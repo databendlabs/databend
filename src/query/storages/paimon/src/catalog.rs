@@ -264,23 +264,6 @@ impl Catalog for PaimonCatalog {
         Err(read_only("get_mv_definition"))
     }
 
-    async fn get_active_mv_definition(
-        &self,
-        _tenant: &Tenant,
-        _source_table_id: u64,
-        _mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>> {
-        Err(read_only("get_active_mv_definition"))
-    }
-
-    async fn get_mv_current_source_generation(
-        &self,
-        _tenant: &Tenant,
-        _source_table_id: u64,
-    ) -> Result<Option<u64>> {
-        Err(read_only("get_mv_source_generation"))
-    }
-
     async fn mget_table_names_by_ids(
         &self,
         _tenant: &Tenant,

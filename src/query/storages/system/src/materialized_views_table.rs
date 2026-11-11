@@ -159,14 +159,6 @@ impl MaterializedViewsTable {
                 "invalid_reason",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
-            TableField::new(
-                "bound_source_generation",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-            TableField::new(
-                "current_source_generation",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
             TableField::new("comment", TableDataType::String),
             TableField::new("text", TableDataType::String),
         ]);
@@ -275,18 +267,22 @@ fn source_lifecycle_invalid_reason(
         .then_some(MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON)
 }
 
-fn listed_materialized_view_status(item: &ListedMaterializedView) -> (bool, Option<&'static str>) {
-    let invalid_reason = source_lifecycle_invalid_reason(
-        &item.mv.table_meta.data,
+/// Whether the listed MV is invalid, and why. The reason recorded in its options comes first.
+/// Without one, the reason is derived from what became of the source: these states are not
+/// recorded, as the definition reads the source by name and binds again once it is back.
+fn listed_materialized_view_status(item: &ListedMaterializedView) -> (bool, Option<String>) {
+    let table_meta = &item.mv.table_meta.data;
+    if let Some(reason) = table_meta.materialized_view_invalid_reason() {
+        return (true, Some(reason.to_string()));
+    }
+    let reason = source_lifecycle_invalid_reason(
+        table_meta,
         item.source.database_name.as_deref(),
         item.source.table_name.as_deref(),
         item.source.is_active,
         item.source.database_dropped,
     );
-    let binding_invalid = item.source.bound_source_generation.is_none()
-        || item.source.current_source_generation.is_none()
-        || item.source.bound_source_generation != item.source.current_source_generation;
-    (binding_invalid || invalid_reason.is_some(), invalid_reason)
+    (reason.is_some(), reason.map(str::to_string))
 }
 
 fn build_block(listed: Vec<ListedMaterializedView>, catalog_name: &str) -> DataBlock {
@@ -306,8 +302,6 @@ fn build_block(listed: Vec<ListedMaterializedView>, catalog_name: &str) -> DataB
     let mut data_compressed_size = Vec::with_capacity(capacity);
     let mut invalid = Vec::with_capacity(capacity);
     let mut invalid_reasons = Vec::with_capacity(capacity);
-    let mut bound_source_generation = Vec::with_capacity(capacity);
-    let mut current_source_generation = Vec::with_capacity(capacity);
     let mut comments = Vec::with_capacity(capacity);
     let mut texts = Vec::with_capacity(capacity);
 
@@ -347,9 +341,7 @@ fn build_block(listed: Vec<ListedMaterializedView>, catalog_name: &str) -> DataB
         data_size.push(table_meta.statistics.data_bytes);
         data_compressed_size.push(table_meta.statistics.compressed_data_bytes);
         invalid.push(invalid_flag);
-        invalid_reasons.push(invalid_reason.map(str::to_string));
-        bound_source_generation.push(item.source.bound_source_generation);
-        current_source_generation.push(item.source.current_source_generation);
+        invalid_reasons.push(invalid_reason);
         comments.push(table_meta.comment.clone());
         texts.push(create_sql);
     }
@@ -370,8 +362,6 @@ fn build_block(listed: Vec<ListedMaterializedView>, catalog_name: &str) -> DataB
         UInt64Type::from_data(data_compressed_size),
         BooleanType::from_data(invalid),
         StringType::from_opt_data(invalid_reasons),
-        UInt64Type::from_opt_data(bound_source_generation),
-        UInt64Type::from_opt_data(current_source_generation),
         StringType::from_data(comments),
         StringType::from_data(texts),
     ])

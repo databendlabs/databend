@@ -87,11 +87,13 @@ use parquet::arrow::ArrowSchemaConverter;
 use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::interpreters::build_insert_select_physical_plan;
+use crate::interpreters::common::MVSourceChange;
 use crate::interpreters::common::check_policy_target_without_materialized_view;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::common::stored_computed_column_references;
 use crate::interpreters::common::ttl_referenced_columns;
+use crate::interpreters::common::update_materialized_view_validity;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::meta_service_error;
@@ -582,13 +584,14 @@ impl ModifyTableColumnInterpreter {
         if (modified_default_scalars.is_empty() && decimal_cluster_rewrites.is_some())
             || (table_is_empty && !needs_decimal_stats_rewrite)
         {
+            let need_update_mv_validity = !table.is_temp() && !catalog.is_external();
             if needs_decimal_stats_rewrite {
                 let cluster_rewrites = decimal_cluster_rewrites.as_deref().unwrap_or_default();
                 rewrite_decimal_stats_and_commit(
                     &self.ctx,
                     fuse_table,
                     base_snapshot.unwrap(),
-                    new_schema,
+                    new_schema.clone(),
                     table_info.meta.clone(),
                     catalog,
                     &decimal_stats_rewrites,
@@ -596,22 +599,34 @@ impl ModifyTableColumnInterpreter {
                     table_meta_timestamps,
                 )
                 .await?;
-                return Ok(PipelineBuildResult::create());
+            } else {
+                commit_table_meta(
+                    &self.ctx,
+                    table.as_ref(),
+                    table_info.meta.clone(),
+                    catalog,
+                    |snapshot_opt, meta| {
+                        if let Some(snapshot) = snapshot_opt {
+                            snapshot.schema = new_schema.as_ref().clone();
+                        }
+                        meta.schema = new_schema.clone();
+                    },
+                )
+                .await?;
             }
-            commit_table_meta(
-                &self.ctx,
-                table.as_ref(),
-                table_info.meta.clone(),
-                catalog,
-                |snapshot_opt, meta| {
-                    if let Some(snapshot) = snapshot_opt {
-                        snapshot.schema = new_schema.as_ref().clone();
-                    }
-                    meta.schema = new_schema.clone();
-                },
-            )
-            .await?;
-
+            // Only this path can change an MV source: rebuilding the data below is rejected
+            // while CHANGE_TRACKING is enabled, which every MV source needs.
+            if need_update_mv_validity {
+                update_materialized_view_validity(
+                    &self.ctx,
+                    table.get_id(),
+                    MVSourceChange::SchemaChanged {
+                        previous_schema: &schema,
+                        schema: &new_schema,
+                    },
+                )
+                .await;
+            }
             return Ok(PipelineBuildResult::create());
         }
 

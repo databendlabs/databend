@@ -32,20 +32,11 @@ impl SourceTableMV {
     }
 }
 
-/// Source generation to which one materialized view is bound.
-///
-/// This value cannot be `EmptyProto`: key existence would express both the
-/// durable dependency and its validity. Invalidating a source would then
-/// require deleting every relationship, losing the dependencies needed to
-/// discover invalid MVs for management and refresh. Recording the bound
-/// generation keeps the relationship and derives validity by comparison with
-/// the expected source generation. The source binding-version key's KV
-/// sequence is deliberately not persisted here; it is only an internal
-/// transaction CAS token.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MVSourceBinding {
-    pub bound_source_generation: u64,
-}
+/// The value of one MV dependency edge. It carries no state: the edge records that the MV
+/// depends on the source, and whether the MV is valid lives in its `TableMeta` options. The edge
+/// is kept after invalidation so management, restore, and GC can still find every dependent MV.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct MVSourceBinding {}
 
 /// `__fd_materialized_view_by_source/<tenant>/<source_table_id>/<mv_table_id>`
 /// -> [`MVSourceBinding`]

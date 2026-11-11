@@ -50,8 +50,16 @@ pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME: &str =
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME: &str = "materialized_view_source_table_name";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
+/// Why the materialized view is invalid; absent while it is valid. Written after source DDL.
+pub const OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON: &str = "materialized_view_invalid_reason";
+/// The source columns the materialized view reads, as JSON.
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS: &str = "materialized_view_source_columns";
 pub const OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS: &str =
     "materialized_view_aggregate_compaction_delta_blocks";
+/// Invalid reason stored when the source table is swapped.
+pub const MATERIALIZED_VIEW_SOURCE_SWAPPED_REASON: &str = "source table was swapped";
+/// Invalid reason stored when a column the MV reads is changed.
+pub const MATERIALIZED_VIEW_SOURCE_SCHEMA_CHANGED_REASON: &str = "source table schema was changed";
 /// Reason reported when the source table bound by CREATE no longer has the same lifecycle identity.
 pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
     "source table was dropped, renamed, or replaced";
@@ -182,6 +190,8 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
     r.insert(OPT_KEY_AS_QUERY);
     r.insert(OPT_KEY_SOURCE_TABLE_IDS);
@@ -207,6 +217,8 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
     r.insert(OPT_KEY_AS_QUERY);
     r.insert(OPT_KEY_SOURCE_TABLE_IDS);
@@ -358,6 +370,18 @@ mod tests {
         ));
         assert!(is_internal_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS
         ));
         assert!(is_reserved_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS

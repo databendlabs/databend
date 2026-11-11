@@ -28,7 +28,6 @@ pub struct CreateMaterializedViewPlan {
     pub source_table_option: Option<UpsertTableOptionReq>,
     /// Fully bound for source authorization and auditing; never executed by CREATE.
     pub query_plan: Box<Plan>,
-    pub expected_source_generation: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

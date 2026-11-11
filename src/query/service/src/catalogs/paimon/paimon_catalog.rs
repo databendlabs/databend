@@ -243,27 +243,6 @@ impl Catalog for PaimonCatalog {
         self.paimon_catalog.get_mv_definition(tenant, mv_id).await
     }
 
-    async fn get_active_mv_definition(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-        mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>> {
-        self.paimon_catalog
-            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
-            .await
-    }
-
-    async fn get_mv_current_source_generation(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-    ) -> Result<Option<u64>> {
-        self.paimon_catalog
-            .get_mv_current_source_generation(tenant, source_table_id)
-            .await
-    }
-
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,

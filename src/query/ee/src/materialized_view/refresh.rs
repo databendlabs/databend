@@ -48,8 +48,11 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::MaterializedViewChecker;
 use databend_common_sql::Planner;
+use databend_common_sql::check_materialized_view_invalid;
+use databend_common_sql::is_materialized_view_physical_schema_changed;
 use databend_common_sql::parse_materialized_view_query;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::record_materialized_view_schema_changed;
 use databend_common_sql::validate_materialized_view_source;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ChangesDesc;
@@ -65,6 +68,7 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
+use databend_storages_common_table_meta::table::MATERIALIZED_VIEW_SOURCE_SCHEMA_CHANGED_REASON;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
@@ -134,27 +138,22 @@ impl<'a> MaterializedViewRefresh<'a> {
         };
 
         let catalog_obj = ctx.get_catalog(catalog).await?;
-        // Binding validity is an admission check, not a refresh fence. Meta reads the definition
-        // and both generations at one transaction point. Once admitted, a concurrent source-schema
-        // change may let this refresh finish; subsequent MV reads reject the stale binding.
+        // Validity is an admission check, not a refresh fence: a reason written after it changes
+        // the MV TableMeta, so the commit's exact sequence condition fails.
+        let mv_name = format!("{}.{}", database, view_name);
+        check_materialized_view_invalid(mv_meta, &mv_name)?;
         let definition = get_materialized_view_handler()
-            .get_active_mv_definition(
-                catalog_obj.as_ref(),
-                &ctx.get_tenant(),
-                source_table_id,
-                mv_table.get_id(),
-            )
+            .get_mv_definition(catalog_obj.as_ref(), &ctx.get_tenant(), mv_table.get_id())
             .await?
             .ok_or_else(|| {
                 ErrorCode::InvalidMaterializedView(format!(
-                    "materialized view {}.{} has an invalid source binding; recreate the materialized view",
-                    database, view_name
+                    "materialized view {mv_name} has no definition; recreate the materialized view"
                 ))
             })?;
-        Self::validate_source_table_id(
+        Self::validate_definition(
             ctx.clone(),
-            database,
-            view_name,
+            mv_table,
+            &mv_name,
             &definition.data.query,
             source_table_id,
         )
@@ -172,6 +171,16 @@ impl<'a> MaterializedViewRefresh<'a> {
             return Err(ErrorCode::UnknownTable(format!(
                 "materialized view {}.{} source table id {} has been dropped",
                 database, view_name, source_table_id
+            )));
+        }
+        // A change of a column the MV reads, recorded at CREATE, that still binds.
+        if mv_meta
+            .is_materialized_view_source_schema_changed(&source_meta.data.schema)
+            .map_err(ErrorCode::from)?
+        {
+            record_materialized_view_schema_changed(mv_table.get_id()).await;
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {mv_name} is invalid: {MATERIALIZED_VIEW_SOURCE_SCHEMA_CHANGED_REASON}; recreate the materialized view"
             )));
         }
         let mut source_seq = source_meta.seq;
@@ -294,10 +303,14 @@ impl<'a> MaterializedViewRefresh<'a> {
         }))
     }
 
-    async fn validate_source_table_id(
+    /// Bind the physical definition `physical_query` of MV `mv_table`, named `mv_name`, and check
+    /// that it reads the source `expected_source_table_id` and still produces the stored schema of
+    /// the MV, so REFRESH does not write rows of other types into the MV. A changed schema is
+    /// recorded.
+    async fn validate_definition(
         ctx: Arc<QueryContext>,
-        database: &str,
-        view_name: &str,
+        mv_table: &dyn Table,
+        mv_name: &str,
         physical_query: &str,
         expected_source_table_id: u64,
     ) -> Result<()> {
@@ -315,22 +328,38 @@ impl<'a> MaterializedViewRefresh<'a> {
             .plan_stmt_without_materialized_view_rewrite(&Statement::Query(Box::new(query)), false)
             .await
             .map_err(|error| {
+                // The definition reads the source by the database and table name it had at CREATE.
+                let reason = match error.code() {
+                    ErrorCode::UNKNOWN_DATABASE => "source database was dropped or renamed",
+                    ErrorCode::UNKNOWN_TABLE => "source table was dropped or renamed",
+                    _ => "definition no longer binds to the source table",
+                };
                 ErrorCode::InvalidMaterializedView(format!(
-                    "materialized view {}.{} source table changed: expected table id {}: {}",
-                    database, view_name, expected_source_table_id, error
+                    "materialized view {mv_name} is invalid: {reason}, expected source table id {expected_source_table_id}: {error}"
                 ))
             })?;
-        let databend_common_sql::plans::Plan::Query { metadata, .. } = plan else {
+        let Plan::Query {
+            metadata,
+            bind_context,
+            ..
+        } = plan
+        else {
             return Err(ErrorCode::InvalidMaterializedView(format!(
-                "materialized view {}.{} physical definition is not a query",
-                database, view_name
+                "materialized view {mv_name} physical definition is not a query"
             )));
         };
-        validate_materialized_view_source(
-            &metadata,
-            expected_source_table_id,
-            &format!("{}.{}", database, view_name),
-        )
+        validate_materialized_view_source(&metadata, expected_source_table_id, mv_name)?;
+        if is_materialized_view_physical_schema_changed(
+            &bind_context,
+            metadata,
+            &mv_table.get_table_info().meta.schema,
+        )? {
+            record_materialized_view_schema_changed(mv_table.get_id()).await;
+            return Err(ErrorCode::InvalidMaterializedView(format!(
+                "materialized view {mv_name} is invalid: {MATERIALIZED_VIEW_SOURCE_SCHEMA_CHANGED_REASON}; recreate the materialized view"
+            )));
+        }
+        Ok(())
     }
 
     /// Bind a qualified table name to an exact `Table` instance for this query context.

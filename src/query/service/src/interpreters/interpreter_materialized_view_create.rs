@@ -59,7 +59,6 @@ impl Interpreter for CreateMaterializedViewInterpreter {
 
             let materialized_view = CreateMaterializedViewMeta {
                 definition: self.plan.mv_definition.clone(),
-                expected_source_generation: self.plan.expected_source_generation,
             };
             let catalog = self.ctx.get_catalog(&self.plan.table_plan.catalog).await?;
             let mut req = table_interpreter.build_request()?;

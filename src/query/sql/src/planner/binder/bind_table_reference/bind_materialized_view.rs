@@ -43,7 +43,6 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -65,6 +64,7 @@ use crate::binder::ScalarBinder;
 use crate::binder::ViewIdent;
 use crate::binder::ddl::materialized_view::find_materialized_view_aggregate;
 use crate::binder::lineage_enabled;
+use crate::check_materialized_view_invalid;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::plans::Aggregate;
@@ -634,32 +634,29 @@ impl Binder {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
 
-        let tenant = self.ctx.get_tenant();
         let source_table_id = table_meta
             .get_table_info()
             .meta
             .materialized_view_source_table_id()
             .map_err(ErrorCode::from)?;
+        check_materialized_view_invalid(&table_meta.get_table_info().meta, table_meta.name())?;
+        let tenant = self.ctx.get_tenant();
         let mv_definition = databend_common_base::runtime::block_on(async {
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             get_materialized_view_handler()
-                .get_active_mv_definition(
-                    catalog.as_ref(),
-                    &tenant,
-                    source_table_id,
-                    table_meta.get_id(),
-                )
+                .get_mv_definition(catalog.as_ref(), &tenant, table_meta.get_id())
                 .await?
                 .ok_or_else(|| {
                     ErrorCode::InvalidMaterializedView(format!(
-                        "materialized view {} has an invalid source binding; recreate the materialized view",
+                        "materialized view {} has no definition; recreate the materialized view",
                         table_meta.name()
                     ))
                 })
         })?;
 
-        // Bind the persisted physical definition to validate its source identity and determine
-        // whether hybrid reads must merge aggregate states before the logical projection.
+        // Bind the persisted physical definition, which reads the source by the name captured
+        // by CREATE, to validate its source identity and determine whether hybrid reads must
+        // merge aggregate states before the logical projection.
         let query = parse_materialized_view_query(
             &mv_definition.data.query,
             "invalid materialized view physical query",
@@ -674,103 +671,44 @@ impl Binder {
         .with_subquery_executor(self.subquery_executor.clone());
         let mut definition_context = BindContext::new();
         definition_context.binding_depth = bind_context.next_depth()?;
-        // The persisted definition names the source captured by CREATE. A missing database or
-        // table means the source was dropped, renamed, or replaced, which REFRESH also reports as
-        // InvalidMaterializedView. Other errors keep their original code.
         let (definition_expr, _) = definition_binder
             .bind_query(&mut definition_context, &query)
-            .map_err(|error| match error.code() {
-                ErrorCode::UNKNOWN_DATABASE | ErrorCode::UNKNOWN_TABLE => {
-                    ErrorCode::InvalidMaterializedView(format!(
-                        "materialized view {} source table changed: expected table id {}: {}",
-                        table_meta.name(),
-                        source_table_id,
-                        error
-                    ))
-                }
-                _ => error,
+            .map_err(|error| {
+                // The definition reads the source by the database and table name it had at
+                // CREATE.
+                let reason = match error.code() {
+                    ErrorCode::UNKNOWN_DATABASE => "source database was dropped or renamed",
+                    ErrorCode::UNKNOWN_TABLE => "source table was dropped or renamed",
+                    _ => "definition no longer binds to the source table",
+                };
+                ErrorCode::InvalidMaterializedView(format!(
+                    "materialized view {} is invalid: {reason}, expected source table id {source_table_id}: {error}",
+                    table_meta.name()
+                ))
             })?;
         validate_materialized_view_source(
             &definition_metadata,
             source_table_id,
             table_meta.name(),
         )?;
+        // The source the definition bound to, unless the caller already resolved it.
+        let (source_table, source_database) = match source_override {
+            Some(source) => source,
+            None => {
+                let metadata = definition_metadata.read();
+                let entry = &metadata.tables()[0];
+                (entry.table(), entry.database().to_string())
+            }
+        };
+        let source_info = source_table.get_table_info();
+        let source_seq = source_info.ident.seq;
+        let source_snapshot_location = source_info
+            .meta
+            .options
+            .get(OPT_KEY_SNAPSHOT_LOCATION)
+            .cloned();
         let is_aggregating = find_materialized_view_aggregate(&definition_expr).is_some();
 
-        let (source_table, source_database, source_seq, source_snapshot_location) = if let Some((
-            source_table,
-            source_database,
-        )) =
-            source_override
-        {
-            if source_table.get_id() != source_table_id {
-                return Err(ErrorCode::InvalidMaterializedView(format!(
-                    "materialized view {} source table changed: expected table id {}, got {}",
-                    table_meta.name(),
-                    source_table_id,
-                    source_table.get_id()
-                )));
-            }
-            let source_info = source_table.get_table_info();
-            (
-                source_table.clone(),
-                source_database,
-                source_info.ident.seq,
-                source_info
-                    .meta
-                    .options
-                    .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    .cloned(),
-            )
-        } else {
-            databend_common_base::runtime::block_on(async {
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
-                let source_meta = catalog
-                    .get_table_meta_by_id(source_table_id)
-                    .await?
-                    .ok_or_else(|| {
-                        ErrorCode::InvalidMaterializedView(format!(
-                            "materialized view {} source table changed: expected table id {} no longer exists",
-                            table_meta.name(), source_table_id
-                        ))
-                    })?;
-                let source_database_id = source_meta
-                    .data
-                    .options
-                    .get(OPT_KEY_DATABASE_ID)
-                    .ok_or_else(|| ErrorCode::Internal("source table database id is missing"))?
-                    .parse::<u64>()?;
-                let source_database = catalog.get_db_name_by_id(source_database_id).await?;
-                let source_table_name = catalog
-                    .get_table_name_by_id(source_table_id)
-                    .await?
-                    .ok_or_else(|| {
-                        ErrorCode::InvalidMaterializedView(format!(
-                            "materialized view {} source table changed: expected table id {} no longer exists",
-                            table_meta.name(), source_table_id
-                        ))
-                    })?;
-                let current_source = catalog
-                    .get_table(&tenant, &source_database, &source_table_name)
-                    .await?;
-                let source_table = catalog.get_table_by_info(&TableInfo {
-                    ident: TableIdent::new(source_table_id, source_meta.seq),
-                    meta: source_meta.data.clone(),
-                    ..current_source.get_table_info().clone()
-                })?;
-                let source_snapshot_location = source_meta
-                    .data
-                    .options
-                    .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    .cloned();
-                Ok::<_, ErrorCode>((
-                    source_table,
-                    source_database,
-                    source_meta.seq,
-                    source_snapshot_location,
-                ))
-            })?
-        };
         // MV results depend on both persisted storage and the live source endpoint. Include both
         // identities in the result-cache key so a source append cannot reuse a previously fresh
         // storage-only result. Sequence values distinguish no-snapshot endpoints and metadata

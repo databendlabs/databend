@@ -22,6 +22,8 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::SwapTablePlan;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::MVSourceChange;
+use crate::interpreters::common::update_materialized_view_validity;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -75,6 +77,17 @@ impl Interpreter for SwapTableInterpreter {
                     target_table_name: self.plan.target_table.clone(),
                 })
                 .await?;
+            // A swap puts each table under the other's name: the MVs of both are final invalid.
+            if !catalog.is_external() {
+                for table in [&origin_table, &target_table] {
+                    update_materialized_view_validity(
+                        &self.ctx,
+                        table.get_id(),
+                        MVSourceChange::Swapped,
+                    )
+                    .await;
+                }
+            }
 
             Ok(PipelineBuildResult::create())
         })

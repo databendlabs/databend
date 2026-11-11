@@ -32,21 +32,6 @@ pub trait MaterializedViewHandler: Sync + Send {
         mv_table_id: u64,
     ) -> Result<Option<SeqV<MVDefinition>>>;
 
-    async fn get_active_mv_definition(
-        &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-        source_table_id: u64,
-        mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>>;
-
-    async fn get_mv_current_source_generation(
-        &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-        source_table_id: u64,
-    ) -> Result<Option<u64>>;
-
     async fn do_refresh_materialized_view(
         &self,
         ctx: Arc<dyn Any + Send + Sync>,
@@ -76,31 +61,6 @@ impl MaterializedViewHandlerWrapper {
     ) -> Result<Option<SeqV<MVDefinition>>> {
         self.handler
             .get_mv_definition(catalog, tenant, mv_table_id)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_active_mv_definition(
-        &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-        source_table_id: u64,
-        mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>> {
-        self.handler
-            .get_active_mv_definition(catalog, tenant, source_table_id, mv_table_id)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_mv_current_source_generation(
-        &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-        source_table_id: u64,
-    ) -> Result<Option<u64>> {
-        self.handler
-            .get_mv_current_source_generation(catalog, tenant, source_table_id)
             .await
     }
 

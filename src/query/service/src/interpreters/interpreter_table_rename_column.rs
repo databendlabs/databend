@@ -29,10 +29,12 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::MVSourceChange;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::rename_column_in_cluster_key;
 use crate::interpreters::common::rename_column_in_comma_separated_ident;
 use crate::interpreters::common::rename_column_in_ttl;
+use crate::interpreters::common::update_materialized_view_validity;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::pipelines::PipelineBuildResult;
@@ -159,6 +161,7 @@ impl Interpreter for RenameTableColumnInterpreter {
                 new_ttl = rename_column_in_ttl(ttl, &self.plan.old_column, &self.plan.new_column)?;
             }
 
+            let need_update_mv_validity = !table.is_temp() && !catalog.is_external();
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
@@ -185,6 +188,17 @@ impl Interpreter for RenameTableColumnInterpreter {
                 },
             )
             .await?;
+            if need_update_mv_validity {
+                update_materialized_view_validity(
+                    &self.ctx,
+                    table.get_id(),
+                    MVSourceChange::SchemaChanged {
+                        previous_schema: &table.schema(),
+                        schema: &self.plan.schema,
+                    },
+                )
+                .await;
+            }
 
             Ok(PipelineBuildResult::create())
         })

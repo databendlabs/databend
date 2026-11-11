@@ -73,6 +73,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_CTE;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME;
@@ -189,6 +190,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME);
         r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
         r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
+        r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS);
         r
     });
 

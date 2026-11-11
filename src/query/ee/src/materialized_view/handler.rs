@@ -47,31 +47,6 @@ impl MaterializedViewHandler for RealMaterializedViewHandler {
     }
 
     #[async_backtrace::framed]
-    async fn get_active_mv_definition(
-        &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-        source_table_id: u64,
-        mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>> {
-        catalog
-            .get_active_mv_definition(tenant, source_table_id, mv_table_id)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    async fn get_mv_current_source_generation(
-        &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-        source_table_id: u64,
-    ) -> Result<Option<u64>> {
-        catalog
-            .get_mv_current_source_generation(tenant, source_table_id)
-            .await
-    }
-
-    #[async_backtrace::framed]
     async fn do_refresh_materialized_view(
         &self,
         ctx: Arc<dyn Any + Send + Sync>,
