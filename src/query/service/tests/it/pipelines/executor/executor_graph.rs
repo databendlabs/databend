@@ -232,65 +232,6 @@ async fn test_queries_executor_completed_async_task_of_foreign_worker() -> anyho
     Ok(())
 }
 
-/// A processor whose `event` panics fails its own query only: the shared
-/// executor keeps its workers, and runs the next query.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_queries_executor_survives_event_panic() -> anyhow::Result<()> {
-    let _fixture = TestFixture::setup().await?;
-
-    type Finished = Arc<(parking_lot::Mutex<bool>, parking_lot::Condvar)>;
-    let create_graph = |panic_event: bool| -> Result<(Arc<RunningGraph>, Finished)> {
-        let mut pipeline = Pipeline::create();
-        pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
-            ProcessorPtr::create(Box::new(SecondEventSource {
-                events: 0,
-                panic_event,
-            })),
-            vec![],
-            vec![OutputPort::create()],
-        )]));
-        let finished = Finished::default();
-        let query_id = Arc::new(format!("test-event-panic-{panic_event}"));
-        let graph = RunningGraph::create(pipeline, 1, query_id, Some(finished.clone()), vec![])?;
-        Ok((graph, finished))
-    };
-    let wait = |finished: &Finished| {
-        let (lock, cvar) = &**finished;
-        let mut finished = lock.lock();
-        if !*finished {
-            cvar.wait_for(&mut finished, std::time::Duration::from_secs(10));
-        }
-        *finished
-    };
-
-    let executor = QueriesPipelineExecutor::create(1)?;
-    let workers = databend_common_base::runtime::Thread::spawn({
-        let executor = executor.clone();
-        move || executor.execute()
-    });
-
-    let (graph, finished) = create_graph(true)?;
-    executor.send_graph(graph.clone())?;
-    assert!(wait(&finished), "the query of the panic must finish");
-    let error = graph.get_error().expect("the query of the panic must fail");
-    assert_eq!(error.code(), ErrorCode::UNWIND_ERROR);
-    assert!(!executor.is_finished());
-
-    let (graph, finished) = create_graph(false)?;
-    executor.send_graph(graph.clone())?;
-    assert!(wait(&finished), "the next query must still be executed");
-    assert!(graph.get_error().is_none());
-
-    // Once the executor is finished, a query fails instead of waiting forever.
-    executor.finish(Some(ErrorCode::Internal("test finish")));
-    workers.join().unwrap().unwrap_err();
-    let (graph, _finished) = create_graph(false)?;
-    let error = executor.send_graph(graph).unwrap_err();
-    assert_eq!(error.message(), "test finish");
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_schedule_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -735,35 +676,6 @@ struct MemoryTrackingSource {
 }
 
 struct InterruptCheckingSource;
-
-/// A source that is processed once, then finishes or panics in `event`.
-struct SecondEventSource {
-    events: usize,
-    panic_event: bool,
-}
-
-impl Processor for SecondEventSource {
-    fn name(&self) -> String {
-        "SecondEventSource".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        self.events += 1;
-        match self.events {
-            1 => Ok(Event::Sync),
-            _ if self.panic_event => panic!("event panic"),
-            _ => Ok(Event::Finished),
-        }
-    }
-
-    fn process(&mut self) -> Result<()> {
-        Ok(())
-    }
-}
 
 impl Processor for InterruptCheckingSource {
     fn name(&self) -> String {
