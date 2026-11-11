@@ -519,7 +519,7 @@ impl Drop for DeserializeDataTransform {
         if !diagnostics.has_activity() {
             return;
         }
-        log::info!(
+        log::debug!(
             "[FUSE-PRUNER-DIAG] stage=execute_scan scan_id={} normal_parts={} normal_ranges={} granule_parts={} granule_groups={} granule_ranges={} projected_columns={} selected_bytes={} coalesced_bytes={} coalesced_requests={} input_rows={} output_blocks={} output_rows={} output_bytes={} granule_reader_create_us={} granule_read_us={} decode_filter_us={} finalize_concat_us={} normal_process_us={}",
             self.scan_id,
             diagnostics.normal_parts,

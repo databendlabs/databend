@@ -34,7 +34,7 @@ use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
-use log::info;
+use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::SegmentLocation;
@@ -232,7 +232,7 @@ impl BlockPruner {
 
         let elapsed = start.elapsed().as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
-        info!("[FUSE-PRUNER] refine block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] refine block prune elapsed: {elapsed}");
 
         Ok(result)
     }
@@ -438,7 +438,7 @@ impl BlockPruner {
         {
             metrics_inc_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] block prune elapsed: {elapsed}");
 
         let block_range = std::time::Duration::from_nanos(block_range_ns.into_inner());
         let runtime_stats = std::time::Duration::from_nanos(runtime_stats_ns.into_inner());
@@ -448,7 +448,7 @@ impl BlockPruner {
         // time may exceed the stage total; `unaccounted` saturates to zero.
         let accounted = block_range + runtime_stats + granule_total + block_index_total;
         let unaccounted = elapsed_duration.saturating_sub(accounted);
-        info!(
+        debug!(
             "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us=0 granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={} inverted_granules_pruned={} block_index_us={}",
             segment_location.segment_idx,
             duration_us(elapsed_duration),
@@ -578,13 +578,13 @@ impl BlockPruner {
         let elapsed_duration = start.elapsed();
         let elapsed = elapsed_duration.as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
-        info!("[FUSE-PRUNER] range and granule prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] range and granule prune elapsed: {elapsed}");
         let accounted = diagnostics.block_range
             + diagnostics.runtime_stats
             + diagnostics.sparse_prefetch
             + diagnostics.granule_total;
         let unaccounted = elapsed_duration.saturating_sub(accounted);
-        info!(
+        debug!(
             "[FUSE-PRUNER-DIAG] stage=prune segment_idx={} total_us={} unaccounted_us={} blocks_total={} blocks_after_internal={} blocks_after_range={} blocks_after_runtime={} blocks_after_granule={} block_range_us={} runtime_stats_us={} sparse_prefetch_us={} granule_total_us={} granule_blocks={} granules_before={} granules_after={} sparse_blocks={} sparse_load_us={} sparse_eval_us={} sparse_unaccounted_us={} marks_loads={} marks_load_us={} bloom_prunes={} bloom_prune_us={} other_index_prunes={} other_index_prune_us={}",
             segment_location.segment_idx,
             duration_us(elapsed_duration),
@@ -718,7 +718,7 @@ impl BlockPruner {
             .collect();
         let elapsed = start.elapsed().as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
-        info!("[FUSE-PRUNER] async block index prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] async block index prune elapsed: {elapsed}");
         result
     }
 
@@ -1184,7 +1184,7 @@ impl BlockPruner {
         {
             metrics_inc_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] sync block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] sync block prune elapsed: {elapsed}");
 
         Ok(result)
     }

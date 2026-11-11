@@ -180,7 +180,7 @@ impl IPhysicalPlan for Recluster {
                 metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
                 metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
                 metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
-                log::info!(
+                log::debug!(
                     event = "recluster.input_planned",
                     table_id = table.get_id(),
                     task_kind :? = task.kind,
@@ -192,7 +192,7 @@ impl IPhysicalPlan for Recluster {
                         VerticalReclusterKind::SortBlocks => "SortBlocks",
                         VerticalReclusterKind::MergeBlocks => "MergeBlocks",
                     };
-                    log::info!(
+                    log::debug!(
                         "recluster: scheduled vertical kind={} block_count={} rows={} budget={}",
                         expected,
                         recluster_block_nums,
