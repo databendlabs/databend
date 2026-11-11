@@ -31,7 +31,6 @@ pub use recluster_strategy::CandidateScore;
 pub(crate) use recluster_strategy::ReclusterBlock;
 pub(crate) use recluster_strategy::ReclusterBlockStats;
 pub(crate) use recluster_strategy::ReclusterGroup;
-pub use recluster_strategy::ReclusterMode;
 pub(crate) use recluster_strategy::ReclusterProperties;
 pub(crate) use recluster_strategy::ReclusterStrategy;
 pub(crate) use recluster_strategy::ReclusterTaskCandidate;

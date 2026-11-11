@@ -40,10 +40,8 @@ use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::ReclusterPlan;
-use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
-use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_common_storages_fuse::segment_zone_map::RefreshOutcome;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
@@ -559,22 +557,11 @@ impl ReclusterJob {
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>, Vec<String>)>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
-        // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
-        // those tables on the conservative strategy until CREATE/ALTER CLUSTER BY
-        // materializes the option with value 1.
-        let mode = if self.plan.is_final
-            && fuse_table.get_option(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER, 0u32) != 0
-        {
-            ReclusterMode::Aggressive
-        } else {
-            ReclusterMode::Conservative
-        };
         let Some((parts, snapshot)) = fuse_table
             .do_recluster(
                 ctx.clone(),
                 push_downs.clone(),
                 limit,
-                mode,
                 linear_final_carry,
                 claimed_segments,
             )

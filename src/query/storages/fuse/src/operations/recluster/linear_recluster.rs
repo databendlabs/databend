@@ -460,14 +460,6 @@ pub(crate) fn select_scalar_segments(
             .then_with(|| right_indices.len().cmp(&left_indices.len()))
     });
 
-    if properties.mode.probes_deepest_window_only() {
-        // Conservative mode is kept for legacy tables without
-        // `aggressive_recluster`. Probe only the deepest window per round to
-        // avoid over-reclustering old tables and creating a sharp behavior
-        // gap from the pre-option strategy.
-        windows.truncate(1);
-    }
-
     debug!(
         "recluster: segment selection windows segments={} blocks={} window_count={}",
         compact_segments.len(),

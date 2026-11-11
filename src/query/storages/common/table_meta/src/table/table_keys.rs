@@ -108,6 +108,8 @@ pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
 /// PARTITION BY and is not a user-settable table option.
 pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
 pub const OPT_KEY_WRITE_DISTRIBUTION_MODE: &str = "write_distribution_mode";
+/// No longer has any effect: recluster always uses one strategy. The key is still accepted so
+/// that existing tables and DDL carrying it keep working.
 pub const OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";

@@ -46,7 +46,6 @@ use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
-use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::operations::SelectedReclusterSegment;
 use databend_common_storages_fuse::pruning::SegmentLocation;
@@ -106,7 +105,6 @@ fn new_test_mutator(
     thresholds: BlockThresholds,
     cluster_key_id: u32,
     max_tasks: usize,
-    mode: ReclusterMode,
 ) -> ReclusterMutator {
     ReclusterMutator::new(
         ctx,
@@ -118,7 +116,6 @@ fn new_test_mutator(
         ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         0,
         max_tasks,
-        mode,
         None,
     )
 }
@@ -450,11 +447,10 @@ async fn gen_recluster_segments_by_vector_stats(
     Ok(segment_locations)
 }
 
-async fn materialize_segments_by_level_with_mode(
+async fn materialize_segments_by_level(
     level_counts: &[(i32, usize)],
     thresholds: BlockThresholds,
     max_tasks: usize,
-    mode: ReclusterMode,
 ) -> anyhow::Result<(u64, ReclusterParts)> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -476,7 +472,7 @@ async fn materialize_segments_by_level_with_mode(
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -484,7 +480,6 @@ async fn materialize_segments_by_level_with_mode(
         cluster_key_id,
         max_tasks,
         1000,
-        mode,
     )
     .await?;
     Ok((block_num, parts))
@@ -525,7 +520,7 @@ async fn materialize_segments_by_level_and_size(
     }
 
     let ctx: Arc<dyn TableContext> = ctx;
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -533,13 +528,12 @@ async fn materialize_segments_by_level_and_size(
         cluster_key_id,
         1,
         1000,
-        ReclusterMode::Aggressive,
     )
     .await?;
     Ok((block_num, parts))
 }
 
-async fn materialize_segment_locations_with_mode(
+async fn materialize_segment_locations(
     ctx: Arc<dyn TableContext>,
     data_accessor: opendal::Operator,
     segment_locations: Vec<meta::Location>,
@@ -547,7 +541,6 @@ async fn materialize_segment_locations_with_mode(
     cluster_key_id: u32,
     max_tasks: usize,
     max_segments: usize,
-    mode: ReclusterMode,
 ) -> anyhow::Result<(usize, u64, ReclusterParts)> {
     let schema = test_cluster_schema();
     let segment_locations = create_segment_location_vector(segment_locations, None);
@@ -566,7 +559,6 @@ async fn materialize_segment_locations_with_mode(
         thresholds,
         cluster_key_id,
         max_tasks,
-        mode,
     );
 
     let segment_windows = mutator.select_segments(&compact_segments, max_segments)?;
@@ -708,7 +700,6 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
             ctx.clone(),
             Some(push_downs),
             Some(2),
-            ReclusterMode::Conservative,
             &mut carry,
             &claimed_segments,
         )
@@ -760,7 +751,7 @@ async fn test_removed_segments_match_selected_blocks() -> anyhow::Result<()> {
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (selected_segments, block_num, parts) = materialize_segment_locations_with_mode(
+    let (selected_segments, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -768,7 +759,6 @@ async fn test_removed_segments_match_selected_blocks() -> anyhow::Result<()> {
         cluster_key_id,
         1,
         1000,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -805,7 +795,7 @@ async fn test_compacts_small_overlaps() -> anyhow::Result<()> {
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, _, parts) = materialize_segment_locations_with_mode(
+    let (_, _, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -813,7 +803,6 @@ async fn test_compacts_small_overlaps() -> anyhow::Result<()> {
         cluster_key_id,
         1,
         8,
-        ReclusterMode::Conservative,
     )
     .await?;
     assert!(!parts.is_empty());
@@ -890,7 +879,7 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
         let source_count = blocks.len();
         let location =
             write_recluster_segment(&operator, &locations, blocks, thresholds, 1).await?;
-        let (_, _, parts) = materialize_segment_locations_with_mode(
+        let (_, _, parts) = materialize_segment_locations(
             ctx.clone(),
             operator.clone(),
             vec![location],
@@ -898,7 +887,6 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
             1,
             budget,
             1000,
-            ReclusterMode::Conservative,
         )
         .await?;
         let actual = parts
@@ -1055,7 +1043,6 @@ async fn test_repack_window_without_rewrite() -> anyhow::Result<()> {
         thresholds,
         cluster_key_id,
         1,
-        ReclusterMode::Conservative,
     );
     let selected_segs = mutator
         .select_segments(&compact_segments, 8)?
@@ -1077,7 +1064,7 @@ async fn test_repack_window_without_rewrite() -> anyhow::Result<()> {
     assert_eq!(score.average_depth, 0.0);
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -1085,7 +1072,6 @@ async fn test_repack_window_without_rewrite() -> anyhow::Result<()> {
         cluster_key_id,
         1,
         8,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -1093,106 +1079,6 @@ async fn test_repack_window_without_rewrite() -> anyhow::Result<()> {
     assert!(parts.tasks.is_empty());
     assert_eq!(parts.remained_blocks.len(), 3);
     assert_eq!(parts.removed_segment_indexes.len(), 3);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_conservative_repack_unordered_window_without_rewrite() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_recluster_block_size(1000)?;
-
-    let data_accessor = ctx.get_application_level_data_operator()?.operator();
-    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
-    let cluster_key_id = 0;
-    let thresholds = BlockThresholds::new(1000, 100, 100, 2);
-    let segment_locations = gen_recluster_segments_by_ranges(
-        &data_accessor,
-        &location_generator,
-        &[vec![(3, 4), (1, 2)]],
-        1000,
-        100,
-        100,
-        thresholds,
-        cluster_key_id,
-    )
-    .await?;
-
-    let schema = test_cluster_schema();
-    let ctx: Arc<dyn TableContext> = ctx.clone();
-    let compact_segments = segment_pruning(
-        &ctx,
-        schema.clone(),
-        data_accessor.clone(),
-        create_segment_location_vector(segment_locations.clone(), None),
-    )
-    .await?;
-
-    let aggressive_mutator = new_test_mutator(
-        ctx.clone(),
-        data_accessor.clone(),
-        schema.clone(),
-        thresholds,
-        cluster_key_id,
-        1,
-        ReclusterMode::Aggressive,
-    );
-    let conservative_mutator = new_test_mutator(
-        ctx.clone(),
-        data_accessor.clone(),
-        schema.clone(),
-        thresholds,
-        cluster_key_id,
-        1,
-        ReclusterMode::Conservative,
-    );
-
-    let selected_segs = aggressive_mutator
-        .select_segments(&compact_segments, 2)?
-        .into_iter()
-        .next()
-        .expect("unordered single-segment window should be selected");
-    let decode_runtime = Arc::new(Runtime::with_worker_threads(
-        2,
-        Some("recluster-block-meta-test-worker".to_owned()),
-    )?);
-    let decode_semaphore = Arc::new(Semaphore::new(4));
-    let aggressive_window = aggressive_mutator
-        .probe_candidate_window(
-            selected_segs.clone(),
-            1,
-            decode_runtime.clone(),
-            decode_semaphore.clone(),
-        )
-        .await?;
-    assert_eq!(aggressive_window.task_count(), 0);
-
-    let conservative_window = conservative_mutator
-        .probe_candidate_window(selected_segs, 1, decode_runtime, decode_semaphore)
-        .await?;
-    assert_eq!(conservative_window.task_count(), 1);
-    let score = conservative_window.task_score(0);
-    assert_eq!(score.selected_total_bytes, 0);
-    assert_eq!(score.max_depth, 0);
-    assert_eq!(score.average_depth, 0.0);
-
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
-        ctx,
-        data_accessor,
-        segment_locations,
-        thresholds,
-        cluster_key_id,
-        1,
-        2,
-        ReclusterMode::Conservative,
-    )
-    .await?;
-
-    assert_eq!(block_num, 2);
-    assert!(parts.tasks.is_empty());
-    assert_eq!(parts.remained_blocks.len(), 2);
-    assert_eq!(parts.removed_segment_indexes.len(), 1);
 
     Ok(())
 }
@@ -1246,7 +1132,6 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
         thresholds,
         cluster_key_id,
         1,
-        ReclusterMode::Aggressive,
     );
 
     let segment_windows = mutator.select_segments(&compact_segments, 3)?;
@@ -1338,7 +1223,6 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
         thresholds,
         cluster_key_id,
         1,
-        ReclusterMode::Aggressive,
     );
     let segment_windows = mutator.select_segments(&compact_segments, 3)?;
     let window_sizes = segment_windows
@@ -1383,7 +1267,6 @@ async fn test_select_segments_covers_candidates() -> anyhow::Result<()> {
         thresholds,
         cluster_key_id,
         1,
-        ReclusterMode::Aggressive,
     );
     let segment_windows = mutator.select_segments(&compact_segments, 2)?;
     assert_eq!(segment_windows.len(), 1);
@@ -1438,7 +1321,6 @@ async fn test_scalar_segment_selection_does_not_cross_partitions() -> anyhow::Re
         ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         1,
         1,
-        ReclusterMode::Aggressive,
         None,
     );
 
@@ -1451,7 +1333,7 @@ async fn test_scalar_segment_selection_does_not_cross_partitions() -> anyhow::Re
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
+async fn test_select_segments_returns_all_windows() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
@@ -1494,64 +1376,22 @@ async fn test_select_segments_normal_conservative() -> anyhow::Result<()> {
     )
     .await?;
 
-    let aggressive_mutator = new_test_mutator(
+    let mutator = new_test_mutator(
         ctx.clone(),
         data_accessor.clone(),
         schema.clone(),
         thresholds,
         cluster_key_id,
         1,
-        ReclusterMode::Aggressive,
     );
-    let aggressive_windows = aggressive_mutator.select_segments(&compact_segments, 2)?;
+    let windows = mutator.select_segments(&compact_segments, 2)?;
     assert_eq!(
-        aggressive_windows
+        windows
             .iter()
             .map(|window| window.len())
             .collect::<Vec<_>>(),
         vec![4, 3, 3]
     );
-
-    let conservative_mutator = new_test_mutator(
-        ctx.clone(),
-        data_accessor.clone(),
-        schema.clone(),
-        thresholds,
-        cluster_key_id,
-        1,
-        ReclusterMode::Conservative,
-    );
-    let conservative_windows = conservative_mutator.select_segments(&compact_segments, 2)?;
-    assert_eq!(
-        conservative_windows
-            .iter()
-            .map(|window| window.len())
-            .collect::<Vec<_>>(),
-        vec![4]
-    );
-
-    let segment_locations = gen_recluster_segments_by_ranges(
-        &data_accessor,
-        &TableMetaLocationGenerator::new("_prefix_disjoint".to_owned()),
-        &[vec![(1, 2)], vec![(3, 4)], vec![(5, 6)]],
-        1000,
-        100,
-        100,
-        thresholds,
-        cluster_key_id,
-    )
-    .await?;
-
-    let compact_segments = segment_pruning(
-        &ctx,
-        schema,
-        data_accessor,
-        create_segment_location_vector(segment_locations, None),
-    )
-    .await?;
-    let conservative_windows = conservative_mutator.select_segments(&compact_segments, 2)?;
-    assert_eq!(conservative_windows.len(), 1);
-    assert_eq!(conservative_windows[0].len(), 3);
 
     Ok(())
 }
@@ -1624,7 +1464,6 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
             ClusterKeyInfo::new((current_key_id, "(c0)".to_string()), ClusterType::Linear),
             0,
             1,
-            ReclusterMode::Conservative,
             Some(vector_cluster_info),
         );
 
@@ -1706,7 +1545,6 @@ async fn test_recluster_mutator_vector_only_overlap_selection() -> anyhow::Resul
         ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         0,
         1,
-        ReclusterMode::Conservative,
         Some(vector_cluster_info),
     );
 
@@ -1788,7 +1626,6 @@ async fn test_vector_segment_selection_does_not_cross_partitions() -> anyhow::Re
         ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear),
         1,
         1,
-        ReclusterMode::Aggressive,
         Some(vector_cluster_info),
     );
 
@@ -1847,7 +1684,6 @@ async fn test_builds_multiple_peaks_in_one_window() -> anyhow::Result<()> {
         thresholds,
         cluster_key_id,
         2,
-        ReclusterMode::Conservative,
     );
 
     let mut segment_windows = mutator.select_segments(&compact_segments, 1000)?;
@@ -1898,7 +1734,7 @@ async fn test_splits_hotspot_by_memory() -> anyhow::Result<()> {
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -1906,7 +1742,6 @@ async fn test_splits_hotspot_by_memory() -> anyhow::Result<()> {
         cluster_key_id,
         4,
         1000,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -1941,7 +1776,7 @@ async fn test_repacks_when_min_task_over_memory() -> anyhow::Result<()> {
     .await?;
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -1949,7 +1784,6 @@ async fn test_repacks_when_min_task_over_memory() -> anyhow::Result<()> {
         cluster_key_id,
         2,
         1000,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -1994,7 +1828,7 @@ async fn test_skips_singleton_over_memory() -> anyhow::Result<()> {
     }
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -2002,7 +1836,6 @@ async fn test_skips_singleton_over_memory() -> anyhow::Result<()> {
         cluster_key_id,
         2,
         1000,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -2068,7 +1901,7 @@ async fn test_keeps_full_hotspot_task() -> anyhow::Result<()> {
     );
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -2076,7 +1909,6 @@ async fn test_keeps_full_hotspot_task() -> anyhow::Result<()> {
         cluster_key_id,
         2,
         1000,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -2125,7 +1957,7 @@ async fn test_keeps_hotspot_plateau() -> anyhow::Result<()> {
     }
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -2133,7 +1965,6 @@ async fn test_keeps_hotspot_plateau() -> anyhow::Result<()> {
         cluster_key_id,
         2,
         1000,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -2199,7 +2030,7 @@ async fn test_fills_hotspot_tail_from_sides() -> anyhow::Result<()> {
     );
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
-    let (_, block_num, parts) = materialize_segment_locations_with_mode(
+    let (_, block_num, parts) = materialize_segment_locations(
         ctx,
         data_accessor,
         segment_locations,
@@ -2207,7 +2038,6 @@ async fn test_fills_hotspot_tail_from_sides() -> anyhow::Result<()> {
         cluster_key_id,
         3,
         1000,
-        ReclusterMode::Conservative,
     )
     .await?;
 
@@ -2229,13 +2059,8 @@ async fn test_fills_hotspot_tail_from_sides() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_defers_after_empty_group() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(0, 1), (1, 3), (2, 10)],
-        thresholds,
-        1,
-        ReclusterMode::Conservative,
-    )
-    .await?;
+    let (block_num, parts) =
+        materialize_segments_by_level(&[(0, 1), (1, 3), (2, 10)], thresholds, 1).await?;
 
     // Empty groups must not consume the single defer slot. The first real small
     // group is deferred, so a later larger group can use the only task slot.
@@ -2250,13 +2075,9 @@ async fn test_defers_after_empty_group() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fills_budget_with_next_task() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(1, 3), (2, 4)],
-        thresholds,
-        2,
-        ReclusterMode::Conservative,
-    )
-    .await?;
+    // Levels 1 through 3 share one group, so use levels that each form their own.
+    let (block_num, parts) =
+        materialize_segments_by_level(&[(4, 3), (5, 4)], thresholds, 2).await?;
 
     assert_eq!(block_num, 7);
     assert_eq!(parts.tasks.len(), 2);
@@ -2266,7 +2087,7 @@ async fn test_fills_budget_with_next_task() -> anyhow::Result<()> {
             .iter()
             .map(|task| task.level)
             .collect::<Vec<_>>(),
-        vec![2, 1]
+        vec![5, 4]
     );
     assert_eq!(task_part_counts(&parts), vec![4, 3]);
 
@@ -2277,13 +2098,8 @@ async fn test_fills_budget_with_next_task() -> anyhow::Result<()> {
 async fn test_final_groups_only_low_maturity_levels() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
     // Levels 1 and 2 share the low-maturity group; level 0 stays isolated.
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(0, 1), (1, 1), (2, 1)],
-        thresholds,
-        1,
-        ReclusterMode::Aggressive,
-    )
-    .await?;
+    let (block_num, parts) =
+        materialize_segments_by_level(&[(0, 1), (1, 1), (2, 1)], thresholds, 1).await?;
 
     assert_eq!(block_num, 2);
     assert_eq!(parts.tasks.len(), 1);
@@ -2340,11 +2156,10 @@ async fn test_final_low_maturity_level_uses_block_size_ratio() -> anyhow::Result
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_final_low_maturity_gets_candidate_budget_before_high_levels() -> anyhow::Result<()> {
-    let (_, parts) = materialize_segments_by_level_with_mode(
+    let (_, parts) = materialize_segments_by_level(
         &[(1, 8), (4, 8)],
         BlockThresholds::new(1000, 100, 100, 10),
         1,
-        ReclusterMode::Aggressive,
     )
     .await?;
     assert_eq!(parts.tasks.len(), 1);
@@ -2354,13 +2169,9 @@ async fn test_final_low_maturity_gets_candidate_budget_before_high_levels() -> a
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_final_two_mature_blocks_still_stop() -> anyhow::Result<()> {
-    let (_, parts) = materialize_segments_by_level_with_mode(
-        &[(2, 2)],
-        BlockThresholds::new(1000, 100, 100, 10),
-        1,
-        ReclusterMode::Aggressive,
-    )
-    .await?;
+    let (_, parts) =
+        materialize_segments_by_level(&[(2, 2)], BlockThresholds::new(1000, 100, 100, 10), 1)
+            .await?;
     assert!(parts.tasks.is_empty());
     assert_eq!(parts.remained_blocks.len(), 2);
     Ok(())
@@ -2370,13 +2181,8 @@ async fn test_final_two_mature_blocks_still_stop() -> anyhow::Result<()> {
 async fn test_final_high_level_boundaries() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
     for levels in [[3, 4], [4, 8]] {
-        let (block_num, parts) = materialize_segments_by_level_with_mode(
-            &[(levels[0], 3), (levels[1], 3)],
-            thresholds,
-            2,
-            ReclusterMode::Aggressive,
-        )
-        .await?;
+        let (block_num, parts) =
+            materialize_segments_by_level(&[(levels[0], 3), (levels[1], 3)], thresholds, 2).await?;
         assert_eq!(block_num, 6);
         assert_eq!(parts.tasks.len(), 2);
         let mut output_levels = parts
@@ -2393,13 +2199,7 @@ async fn test_final_high_level_boundaries() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_repacks_max_level_without_rewrite() -> anyhow::Result<()> {
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
-    let (block_num, parts) = materialize_segments_by_level_with_mode(
-        &[(32, 3)],
-        thresholds,
-        1,
-        ReclusterMode::Aggressive,
-    )
-    .await?;
+    let (block_num, parts) = materialize_segments_by_level(&[(32, 3)], thresholds, 1).await?;
 
     assert_eq!(block_num, 3);
     assert!(parts.tasks.is_empty());
@@ -2481,7 +2281,6 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
             threshold,
             cluster_key_id,
             max_tasks,
-            ReclusterMode::Aggressive,
         );
         let mutator = new_test_mutator(
             ctx.clone(),
@@ -2490,7 +2289,6 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
             threshold,
             cluster_key_id,
             max_tasks,
-            ReclusterMode::Conservative,
         );
         let segment_windows = select_mutator.select_segments(&compact_segments, 8)?;
         // `select_segments` only skips large unclustered segments (level < 0 and

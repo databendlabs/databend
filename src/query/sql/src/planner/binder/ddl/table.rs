@@ -117,7 +117,6 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY;
-use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
@@ -1226,9 +1225,6 @@ impl Binder {
                     OPT_KEY_CLUSTER_TYPE.to_owned(),
                     cluster_opt.cluster_type.to_string().to_lowercase(),
                 );
-                options
-                    .entry(OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
-                    .or_insert_with(|| "1".to_owned());
                 cluster_key = Some(format!("({})", keys.join(", ")));
             }
         }

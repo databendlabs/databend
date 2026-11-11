@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -66,7 +65,6 @@ use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
 use crate::operations::recluster::ReclusterBlockStats;
 use crate::operations::recluster::ReclusterGroup;
-use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
@@ -75,7 +73,6 @@ use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::partition_values;
 use crate::statistics::reducers::merge_statistics_mut;
-use crate::statistics::sort_by_cluster_stats;
 
 /// Maximum recluster depth allowed when only two blocks remain.
 /// For two-block layouts, repeated reclustering beyond this level
@@ -136,19 +133,19 @@ impl ReclusterCandidateWindow {
 /// Carry-over state reused across rounds of one `RECLUSTER FINAL` statement.
 #[derive(Clone, Default)]
 pub struct ReclusterFinalCarry {
-    // State reused across rounds of one RECLUSTER FINAL statement.
+    // State reused across rounds of one recluster job.
     pub(crate) pending: Vec<ReclusterCandidateWindow>,
     // Next scan-range start in the latest snapshot. A successful task resets this to the current
     // range start so the next round can continue reclustering replacement segments.
     pub(crate) scan_cursor: usize,
     // Cached candidates must match this cluster key.
     pub(crate) cluster_key_id: u32,
-    // Reuse block-meta decode workers across rounds of one FINAL statement.
+    // Reuse block-meta decode workers across rounds of one recluster job.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
 }
 
 impl ReclusterFinalCarry {
-    /// Lazily create or reuse the block-meta decode runtime for FINAL recluster.
+    /// Lazily create or reuse the block-meta decode runtime of the job.
     pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
         if self.decode_runtime.is_none() {
             self.decode_runtime = Some(Arc::new(Runtime::with_worker_threads(
@@ -215,7 +212,6 @@ impl ReclusterMutator {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         snapshot: &TableSnapshot,
-        mode: ReclusterMode,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
         let cluster_key_info = table
@@ -264,7 +260,6 @@ impl ReclusterMutator {
             table,
             &schema,
             parsed_cluster_keys,
-            mode,
             depth_threshold,
             block_thresholds,
             cluster_key_info,
@@ -294,7 +289,6 @@ impl ReclusterMutator {
         cluster_key_info: ClusterKeyInfo,
         partition_key_count: usize,
         max_tasks: usize,
-        mode: ReclusterMode,
         vector_cluster_info: Option<VectorClusterInfo>,
     ) -> Self {
         let memory_threshold = ctx
@@ -305,7 +299,6 @@ impl ReclusterMutator {
         let (properties, strategy) = ReclusterProperties::for_test(
             &schema,
             cluster_key_exprs,
-            mode,
             depth_threshold,
             block_thresholds,
             cluster_key_info,
@@ -374,27 +367,13 @@ impl ReclusterMutator {
         candidate_window.tasks = tasks;
 
         if candidate_window.tasks.is_empty() {
-            let all_original_stats = blocks
-                .iter()
-                .all(|block| matches!(block.stats, ReclusterBlockStats::Original));
-            let unordered = || {
-                blocks.windows(2).any(|window| {
-                    sort_by_cluster_stats(
-                        Some(window[0].stats()),
-                        Some(window[1].stats()),
-                        self.properties.cluster_key_info.cluster_key_id(),
-                    ) == cmp::Ordering::Greater
-                })
-            };
             let selected_segment_count = window_segment_infos.len();
             let target_segment_count =
                 total_block_count.div_ceil(self.properties.block_thresholds.block_per_segment);
             let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack =
-                self.properties.mode.allows_unordered_repack() && all_original_stats && unordered();
-            if compactable_repack || unordered_repack {
+            if compactable_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);
                 candidate_window.tasks.push(ReclusterTaskCandidate {
@@ -465,10 +444,7 @@ impl ReclusterMutator {
                 continue;
             };
             blocks_map
-                .entry((
-                    ReclusterGroup::assign(level, self.properties.mode),
-                    partition,
-                ))
+                .entry((ReclusterGroup::assign(level), partition))
                 .or_default()
                 .push(idx);
         }

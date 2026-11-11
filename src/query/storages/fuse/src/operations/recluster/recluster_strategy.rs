@@ -47,44 +47,9 @@ use crate::statistics::VectorClusterInfo;
 use crate::statistics::cluster_stats_from_col_stats;
 use crate::statistics::prepare_cluster_key_exprs;
 
-/// Recluster candidate selection mode.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ReclusterMode {
-    /// Legacy one-window probing with tighter rewrite selection.
-    Conservative,
-    /// Broader probing that mixes levels 1 through 3 while keeping other levels separate.
-    Aggressive,
-}
-
-/// Each behavior a mode selects is queried on its own, so call sites depend on the behavior
-/// rather than on which mode selected it.
-impl ReclusterMode {
-    /// Blocks of the low mature levels 1 through 3 share one candidate group.
-    pub(crate) fn groups_low_maturity_levels(self) -> bool {
-        matches!(self, Self::Aggressive)
-    }
-
-    /// Segment selection probes only the deepest window of each scan range.
-    pub(crate) fn probes_deepest_window_only(self) -> bool {
-        matches!(self, Self::Conservative)
-    }
-
-    /// A window that yields no rewrite task, and whose blocks all keep their original
-    /// statistics but are out of cluster-key order, may still be repacked.
-    pub(crate) fn allows_unordered_repack(self) -> bool {
-        matches!(self, Self::Conservative)
-    }
-
-    /// The scan cursor and pending windows survive into the next round.
-    pub(crate) fn keeps_carry(self) -> bool {
-        matches!(self, Self::Aggressive)
-    }
-}
-
 /// Immutable inputs shared by all recluster strategies.
 #[derive(Clone)]
 pub(crate) struct ReclusterProperties {
-    pub(crate) mode: ReclusterMode,
     pub(crate) depth_threshold: f64,
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_info: ClusterKeyInfo,
@@ -104,7 +69,6 @@ impl ReclusterProperties {
         table: &FuseTable,
         schema: &TableSchemaRef,
         cluster_keys: ClusterKeys,
-        mode: ReclusterMode,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
         cluster_key_info: ClusterKeyInfo,
@@ -143,7 +107,6 @@ impl ReclusterProperties {
         let prepared_cluster_key_exprs =
             prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
         let properties = Self {
-            mode,
             depth_threshold,
             block_thresholds,
             split_sort_tasks: strategy.supports_ordered_merge()
@@ -162,7 +125,6 @@ impl ReclusterProperties {
     pub(crate) fn for_test(
         schema: &TableSchemaRef,
         cluster_key_exprs: Vec<Expr<usize>>,
-        mode: ReclusterMode,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
         cluster_key_info: ClusterKeyInfo,
@@ -191,7 +153,6 @@ impl ReclusterProperties {
         let prepared_cluster_key_exprs =
             prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
         let properties = Self {
-            mode,
             depth_threshold,
             block_thresholds,
             split_sort_tasks: strategy.supports_ordered_merge(),
@@ -266,7 +227,7 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
 pub(crate) enum ReclusterGroup {
     /// A single level forms its own group.
     Level(i32),
-    /// Aggressive mode groups the low mature levels 1 through 3.
+    /// The low mature levels 1 through 3.
     LowMaturity,
 }
 
@@ -287,9 +248,10 @@ impl PartialOrd for ReclusterGroup {
 }
 
 impl ReclusterGroup {
-    /// Assign a block's recluster group for the given mode.
-    pub(crate) fn assign(level: i32, mode: ReclusterMode) -> ReclusterGroup {
-        if mode.groups_low_maturity_levels() && (1..=3).contains(&level) {
+    /// Assign a block's recluster group: the low mature levels 1 through 3 share one group,
+    /// every other level forms its own.
+    pub(crate) fn assign(level: i32) -> ReclusterGroup {
+        if (1..=3).contains(&level) {
             ReclusterGroup::LowMaturity
         } else {
             ReclusterGroup::Level(level)

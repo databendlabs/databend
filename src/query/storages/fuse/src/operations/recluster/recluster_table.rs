@@ -42,7 +42,6 @@ use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
-use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
@@ -115,7 +114,6 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
-        mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
@@ -144,7 +142,6 @@ impl FuseTable {
             self,
             ctx.clone(),
             snapshot.as_ref(),
-            mode,
         )?);
 
         // Carry is tied to the current cluster key because cached block metas
@@ -217,8 +214,7 @@ impl FuseTable {
             let scan_end = scan_start.saturating_add(chunk_size).min(number_segments);
 
             debug!(
-                "recluster: candidate scan mode={:?} carry_in={} carry_valid={} scan_cursor={} scan_start={} scan_end={} chunk_size={}",
-                mode,
+                "recluster: candidate scan carry_in={} carry_valid={} scan_cursor={} scan_start={} scan_end={} chunk_size={}",
                 carry_in,
                 valid_carry.len(),
                 carry.scan_cursor,
@@ -500,17 +496,12 @@ impl FuseTable {
             }
         };
 
-        if !mode.keeps_carry() {
-            *carry = ReclusterFinalCarry::default();
-        }
-
         let recluster_seg_num = parts.removed_segment_indexes.len() as u64;
         let elapsed_time = start.elapsed();
         info!(
             event = "recluster.planned",
             table_id = self.get_id(),
             strategy = format!("{:?}", mutator.properties.cluster_key_info.cluster_type).as_str(),
-            mode = format!("{:?}", mode).as_str(),
             tasks = parts.tasks.len(),
             repack_count,
             segments = recluster_seg_num,

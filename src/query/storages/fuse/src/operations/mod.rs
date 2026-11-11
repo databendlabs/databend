@@ -61,7 +61,6 @@ pub use read::row_fetch_processor;
 pub use recluster::CandidateScore;
 pub use recluster::ReclusterCandidateWindow;
 pub use recluster::ReclusterFinalCarry;
-pub use recluster::ReclusterMode;
 pub use recluster::ReclusterMutator;
 pub use recluster::SelectedReclusterSegment;
 pub use replace_into::*;
