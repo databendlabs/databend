@@ -127,6 +127,7 @@ mod tests {
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::types::BinaryType;
     use databend_common_expression::types::StringType;
     use databend_common_meta_app::principal::CsvFileFormatParams;
     use databend_common_meta_app::principal::CsvQuoteStyle;
@@ -136,6 +137,32 @@ mod tests {
 
     use crate::get_output_format;
     use crate::output_format::test_utils::gen_schema_and_block;
+
+    #[test]
+    fn test_csv_output_empty_values() -> Result<()> {
+        let (schema, block) = gen_schema_and_block(
+            vec![
+                TableField::new("binary", TableDataType::Binary.wrap_nullable()),
+                TableField::new("string", TableDataType::String.wrap_nullable()),
+            ],
+            vec![
+                BinaryType::from_opt_data(vec![Some(b"".as_slice()), None]),
+                StringType::from_opt_data(vec![Some(""), None]),
+            ],
+        );
+        let settings = Settings::create(Tenant::new_literal("default"));
+        let params = CsvFileFormatParams {
+            quote_style: CsvQuoteStyle::QuoteMinimal,
+            ..Default::default()
+        };
+        let mut output = get_output_format(
+            schema,
+            FileFormatParams::Csv(params),
+            settings.get_output_format_settings()?,
+        )?;
+        assert_eq!(output.serialize_block(&block)?, b"\"\",\"\"\n\\N,\\N\n");
+        Ok(())
+    }
 
     #[test]
     fn test_csv_output_ignores_escape() -> Result<()> {
@@ -157,8 +184,8 @@ mod tests {
                     "\"a,b\\\"\n",
                     "\"a\"\"b\\\"\n",
                     "\"a\nb\\\"\n",
-                    "\\N\n",
-                    "\n",
+                    "\"\\N\"\n",
+                    "\"\"\n",
                 ),
             ),
             (

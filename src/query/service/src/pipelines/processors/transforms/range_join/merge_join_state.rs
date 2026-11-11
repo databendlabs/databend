@@ -90,6 +90,11 @@ impl RangeJoinState {
         // Start to execute range join algo
         let left_len = left_sorted_block.num_rows();
         let right_len = right_sort_block.num_rows();
+        // Filters can leave empty blocks in a partition. Neither side can produce
+        // matches in that case, and the merge loop requires a non-empty right side.
+        if left_len == 0 || right_len == 0 {
+            return Ok(vec![]);
+        }
 
         let left_idx_col = left_sorted_block.get_by_offset(1);
         let left_join_key_col = left_sorted_block.get_by_offset(0);

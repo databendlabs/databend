@@ -76,9 +76,10 @@ where
             let cache = self.cache.clone();
             let reader = self.reader.clone();
             let key = key.to_string();
+            let policy = cache.policy();
             databend_common_base::runtime::spawn(async move {
                 let start = Instant::now();
-                match reader.read(&key).await {
+                match reader.read(&key, &policy).await {
                     Ok(value) => {
                         metrics_inc_cache_miss_load_millisecond(
                             start.elapsed().as_millis() as u64,
@@ -117,7 +118,10 @@ where
     /// rejects it the old value is dropped, so it is not served afterwards.
     async fn load(&self, key: &str, replace: bool) -> Result<CacheRef<R::Item>> {
         let start = Instant::now();
-        let value = self.reader.read(&key.to_string()).await?;
+        let value = self
+            .reader
+            .read(&key.to_string(), &self.cache.policy())
+            .await?;
         if !self.cache.is_enabled() {
             return Ok(self.cache.fill(key, value));
         }

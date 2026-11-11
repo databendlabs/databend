@@ -346,7 +346,6 @@ md-5 = "0.10.5"
 memchr = { version = "2", default-features = false }
 micromarshal = "0.7.0"
 mlua = { version = "0.11", features = ["lua54", "vendored", "async", "serialize"] }
-mockall = "0.11.2"
 mysql_async = { version = "0.37.1", default-features = false, features = [
     "minimal-rust",
     "rustls-tls",
@@ -457,6 +456,7 @@ snailquote = "0.3.1"
 snap = "1"
 socket2 = "0.5.3"
 sqlx = { version = "0.8", default-features = false, features = ["mysql", "runtime-tokio"] }
+stacker = "0.1.21"
 state = "0.6.0"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
@@ -501,7 +501,7 @@ wkt = "0.14.0"
 xorf = "0.12.0"
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
 zerocopy = { version = "0.8.26", features = ["derive"] }
-zip = { version = "4.6.1", default-features = false, features = [
+zip = { version = "9.0.1", default-features = false, features = [
     "aes-crypto",
     "bzip2",
     "deflate",

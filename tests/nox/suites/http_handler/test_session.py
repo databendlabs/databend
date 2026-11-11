@@ -253,6 +253,11 @@ def test_session(client):
             assert error["code"] == 5110, response.text
             assert "temporary tables in session" in error["message"], error
             assert "expired" in error["message"], error
+            # The server has confirmed the tables are gone, so the state it hands
+            # back must no longer pin the client to a node.
+            failed_state = response.json()["session"]
+            assert not failed_state["need_sticky"], response.text
+            assert not failed_state["need_keep_alive"], response.text
         body = client.do_query("SELECT * FROM session_header_temp", state)
         state = body["session"]
         assert body["data"] == [["42"]], body
@@ -261,6 +266,171 @@ def test_session(client):
     assert not body["session"]["need_sticky"], body
     assert not body["session"]["need_keep_alive"], body
     client.do_logout()
+
+
+def test_materialized_cte_is_not_sticky(client):
+    # A materialized CTE is backed by a temporary table that lives only for the
+    # duration of the query. Responses sent while it exists (the first page is
+    # returned after wait_time_secs even though the CTE is still being
+    # materialized) must not report it as session state, otherwise the client
+    # pins every later request to this node.
+    client.login()
+    body = client.do_query(
+        "WITH slow AS MATERIALIZED (SELECT sleep(3) AS a) SELECT a FROM slow",
+        pagination={"wait_time_secs": 1},
+    )
+    states = [body["session"]] if body["session"] else []
+    data = list(body["data"])
+    next_uri = body["next_uri"]
+    final_uri = body["final_uri"]
+    for _ in range(30):
+        if not next_uri or next_uri == final_uri:
+            break
+        body = client.request("GET", f"http://localhost:8000{next_uri}")
+        assert body["error"] is None, body
+        if body.get("session"):
+            states.append(body["session"])
+        data.extend(body.get("data") or [])
+        next_uri = body.get("next_uri")
+    else:
+        pytest.fail("materialized CTE query did not finish")
+    assert data == [["0"]], data
+    # The page that points at final_uri has already been appended to `states`
+    # above; /final itself carries no session, but request it to close the query.
+    body = client.request("GET", f"http://localhost:8000{final_uri}")
+    assert body["error"] is None, body
+    assert body["next_uri"] is None, body
+    assert body["session"] is None, body
+    assert states, "expected at least one response carrying session state"
+    for state in states:
+        assert not state["need_sticky"], state
+        assert not state["need_keep_alive"], state
+    # The scratch table is gone with the query, so a follow-up statement that
+    # echoes the final state runs without any temp-table check tripping.
+    body = client.do_query("select 1", states[-1])
+    assert body["data"] == [["1"]], body
+    assert not body["session"]["need_sticky"], body
+    client.do_logout()
+
+
+def test_failed_materialized_cte_is_not_sticky(client):
+    # The CTE's CREATE TEMP TABLE ... AS SELECT fails at execution; whatever
+    # it left behind is dropped with the query and the session is not sticky.
+    client.login()
+    body = client.request(
+        "POST",
+        query_url,
+        json={
+            "sql": "WITH broken AS MATERIALIZED "
+            "(SELECT 1 / (number - number) AS x FROM numbers(1)) SELECT x FROM broken",
+            "pagination": {"wait_time_secs": 10},
+        },
+    )
+    assert body["error"] is not None, body
+    assert "divided by zero" in body["error"]["message"], body
+    assert not body["session"]["need_sticky"], body
+    body = client.do_query("select 1", body["session"])
+    assert body["data"] == [["1"]], body
+    assert not body["session"]["need_sticky"], body
+    client.do_logout()
+
+
+def test_recursive_cte_does_not_hide_user_temp_table(client):
+    # A recursive CTE materializes into a regular memory table
+    # (`__rcte_<query_id>_<node_id>_<n>_<cte>`), not a session temporary table.
+    # It must never be marked as query-scoped in the temp table manager: the mark
+    # would not be cleared (the table is dropped through the catalog) and the
+    # stickiness check must keep seeing a user temp table created afterwards.
+    client.login()
+    body = client.do_query(
+        "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM t WHERE n < 3) "
+        "SELECT n FROM t ORDER BY n"
+    )
+    assert body["data"] == [["1"], ["2"], ["3"]], body
+    assert not body["session"]["need_sticky"], body
+    state = body["session"]
+    body = client.do_query("CREATE TEMP TABLE t(a INT)", state)
+    state = body["session"]
+    try:
+        assert state["need_sticky"], body
+        assert state["need_keep_alive"], body
+    finally:
+        body = client.do_query("DROP TABLE t", state)
+    assert not body["session"]["need_sticky"], body
+    client.do_logout()
+
+
+def test_sticky_node_lost_error_code():
+    # A request pinned to a node that is no longer in the cluster is rejected
+    # by the session middleware before the query handler runs. Clients key on
+    # SessionNodeLost (5113) to drop their sticky state and reconnect.
+    headers = {"X-DATABEND-STICKY-NODE": "node-that-does-not-exist"}
+
+    # No session in the request: nothing to correct, just the error.
+    response = requests.post(
+        query_url, auth=auth, headers=headers, json={"sql": "select 1"}, timeout=30
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    error = body["error"]
+    assert error["code"] == 5113, response.text
+    # Older clients match on this text; keep it stable alongside the code.
+    assert error["message"].startswith("Sticky session state lost: "), error
+    assert "node-that-does-not-exist" in error["message"], error
+    assert body["session"] is None, body
+
+    # With the stale state the client is replaying, the response hands back a
+    # corrected copy: client-side state kept, node-bound state cleared.
+    stale = {
+        "database": "system",
+        "settings": {"max_threads": "3"},
+        "txn_state": "Active",
+        "need_sticky": True,
+        "need_keep_alive": True,
+        "internal": json.dumps(
+            {"has_temp_table": True, "last_node_id": "node-that-does-not-exist"}
+        ),
+    }
+    response = requests.post(
+        query_url,
+        auth=auth,
+        headers=headers,
+        json={"sql": "select 1", "session": stale},
+        timeout=30,
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert body["error"]["code"] == 5113, response.text
+    session = body["session"]
+    assert session["database"] == "system", body
+    assert session["settings"] == {"max_threads": "3"}, body
+    assert session["txn_state"] == "Fail", body
+    assert not session["need_sticky"], body
+    assert not session["need_keep_alive"], body
+    # false is omitted from the serialized internal state
+    assert not json.loads(session["internal"]).get("has_temp_table", False), body
+
+    # Page requests carry no session state, so none is returned.
+    response = requests.get(
+        f"{query_url}/some-query-id/page/1", auth=auth, headers=headers, timeout=30
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert body["error"]["code"] == 5113, response.text
+    assert body["session"] is None, body
+
+    # Other sticky endpoints keep the minimal error-only body.
+    response = requests.post(
+        "http://localhost:8000/v1/session/logout",
+        auth=auth,
+        headers=headers,
+        json={},
+        timeout=30,
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert body["error"]["code"] == 5113, response.text
+    assert set(body) == {"error"}, body
 
 
 @pytest.mark.parametrize("caps", [None, "", "unknown", "session_header_v2"])

@@ -17,6 +17,7 @@ use std::mem::discriminant;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -48,7 +49,6 @@ use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_sql::validate_function_arg;
 use databend_common_storages_factory::Table;
-use itertools::Itertools;
 
 use crate::sessions::TableContext;
 
@@ -164,7 +164,7 @@ impl Table for RangeTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         match self.name() {
             "generate_series" => {
@@ -214,9 +214,7 @@ struct RangeSource<const INCLUSIVE: bool> {
 
     data_type: DataType,
 
-    // TODO: make it atomic thus we can use it in multiple threads
-    current_idx: i64,
-    start: i64,
+    current: i64,
     end: i64,
     step: i64,
 }
@@ -249,16 +247,11 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
             ))
         })?;
         let normalized = normalize_series_params(&series_type, start, end, step, INCLUSIVE)?;
-        let start = normalized.start;
-        let end = normalized.end;
-        let step = normalized.step;
-
         SyncSourcer::create(ctx.get_scan_progress(), output, Self {
-            current_idx: 0,
+            current: normalized.start,
             data_type,
-            start,
-            end,
-            step,
+            end: normalized.end,
+            step: normalized.step,
             finished: false,
         })
     }
@@ -272,46 +265,38 @@ impl<const INCLUSIVE: bool> SyncSource for RangeSource<INCLUSIVE> {
             return Ok(None);
         }
 
-        let current_start = self.start + self.step * self.current_idx;
-        let offset = if self.step < 0 { 1 } else { -1 };
+        const MAX_BLOCK_SIZE: usize = 1024 * 1024;
 
-        // check if we need to finish
-        if (self.step > 0 && current_start >= self.end)
-            || (self.step < 0 && current_start <= self.end)
-        {
-            self.finished = true;
+        let mut values = Vec::new();
+        while values.len() < MAX_BLOCK_SIZE && !self.finished {
+            if (self.step > 0 && self.current > self.end)
+                || (self.step < 0 && self.current < self.end)
+                || (!INCLUSIVE && self.current == self.end)
+            {
+                self.finished = true;
+                break;
+            }
+
+            values.push(self.current);
+            match self.current.checked_add(self.step) {
+                Some(next) => self.current = next,
+                None => self.finished = true,
+            }
+        }
+
+        if values.is_empty() {
             return Ok(None);
         }
 
-        static MAX_BLOCK_SIZE: i64 = 1024 * 1024;
-
-        let size =
-            ((self.end - current_start + (self.step + offset)) / self.step).min(MAX_BLOCK_SIZE);
-
         let column = match self.data_type {
-            DataType::Number(_) => Int64Type::from_data(
-                (0..size)
-                    .map(|idx| current_start + self.step * idx)
-                    .collect_vec(),
-            ),
-            DataType::Timestamp => TimestampType::from_data(
-                (0..size)
-                    .map(|idx| current_start + self.step * idx)
-                    .collect_vec(),
-            ),
+            DataType::Number(_) => Int64Type::from_data(values),
+            DataType::Timestamp => TimestampType::from_data(values),
             DataType::Date => {
-                let current_start = current_start as i32;
-                let step = self.step as i32;
-                DateType::from_data(
-                    (0..size as i32)
-                        .map(|idx| current_start + step * idx)
-                        .collect_vec(),
-                )
+                DateType::from_data(values.into_iter().map(|val| val as i32).collect())
             }
             _ => unreachable!(),
         };
 
-        self.current_idx += size;
         Ok(Some(DataBlock::new_from_columns(vec![column])))
     }
 }

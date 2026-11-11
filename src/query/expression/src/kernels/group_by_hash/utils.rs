@@ -14,6 +14,7 @@
 
 use databend_common_column::types::NativeType;
 use databend_common_column::types::i256 as NativeI256;
+use databend_common_column::types::timestamp_tz;
 
 use crate::Column;
 use crate::ProjectedBlock;
@@ -107,7 +108,10 @@ unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut G
                 unimplemented!()
             }
             Column::Timestamp(v) => row_space.store(&v[row]),
-            Column::TimestampTz(v) => row_space.store(&v[row]),
+            Column::TimestampTz(v) => {
+                // Only the equality key discards the offset; projection uses the original column.
+                row_space.store(&timestamp_tz::new(v[row].timestamp(), 0));
+            }
             Column::Date(v) => row_space.store(&v[row]),
             Column::Interval(v) => row_space.store(&v[row]),
             Column::Array(array) | Column::Map(array) => {

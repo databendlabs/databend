@@ -121,7 +121,6 @@ fn where_uses_original_only_for_authorized_base_columns() -> Result<()> {
         "default".into(),
         table.into(),
         None,
-        None,
         false,
         false,
         None,

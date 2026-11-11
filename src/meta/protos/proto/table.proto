@@ -144,8 +144,7 @@ message TableMeta {
   map<uint32, RowAccessPolicyColumnMap> column_mask_policy_columns_ids = 36;
 
   // Legacy experimental table refs were intentionally removed and are no longer
-  // part of table metadata compatibility. Do not reuse field 37 for the new
-  // branch/tag redesign.
+  // part of table metadata compatibility. Do not reuse field 37.
   // map<string, SnapshotRef> refs = 37;
   reserved 37;
 

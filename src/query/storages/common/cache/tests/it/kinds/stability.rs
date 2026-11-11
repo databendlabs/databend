@@ -31,8 +31,9 @@ const THREADS: u64 = 8;
 const OPS: usize = 2_000;
 
 /// Threads mixing every kind on a small cache, while capacities change and memory pressure
-/// reclaims. Once nobody holds a value, every byte charged is a byte cached, within capacity;
-/// once every kind is turned off, nothing stays charged.
+/// reclaims. Once nobody holds a value, every byte charged is a byte cached. Reapplying shared
+/// limits reclaims entries that were pinned during a resize; turning every kind off clears
+/// all charges.
 #[test]
 fn test_every_kind_under_concurrency() {
     for backend in Backend::ALL {
@@ -48,6 +49,21 @@ fn test_every_kind_under_concurrency() {
             thread.join().unwrap();
         }
 
+        if backend == Backend::Shared {
+            // A resize cannot reclaim pinned entries. Dropping the workers' handles does not
+            // evict them from the cache, so reapply each limit now that all entries are unheld.
+            for row in manager
+                .rows()
+                .iter()
+                .filter(|r| r.kind.is_some() && r.pool.is_some())
+            {
+                assert_eq!(row.size, row.in_cache_size, "{backend:?} {}", row.name);
+                if let Some(capacity) = row.capacity {
+                    manager.set_cache_capacity(&row.name, capacity).unwrap();
+                }
+            }
+        }
+
         for row in manager
             .rows()
             .iter()
@@ -55,13 +71,15 @@ fn test_every_kind_under_concurrency() {
         {
             assert_eq!(row.size, row.in_cache_size, "{backend:?} {}", row.name);
             match (row.capacity, row.unit) {
-                (Some(cap), Unit::Bytes) => assert!(row.in_cache_size <= cap, "{}", row.name),
-                (Some(cap), Unit::Count) => assert!(row.num_items <= cap, "{}", row.name),
+                (Some(cap), Unit::Bytes) => {
+                    assert!(row.in_cache_size <= cap, "{backend:?} {row:?}")
+                }
+                (Some(cap), Unit::Count) => assert!(row.num_items <= cap, "{backend:?} {row:?}"),
                 (None, _) => {}
             }
         }
         for pool in manager.rows().iter().filter(|r| r.kind.is_none()) {
-            assert!(pool.size <= pool.capacity.unwrap(), "{}", pool.name);
+            assert!(pool.size <= pool.capacity.unwrap(), "{backend:?} {pool:?}");
         }
 
         for kind in CacheKind::all() {

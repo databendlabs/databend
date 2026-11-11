@@ -1005,13 +1005,23 @@ impl Binder {
         metadata.add_lazy_columns(supported_lazy_cols);
 
         for table_index in lazy_table_indexes {
-            if metadata.row_id_index_by_table_index(table_index).is_none() {
-                let internal_column = INTERNAL_COLUMN_FACTORY
-                    .get_internal_column(ROW_ID_COL_NAME)
-                    .unwrap();
-                let index = metadata.add_internal_column(table_index, internal_column);
-                metadata.set_table_row_id_index(table_index, index);
+            if metadata.row_id_index_by_table_index(table_index).is_some() {
+                continue;
             }
+            // The query may already bind `_row_id` for this table (e.g. `SELECT _row_id, a ...`),
+            // possibly in a subquery. Reuse it: the scan keeps one `_row_id` in its name mapping,
+            // so a second internal column would never be read and the row fetcher could not find
+            // it.
+            let index = match metadata.internal_column_index(table_index, ROW_ID_COLUMN_ID) {
+                Some(index) => index,
+                None => {
+                    let internal_column = INTERNAL_COLUMN_FACTORY
+                        .get_internal_column(ROW_ID_COL_NAME)
+                        .unwrap();
+                    metadata.add_internal_column(table_index, internal_column)
+                }
+            };
+            metadata.set_table_row_id_index(table_index, index);
         }
 
         Ok(())

@@ -344,6 +344,67 @@ fn test_serialized_key_row_count_mismatch() {
 }
 
 #[test]
+fn test_timezone_equality_keys_keep_source_offsets() -> anyhow::Result<()> {
+    use databend_common_column::types::timestamp_tz;
+
+    let timestamps = Column::TimestampTz(
+        vec![
+            timestamp_tz::new(-4, -1800),
+            timestamp_tz::new(-4, 7200),
+            timestamp_tz::new(9, 0),
+        ]
+        .into(),
+    );
+    let arrays = Column::Array(Box::new(ArrayColumn::new(
+        timestamps.clone(),
+        vec![0, 1, 2, 3].into(),
+    )));
+    let maps = Column::Map(Box::new(ArrayColumn::new(
+        Column::Tuple(vec![
+            StringType::from_data(vec!["key"; 3]),
+            timestamps.clone(),
+        ]),
+        vec![0, 1, 2, 3].into(),
+    )));
+    for column in [
+        timestamps.clone(),
+        NullableColumn::new_column(timestamps.clone(), Bitmap::from([true; 3])),
+        arrays.clone(),
+        maps,
+        Column::Tuple(vec![arrays]),
+    ] {
+        let block = DataBlock::new_from_columns(vec![column, Int8Type::from_data(vec![2; 3])]);
+        for projection in [vec![0], vec![0, 1]] {
+            let entries = ProjectedBlock::project(&projection, &block);
+            let method = HashMethodSerializer::default();
+            let state = method.build_keys_state(entries, 3)?;
+            let keys = method.build_keys_iter(&state)?.collect::<Vec<_>>();
+            assert_eq!(keys[0], keys[1]);
+            assert_ne!(keys[0], keys[2]);
+
+            let mut hashes = vec![0; 3];
+            group_hash_entries(entries, &mut hashes);
+            assert_eq!(hashes[0], hashes[1]);
+        }
+        let column = block.get_by_offset(0).to_column();
+        let mut column_hashes = vec![0; 3];
+        group_hash_entry(block.get_by_offset(0), &mut column_hashes, true);
+        for (value, expected_hash) in column.iter().zip(column_hashes) {
+            let constant = BlockEntry::new_const_column(column.data_type(), value.to_owned(), 1);
+            let mut constant_hash = [0];
+            group_hash_entry(&constant, &mut constant_hash, true);
+            assert_eq!(constant_hash[0], expected_hash);
+        }
+    }
+    let Column::TimestampTz(source) = timestamps else {
+        unreachable!()
+    };
+    assert_eq!(source[0].seconds_offset(), -1800);
+    assert_eq!(source[1].seconds_offset(), 7200);
+    Ok(())
+}
+
+#[test]
 fn test_group_by_hash() -> anyhow::Result<()> {
     let schema = TableSchemaRefExt::create(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int8)),

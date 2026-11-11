@@ -54,6 +54,7 @@ impl AdminService {
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::v1::config::config_handler))
+            .at("/v1/caches", get(super::v1::caches::caches_handler))
             .at("/v1/system", get(super::v1::system::system_handler))
             .at(
                 "/v1/status",

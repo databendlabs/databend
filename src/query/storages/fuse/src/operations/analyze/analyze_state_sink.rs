@@ -47,6 +47,7 @@ use databend_common_statistics::Histogram;
 use databend_common_statistics::HistogramBucket;
 use databend_common_statistics::KllBucketBounds;
 use databend_common_storage::MetaHLL;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
@@ -461,7 +462,10 @@ impl SinkAnalyzeState {
     async fn commit_statistics(&mut self) -> Result<()> {
         let table = self.table.refresh(self.ctx.as_ref()).await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let Some(snapshot) = table.read_table_snapshot().await? else {
+        let Some(snapshot) = table
+            .read_table_snapshot_with_policy(self.ctx.cache_policy())
+            .await?
+        else {
             return Ok(());
         };
         self.rebase_statistics(table, snapshot.clone()).await?;
@@ -936,7 +940,11 @@ impl KllBucketScanner {
         }
         let projection = Projection::Columns(field_indices);
         Ok(Some(Self {
-            block_reader: table.create_block_reader(ctx.clone(), projection, false)?,
+            block_reader: table.create_block_reader(
+                ctx.clone(),
+                projection,
+                CachePolicy::READ_ONLY,
+            )?,
             settings: ReadSettings::from_ctx(ctx)?,
             storage_format: table.get_storage_format(),
             collector_indices,
@@ -974,7 +982,7 @@ impl KllBucketScanner {
         let (mut num_blocks, mut num_rows) = (0, 0);
         for chunk in segments.chunks(max_threads * 4) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for segment in segments {
                 for block_meta in segment?.block_metas()? {

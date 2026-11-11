@@ -108,6 +108,73 @@ insert into t4 select number % 2, to_string(number) from numbers(500)
 statement ok
 alter table t4 recluster final
 
+# Recluster output must be cut at the table thresholds (80 rows here), so a
+# constant-key block is terminal (level -1) as soon as it is written. The
+# task-scaled cut used to land at 80% of the 80-row target, 64 rows, below the
+# table minimum; those blocks never became terminal and every later RECLUSTER
+# rewrote the same hot key again.
+statement ok
+create table t5(a int) cluster by(a) row_per_block=100
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+insert into t5 select 1 from numbers(50)
+
+statement ok
+set max_block_size = 10
+
+statement ok
+alter table t5 recluster final
+
+query I
+select count() from fuse_snapshot('db_09_0016', 't5')
+----
+9
+
+# 400 rows are cut at the table minimum of 80 rows, not at 64.
+query I
+select row_count from fuse_block('db_09_0016', 't5') order by row_count
+----
+80
+80
+80
+80
+80
+
+# Every output block is a terminal constant block, so nothing is left to do.
+statement ok
+alter table t5 recluster final
+
+query I
+select count() from fuse_snapshot('db_09_0016', 't5')
+----
+9
+
+query I
+select count() from t5
+----
+400
+
 statement ok
 DROP DATABASE db_09_0016
 

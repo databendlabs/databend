@@ -161,6 +161,53 @@ select 'a%b_c\d' like 'a!%b!_c!\\d' escape '!'
 ----
 1
 
+# `\\` in a pattern is a single literal backslash; constant patterns must match the like function.
+query BBBB
+select 'a\\b' like 'a\\\\b', 'a\\b' like 'a\\\\b%', 'a\\\\b' like 'a\\\\b', 'a\\\\b' like 'a\\\\\\\\b'
+----
+1 1 0 1
+
+query IBBBB
+select number + 1, s like 'a\\\\b', s like 'a\\\\b%', s like '%a\\\\b', s like '%a\\\\b%'
+from (select number, concat('a', repeat(char(92), number + 1), 'b') s from numbers(2)) order by number
+----
+1 1 1 1 1
+2 0 0 0 0
+
+query I
+select count(*) from (select concat('a', repeat(char(92), number + 1), 'b') s from numbers(3))
+where (s like 'a\\\\b') != (s like concat('a', repeat(char(92), 2), 'b'))
+   or (s like 'a\\\\b%') != (s like concat('a', repeat(char(92), 2), 'b%'))
+   or (s like '%a\\\\b') != (s like concat('%a', repeat(char(92), 2), 'b'))
+----
+0
+
+query BB
+select '\\' like '\\\\', '\\x' like '\\\\%'
+----
+1 1
+
+# A custom escape character escapes itself and turns `\` into a plain literal.
+query BBBB
+select '!' like '%!!%' escape '!', '#' like '%##%' escape '#', '!' like '!!' escape '!', 'a!b' like 'a!!b' escape '!'
+----
+1 1 1 1
+
+query BBBB
+select '%' like '!%' escape '!', '_' like '!_' escape '!', '%' like '\\%' escape '!', '_' like '\\_' escape '!'
+----
+1 1 0 0
+
+query BBBB
+select '%' like concat(char(92), '%') escape '!', '\\' like '\\' escape '!', '\\x' like '\\_' escape '!', 'a\\b' like 'a\\b%' escape '!'
+----
+0 1 1 1
+
+query BB
+select parse_json('{"name":"a\\\\b"}') like 'a\\\\b', parse_json('["a\\\\bc"]') like 'a\\\\b%'
+----
+1 1
+
 query B
 select 'ababac' like 'abab%%%%%'
 ----
