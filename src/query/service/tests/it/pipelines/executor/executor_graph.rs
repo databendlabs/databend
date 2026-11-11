@@ -239,7 +239,7 @@ async fn test_queries_executor_survives_event_panic() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     type Finished = Arc<(parking_lot::Mutex<bool>, parking_lot::Condvar)>;
-    let create_graph = |panic_event: bool| -> Result<(Arc<RunningGraph>, Finished)> {
+    let create_graph = |panic_event: Option<usize>| -> Result<(Arc<RunningGraph>, Finished)> {
         let mut pipeline = Pipeline::create();
         pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
             ProcessorPtr::create(Box::new(SecondEventSource {
@@ -250,7 +250,7 @@ async fn test_queries_executor_survives_event_panic() -> anyhow::Result<()> {
             vec![OutputPort::create()],
         )]));
         let finished = Finished::default();
-        let query_id = Arc::new(format!("test-event-panic-{panic_event}"));
+        let query_id = Arc::new(format!("test-event-panic-{panic_event:?}"));
         let graph = RunningGraph::create(pipeline, 1, query_id, Some(finished.clone()), vec![])?;
         Ok((graph, finished))
     };
@@ -269,14 +269,20 @@ async fn test_queries_executor_survives_event_panic() -> anyhow::Result<()> {
         move || executor.execute()
     });
 
-    let (graph, finished) = create_graph(true)?;
+    // The first event runs when the graph is sent, the next ones on a worker.
+    let (graph, _finished) = create_graph(Some(1))?;
+    let error = executor.send_graph(graph).unwrap_err();
+    assert_eq!(error.code(), ErrorCode::UNWIND_ERROR);
+    assert!(!executor.is_finished());
+
+    let (graph, finished) = create_graph(Some(2))?;
     executor.send_graph(graph.clone())?;
     assert!(wait(&finished), "the query of the panic must finish");
     let error = graph.get_error().expect("the query of the panic must fail");
     assert_eq!(error.code(), ErrorCode::UNWIND_ERROR);
     assert!(!executor.is_finished());
 
-    let (graph, finished) = create_graph(false)?;
+    let (graph, finished) = create_graph(None)?;
     executor.send_graph(graph.clone())?;
     assert!(wait(&finished), "the next query must still be executed");
     assert!(graph.get_error().is_none());
@@ -284,7 +290,7 @@ async fn test_queries_executor_survives_event_panic() -> anyhow::Result<()> {
     // Once the executor is finished, a query fails instead of waiting forever.
     executor.finish(Some(ErrorCode::Internal("test finish")));
     workers.join().unwrap().unwrap_err();
-    let (graph, _finished) = create_graph(false)?;
+    let (graph, _finished) = create_graph(None)?;
     let error = executor.send_graph(graph).unwrap_err();
     assert_eq!(error.message(), "test finish");
 
@@ -736,10 +742,11 @@ struct MemoryTrackingSource {
 
 struct InterruptCheckingSource;
 
-/// A source that is processed once, then finishes or panics in `event`.
+/// A source that is processed once, then finishes. It panics in the
+/// `panic_event`-th call of `event`, if any.
 struct SecondEventSource {
     events: usize,
-    panic_event: bool,
+    panic_event: Option<usize>,
 }
 
 impl Processor for SecondEventSource {
@@ -753,9 +760,11 @@ impl Processor for SecondEventSource {
 
     fn event(&mut self) -> Result<Event> {
         self.events += 1;
+        if self.panic_event == Some(self.events) {
+            panic!("event panic");
+        }
         match self.events {
             1 => Ok(Event::Sync),
-            _ if self.panic_event => panic!("event panic"),
             _ => Ok(Event::Finished),
         }
     }

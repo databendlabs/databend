@@ -106,7 +106,10 @@ impl QueriesPipelineExecutor {
         self.bind_waker_for_graph(&graph);
 
         unsafe {
-            let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
+            // It runs `Processor::event` on the thread of the query: a panic must
+            // fail the query, not unwind a thread that nobody waits for.
+            let mut init_schedule_queue =
+                catch_unwind(|| graph.clone().init_schedule_queue(self.threads_num)).flatten()?;
 
             let async_queue = std::mem::take(&mut init_schedule_queue.async_queue);
             self.global_tasks_queue
@@ -229,30 +232,27 @@ impl QueriesPipelineExecutor {
                                         && !graph.is_should_finish()
                                     {
                                         // We immediately schedule the processor again.
-                                        // It runs `Processor::event`: a panic of it
-                                        // must only fail its query, as one of
-                                        // `process` does, not finish the executor.
-                                        let schedule_queue_res = catch_unwind(|| {
-                                            graph.clone().schedule_queue(executed_pid)
+                                        // It runs `Processor::event` and creates the
+                                        // async tasks: a panic of them must only fail
+                                        // its query, as one of `process` does, not
+                                        // finish the executor.
+                                        let schedule_res = catch_unwind(|| {
+                                            let schedule_queue =
+                                                graph.clone().schedule_queue(executed_pid)?;
+                                            schedule_queue.schedule_with_condition(
+                                                &self.global_tasks_queue,
+                                                &mut context,
+                                                self,
+                                            );
+                                            Ok(())
                                         })
                                         .flatten();
-                                        match schedule_queue_res {
-                                            Ok(schedule_queue) => {
-                                                schedule_queue.schedule_with_condition(
-                                                    &self.global_tasks_queue,
-                                                    &mut context,
-                                                    self,
-                                                );
-                                            }
-                                            Err(cause) => {
-                                                graph.record_node_error(
-                                                    executed_pid,
-                                                    NodeErrorType::ScheduleEventError(
-                                                        cause.clone(),
-                                                    ),
-                                                );
-                                                graph.should_finish(Err(cause))?;
-                                            }
+                                        if let Err(cause) = schedule_res {
+                                            graph.record_node_error(
+                                                executed_pid,
+                                                NodeErrorType::ScheduleEventError(cause.clone()),
+                                            );
+                                            graph.should_finish(Err(cause))?;
                                         }
                                     }
                                     if graph.is_all_nodes_finished() {
