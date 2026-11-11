@@ -23,6 +23,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
@@ -42,6 +43,7 @@ use itertools::Itertools;
 
 use super::AggregateExpand;
 use super::AggregatePartial;
+use super::EvalScalar;
 use super::Exchange;
 use super::ExchangeSource;
 use super::PhysicalPlanCast;
@@ -74,6 +76,11 @@ pub struct AggregateFinal {
 
     /// Set when the output feeds a top N of `limit` rows ordered by these output columns.
     pub top_n: Option<(Vec<SortDesc>, usize)>,
+
+    /// The consumer merges a group it receives more than once, so the final aggregate may
+    /// output the groups aggregated so far instead of spilling them when it runs out of
+    /// memory. See [`AggregateFinal::allow_duplicate_groups`].
+    pub allow_duplicate_groups: bool,
 }
 
 #[typetag::serde]
@@ -152,6 +159,7 @@ impl IPhysicalPlan for AggregateFinal {
             stat_info: self.stat_info.clone(),
             global_shuffled: self.global_shuffled,
             top_n: self.top_n.clone(),
+            allow_duplicate_groups: self.allow_duplicate_groups,
         })
     }
 
@@ -181,6 +189,9 @@ impl IPhysicalPlan for AggregateFinal {
                 .collect::<Result<Vec<_>>>()?;
             // Just created, so not shared yet.
             Arc::get_mut(&mut params).unwrap().top_n = Some((order_by, *limit));
+        }
+        if self.allow_duplicate_groups {
+            Arc::get_mut(&mut params).unwrap().allow_duplicate_groups = true;
         }
 
         if params.group_columns.is_empty() {
@@ -219,6 +230,39 @@ impl IPhysicalPlan for AggregateFinal {
             builder.ctx.clone(),
             self.global_shuffled,
         )
+    }
+}
+
+impl AggregateFinal {
+    /// Let the final aggregate at the root of `plan`, below any row-wise operators and
+    /// exchanges, output a group more than once rather than spill when it runs out of memory,
+    /// see `AggregatorParams::allow_duplicate_groups`.
+    ///
+    /// Only for an aggregate whose every function writes an aggregate state, as the physical
+    /// query of a materialized view does: the consumer of the states merges them per group
+    /// anyway, so it is indifferent to how many rows a group is spread over. Returns whether such
+    /// an aggregate was found.
+    pub fn allow_duplicate_groups(plan: &mut PhysicalPlan) -> bool {
+        if let Some(aggregate) = AggregateFinal::from_mut_physical_plan(plan) {
+            let states_only = aggregate.agg_funcs.iter().all(|func| {
+                matches!(
+                    func.sig.return_type.remove_nullable(),
+                    DataType::AggregateState(_)
+                )
+            });
+            if !states_only || aggregate.top_n.is_some() {
+                return false;
+            }
+            aggregate.allow_duplicate_groups = true;
+            return true;
+        }
+        if EvalScalar::check_physical_plan(plan) || Exchange::check_physical_plan(plan) {
+            return plan
+                .children_mut()
+                .next()
+                .is_some_and(Self::allow_duplicate_groups);
+        }
+        false
     }
 }
 
@@ -462,6 +506,7 @@ impl PhysicalPlanBuilder {
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
                         global_shuffled: false,
                         top_n,
+                        allow_duplicate_groups: false,
                     })
                 } else {
                     let Some(exchange) = Exchange::from_physical_plan(&input) else {
@@ -493,6 +538,7 @@ impl PhysicalPlanBuilder {
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
                         global_shuffled,
                         top_n,
+                        allow_duplicate_groups: false,
                     })
                 }
             }

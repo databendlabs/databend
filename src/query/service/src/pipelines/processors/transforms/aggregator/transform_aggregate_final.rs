@@ -293,6 +293,16 @@ impl TransformFinalAggregate {
     }
 
     fn check_spill(&mut self, need_check_spill: bool) -> Result<()> {
+        if self.params.allow_duplicate_groups {
+            // The consumer merges repeated groups, so output the groups aggregated so far rather
+            // than spilling them and merging them back at the end. Checked whatever the spill
+            // level: this is what bounds the memory of the table.
+            if self.settings.check_spill() {
+                self.output_hashtable(Some(self.output_stream()))?;
+            }
+            return Ok(());
+        }
+
         // Once a task spills, all remaining input must follow it so a group cannot
         // be finalized separately from its already spilled states.
         if self.spilled_occurred || (need_check_spill && self.settings.check_spill()) {
@@ -300,6 +310,11 @@ impl TransformFinalAggregate {
         }
 
         Ok(())
+    }
+
+    /// Coalesces the output blocks of one hash table to the block size of the aggregate.
+    fn output_stream(&self) -> BlockPartitionStream {
+        BlockPartitionStream::create(self.params.max_block_rows, self.params.max_block_bytes, 1)
     }
 
     fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
@@ -390,11 +405,7 @@ impl TransformFinalAggregate {
             self.spill_finish(spilled_depth, tx)?;
             (0, 0, FinalAggregateFinishMode::Spilled)
         } else {
-            let output_stream = BlockPartitionStream::create(
-                self.params.max_block_rows,
-                self.params.max_block_bytes,
-                1,
-            );
+            let output_stream = self.output_stream();
             let (output_rows, hash_index_resizes) = self.output_hashtable(Some(output_stream))?;
             (
                 output_rows,
@@ -656,8 +667,10 @@ mod tests {
     use bumpalo::Bump;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchema;
+    use databend_common_expression::FromData;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::UInt64Type;
     use databend_common_pipeline::core::ProcessorPtr;
     use databend_common_pipeline::core::port::connect;
     use futures::FutureExt;
@@ -791,6 +804,69 @@ mod tests {
         assert!(!has_hashtable(&mut processor));
         assert!(matches!(processor.event()?, Event::Async));
         assert!(!downstream.has_data());
+        drop(tx);
+        Ok(())
+    }
+
+    // With `allow_duplicate_groups`, memory pressure makes the final aggregate output the groups
+    // it holds, so a group seen again is output again, and nothing is ever spilled.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_allow_duplicate_groups_outputs_under_memory_pressure() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        // Every memory check reports pressure.
+        ctx.get_settings()
+            .set_setting("force_aggregate_data_spill".to_string(), "1".to_string())?;
+        let (tx, rx) = async_channel::unbounded();
+        let mut params = create_params()?;
+        Arc::get_mut(&mut params).unwrap().allow_duplicate_groups = true;
+        let upstream = OutputPort::create();
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let downstream = InputPort::create();
+        // The ports are not yet used by a processor or executor.
+        unsafe {
+            connect(&input, &upstream);
+            connect(&downstream, &output);
+        }
+        input.set_need_data();
+
+        let mut processor = TransformFinalAggregate::try_create(
+            input,
+            output,
+            params,
+            0,
+            ctx,
+            tx.clone(),
+            rx,
+            Arc::new(AtomicU64::new(1)),
+        )?;
+        let keys = || DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![1u64, 2])]);
+
+        let mut output_rows = 0;
+        for _ in 0..2 {
+            downstream.set_need_data();
+            upstream.push_data(Ok(keys()));
+            assert!(matches!(processor.event()?, Event::Sync));
+            processor.process()?;
+            // The groups of this block were output right away.
+            assert!(matches!(processor.event()?, Event::NeedConsume));
+            output_rows += downstream.pull_data().unwrap()?.num_rows();
+        }
+        assert_eq!(output_rows, 4, "each block outputs the same two groups");
+
+        downstream.set_need_data();
+        upstream.finish();
+        // Finish the input stage: no retained groups, no spilled task to wait for.
+        assert!(matches!(processor.event()?, Event::Sync));
+        processor.process()?;
+        assert!(!downstream.has_data());
+        let final_aggregate = processor
+            .as_any()
+            .downcast_mut::<TransformFinalAggregate>()
+            .unwrap();
+        assert!(!final_aggregate.spilled_occurred);
+        assert!(final_aggregate.hashtable.is_none());
         drop(tx);
         Ok(())
     }
