@@ -14,8 +14,11 @@
 
 use std::cmp::max;
 use std::collections::HashSet;
+use std::future::Future;
+use std::pin::pin;
 use std::sync::Arc;
 
+use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::GlobalPruningRuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PruningStatistics;
@@ -61,6 +64,7 @@ use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
 use crate::io::BloomIndexRebuilder;
@@ -361,6 +365,55 @@ impl PruningContext {
             return Err(ErrorCode::aborting());
         }
         Ok(())
+    }
+
+    /// Runs the block pruning `tasks` on the pruning runtime, one permit of
+    /// `semaphore` each, and returns their results in order. The query being
+    /// aborted fails it at once, and aborts the tasks that are not finished.
+    pub async fn run_tasks<F, Fut, T>(
+        &self,
+        semaphore: Arc<Semaphore>,
+        tasks: impl IntoIterator<Item = F>,
+    ) -> Result<Vec<T>>
+    where
+        F: FnOnce(OwnedSemaphorePermit) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T>> + Send + 'static,
+        T: Send + 'static,
+    {
+        let runtime = self.pruning_runtime()?;
+        let results = run_tasks(&runtime, semaphore, self.ctx.get_abort_notify(), tasks).await?;
+        // An aborted query has not pruned all its blocks.
+        self.check_aborting()?;
+        Ok(results)
+    }
+}
+
+/// A query that is stopped while it is planned is only notified: nothing drops
+/// the future that joins its tasks. Waiting for the notification does, and the
+/// tasks are aborted with it.
+async fn run_tasks<F, Fut, T>(
+    runtime: &Runtime,
+    semaphore: Arc<Semaphore>,
+    abort_notify: Arc<WatchNotify>,
+    tasks: impl IntoIterator<Item = F>,
+) -> Result<Vec<T>>
+where
+    F: FnOnce(OwnedSemaphorePermit) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    let notified = pin!(abort_notify.notified());
+    let join = pin!(async {
+        let handles = runtime
+            .try_spawn_batch_with_owned_semaphore(semaphore, tasks)
+            .await?;
+        Runtime::try_join_all(handles)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {e}")))
+    });
+    match futures::future::select(notified, join).await {
+        futures::future::Either::Left(((), _)) => Err(ErrorCode::aborting()),
+        futures::future::Either::Right((res, _)) => res?.into_iter().collect(),
     }
 }
 
@@ -897,4 +950,75 @@ pub fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>
         }
     }
     Ok(sample_probability)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering::SeqCst;
+    use std::time::Duration;
+
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_run_tasks_caps_concurrency_and_aborts_on_notify() -> Result<()> {
+        let runtime = Arc::new(Runtime::with_worker_threads(
+            4,
+            Some("pruning-test".to_owned()),
+        )?);
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let tasks = (0..4).map(|i| {
+            let active = active.clone();
+            let peak = peak.clone();
+            move |permit| async move {
+                let _permit = permit;
+                let cur = active.fetch_add(1, SeqCst) + 1;
+                peak.fetch_max(cur, SeqCst);
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                active.fetch_sub(1, SeqCst);
+                Ok(i)
+            }
+        });
+        let res = run_tasks(
+            &runtime,
+            Arc::new(Semaphore::new(1)),
+            Arc::new(WatchNotify::new()),
+            tasks,
+        )
+        .await?;
+        assert_eq!(res, vec![0, 1, 2, 3]);
+        assert_eq!(peak.load(SeqCst), 1);
+
+        // Stopping an HTTP query in Starting state notifies `abort_notify`
+        // without dropping the outer future; in-flight tasks must still abort.
+        let abort_notify = Arc::new(WatchNotify::new());
+        let task_alive = Arc::new(());
+        let held = task_alive.clone();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let tasks = std::iter::once(move |permit| async move {
+            let _permit = permit;
+            let _held = held;
+            let _ = started_tx.send(());
+            std::future::pending::<Result<usize>>().await
+        });
+        let join = runtime.spawn({
+            let runtime = runtime.clone();
+            let abort_notify = abort_notify.clone();
+            let semaphore = Arc::new(Semaphore::new(2));
+            async move { run_tasks(&runtime, semaphore, abort_notify, tasks).await }
+        });
+        started_rx.await.unwrap();
+        abort_notify.notify_waiters();
+        let err = join.await.unwrap().unwrap_err();
+        assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
+        for _ in 0..100 {
+            if Arc::strong_count(&task_alive) == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(Arc::strong_count(&task_alive), 1);
+        Ok(())
+    }
 }

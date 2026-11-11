@@ -19,12 +19,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::future::Future;
-use std::pin::pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
@@ -524,21 +521,21 @@ impl VectorIndexPruner {
             })
         });
 
-        let runtime = self.pruning_ctx.pruning_runtime()?;
         let mut semaphore = self.pruning_ctx.pruning_semaphore.clone();
         // The index search is CPU bound. The runtime of a query has `max_threads`
         // threads; the global one may have more, and must not run more of them.
         // The tasks read the index too: never allow more than the I/O limit.
         let max_threads = self.pruning_ctx.ctx.get_settings().get_max_threads()? as usize;
-        let workers = runtime.inner().metrics().num_workers();
+        let workers = self
+            .pruning_ctx
+            .pruning_runtime()?
+            .inner()
+            .metrics()
+            .num_workers();
         if max_threads < workers.min(semaphore.available_permits()) {
             semaphore = Arc::new(Semaphore::new(max_threads.max(1)));
         }
-        let abort_notify = self.pruning_ctx.ctx.get_abort_notify();
-        let results = run_score_tasks(&runtime, semaphore, abort_notify, tasks).await?;
-        // An aborted query has not scored all its blocks.
-        self.pruning_ctx.check_aborting()?;
-        Ok(results)
+        self.pruning_ctx.run_tasks(semaphore, tasks).await
     }
 
     fn vector_prune_candidates(
@@ -848,33 +845,6 @@ impl VectorScore {
     }
 }
 
-/// Spawns and joins block-scoring `tasks`, one permit of `semaphore` each,
-/// aborting unfinished ones as soon as `abort_notify` fires.
-async fn run_score_tasks<F, Fut>(
-    runtime: &Runtime,
-    semaphore: Arc<Semaphore>,
-    abort_notify: Arc<WatchNotify>,
-    tasks: impl IntoIterator<Item = F>,
-) -> Result<Vec<VectorPruneResult>>
-where
-    F: FnOnce(OwnedSemaphorePermit) -> Fut + Send + 'static,
-    Fut: Future<Output = Result<VectorPruneResult>> + Send + 'static,
-{
-    let notified = pin!(abort_notify.notified());
-    let score = pin!(async {
-        let handles = runtime
-            .try_spawn_batch_with_owned_semaphore(semaphore, tasks)
-            .await?;
-        Runtime::try_join_all(handles)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("vector pruning failure: {e}")))
-    });
-    match futures::future::select(notified, score).await {
-        futures::future::Either::Left(((), _)) => Err(ErrorCode::aborting()),
-        futures::future::Either::Right((res, _)) => res?.into_iter().collect(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::DataType;
@@ -1053,100 +1023,5 @@ mod tests {
                 VectorScores::All(vec![f(0.2), max, max])
             ),
         ]);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_run_score_tasks_caps_concurrency_and_aborts_on_notify() -> Result<()> {
-        use std::sync::atomic::AtomicUsize;
-        use std::sync::atomic::Ordering::SeqCst;
-        use std::time::Duration;
-
-        let empty_result = |block_idx| VectorPruneResult {
-            block_idx,
-            scores: Vec::new(),
-            block_meta_index: BlockMetaIndex::default(),
-            block_meta: Arc::new(BlockMeta::new(
-                1,
-                0,
-                0,
-                Default::default(),
-                Default::default(),
-                None,
-                (format!("b{block_idx}"), 0),
-                None,
-                0,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                Compression::None,
-                None,
-            )),
-        };
-
-        let runtime = Arc::new(Runtime::with_worker_threads(
-            4,
-            Some("vec-score-test".to_owned()),
-        )?);
-        let active = Arc::new(AtomicUsize::new(0));
-        let peak = Arc::new(AtomicUsize::new(0));
-        let tasks = (0..4).map(|i| {
-            let active = active.clone();
-            let peak = peak.clone();
-            move |permit| async move {
-                let _permit = permit;
-                let cur = active.fetch_add(1, SeqCst) + 1;
-                peak.fetch_max(cur, SeqCst);
-                tokio::time::sleep(Duration::from_millis(20)).await;
-                active.fetch_sub(1, SeqCst);
-                Ok(empty_result(i))
-            }
-        });
-        let res = run_score_tasks(
-            &runtime,
-            Arc::new(Semaphore::new(1)),
-            Arc::new(WatchNotify::new()),
-            tasks,
-        )
-        .await?;
-        assert_eq!(res.len(), 4);
-        assert_eq!(peak.load(SeqCst), 1);
-
-        // Stopping an HTTP query in Starting state notifies `abort_notify`
-        // without dropping the outer future; in-flight tasks must still abort.
-        let abort_notify = Arc::new(WatchNotify::new());
-        let task_alive = Arc::new(());
-        let held = task_alive.clone();
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let tasks = std::iter::once(move |permit| async move {
-            let _permit = permit;
-            let _held = held;
-            let _ = started_tx.send(());
-            std::future::pending::<Result<VectorPruneResult>>().await
-        });
-        let join = runtime.spawn({
-            let runtime = runtime.clone();
-            let abort_notify = abort_notify.clone();
-            let semaphore = Arc::new(Semaphore::new(2));
-            async move { run_score_tasks(&runtime, semaphore, abort_notify, tasks).await }
-        });
-        started_rx.await.unwrap();
-        abort_notify.notify_waiters();
-        let Err(err) = join.await.unwrap() else {
-            panic!("expected aborted query");
-        };
-        assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
-        for _ in 0..100 {
-            if Arc::strong_count(&task_alive) == 1 {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-        assert_eq!(Arc::strong_count(&task_alive), 1);
-        Ok(())
     }
 }
