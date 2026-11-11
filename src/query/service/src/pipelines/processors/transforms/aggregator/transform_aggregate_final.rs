@@ -91,6 +91,9 @@ pub struct TransformFinalAggregate {
     output_finished: WatchNotify,
     stage: Stage,
     spilled_occurred: bool,
+    /// How many times the table was output and reset under memory pressure, see
+    /// `AggregatorParams::allow_duplicate_groups`.
+    pressure_outputs: usize,
 
     // Created on the first non-empty input. With bucket shuffle there are many final
     // processors and most of them may never receive rows, so an eagerly allocated
@@ -148,6 +151,7 @@ impl TransformFinalAggregate {
             output_finished: WatchNotify::new(),
             stage: Stage::Input,
             spilled_occurred: false,
+            pressure_outputs: 0,
             hashtable: None,
             params,
             flush_state,
@@ -297,8 +301,17 @@ impl TransformFinalAggregate {
             // The consumer merges repeated groups, so output the groups aggregated so far rather
             // than spilling them and merging them back at the end. Checked whatever the spill
             // level: this is what bounds the memory of the table.
-            if self.settings.check_spill() {
-                self.output_hashtable(Some(self.output_stream()))?;
+            if self.hashtable.is_some() && self.settings.check_spill() {
+                let (rows, _) = self.output_hashtable(Some(self.output_stream()))?;
+                self.pressure_outputs += 1;
+                // The pressure may not come from this table: then the table is reset on
+                // every input, which these logs make visible.
+                log::info!(
+                    "Final aggregate output its groups under memory pressure: processor={}, rows={}, outputs_so_far={}",
+                    self.id,
+                    rows,
+                    self.pressure_outputs,
+                );
             }
             return Ok(());
         }
@@ -867,6 +880,7 @@ mod tests {
             .unwrap();
         assert!(!final_aggregate.spilled_occurred);
         assert!(final_aggregate.hashtable.is_none());
+        assert_eq!(final_aggregate.pressure_outputs, 2);
         drop(tx);
         Ok(())
     }
