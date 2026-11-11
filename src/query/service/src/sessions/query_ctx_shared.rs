@@ -719,12 +719,8 @@ impl QueryContextShared {
 
     /// The first known kind wins, see `TableContextQueryIdentity::attach_query_kind`.
     pub fn attach_query_kind(&self, kind: QueryKind) {
-        if kind == QueryKind::Unknown {
-            return;
-        }
-        let mut running_query_kind = self.running_query_kind.write();
-        if matches!(*running_query_kind, None | Some(QueryKind::Unknown)) {
-            *running_query_kind = Some(kind);
+        if kind != QueryKind::Unknown {
+            self.running_query_kind.write().get_or_insert(kind);
         }
     }
 
