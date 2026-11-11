@@ -34,17 +34,12 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 
 pub struct AggregateInjector {
-    ctx: Arc<QueryContext>,
     aggregator_params: Arc<AggregatorParams>,
 }
 
 impl AggregateInjector {
-    pub fn create(
-        ctx: Arc<QueryContext>,
-        params: Arc<AggregatorParams>,
-    ) -> Arc<dyn ExchangeInjector> {
+    pub fn create(params: Arc<AggregatorParams>) -> Arc<dyn ExchangeInjector> {
         Arc::new(AggregateInjector {
-            ctx,
             aggregator_params: params,
         })
     }
@@ -53,7 +48,7 @@ impl AggregateInjector {
 impl ExchangeInjector for AggregateInjector {
     fn flight_scatter(
         &self,
-        _: &Arc<QueryContext>,
+        ctx: &Arc<QueryContext>,
         exchange: &DataExchange,
     ) -> Result<Arc<Box<dyn FlightScatter>>> {
         let DataExchange::GlobalShuffleExchange(exchange) = exchange else {
@@ -63,7 +58,7 @@ impl ExchangeInjector for AggregateInjector {
         };
 
         // Partitions are the threads of all nodes, in the order of the destinations.
-        let local_id = &self.ctx.get_cluster().local_id;
+        let local_id = &ctx.get_cluster().local_id;
         let mut partitions = 0;
         let mut local_partitions = 0..0;
         for (destination, channels) in &exchange.destination_channels {

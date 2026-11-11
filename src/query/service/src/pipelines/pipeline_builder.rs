@@ -52,7 +52,6 @@ pub struct PipelineBuilder {
     pub hash_join_states: HashMap<usize, HashJoinStateRef>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
-    pub(crate) is_exchange_stack: Vec<bool>,
 }
 
 impl PipelineBuilder {
@@ -70,7 +69,6 @@ impl PipelineBuilder {
             exchange_injector: DefaultExchangeInjector::create(),
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
-            is_exchange_stack: vec![],
         }
     }
 
@@ -110,14 +108,6 @@ impl PipelineBuilder {
             exchange_injector: self.exchange_injector,
             r_cte_scan_interpreters: self.r_cte_scan_interpreters,
         })
-    }
-
-    pub(crate) fn is_exchange_parent(&self) -> bool {
-        if self.is_exchange_stack.len() >= 2 {
-            return self.is_exchange_stack[self.is_exchange_stack.len() - 2];
-        }
-
-        false
     }
 
     #[recursive::recursive]
