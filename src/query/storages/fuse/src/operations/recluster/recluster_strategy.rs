@@ -56,6 +56,31 @@ pub enum ReclusterMode {
     Aggressive,
 }
 
+/// Each behavior a mode selects is queried on its own, so call sites depend on the behavior
+/// rather than on which mode selected it.
+impl ReclusterMode {
+    /// Blocks of the low mature levels 1 through 3 share one candidate group.
+    pub(crate) fn groups_low_maturity_levels(self) -> bool {
+        matches!(self, Self::Aggressive)
+    }
+
+    /// Segment selection probes only the deepest window of each scan range.
+    pub(crate) fn probes_deepest_window_only(self) -> bool {
+        matches!(self, Self::Conservative)
+    }
+
+    /// A window that yields no rewrite task, and whose blocks all keep their original
+    /// statistics but are out of cluster-key order, may still be repacked.
+    pub(crate) fn allows_unordered_repack(self) -> bool {
+        matches!(self, Self::Conservative)
+    }
+
+    /// The scan cursor and pending windows survive into the next round.
+    pub(crate) fn keeps_carry(self) -> bool {
+        matches!(self, Self::Aggressive)
+    }
+}
+
 /// Immutable inputs shared by all recluster strategies.
 #[derive(Clone)]
 pub(crate) struct ReclusterProperties {
@@ -264,9 +289,10 @@ impl PartialOrd for ReclusterGroup {
 impl ReclusterGroup {
     /// Assign a block's recluster group for the given mode.
     pub(crate) fn assign(level: i32, mode: ReclusterMode) -> ReclusterGroup {
-        match mode {
-            ReclusterMode::Aggressive if (1..=3).contains(&level) => ReclusterGroup::LowMaturity,
-            _ => ReclusterGroup::Level(level),
+        if mode.groups_low_maturity_levels() && (1..=3).contains(&level) {
+            ReclusterGroup::LowMaturity
+        } else {
+            ReclusterGroup::Level(level)
         }
     }
 

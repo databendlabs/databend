@@ -27,7 +27,6 @@ use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
 use crate::operations::recluster::ReclusterGroup;
-use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
@@ -461,7 +460,7 @@ pub(crate) fn select_scalar_segments(
             .then_with(|| right_indices.len().cmp(&left_indices.len()))
     });
 
-    if properties.mode == ReclusterMode::Conservative {
+    if properties.mode.probes_deepest_window_only() {
         // Conservative mode is kept for legacy tables without
         // `aggressive_recluster`. Probe only the deepest window per round to
         // avoid over-reclustering old tables and creating a sharp behavior

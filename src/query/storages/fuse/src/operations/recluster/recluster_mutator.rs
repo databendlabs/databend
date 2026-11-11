@@ -392,9 +392,8 @@ impl ReclusterMutator {
             let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack = self.properties.mode == ReclusterMode::Conservative
-                && all_original_stats
-                && unordered();
+            let unordered_repack =
+                self.properties.mode.allows_unordered_repack() && all_original_stats && unordered();
             if compactable_repack || unordered_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);

@@ -500,7 +500,7 @@ impl FuseTable {
             }
         };
 
-        if mode != ReclusterMode::Aggressive {
+        if !mode.keeps_carry() {
             *carry = ReclusterFinalCarry::default();
         }
 
