@@ -2808,7 +2808,9 @@ impl AccessChecker for PrivilegeAccess {
                         .await?;
                 }
             }
-            Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+            // KILL authorization depends on the target session and is checked at execution.
+            Plan::Kill(_) => {}
+            Plan::SetPriority(_) | Plan::System(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
