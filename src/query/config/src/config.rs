@@ -2041,7 +2041,7 @@ pub struct QueryConfig {
     #[clap(skip)]
     pub resources_management: Option<ResourcesManagementConfig>,
 
-    #[clap(long, value_name = "VALUE", default_value = "false")]
+    #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_queries_executor: bool,
 
     /// Controls how table hooks after write are executed. Supported values: sync, async.
