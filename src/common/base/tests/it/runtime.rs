@@ -229,3 +229,57 @@ async fn test_runtime_try_spawn_batch() -> anyhow::Result<()> {
     assert_eq!(result.len(), 20);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_runtime_try_join_all_aborts_on_drop() -> anyhow::Result<()> {
+    let runtime = Runtime::with_worker_threads(2, Some("runtime-join-test".to_string()))?;
+
+    // It joins the tasks, in their order.
+    let handles = (0..4).map(|i| runtime.spawn(async move { i }));
+    assert_eq!(Runtime::try_join_all(handles).await?, vec![0, 1, 2, 3]);
+
+    // The caller goes away while its tasks run: they are aborted, not left to
+    // run to their end on a runtime that outlives the caller.
+    let finished = Arc::new(Mutex::new(0));
+    let (started_tx, started_rx) = mpsc::channel();
+    let handles = (0..4)
+        .map(|_| {
+            let finished = finished.clone();
+            let started_tx = started_tx.clone();
+            runtime.spawn(async move {
+                let _ = started_tx.send(());
+                sleep(Duration::from_millis(500)).await;
+                *finished.lock().unwrap() += 1;
+            })
+        })
+        .collect::<Vec<_>>();
+    let join = Runtime::try_join_all(handles);
+    for _ in 0..4 {
+        started_rx.recv_timeout(Duration::from_secs(10))?;
+    }
+    let joined = tokio::time::timeout(Duration::from_millis(10), join).await;
+    assert!(joined.is_err(), "the tasks sleep longer than the timeout");
+    sleep(Duration::from_secs(1)).await;
+    assert_eq!(*finished.lock().unwrap(), 0);
+
+    // The same while the batch is spawned: with one permit, the caller goes
+    // away waiting for the permit of the second task, the first one running.
+    let (started_tx, started_rx) = mpsc::channel();
+    let tasks = (0..4).map(|_| {
+        let finished = finished.clone();
+        let started_tx = started_tx.clone();
+        move |permit| async move {
+            let _permit = permit;
+            let _ = started_tx.send(());
+            sleep(Duration::from_millis(500)).await;
+            *finished.lock().unwrap() += 1;
+        }
+    });
+    let spawn = runtime.try_spawn_batch_with_owned_semaphore(Arc::new(Semaphore::new(1)), tasks);
+    let spawned = tokio::time::timeout(Duration::from_millis(100), spawn).await;
+    assert!(spawned.is_err(), "the first task holds the permit longer");
+    started_rx.recv_timeout(Duration::from_secs(10))?;
+    sleep(Duration::from_secs(1)).await;
+    assert_eq!(*finished.lock().unwrap(), 0);
+    Ok(())
+}

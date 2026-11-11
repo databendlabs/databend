@@ -1031,18 +1031,20 @@ impl Display for SubqueryModifier {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Literal {
-    UInt64(u64),
-    Float64(f64),
+    UInt64(#[drive(skip)] u64),
+    Float64(#[drive(skip)] f64),
     Decimal256 {
         #[drive(skip)]
         value: i256,
+        #[drive(skip)]
         precision: u8,
+        #[drive(skip)]
         scale: u8,
     },
     // Quoted string literal value
-    String(String),
-    Binary(Vec<u8>),
-    Boolean(bool),
+    String(#[drive(skip)] String),
+    Binary(#[drive(skip)] Vec<u8>),
+    Boolean(#[drive(skip)] bool),
     Null,
 }
 

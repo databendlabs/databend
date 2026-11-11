@@ -41,6 +41,7 @@ geo = { workspace = true }
 half = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
+libc = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }

@@ -18,6 +18,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,7 +30,6 @@ use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use futures_util::future;
 use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
@@ -141,7 +141,7 @@ impl BlockPruner {
             .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
             .await?;
 
-        let joint = future::try_join_all(join_handlers)
+        let joint = Runtime::try_join_all(join_handlers)
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
@@ -201,7 +201,7 @@ impl BlockPruner {
         let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
-            if limit_pruner.exceeded() {
+            if limit_pruner.exceeded() || pruning_ctx.check_aborting().is_err() {
                 return None;
             }
 
@@ -287,9 +287,11 @@ impl BlockPruner {
             .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
             .await?;
 
-        let joint = future::try_join_all(join_handlers)
+        let joint = Runtime::try_join_all(join_handlers)
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
+        // An aborted query has not pruned all its blocks.
+        self.pruning_ctx.check_aborting()?;
 
         let mut result = Vec::with_capacity(joint.len());
         let block_num = block_metas.len();
@@ -340,6 +342,7 @@ impl BlockPruner {
         if !prune_result.keep {
             return Ok(prune_result);
         }
+        pruning_ctx.check_aborting()?;
 
         let pruning_stats = pruning_ctx.pruning_stats.clone();
         let pruning_cost = pruning_ctx.pruning_cost.clone();

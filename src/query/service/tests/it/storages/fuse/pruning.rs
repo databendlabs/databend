@@ -16,7 +16,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
+use databend_common_base::runtime::GlobalPruningRuntime;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -271,6 +273,44 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         let rows = blocks.iter().map(|b| b.row_count as usize).sum::<usize>();
         assert_eq!(expected_rows, rows);
         assert_eq!(expected_blocks, blocks.len());
+    }
+
+    // With the global pruning runtime, the queries prune on it, with the same
+    // result. The filter makes the pruning tasks read bloom indexes.
+    if GlobalPruningRuntime::try_instance().is_none() {
+        GlobalPruningRuntime::init(2)?;
+    }
+    let bloom_filter = Some(PushDownInfo {
+        filters: Some(parse_to_filters(ctx.clone(), table.clone(), "b = 6")?),
+        ..Default::default()
+    });
+    let ctx = fixture.new_query_ctx().await?;
+    let blocks = apply_block_pruning(
+        snapshot.clone(),
+        table.get_table_info().schema(),
+        &bloom_filter,
+        ctx.clone(),
+        fuse_table.get_operator(),
+        fuse_table.bloom_index_cols(),
+    )
+    .await?;
+    assert_eq!(blocks.len(), 1);
+
+    // A killed query stops pruning: on a runtime that the queries share, its
+    // tasks must not run to their end.
+    ctx.get_current_session()
+        .force_kill_query(ErrorCode::aborting());
+    for push_down in [&bloom_filter, &None] {
+        let killed = apply_block_pruning(
+            snapshot.clone(),
+            table.get_table_info().schema(),
+            push_down,
+            ctx.clone(),
+            fuse_table.get_operator(),
+            fuse_table.bloom_index_cols(),
+        )
+        .await;
+        assert_eq!(killed.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
     }
 
     Ok(())

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use async_channel::Sender;
 use chrono::DateTime;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
@@ -39,7 +40,6 @@ use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
-use futures_util::future;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::PrunedColumnOrientedSegmentMeta;
@@ -138,6 +138,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let mut pruning_tasks = Vec::with_capacity(block_num);
 
         for block_idx in 0..block_num {
+            self.block_pruner.pruning_ctx.check_aborting()?;
             let location_path = location_path_col.index(block_idx).unwrap().to_string();
 
             let internal_pruner = &self.block_pruner.pruning_ctx.internal_column_pruner;
@@ -165,9 +166,11 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let runtime_stats_pruner = runtime_stats_pruner.clone();
             let runtime_scan_filters = self.runtime_scan_filters.clone();
 
+            let pruning_ctx = self.block_pruner.pruning_ctx.clone();
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
                 Box::pin(async move {
                     let _permit = permit;
+                    pruning_ctx.check_aborting()?;
                     // 2. prune columns by range index
                     let mut columns_stat = HashMap::with_capacity(column_ids.len());
                     let mut columns_meta = HashMap::with_capacity(column_ids.len());
@@ -346,7 +349,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
             // Wait for all tasks to complete and propagate both join errors and pruning errors.
-            let results = future::try_join_all(join_handlers)
+            let results = Runtime::try_join_all(join_handlers)
                 .await
                 .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
             for result in results {

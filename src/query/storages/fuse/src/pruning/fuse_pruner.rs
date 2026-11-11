@@ -16,6 +16,7 @@ use std::cmp::max;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalPruningRuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
@@ -24,6 +25,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::ColumnId;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::TableSchemaRef;
@@ -84,18 +86,60 @@ const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 use databend_common_catalog::plan::VirtualPredicateRef;
 use databend_storages_common_cache::CachePolicy;
 
+/// Where the batch pruning paths (`FusePruner::pruning`, bloom / inverted /
+/// vector index block pruning, recluster) of a query run. It follows the
+/// pipeline executor of the query, see `ExecutorSettings`.
+enum PruningRuntime {
+    /// The query runs on the global queries executor, and prunes on the global
+    /// pruning runtime.
+    Global(Arc<Runtime>),
+    /// The query has an executor of its own, and a pruning runtime of its own,
+    /// both of `max_threads` threads. The runtime is created on first use: the
+    /// pipeline based pruning without index pruners never touches it.
+    Query {
+        threads: usize,
+        runtime: Mutex<Option<Arc<Runtime>>>,
+    },
+}
+
+impl PruningRuntime {
+    fn create(ctx: &Arc<dyn TableContext>) -> Result<Self> {
+        let settings = ctx.get_settings();
+        // The global pruning runtime exists where the global queries executor does.
+        if !settings.get_use_legacy_query_executor()?
+            && let Some(runtime) = GlobalPruningRuntime::try_instance()
+        {
+            return Ok(PruningRuntime::Global(runtime));
+        }
+        Ok(PruningRuntime::Query {
+            threads: settings.get_max_threads()? as usize,
+            runtime: Mutex::new(None),
+        })
+    }
+
+    fn get(&self) -> Result<Arc<Runtime>> {
+        match self {
+            PruningRuntime::Global(runtime) => Ok(runtime.clone()),
+            PruningRuntime::Query { threads, runtime } => {
+                let mut runtime = runtime.lock();
+                if let Some(runtime) = runtime.as_ref() {
+                    return Ok(runtime.clone());
+                }
+                let created = Arc::new(Runtime::with_worker_threads(
+                    *threads,
+                    Some("pruning-worker".to_owned()),
+                )?);
+                *runtime = Some(created.clone());
+                Ok(created)
+            }
+        }
+    }
+}
+
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
     pub dal: Operator,
-    /// Dedicated runtime for the batch pruning paths (`FusePruner::pruning`,
-    /// bloom / inverted / vector index block pruning, recluster).
-    ///
-    /// It is created on first use: the pipeline based pruning without index
-    /// pruners never touches it, and spawning (and later joining) a
-    /// `max_threads` worker runtime for every table scan is a measurable cost
-    /// on the query critical path.
-    pruning_runtime: Mutex<Option<Arc<Runtime>>>,
-    pruning_runtime_threads: usize,
+    pruning_runtime: PruningRuntime,
     pub pruning_semaphore: Arc<Semaphore>,
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
@@ -280,15 +324,11 @@ impl PruningContext {
         let internal_column_pruner =
             InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
-        // Constraint the degree of parallelism
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
-            pruning_runtime: Mutex::new(None),
-            pruning_runtime_threads: max_threads,
+            pruning_runtime: PruningRuntime::create(ctx)?,
             pruning_semaphore,
             limit_pruner,
             range_pruner,
@@ -306,18 +346,21 @@ impl PruningContext {
         Ok(pruning_ctx)
     }
 
-    /// The pruning runtime, created on first use.
+    /// The runtime of the batch pruning paths, see [`PruningRuntime`].
     pub fn pruning_runtime(&self) -> Result<Arc<Runtime>> {
-        let mut guard = self.pruning_runtime.lock();
-        if let Some(runtime) = guard.as_ref() {
-            return Ok(runtime.clone());
+        self.pruning_runtime.get()
+    }
+
+    /// Fails once the query is aborted. The pruning tasks check it before their
+    /// I/O and CPU bound steps: nothing else stops them, and on the runtime
+    /// shared by the queries they would keep its threads from the other queries.
+    pub fn check_aborting(&self) -> Result<()> {
+        self.ctx.check_aborting().with_context(|| "query aborted")?;
+        // A query that is stopped while it is planned is only notified.
+        if self.ctx.get_abort_notify().has_notified() {
+            return Err(ErrorCode::aborting());
         }
-        let runtime = Arc::new(Runtime::with_worker_threads(
-            self.pruning_runtime_threads,
-            Some("pruning-worker".to_owned()),
-        )?);
-        *guard = Some(runtime.clone());
-        Ok(runtime)
+        Ok(())
     }
 }
 
@@ -478,6 +521,7 @@ impl FusePruner {
 
                     if delete_pruning {
                         for (segment_location, compact_segment_info) in &pruned_segments {
+                            pruning_ctx.check_aborting()?;
                             if let Some(range_index) = &inverse_range_index {
                                 let range_input = RangeIndexInput::new(
                                     &compact_segment_info.summary.col_stats,
@@ -517,6 +561,7 @@ impl FusePruner {
                     } else {
                         let sample_probability = table_sample(&push_down)?;
                         for (location, info) in pruned_segments {
+                            pruning_ctx.check_aborting()?;
                             let mut block_metas = ExtractSegmentTransform::extract_block_metas(
                                 &location.location.0,
                                 &info,
@@ -578,7 +623,7 @@ impl FusePruner {
             }));
         }
 
-        let workers = futures::future::try_join_all(works).await?;
+        let workers = Runtime::try_join_all(works).await?;
 
         let mut metas = vec![];
         for worker in workers {
@@ -618,6 +663,7 @@ impl FusePruner {
             works.push(pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 async move {
+                    block_pruner.pruning_ctx.check_aborting()?;
                     // Build pruning tasks.
                     let res = block_pruner
                         .pruning(
@@ -642,7 +688,7 @@ impl FusePruner {
             segment_idx += 1;
         }
 
-        let workers = futures::future::try_join_all(works).await?;
+        let workers = Runtime::try_join_all(works).await?;
 
         let mut metas = vec![];
         for worker in workers {
