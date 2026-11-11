@@ -18,6 +18,8 @@ databend_common_tracing::register_module_tag!("[TABLE-HOOK]");
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::SharedLockGuard;
@@ -80,6 +82,9 @@ impl TableHookTarget {
 
 pub struct TableHookTask {
     pub ctx: Arc<QueryContext>,
+    /// Tracking of a context created for this task. `None` when the task runs on the
+    /// triggering statement's context and is accounted to that statement.
+    pub tracking: Option<Arc<TrackingPayload>>,
     pub target: TableHookTarget,
     pub hook_settings: TableHookTaskSettings,
     pub lock_opt: LockTableOption,
@@ -91,12 +96,19 @@ pub struct TableHookTask {
 }
 
 impl TableHookTask {
+    pub(crate) async fn execute(self, is_async: bool) {
+        match self.tracking.clone() {
+            Some(tracking) => tracking.tracking(self.execute_stages(is_async)).await,
+            None => self.execute_stages(is_async).await,
+        }
+    }
+
     /// Run the same maintenance chain for autocommit and post-commit hooks, in both modes.
     /// Release any handed-over statement lock after refresh and before analyze.
     ///
     /// Each stage lives with its own hook module: `execute_compact` in `compact_hook.rs`,
     /// `execute_refresh` in `refresh_hook.rs`, and `execute_analyze` in `analyze_hook.rs`.
-    pub(crate) async fn execute(mut self, is_async: bool) {
+    async fn execute_stages(mut self, is_async: bool) {
         if is_async {
             info!(
                 "Start async table hook job for operation {}, table_id={}, table={}",
@@ -152,10 +164,12 @@ impl SchedulerTask for TableHookTask {
             .written_segment_locations()
             .extend(self.ctx.written_segment_locations().list());
 
+        // Each hint describes the whole snapshot it was taken from, not a per-write increment,
+        // so pending writes merge to the larger hint, as transaction hooks do.
         let compaction_num_block_hint = self
             .ctx
             .get_compaction_num_block_hint(&self.target.table)
-            .saturating_add(other.ctx.get_compaction_num_block_hint(&other.target.table));
+            .max(other.ctx.get_compaction_num_block_hint(&other.target.table));
         if compaction_num_block_hint > 0 {
             other
                 .ctx
@@ -200,6 +214,7 @@ mod tests {
         let hook_settings = TableHookTaskSettings::create(&ctx);
         TableHookTask {
             ctx,
+            tracking: None,
             target: TableHookTarget {
                 catalog: "default".to_string(),
                 database: "default".to_string(),
@@ -215,7 +230,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_table_hook_task_merge_accumulates_compaction_hint() -> Result<()> {
+    async fn test_table_hook_task_merge_keeps_larger_compaction_hint() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let old_ctx = fixture.new_query_ctx().await?;
         let latest_ctx = fixture.new_query_ctx().await?;
@@ -225,7 +240,7 @@ mod tests {
         let mut task = table_hook_task(old_ctx, "t");
         task.merge(table_hook_task(latest_ctx, "t"));
 
-        assert_eq!(task.ctx.get_compaction_num_block_hint("t"), 12);
+        assert_eq!(task.ctx.get_compaction_num_block_hint("t"), 7);
         Ok(())
     }
 

@@ -36,11 +36,10 @@ use crate::interpreters::hook::table_hook_task::TableHookTask;
 use crate::interpreters::hook::table_hook_task::TableHookTaskSettings;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextQueryInfo;
 use crate::sessions::TableContextSession;
 use crate::sessions::TableContextTableAccess;
+use crate::table_maintenance::MaintenanceContext;
 
 /// Register the release point of a handed-over table lock on the finished-callback chain.
 ///
@@ -231,6 +230,7 @@ impl HookOperator {
         };
         Some(TableHookTask {
             ctx: self.ctx.clone(),
+            tracking: None,
             target: TableHookTarget {
                 catalog: self.catalog.clone(),
                 database: self.database.clone(),
@@ -288,21 +288,14 @@ async fn create_deferred_table_hook_task(
     parent: &Arc<QueryContext>,
     hook: TxnTableHook,
 ) -> Result<TableHookTask> {
-    let session = parent
-        .get_current_session()
-        .create_internal_session()
-        .await?;
-    let ctx = session.create_query_context_with_cluster(
-        parent.get_cluster(),
-        parent.get_version(),
-        None,
-    )?;
+    let MaintenanceContext { ctx, tracking } = MaintenanceContext::create(parent).await?;
     ctx.set_compaction_num_block_hint(&hook.table, hook.compaction_num_block_hint);
     ctx.written_segment_locations()
         .extend(hook.written_segments);
     ctx.set_enable_auto_analyze(hook.enable_auto_analyze);
     Ok(TableHookTask {
         ctx,
+        tracking: Some(tracking),
         target: TableHookTarget {
             catalog: hook.catalog,
             database: hook.database,
