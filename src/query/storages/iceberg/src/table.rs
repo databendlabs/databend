@@ -201,7 +201,7 @@ impl IcebergTable {
         let metadata = serde_json::to_string(table.metadata())?;
         let identifier = serde_json::to_string(table.identifier())?;
         let statistics =
-            serde_json::to_string(&statistics::IcebergStatisticsWire::try_from(statistics)?)?;
+            serde_json::to_string(&statistics::IcebergStatisticsWire::from(statistics))?;
 
         Ok(BTreeMap::from_iter([
             ("iceberg.file_io.scheme".to_string(), file_io_scheme),

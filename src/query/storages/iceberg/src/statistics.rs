@@ -56,8 +56,8 @@ pub struct IcebergStatistics {
     pub computed_statistics: HashMap<ColumnId, statistics::BasicColumnStatistics>,
 }
 
-// Only engine-options transport needs serde. Keep the Iceberg wire format
-// independent of runtime statistics; Iceberg currently supplies no column NDV.
+// Only engine-options transport needs serde. Transport the base statistics,
+// ignoring runtime NDV estimates; the reader reconstructs NDV from these facts.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct IcebergStatisticsWire {
     record_count: u64,
@@ -75,20 +75,9 @@ struct IcebergColumnStatisticsWire {
     in_memory_size: u64,
 }
 
-impl TryFrom<&IcebergStatistics> for IcebergStatisticsWire {
-    type Error = ErrorCode;
-
-    fn try_from(stats: &IcebergStatistics) -> Result<Self> {
-        if stats
-            .computed_statistics
-            .values()
-            .any(|column| column.ndv().expected.is_some())
-        {
-            return Err(ErrorCode::Internal(
-                "Iceberg engine-options wire format does not support a column NDV point",
-            ));
-        }
-        Ok(Self {
+impl From<&IcebergStatistics> for IcebergStatisticsWire {
+    fn from(stats: &IcebergStatistics) -> Self {
+        Self {
             record_count: stats.record_count,
             file_size_in_bytes: stats.file_size_in_bytes,
             number_of_manifest_files: stats.number_of_manifest_files,
@@ -105,7 +94,7 @@ impl TryFrom<&IcebergStatistics> for IcebergStatisticsWire {
                     })
                 })
                 .collect(),
-        })
+        }
     }
 }
 
@@ -407,7 +396,7 @@ mod tests {
             number_of_data_files: 3,
             computed_statistics: HashMap::from([(7, column.clone())]),
         };
-        let json = serde_json::to_string(&IcebergStatisticsWire::try_from(&stats)?)?;
+        let json = serde_json::to_string(&IcebergStatisticsWire::from(&stats))?;
         let wire: IcebergStatisticsWire = serde_json::from_str(&json)?;
         let replay = IcebergStatistics::from(wire);
         assert_eq!(replay.record_count, stats.record_count);
@@ -419,7 +408,7 @@ mod tests {
         assert_eq!(replay.number_of_data_files, stats.number_of_data_files);
         assert_eq!(replay.column_statistics(7), Some(&column));
 
-        // The wire format cannot carry an NDV point.
+        // Runtime NDV points are ignored; the reader reconstructs the upper.
         let mut with_ndv = stats;
         with_ndv.computed_statistics.insert(
             7,
@@ -433,7 +422,31 @@ mod tests {
             )
             .unwrap(),
         );
-        assert!(IcebergStatisticsWire::try_from(&with_ndv).is_err());
+        let json = serde_json::to_string(&IcebergStatisticsWire::from(&with_ndv))?;
+        let wire: IcebergStatisticsWire = serde_json::from_str(&json)?;
+        let replay = IcebergStatistics::from(wire);
+        assert_eq!(replay.column_statistics(7), Some(&column));
+        Ok(())
+    }
+
+    #[test]
+    fn test_zero_ndv_engine_options_round_trip() -> Result<()> {
+        // An all-NULL column and a column in a zero-row snapshot both have
+        // exact zero NDV, reconstructible from the transported row/NULL counts.
+        for num_rows in [100, 0] {
+            let column = column_statistics(7, None, None, num_rows, 0, num_rows).unwrap();
+            assert_eq!(column.ndv(), NdvEstimate::exact(0.0));
+            let stats = IcebergStatistics {
+                record_count: num_rows,
+                computed_statistics: HashMap::from([(7, column.clone())]),
+                ..Default::default()
+            };
+            let json = serde_json::to_string(&IcebergStatisticsWire::from(&stats))?;
+            let wire: IcebergStatisticsWire = serde_json::from_str(&json)?;
+            let replay = IcebergStatistics::from(wire);
+            assert_eq!(replay.record_count, num_rows);
+            assert_eq!(replay.column_statistics(7), Some(&column));
+        }
         Ok(())
     }
 
