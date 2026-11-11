@@ -46,7 +46,6 @@ use prost::Message;
 use tokio::net::TcpListener;
 use tokio::sync::Notify;
 use tokio::sync::mpsc;
-use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tonic::Code;
@@ -66,7 +65,7 @@ enum Event {
 /// Observe resets at the peer rather than inferring them from a dropped Body.
 struct ResponsePeer {
     address: String,
-    finish: Option<oneshot::Sender<Code>>,
+    finish: mpsc::UnboundedSender<Code>,
     events: mpsc::UnboundedReceiver<Event>,
     channel: Option<tonic::transport::Channel>,
     task: JoinHandle<()>,
@@ -74,57 +73,82 @@ struct ResponsePeer {
 
 impl ResponsePeer {
     async fn start(items: Vec<StreamItem>) -> Self {
+        Self::start_repeated(items, 1).await
+    }
+
+    async fn start_repeated(items: Vec<StreamItem>, requests: usize) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = format!("http://{}", listener.local_addr().unwrap());
-        let (finish, done) = oneshot::channel::<Code>();
+        let (finish, mut done) = mpsc::unbounded_channel::<Code>();
         let (events_tx, events) = mpsc::unbounded_channel();
         let task = spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            let mut connection = h2::server::handshake(socket).await.unwrap();
-            let (_, mut respond) = connection.accept().await.unwrap().unwrap();
-            let headers = http::Response::builder()
-                .header("content-type", "application/grpc")
-                .body(())
+            socket.set_nodelay(true).unwrap();
+            // Match Meta's gRPC server rather than h2's smaller default
+            // pending-reset budget; that is a separate protection mechanism.
+            let mut connection = h2::server::Builder::new()
+                .max_pending_accept_reset_streams(4096)
+                .handshake(socket)
+                .await
                 .unwrap();
-            let mut response = respond.send_response(headers, false).unwrap();
-            let mut data = BytesMut::new();
-            for item in items {
-                data.put_u8(0); // Uncompressed gRPC message.
-                data.put_u32(item.encoded_len() as u32);
-                item.encode(&mut data).unwrap();
-            }
-            if !data.is_empty() {
-                // Coalesce messages as tonic does: many tiny DATA frames
-                // would exercise h2's unrelated framing-overhead protection.
-                response.send_data(data.freeze(), false).unwrap();
-            }
-
-            let control = async move {
+            for _ in 0..requests {
+                let (request, mut respond) = connection.accept().await.unwrap().unwrap();
+                let mut body = request.into_body();
+                let read_request = async {
+                    while let Some(data) = body.data().await {
+                        let data = data.unwrap();
+                        body.flow_control().release_capacity(data.len()).unwrap();
+                    }
+                };
                 tokio::select! {
-                    reason = poll_fn(|cx| response.poll_reset(cx)) => {
-                        let _ = events_tx.send(Event::Cancelled(reason.unwrap()));
-                    }
-                    code = done => {
-                        let code = code.unwrap();
-                        let mut trailers = HeaderMap::new();
-                        trailers.insert("grpc-status", HeaderValue::from_str(&(code as i32).to_string()).unwrap());
-                        response.send_trailers(trailers).unwrap();
-                        let _ = events_tx.send(Event::TrailersSent);
-                    }
+                    _ = read_request => {}
+                    result = poll_fn(|cx| connection.poll_closed(cx)) => { result.unwrap(); return; }
                 }
-            };
-            // send_data/send_trailers only queue frames. Keep driving the
-            // connection while waiting for the release signal or peer reset.
-            let drive = poll_fn(|cx| connection.poll_closed(cx));
-            tokio::pin!(drive);
-            tokio::select! {
-                _ = control => { let _ = drive.await; }
-                result = &mut drive => { result.unwrap(); }
+                let headers = http::Response::builder()
+                    .header("content-type", "application/grpc")
+                    .body(())
+                    .unwrap();
+                let mut response = respond.send_response(headers, false).unwrap();
+                let mut data = BytesMut::new();
+                for item in &items {
+                    data.put_u8(0); // Uncompressed gRPC message.
+                    data.put_u32(item.encoded_len() as u32);
+                    item.encode(&mut data).unwrap();
+                }
+                if !data.is_empty() {
+                    // Coalesce messages as tonic does: many tiny DATA frames
+                    // would exercise h2's unrelated framing-overhead protection.
+                    response.send_data(data.freeze(), false).unwrap();
+                }
+
+                let control = async {
+                    tokio::select! {
+                        reason = poll_fn(|cx| response.poll_reset(cx)) => {
+                            let _ = events_tx.send(Event::Cancelled(reason.unwrap()));
+                        }
+                        code = done.recv() => {
+                            let code = code.unwrap();
+                            let mut trailers = HeaderMap::new();
+                            trailers.insert("grpc-status", HeaderValue::from_str(&(code as i32).to_string()).unwrap());
+                            response.send_trailers(trailers).unwrap();
+                            let _ = events_tx.send(Event::TrailersSent);
+                        }
+                    }
+                };
+                // send_data/send_trailers only queue frames. Keep driving the
+                // connection while waiting for the release signal or peer reset.
+                let drive = poll_fn(|cx| connection.poll_closed(cx));
+                tokio::pin!(drive);
+                tokio::select! {
+                    _ = control => {}
+                    result = &mut drive => { result.unwrap(); return; }
+                }
             }
+            let _ = poll_fn(|cx| connection.poll_closed(cx)).await;
         });
         Self {
             address,
-            finish: Some(finish),
+            finish,
             events,
             channel: None,
             task,
@@ -132,11 +156,14 @@ impl ResponsePeer {
     }
 
     async fn stream(&mut self) -> Streaming<StreamItem> {
-        let channel = tonic::transport::Endpoint::from_shared(self.address.clone())
-            .unwrap()
-            .connect()
-            .await
-            .unwrap();
+        let channel = match &self.channel {
+            Some(channel) => channel.clone(),
+            None => tonic::transport::Endpoint::from_shared(self.address.clone())
+                .unwrap()
+                .connect()
+                .await
+                .unwrap(),
+        };
         // Keep the connection alive after the response stream is dropped, so
         // the peer observes a stream reset rather than a connection teardown.
         self.channel = Some(channel.clone());
@@ -148,7 +175,7 @@ impl ResponsePeer {
     }
 
     fn finish(&mut self, code: Code) {
-        self.finish.take().unwrap().send(code).unwrap();
+        self.finish.send(code).unwrap();
     }
 
     async fn event(&mut self) -> Event {
@@ -370,6 +397,47 @@ async fn test_pb_vec_checks_final_status_of_each_chunk() {
     })
     .await
     .unwrap();
+}
+
+/// More than the default 1024 internal-reset threshold on one connection.
+/// Ordinary CANCEL alone must not be confused with that separate budget.
+#[tokio::test]
+async fn test_repeated_single_key_reads_on_one_connection() {
+    timeout(Duration::from_secs(60), async {
+        const REQUESTS: usize = 1100;
+        for truncate in [true, false] {
+            let mut peer = ResponsePeer::start_repeated(vec![item(1)], REQUESTS).await;
+            let mut cancelled = 0;
+            let mut completed = 0;
+            for _ in 0..REQUESTS {
+                let stream = peer.stream().await;
+                if truncate {
+                    assert_eq!(stream.take(1).try_collect::<Vec<_>>().await.unwrap().len(), 1);
+                } else {
+                    let kv = StreamKV::new(vec![stream]);
+                    let result = kv.get_pb_vec([key(1)]);
+                    tokio::pin!(result);
+                    tokio::select! {
+                        biased;
+                        result = &mut result => panic!("completed before trailers: {result:?}"),
+                        _ = kv.read.notified() => {}
+                    }
+                    peer.finish(Code::Ok);
+                    assert_eq!(result.await.unwrap().len(), 1);
+                }
+                match peer.event().await {
+                    Event::Cancelled(reason) => {
+                        assert_eq!(reason, h2::Reason::CANCEL);
+                        cancelled += 1;
+                    }
+                    Event::TrailersSent => completed += 1,
+                }
+            }
+            eprintln!("single connection: truncate={truncate}, requests={REQUESTS}, CANCEL={cancelled}, completed={completed}");
+            assert_eq!(cancelled, if truncate { REQUESTS } else { 0 });
+            assert_eq!(completed, if truncate { 0 } else { REQUESTS });
+        }
+    }).await.unwrap();
 }
 
 #[tokio::test]
