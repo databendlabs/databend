@@ -205,12 +205,12 @@ async fn test_attach_query_kind_keeps_first_known_kind() -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     ctx.attach_query_kind(QueryKind::Unknown);
     assert_eq!(ctx.get_query_kind(), QueryKind::Unknown);
-    ctx.attach_query_str(QueryKind::Unknown, "SELEC 1".to_string());
+    ctx.attach_query_str(QueryKind::Unknown, "SELECT (".to_string());
     ctx.attach_query_kind(QueryKind::Insert);
     assert_eq!(ctx.get_query_kind(), QueryKind::Insert);
     ctx.attach_query_str(QueryKind::Unknown, "other text".to_string());
     assert_eq!(ctx.get_query_kind(), QueryKind::Insert);
-    assert_eq!(ctx.get_query_str(), "SELEC 1");
+    assert_eq!(ctx.get_query_str(), "SELECT (");
     Ok(())
 }
 

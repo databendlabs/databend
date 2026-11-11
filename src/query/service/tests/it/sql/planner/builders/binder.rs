@@ -191,7 +191,7 @@ async fn test_query_kind_of_early_planning_failures() -> anyhow::Result<()> {
             QueryKind::Update,
         ),
         // Without a statement the kind stays unknown.
-        ("SELEC 1", None, Setup::None, QueryKind::Unknown),
+        ("SELECT (", None, Setup::None, QueryKind::Unknown),
     ];
     for (sql, params, setup, expected) in cases {
         let session = fixture
