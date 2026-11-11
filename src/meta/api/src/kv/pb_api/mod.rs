@@ -492,6 +492,8 @@ impl<T> KVPbApi for T where T: KVApi + ?Sized {}
 
 #[cfg(test)]
 mod tests {
+    mod grpc;
+
     use std::collections::BTreeMap;
 
     use async_trait::async_trait;
