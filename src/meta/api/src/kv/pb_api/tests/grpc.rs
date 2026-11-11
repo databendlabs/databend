@@ -12,27 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use bytes::BufMut;
 use bytes::BytesMut;
 use databend_common_base::runtime::spawn;
+use databend_common_meta_app::schema::CatalogIdIdent;
+use databend_common_meta_app::tenant::Tenant;
+use databend_meta_client::kvapi::KVApi;
+use databend_meta_client::kvapi::KVStream;
+use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::types::Change;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
+use databend_meta_client::types::TxnReply;
+use databend_meta_client::types::TxnRequest;
+use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::protobuf::RaftRequest;
 use databend_meta_client::types::protobuf::StreamItem;
 use databend_meta_client::types::protobuf::meta_service_client::MetaServiceClient;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::future::poll_fn;
+use futures::stream::BoxStream;
 use http::HeaderMap;
 use http::HeaderValue;
 use prost::Message;
 use tokio::net::TcpListener;
+use tokio::sync::Notify;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tonic::Code;
 use tonic::Streaming;
+
+use crate::kv_pb_api::KVPbApi;
 
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -67,11 +87,15 @@ impl ResponsePeer {
                 .body(())
                 .unwrap();
             let mut response = respond.send_response(headers, false).unwrap();
+            let mut data = BytesMut::new();
             for item in items {
-                let mut data = BytesMut::new();
                 data.put_u8(0); // Uncompressed gRPC message.
                 data.put_u32(item.encoded_len() as u32);
                 item.encode(&mut data).unwrap();
+            }
+            if !data.is_empty() {
+                // Coalesce messages as tonic does: many tiny DATA frames
+                // would exercise h2's unrelated framing-overhead protection.
                 response.send_data(data.freeze(), false).unwrap();
             }
 
@@ -138,6 +162,214 @@ impl Drop for ResponsePeer {
         // or connection task may survive a failed test.
         self.task.abort();
     }
+}
+
+/// Exercise the actual KVPbApi adapter with a real tonic response stream.
+struct StreamKV {
+    streams: Mutex<VecDeque<KVStream<MetaError>>>,
+    calls: AtomicUsize,
+    read: Arc<Notify>,
+}
+
+impl StreamKV {
+    fn new(streams: Vec<Streaming<StreamItem>>) -> Self {
+        let read = Arc::new(Notify::new());
+        let streams = streams
+            .into_iter()
+            .map(|stream| {
+                let read = read.clone();
+                stream
+                    .inspect(move |_| read.notify_one())
+                    .map_err(MetaError::from)
+                    .boxed()
+            })
+            .collect();
+        Self {
+            streams: Mutex::new(streams),
+            calls: AtomicUsize::new(0),
+            read,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl KVApi for StreamKV {
+    type Error = MetaError;
+
+    async fn get_many_kv(
+        &self,
+        keys: BoxStream<'static, Result<String, MetaError>>,
+    ) -> Result<KVStream<MetaError>, MetaError> {
+        let _ = keys.try_collect::<Vec<_>>().await?;
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Ok(self.streams.lock().unwrap().pop_front().unwrap())
+    }
+
+    async fn list_kv(&self, _: ListOptions<'_, str>) -> Result<KVStream<MetaError>, MetaError> {
+        unimplemented!()
+    }
+    async fn upsert_kv(&self, _: UpsertKV) -> Result<Change<Vec<u8>>, MetaError> {
+        unimplemented!()
+    }
+    async fn transaction(&self, _: TxnRequest) -> Result<TxnReply, MetaError> {
+        unimplemented!()
+    }
+}
+
+fn item(id: u64) -> StreamItem {
+    StreamItem::new(format!("__fd_catalog_by_id/{id}"), None)
+}
+
+fn key(id: u64) -> CatalogIdIdent {
+    CatalogIdIdent::new(Tenant::new_literal("dummy"), id)
+}
+
+#[tokio::test]
+async fn test_pb_vec_waits_for_trailers() {
+    timeout(TEST_TIMEOUT, async {
+        for code in [Code::Ok, Code::Internal] {
+            let mut peer = ResponsePeer::start(vec![item(1)]).await;
+            let kv = StreamKV::new(vec![peer.stream().await]);
+            let result = kv.get_pb_vec([key(1)]);
+            tokio::pin!(result);
+            tokio::select! {
+                biased;
+                result = &mut result => panic!("completed before grpc-status: {result:?}"),
+                _ = kv.read.notified() => {}
+            }
+            assert!(futures::poll!(&mut result).is_pending());
+            peer.finish(code);
+            let result = result.await;
+            if code == Code::Ok {
+                assert_eq!(result.unwrap().len(), 1);
+            } else {
+                assert!(result.is_err(), "final grpc-status must not be discarded");
+            }
+            assert_eq!(peer.event().await, Event::TrailersSent);
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn test_pb_vec_checks_item_count() {
+    timeout(TEST_TIMEOUT, async {
+        for count in [0, 2] {
+            let mut peer = ResponsePeer::start((1..=count).map(item).collect()).await;
+            let kv = StreamKV::new(vec![peer.stream().await]);
+            peer.finish(Code::Ok);
+            let error = kv.get_pb_vec([key(1)]).await.unwrap_err();
+            assert!(
+                error.to_string().contains(if count == 0 {
+                    "StreamReadEOF"
+                } else {
+                    "StreamReadOverflow"
+                }),
+                "{error}"
+            );
+        }
+        let kv = StreamKV::new(vec![]);
+        let stream = kv
+            .get_pb_stream_low(Vec::<CatalogIdIdent>::new())
+            .await
+            .unwrap();
+        assert!(stream.collect::<Vec<_>>().await.is_empty());
+        assert_eq!(kv.calls.load(Ordering::SeqCst), 0);
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn test_pb_vec_propagates_disconnect_and_cancellation() {
+    timeout(TEST_TIMEOUT, async {
+        let mut peer = ResponsePeer::start(vec![item(1)]).await;
+        let kv = StreamKV::new(vec![peer.stream().await]);
+        let result = kv.get_pb_vec([key(1)]);
+        tokio::pin!(result);
+        tokio::select! {
+            biased;
+            result = &mut result => panic!("completed before grpc-status: {result:?}"),
+            _ = kv.read.notified() => {}
+        }
+        peer.task.abort();
+        assert!(result.await.is_err());
+
+        let mut peer = ResponsePeer::start(vec![item(1)]).await;
+        let kv = StreamKV::new(vec![peer.stream().await]);
+        let mut stream = kv.get_pb_stream([key(1), key(2)]).await.unwrap();
+        assert!(stream.next().await.unwrap().is_ok());
+        drop(stream);
+        assert_eq!(peer.event().await, Event::Cancelled(h2::Reason::CANCEL));
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn test_pb_stream_retains_decode_errors_and_terminal_status() {
+    timeout(TEST_TIMEOUT, async {
+        let mut invalid = item(1);
+        invalid.value = Some(SeqV::new(1, b"b".to_vec()).into());
+        for code in [Code::Ok, Code::Internal] {
+            let mut peer = ResponsePeer::start(vec![invalid.clone(), item(2)]).await;
+            let kv = StreamKV::new(vec![peer.stream().await]);
+            peer.finish(code);
+            let stream = kv.get_pb_stream_low([key(1), key(2)]).await.unwrap();
+            let results = stream.collect::<Vec<_>>().await;
+            assert_eq!(results.len(), 2);
+            assert!(matches!(
+                results[0],
+                Err(crate::kv_pb_api::errors::PbApiReadError::PbDecodeError(_))
+            ));
+            assert_eq!(results[1].is_ok(), code == Code::Ok);
+            // Existing table/GC consumers zip results with requested keys;
+            // the terminal error must replace the last item, not follow it.
+            assert_eq!(
+                results
+                    .into_iter()
+                    .zip([key(1), key(2)])
+                    .filter(|(result, _)| result.is_err())
+                    .count(),
+                if code == Code::Ok { 1 } else { 2 }
+            );
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn test_pb_vec_timeout_cancels_pending_trailers() {
+    timeout(TEST_TIMEOUT, async {
+        let mut peer = ResponsePeer::start(vec![item(1)]).await;
+        let kv = StreamKV::new(vec![peer.stream().await]);
+        assert!(
+            timeout(Duration::ZERO, kv.get_pb_vec([key(1)]))
+                .await
+                .is_err()
+        );
+        assert_eq!(peer.event().await, Event::Cancelled(h2::Reason::CANCEL));
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn test_pb_vec_checks_final_status_of_each_chunk() {
+    timeout(TEST_TIMEOUT, async {
+        let n = StreamKV::CHUNK_SIZE as u64;
+        let mut first = ResponsePeer::start((1..=n).map(item).collect()).await;
+        let mut second = ResponsePeer::start(vec![item(n + 1)]).await;
+        let kv = StreamKV::new(vec![first.stream().await, second.stream().await]);
+        first.finish(Code::Ok);
+        second.finish(Code::Internal);
+        assert!(kv.get_pb_vec((1..=n + 1).map(key)).await.is_err());
+        assert_eq!(kv.calls.load(Ordering::SeqCst), 2);
+    })
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
