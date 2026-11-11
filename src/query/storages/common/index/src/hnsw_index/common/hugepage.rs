@@ -194,12 +194,10 @@ mod tests {
         let data = vec![7_u8; 8 * HUGE_PAGE + 4096];
         for round in 0..3 {
             let bytes = HugePageBytes::from_slice(&data);
-            // The kernel may be out of free huge pages: it is not an error.
+            // Under fragmentation or pressure, the kernel may back only some or
+            // none of the pages with huge pages.
             let kb = huge_kb(&bytes);
-            assert!(
-                kb == 0 || kb >= 8 * HUGE_PAGE / 1024,
-                "round {round}: {kb} kB"
-            );
+            assert!(kb == 0 || kb >= HUGE_PAGE / 1024, "round {round}: {kb} kB");
             if kb == 0 {
                 return;
             }
