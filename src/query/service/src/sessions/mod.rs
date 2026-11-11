@@ -49,5 +49,6 @@ pub use session_mgr_status::SessionManagerStatus;
 pub use session_privilege_mgr::SessionPrivilegeManager;
 pub use session_status::SessionStatus;
 
-/// Reserved namespace for server-generated session ids, distinct from client query ids.
-pub const SESSION_ID_PREFIX: &str = "session-";
+/// Reserved SQL process namespace for server-generated session ids, distinct from
+/// HTTP login/client-session ids and client query ids.
+pub const SESSION_ID_PREFIX: &str = "p-";

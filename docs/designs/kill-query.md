@@ -7,13 +7,14 @@ that query's session.
 
 ## Identifiers
 
-New internal session ids have the form `session-<UUID>`. Both the SQL
+New internal session ids have the form `p-<UUID>`, where `p` refers to the SQL
+process in `system.processes`, not an operating-system PID. Both the SQL
 `connection_id()` function and `system.processes.id` expose this prefixed string;
 MySQL's numeric protocol connection id is unchanged. HTTP login/client-session
 ids are separate and retain their existing format. Temporary-table session keys
 and logs treat internal session ids as opaque strings.
 
-`session-` is reserved: an `X-DATABEND-QUERY-ID` beginning with this prefix is
+`p-` is reserved: an `X-DATABEND-QUERY-ID` beginning with this prefix is
 rejected with HTTP 400. Existing clients may continue using 32-character hex ids,
 UUIDs, UUID-plus-sequence ids, or other non-reserved query ids.
 
@@ -22,7 +23,7 @@ SQL KILL resolves its argument in this order:
 1. If it parses as `u32`, use the MySQL connection id on the receiving node. This
    preserves MySQL client Ctrl+C. Query ids that parse as numeric connection ids
    cannot be addressed by query id with SQL KILL.
-2. If it starts with `session-`, look up that session id.
+2. If it starts with `p-`, look up that session id.
 3. Otherwise, look up an active coordinator session's current query id, then
    fall back to an unprefixed legacy session id. The fallback supports sessions
    on nodes that have not yet been upgraded. A UUID alone is inherently

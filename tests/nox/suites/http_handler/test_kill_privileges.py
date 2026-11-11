@@ -122,10 +122,10 @@ def test_sql_kill_privileges(users, kind, id_type, killer, remote):
                 break
             time.sleep(0.1)
         assert session_id is not None, "running query has no session"
-        assert session_id.startswith("session-"), session_id
-        assert str(
-            uuid.UUID(session_id.removeprefix("session-"))
-        ) == session_id.removeprefix("session-")
+        assert session_id.startswith("p-"), session_id
+        assert str(uuid.UUID(session_id.removeprefix("p-"))) == session_id.removeprefix(
+            "p-"
+        )
         target_id = query_id if id_type == "query" else session_id
 
         if id_type == "query":

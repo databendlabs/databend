@@ -719,7 +719,7 @@ async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
 async fn test_client_query_id_rejects_reserved_session_prefix() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
-    for id in ["session-", "session-55b05b74-80a6-49fd-b813-3ef25bf0f110"] {
+    for id in ["p-", "p-55b05b74-80a6-49fd-b813-3ef25bf0f110"] {
         let req = Request::builder()
             .method(Method::POST)
             .uri("/v1/query".parse()?)
