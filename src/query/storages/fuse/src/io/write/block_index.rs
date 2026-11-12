@@ -22,7 +22,6 @@ use std::io;
 use std::ops::Range;
 use std::sync::Arc;
 
-use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -249,7 +248,7 @@ pub fn create_block_index_specs_with_mode(
         }
     }
     let ngram_args =
-        FuseTable::create_ngram_index_args(indexes, &table.schema(), mode.synchronous_only())?;
+        FuseTable::create_ngram_index_args(indexes, schema.as_ref(), mode.synchronous_only())?;
     let mut specs: Vec<Arc<dyn BlockIndexSpec>> =
         vec![Arc::new(BloomIndexWriteSpec::new(columns, ngram_args))];
     for builder in

@@ -545,8 +545,11 @@ impl StreamBlockProperties {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
-        let ngram_args =
-            FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
+        let ngram_args = FuseTable::create_ngram_index_args(
+            &table.table_info.meta.indexes,
+            &source_schema,
+            true,
+        )?;
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
