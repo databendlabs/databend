@@ -70,10 +70,6 @@ pub const VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 64 * 1024;
 
 const TRAILER_MAGIC: &[u8; 4] = b"DBVI";
 const FOOTER_MAGIC: &[u8; 4] = b"DBVF";
-/// Bounds the decompression buffer of a ZSTD-compressed HNSW component. Plain
-/// components (FP16 pages, validity bitmaps) are not decompressed and have no
-/// component-level cap beyond the block and object limits.
-const MAX_COMPRESSED_COMPONENT_RAW_SIZE: u64 = 4 * 1024 * 1024 * 1024;
 /// ZSTD level for HNSW components. Level 1 matches the legacy Parquet default and,
 /// for SQ8 data (few repeats, skewed bytes), compresses better than higher levels:
 /// ~43% vs ~50% at level 3, and several times faster.
@@ -233,15 +229,11 @@ impl VectorBundlePageRead {
     /// Decodes `bytes` read from `range()`. The decoded size (and checksum, if any)
     /// is verified, which also rejects bytes of the wrong length.
     pub fn decode(&self, bytes: Bytes) -> Result<Bytes> {
-        // Bounds the decompression buffer of compressed components. Plain reads
-        // return `bytes` without allocating.
-        if self.codec == VectorBundleCodec::Zstd
-            && self.raw_length > MAX_COMPRESSED_COMPONENT_RAW_SIZE
-        {
-            return Err(invalid("Vector component exceeds size limit"));
-        }
+        // `raw_length` comes from the footer, whose checksum was verified when it
+        // was read, so it is trusted to size the decompression buffer. Component
+        // sizes are bounded by the table's block size, not by a separate cap.
         let raw_length = usize::try_from(self.raw_length)
-            .map_err(|_| invalid("Vector component exceeds size limit"))?;
+            .map_err(|_| invalid("Vector component size overflow"))?;
         let decoded = self.codec.decode(bytes, raw_length)?;
         if decoded.len() as u64 != self.raw_length
             || self
@@ -407,11 +399,6 @@ impl VectorBundleBuilder {
     /// index is loaded into the object cache, so compression only costs on misses.
     /// A component that does not shrink (e.g. the tiny SQ8 meta) is stored plain.
     pub fn add_hnsw(&mut self, name: String, raw: &[u8]) -> Result<()> {
-        if raw.len() as u64 > MAX_COMPRESSED_COMPONENT_RAW_SIZE {
-            return Err(invalid(&format!(
-                "Vector component {name} exceeds size limit"
-            )));
-        }
         let start = self.begin(&name)?;
         let zstd = &mut self.zstd;
         let compressor = match zstd {
@@ -675,9 +662,9 @@ mod tests {
     }
 
     #[test]
-    fn test_component_size_limits_by_codec() -> Result<()> {
-        // Plain FP16 components may exceed 1 GiB (e.g. 2M x 768D = 3.07 GB) and
-        // still address and decode individual pages without hitting a cap.
+    fn test_large_component_has_no_size_cap() -> Result<()> {
+        // FP16 components may exceed 1 GiB (e.g. 2M x 768D = 3.07 GB) and still
+        // address and decode individual pages.
         let total_rows = 2_000_000_u64;
         let dim = 768_u64;
         let row_bytes = dim * 2;
@@ -704,18 +691,22 @@ mod tests {
         let page_bytes = Bytes::from(vec![0x5a; (128 * row_bytes) as usize]);
         assert_eq!(page_read.decode(page_bytes.clone())?, page_bytes);
 
-        // Compressed components remain bounded at MAX_COMPRESSED_COMPONENT_RAW_SIZE.
-        let oversized_zstd = VectorBundlePageRead {
+        // A compressed component whose decoded size is misdeclared is rejected by
+        // the size and checksum verification, not by a size cap.
+        let raw = vec![7_u8; 4096];
+        let compressed = zstd::bulk::compress(&raw, HNSW_ZSTD_LEVEL).unwrap();
+        let mut read = VectorBundlePageRead {
             offset: 0,
-            length: 16,
-            raw_length: MAX_COMPRESSED_COMPONENT_RAW_SIZE + 1,
+            length: compressed.len() as u64,
+            raw_length: raw.len() as u64,
             codec: VectorBundleCodec::Zstd,
-            checksum: None,
+            checksum: Some(crc32fast::hash(&raw)),
         };
-        let err = oversized_zstd
-            .decode(Bytes::from_static(&[0; 16]))
-            .unwrap_err();
-        assert!(err.message().contains("exceeds size limit"));
+        assert_eq!(read.decode(Bytes::from(compressed.clone()))?, raw);
+        read.raw_length = 2 * 1024 * 1024 * 1024;
+        assert!(read.decode(Bytes::from(compressed.clone())).is_err());
+        read.raw_length = 16;
+        assert!(read.decode(Bytes::from(compressed)).is_err());
         Ok(())
     }
 }
