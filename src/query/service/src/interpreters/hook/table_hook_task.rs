@@ -38,6 +38,7 @@ use crate::interpreters::hook::recluster_hook::ReclusterUnitOutcome;
 use crate::interpreters::hook::refresh_hook::RefreshProgress;
 use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryIdentity;
@@ -231,6 +232,7 @@ const ACTION_NAMES: [&str; 3] = ["refresh", "analyze", "recluster"];
 enum MaintenanceOutcome {
     Completed,
     Progress,
+    ScanProgress,
     Deferred(Duration),
 }
 
@@ -274,6 +276,7 @@ impl TableHookRequest {
         let outcome = match &result {
             Ok(MaintenanceOutcome::Completed) => "completed",
             Ok(MaintenanceOutcome::Progress) => "progress",
+            Ok(MaintenanceOutcome::ScanProgress) => "scan",
             Ok(MaintenanceOutcome::Deferred(_)) => "deferred",
             Err(_) => "error",
         };
@@ -293,6 +296,13 @@ impl TableHookRequest {
             Ok(MaintenanceOutcome::Progress) => {
                 self.failures[action] = 0;
                 self.blocked_since[action] = None;
+            }
+            Ok(MaintenanceOutcome::ScanProgress) => {
+                // A bounded scan moves its cursor but is not evidence that a repeatedly
+                // failing/claimed range was repaired. Do not reset failure/cooldown budgets.
+                if self.blocked_too_long(action) {
+                    self.stop_action(action, "no_progress");
+                }
             }
             Ok(MaintenanceOutcome::Deferred(delay)) => {
                 if self.blocked_too_long(action) {
@@ -448,6 +458,8 @@ impl TableHookRequest {
                         .map(|covered| {
                             if covered {
                                 MaintenanceOutcome::Completed
+                            } else if task.ctx.written_segment_locations().list().is_empty() {
+                                MaintenanceOutcome::ScanProgress
                             } else {
                                 MaintenanceOutcome::Progress
                             }
@@ -474,7 +486,9 @@ impl TableHookRequest {
                                 self.ready_at[2] = Instant::now() + Duration::from_millis(100);
                                 Ok(MaintenanceOutcome::Progress)
                             }
-                            ReclusterUnitOutcome::ScanProgress => Ok(MaintenanceOutcome::Progress),
+                            ReclusterUnitOutcome::ScanProgress => {
+                                Ok(MaintenanceOutcome::ScanProgress)
+                            }
                             ReclusterUnitOutcome::Converged => Ok(MaintenanceOutcome::Completed),
                             ReclusterUnitOutcome::Deferred(delay) => {
                                 Ok(MaintenanceOutcome::Deferred(delay))
@@ -714,6 +728,30 @@ mod tests {
             "a later notification may open a fresh attempt"
         );
         assert_eq!(task.failures[0], 0);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_scanning_cannot_reset_a_failing_attempt_budget() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut task = table_hook_task(ctx, "t").into_request().await?;
+        task.failures[0] = MAX_ACTION_FAILURES - 1;
+        task.apply_outcome(0, Ok(MaintenanceOutcome::ScanProgress));
+        assert_eq!(task.failures[0], MAX_ACTION_FAILURES - 1);
+        task.apply_outcome(0, Err(ErrorCode::Internal("unrepairable range")));
+        assert!(
+            !task.refresh_pending,
+            "scan/error cycles must eventually relinquish the mailbox"
+        );
+
+        task.recluster_target = Some(task.target.clone());
+        task.blocked_since[2] = Some(Instant::now() - MAX_ACTION_BLOCKED);
+        task.apply_outcome(2, Ok(MaintenanceOutcome::ScanProgress));
+        assert!(
+            task.recluster_target.is_none(),
+            "repeated scans must not look like committed maintenance"
+        );
         Ok(())
     }
 
