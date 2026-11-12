@@ -29,6 +29,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchemaRef;
+use databend_common_sql::binder::validate_table_indexes_by_schema;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -233,17 +234,17 @@ pub fn create_block_index_specs_with_mode(
     if mode == BlockIndexBuildMode::All {
         // Maintenance cannot silently skip an invalid definition and then publish a
         // newly rewritten block without its index. Foreground behavior is unchanged.
+        validate_table_indexes_by_schema(indexes, schema.clone())?;
         for index in indexes.values() {
-            for column_id in &index.column_ids {
-                let field = schema.field_of_column_id(*column_id)?;
-                if field.column_id() != *column_id {
-                    return Err(databend_common_exception::ErrorCode::RefreshIndexError(
-                        format!(
-                            "Index {} references a nested column unsupported by block-index writers",
-                            index.name
-                        ),
-                    ));
-                }
+            if index
+                .column_ids
+                .iter()
+                .any(|id| !schema.fields().iter().any(|field| field.column_id() == *id))
+            {
+                return Err(ErrorCode::UnsupportedIndex(format!(
+                    "Index {} must reference top-level stored columns",
+                    index.name
+                )));
             }
         }
     }
@@ -259,7 +260,11 @@ pub fn create_block_index_specs_with_mode(
     if let Some(builder) =
         VectorIndexBuilder::try_create(indexes, schema.clone(), mode.synchronous_only())?
     {
-        specs.push(Arc::new(builder.into_write_spec()));
+        specs.push(Arc::new(
+            builder
+                .with_parallel_build(mode.synchronous_only())
+                .into_write_spec(),
+        ));
     }
     if let Some(builder) = SpatialIndexBuilder::try_create(indexes, schema, mode.synchronous_only())
     {
