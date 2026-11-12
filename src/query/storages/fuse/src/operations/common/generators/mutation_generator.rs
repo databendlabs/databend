@@ -43,12 +43,14 @@ pub struct MutationGenerator {
 
     pub(crate) mutation_kind: MutationKind,
     logical_change_delta: (u64, u64),
-    refresh_definition: Option<TableMeta>,
+    index_definition: Option<TableMeta>,
 }
 
 impl MutationGenerator {
-    pub(crate) fn with_refresh_definition(mut self, meta: TableMeta) -> Self {
-        self.refresh_definition = Some(meta);
+    /// Pin the definition used to build indexes across OCC rebases. Rewriting data must
+    /// not attach old-version artifacts to a newly changed schema or index definition.
+    pub fn with_index_definition(mut self, meta: TableMeta) -> Self {
+        self.index_definition = Some(meta);
         self
     }
 
@@ -58,7 +60,7 @@ impl MutationGenerator {
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
             logical_change_delta: (0, 0),
-            refresh_definition: None,
+            index_definition: None,
         }
     }
 }
@@ -92,12 +94,13 @@ impl SnapshotGenerator for MutationGenerator {
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
-        if self.refresh_definition.as_ref().is_some_and(|expected| {
+        if self.index_definition.as_ref().is_some_and(|expected| {
             expected.schema != table_info.meta.schema || expected.indexes != table_info.meta.indexes
         }) {
-            return Err(ErrorCode::RefreshIndexError(
-                "Index definitions or schema changed during refresh",
-            ));
+            return Err(ErrorCode::RefreshIndexError(format!(
+                "Index definitions or schema changed during {}",
+                self.mutation_kind.to_string().to_ascii_lowercase()
+            )));
         }
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {

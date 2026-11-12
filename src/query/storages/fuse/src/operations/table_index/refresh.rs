@@ -215,7 +215,7 @@ impl FuseTable {
         });
         let previous = snapshot.snapshot_id;
         let generator = MutationGenerator::new(Some(snapshot), MutationKind::Refresh)
-            .with_refresh_definition(self.get_table_info().meta.clone());
+            .with_index_definition(self.get_table_info().meta.clone());
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,
