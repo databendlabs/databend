@@ -319,15 +319,13 @@ impl HashJoin {
     /// zero-column side occupies no projected positions, so join conditions
     /// and the output keep the same column offsets.
     fn build_zero_column_side(&mut self) {
-        // Merge into and build-side caches consume the build state of the
-        // side the planner chose.
+        // Build-side caches consume the build state of the side the planner chose.
         if !probes_all_pairs(
             self.join_type,
             !self.build_keys.is_empty(),
             self.single_to_inner,
         ) || !self.probe_projections.is_empty()
             || self.build_projections.is_empty()
-            || self.need_hold_hash_table
             || self.build_side_cache_info.is_some()
         {
             return;
@@ -1382,7 +1380,6 @@ mod tests {
             from_correlated_subquery: false,
             probe_to_build: vec![],
             output_schema: DataSchemaRefExt::create(vec![DataField::new("build", int64_type())]),
-            need_hold_hash_table: false,
             stat_info: None,
             single_to_inner: None,
             build_side_cache_info: None,
@@ -1396,7 +1393,7 @@ mod tests {
     }
 
     // Inner joins that keep their hash join execution.
-    fn hash_table_variants() -> [fn(&mut HashJoin); 4] {
+    fn hash_table_variants() -> [fn(&mut HashJoin); 3] {
         [
             |join| {
                 let key = RemoteExpr::ColumnRef {
@@ -1409,7 +1406,6 @@ mod tests {
                 join.build_keys = vec![key];
             },
             |join| join.single_to_inner = Some(JoinType::LeftSingle),
-            |join| join.need_hold_hash_table = true,
             |join| join.build_side_cache_info = Some((0, HashMap::new())),
         ]
     }
@@ -1427,11 +1423,6 @@ mod tests {
         }
 
         let mut join = cross_join(BTreeSet::from([0]));
-        join.build_zero_column_side();
-        assert_eq!(build_side(&join)?, "build");
-
-        let mut join = cross_join(BTreeSet::new());
-        join.need_hold_hash_table = true;
         join.build_zero_column_side();
         assert_eq!(build_side(&join)?, "build");
 

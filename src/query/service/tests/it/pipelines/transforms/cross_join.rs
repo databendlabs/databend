@@ -89,7 +89,6 @@ fn cross_join(probe: DataBlock, build: DataBlock, predicate: Option<Expr>) -> Ha
         from_correlated_subquery: false,
         probe_to_build: vec![],
         output_schema: Arc::new(DataSchema::new(fields)),
-        need_hold_hash_table: false,
         stat_info: None,
         single_to_inner: None,
         build_side_cache_info: None,
