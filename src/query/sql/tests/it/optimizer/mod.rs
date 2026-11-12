@@ -39,6 +39,7 @@ mod outer_join_to_anti;
 mod physical_planner;
 mod plan_cache_query_specific;
 mod planning_context;
+mod proven_empty;
 mod push_down_filter_project_set;
 mod push_down_filter_window_top_n;
 mod push_down_rank_limit_aggregate;
