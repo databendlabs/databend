@@ -85,7 +85,7 @@ impl DataBlock {
 fn has_non_strict_child(column: &Column) -> bool {
     match column {
         Column::Decimal(decimal) => !decimal.is_strict_decimal(),
-        Column::Nullable(nullable) => has_non_strict_child(&nullable.column),
+        Column::Nullable(nullable) => has_non_strict_child(nullable.column()),
         Column::Array(array) | Column::Map(array) => has_non_strict_child(array.values()),
         Column::Tuple(fields) => fields.iter().any(has_non_strict_child),
         Column::Encoded(_) => true,
@@ -131,18 +131,16 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        self.visit_boolean(column.validity.clone())?;
+        let (column, validity) = column.destructure();
+        self.visit_boolean(validity)?;
         let validity =
             BooleanType::try_downcast_column(self.result.take().unwrap().as_column().unwrap())
                 .unwrap();
 
-        self.visit_column(column.column)?;
+        self.visit_column(column)?;
         let result = self.result.take().unwrap();
         let result = result.as_column().unwrap();
-        self.result = Some(Value::Column(NullableColumn::new_column(
-            result.clone(),
-            validity,
-        )));
+        self.result = Some(Value::Column(result.clone().wrap_nullable(Some(validity))));
         Ok(())
     }
 
