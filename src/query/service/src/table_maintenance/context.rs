@@ -19,12 +19,15 @@ use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_exception::Result;
+use databend_common_version::BUILD_INFO;
 use uuid::Uuid;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextQueryInfo;
+use crate::table_maintenance::MaintenanceIdentity;
 
 /// Where one maintenance unit runs: an internal session derived from the triggering
 /// session, a query context of its own, and tracking (query id, memory, IO) of its own.
@@ -36,6 +39,24 @@ pub(crate) struct MaintenanceContext {
 }
 
 impl MaintenanceContext {
+    /// Resolve a fresh execution environment only when a queued action actually starts.
+    pub(crate) async fn from_identity(identity: &MaintenanceIdentity) -> Result<Self> {
+        let query_id = Uuid::new_v4().to_string();
+        let mut payload = maintenance_tracking(query_id.clone());
+        // Do not inherit an arbitrary worker's foreground workload resource.
+        payload.workload_group_resource = None;
+        let tracking = Arc::new(payload);
+        let ctx = tracking
+            .clone()
+            .tracking(async {
+                let session = identity.create_session().await?;
+                session.create_query_context(&BUILD_INFO).await
+            })
+            .await?;
+        ctx.update_init_query_id(query_id);
+        Ok(Self { ctx, tracking })
+    }
+
     pub(crate) async fn create(parent: &Arc<QueryContext>) -> Result<Self> {
         let query_id = Uuid::new_v4().to_string();
         let tracking = Arc::new(maintenance_tracking(query_id.clone()));

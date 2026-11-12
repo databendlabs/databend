@@ -25,7 +25,6 @@ use async_channel::Sender;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use log::warn;
 use parking_lot::Mutex;
@@ -33,7 +32,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
 use crate::interpreters::hook::table_hook_task::SchedulerTask;
-use crate::interpreters::hook::table_hook_task::TableHookTask;
+use crate::interpreters::hook::table_hook_task::TableHookRequest;
 use crate::interpreters::hook::table_hook_task::TableHookTaskKey;
 
 type SchedulerFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -41,7 +40,7 @@ type SchedulerRunner<T> = Arc<dyn Fn(T) -> SchedulerFuture + Send + Sync>;
 type SchedulerSpawner = Arc<dyn Fn(SchedulerFuture, String) + Send + Sync>;
 
 pub struct TableHookScheduler {
-    core: Arc<SchedulerCore<TableHookTask>>,
+    core: Arc<SchedulerCore<TableHookRequest>>,
 }
 
 struct SchedulerCore<T> {
@@ -59,8 +58,13 @@ enum TableHookState<T> {
 
 impl TableHookScheduler {
     pub fn init(max_concurrency: usize) -> Result<()> {
-        let runner: SchedulerRunner<TableHookTask> =
-            Arc::new(|task| Box::pin(task.execute_remaining_stages(true)));
+        let runner: SchedulerRunner<TableHookRequest> = Arc::new(|request| {
+            Box::pin(async move {
+                if let Err(e) = request.execute().await {
+                    warn!("Failed to execute table maintenance request: {e}");
+                }
+            })
+        });
         let spawner: SchedulerSpawner = Arc::new(|future, name| {
             GlobalIORuntime::instance().spawn_named(future, name);
         });
@@ -75,13 +79,7 @@ impl TableHookScheduler {
         GlobalInstance::try_get()
     }
 
-    pub fn is_async_enabled() -> bool {
-        GlobalConfig::try_get_instance()
-            .map(|config| config.query.common.table_hook_mode == "async")
-            .unwrap_or(false)
-    }
-
-    pub fn enqueue(&self, task: TableHookTask) {
+    pub(super) fn enqueue(&self, task: TableHookRequest) {
         self.core.enqueue(task);
     }
 }
@@ -271,6 +269,7 @@ mod tests {
     impl SchedulerTask for TestTask {
         fn key(&self) -> TableHookTaskKey {
             TableHookTaskKey {
+                tenant: "test".to_string(),
                 catalog: self.catalog.clone(),
                 table_id: self.table_id,
             }

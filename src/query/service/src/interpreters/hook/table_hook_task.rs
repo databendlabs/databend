@@ -23,6 +23,7 @@ use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use log::warn;
 
@@ -32,9 +33,13 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::table_maintenance::MaintenanceContext;
+use crate::table_maintenance::MaintenanceIdentity;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) struct TableHookTaskKey {
+    pub(super) tenant: String,
     pub(super) catalog: String,
     pub(super) table_id: u64,
 }
@@ -45,6 +50,7 @@ pub(super) trait SchedulerTask: Send + 'static {
     fn merge(&mut self, other: Self);
 }
 
+#[derive(Clone)]
 pub struct TableHookTarget {
     pub catalog: String,
     pub database: String,
@@ -83,6 +89,7 @@ impl TableHookTarget {
 
 pub struct TableHookTask {
     pub ctx: Arc<QueryContext>,
+    pub session_local: bool,
     /// Tracking of a context created for this task. `None` when the task runs on the
     /// triggering statement's context and is accounted to that statement.
     pub tracking: Option<Arc<TrackingPayload>>,
@@ -177,38 +184,78 @@ impl TableHookTask {
     }
 }
 
-impl SchedulerTask for TableHookTask {
+/// Queued maintenance contains values only. In particular, it must not keep a write's
+/// QueryContext, transaction manager, executor, session or handed-over lock alive.
+pub(super) struct TableHookRequest {
+    pub identity: MaintenanceIdentity,
+    pub target: TableHookTarget,
+    pub recluster_target: Option<TableHookTarget>,
+    pub written_segments: Vec<Location>,
+    pub enable_auto_analyze: bool,
+    pub source_query_id: String,
+    pub operation_name: String,
+    pub main_operation_start: Instant,
+}
+
+impl TableHookRequest {
+    pub(super) async fn execute(self) -> Result<()> {
+        let MaintenanceContext { ctx, tracking } =
+            MaintenanceContext::from_identity(&self.identity).await?;
+        ctx.written_segment_locations()
+            .extend(self.written_segments);
+        ctx.set_enable_auto_analyze(self.enable_auto_analyze);
+        info!(source_query_id = self.source_query_id.as_str(), table_id = self.target.table_id;
+            "Create independent table maintenance context");
+        TableHookTask {
+            ctx,
+            session_local: false,
+            tracking: Some(tracking),
+            target: self.target,
+            recluster_target: self.recluster_target,
+            hook_settings: TableHookTaskSettings {
+                compact_after_write: false,
+            },
+            lock_opt: LockTableOption::LockWithRetry,
+            lock_guard: None,
+            operation_name: self.operation_name,
+            main_operation_start: self.main_operation_start,
+        }
+        .execute_remaining_stages(true)
+        .await;
+        Ok(())
+    }
+}
+
+impl TableHookTask {
+    pub(super) async fn into_request(self) -> Result<TableHookRequest> {
+        Ok(TableHookRequest {
+            identity: MaintenanceIdentity::capture(&self.ctx).await?,
+            written_segments: self.ctx.written_segment_locations().list(),
+            enable_auto_analyze: self.ctx.get_enable_auto_analyze(),
+            source_query_id: self.ctx.get_id(),
+            target: self.target,
+            recluster_target: self.recluster_target,
+            operation_name: self.operation_name,
+            main_operation_start: self.main_operation_start,
+        })
+    }
+}
+
+impl SchedulerTask for TableHookRequest {
     fn key(&self) -> TableHookTaskKey {
         TableHookTaskKey {
+            tenant: self.identity.tenant.tenant_name().to_string(),
             catalog: self.target.catalog.clone(),
             table_id: self.target.table_id,
         }
     }
 
-    /// Combine pending inputs while keeping the latest task's execution context.
+    /// Combine pending values, never mutate another query's context.
     fn merge(&mut self, mut other: Self) {
-        other.hook_settings.merge(self.hook_settings);
-
-        other
-            .ctx
-            .written_segment_locations()
-            .extend(self.ctx.written_segment_locations().list());
-
-        // Each hint describes the whole snapshot it was taken from, not a per-write increment,
-        // so pending writes merge to the larger hint, as transaction hooks do.
-        let compaction_num_block_hint = self
-            .ctx
-            .get_compaction_num_block_hint(&self.target.table)
-            .max(other.ctx.get_compaction_num_block_hint(&other.target.table));
-        if compaction_num_block_hint > 0 {
-            other
-                .ctx
-                .set_compaction_num_block_hint(&other.target.table, compaction_num_block_hint);
-        }
-
-        if self.ctx.get_enable_auto_analyze() {
-            other.ctx.set_enable_auto_analyze(true);
-        }
+        other.written_segments.append(&mut self.written_segments);
+        other.written_segments.sort_unstable();
+        other.written_segments.dedup();
+        other.enable_auto_analyze |= self.enable_auto_analyze;
 
         // Each compacted write asks for a recluster round; one round covers them all.
         if other.recluster_target.is_none() {
@@ -233,10 +280,6 @@ impl TableHookTaskSettings {
             compact_after_write: compact_after_write_enabled(ctx),
         }
     }
-
-    fn merge(&mut self, other: Self) {
-        self.compact_after_write |= other.compact_after_write;
-    }
 }
 
 /// Run maintenance work without adding its reads and writes to the progress of `ctx`. On an
@@ -257,13 +300,13 @@ pub(super) async fn keep_progress<T>(ctx: &Arc<QueryContext>, work: impl Future<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sessions::TableContextSettings;
     use crate::test_kits::TestFixture;
 
     fn table_hook_task(ctx: Arc<QueryContext>, table: &str) -> TableHookTask {
         let hook_settings = TableHookTaskSettings::create(&ctx);
         TableHookTask {
             ctx,
+            session_local: false,
             tracking: None,
             recluster_target: None,
             target: TableHookTarget {
@@ -281,37 +324,44 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_table_hook_task_merge_keeps_larger_compaction_hint() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let old_ctx = fixture.new_query_ctx().await?;
-        let latest_ctx = fixture.new_query_ctx().await?;
-
-        old_ctx.set_compaction_num_block_hint("t", 7);
-        latest_ctx.set_compaction_num_block_hint("t", 5);
-        let mut task = table_hook_task(old_ctx, "t");
-        task.merge(table_hook_task(latest_ctx, "t"));
-
-        assert_eq!(task.ctx.get_compaction_num_block_hint("t"), 7);
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_table_hook_task_merge_preserves_hook_settings() -> Result<()> {
+    async fn test_table_hook_request_merge_releases_write_context() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let old_ctx = fixture.new_query_ctx().await?;
         let latest_ctx = fixture.new_query_ctx().await?;
 
         old_ctx
-            .get_settings()
-            .set_setting("enable_compact_after_write".to_string(), "1".to_string())?;
+            .written_segment_locations()
+            .extend(vec![("a".into(), 1)]);
         latest_ctx
-            .get_settings()
-            .set_setting("enable_compact_after_write".to_string(), "0".to_string())?;
+            .written_segment_locations()
+            .extend(vec![("b".into(), 1)]);
+        let old_weak = Arc::downgrade(&old_ctx);
+        let mut task = table_hook_task(old_ctx, "t").into_request().await?;
+        task.merge(table_hook_task(latest_ctx, "t").into_request().await?);
 
-        let mut task = table_hook_task(old_ctx, "t");
-        task.merge(table_hook_task(latest_ctx, "t"));
+        assert_eq!(task.written_segments, vec![
+            ("a".into(), 1),
+            ("b".into(), 1)
+        ]);
+        assert!(
+            old_weak.upgrade().is_none(),
+            "queued values must not retain the write context"
+        );
+        Ok(())
+    }
 
-        assert!(task.hook_settings.compact_after_write);
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_table_hook_request_merge_preserves_analyze_demand() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let old_ctx = fixture.new_query_ctx().await?;
+        let latest_ctx = fixture.new_query_ctx().await?;
+
+        old_ctx.set_enable_auto_analyze(true);
+        latest_ctx.set_enable_auto_analyze(false);
+        let mut task = table_hook_task(old_ctx, "t").into_request().await?;
+        task.merge(table_hook_task(latest_ctx, "t").into_request().await?);
+
+        assert!(task.enable_auto_analyze);
         Ok(())
     }
 }

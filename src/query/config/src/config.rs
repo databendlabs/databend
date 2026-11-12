@@ -2044,7 +2044,8 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_queries_executor: bool,
 
-    /// Controls how table hooks after write are executed. Supported values: sync, async.
+    /// Deprecated compatibility option (sync or async). Compact is always synchronous;
+    /// other automatic maintenance is asynchronous, except on session-local temporary tables.
     #[clap(long, value_name = "VALUE", default_value = "sync")]
     pub table_hook_mode: String,
 

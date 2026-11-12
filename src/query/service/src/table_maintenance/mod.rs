@@ -15,5 +15,7 @@
 //! Automatic table maintenance that runs after a successful write.
 
 mod context;
+mod identity;
 
 pub(crate) use context::MaintenanceContext;
+pub(crate) use identity::MaintenanceIdentity;

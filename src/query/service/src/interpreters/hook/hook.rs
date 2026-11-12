@@ -115,7 +115,7 @@ impl HookOperator {
     /// 3. Refresh indexes if needed.
     /// 4. Analyze if needed.
     ///
-    /// In async mode, steps 2 to 4 run in the background scheduler.
+    /// Steps 2 to 4 run in the background scheduler, except for session-local temporary tables.
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute(&self, pipeline: &mut Pipeline) {
@@ -129,30 +129,21 @@ impl HookOperator {
             self.defer_until_commit(pipeline).await;
             return;
         }
-        let is_async = TableHookScheduler::is_async_enabled();
-        let lock_opt = if is_async {
-            // Async hooks acquire maintenance locks where required. Release the statement lock
-            // before the success callback compacts and enqueues the task, even if task
-            // creation fails.
-            self.release_lock_guard(pipeline);
-            LockTableOption::LockWithRetry
-        } else {
-            self.lock_opt.clone()
-        };
-        if let Some(mut task) = self.create_task(lock_opt).await {
-            if !is_async {
-                task.lock_guard = self.lock_guard.clone();
-            }
+        if let Some(mut task) = self.create_task(self.lock_opt.clone()).await {
+            task.lock_guard = self.lock_guard.clone();
             pipeline.set_on_finished(move |info: &ExecutionInfo| {
                 if info.res.is_ok() {
                     GlobalIORuntime::instance()
                         .block_on(async move {
                             // Compaction always finishes before the statement returns.
                             task.execute_compact_stage().await;
-                            if is_async {
-                                enqueue_table_hook(task);
-                            } else {
+                            if task.session_local {
                                 task.execute_remaining_stages(false).await;
+                            } else {
+                                if let Some(guard) = task.lock_guard.take() {
+                                    drop(guard.try_take());
+                                }
+                                enqueue_table_hook(task).await;
                             }
                             Ok::<_, databend_common_exception::ErrorCode>(())
                         })
@@ -161,11 +152,8 @@ impl HookOperator {
                 Ok(())
             });
         }
-        if !is_async {
-            // Successful tasks release the lock before analyze. Keep the callback-chain
-            // fallback for task creation failures and skipped or interrupted execution.
-            self.release_lock_guard(pipeline);
-        }
+        // Fallback for failed task creation or an interrupted callback chain.
+        self.release_lock_guard(pipeline);
     }
 
     async fn defer_until_commit(&self, pipeline: &mut Pipeline) {
@@ -220,12 +208,12 @@ impl HookOperator {
     }
 
     async fn create_task(&self, lock_opt: LockTableOption) -> Option<TableHookTask> {
-        let table_id = match self
+        let table = match self
             .ctx
             .get_table(&self.catalog, &self.database, &self.table)
             .await
         {
-            Ok(table) => table.get_id(),
+            Ok(table) => table,
             Err(e) => {
                 warn!(
                     "Failed to resolve table hook target {}.{}.{}: {e}",
@@ -236,13 +224,14 @@ impl HookOperator {
         };
         Some(TableHookTask {
             ctx: self.ctx.clone(),
+            session_local: table.is_temp(),
             tracking: None,
             recluster_target: None,
             target: TableHookTarget {
                 catalog: self.catalog.clone(),
                 database: self.database.clone(),
                 table: self.table.clone(),
-                table_id,
+                table_id: table.get_id(),
             },
             hook_settings: TableHookTaskSettings::create(&self.ctx),
             lock_opt,
@@ -253,13 +242,14 @@ impl HookOperator {
     }
 }
 
-fn enqueue_table_hook(task: TableHookTask) {
-    match TableHookScheduler::try_instance() {
-        Some(scheduler) => scheduler.enqueue(task),
-        None => warn!(
-            "Async table hook scheduler is not initialized, table_id={}",
-            task.target.table_id
-        ),
+async fn enqueue_table_hook(task: TableHookTask) {
+    let table_id = task.target.table_id;
+    match task.into_request().await {
+        Ok(request) => match TableHookScheduler::try_instance() {
+            Some(scheduler) => scheduler.enqueue(request),
+            None => warn!("Async table hook scheduler is not initialized, table_id={table_id}"),
+        },
+        Err(e) => warn!("Failed to capture table maintenance request, table_id={table_id}: {e}"),
     }
 }
 
@@ -270,7 +260,6 @@ pub(crate) async fn execute_deferred_table_hooks(
     hooks: Vec<TxnTableHook>,
     txn_id: &str,
 ) {
-    let is_async = TableHookScheduler::is_async_enabled();
     for hook in hooks {
         let table_id = hook.table_id;
         log::info!("Dispatch post-commit table hook, txn_id={txn_id}, table_id={table_id}");
@@ -285,10 +274,10 @@ pub(crate) async fn execute_deferred_table_hooks(
         };
         // Compaction always finishes before COMMIT returns.
         task.execute_compact_stage().await;
-        if is_async {
-            enqueue_table_hook(task);
-        } else {
+        if task.session_local {
             task.execute_remaining_stages(false).await;
+        } else {
+            enqueue_table_hook(task).await;
         }
     }
 }
@@ -302,8 +291,13 @@ async fn create_deferred_table_hook_task(
     ctx.written_segment_locations()
         .extend(hook.written_segments);
     ctx.set_enable_auto_analyze(hook.enable_auto_analyze);
+    let session_local = ctx
+        .get_table(&hook.catalog, &hook.database, &hook.table)
+        .await?
+        .is_temp();
     Ok(TableHookTask {
         ctx,
+        session_local,
         tracking: Some(tracking),
         recluster_target: None,
         target: TableHookTarget {
