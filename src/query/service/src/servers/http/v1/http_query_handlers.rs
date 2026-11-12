@@ -597,7 +597,7 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
-                query.check_access(ctx)?;
+                query.check_owner(ctx)?;
                 if let Some(reason) = query.check_closed() {
                     Ok(StateResponse::closed(&query_id, reason.reason).into_response())
                 } else {
@@ -628,7 +628,8 @@ async fn query_page_handler(
         return Err(query_id_not_found(&query_id, &ctx.node_id));
     };
 
-    query.check_access(ctx)?;
+    query.check_owner(ctx)?;
+    query.check_client_session_id(&ctx.client_session_id)?;
     ctx.try_refresh_worksheet_session().await.ok();
 
     let query_mem_stat = query.query_mem_stat.clone();

@@ -141,12 +141,14 @@ def assert_denied(response, owner_name, session_id):
 
 
 @pytest.mark.parametrize("mode", ["none", "cookie", "header", "worksheet", "token"])
-def test_query_owner(users, mode):
+@pytest.mark.parametrize("kill_method", ["GET", "POST"])
+def test_query_owner(users, mode, kill_method):
     owner_auth, other_auth = users
     with (
         owner_client(owner_auth, mode) as owner,
         client(other_auth) as other,
         client(owner_auth) as different_session,
+        client(owner_auth) as no_session,
         client(("root", "")) as root,
         running_query(owner) as query,
     ):
@@ -168,7 +170,8 @@ def test_query_owner(users, mode):
 
         if mode != "none":
             assert session_id, query
-            for suffix in ("", "/page/0", "/kill", "/final"):
+            assert state(different_session, query)["state"] == "Running"
+            for suffix in ("/page/0", "/final"):
                 response = request(different_session, "GET", query_path + suffix)
                 assert_denied(response, owner_auth[0], session_id)
                 assert state(owner, query)["state"] == "Running"
@@ -184,12 +187,15 @@ def test_query_owner(users, mode):
 
         different_session.cookies.set("cookie_enabled", "true")
         different_session.cookies.set("session_id", str(uuid.uuid4()))
-        for suffix in ("/kill", "/final"):
-            response = request(different_session, "POST", query_path + suffix)
-            assert_denied(response, owner_auth[0], session_id)
-            assert state(owner, query)["state"] == "Running"
+        assert state(different_session, query)["state"] == "Running"
+        response = request(different_session, "POST", query["final_uri"])
+        assert_denied(response, owner_auth[0], session_id)
+        assert state(owner, query)["state"] == "Running"
 
-        response = request(owner, "POST", query["kill_uri"])
+        # Both missing and different sessions are allowed for the same owner.
+        assert state(no_session, query)["state"] == "Running"
+        caller = no_session if kill_method == "GET" else different_session
+        response = request(caller, kill_method, query["kill_uri"])
         assert response.status_code == 200, response.text
         response = request(owner, "GET", query["final_uri"])
         assert response.status_code == 200, response.text
@@ -242,7 +248,10 @@ def test_heartbeat_query_owner(users, remote, mode):
             assert heartbeat(other, [query]) == [query["id"]]
             assert heartbeat(root, [query]) == [query["id"]]
             if mode != "none":
-                assert heartbeat(different_session, [query]) == [query["id"]]
+                assert heartbeat(different_session, [query]) == []
+                different_session.cookies.set("cookie_enabled", "true")
+                different_session.cookies.set("session_id", str(uuid.uuid4()))
+                assert heartbeat(different_session, [query]) == []
                 other.cookies.set("cookie_enabled", "true")
                 other.cookies.set("session_id", query["session_id"])
                 assert heartbeat(other, [query]) == [query["id"]]
@@ -256,6 +265,7 @@ def test_unauthorized_heartbeat_does_not_extend_timeout(users, remote):
     with (
         client(("root", "")) as root,
         owner_client(owner_auth, "cookie") as owner,
+        owner_client(owner_auth, "cookie") as different_session,
         client(other_auth) as other,
     ):
         base_url = query_node(root, remote)
@@ -263,11 +273,14 @@ def test_unauthorized_heartbeat_does_not_extend_timeout(users, remote):
         with running_query(
             owner, base_url, sql="SELECT * FROM numbers(100)", result_timeout=3
         ) as query:
-            # Authorized heartbeats must keep unread results alive, including
+            # The same owner can extend TTL from another session, including
             # across forwarding with cookies. State polling does not refresh TTL.
+            assert owner.cookies.get("session_id") != different_session.cookies.get(
+                "session_id"
+            )
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
-                assert heartbeat(owner, [query]) == []
+                assert heartbeat(different_session, [query]) == []
                 time.sleep(0.5)
             assert state(owner, query, base_url)["state"] != "Failed"
 

@@ -1113,16 +1113,16 @@ impl HttpQuery {
         }
     }
 
-    /// Query access is restricted to the originating tenant, user and client session.
+    /// Query ownership is restricted to the originating tenant and user.
     /// These fields are immutable, including after the executor releases its session.
-    pub(crate) fn check_access(&self, ctx: &HttpQueryContext) -> poem::error::Result<()> {
+    pub(crate) fn check_owner(&self, ctx: &HttpQueryContext) -> poem::error::Result<()> {
         if self.tenant != ctx.session.get_current_tenant() || self.user_name != ctx.user_name {
             return Err(poem::error::Error::from_string(
                 "Authentication error: query owner mismatch",
                 StatusCode::UNAUTHORIZED,
             ));
         }
-        self.check_client_session_id(&ctx.client_session_id)
+        Ok(())
     }
 
     pub fn check_client_session_id(&self, id: &Option<String>) -> poem::error::Result<()> {

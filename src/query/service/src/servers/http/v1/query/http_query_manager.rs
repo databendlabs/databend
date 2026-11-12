@@ -98,7 +98,12 @@ impl Queries {
             // Authorize and mark closed under the same queries write lock. Only
             // the server-side timeout task closes queries without a request context.
             if let Some(ctx) = ctx {
-                q.check_access(ctx)?;
+                q.check_owner(ctx)?;
+                // Final consumes session state; cancellation may come from a
+                // separate connection belonging to the same query owner.
+                if matches!(reason, CloseReason::Finalized) {
+                    q.check_client_session_id(&ctx.client_session_id)?;
+                }
             }
             let closed_state = q.mark_closed(reason);
             if let Some(st) = closed_state {
@@ -283,7 +288,7 @@ impl HttpQueryManager {
                 .get(&query_id)
                 // Treat inaccessible queries like missing ones in this batch API.
                 // Never refresh their expiration time or disclose their state.
-                .map(|q| q.check_access(ctx).is_err() || q.on_heartbeat())
+                .map(|q| q.check_owner(ctx).is_err() || q.on_heartbeat())
                 .unwrap_or(true);
             if stop_heartbeat {
                 to_stop.push(query_id);

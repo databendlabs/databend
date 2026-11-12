@@ -2723,6 +2723,39 @@ async fn test_query_owner_tenant_and_token() -> anyhow::Result<()> {
         .do_request_raw(Method::GET, &make_page_uri(&query.id, 0))
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
+
+    // Side-channel access needs the same tenant and user, not the same session.
+    let mut side_channel = TestHttpQueryRequest::new(serde_json::json!({}));
+    side_channel
+        .headers
+        .insert("x-databend-tenant", "owner-tenant".parse()?);
+    for cookie in [None, Some("cookie_enabled=true; session_id=other-session")] {
+        if let Some(cookie) = cookie {
+            side_channel.headers.insert(header::COOKIE, cookie.parse()?);
+        }
+        let response = side_channel
+            .do_request_raw(Method::GET, &format!("/v1/query/{}", query.id))
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        side_channel.json =
+            serde_json::json!({"node_to_queries": {query.node_id.clone(): [query.id.clone()]}});
+        let response = side_channel
+            .do_request_raw(Method::POST, "/v1/session/heartbeat")
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value = response.into_body().into_json().await?;
+        assert_eq!(body["queries_to_remove"], serde_json::json!([]));
+        for suffix in ["/page/0", "/final"] {
+            let response = side_channel
+                .do_request_raw(Method::GET, &format!("/v1/query/{}{suffix}", query.id))
+                .await?;
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+    }
+    let response = side_channel
+        .do_request_raw(Method::POST, &format!("/v1/query/{}/kill", query.id))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
     let response = token_owner
         .do_request_raw(Method::POST, query.final_uri.as_ref().unwrap())
         .await?;
