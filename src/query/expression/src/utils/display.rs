@@ -1363,6 +1363,9 @@ impl Display for FunctionProperty {
         if self.non_deterministic {
             properties.push("non_deterministic");
         }
+        if self.depends_on_other_rows {
+            properties.push("depends_on_other_rows");
+        }
         if !properties.is_empty() {
             write!(f, "{{{}}}", properties.join(", "))?;
         }

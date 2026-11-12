@@ -20,6 +20,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
 use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalPruningRuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::CatalogManager;
@@ -36,6 +37,7 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -200,12 +202,21 @@ impl GlobalServices {
             &config.query.common.share_endpoint_auth_token_file,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
+        // The shared pools are reclaimed when the server memory limit is reached; without an
+        // enforced limit they never would be.
+        if config.cache.shared_memory_enabled && !config.query.common.max_memory_limit_enabled {
+            return Err(ErrorCode::InvalidConfig(
+                "cache.shared_memory_enabled requires a server memory limit: set \
+                 query.max_memory_limit_enabled and query.max_server_memory_usage",
+            ));
+        }
         CacheManager::init(
             &config.cache,
             &config.query.common.max_server_memory_usage,
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
+        FuseCaches::init(&CacheManager::instance());
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config
@@ -224,6 +235,8 @@ impl GlobalServices {
 
         if config.query.common.enable_queries_executor {
             GlobalQueriesExecutor::init()?;
+            // The queries of the global executor prune on a global runtime too.
+            GlobalPruningRuntime::init(num_cpus::get())?;
         }
 
         Self::init_workload_mgr(config).await?;
@@ -253,6 +266,13 @@ impl GlobalServices {
         }
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
+        // The legacy cache backend keeps its old behavior: caches are not shrunk under pressure.
+        if config.cache.shared_memory_enabled {
+            let cache_manager = CacheManager::instance();
+            GLOBAL_QUERIES_MANAGER.set_reclaim_handle(move |relieved| {
+                cache_manager.shrink_for_pressure(relieved).freed
+            });
+        }
 
         Ok(())
     }

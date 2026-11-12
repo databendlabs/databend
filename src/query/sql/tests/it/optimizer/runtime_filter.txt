@@ -631,7 +631,7 @@ EvalScalar
 ├── scalars: [rf_mid.j (#1) AS (#1)]
 └── Join(Inner)
     ├── build keys: [rf_dim.k (#8)]
-    ├── probe keys: [if(is_not_null(k (#5)), assume_not_null(k (#5)), true, 0, NULL)]
+    ├── probe keys: [CAST(if(is_not_null(k (#5)), assume_not_null(k (#5)), 0) AS Int32 NULL)]
     ├── other filters: []
     ├── Scan
     │   ├── table: default.rf_dim (#2)
@@ -660,9 +660,9 @@ EvalScalar
 ├── scalars: [rf_mid.j (#1) AS (#1), k (#5) AS (#10), rf_dim.k (#8) AS (#11)]
 └── Join(Inner)
     ├── build keys: [rf_dim.k (#8)]
-    ├── probe keys: [if(is_not_null(k (#5)), assume_not_null(k (#5)), true, 0, NULL)]
+    ├── probe keys: [CAST(if(is_not_null(k (#5)), assume_not_null(k (#5)), 0) AS Int32 NULL)]
     ├── other filters: []
-    ├── runtime filters: [#0: rf_dim.k (#8) -> if(is_not_null(k (#5)), assume_not_null(k (#5)), true, 0, NULL)]
+    ├── runtime filters: [#0: rf_dim.k (#8) -> CAST(if(is_not_null(k (#5)), assume_not_null(k (#5)), 0) AS Int32 NULL)]
     ├── Scan
     │   ├── table: default.rf_dim (#2)
     │   ├── filters: []
@@ -697,7 +697,7 @@ EvalScalar
 └── Join(Inner)
     ├── build keys: []
     ├── probe keys: []
-    ├── other filters: [assume_not_null(if(false, true, false, false, eq(rf_fact.k (#0), rf_dim.k (#3))))]
+    ├── other filters: [assume_not_null(eq(rf_fact.k (#0), rf_dim.k (#3)))]
     ├── Scan
     │   ├── table: default.rf_dim (#1)
     │   ├── filters: []
@@ -713,7 +713,7 @@ optimized_plan:
 EvalScalar
 ├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#5), rf_dim.k (#3) AS (#6)]
 └── Filter
-    ├── filters: [assume_not_null(if(false, true, false, false, eq(rf_fact.k (#0), rf_dim.k (#3))))]
+    ├── filters: [assume_not_null(eq(rf_fact.k (#0), rf_dim.k (#3)))]
     └── Join(Cross)
         ├── build keys: []
         ├── probe keys: []
@@ -728,5 +728,171 @@ EvalScalar
             ├── filters: []
             ├── order by: []
             └── limit: NONE
+
+
+=== stateful_projection_is_not_pushed ===
+description: running_difference depends on the preceding rows, so the filter is removed above its projection.
+sql: SELECT f.d FROM (SELECT k, running_difference(v) AS d FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [d (#3) AS (#3)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), running_difference(rf_fact.v (#1)) AS (#3)]
+        └── Scan
+            ├── table: default.rf_fact (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [d (#3) AS (#3), rf_fact.k (#0) AS (#6), rf_dim.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#4)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#4) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), running_difference(rf_fact.v (#1)) AS (#3)]
+        └── Scan
+            ├── table: default.rf_fact (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== row_local_volatile_scan_predicate ===
+description: rand() is evaluated per row, so the scan with v > rand() still receives the filter.
+sql: SELECT f.v FROM (SELECT k, v FROM rf_fact WHERE v > rand()) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#3)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), rf_fact.v (#1) AS (#1)]
+        └── Filter
+            ├── filters: [gt(rf_fact.v (#1), rand())]
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#5), rf_dim.k (#3) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#3)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#3) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.rf_fact (#0)
+        ├── filters: [gt(rf_fact.v (#1), rand())]
+        ├── order by: []
+        ├── limit: NONE
+        └── runtime filters: [#0: rf_fact.k (#0)]
+
+
+=== converted_single_side_is_not_pushed ===
+description: A filter on the scalar subquery result could hide a second match of the converted single join, so it is removed above that join.
+sql: SELECT q.k FROM (SELECT f.k, (SELECT m.j FROM rf_mid m WHERE m.k = f.k) AS sv FROM rf_fact f) q
+JOIN rf_dim d ON q.sv = d.k WHERE q.sv IS NOT NULL
+raw_plan:
+EvalScalar
+├── scalars: [rf_fact.k (#0) AS (#0)]
+└── Filter
+    ├── filters: [is_not_null(sv (#5))]
+    └── Join(Inner)
+        ├── build keys: [rf_dim.k (#6)]
+        ├── probe keys: [sv (#5)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.rf_dim (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [rf_fact.k (#0) AS (#0), SUBQUERY AS (#4) AS (#5)]
+            ├── subquerys
+            │   └── Subquery (Scalar)
+            │       ├── output_column: rf_mid.j (#4)
+            │       └── EvalScalar
+            │           ├── scalars: [rf_mid.j (#4) AS (#4)]
+            │           └── Filter
+            │               ├── filters: [eq(rf_mid.k (#3), rf_fact.k (#0))]
+            │               └── Scan
+            │                   ├── table: default.rf_mid (#1)
+            │                   ├── filters: []
+            │                   ├── order by: []
+            │                   └── limit: NONE
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [rf_fact.k (#0) AS (#0), sv (#5) AS (#8), rf_dim.k (#6) AS (#9)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#6)]
+    ├── probe keys: [sv (#5)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#6) -> sv (#5)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#2)
+    │   ├── filters: [is_not_null(rf_dim.k (#6))]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), rf_mid.j (#4) AS (#5)]
+        └── Filter
+            ├── filters: [is_not_null(rf_mid.j (#4))]
+            └── Join(Inner)
+                ├── build keys: [rf_mid.k (#3)]
+                ├── probe keys: [rf_fact.k (#0)]
+                ├── other filters: []
+                ├── runtime filters: [#1: rf_mid.k (#3) -> rf_fact.k (#0)]
+                ├── Scan
+                │   ├── table: default.rf_mid (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.rf_fact (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    ├── limit: NONE
+                    └── runtime filters: [#1: rf_fact.k (#0)]
 
 

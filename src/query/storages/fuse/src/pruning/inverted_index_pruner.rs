@@ -18,6 +18,7 @@ use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use lindera::dictionary::UserDictionary;
@@ -69,6 +70,7 @@ pub struct InvertedIndexPruner {
 impl InvertedIndexPruner {
     pub fn try_create(
         dal: Operator,
+        cache_policy: CachePolicy,
         push_down: &Option<PushDownInfo>,
     ) -> Result<Option<Arc<InvertedIndexPruner>>> {
         let inverted_index_info = push_down.as_ref().and_then(|p| p.inverted_index.as_ref());
@@ -83,6 +85,7 @@ impl InvertedIndexPruner {
             let index_version = inverted_index_info.index_version.clone();
             let reader = InvertedIndexReader::create(
                 dal,
+                cache_policy,
                 has_score,
                 prepared.tokenizer_manager,
                 prepared.warmup,

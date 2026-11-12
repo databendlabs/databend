@@ -93,7 +93,7 @@ where I: TakeIndex + ?Sized
         }
     }
 
-    fn with_optimize_size_enable(mut self, optimize_size_enable: bool) -> Self {
+    pub(super) fn with_optimize_size_enable(mut self, optimize_size_enable: bool) -> Self {
         self.optimize_size_enable = optimize_size_enable;
         self
     }
@@ -187,16 +187,16 @@ where I: TakeIndex + ?Sized
 
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut unset_bits = 0;
+        let mut set_bits = 0;
         let mut value = 0;
         let mut i = 0;
 
+        // No branch on the bit value: on random bits a branch mispredicts
+        // about half of the time.
         for index in self.indices.iter() {
-            if col.get_bit(index) {
-                value |= BIT_MASK[i % 8];
-            } else {
-                unset_bits += 1;
-            }
+            let bit = col.get_bit(index) as u8;
+            value |= bit << (i % 8);
+            set_bits += bit as usize;
             i += 1;
             if i % 8 == 0 {
                 builder.push(value);
@@ -208,7 +208,7 @@ where I: TakeIndex + ?Sized
         }
 
         let result = unsafe {
-            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, num_rows - set_bits)
                 .ok()
                 .unwrap()
         };

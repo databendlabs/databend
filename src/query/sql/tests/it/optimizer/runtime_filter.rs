@@ -162,6 +162,24 @@ JOIN rf_dim d ON f.k = d.k",
             description: "A null-safe equality matches NULL keys, which a runtime filter would remove.",
             sql: "SELECT f.v FROM rf_fact f JOIN rf_dim d ON f.k IS NOT DISTINCT FROM d.k",
         },
+        RuntimeFilterCase {
+            name: "stateful_projection_is_not_pushed",
+            description: "running_difference depends on the preceding rows, so the filter is removed above its projection.",
+            sql: "SELECT f.d FROM (SELECT k, running_difference(v) AS d FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k",
+        },
+        RuntimeFilterCase {
+            name: "row_local_volatile_scan_predicate",
+            description: "rand() is evaluated per row, so the scan with v > rand() still receives the filter.",
+            sql: "SELECT f.v FROM (SELECT k, v FROM rf_fact WHERE v > rand()) f
+JOIN rf_dim d ON f.k = d.k",
+        },
+        RuntimeFilterCase {
+            name: "converted_single_side_is_not_pushed",
+            description: "A filter on the scalar subquery result could hide a second match of the converted single join, so it is removed above that join.",
+            sql: "SELECT q.k FROM (SELECT f.k, (SELECT m.j FROM rf_mid m WHERE m.k = f.k) AS sv FROM rf_fact f) q
+JOIN rf_dim d ON q.sv = d.k WHERE q.sv IS NOT NULL",
+        },
     ];
 
     for case in &cases {

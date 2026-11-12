@@ -14,6 +14,7 @@
 
 use databend_common_base::vec_ext::VecExt;
 use databend_common_base::vec_ext::VecU8Ext;
+use databend_common_column::types::timestamp_tz;
 
 use crate::Column;
 use crate::ProjectedBlock;
@@ -40,7 +41,7 @@ pub fn serialize_group_columns(
     let columns: Vec<Column> = columns
         .iter()
         // Decoded once per block: rows are serialized one at a time.
-        .map(|entry| normalize_bitmap_in_column(entry.to_column().decode_encoded()))
+        .map(|entry| normalize_bitmap_in_column(entry.to_column().decode_owned()))
         .collect();
     let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
 
@@ -113,7 +114,10 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                 unimplemented!()
             }
             Column::Timestamp(v) => row_space.store_value_uncheckd(&v[row]),
-            Column::TimestampTz(v) => row_space.store_value_uncheckd(&v[row]),
+            Column::TimestampTz(v) => {
+                // Only the equality key discards the offset; projection uses the original column.
+                row_space.store_value_uncheckd(&timestamp_tz::new(v[row].timestamp(), 0));
+            }
             Column::Date(v) => row_space.store_value_uncheckd(&v[row]),
             Column::Interval(v) => row_space.store_value_uncheckd(&v[row]),
             Column::Array(array) | Column::Map(array) => {

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -21,7 +20,6 @@ use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::function_stat::DomainStatBounds;
@@ -30,7 +28,6 @@ use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -415,20 +412,13 @@ fn fold_constant_stat(
     expr: &ScalarExpr,
     func_ctx: &FunctionContext,
 ) -> Result<Option<FoldedConstantStat>> {
-    let expr = expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
-    let Ok(constant) = expr.into_owned().into_constant() else {
+    let Some((value, data_type)) = expr.constant_value(func_ctx) else {
         return Ok(None);
     };
-    if constant.scalar == Scalar::Null {
+    if value == Scalar::Null {
         return Ok(Some(FoldedConstantStat::Null));
     }
-    let DomainStatBounds::Bounds(bounds) = constant
-        .scalar
-        .as_ref()
-        .domain(&constant.data_type)
-        .stat_bounds()
-    else {
+    let DomainStatBounds::Bounds(bounds) = value.as_ref().domain(&data_type).stat_bounds() else {
         return Ok(None);
     };
     let stat = ColumnStat::new(bounds, NdvEstimate::exact(1.0), StatCount::exact(0), None)

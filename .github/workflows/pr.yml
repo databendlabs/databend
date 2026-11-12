@@ -150,6 +150,39 @@ jobs:
             At least one type of change must be checked in the PR description.
             @${{ github.event.pull_request.user.login }} please update it 🙏.
 
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check PR description quality
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/check_pr_quality.py
+      - name: Delete Comment
+        if: always() && steps.check.outputs.quality == 'valid'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: "pr-assistant-quality"
+          delete: true
+      - name: Comment on PR
+        if: always() && steps.check.outputs.quality == 'invalid'
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ github.token }}
+          identifier: "pr-assistant-quality"
+          body: |
+            The PR description does not meet the repository's writing bar (see [AI_POLICY.md](https://github.com/databendlabs/databend/blob/main/AI_POLICY.md)).
+            @${{ github.event.pull_request.user.login }} please update it 🙏.
+
+            ${{ steps.check.outputs.problems }}
+
+            Describe the change the way you would explain it to a reviewer: the concrete
+            problem, why it matters, and how you validated it - in your own words. Do not
+            paste model transcripts, long logs, or stack traces; link a gist or use a
+            <details> block instead.
+
   ai_assistance:
     runs-on: ubuntu-latest
     steps:

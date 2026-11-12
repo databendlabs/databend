@@ -24,7 +24,6 @@ use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::JoinProperty;
@@ -53,11 +52,11 @@ use crate::plans::as_runtime_filter_predicate;
 pub struct RulePushDownFilterJoin {
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
-    stat_context: StatContext,
+    func_ctx: FunctionContext,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(metadata: MetadataRef, stat_context: StatContext) -> Self {
+    pub fn new(metadata: MetadataRef, func_ctx: FunctionContext) -> Self {
         Self {
             // Filter
             //  \
@@ -73,7 +72,7 @@ impl RulePushDownFilterJoin {
                 }],
             }],
             metadata,
-            stat_context,
+            func_ctx,
         }
     }
 }
@@ -93,7 +92,7 @@ impl Rule for RulePushDownFilterJoin {
 
         // Second, try to convert outer join to inner join
         let (s_expr, outer_to_inner) =
-            outer_join_to_inner_join(s_expr, self.metadata.clone(), &self.stat_context)?;
+            outer_join_to_inner_join(s_expr, self.metadata.clone(), &self.func_ctx)?;
 
         // Third, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr, self.metadata.clone())?;
@@ -108,11 +107,8 @@ impl Rule for RulePushDownFilterJoin {
         }
 
         // Finally, push down filter to join.
-        let (need_push, mut result) = try_push_down_filter_join(
-            &s_expr,
-            self.metadata.clone(),
-            &self.stat_context.function_context,
-        )?;
+        let (need_push, mut result) =
+            try_push_down_filter_join(&s_expr, self.metadata.clone(), &self.func_ctx)?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
@@ -174,6 +170,10 @@ fn try_push_down_filter_join(
     let mut predicates = rewrite_predicates(s_expr)?;
     let join_expr = s_expr.child(0)?;
     let mut join: Join = join_expr.plan().clone().try_into()?;
+    // A predicate moved into an input would also filter the rows that the join conditions see.
+    if join.depends_on_other_rows() {
+        return Ok((false, s_expr.clone()));
+    }
 
     let rel_expr = RelExpr::with_s_expr(join_expr);
     let left_prop = rel_expr.derive_relational_prop_child(0)?;
@@ -191,6 +191,15 @@ fn try_push_down_filter_join(
             visitor.visit(predicate)?;
         }
     }
+    // A join converted from a single join still reports an error when the single side has
+    // several matches for a row. A filter on that side could remove matches and hide the
+    // error, so it stays above the join. Predicates inferred through the join equalities
+    // below remain safe: they cannot remove a match of any row that the filter keeps.
+    let (single_side_is_left, single_side_is_right) = match join.single_to_inner {
+        Some(JoinType::LeftSingle) => (false, true),
+        Some(JoinType::RightSingle) => (true, false),
+        _ => (false, false),
+    };
     let original_predicates_count = predicates.len();
     let mut original_predicates = vec![];
     let mut left_push_down = vec![];
@@ -207,6 +216,8 @@ fn try_push_down_filter_join(
             JoinPredicate::ALL(_) => {
                 push_down_predicates.push(predicate);
             }
+            JoinPredicate::Left(_) if single_side_is_left => original_predicates.push(predicate),
+            JoinPredicate::Right(_) if single_side_is_right => original_predicates.push(predicate),
             JoinPredicate::Left(_) => {
                 if matches!(
                     join.join_type,

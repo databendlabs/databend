@@ -87,6 +87,7 @@ fn execute_query(
     let id = http_query_context.query_id.clone();
     let warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
     let io_stats = query_context.get_local_io_stats();
+    let perf_query_token = query_context.get_perf_query_token();
     let fut = async move {
         let interpreter = InterpreterFactory::get(query_context.clone(), &plan).await?;
 
@@ -99,6 +100,7 @@ fn execute_query(
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
     tracking_payload.io_stats = Some(io_stats);
+    tracking_payload.perf_query_token = perf_query_token;
     tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(mem_stat);
 
@@ -218,13 +220,13 @@ async fn streaming_load_handler_inner(
     let settings = query_context.get_settings();
 
     let mut planner = Planner::new(query_context.clone());
-    let (mut plan, extras) = planner
+    let (mut plan, _) = planner
         .plan_sql(sql)
         .await
         .map_err(|err| err.display_with_sql(sql))
         .map_err(BadRequest)?;
 
-    let entry = QueryEntry::create(&query_context, &plan, &extras).map_err(InternalServerError)?;
+    let entry = QueryEntry::create(&query_context, &plan).map_err(InternalServerError)?;
     let _guard = QueriesQueueManager::instance()
         .acquire(entry)
         .await

@@ -32,12 +32,16 @@ use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::SelectExpr;
+use databend_common_expression::SelectExprBuilder;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_pruner::VectorScores;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -50,6 +54,35 @@ pub struct BloomRuntimeFilterRef {
     pub probe_expr: Expr<FieldIndex>,
     pub filter: RuntimeBloomFilter,
     pub stats: Arc<RuntimeFilterStats>,
+}
+
+/// Build a selector executor for a prewhere predicate, or `None` to keep the evaluator.
+///
+/// The selector evaluates each AND/OR child only on the rows earlier children left
+/// undecided, and works on row indexes instead of a boolean column. A single comparison has
+/// nothing to short-circuit and keeps the evaluator.
+fn prewhere_selector(
+    filter: &Expr,
+    func_ctx: &FunctionContext,
+    max_block_size: usize,
+) -> Option<FilterExecutor> {
+    if !func_ctx.enable_selector_executor {
+        return None;
+    }
+    let (select_expr, _) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+        .build(filter)
+        .into();
+    if matches!(select_expr, SelectExpr::Compare(_)) {
+        return None;
+    }
+    Some(FilterExecutor::new(
+        filter.clone(),
+        func_ctx.clone(),
+        max_block_size,
+        None,
+        &BUILTIN_FUNCTIONS,
+        false,
+    ))
 }
 
 /// Scan workload of one block, measured before prewhere and runtime filters
@@ -93,6 +126,7 @@ pub struct ReadState {
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
     pub filters: Option<Expr>,
+    prewhere_selector: Option<FilterExecutor>,
     pub runtime_filters: Vec<BloomRuntimeFilterRef>,
     pub pre_column_ids: HashSet<ColumnId>,
     pub remain_column_ids: HashSet<ColumnId>,
@@ -185,22 +219,45 @@ impl ReadState {
             None
         };
 
+        let func_ctx = ctx.get_function_context()?;
+        let max_block_size = (ctx.get_settings().get_max_block_size()? as usize).max(1);
+        let prewhere_selector = prewhere_filter
+            .as_ref()
+            .and_then(|filter| prewhere_selector(filter, &func_ctx, max_block_size));
+
         Ok(Self {
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
+            prewhere_selector,
             runtime_filters,
             pre_column_ids,
             remain_column_ids,
-            func_ctx: ctx.get_function_context()?,
+            func_ctx,
             output_schema: block_reader.data_schema(),
             prewhere_selectivity_threshold,
             use_single_prewhere_reader,
         })
     }
 
-    pub fn filter(&self, block: &DataBlock, num_rows: usize) -> Result<Option<MutableBitmap>> {
+    pub fn filter(&mut self, block: &DataBlock, num_rows: usize) -> Result<Option<MutableBitmap>> {
         if let Some(ref f) = self.filters {
+            if let Some(selector) = self.prewhere_selector.as_mut() {
+                // The block is selected in slices of `max_block_size` rows, as the `Filter`
+                // operator does. The selected indexes are not sorted when the predicate
+                // contains OR.
+                let max_block_size = selector.max_block_size();
+                let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
+                for offset in (0..num_rows).step_by(max_block_size) {
+                    let end = (offset + max_block_size).min(num_rows);
+                    let selected = selector.select(&block.slice(offset..end))?;
+                    for index in &selector.true_selection()[..selected] {
+                        bitmap.set(offset + *index as usize, true);
+                    }
+                }
+                return Ok(Some(bitmap));
+            }
+
             let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let filter_result = evaluator.run(f)?.try_downcast::<BooleanType>().unwrap();
             Ok(Some(FilterHelpers::filter_to_bitmap(
@@ -252,7 +309,7 @@ impl ReadState {
     }
 
     pub fn deserialize_and_filter(
-        &self,
+        &mut self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<ReadStateOutput> {
@@ -290,6 +347,10 @@ impl ReadState {
             (Some(filter_bitmap), None) => Some(filter_bitmap.into()),
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
+        };
+        let bitmap_selection = match (bitmap_selection, vector_topn_rows(part)) {
+            (Some(selection), Some(rows)) => Some(&selection & &rows),
+            (selection, rows) => selection.or(rows),
         };
 
         if let Some(ref bitmap) = bitmap_selection {
@@ -373,6 +434,25 @@ fn runtime_filter_column_is_projectable(
     name: &str,
 ) -> bool {
     Projection::from_column_names(schema, &[name]).is_ok()
+}
+
+/// The rows of a vector TopN in a block (see `VectorScores::TopN`): the scan
+/// outputs only them. `None` when every row is output.
+fn vector_topn_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
+    let Some(VectorScores::TopN(scores)) = part.block_meta_index()?.vector_scores.as_ref() else {
+        return None;
+    };
+    if scores.len() >= part.nums_rows {
+        return None;
+    }
+    let mut rows = MutableBitmap::from_len_zeroed(part.nums_rows);
+    for &(row, _) in scores {
+        let row = row as usize;
+        if row < part.nums_rows {
+            rows.set(row, true);
+        }
+    }
+    Some(rows.into())
 }
 
 fn expand_runtime_filter_bitmap(

@@ -625,6 +625,56 @@ impl DataType {
         matches!(self, DataType::Timestamp | DataType::Date)
     }
 
+    /// Whether SQL equality can hide a stored timezone offset, including in nested values.
+    pub fn contains_timestamp_tz(&self) -> bool {
+        match self {
+            DataType::TimestampTz => true,
+            DataType::Nullable(inner) | DataType::Array(inner) | DataType::Map(inner) => {
+                inner.contains_timestamp_tz()
+            }
+            DataType::Tuple(fields) => fields.iter().any(Self::contains_timestamp_tz),
+            _ => false,
+        }
+    }
+
+    /// Whether values that are equal as group keys are also indistinguishable to every function,
+    /// so an expression of a group key can be computed after the aggregation from any row of its
+    /// group. Keep this in line with the hash and equality of group keys.
+    pub fn groups_by_exact_value(&self) -> bool {
+        match self {
+            // Equal keys have the same bits.
+            DataType::Boolean
+            | DataType::String
+            | DataType::Date
+            | DataType::Timestamp
+            | DataType::Decimal(_) => true,
+            DataType::Number(ty) => ALL_INTEGER_TYPES.contains(ty),
+            // `NULL` only equals `NULL`.
+            DataType::Nullable(ty) => ty.groups_by_exact_value(),
+            // Floats: `+0.0` equals `-0.0` (`atan2` tells them apart).
+            // TimestampTz: equality ignores the offset. Interval: `1 month` equals `30 days`.
+            // Nested types can hold any of these. The other types are not checked yet.
+            DataType::Null
+            | DataType::EmptyArray
+            | DataType::EmptyMap
+            | DataType::Binary
+            | DataType::TimestampTz
+            | DataType::Array(_)
+            | DataType::Map(_)
+            | DataType::Bitmap
+            | DataType::Tuple(_)
+            | DataType::Variant
+            | DataType::Geometry
+            | DataType::Interval
+            | DataType::Geography
+            | DataType::Vector(_)
+            | DataType::Opaque(_)
+            | DataType::AggregateState(_)
+            | DataType::Generic(_)
+            | DataType::StageLocation => false,
+        }
+    }
+
     #[inline]
     pub fn is_string_column(&self) -> bool {
         match self {

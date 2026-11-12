@@ -1,0 +1,93 @@
+=== filter_stays_above_running_difference_projection ===
+description: running_difference depends on the preceding rows, so a filter on another column stays above its projection.
+sql: SELECT * FROM (SELECT k, running_difference(v) AS d FROM t) s WHERE k = 1
+optimized_plan:
+Filter
+├── filters: [eq(t.k (#0), 1)]
+└── EvalScalar
+    ├── scalars: [t.k (#0) AS (#0), running_difference(t.v (#1)) AS (#2)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== filter_passes_row_local_volatile_projection ===
+description: rand() is evaluated per row, so a filter on another column still passes its projection.
+sql: SELECT * FROM (SELECT k, rand() AS r FROM t) s WHERE k = 1
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), rand() AS (#2)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: [eq(t.k (#0), 1)]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== filter_stays_above_running_difference_join_condition ===
+description: The join evaluates running_difference on its input, so a filter on that input stays above the join.
+sql: SELECT * FROM t JOIN u ON running_difference(t.v) = u.v WHERE t.k = 1
+optimized_plan:
+Filter
+├── filters: [eq(t.k (#0), 1)]
+└── Join(Inner)
+    ├── build keys: [u.v (#3)]
+    ├── probe keys: [running_difference(t.v (#1))]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.u (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== filter_stays_above_running_difference_filter ===
+description: A filter stays above a filter whose predicate depends on the preceding rows.
+sql: SELECT * FROM (SELECT k, v FROM t WHERE running_difference(v) > 0) s WHERE k = 1
+optimized_plan:
+Filter
+├── filters: [eq(t.k (#0), 1)]
+└── Filter
+    ├── filters: [gt(running_difference(t.v (#1)), 0)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [gt(running_difference(t.v (#1)), 0)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== filter_stays_out_of_converted_single_side ===
+description: A filter on the scalar subquery result stays above the converted single join, so it cannot hide a second match. The outer filter and its inferred copy are still pushed down.
+sql: SELECT * FROM (SELECT t.k, (SELECT u.v FROM u WHERE u.k = t.k) AS sv FROM t) s WHERE s.sv IS NOT NULL AND s.k = 1
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), u.v (#3) AS (#4)]
+└── Filter
+    ├── filters: [is_not_null(u.v (#3))]
+    └── Join(Inner)
+        ├── build keys: [u.k (#2)]
+        ├── probe keys: [t.k (#0)]
+        ├── other filters: []
+        ├── runtime filters: [#0: u.k (#2) -> t.k (#0)]
+        ├── Filter
+        │   ├── filters: [eq(u.k (#2), 1)]
+        │   └── Scan
+        │       ├── table: default.u (#1)
+        │       ├── filters: [eq(u.k (#2), 1)]
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: [eq(t.k (#0), 1)]
+            ├── order by: []
+            ├── limit: NONE
+            └── runtime filters: [#0: t.k (#0)]
+
+

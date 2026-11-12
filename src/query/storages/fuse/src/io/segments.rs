@@ -21,7 +21,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -31,7 +31,8 @@ use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use super::read::SegmentReader;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentInfoReader;
 
 #[derive(Clone)]
 pub struct SerializedSegment {
@@ -55,26 +56,22 @@ impl SegmentsIO {
         }
     }
 
+    /// The cache policy of reads through `self`: the statement's, and `policy`.
+    fn policy(&self, policy: CachePolicy) -> CachePolicy {
+        policy.at_most(self.ctx.cache_policy())
+    }
+
     // Read one segment file by location.
     #[async_backtrace::framed]
     pub async fn read_compact_segment(
         dal: Operator,
         segment_location: Location,
         table_schema: TableSchemaRef,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<CompactSegmentInfo>> {
-        let (path, ver) = segment_location;
-        let reader = MetaReaders::segment_info_reader(dal, table_schema);
-
-        // Keep in mind that segment_info_read must need a schema
-        let load_params = LoadParams {
-            location: path,
-            len_hint: None,
-            ver,
-            put_cache,
-        };
-
-        reader.read(&load_params).await
+        let cache = FuseCaches::instance().segments.with_policy(policy);
+        let reader = SegmentInfoReader::new(dal, table_schema);
+        cache.get(&reader, segment_location).await
     }
 
     // Read all segments information from s3 in concurrently.
@@ -83,11 +80,12 @@ impl SegmentsIO {
     pub async fn read_segments<T>(
         &self,
         segment_locations: &[Location],
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Vec<Result<T>>>
     where
         T: TryFrom<Arc<CompactSegmentInfo>> + Send + 'static,
     {
+        let policy = self.policy(policy);
         // combine all the tasks.
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(|| {
@@ -97,7 +95,7 @@ impl SegmentsIO {
                 let segment_location = location.clone();
                 async move {
                     let compact_segment =
-                        Self::read_compact_segment(dal, segment_location, table_schema, put_cache)
+                        Self::read_compact_segment(dal, segment_location, table_schema, policy)
                             .await?;
                     compact_segment
                         .try_into()
@@ -127,7 +125,7 @@ impl SegmentsIO {
         dal: Operator,
         table_schema: TableSchemaRef,
         segment_locations: &[Location],
-        put_cache: bool,
+        policy: CachePolicy,
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<Result<T>>>
     where
@@ -145,7 +143,7 @@ impl SegmentsIO {
             let location = location.clone();
             tasks.push(runtime.spawn(async move {
                 let _permit = permit;
-                let segment = Self::read_compact_segment(dal, location, schema, put_cache).await?;
+                let segment = Self::read_compact_segment(dal, location, schema, policy).await?;
                 segment
                     .try_into()
                     .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
@@ -161,9 +159,10 @@ impl SegmentsIO {
     pub async fn generic_read_compact_segments<R: SegmentReader>(
         &self,
         segment_locations: &[&Location],
-        put_cache: bool,
+        policy: CachePolicy,
         projection: &HashSet<String>,
     ) -> Result<Vec<Result<Arc<R::CompactSegment>>>> {
+        let policy = self.policy(policy);
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(|| {
             iter.next().map(|&location| {
@@ -177,7 +176,7 @@ impl SegmentsIO {
                         segment_location,
                         &projection,
                         table_schema,
-                        put_cache,
+                        policy,
                     )
                     .await?;
                     Ok(segment)
@@ -202,9 +201,10 @@ impl SegmentsIO {
     pub async fn generic_read_segments<R: SegmentReader>(
         &self,
         segment_locations: &[Location],
-        put_cache: bool,
+        policy: CachePolicy,
         projection: &HashSet<String>,
     ) -> Result<Vec<Result<R::Segment>>> {
+        let policy = self.policy(policy);
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(|| {
             iter.next().map(|location| {
@@ -213,14 +213,9 @@ impl SegmentsIO {
                 let segment_location = location.clone();
                 let projection = projection.clone();
                 async move {
-                    let segment = R::read_segment(
-                        dal,
-                        segment_location,
-                        &projection,
-                        table_schema,
-                        put_cache,
-                    )
-                    .await?;
+                    let segment =
+                        R::read_segment(dal, segment_location, &projection, table_schema, policy)
+                            .await?;
                     Ok(segment)
                 }
                 .in_span(Span::enter_with_local_parent(func_path!()))

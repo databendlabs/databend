@@ -20,6 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SortColumnDescription;
 use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
@@ -39,21 +40,27 @@ pub struct AggregatorParams {
     // If there is no aggregate function, layout is None
     pub states_layout: Option<StatesLayout>,
 
-    pub cluster_aggregator: bool,
-
     pub max_block_rows: usize,
     pub max_block_bytes: usize,
+
+    /// Set when the final aggregation feeds a top N: its output only needs the first rows
+    /// ordered by these columns of the result, see `PartitionedPayload::top_n_result`.
+    pub top_n: Option<(Vec<SortColumnDescription>, usize)>,
+
+    /// Set when the consumer of the final aggregation merges a group that it receives more than
+    /// once, as a materialized view refresh does with aggregate states. The final aggregate then
+    /// outputs the groups aggregated so far when it runs out of memory instead of spilling them,
+    /// so the output can repeat a group but never holds or spills more than its memory budget.
+    pub allow_duplicate_groups: bool,
 }
 
 impl AggregatorParams {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input_schema: DataSchemaRef,
         group_data_types: Vec<DataType>,
         group_columns: &[usize],
         agg_funcs: &[AggregateCallRef],
         agg_args: &[Vec<usize>],
-        cluster_aggregator: bool,
         max_block_rows: usize,
         max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
@@ -70,9 +77,10 @@ impl AggregatorParams {
             aggregate_functions: agg_funcs.to_vec(),
             aggregate_functions_arguments: agg_args.to_vec(),
             states_layout,
-            cluster_aggregator,
             max_block_rows,
             max_block_bytes,
+            top_n: None,
+            allow_duplicate_groups: false,
         }))
     }
 

@@ -1370,18 +1370,27 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let alter_table = map(
-        rule! {
-            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only_with_branch ~ #alter_table_action
-        },
-        |(_, _, opt_if_exists, table_reference, action)| {
-            Statement::AlterTable(AlterTableStmt {
-                if_exists: opt_if_exists.is_some(),
-                table_reference,
-                action,
-            })
-        },
-    );
+    let alter_table = alt((
+        // Deprecated RECLUSTER syntax directly produces the canonical OPTIMIZE AST.
+        map(
+            rule! {
+                ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #recluster_table
+            },
+            |(_, _, _, stmt)| Statement::OptimizeTable(stmt),
+        ),
+        map(
+            rule! {
+                ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only ~ #alter_table_action
+            },
+            |(_, _, opt_if_exists, table_reference, action)| {
+                Statement::AlterTable(AlterTableStmt {
+                    if_exists: opt_if_exists.is_some(),
+                    table_reference,
+                    action,
+                })
+            },
+        ),
+    ));
     let rename_table = map(
         rule! {
             RENAME ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
@@ -1428,11 +1437,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ),
         map(
             rule! {
-                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_2 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+                OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
             },
-            |(_, _, (database, table), action, opt_limit)| {
+            |(_, _, (catalog, database, table), action, opt_limit)| {
                 Statement::OptimizeTable(OptimizeTableStmt {
-                    catalog: None,
+                    catalog,
                     database,
                     table,
                     action,
@@ -1825,19 +1834,28 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ))
         },
     );
-    let alter_materialized_view = map(
-        rule! {
-            ALTER ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #alter_table_action
-        },
-        |(_, _, _, (catalog, database, view), action)| {
-            Statement::AlterMaterializedView(AlterMaterializedViewStmt {
-                catalog,
-                database,
-                view,
-                action,
-            })
-        },
-    );
+    let alter_materialized_view = alt((
+        // Keep ALTER MATERIALIZED VIEW ... RECLUSTER as the same compatibility alias.
+        map(
+            rule! {
+                ALTER ~ MATERIALIZED ~ ^VIEW ~ #recluster_table
+            },
+            |(_, _, _, stmt)| Statement::OptimizeTable(stmt),
+        ),
+        map(
+            rule! {
+                ALTER ~ MATERIALIZED ~ ^VIEW ~ #dot_separated_idents_1_to_3 ~ #alter_table_action
+            },
+            |(_, _, _, (catalog, database, view), action)| {
+                Statement::AlterMaterializedView(AlterMaterializedViewStmt {
+                    catalog,
+                    database,
+                    view,
+                    action,
+                })
+            },
+        ),
+    ));
     let drop_materialized_view = map(
         rule! {
             DROP ~ MATERIALIZED ~ ^VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
@@ -2224,7 +2242,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let revoke = map(
         rule! {
-            REVOKE ~ #grant_source ~ FROM ~ #grant_option
+            REVOKE ~ #revoke_source ~ FROM ~ #grant_option
         },
         |(_, source, _, grant_option)| {
             Statement::Revoke(RevokeStmt {
@@ -3297,7 +3315,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ABORT | ROLLBACK => rule!(#abort).parse(i),
         TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             ).parse(i),
-        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (PURGE | COMPACT [SEGMENT])`"
+        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE <table> (PURGE | (COMPACT [SEGMENT] | RECLUSTER [FINAL] [WHERE <expr>]) [LIMIT <n>])`"
             ).parse(i),
         VACUUM => rule!(
             #vacuum_all : "`VACUUM ALL`"
@@ -4226,6 +4244,13 @@ pub fn role_name(i: Input) -> IResult<String> {
 }
 
 pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_select = map(
+        rule! { SELECT ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, level)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Select],
+            level,
+        },
+    );
     let role = map(
         rule! {
             ROLE ~ #role_name
@@ -4418,6 +4443,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 
     rule!(
         #role : "ROLE <role_name>"
+        | #materialized_view_select : "SELECT ON MATERIALIZED VIEW [<database>.]<view>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
         | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
@@ -4439,6 +4465,25 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )
     .parse(i)
+}
+
+fn materialized_view_grant_level(i: Input) -> IResult<AccountMgrLevel> {
+    map_res(grant_level, |level| match level {
+        AccountMgrLevel::Table(database, table) => {
+            Ok(AccountMgrLevel::MaterializedView(database, table))
+        }
+        _ => Err(nom::Err::Error(ErrorKind::other(
+            "expected a materialized view name, not a wildcard or another object type",
+        ))),
+    })(i)
+}
+
+fn revoke_source(i: Input) -> IResult<AccountMgrSource> {
+    let materialized_view_all = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ MATERIALIZED ~ VIEW ~ #materialized_view_grant_level },
+        |(_, _, _, _, _, level)| AccountMgrSource::ALL { level },
+    );
+    rule!(#materialized_view_all | #grant_source).parse(i)
 }
 
 pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
@@ -5454,17 +5499,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _)| AlterTableAction::MaterializeTableTtl,
     );
 
-    let recluster_table = map(
-        rule! {
-            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, opt_is_final, opt_selection, opt_limit)| AlterTableAction::ReclusterTable {
-            is_final: opt_is_final.is_some(),
-            selection: opt_selection.map(|(_, selection)| selection),
-            limit: opt_limit.map(|(_, limit)| limit),
-        },
-    );
-
     let revert_table = map(
         rule! {
             FLASHBACK ~ TO ~ #travel_point
@@ -5502,19 +5536,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    let create_table_branch = map(
-        rule! {
-            CREATE ~ BRANCH ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
-        },
-        |(_, _, name, opt_travel_point, retain)| AlterTableAction::CreateTableBranch {
-            spec: CreateTableRefSpec {
-                name,
-                travel_point: opt_travel_point.map(|(_, point)| point),
-                retain: retain.map(|(_, retain)| retain),
-            },
-        },
-    );
-
     let create_table_tag = map(
         rule! {
             CREATE ~ TAG ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
@@ -5528,13 +5549,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
-    let drop_table_branch = map(
-        rule! {
-            DROP ~ BRANCH ~ #ident
-        },
-        |(_, _, branch_name)| AlterTableAction::DropTableBranch { branch_name },
-    );
-
     let drop_table_tag = map(
         rule! {
             DROP ~ TAG ~ #ident
@@ -5544,9 +5558,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     // The action list is split to avoid the trait bound limit in `alt(...)`.
     let alter_table_action_primary = rule!(
-        #create_table_branch
-            | #create_table_tag
-            | #drop_table_branch
+        #create_table_tag
             | #drop_table_tag
             | #alter_table_partition_by
             | #drop_table_partition_key
@@ -5560,7 +5572,6 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #add_column
             | #drop_column
             | #modify_column
-            | #recluster_table
             | #revert_table
             | #set_table_options
     );
@@ -5689,12 +5700,47 @@ pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
     .parse(i)
 }
 
+fn recluster_table(i: Input) -> IResult<OptimizeTableStmt> {
+    map(
+        rule! {
+            #dot_separated_idents_1_to_3 ~ #recluster_clause ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |((catalog, database, table), (is_final, selection), opt_limit)| OptimizeTableStmt {
+            catalog,
+            database,
+            table,
+            action: OptimizeTableAction::Recluster {
+                is_final,
+                selection: selection.map(Box::new),
+            },
+            limit: opt_limit.map(|(_, limit)| limit),
+        },
+    )
+    .parse(i)
+}
+
+fn recluster_clause(i: Input) -> IResult<(bool, Option<Expr>)> {
+    map(
+        rule! { RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? },
+        |(_, is_final, selection)| (is_final.is_some(), selection.map(|(_, expr)| expr)),
+    )
+    .parse(i)
+}
+
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
-    map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
-        OptimizeTableAction::Compact {
-            target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-        }
-    })
+    alt((
+        map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
+            OptimizeTableAction::Compact {
+                target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
+            }
+        }),
+        map(recluster_clause, |(is_final, selection)| {
+            OptimizeTableAction::Recluster {
+                is_final,
+                selection: selection.map(Box::new),
+            }
+        }),
+    ))
     .parse(i)
 }
 
@@ -6555,12 +6601,10 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             external_access_integrations,
         )| {
             if address_or_code.1 {
-                if external_access_integrations.is_some() {
-                    return Err(nom::Err::Failure(ErrorKind::other(
-                        "EXTERNAL_ACCESS_INTEGRATIONS requires a remote UDF ADDRESS",
-                    )));
-                }
                 Ok(UDFDefinition::UDFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     return_type,
                     code: address_or_code.0,
@@ -6652,6 +6696,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
+            ~ (EXTERNAL_ACCESS_INTEGRATIONS ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
         |(
             arg_types,
@@ -6667,9 +6712,13 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             packages,
             headers,
             address_or_code,
+            external_access_integrations,
         )| {
             if address_or_code.1 {
                 Ok(UDFDefinition::UDAFScript {
+                    external_access_integrations: external_access_integrations
+                        .map(|(_, _, _, names, _)| names)
+                        .unwrap_or_default(),
                     arg_types,
                     state_fields: state_types,
                     return_type,
@@ -6686,6 +6735,11 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     runtime_version: "".to_string(),
                 })
             } else {
+                if external_access_integrations.is_some() {
+                    return Err(nom::Err::Failure(ErrorKind::other(
+                        "Remote aggregate UDF integrations are not supported",
+                    )));
+                }
                 Ok(UDFDefinition::UDAFServer {
                     arg_types,
                     state_fields: state_types,

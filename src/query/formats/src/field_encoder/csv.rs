@@ -32,13 +32,15 @@ use crate::field_encoder::FieldEncoderBytes;
 use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::write_tsv_escaped_string;
 
+/// CSV output always escapes quotes by doubling them. The input-only `ESCAPE`
+/// option affects neither output quoting decisions nor the field contents.
 #[derive(Clone)]
 pub struct CsvQuoteSettings {
     pub quote_char: u8,
     pub quote_style: CsvQuoteStyle,
     pub field_delimiter: u8,
     pub record_delimiter: Vec<u8>,
-    pub escape_char: Option<u8>,
+    pub null_display: Vec<u8>,
 }
 
 impl CsvQuoteSettings {
@@ -48,7 +50,7 @@ impl CsvQuoteSettings {
             quote_style: params.quote_style,
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
-            escape_char: params.escape.as_bytes().first().copied(),
+            null_display: params.null_display.as_bytes().to_vec(),
         }
     }
 }
@@ -59,6 +61,13 @@ pub enum StringFormatter {
 }
 
 impl StringFormatter {
+    fn write_binary(&self, bytes: &[u8], buf: &mut Vec<u8>) {
+        match self {
+            StringFormatter::Csv(settings) => write_csv_string_maybe_quoted(bytes, buf, settings),
+            StringFormatter::Text { .. } => buf.extend_from_slice(bytes),
+        }
+    }
+
     fn write_string(&self, bytes: &[u8], buf: &mut Vec<u8>) {
         match self {
             StringFormatter::Csv(settings) => write_csv_string_maybe_quoted(bytes, buf, settings),
@@ -69,7 +78,6 @@ impl StringFormatter {
     }
 }
 
-// todo(youngsofun): support quote style
 pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
     buf.push(quote);
     let mut start = 0;
@@ -92,12 +100,14 @@ pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
 }
 
 fn csv_string_needs_quotes(bytes: &[u8], settings: &CsvQuoteSettings) -> bool {
-    bytes.iter().any(|byte| {
-        *byte == settings.quote_char
-            || *byte == settings.field_delimiter
-            || settings.record_delimiter[0] == *byte
-            || settings.escape_char == Some(*byte)
-    })
+    // An unquoted empty field is read as NULL by default.
+    bytes.is_empty()
+        || bytes == settings.null_display
+        || bytes.iter().any(|byte| {
+            *byte == settings.quote_char
+                || *byte == settings.field_delimiter
+                || settings.record_delimiter[0] == *byte
+        })
 }
 
 pub fn write_csv_string_maybe_quoted(bytes: &[u8], buf: &mut Vec<u8>, settings: &CsvQuoteSettings) {
@@ -154,13 +164,24 @@ impl FieldEncoderCSV {
                     .settings
                     .binary_format
                     .encode(buf)?;
-                out_buf.extend_from_slice(&encoded);
+                self.string_formatter.write_binary(&encoded, out_buf);
             }
             Column::Opaque(c) => self.write_opaque(c, row_index, out_buf)?,
             Column::String(c) => {
                 let buf = unsafe { c.index_unchecked(row_index) };
                 self.string_formatter.write_string(buf.as_bytes(), out_buf);
             }
+
+            Column::Boolean(c) => {
+                let bytes = if c.get_bit(row_index) {
+                    &self.simple.common_settings.true_bytes
+                } else {
+                    &self.simple.common_settings.false_bytes
+                };
+                self.string_formatter.write_string(bytes, out_buf);
+            }
+            Column::EmptyArray { .. } => self.string_formatter.write_string(b"[]", out_buf),
+            Column::EmptyMap { .. } => self.string_formatter.write_string(b"{}", out_buf),
 
             Column::Date(..)
             | Column::Timestamp(..)
@@ -192,13 +213,36 @@ impl FieldEncoderCSV {
                 self.string_formatter.write_string(&buf, out_buf);
             }
 
-            Column::Decimal(c) => self.write_decimal_trimmed(c, row_index, out_buf),
+            Column::Number(_) | Column::Decimal(_) => {
+                self.write_numeric(column, row_index, out_buf)?;
+            }
 
-            Column::Null { .. }
-            | Column::EmptyArray { .. }
-            | Column::EmptyMap { .. }
-            | Column::Number(_)
-            | Column::Boolean(_) => self.simple.write_field(column, row_index, out_buf, false)?,
+            Column::Null { .. } => self.simple.write_null(out_buf),
+        }
+        Ok(())
+    }
+
+    fn write_numeric(
+        &self,
+        column: &Column,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
+        let start = out_buf.len();
+        if let Column::Decimal(c) = column {
+            self.write_decimal_trimmed(c, row_index, out_buf);
+        } else {
+            self.simple.write_field(column, row_index, out_buf, false)?;
+        }
+        if let StringFormatter::Csv(settings) = &self.string_formatter {
+            if settings.quote_style == CsvQuoteStyle::QuoteNotNull
+                || csv_string_needs_quotes(&out_buf[start..], settings)
+            {
+                // Numeric renderings cannot contain any supported QUOTE character,
+                // so surround the appended value without allocating a scratch buffer.
+                out_buf.insert(start, settings.quote_char);
+                out_buf.push(settings.quote_char);
+            }
         }
         Ok(())
     }
@@ -252,7 +296,7 @@ impl FieldEncoderCSV {
             .settings
             .binary_format
             .encode(&bytes)?;
-        out_buf.extend_from_slice(&encoded);
+        self.string_formatter.write_binary(&encoded, out_buf);
         Ok(())
     }
 }

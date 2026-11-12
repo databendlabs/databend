@@ -36,6 +36,113 @@ use nom::Parser;
 use nom_rule::rule;
 
 #[test]
+fn test_deep_expression_parsing() {
+    // Do not let a larger test-thread stack hide missing recursion guards.
+    std::thread::Builder::new()
+        .stack_size(2 * 1024 * 1024)
+        .spawn(|| {
+            for sql in [
+                format!("{}1{}", "(".repeat(100), ")".repeat(100)),
+                format!("{}1{}", "abs(".repeat(100), ")".repeat(100)),
+                format!("{}1{}", "{'a':".repeat(100), "}".repeat(100)),
+                format!("{}true", "NOT ".repeat(300)),
+                format!("{}1", "1 ^ ".repeat(300)),
+            ] {
+                let tokens = tokenize_sql(&sql).unwrap();
+                // The exact accepted depth depends on build mode and stack size.
+                if let Err(err) = parse_expr(&tokens, Dialect::PostgreSQL) {
+                    assert!(
+                        err.1
+                            .contains("expression nesting exceeds the available stack space")
+                    );
+                }
+            }
+            for (prefix, value) in [("NOT ", "true"), ("1 ^ ", "1")] {
+                let sql = format!("{}{value}", prefix.repeat(10_000));
+                let tokens = tokenize_sql(&sql).unwrap();
+                let err = parse_expr(&tokens, Dialect::PostgreSQL).unwrap_err();
+                assert!(
+                    err.1
+                        .contains("expression nesting exceeds the available stack space")
+                );
+                // The stack error must survive parenthesis/subquery backtracking.
+                let sql = format!("SELECT ((({sql})))");
+                let tokens = tokenize_sql(&sql).unwrap();
+                let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+                assert!(
+                    err.1
+                        .contains("expression nesting exceeds the available stack space")
+                );
+            }
+            let tokens = tokenize_sql("1 + 2").unwrap();
+            assert!(parse_expr(&tokens, Dialect::PostgreSQL).is_ok());
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
+fn test_structural_expression_depth_limit() {
+    // A large stack isolates the structural budget from Pratt's stack-space check.
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            for (prefix, suffix) in [
+                ("(", ")"),
+                ("abs(", ")"),
+                ("{'a':", "}"),
+                ("[", "]"),
+                ("(SELECT ", ")"),
+            ] {
+                for depth in [8, 256, 1_024] {
+                    let sql = format!("{}1{}", prefix.repeat(depth), suffix.repeat(depth));
+                    let tokens = tokenize_sql(&sql).unwrap();
+                    if depth == 8 {
+                        parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+                        continue;
+                    }
+                    let input = Input {
+                        tokens: &tokens,
+                        dialect: Dialect::PostgreSQL,
+                        mode: ParseMode::Default,
+                        expr_depth: 0,
+                    };
+                    let err = expr(input).unwrap_err();
+                    assert!(matches!(err, nom::Err::Failure(error) if error.errors.contains(
+                        &ErrorKind::other("expression nesting exceeds the maximum parsing depth")
+                    )));
+                }
+            }
+
+            // The root expression also consumes one of the 256 levels.
+            let sql = format!("{}1{}", "(".repeat(255), ")".repeat(255));
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+
+            // The fatal depth error must survive SELECT/parenthesis backtracking.
+            let sql = format!("SELECT {}1{}", "(".repeat(1_024), ")".repeat(1_024));
+            let tokens = tokenize_sql(&sql).unwrap();
+            let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+            assert!(err.1.contains("expression nesting exceeds the maximum parsing depth"));
+
+            // Siblings, including precedence-limited BETWEEN operands, share the parent budget.
+            let args = vec!["abs(1) BETWEEN 0 AND 2"; 1_000].join(", ");
+            let sql = format!("concat({args})");
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+            let sql = format!("SELECT {args}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let tokens = tokenize_sql("1 + 2").unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
 fn test_external_access_sql() {
     for sql in [
         "CREATE NETWORK RULE video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443', 'other.example.com')",
@@ -64,6 +171,9 @@ fn test_external_access_sql() {
         "CREATE EXTERNAL ACCESS INTEGRATION \"QuotedAccess\" ALLOWED_NETWORK_RULES = (\"QuotedRule\") ENABLED = TRUE",
         "CREATE FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access, other_access)",
         "ALTER FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i, \"MixedCase\")",
+        "ALTER FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python AS $$class A: pass$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         let (stmt, _) =
@@ -86,7 +196,8 @@ fn test_external_access_sql() {
         "CREATE EXTERNAL ACCESS INTEGRATION i ENABLED = TRUE ENABLED = FALSE ALLOWED_NETWORK_RULES = (r)",
         "ALTER EXTERNAL ACCESS INTEGRATION i SET ALLOWED_NETWORK_RULES = (r) ALLOWED_NETWORK_RULES = (r2)",
         "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = ()",
-        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = ()",
+        "CREATE FUNCTION a(INT) STATE {s INT} RETURNS INT LANGUAGE python ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = (i)",
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
@@ -262,6 +373,7 @@ fn run_parser_with_dialect<P, O>(
         tokens: &tokens,
         dialect,
         mode,
+        expr_depth: 0,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
@@ -597,7 +709,7 @@ SELECT * from s;"#,
         r#"create user `a'a` identified by '123'"#,
         r#"drop role if exists test"#,
         r#"drop role if exists 'test'"#,
-        r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
+        r#"OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t PURGE;"#,
         r#"OPTIMIZE TABLE db.t PURGE;"#,
@@ -647,9 +759,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t ADD CHECK (a != 1);"#,
         r#"ALTER TABLE t DROP CONSTRAINT a_not_1;"#,
         r#"ALTER TABLE t FLASHBACK TO (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5');"#,
-        r#"ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS;"#,
         r#"ALTER TABLE t CREATE TAG tag1 AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) RETAIN 30 SECONDS;"#,
-        r#"ALTER TABLE t DROP BRANCH b1;"#,
         r#"ALTER TABLE t DROP TAG tag1;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
@@ -1534,7 +1644,6 @@ fn test_statement_error() {
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
         r#"show columns from db1.t from ctl.db"#,
-        r#"alter table t1 create branch from_dev at (branch => dev)"#,
         r#"SELECT c a as FROM t"#,
         r#"SELECT c a as b FROM t"#,
         r#"SELECT top -1 c a as b FROM t"#,
@@ -1636,8 +1745,13 @@ fn test_statement_error() {
 }
 
 #[test]
-fn test_removed_vacuum_syntax() {
+fn test_removed_syntax() {
     let cases = [
+        "ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS",
+        "ALTER TABLE t DROP BRANCH b1",
+        "SELECT * FROM db.t/b1",
+        "INSERT INTO db.t/b1 VALUES (1)",
+        "ALTER TABLE db.t/b1 ADD COLUMN a INT",
         "VACUUM TABLE t DRY RUN",
         "VACUUM TABLE t DRY RUN SUMMARY",
         "VACUUM TABLE catalog.db.t",
@@ -1971,6 +2085,19 @@ fn test_expr() {
         r#"(1,2,)"#,
         r#"[1]"#,
         r#"[1,]"#,
+        r#"[-1]"#,
+        r#"[1, 2]"#,
+        r#"[1.5, -2.25, 3e2, -4E-3, 0, 007, 1_000, 5.]"#,
+        r#"[-1, - 2,]"#,
+        r#"[18446744073709551616, -18446744073709551616, -18446744073709551615]"#,
+        r#"[0.1, -0.2][1]"#,
+        r#"[1, 2] = [1, -2]"#,
+        r#"[1, .5]"#,
+        r#"[1, -.5]"#,
+        r#"[1, 2 + 3]"#,
+        r#"[1, -a]"#,
+        r#"[1, --2]"#,
+        r#"[1, +2]"#,
         r#"[[1]]"#,
         r#"[[1],[2]]"#,
         r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
@@ -2107,12 +2234,103 @@ fn test_expr() {
 }
 
 #[test]
+fn test_nested_trailing_vector_argument() {
+    let values = ["0.1973208636045456", "-0.2610067129135132"];
+    let vector = values.repeat(384).join(", ");
+    let cast = format!("CAST([{vector}] AS VECTOR(768))");
+    let mut sql = cast;
+    for depth in 0..=4 {
+        let tokens = tokenize_sql(&sql).unwrap();
+        let mut parsed = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        for _ in 0..depth {
+            let Expr::FunctionCall { mut func, .. } = parsed else {
+                panic!("expected a nested function call");
+            };
+            assert_eq!(func.args.len(), 2);
+            assert_eq!(func.args[0].to_string(), "embedding");
+            assert!(func.lambda.is_none());
+            parsed = func.args.pop().unwrap();
+        }
+        let Expr::Cast {
+            expr, target_type, ..
+        } = parsed
+        else {
+            panic!("expected a vector cast");
+        };
+        assert_eq!(target_type.to_string(), "VECTOR(768)");
+        let Expr::Array { exprs, .. } = *expr else {
+            panic!("expected an array");
+        };
+        assert_eq!(exprs.len(), 768);
+        for (index, value) in exprs.iter().enumerate() {
+            assert_eq!(value.to_string(), values[index % values.len()]);
+        }
+        sql = format!("cosine_distance(embedding, {sql})");
+    }
+}
+
+#[test]
+fn test_trailing_arrow_argument_with_function_suffixes() {
+    for (sql, ambiguous) in [
+        ("f(a, b, doc -> 'key')", true),
+        ("f(a, doc -> 'first', b, doc -> 'key')", true),
+        ("f(a, b, (x, y) -> x + y)", true),
+        ("f(DISTINCT a, b, doc -> 'key')", false),
+        ("f(a, b, doc -> 'key' ORDER BY a)", false),
+        ("f(a, b, doc -> 'key') WITHIN GROUP (ORDER BY a)", false),
+        ("f(a, b, doc -> 'key') FILTER (WHERE ok)", false),
+        ("f(a, b, doc -> 'key') OVER ()", false),
+        ("f(a, b, doc -> 'key')(c)", false),
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let parsed = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let Expr::FunctionCall { func, .. } = parsed else {
+            panic!("expected a function call: {sql}");
+        };
+        assert_eq!(
+            matches!(func.lambda, Some(LambdaArgument::Ambiguous(_))),
+            ambiguous,
+            "{sql}"
+        );
+        assert_eq!(func.distinct, sql.contains("DISTINCT"), "{sql}");
+        assert_eq!(func.filter.is_some(), sql.contains("FILTER"), "{sql}");
+        assert_eq!(func.window.is_some(), sql.contains("OVER"), "{sql}");
+        assert_eq!(!func.order_by.is_empty(), sql.contains("ORDER BY"), "{sql}");
+        let args = if func.params.is_empty() {
+            &func.args
+        } else {
+            assert_eq!(func.args.len(), 1, "{sql}");
+            &func.params
+        };
+        assert_eq!(
+            args.len(),
+            if sql.contains("'first'") { 4 } else { 3 },
+            "{sql}"
+        );
+        assert_eq!(args[0].to_string(), "a", "{sql}");
+        let ordinary_arg = if sql.contains("(x, y)") {
+            "(x, y) -> x + y"
+        } else {
+            "doc -> 'key'"
+        };
+        let tokens = tokenize_sql(ordinary_arg).unwrap();
+        let ordinary_arg = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(
+            args.last().unwrap().to_string(),
+            ordinary_arg.to_string(),
+            "{sql}"
+        );
+    }
+}
+
+#[test]
 fn test_ambiguous_trailing_lambda_argument() {
     let tokens = tokenize_sql("concat(a, b, doc -> 'key')").unwrap();
     let input = Input {
         tokens: &tokens,
         dialect: Dialect::PostgreSQL,
         mode: ParseMode::Default,
+        expr_depth: 0,
     };
     let (_, expr) = expr(input).unwrap();
     let Expr::FunctionCall { func, .. } = expr else {
@@ -2135,6 +2353,7 @@ fn test_json_arrow_argument_before_aggregate_filter() {
         tokens: &tokens,
         dialect: Dialect::PostgreSQL,
         mode: ParseMode::Default,
+        expr_depth: 0,
     };
     let (_, expr) = expr(input).unwrap();
     let Expr::FunctionCall { func, .. } = expr else {

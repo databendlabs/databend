@@ -68,6 +68,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use super::query::MaskedRequest;
 use super::query::ResponseState;
 use super::query::execute_state::ARROW_FEATURE_NEGOTIATION_VERSION;
 use super::query::execute_state::LEGACY_ARROW_RESULT_VERSION;
@@ -737,12 +738,17 @@ pub(crate) async fn query_handler(
             .as_ref()
             .map(|s| format!("(client_session_id={s})"))
             .unwrap_or("".to_string());
+        // Masked once for all the logs of this request.
+        let masked_sql = mask_log_sql_secrets(&req.sql);
         info!(
             "New query request{}{}: {:?}",
             agent_info,
             client_session_id_info,
-            // `HttpQueryRequest`'s Debug masks the SQL and omits parameters.
-            req
+            // The Debug of a request masks the SQL and omits parameters.
+            MaskedRequest {
+                request: &req,
+                masked_sql: &masked_sql,
+            }
         );
         let sql = req.sql.clone();
 
@@ -798,7 +804,8 @@ pub(crate) async fn query_handler(
 
         match HttpQuery::try_create(
             ctx,
-            req.clone(),
+            &req,
+            &masked_sql,
             arrow_result_version,
             arrow_features.clone(),
         )
@@ -811,7 +818,7 @@ pub(crate) async fn query_handler(
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
-                if let Err(err) = query.start_query(sql.clone(), req.params.clone()).await {
+                if let Err(err) = query.start_query(sql.clone(), req.params.take()).await {
                     let err = err.display_with_sql(&sql);
                     log_start_query_error(&err, &sql);
                     ctx.set_fail();
@@ -847,11 +854,7 @@ pub(crate) async fn query_handler(
                 };
                 info!(
                     "Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                    query.id,
-                    resp.state,
-                    rows,
-                    next_page,
-                    mask_log_sql_secrets(&sql)
+                    query.id, resp.state, rows, next_page, masked_sql
                 );
                 query
                     .update_expire_time(false, resp.is_data_drained())

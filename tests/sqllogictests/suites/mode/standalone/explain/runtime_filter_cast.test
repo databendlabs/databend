@@ -69,7 +69,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
 └── TableScan(Probe)
@@ -80,7 +80,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 3.00
@@ -303,7 +303,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 2.00
 └── TableScan(Probe)
@@ -314,7 +314,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 3.00
@@ -346,7 +346,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 2.00
 └── HashJoin(Probe)
@@ -367,7 +367,7 @@ HashJoin
     │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   ├── apply join filters: [#1]
     │   └── estimated rows: 3.00
@@ -379,7 +379,7 @@ HashJoin
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── apply join filters: [#1, #0]
         └── estimated rows: 3.00
@@ -462,7 +462,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
 └── TableScan(Probe)
@@ -473,7 +473,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 4.00
@@ -548,7 +548,7 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 2.00
 └── TableScan(Probe)
@@ -559,7 +559,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 4.00

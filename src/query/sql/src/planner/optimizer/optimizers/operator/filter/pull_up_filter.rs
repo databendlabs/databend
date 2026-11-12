@@ -73,6 +73,15 @@ impl PullUpFilterOptimizer {
     #[recursive::recursive]
     pub fn pull_up(&mut self, s_expr: SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
+            // Moving predicates across an operator that evaluates expressions depending on
+            // other rows would change the rows that those expressions see.
+            RelOperator::Filter(filter) if filter.depends_on_other_rows() => {
+                self.pull_up_others(s_expr)
+            }
+            RelOperator::Join(join) if join.depends_on_other_rows() => self.pull_up_others(s_expr),
+            RelOperator::EvalScalar(eval_scalar) if eval_scalar.depends_on_other_rows() => {
+                self.pull_up_others(s_expr)
+            }
             RelOperator::Filter(_) => self.pull_up_filter(s_expr),
             RelOperator::Join(join) if !join.is_lateral && !join.has_null_equi_condition() => {
                 self.pull_up_join(s_expr)

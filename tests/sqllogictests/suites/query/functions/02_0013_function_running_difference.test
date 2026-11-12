@@ -18,6 +18,23 @@ select running_difference(a), running_difference(b), running_difference(c), runn
 statement error 1006
 select d, running_difference(d) from running_difference_test
 
+# A filter on another column must not remove the preceding rows that
+# running_difference reads, whether it is projected, filtered or joined on.
+query II
+select a, d from (select a, running_difference(a) as d from running_difference_test) s where a = 3
+----
+3 2
+
+query I
+select a from (select a from running_difference_test where running_difference(a) = 2) s where a = 5
+----
+5
+
+query II
+select t.a, u.a from running_difference_test t join running_difference_test u on running_difference(t.a) = u.a where t.a = 10
+----
+10 5
+
 statement ok
 DROP TABLE IF EXISTS running_difference_test
 

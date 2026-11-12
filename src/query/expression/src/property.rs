@@ -57,6 +57,15 @@ pub type MonotonicityCheck = fn(&FunctionContext, &[Domain]) -> Option<usize>;
 #[derive(Debug, Clone)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
+    /// The result for a row also depends on the other rows of the input block, e.g. on the
+    /// preceding rows. Removing input rows before the function is evaluated can change its
+    /// result for the rows that remain, so a filter must not be moved below it.
+    pub depends_on_other_rows: bool,
+    /// Pure, row-local scalar functions that may be evaluated once per dictionary entry.
+    /// Reducing the number of calls, or evaluating unreferenced entries, must have no side
+    /// effects. Errors in unreferenced entries are ignored; referenced errors report
+    /// the first error text recorded during dictionary evaluation.
+    pub dictionary_eval: bool,
     pub kind: FunctionKind,
     // strictly increasing or strictly decreasing, like y = x + 1
     // y = x ^ 2 is not monotonicity, but it's only monotonicity in [-x, 0] and [0, +x]
@@ -70,8 +79,18 @@ pub struct FunctionProperty {
 }
 
 impl FunctionProperty {
+    pub fn dictionary_eval(mut self) -> Self {
+        self.dictionary_eval = true;
+        self
+    }
+
     pub fn non_deterministic(mut self) -> Self {
         self.non_deterministic = true;
+        self
+    }
+
+    pub fn depends_on_other_rows(mut self) -> Self {
+        self.depends_on_other_rows = true;
         self
     }
 
@@ -100,6 +119,8 @@ impl Default for FunctionProperty {
     fn default() -> Self {
         FunctionProperty {
             non_deterministic: false,
+            depends_on_other_rows: false,
+            dictionary_eval: false,
             monotonicity: false,
             monotonicity_by_type: vec![],
             monotonicity_check: None,

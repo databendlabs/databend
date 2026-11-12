@@ -35,14 +35,15 @@ use crate::table_functions::string_value;
 #[derive(Clone)]
 pub struct SetCapacity {
     cache_name: String,
-    capacity: u64,
+    /// As written: bytes, `'<n>%'` (disk pools) or `'default'`; parsed by `CacheManager`.
+    capacity: String,
 }
 
 impl From<&SetCapacity> for TableArgs {
     fn from(value: &SetCapacity) -> Self {
         TableArgs::new_positioned(vec![
             string_literal(&value.cache_name),
-            string_literal(&value.capacity.to_string()),
+            string_literal(&value.capacity),
         ])
     }
 }
@@ -74,7 +75,7 @@ impl SimpleTableFunc for SetCacheCapacity {
     ) -> Result<Option<DataBlock>> {
         let cache_mgr = CacheManager::instance();
         let op = &self.operation;
-        cache_mgr.set_cache_capacity(&op.cache_name, op.capacity)?;
+        cache_mgr.set_cache_capacity_arg(&op.cache_name, &op.capacity)?;
 
         let node = vec![ctx.get_cluster().local_id.clone()];
         let res = vec!["Ok".to_owned()];
@@ -89,7 +90,7 @@ impl SimpleTableFunc for SetCacheCapacity {
     where Self: Sized {
         let args = table_args.expect_all_positioned("", Some(2))?;
         let cache_name = string_value(&args[0])?;
-        let capacity = string_value(&args[1])?.parse::<u64>()?;
+        let capacity = string_value(&args[1])?;
 
         let operation = SetCapacity {
             cache_name,

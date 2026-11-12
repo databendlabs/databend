@@ -29,8 +29,10 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_statistics::Datum;
 use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::SegmentInfoReader;
+use databend_common_storages_fuse::io::SnapshotStatsReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use databend_common_storages_fuse::operations::AnalyzeOptions;
@@ -48,7 +50,8 @@ use databend_query::sessions::TableContextTableManagement;
 use databend_query::sql::Planner;
 use databend_query::sql::plans::Plan;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -56,6 +59,107 @@ use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotStatisticsV3;
 use futures::TryStreamExt;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_exact_ndv_bounds_without_analyze() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("set enable_auto_analyze = 0")
+        .await?;
+    fixture
+        .execute_command(
+            "create table ndv_exact_fixture(k bigint, f double, d decimal(10, 2), u bigint) \
+             approx_distinct_columns = ''",
+        )
+        .await?;
+    fixture
+        .execute_command(
+            "insert into ndv_exact_fixture \
+             select number % 3, number / 100.0, (number / 100.0)::decimal(10, 2), \
+             9007199254740992 + number % 2 from numbers(250)",
+        )
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let table = latest_fuse_table(&ctx, "ndv_exact_fixture").await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert!(snapshot.table_statistics_location.is_none());
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    assert_eq!(provider.stats_num_rows(), Some(0));
+    for (column_id, expected) in [(0, 3), (1, 250), (2, 250), (3, 2)] {
+        assert_eq!(
+            provider.column_statistics(column_id).unwrap().ndv,
+            Some(expected),
+            "column {column_id}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unknown_legacy_sample_ndv_after_sql_append() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("set enable_auto_analyze = 0")
+        .await?;
+    fixture
+        .execute_command("create table ndv_legacy_fixture(k bigint) approx_distinct_columns = ''")
+        .await?;
+    fixture
+        .execute_command("insert into ndv_legacy_fixture select number from numbers(3)")
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table = latest_fuse_table(&ctx, "ndv_legacy_fixture").await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+
+    // Construct a converted v3 HLL entirely from synthetic values. Its zero
+    // row count represents unknown coverage, not a fresh unsampled summary.
+    let mut hll = MetaHLL12::new();
+    for value in 0_u64..3 {
+        hll.add_object(&value);
+    }
+    let legacy = TableSnapshotStatistics::from(TableSnapshotStatisticsV3::new(
+        HashMap::from([(0, hll)]),
+        HashMap::new(),
+        snapshot.snapshot_id,
+    ));
+    assert_eq!(legacy.row_count, 0);
+    assert!(legacy.column_distinct_values()[&0] < 100);
+    let generator = table.meta_location_generator();
+    let location = generator
+        .snapshot_statistics_location_from_uuid(&legacy.snapshot_id, legacy.format_version())?;
+    let mut updated = TableSnapshot::try_from_previous(
+        snapshot,
+        table.cluster_key_info(),
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )?;
+    updated.summary.additional_stats_meta = None;
+    updated.table_statistics_location = Some(location.clone());
+    table
+        .commit_to_meta_server(
+            ctx.as_ref(),
+            table.get_table_info(),
+            generator,
+            updated,
+            Some(legacy),
+            &None,
+            &table.get_operator(),
+        )
+        .await?;
+
+    fixture
+        .execute_command("insert into ndv_legacy_fixture select number + 3 from numbers(97)")
+        .await?;
+    let table = latest_fuse_table(&ctx, "ndv_legacy_fixture").await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.table_statistics_location.as_ref(), Some(&location));
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    assert_eq!(provider.stats_num_rows(), Some(0));
+    assert_eq!(provider.num_rows(), Some(100));
+    assert_eq!(provider.column_statistics(0).unwrap().ndv, Some(100));
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
@@ -152,18 +256,14 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
 
     // get segments summary
     let mut segment_summary = Statistics::default();
-    let segment_reader = MetaReaders::segment_info_reader(
+    let segment_reader = SegmentInfoReader::new(
         ctx.get_application_level_data_operator()?.operator(),
         TestFixture::default_table_schema(),
     );
     for segment in after_update.segments.iter() {
-        let param = LoadParams {
-            location: segment.0.clone(),
-            len_hint: None,
-            ver: segment.1,
-            put_cache: false,
-        };
-        let compact_segment = segment_reader.read(&param).await?;
+        let compact_segment = segment_reader
+            .read(&(segment.0.clone(), segment.1), &CachePolicy::BYPASS)
+            .await?;
         let segment_info = SegmentInfo::try_from(compact_segment)?;
         merge_statistics_mut(
             &mut segment_summary,
@@ -387,13 +487,15 @@ async fn latest_statistics(
     let table = latest_fuse_table(ctx, name).await?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
     let location = snapshot.table_statistics_location.as_ref().unwrap();
-    let statistics = MetaReaders::table_snapshot_statistics_reader(table.get_operator())
-        .read(&LoadParams {
-            location: location.clone(),
-            len_hint: None,
-            ver: TableMetaLocationGenerator::table_statistics_version(location),
-            put_cache: false,
-        })
+    let ver = TableMetaLocationGenerator::table_statistics_version(location);
+    let statistics = FuseCaches::instance()
+        .snapshots
+        .with_policy(CachePolicy::READ_ONLY)
+        .get_stats(
+            &SnapshotStatsReader::new(table.get_operator()),
+            location.clone(),
+            ver,
+        )
         .await?;
     Ok((table, snapshot, statistics.as_ref().clone()))
 }
@@ -779,18 +881,12 @@ async fn test_analyze_does_not_publish_virtual_column_statistics() -> anyhow::Re
     let table = latest_fuse_table(&ctx, name).await?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.segments.len(), 2);
-    let segment_reader =
-        MetaReaders::segment_info_reader(table.get_operator(), table.schema_with_stream());
+    let segment_reader = SegmentInfoReader::new(table.get_operator(), table.schema_with_stream());
     let mut segment_virtual_ids = Vec::new();
     let mut segment_paths = Vec::new();
     for (location, ver) in snapshot.segments.iter() {
         let segment = segment_reader
-            .read(&LoadParams {
-                location: location.clone(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+            .read(&(location.clone(), *ver), &CachePolicy::BYPASS)
             .await?;
         let summary = SegmentInfo::try_from(segment)?.summary;
         let schema = summary

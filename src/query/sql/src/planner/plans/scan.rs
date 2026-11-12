@@ -243,6 +243,21 @@ impl Scan {
         used_columns
     }
 
+    /// Whether a predicate evaluated by this scan may depend on other input rows. Adding
+    /// predicates to the scan can then change which rows those predicates keep.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.push_down_predicates
+            .iter()
+            .chain(self.secure_predicates.iter())
+            .flatten()
+            .chain(
+                self.prewhere
+                    .iter()
+                    .flat_map(|prewhere| &prewhere.predicates),
+            )
+            .any(ScalarExpr::depends_on_other_rows)
+    }
+
     pub fn has_secure_predicates_not_applied_by_prewhere(&self) -> bool {
         let Some(secure_predicates) = &self.secure_predicates else {
             return false;

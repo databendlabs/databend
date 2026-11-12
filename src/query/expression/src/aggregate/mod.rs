@@ -19,6 +19,7 @@ mod aggregate_meta;
 mod group_hash;
 mod hash_index;
 mod hash_index_adapter;
+mod partial_controller;
 mod partitioned_payload;
 mod payload;
 mod payload_flush;
@@ -26,15 +27,12 @@ mod payload_row;
 mod probe_state;
 mod row_ptr;
 
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-
 pub use aggregate_function::AggregateCall;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
 pub use aggregate_meta::*;
 pub use group_hash::*;
+pub use partial_controller::*;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
@@ -47,80 +45,43 @@ use crate::aggregate::hash_index::HashIndex;
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
 
-const LOAD_FACTOR: f64 = 1.5;
-
-// 75% of the capacity
-// The hash index can probe multiple ctrl bytes by SIMD, so it can use a denser
-// load factor than the payload capacity estimate.
+// A hash index holds up to 1 / 1.35 (74%) of its slots: a probe matches the tags of a whole
+// chunk at once, so the index can be dense.
 const HASH_INDEX_LOAD_FACTOR: f64 = 1.35;
 
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
-// Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
-pub(crate) const L1_CACHE_SIZE: usize = 32768 / 2;
-// Assume (1 << 20) = 1MB L2 cache per core, divided by two because hyperthreading
-pub(crate) const L2_CACHE_SIZE: usize = 1048576 / 2;
-// Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
-pub(crate) const L3_CACHE_SIZE: usize = 1572864 / 2;
-
-pub(crate) const MAX_RADIX_BITS: u64 = 7;
-pub const MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM: u64 = 1 << MAX_RADIX_BITS;
-
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
-    // Max radix bits across all threads, this is a hint to repartition
-    pub current_max_radix_bits: Arc<AtomicU64>,
     pub initial_radix_bits: u64,
     pub partition_start_bit: u64,
-    pub max_radix_bits: u64,
-    pub repartition_radix_bits_incr: u64,
-    pub block_fill_factor: f64,
+    // Partial aggregation: the caller drives how rows are handled and how the index grows.
     pub partial_agg: bool,
-    pub max_partial_capacity: usize,
 }
 
 impl Default for HashTableConfig {
     fn default() -> Self {
         Self {
-            current_max_radix_bits: Arc::new(AtomicU64::new(3)),
             initial_radix_bits: 3,
             partition_start_bit: 0,
-            max_radix_bits: MAX_RADIX_BITS,
-            repartition_radix_bits_incr: 2,
-            block_fill_factor: 1.8,
             partial_agg: false,
-            max_partial_capacity: 131072,
         }
     }
 }
 
 impl HashTableConfig {
-    pub fn partial_aggregate(radix_bits: u64, node_nums: usize, active_threads: usize) -> Self {
-        let capacity = if node_nums != 1 {
-            131072 * (2 << node_nums)
-        } else {
-            let total_shared_cache_size = active_threads * L3_CACHE_SIZE;
-            let cache_per_active_thread =
-                L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
-            let size_per_entry = (8_f64 * LOAD_FACTOR) as usize;
-            (cache_per_active_thread / size_per_entry).next_power_of_two()
-        };
-
-        // Partial aggregate does not support payload growth after the target radix is fixed.
+    /// A partial aggregate table has a single partition: its rows are routed to the final
+    /// aggregates by group hash when they leave it, see `Payload::scatter_into_buckets`.
+    pub fn partial_aggregate() -> Self {
         HashTableConfig {
-            current_max_radix_bits: Arc::new(AtomicU64::new(radix_bits)),
-            initial_radix_bits: radix_bits,
-            max_radix_bits: radix_bits,
-            repartition_radix_bits_incr: 0,
+            initial_radix_bits: 0,
             partial_agg: true,
-            max_partial_capacity: capacity,
             ..Default::default()
         }
     }
 
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {
         self.initial_radix_bits = initial_radix_bits;
-        self.current_max_radix_bits = Arc::new(AtomicU64::new(initial_radix_bits));
         self
     }
 

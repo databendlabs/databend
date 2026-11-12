@@ -122,9 +122,6 @@ pub struct HashJoin {
     // (probe index, (is probe column nullable, is build column nullable))
     pub probe_to_build: Vec<(usize, (bool, bool))>,
     pub output_schema: DataSchemaRef,
-    // if we execute distributed merge into, we need to hold the
-    // hash table to get not match data from source.
-    pub need_hold_hash_table: bool,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -255,7 +252,6 @@ impl IPhysicalPlan for HashJoin {
             from_correlated_subquery: self.from_correlated_subquery,
             probe_to_build: self.probe_to_build.clone(),
             output_schema: self.output_schema.clone(),
-            need_hold_hash_table: self.need_hold_hash_table,
             stat_info: self.stat_info.clone(),
             single_to_inner: self.single_to_inner,
             build_side_cache_info: self.build_side_cache_info.clone(),
@@ -287,7 +283,6 @@ impl IPhysicalPlan for HashJoin {
             )
             && experimental_new_join
             && !enable_optimization
-            && !self.need_hold_hash_table
         {
             return self.build_new_join_pipeline(builder, desc);
         }
@@ -360,18 +355,6 @@ impl HashJoin {
             )?))
         })?;
 
-        // For merge-into operations that need to hold the hash table
-        if self.need_hold_hash_table {
-            // Extract projected fields from probe schema
-            let mut projected_fields = vec![];
-            for (i, field) in probe_state.probe_schema.fields().iter().enumerate() {
-                if probe_state.probe_projections.contains(&i) {
-                    projected_fields.push(field.clone());
-                }
-            }
-            builder.merge_into_probe_data_fields = Some(projected_fields);
-        }
-
         Ok(())
     }
 
@@ -399,11 +382,6 @@ impl HashJoin {
             )?))
         };
 
-        // For distributed merge-into when source as build side
-        if self.need_hold_hash_table {
-            builder.join_state = Some(build_state.clone())
-        }
-
         build_res.main_pipeline.add_sink(create_sink_processor)?;
 
         builder
@@ -424,16 +402,15 @@ impl HashJoin {
         // as we will inject some runtime filter information into the context for the child nodes to use.
         let rf_desc = RuntimeFiltersDesc::create(&builder.ctx, self)?;
 
-        // After common subexpression elimination is completed, we can delete this type of code.
-        {
-            let state = factory.create_basic_state(0)?;
+        // States shared by all join processors at spill level 0.
+        let level_states = factory.create_level_states(0)?;
 
-            if let Some((build_cache_index, column_map)) = &self.build_side_cache_info {
-                builder.hash_join_states.insert(
-                    *build_cache_index,
-                    HashJoinStateRef::NewHashJoinState(state.clone(), column_map.clone()),
-                );
-            }
+        // After common subexpression elimination is completed, we can delete this type of code.
+        if let Some((build_cache_index, column_map)) = &self.build_side_cache_info {
+            builder.hash_join_states.insert(
+                *build_cache_index,
+                HashJoinStateRef::NewHashJoinState(level_states.basic.clone(), column_map.clone()),
+            );
         }
 
         let mut sub_query_ctx = QueryContext::create_from(&builder.ctx);
@@ -474,7 +451,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                factory.create_hash_join(self.join_type, 0)?,
+                factory.create_hash_join(self.join_type, level_states.clone())?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -721,6 +698,12 @@ impl PhysicalPlanBuilder {
         if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
             (left_condition, right_condition)
         {
+            // Equal keys can still expose different timezone offsets in the result.
+            if left.column.data_type.contains_timestamp_tz()
+                || right.column.data_type.contains_timestamp_tz()
+            {
+                return Ok(());
+            }
             if column_projections.contains(&right.column.index) {
                 if let (Ok(probe_index), Ok(build_index)) = (
                     probe_schema.index_of(&left.column.index.to_string()),
@@ -1299,7 +1282,6 @@ impl PhysicalPlanBuilder {
             from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
-            need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
             single_to_inner: join.single_to_inner,
             build_side_cache_info,

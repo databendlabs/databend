@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -31,10 +33,18 @@ impl RecordDelimiter {
     }
 }
 
+impl FromStr for RecordDelimiter {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self> {
+        Self::try_from(s.as_bytes())
+    }
+}
+
 impl TryFrom<&str> for RecordDelimiter {
     type Error = ErrorCode;
     fn try_from(s: &str) -> Result<Self> {
-        Self::try_from(s.as_bytes())
+        s.parse()
     }
 }
 
@@ -54,6 +64,45 @@ impl TryFrom<&[u8]> for RecordDelimiter {
                 "bad RecordDelimiter: '{:?}'",
                 s
             ))),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+
+    use super::RecordDelimiter;
+
+    #[test]
+    fn parse_record_delimiter() {
+        for input in ["\n", "\r\n"] {
+            assert!(matches!(input.parse(), Ok(RecordDelimiter::Crlf)));
+            assert!(matches!(
+                RecordDelimiter::try_from(input),
+                Ok(RecordDelimiter::Crlf)
+            ));
+        }
+        for input in ["|", "\r", "\0"] {
+            let expected = input.as_bytes()[0];
+            assert!(matches!(
+                input.parse(),
+                Ok(RecordDelimiter::Any(byte)) if byte == expected
+            ));
+            assert!(matches!(
+                RecordDelimiter::try_from(input),
+                Ok(RecordDelimiter::Any(byte)) if byte == expected
+            ));
+        }
+    }
+
+    #[test]
+    fn reject_invalid_record_delimiter() {
+        for input in ["", "||", "abc", "é"] {
+            let parsed = input.parse::<RecordDelimiter>().unwrap_err();
+            let converted = RecordDelimiter::try_from(input).unwrap_err();
+            assert_eq!(parsed.code(), ErrorCode::INVALID_ARGUMENT);
+            assert_eq!(parsed.to_string(), converted.to_string());
         }
     }
 }

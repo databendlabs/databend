@@ -15,6 +15,7 @@
 
 use databend_common_exception::Result;
 
+use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::types::PointOffsetType;
 
 mod header;
@@ -65,7 +66,7 @@ pub enum GraphLinksFormat {
 
 self_cell::self_cell! {
     pub struct GraphLinks {
-        owner: Vec<u8>,
+        owner: HugePageBytes,
         #[covariant]
         dependent: GraphLinksView,
     }
@@ -76,13 +77,15 @@ self_cell::self_cell! {
 impl GraphLinks {
     pub fn load(data: &[u8]) -> Result<Self> {
         let format = GraphLinksFormat::Compressed;
-        Self::try_new(data.to_vec(), |x| GraphLinksView::load(x, format))
+        Self::try_new(HugePageBytes::from_slice(data), |x| {
+            GraphLinksView::load(x, format)
+        })
     }
 
     pub(crate) fn memory_size(&self) -> usize {
         // self_cell allocates the owner and its dependent view together on the heap.
         std::mem::size_of::<Self>()
-            + std::mem::size_of::<Vec<u8>>()
+            + std::mem::size_of::<HugePageBytes>()
             + std::mem::size_of::<GraphLinksView<'_>>()
             + self.borrow_owner().capacity()
             + self.view().level_offsets.capacity() * std::mem::size_of::<u64>()

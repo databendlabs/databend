@@ -29,6 +29,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
+use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumn;
@@ -128,6 +129,26 @@ impl IEJoinState {
         }
     }
 
+    fn sort_block(&self, block: &DataBlock) -> Result<DataBlock> {
+        // NULL range keys cannot match and would invalidate the bounds used by
+        // intersection and probe_l1. Filter only keys, preserving the tuple IDs
+        // into the original tables (including unmatched rows for outer joins).
+        let mut validity = None;
+        for entry in block.columns().iter().take(2) {
+            let (all_null, column_validity) = entry.as_column().unwrap().validity();
+            if all_null {
+                return Ok(block.slice(0..0));
+            }
+            validity = and_validities(validity, column_validity.cloned());
+        }
+        if let Some(validity) = validity {
+            let block = block.clone().filter_with_bitmap(&validity)?;
+            DataBlock::sort(&block, &self.l1_sort_descriptions, None)
+        } else {
+            DataBlock::sort(block, &self.l1_sort_descriptions, None)
+        }
+    }
+
     fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
         let left_len = left_block.num_rows();
         let right_len = right_block.num_rows();
@@ -199,16 +220,8 @@ impl RangeJoinState {
         let ie_join_state = self.ie_join_state.as_ref().unwrap();
         let left_sorted_blocks = self.left_sorted_blocks.read();
         let right_sorted_blocks = self.right_sorted_blocks.read();
-        let l1_sorted_block = DataBlock::sort(
-            &left_sorted_blocks[left_idx],
-            &ie_join_state.l1_sort_descriptions,
-            None,
-        )?;
-        let right_block = DataBlock::sort(
-            &right_sorted_blocks[right_idx],
-            &ie_join_state.l1_sort_descriptions,
-            None,
-        )?;
+        let l1_sorted_block = ie_join_state.sort_block(&left_sorted_blocks[left_idx])?;
+        let right_block = ie_join_state.sort_block(&right_sorted_blocks[right_idx])?;
         if !ie_join_state.intersection(&l1_sorted_block, &right_block) {
             return Ok(vec![DataBlock::empty()]);
         }

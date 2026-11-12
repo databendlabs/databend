@@ -1,0 +1,49 @@
+# Read by an older query that predates the segment zone map. The snapshot's unknown
+# field is skipped: data and filters are unaffected, the table metadata is
+# readable, and the table stays writable. Nothing here may use the new settings
+# or the new fuse_snapshot column.
+
+query IT
+SELECT id, label FROM compat_segment_zone_map ORDER BY id
+----
+1 a
+2 b
+3 c
+4 d
+11 e
+12 f
+13 g
+14 h
+
+query I
+SELECT count(*) FROM compat_segment_zone_map WHERE id >= 2
+----
+7
+
+query I
+SELECT segment_count FROM fuse_snapshot('default', 'compat_segment_zone_map') ORDER BY timestamp DESC LIMIT 1
+----
+2
+
+statement ok
+SHOW CREATE TABLE compat_segment_zone_map
+
+statement ok
+DESC compat_segment_zone_map
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (21, 'i')
+
+query IT
+SELECT id, label FROM compat_segment_zone_map WHERE id >= 14 ORDER BY id
+----
+14 h
+21 i
+
+query I
+SELECT segment_count FROM fuse_snapshot('default', 'compat_segment_zone_map') ORDER BY timestamp DESC LIMIT 1
+----
+3

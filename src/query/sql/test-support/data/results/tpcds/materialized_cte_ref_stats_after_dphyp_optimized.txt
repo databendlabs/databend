@@ -18,11 +18,13 @@ Exchange(Merge)
     │                       ├── build keys: [customer.c_customer_sk (#220)]
     │                       ├── probe keys: [store_sales.ss_customer_sk (#3)]
     │                       ├── other filters: [noteq(customer_demographics.cd_marital_status (#240), customer_demographics.cd_marital_status (#249))]
+    │                       ├── runtime filters: [#0: customer.c_customer_sk (#220) -> store_sales.ss_customer_sk (#3)]
     │                       ├── Exchange(Broadcast)
     │                       │   └── Join(Inner)
     │                       │       ├── build keys: [customer_address.ca_address_sk (#298)]
     │                       │       ├── probe keys: [customer.c_current_addr_sk (#224)]
     │                       │       ├── other filters: []
+    │                       │       ├── runtime filters: [#14: customer_address.ca_address_sk (#298) -> customer.c_current_addr_sk (#224)]
     │                       │       ├── Exchange(Hash)
     │                       │       │   ├── Exchange(Hash): keys: [customer_address.ca_address_sk (#298)]
     │                       │       │   └── Scan
@@ -36,17 +38,20 @@ Exchange(Merge)
     │                       │               ├── build keys: [customer.c_current_cdemo_sk (#222)]
     │                       │               ├── probe keys: [customer_demographics.cd_demo_sk (#247)]
     │                       │               ├── other filters: []
+    │                       │               ├── runtime filters: [#15: customer.c_current_cdemo_sk (#222) -> customer_demographics.cd_demo_sk (#247)]
     │                       │               ├── Exchange(Hash)
     │                       │               │   ├── Exchange(Hash): keys: [customer.c_current_cdemo_sk (#222)]
     │                       │               │   └── Join(Inner)
     │                       │               │       ├── build keys: [household_demographics.hd_demo_sk (#280)]
     │                       │               │       ├── probe keys: [customer.c_current_hdemo_sk (#223)]
     │                       │               │       ├── other filters: []
+    │                       │               │       ├── runtime filters: [#16: household_demographics.hd_demo_sk (#280) -> customer.c_current_hdemo_sk (#223)]
     │                       │               │       ├── Exchange(Broadcast)
     │                       │               │       │   └── Join(Inner)
     │                       │               │       │       ├── build keys: [income_band.ib_income_band_sk (#314)]
     │                       │               │       │       ├── probe keys: [household_demographics.hd_income_band_sk (#281)]
     │                       │               │       │       ├── other filters: []
+    │                       │               │       │       ├── runtime filters: [#19: income_band.ib_income_band_sk (#314) -> household_demographics.hd_income_band_sk (#281)]
     │                       │               │       │       ├── Exchange(Broadcast)
     │                       │               │       │       │   └── Scan
     │                       │               │       │       │       ├── table: default.income_band (#17)
@@ -57,11 +62,13 @@ Exchange(Merge)
     │                       │               │       │           ├── table: default.household_demographics (#13)
     │                       │               │       │           ├── filters: []
     │                       │               │       │           ├── order by: []
-    │                       │               │       │           └── limit: NONE
+    │                       │               │       │           ├── limit: NONE
+    │                       │               │       │           └── runtime filters: [#19: household_demographics.hd_income_band_sk (#281)]
     │                       │               │       └── Join(Inner)
     │                       │               │           ├── build keys: [date_dim.d_date_sk (#163)]
     │                       │               │           ├── probe keys: [customer.c_first_shipto_date_sk (#225)]
     │                       │               │           ├── other filters: []
+    │                       │               │           ├── runtime filters: [#17: date_dim.d_date_sk (#163) -> customer.c_first_shipto_date_sk (#225)]
     │                       │               │           ├── Exchange(Broadcast)
     │                       │               │           │   └── Scan
     │                       │               │           │       ├── table: default.date_dim (#6)
@@ -72,6 +79,7 @@ Exchange(Merge)
     │                       │               │               ├── build keys: [date_dim.d_date_sk (#135)]
     │                       │               │               ├── probe keys: [customer.c_first_sales_date_sk (#226)]
     │                       │               │               ├── other filters: []
+    │                       │               │               ├── runtime filters: [#18: date_dim.d_date_sk (#135) -> customer.c_first_sales_date_sk (#226)]
     │                       │               │               ├── Exchange(Broadcast)
     │                       │               │               │   └── Scan
     │                       │               │               │       ├── table: default.date_dim (#5)
@@ -82,18 +90,21 @@ Exchange(Merge)
     │                       │               │                   ├── table: default.customer (#8)
     │                       │               │                   ├── filters: []
     │                       │               │                   ├── order by: []
-    │                       │               │                   └── limit: NONE
+    │                       │               │                   ├── limit: NONE
+    │                       │               │                   └── runtime filters: [#14: customer.c_current_addr_sk (#224), #16: customer.c_current_hdemo_sk (#223), #17: customer.c_first_shipto_date_sk (#225), #18: customer.c_first_sales_date_sk (#226)]
     │                       │               └── Exchange(Hash)
     │                       │                   ├── Exchange(Hash): keys: [customer_demographics.cd_demo_sk (#247)]
     │                       │                   └── Scan
     │                       │                       ├── table: default.customer_demographics (#10)
     │                       │                       ├── filters: []
     │                       │                       ├── order by: []
-    │                       │                       └── limit: NONE
+    │                       │                       ├── limit: NONE
+    │                       │                       └── runtime filters: [#15: customer_demographics.cd_demo_sk (#247)]
     │                       └── Join(Inner)
     │                           ├── build keys: [customer_address.ca_address_sk (#285)]
     │                           ├── probe keys: [store_sales.ss_addr_sk (#6)]
     │                           ├── other filters: []
+    │                           ├── runtime filters: [#1: customer_address.ca_address_sk (#285) -> store_sales.ss_addr_sk (#6)]
     │                           ├── Exchange(Broadcast)
     │                           │   └── Scan
     │                           │       ├── table: default.customer_address (#14)
@@ -104,6 +115,7 @@ Exchange(Merge)
     │                               ├── build keys: [customer_demographics.cd_demo_sk (#238)]
     │                               ├── probe keys: [store_sales.ss_cdemo_sk (#4)]
     │                               ├── other filters: []
+    │                               ├── runtime filters: [#2: customer_demographics.cd_demo_sk (#238) -> store_sales.ss_cdemo_sk (#4)]
     │                               ├── Exchange(Broadcast)
     │                               │   └── Scan
     │                               │       ├── table: default.customer_demographics (#9)
@@ -114,6 +126,7 @@ Exchange(Merge)
     │                                   ├── build keys: [promotion.p_promo_sk (#256)]
     │                                   ├── probe keys: [store_sales.ss_promo_sk (#8)]
     │                                   ├── other filters: []
+    │                                   ├── runtime filters: [#3: promotion.p_promo_sk (#256) -> store_sales.ss_promo_sk (#8)]
     │                                   ├── Exchange(Broadcast)
     │                                   │   └── Scan
     │                                   │       ├── table: default.promotion (#11)
@@ -124,6 +137,7 @@ Exchange(Merge)
     │                                       ├── build keys: [store.s_store_sk (#191)]
     │                                       ├── probe keys: [store_sales.ss_store_sk (#7)]
     │                                       ├── other filters: []
+    │                                       ├── runtime filters: [#4: store.s_store_sk (#191) -> store_sales.ss_store_sk (#7)]
     │                                       ├── Exchange(Broadcast)
     │                                       │   └── Scan
     │                                       │       ├── table: default.store (#7)
@@ -134,11 +148,13 @@ Exchange(Merge)
     │                                           ├── build keys: [household_demographics.hd_demo_sk (#275)]
     │                                           ├── probe keys: [store_sales.ss_hdemo_sk (#5)]
     │                                           ├── other filters: []
+    │                                           ├── runtime filters: [#5: household_demographics.hd_demo_sk (#275) -> store_sales.ss_hdemo_sk (#5)]
     │                                           ├── Exchange(Broadcast)
     │                                           │   └── Join(Inner)
     │                                           │       ├── build keys: [income_band.ib_income_band_sk (#311)]
     │                                           │       ├── probe keys: [household_demographics.hd_income_band_sk (#276)]
     │                                           │       ├── other filters: []
+    │                                           │       ├── runtime filters: [#13: income_band.ib_income_band_sk (#311) -> household_demographics.hd_income_band_sk (#276)]
     │                                           │       ├── Exchange(Broadcast)
     │                                           │       │   └── Scan
     │                                           │       │       ├── table: default.income_band (#16)
@@ -149,11 +165,13 @@ Exchange(Merge)
     │                                           │           ├── table: default.household_demographics (#12)
     │                                           │           ├── filters: []
     │                                           │           ├── order by: []
-    │                                           │           └── limit: NONE
+    │                                           │           ├── limit: NONE
+    │                                           │           └── runtime filters: [#13: household_demographics.hd_income_band_sk (#276)]
     │                                           └── Join(Inner)
     │                                               ├── build keys: [date_dim.d_date_sk (#107)]
     │                                               ├── probe keys: [store_sales.ss_sold_date_sk (#0)]
     │                                               ├── other filters: []
+    │                                               ├── runtime filters: [#6: date_dim.d_date_sk (#107) -> store_sales.ss_sold_date_sk (#0)]
     │                                               ├── Exchange(Broadcast)
     │                                               │   └── Scan
     │                                               │       ├── table: default.date_dim (#4)
@@ -164,16 +182,19 @@ Exchange(Merge)
     │                                                   ├── build keys: [item.i_item_sk (#317), store_returns.sr_ticket_number (#32)]
     │                                                   ├── probe keys: [store_sales.ss_item_sk (#2), store_sales.ss_ticket_number (#9)]
     │                                                   ├── other filters: []
+    │                                                   ├── runtime filters: [#7: item.i_item_sk (#317) -> store_sales.ss_item_sk (#2), #8: store_returns.sr_ticket_number (#32) -> store_sales.ss_ticket_number (#9)]
     │                                                   ├── Exchange(Broadcast)
     │                                                   │   └── Join(Inner)
     │                                                   │       ├── build keys: [item.i_item_sk (#317)]
     │                                                   │       ├── probe keys: [store_returns.sr_item_sk (#25)]
     │                                                   │       ├── other filters: []
+    │                                                   │       ├── runtime filters: [#9: item.i_item_sk (#317) -> store_returns.sr_item_sk (#25)]
     │                                                   │       ├── Exchange(Broadcast)
     │                                                   │       │   └── Join(Inner)
     │                                                   │       │       ├── build keys: [item.i_item_sk (#317)]
     │                                                   │       │       ├── probe keys: [catalog_sales.cs_item_sk (#58)]
     │                                                   │       │       ├── other filters: []
+    │                                                   │       │       ├── runtime filters: [#10: item.i_item_sk (#317) -> catalog_sales.cs_item_sk (#58)]
     │                                                   │       │       ├── Exchange(Hash)
     │                                                   │       │       │   ├── Exchange(Hash): keys: [item.i_item_sk (#317)]
     │                                                   │       │       │   └── Scan
@@ -199,33 +220,39 @@ Exchange(Merge)
     │                                                   │       │                                   ├── build keys: [catalog_returns.cr_item_sk (#79), catalog_returns.cr_order_number (#93)]
     │                                                   │       │                                   ├── probe keys: [catalog_sales.cs_item_sk (#58), catalog_sales.cs_order_number (#60)]
     │                                                   │       │                                   ├── other filters: []
+    │                                                   │       │                                   ├── runtime filters: [#11: catalog_returns.cr_item_sk (#79) -> catalog_sales.cs_item_sk (#58), #12: catalog_returns.cr_order_number (#93) -> catalog_sales.cs_order_number (#60)]
     │                                                   │       │                                   ├── Exchange(Broadcast)
     │                                                   │       │                                   │   └── Scan
     │                                                   │       │                                   │       ├── table: default.catalog_returns (#3)
     │                                                   │       │                                   │       ├── filters: []
     │                                                   │       │                                   │       ├── order by: []
-    │                                                   │       │                                   │       └── limit: NONE
+    │                                                   │       │                                   │       ├── limit: NONE
+    │                                                   │       │                                   │       └── runtime filters: [#10: catalog_returns.cr_item_sk (#79)]
     │                                                   │       │                                   └── Scan
     │                                                   │       │                                       ├── table: default.catalog_sales (#2)
     │                                                   │       │                                       ├── filters: []
     │                                                   │       │                                       ├── order by: []
-    │                                                   │       │                                       └── limit: NONE
+    │                                                   │       │                                       ├── limit: NONE
+    │                                                   │       │                                       └── runtime filters: [#10: catalog_sales.cs_item_sk (#58), #11: catalog_sales.cs_item_sk (#58), #12: catalog_sales.cs_order_number (#60)]
     │                                                   │       └── Scan
     │                                                   │           ├── table: default.store_returns (#1)
     │                                                   │           ├── filters: []
     │                                                   │           ├── order by: []
-    │                                                   │           └── limit: NONE
+    │                                                   │           ├── limit: NONE
+    │                                                   │           └── runtime filters: [#9: store_returns.sr_item_sk (#25)]
     │                                                   └── Scan
     │                                                       ├── table: default.store_sales (#0)
     │                                                       ├── filters: []
     │                                                       ├── order by: []
-    │                                                       └── limit: NONE
+    │                                                       ├── limit: NONE
+    │                                                       └── runtime filters: [#0: store_sales.ss_customer_sk (#3), #1: store_sales.ss_addr_sk (#6), #2: store_sales.ss_cdemo_sk (#4), #3: store_sales.ss_promo_sk (#8), #4: store_sales.ss_store_sk (#7), #5: store_sales.ss_hdemo_sk (#5), #6: store_sales.ss_sold_date_sk (#0), #7: store_sales.ss_item_sk (#2), #8: store_sales.ss_ticket_number (#9)]
     └── EvalScalar
         ├── scalars: [item.i_item_sk (#660) AS (#660), item.i_item_sk (#1003) AS (#1071), store.s_store_name (#539) AS (#1072), store.s_store_name (#882) AS (#1073), store.s_zip (#559) AS (#1074), store.s_zip (#902) AS (#1075)]
         └── Join(Inner)
             ├── build keys: [item.i_item_sk (#1003), store.s_store_name (#882), store.s_zip (#902)]
             ├── probe keys: [item.i_item_sk (#660), store.s_store_name (#539), store.s_zip (#559)]
             ├── other filters: []
+            ├── runtime filters: [#20: item.i_item_sk (#1003) -> item.i_item_sk (#660), #21: store.s_store_name (#882) -> store.s_store_name (#539), #22: store.s_zip (#902) -> store.s_zip (#559)]
             ├── Exchange(Hash)
             │   ├── Exchange(Hash): keys: [item.i_item_sk (#1003), store.s_store_name (#882), store.s_zip (#902)]
             │   └── MaterializedCTERef

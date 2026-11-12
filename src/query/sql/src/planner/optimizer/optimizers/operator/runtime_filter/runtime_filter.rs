@@ -119,7 +119,8 @@ impl RuntimeFilterPlanner<'_> {
                 continue;
             }
             let (probe_key, build_key) = condition.canonical_keys();
-            if probe_key.used_columns().len() != 1 {
+            // The predicate is moved like a filter, see `ScalarExpr::depends_on_other_rows`.
+            if probe_key.used_columns().len() != 1 || probe_key.depends_on_other_rows() {
                 continue;
             }
             let id = self
@@ -149,6 +150,8 @@ impl RuntimeFilterPlanner<'_> {
     #[recursive::recursive]
     fn push_down(&self, predicates: Vec<ScalarExpr>, child: SExpr) -> Result<SExpr> {
         match child.plan() {
+            // The same conditions as `RulePushDownFilterScan`.
+            RelOperator::Scan(scan) if scan.depends_on_other_rows() => return Ok(child),
             RelOperator::Scan(scan) => {
                 let mut scan = scan.clone();
                 for predicate in predicates.iter() {
@@ -161,7 +164,9 @@ impl RuntimeFilterPlanner<'_> {
                 }
                 return Ok(child.replace_plan(Arc::new(RelOperator::Scan(scan))));
             }
-            // Runtime filters commute with an ordinary filter.
+            // Runtime filters commute with an ordinary filter, under the same conditions as
+            // `RuleMergeFilter`.
+            RelOperator::Filter(filter) if filter.depends_on_other_rows() => return Ok(child),
             RelOperator::Filter(_) => {
                 let input = self.push_down(predicates, child.child(0)?.clone())?;
                 return Ok(child.replace_children([Arc::new(input)]));

@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
-use futures_util::future;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::PrunedColumnOrientedSegmentMeta;
@@ -132,12 +131,12 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let block_size_col = segment.block_size_col();
         let row_count_col = segment.row_count_col();
 
-        let pruning_runtime = &self.block_pruner.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.block_pruner.pruning_ctx.pruning_semaphore;
 
         let mut pruning_tasks = Vec::with_capacity(block_num);
 
         for block_idx in 0..block_num {
+            self.block_pruner.pruning_ctx.check_aborting()?;
             let location_path = location_path_col.index(block_idx).unwrap().to_string();
 
             let internal_pruner = &self.block_pruner.pruning_ctx.internal_column_pruner;
@@ -165,9 +164,11 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let runtime_stats_pruner = runtime_stats_pruner.clone();
             let runtime_scan_filters = self.runtime_scan_filters.clone();
 
+            let pruning_ctx = self.block_pruner.pruning_ctx.clone();
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
                 Box::pin(async move {
                     let _permit = permit;
+                    pruning_ctx.check_aborting()?;
                     // 2. prune columns by range index
                     let mut columns_stat = HashMap::with_capacity(column_ids.len());
                     let mut columns_meta = HashMap::with_capacity(column_ids.len());
@@ -340,18 +341,11 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
         // Execute all pruning tasks in parallel
         if !pruning_tasks.is_empty() {
-            let join_handlers = pruning_runtime
-                .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
-                .await
-                .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
-
             // Wait for all tasks to complete and propagate both join errors and pruning errors.
-            let results = future::try_join_all(join_handlers)
-                .await
-                .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
-            for result in results {
-                result?;
-            }
+            self.block_pruner
+                .pruning_ctx
+                .run_tasks(pruning_semaphore.clone(), pruning_tasks)
+                .await?;
         }
         Ok(false)
     }

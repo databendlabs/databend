@@ -39,14 +39,6 @@ pub fn illegal_ident_name(ident_name: &str) -> bool {
         .any(|c| c == '\'' || c == '\"' || c == '\u{000C}' || c == '\u{0008}')
 }
 
-pub(crate) fn legacy_table_ref_removed_error(context: impl Into<String>) -> ErrorCode {
-    ErrorCode::Unimplemented(format!(
-        "Legacy experimental table refs were removed: {}. The remaining syntax is reserved for \
-         a future redesign and is intentionally rejected during binding.",
-        context.into()
-    ))
-}
-
 impl Binder {
     // Find all recursive cte scans
     #[allow(clippy::only_used_in_recursion)]
@@ -95,7 +87,6 @@ pub struct TableIdentifier {
     catalog: Identifier,
     database: Identifier,
     table: Identifier,
-    branch: Option<Identifier>,
     table_alias: Option<TableAlias>,
     dialect: Dialect,
     name_resolution_ctx: NameResolutionContext,
@@ -112,7 +103,6 @@ impl TableIdentifier {
             &table_ref.catalog,
             &table_ref.database,
             &table_ref.table,
-            &table_ref.branch,
             table_alias,
         )
     }
@@ -122,7 +112,6 @@ impl TableIdentifier {
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
         table: &Identifier,
-        branch: &Option<Identifier>,
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
         // Use the common normalization logic to handle MySQL-style identifiers.
@@ -187,7 +176,6 @@ impl TableIdentifier {
             catalog,
             database,
             table,
-            branch: branch.clone(),
             table_alias: table_alias.clone(),
             dialect: *dialect,
             name_resolution_ctx: name_resolution_ctx.clone(),
@@ -204,12 +192,6 @@ impl TableIdentifier {
 
     pub fn table_name(&self) -> String {
         normalize_identifier(&self.table, &self.name_resolution_ctx).name
-    }
-
-    pub fn branch_name(&self) -> Option<String> {
-        self.branch
-            .as_ref()
-            .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name)
     }
 
     pub fn table_name_alias(&self) -> Option<String> {

@@ -1,0 +1,73 @@
+# ANALYZE provides known sample coverage. No settings are changed.
+# These intervals contain more distinct values than the old Float/byte-width
+# caps allowed; a large integer interval must not be rounded through f64.
+statement ok
+create or replace table ndv_decimal(v decimal(10,2));
+
+statement ok
+insert into ndv_decimal values (1.00), (1.01), (1.02);
+
+statement ok
+analyze table ndv_decimal;
+
+# Old estimate: 3.00 (NDV capped to 1). Actual matching rows: 1.
+query T
+explain select * from ndv_decimal where v = 1.01;
+----
+table: default.default.ndv_decimal<slt:ignore>estimated rows: 1.00
+
+query I
+select count(*) from ndv_decimal where v = 1.01;
+----
+1
+
+statement ok
+drop table ndv_decimal;
+
+statement ok
+create or replace table ndv_string(v varchar);
+
+statement ok
+insert into ndv_string values ('a'), ('aa'), ('ab'), ('b');
+
+statement ok
+analyze table ndv_string;
+
+# Short endpoints 'a'/'b' do not limit variable-length strings to two values.
+# Old estimate: 2.00 (NDV capped to 2). Actual matching rows: 1.
+query T
+explain select * from ndv_string where v = 'aa';
+----
+table: default.default.ndv_string<slt:ignore>estimated rows: 1.00
+
+query I
+select count(*) from ndv_string where v = 'aa';
+----
+1
+
+statement ok
+drop table ndv_string;
+
+statement ok
+create or replace table ndv_bigint(v bigint);
+
+statement ok
+insert into ndv_bigint values (9007199254740992), (9007199254740993);
+
+statement ok
+analyze table ndv_bigint;
+
+# Adjacent values above 2^53 can round to the same f64. Their exact bound is 2.
+# Old estimate: 2.00 (NDV capped to 1). Actual matching rows: 1.
+query T
+explain select * from ndv_bigint where v = 9007199254740992;
+----
+table: default.default.ndv_bigint<slt:ignore>estimated rows: 1.00
+
+query I
+select count(*) from ndv_bigint where v = 9007199254740992;
+----
+1
+
+statement ok
+drop table ndv_bigint;

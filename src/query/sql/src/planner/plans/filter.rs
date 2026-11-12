@@ -43,6 +43,14 @@ impl Filter {
         }
         Ok(used_columns)
     }
+
+    /// Whether a predicate may depend on other input rows. Removing input rows before this
+    /// filter can then change which of the remaining rows it keeps.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.predicates
+            .iter()
+            .any(ScalarExpr::depends_on_other_rows)
+    }
 }
 
 impl Operator for Filter {

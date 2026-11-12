@@ -58,6 +58,7 @@ pub enum UDFDefinition {
         immutable: Option<bool>,
     },
     UDFScript {
+        external_access_integrations: Vec<Identifier>,
         arg_types: UDFArgs,
         return_type: TypeName,
         code: String,
@@ -77,6 +78,7 @@ pub enum UDFDefinition {
         language: String,
     },
     UDAFScript {
+        external_access_integrations: Vec<Identifier>,
         arg_types: UDFArgs,
         state_fields: Vec<UDAFStateField>,
         return_type: TypeName,
@@ -226,6 +228,7 @@ impl Display for UDFDefinition {
                 }
             }
             UDFDefinition::UDFScript {
+                external_access_integrations,
                 arg_types,
                 return_type,
                 code,
@@ -258,6 +261,11 @@ impl Display for UDFDefinition {
                     " IMPORTS = ({}) PACKAGES = ({}) HANDLER = '{handler}' AS $$\n{code}\n$$",
                     imports, packages
                 )?;
+                if !external_access_integrations.is_empty() {
+                    write!(f, " EXTERNAL_ACCESS_INTEGRATIONS = (")?;
+                    write_comma_separated_list(f, external_access_integrations)?;
+                    write!(f, ")")?;
+                }
             }
             UDFDefinition::UDAFServer {
                 arg_types,
@@ -353,6 +361,7 @@ impl Display for UDFDefinition {
                 write!(f, ") RETURNS {return_type} AS $$\n{definition}\n$$")?;
             }
             UDFDefinition::UDAFScript {
+                external_access_integrations,
                 arg_types,
                 state_fields: state_types,
                 return_type,
@@ -379,6 +388,11 @@ impl Display for UDFDefinition {
                     " }} RETURNS {return_type} LANGUAGE {language} IMPORTS = ({}) PACKAGES = ({}) AS $$\n{code}\n$$",
                     imports, packages
                 )?;
+                if !external_access_integrations.is_empty() {
+                    write!(f, " EXTERNAL_ACCESS_INTEGRATIONS = (")?;
+                    write_comma_separated_list(f, external_access_integrations)?;
+                    write!(f, ")")?;
+                }
             }
         }
         Ok(())

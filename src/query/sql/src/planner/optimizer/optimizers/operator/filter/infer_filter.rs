@@ -117,7 +117,9 @@ impl<'a> InferFilterOptimizer<'a> {
                             }
                         }
                         (true, false)
-                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] =>
+                            if let ScalarExpr::ConstantExpr(constant)
+                            | ScalarExpr::TypedConstantExpr(constant, _) =
+                                &func.arguments[1] =>
                         {
                             if matches!(constant.value, Scalar::Null) {
                                 self.is_falsy = true;
@@ -139,7 +141,9 @@ impl<'a> InferFilterOptimizer<'a> {
                             }
                         }
                         (false, true)
-                            if let ScalarExpr::ConstantExpr(constant) = &func.arguments[0] =>
+                            if let ScalarExpr::ConstantExpr(constant)
+                            | ScalarExpr::TypedConstantExpr(constant, _) =
+                                &func.arguments[0] =>
                         {
                             if matches!(constant.value, Scalar::Null) {
                                 self.is_falsy = true;
@@ -234,6 +238,11 @@ impl<'a> InferFilterOptimizer<'a> {
 
         let left_ty = left.data_type();
         let right_ty = right.data_type();
+        // Equal instants may display different offsets, so arbitrary predicates
+        // cannot substitute these values (including inside containers).
+        if left_ty.contains_timestamp_tz() || right_ty.contains_timestamp_tz() {
+            return false;
+        }
         // NULL-typed expressions cannot make equality true. Do not let the bottom
         // type bridge otherwise incomparable numeric domains in an equivalence class.
         if left_ty.remove_nullable() == DataType::Null

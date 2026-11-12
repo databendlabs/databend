@@ -333,9 +333,6 @@ pub struct Join {
     // marker_index is for MarkJoin only.
     pub marker_index: Option<Symbol>,
     pub from_correlated_subquery: bool,
-    // if we execute distributed merge into, we need to hold the
-    // hash table to get not match data from source.
-    pub need_hold_hash_table: bool,
     pub is_lateral: bool,
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
@@ -358,7 +355,6 @@ impl Default for Join {
             join_type: JoinType::Cross,
             marker_index: None,
             from_correlated_subquery: false,
-            need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
@@ -385,6 +381,17 @@ impl Join {
         self.equi_conditions
             .iter()
             .any(|condition| condition.is_null_equal)
+    }
+
+    /// Whether a join condition may depend on other input rows. The join evaluates its
+    /// conditions on its inputs, so removing input rows can then change the matches of the
+    /// remaining rows.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.equi_conditions
+            .iter()
+            .flat_map(|condition| [&condition.left, &condition.right])
+            .chain(self.non_equi_conditions.iter())
+            .any(ScalarExpr::depends_on_other_rows)
     }
 
     pub fn derive_join_stats(

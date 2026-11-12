@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::plan::block_id_in_segment;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::types::F32;
@@ -29,7 +28,6 @@ use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use futures_util::future;
 use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
@@ -97,7 +95,6 @@ impl BlockPruner {
             return Ok(block_metas);
         }
 
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let pruning_ctx = self.pruning_ctx.clone();
 
@@ -137,18 +134,13 @@ impl BlockPruner {
 
         let start = Instant::now();
 
-        let join_handlers = pruning_runtime
-            .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
-            .await?;
-
-        let joint = future::try_join_all(join_handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
-
-        let result = joint
+        let result = self
+            .pruning_ctx
+            .run_tasks(pruning_semaphore.clone(), pruning_tasks)
+            .await?
             .into_iter()
-            .filter_map(|prune_result| prune_result.transpose())
-            .collect::<Result<Vec<_>>>()?;
+            .flatten()
+            .collect::<Vec<_>>();
 
         let elapsed = start.elapsed().as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
@@ -191,7 +183,6 @@ impl BlockPruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
-        let pruning_runtime = &self.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
@@ -201,7 +192,7 @@ impl BlockPruner {
         let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
-            if limit_pruner.exceeded() {
+            if limit_pruner.exceeded() || pruning_ctx.check_aborting().is_err() {
                 return None;
             }
 
@@ -283,18 +274,14 @@ impl BlockPruner {
 
         let start = Instant::now();
 
-        let join_handlers = pruning_runtime
-            .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
+        let joint = self
+            .pruning_ctx
+            .run_tasks(pruning_semaphore.clone(), pruning_tasks)
             .await?;
-
-        let joint = future::try_join_all(join_handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
         let mut result = Vec::with_capacity(joint.len());
         let block_num = block_metas.len();
         for prune_result in joint {
-            let prune_result = prune_result?;
             if prune_result.keep {
                 let block = block_metas[prune_result.block_idx].clone();
 
@@ -340,6 +327,7 @@ impl BlockPruner {
         if !prune_result.keep {
             return Ok(prune_result);
         }
+        pruning_ctx.check_aborting()?;
 
         let pruning_stats = pruning_ctx.pruning_stats.clone();
         let pruning_cost = pruning_ctx.pruning_cost.clone();

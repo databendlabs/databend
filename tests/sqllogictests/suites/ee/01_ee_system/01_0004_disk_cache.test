@@ -1,0 +1,321 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+## -------------------------------------------------------
+## Disk cache
+##
+## The EE suite runs with `cache.data_cache_storage = disk` and the default
+## `cache.disk.max_bytes` of 20 GiB (see test_ee_sqllogic_standalone_linux).
+## Other tests run in parallel and share the cache, so counts are checked as
+## "> 0" only. The memory caches of the kinds checked here are turned off while
+## the test runs, so that the second read of each object goes to the disk cache;
+## they are restored to the defaults of the CI config at the end.
+## -------------------------------------------------------
+
+statement ok
+set enable_query_result_cache = 0;
+
+statement ok
+set enable_prune_cache = 0;
+
+# The pools split max_bytes 10/20/70.
+query TI
+select name, capacity from system.caches where name like '__disk_pool:%' order by name;
+----
+__disk_pool:data 15032385536
+__disk_pool:index 4294967296
+__disk_pool:meta 2147483648
+
+# Decoded values are not kept on disk.
+query I
+select count() from system.caches where name = 'disk_cache_table_data';
+----
+0
+
+statement ok
+create or replace database test_disk_cache;
+
+statement ok
+use test_disk_cache;
+
+statement ok
+create table t(id int, s string, v variant, inverted index idx_s(s)) storage_format = 'parquet' enable_virtual_column = true;
+
+statement ok
+insert into t select number, concat('k', number::string), parse_json(concat('{"a":', number::string, ',"b":"w', (number % 7)::string, '"}')) from numbers(1000);
+
+statement ok
+insert into t select number + 1000, concat('k', (number + 1000)::string), parse_json(concat('{"a":', (number + 1000)::string, ',"b":"w', (number % 7)::string, '"}')) from numbers(1000);
+
+# Virtual columns are built by a refresh; reads of `v['a']` then go to the sidecar.
+statement ok
+REFRESH VIRTUAL COLUMN FOR t;
+
+statement ok
+call system$set_cache_capacity('memory_cache_table_snapshot', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_compact_segment_info', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_bloom_index_file_meta_data', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_bloom_index_filter', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_meta_data', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_lookup', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_payload', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_virtual_column_file_meta_data', 0);
+
+# The first reads miss and fill the disk cache in the background.
+query IIT
+select count(), sum(id), max(s) from t;
+----
+2000 1999000 k999
+
+query IT
+select id, s from t where s = 'k1234';
+----
+1234 k1234
+
+query IT
+select id, s from t where match(s, 'k42');
+----
+42 k42
+
+query TT
+select v['a'], v['b'] from t where id = 777;
+----
+777 "w0"
+
+# Queries prune virtual columns from the block metas; the virtual column files' own metadata
+# is read by this table function.
+query B
+select count() > 0 from fuse_virtual_column_parquet_meta('test_disk_cache', 't');
+----
+1
+
+query I
+select sleep(1);
+----
+0
+
+# The same reads, now from the disk cache.
+query IIT
+select count(), sum(id), max(s) from t;
+----
+2000 1999000 k999
+
+query IT
+select id, s from t where s = 'k1234';
+----
+1234 k1234
+
+query IT
+select id, s from t where match(s, 'k42');
+----
+42 k42
+
+query TT
+select v['a'], v['b'] from t where id = 777;
+----
+777 "w0"
+
+query B
+select count() > 0 from fuse_virtual_column_parquet_meta('test_disk_cache', 't');
+----
+1
+
+query T
+select name from system.caches where name in (
+    'disk_cache_table_snapshot',
+    'disk_cache_compact_segment_info',
+    'disk_cache_bloom_index_filter',
+    'disk_cache_inverted_index_meta_data',
+    'disk_cache_inverted_index_lookup',
+    'disk_cache_virtual_column_file_meta_data',
+    'disk_cache_column_data'
+) and hit > 0 and num_items > 0 and size > 0 order by name;
+----
+disk_cache_bloom_index_filter
+disk_cache_column_data
+disk_cache_compact_segment_info
+disk_cache_inverted_index_lookup
+disk_cache_inverted_index_meta_data
+disk_cache_table_snapshot
+disk_cache_virtual_column_file_meta_data
+
+query B
+select sum(hit) > 0 and sum(num_items) > 0 from system.caches where name like '__disk_pool:%';
+----
+1
+
+# A disk pool is resized by bytes, by a share of max_bytes, or back to its default; 0 turns it
+# and its kinds off, and reads go to storage.
+statement ok
+call system$set_cache_capacity('disk_pool:data', '50%');
+
+query I
+select capacity from system.caches where name = '__disk_pool:data';
+----
+10737418240
+
+statement ok
+call system$set_cache_capacity('disk_pool:data', 0);
+
+query I
+select count() from system.caches where name in ('__disk_pool:data', 'disk_cache_column_data');
+----
+0
+
+query IIT
+select count(), sum(id), max(s) from t;
+----
+2000 1999000 k999
+
+statement ok
+call system$set_cache_capacity('disk_pool:data', 'default');
+
+query I
+select capacity from system.caches where name = '__disk_pool:data';
+----
+15032385536
+
+# The pools together stay within max_bytes.
+statement error 1006
+call system$set_cache_capacity('disk_pool:data', '90%');
+
+statement error 1006
+call system$set_cache_capacity('disk_pool:data', '101%');
+
+statement error 1006
+call system$set_cache_capacity('disk_pool:data', 'abc');
+
+statement error 1006
+call system$set_cache_capacity('disk_pool:none', 0);
+
+# A kind's disk cache is turned off by 0 and back on by 'default'.
+statement ok
+call system$set_cache_capacity('disk:memory_cache_bloom_index_filter', 0);
+
+query I
+select count() from system.caches where name = 'disk_cache_bloom_index_filter';
+----
+0
+
+query IT
+select id, s from t where s = 'k1234';
+----
+1234 k1234
+
+statement ok
+call system$set_cache_capacity('disk:memory_cache_bloom_index_filter', 'default');
+
+query I
+select count() from system.caches where name = 'disk_cache_bloom_index_filter';
+----
+1
+
+# Decoded columns have no disk cache.
+statement error 1006
+call system$set_cache_capacity('disk:memory_cache_table_data', 0);
+
+# Vacuum deletes old snapshots: their bytes leave the disk cache too, or the snapshot history
+# would still be walked from disk. The memory snapshot cache is off, so history reads go to disk.
+statement ok
+set data_retention_time_in_days = 0;
+
+statement ok
+create table v(c int);
+
+statement ok
+insert into v values(1);
+
+statement ok
+insert into v values(2);
+
+statement ok
+insert into v values(3);
+
+query I
+select count() from fuse_snapshot('test_disk_cache', 'v');
+----
+3
+
+query I
+select sleep(1);
+----
+0
+
+statement ok
+optimize table v compact;
+
+query I
+select count(*) from fuse_vacuum2('test_disk_cache', 'v');
+----
+0
+
+query I
+select count() from fuse_snapshot('test_disk_cache', 'v');
+----
+1
+
+query I
+select sum(c) from v;
+----
+6
+
+statement ok
+unset data_retention_time_in_days;
+
+statement ok
+call system$set_cache_capacity('memory_cache_table_snapshot', 256);
+
+statement ok
+call system$set_cache_capacity('memory_cache_compact_segment_info', 1073741824);
+
+statement ok
+call system$set_cache_capacity('memory_cache_bloom_index_file_meta_data', 3000);
+
+statement ok
+call system$set_cache_capacity('memory_cache_bloom_index_filter', 2147483648);
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_meta_data', 30000);
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_lookup', 8589934592);
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_payload', 17179869184);
+
+statement ok
+call system$set_cache_capacity('memory_cache_virtual_column_file_meta_data', 30000);
+
+statement ok
+drop database test_disk_cache;
+
+statement ok
+unset enable_query_result_cache;
+
+statement ok
+unset enable_prune_cache;
