@@ -45,6 +45,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 
 pub(crate) fn compact_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
@@ -66,8 +67,8 @@ pub(crate) fn compact_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
 }
 
 impl TableHookTask {
-    /// Compact the table the write left fragmented. Returns the resolved target when a
-    /// compaction ran and succeeded, so the caller can follow it with a recluster round.
+    /// Compact the table the write left fragmented. Returns the resolved clustered target
+    /// when compaction succeeded, so the caller can register a Recluster generation.
     pub(super) async fn execute_compact(&self) -> Result<Option<TableHookTarget>> {
         let ctx = self.ctx.clone();
         // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context
@@ -135,8 +136,22 @@ impl TableHookTask {
             compact_start_at.elapsed().as_millis() as u64,
         );
 
+        // Unclustered tables have no Recluster demand. In particular, do not keep their
+        // otherwise idle mailbox occupied for the entire accumulation window.
+        let clustered = if compacted {
+            ctx.get_table(
+                &compact_target.catalog,
+                &compact_target.database,
+                &compact_target.table,
+            )
+            .await?
+            .cluster_key_meta()
+            .is_some()
+        } else {
+            false
+        };
         // A non-zero hint means the target was resolved above.
-        Ok(resolved_target.filter(|_| compacted))
+        Ok(resolved_target.filter(|_| compacted && clustered))
     }
 }
 

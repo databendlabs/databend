@@ -23,13 +23,15 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
   Cancellation interrupts its context, allows up to 3 seconds for normal pipeline cleanup,
   and tears down any remaining local exchange environment. These limits require async work
   to yield; they cannot preempt an arbitrary synchronous CPU operation.
-- Recluster is triggered by successful automatic Compact, not by every write. It remains
-  distributed and yields between rounds. Refresh and Analyze do not wait for convergence.
+- Recluster is triggered by successful automatic Compact on a clustered table, not by every
+  write. It remains distributed and yields between rounds. Refresh and Analyze do not wait
+  for convergence.
 - `query.table_maintenance_recluster_accumulation_window_secs` defaults to 600 (10 minutes).
   The first dirty notification starts the window; merged notifications do not postpone it.
-  Demand arriving during a running generation requests another generation, whose window
-  starts after the current generation ends. Rounds within one generation do not repeat this
-  wait. Zero makes a generation immediately eligible; it does not disable maintenance.
+  Demand arriving during a frozen generation requests another generation without widening
+  the active scope. A subsequent generation has its own accumulation window; rounds within
+  one generation do not repeat this wait. Zero makes a generation immediately eligible;
+  it does not disable maintenance.
   Retry backoff and the short round/time-slice cooldowns are independent of this window.
 - Background Recluster builds both SYNC and ASYNC indexes for newly rewritten blocks:
   Bloom/Ngram, Spatial and Vector are rebuilt; compatible inverted indexes are merged
@@ -39,8 +41,10 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
 - Indexed Recluster uses the same local/remote admission and memory group as other
   maintenance. Its planner leaves additional input-byte headroom for index writers (more
   for inverted/vector indexes). This is a heuristic, not an index-size guarantee: the hard
-  tracked memory limit and bounded failure/retry policy remain authoritative. No sort spill
-  or remote load probe is enabled to hide a too-large task.
+  tracked memory limit and bounded failure/retry policy remain authoritative. Automatic
+  Vector index construction stays on admitted pipeline threads, not the process-wide HNSW
+  rayon pool. Inline index definitions are validated with the CREATE INDEX rules before
+  building. No sort spill or remote load probe is enabled to hide a too-large task.
 - Before publication, and again on each OCC rebase, schema, index definitions, Bloom
   options and the Recluster key must still match those used to build the artifacts.
   Segment claims and the normal commit lock are unchanged. Unpublished objects are left
@@ -118,6 +122,12 @@ The private-service regression `tests/suites/1_stateful/02_query/02_0013_async_t
 uses bounded coverage polling, not fixed sleeps or foreground-return assumptions. It stops
 only the exact service process handles it started. Normal SQL tests that depend on automatic
 index publication must likewise wait for observable coverage or explicitly refresh.
+
+The accumulation/inline-index follow-up deliberately adds no new test cases yet; existing
+hook, maintenance, writer, index, HNSW and licensed MV tests provide regression checks.
+The probe below predates that follow-up. Million-segment planning/cache baselines, exhaustive
+mixed-index/definition-change interleavings and commit-response-loss fault injection remain
+unverified; do not interpret the older probe as evidence for those workloads.
 
 ### Local resource probe (2026-11-12)
 
