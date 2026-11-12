@@ -1408,6 +1408,10 @@ impl Table for FuseTable {
                 .map(|v| v.row_count)
                 .or(table_statistics.as_ref().map(|v| v.row_count))
                 .unwrap_or(0);
+            let (approx_top_n, approx_top_n_rows) = table_statistics
+                .as_ref()
+                .map(|v| (v.top_n.clone(), v.row_count))
+                .unwrap_or_default();
             FuseTableColumnStatisticsProvider::new(
                 stats,
                 histograms,
@@ -1417,6 +1421,7 @@ impl Table for FuseTable {
                 stats_row_count,
                 snapshot.summary.row_count,
             )
+            .with_approx_top_n(approx_top_n, approx_top_n_rows)
         } else {
             FuseTableColumnStatisticsProvider::default()
         };

@@ -35,7 +35,9 @@
 //! `databend_common_functions::topk_count`.
 //!
 //! The rewrite applies only when the second scan reads the same rows: the
-//! input must be deterministic operators over one scan of a FUSE table.
+//! input must be deterministic operators over one scan of a FUSE table. It
+//! also applies only when cost heuristics expect it to be faster, see
+//! `HeavyHitterAggregateOptimizer::worth_rewriting`.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -79,14 +81,24 @@ use crate::plans::Statistics;
 
 /// The largest `limit + offset` the rewrite applies to.
 const MAX_LIMIT: usize = 1000;
+/// Below this many groups the aggregation is cheap and the rewrite gains little.
+const MIN_GROUPS: f64 = 1_000_000.0;
+/// A filter keeping a smaller share of the scanned rows costs more to evaluate
+/// again than the aggregation it saves.
+const MIN_FILTER_SELECTIVITY: f64 = 0.2;
+/// Without top-N stats, a key with more groups per row is assumed to have too
+/// few frequent keys for the summary to prove the candidates.
+const MAX_GROUPS_PER_ROW: f64 = 0.9;
 
 pub struct HeavyHitterAggregateOptimizer {
     opt_ctx: Arc<OptimizerContext>,
+    /// Applies the rewrite to every matching query, skipping the cost heuristics.
+    force: bool,
 }
 
 impl HeavyHitterAggregateOptimizer {
-    pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
-        Self { opt_ctx }
+    pub fn new(opt_ctx: Arc<OptimizerContext>, force: bool) -> Self {
+        Self { opt_ctx, force }
     }
 
     pub fn optimize_sync(&self, s_expr: SExpr) -> Result<SExpr> {
@@ -158,7 +170,7 @@ impl HeavyHitterAggregateOptimizer {
             return Ok(None);
         }
         let capacity = topk_count_capacity(limit);
-        if !self.has_many_groups(input, group_item.index, capacity)? {
+        if !self.force && !self.worth_rewriting(input, group_item.index, limit, capacity)? {
             return Ok(None);
         }
         let metadata_ref = self.opt_ctx.get_metadata();
@@ -240,18 +252,70 @@ impl HeavyHitterAggregateOptimizer {
         Ok(Some(rewritten))
     }
 
-    /// The rewrite only pays off when the aggregation would hold more groups
-    /// than the candidate capacity.
-    fn has_many_groups(&self, input: &SExpr, key: Symbol, capacity: usize) -> Result<bool> {
+    /// Whether the rewrite is expected to be faster than aggregating every row.
+    ///
+    /// The rewrite scans the input twice and only saves hash table work, so:
+    /// - the aggregation must hold many groups;
+    /// - a filter must be cheap to evaluate again and keep enough rows;
+    /// - the summary must be likely to prove the candidates, since otherwise
+    ///   every row is aggregated after the extra scan. Top-N stats of the key,
+    ///   even stale ones, tell whether `limit` keys are frequent enough.
+    ///   Without them, a key that is almost unique is assumed to fail.
+    ///
+    /// These are estimates; the result is exact whatever they decide.
+    fn worth_rewriting(
+        &self,
+        input: &SExpr,
+        key: Symbol,
+        limit: usize,
+        capacity: usize,
+    ) -> Result<bool> {
+        let Some(scan) = find_scan(input) else {
+            return Ok(false);
+        };
         let stat_info = input.derive_cardinality(self.opt_ctx.get_stat_context())?;
-        if stat_info.cardinality <= capacity as f64 {
+        let rows = stat_info.cardinality;
+        let groups = stat_info.statistics.column_stats.get(&key).map(|stat| {
+            let ndv = stat.ndv();
+            ndv.expected.unwrap_or(ndv.upper).min(rows)
+        });
+        if groups.unwrap_or(rows) < MIN_GROUPS.max(capacity as f64) {
             return Ok(false);
         }
-        Ok(stat_info
-            .statistics
-            .column_stats
-            .get(&key)
-            .is_none_or(|stat| stat.ndv().upper > capacity as f64))
+
+        let mut predicates = vec![];
+        collect_predicates(input, &mut predicates);
+        if !predicates.is_empty() {
+            if !predicates
+                .iter()
+                .all(|predicate| is_cheap_predicate(predicate))
+            {
+                return Ok(false);
+            }
+            let scanned = scan
+                .statistics
+                .table_stats
+                .and_then(|stats| stats.num_rows)
+                .map_or(rows, |num_rows| num_rows as f64);
+            if scanned > 0.0 && rows / scanned < MIN_FILTER_SELECTIVITY {
+                return Ok(false);
+            }
+        }
+
+        if let Some((top_n, stats_rows)) = scan.statistics.approx_top_n.get(&key)
+            && *stats_rows > 0
+        {
+            // Assume the filter keeps the same share of every key.
+            let scale = rows / *stats_rows as f64;
+            let threshold = 2.0 * rows / (capacity as f64 + 1.0);
+            let frequent = top_n
+                .values
+                .iter()
+                .filter(|entry| entry.count.saturating_sub(entry.error) as f64 * scale > threshold)
+                .count();
+            return Ok(frequent >= limit);
+        }
+        Ok(groups.is_none_or(|groups| groups / rows <= MAX_GROUPS_PER_ROW))
     }
 }
 
@@ -305,6 +369,55 @@ fn orders_by_count(
                 }) if func_name == "count" && params.is_empty() && args.is_empty() && sort_descs.is_empty()
             )
     })
+}
+
+/// The scan of an input accepted by [`can_scan_twice`].
+fn find_scan(s_expr: &SExpr) -> Option<&Scan> {
+    match s_expr.plan() {
+        RelOperator::Scan(scan) => Some(scan),
+        _ => s_expr.children().find_map(find_scan),
+    }
+}
+
+/// The filter predicates of an input accepted by [`can_scan_twice`].
+fn collect_predicates<'a>(s_expr: &'a SExpr, predicates: &mut Vec<&'a ScalarExpr>) {
+    match s_expr.plan() {
+        RelOperator::Filter(filter) => predicates.extend(&filter.predicates),
+        RelOperator::Scan(scan) => {
+            predicates.extend(scan.push_down_predicates.iter().flatten());
+        }
+        _ => {}
+    }
+    for child in s_expr.children() {
+        collect_predicates(child, predicates);
+    }
+}
+
+/// Whether evaluating `predicate` again is cheap: comparisons of a column with
+/// constants, NULL tests, and their combinations. Such predicates are also
+/// the ones block statistics can prune by.
+fn is_cheap_predicate(predicate: &ScalarExpr) -> bool {
+    let is_operand = |scalar: &ScalarExpr| {
+        matches!(
+            scalar,
+            ScalarExpr::BoundColumnRef(_)
+                | ScalarExpr::ConstantExpr(_)
+                | ScalarExpr::TypedConstantExpr(_, _)
+        )
+    };
+    match predicate {
+        ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => true,
+        ScalarExpr::FunctionCall(call) => match call.func_name.as_str() {
+            "and" | "or" | "and_filters" | "or_filters" | "not" | "is_true" => {
+                call.arguments.iter().all(is_cheap_predicate)
+            }
+            "eq" | "noteq" | "gt" | "gte" | "lt" | "lte" | "is_null" | "is_not_null" => {
+                call.arguments.iter().all(is_operand)
+            }
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 /// Whether scanning `input` twice in one query reads the same rows twice.
@@ -481,6 +594,11 @@ fn remap_statistics(statistics: &Statistics, columns: &HashMap<Symbol, Symbol>) 
             .count_min_sketch
             .iter()
             .filter_map(|(column, sketch)| Some((remap_keys(column)?, sketch.clone())))
+            .collect(),
+        approx_top_n: statistics
+            .approx_top_n
+            .iter()
+            .filter_map(|(column, top_n)| Some((remap_keys(column)?, top_n.clone())))
             .collect(),
     }
 }

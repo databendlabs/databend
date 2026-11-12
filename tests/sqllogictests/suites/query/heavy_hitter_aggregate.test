@@ -1,4 +1,4 @@
-# run-with-settings: enable_heavy_hitter_aggregate=1
+# run-with-settings: enable_heavy_hitter_aggregate=2
 
 # GROUP BY key ORDER BY COUNT(*) DESC LIMIT n must return the same rows with and without the
 # heavy hitter aggregation. The settings pass finds candidate keys first and aggregates only their

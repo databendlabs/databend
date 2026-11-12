@@ -7,7 +7,7 @@ statement ok
 insert into t_heavy_hitter_explain select number % 50000, number from numbers(100000)
 
 statement ok
-set enable_heavy_hitter_aggregate = 1
+set enable_heavy_hitter_aggregate = 2
 
 # The aggregation only reads the rows of candidate keys. The candidates come from a summary of a
 # second scan with the same filter, cross joined as a one-row build side.

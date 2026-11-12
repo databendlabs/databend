@@ -184,7 +184,7 @@ TopN
 
 === top_count_computed_key ===
 description: A computed group key is computed again by the cloned EvalScalar of the summary input.
-sql: SELECT item % 100000 AS k, count(*) AS c FROM events GROUP BY k ORDER BY c DESC LIMIT 5
+sql: SELECT item + 1 AS k, count(*) AS c FROM events GROUP BY k ORDER BY c DESC LIMIT 5
 raw_plan:
 Limit
 ├── limit: [5]
@@ -195,10 +195,10 @@ Limit
     └── EvalScalar
         ├── scalars: [COUNT(*) (#5) AS (#5), k (#4) AS (#6)]
         └── Aggregate(Initial)
-            ├── group items: [modulo(events.item (#0), 100000) AS (#4)]
+            ├── group items: [plus(events.item (#0), 1) AS (#4)]
             ├── aggregate functions: [count() AS (#5)]
             └── EvalScalar
-                ├── scalars: [modulo(events.item (#0), 100000) AS (#4)]
+                ├── scalars: [plus(events.item (#0), 1) AS (#4)]
                 └── Scan
                     ├── table: default.events (#0)
                     ├── filters: []
@@ -213,10 +213,10 @@ TopN
 └── EvalScalar
     ├── scalars: [COUNT(*) (#5) AS (#5), k (#4) AS (#6)]
     └── Aggregate(Final)
-        ├── group items: [modulo(events.item (#0), 100000) AS (#4)]
+        ├── group items: [plus(events.item (#0), 1) AS (#4)]
         ├── aggregate functions: [count() AS (#5)]
         └── Aggregate(Partial)
-            ├── group items: [modulo(events.item (#0), 100000) AS (#4)]
+            ├── group items: [plus(events.item (#0), 1) AS (#4)]
             ├── aggregate functions: [count() AS (#5)]
             └── Filter
                 ├── filters: [is_topk_count_candidate(topk_count_candidates(5, 4096)(k) (#12), k (#4))]
@@ -231,14 +231,14 @@ TopN
                     │       ├── group items: []
                     │       ├── aggregate functions: [topk_count_candidates(5, 4096)(k (#11)) AS (#12)]
                     │       └── EvalScalar
-                    │           ├── scalars: [modulo(item (#7), 100000) AS (#11)]
+                    │           ├── scalars: [plus(item (#7), 1) AS (#11)]
                     │           └── Scan
                     │               ├── table: default.events (#0)
                     │               ├── filters: []
                     │               ├── order by: []
                     │               └── limit: NONE
                     └── EvalScalar
-                        ├── scalars: [modulo(events.item (#0), 100000) AS (#4)]
+                        ├── scalars: [plus(events.item (#0), 1) AS (#4)]
                         └── Scan
                             ├── table: default.events (#0)
                             ├── filters: []
@@ -600,7 +600,7 @@ TopN
 
 
 === few_groups_are_not_rewritten ===
-description: A key with at most capacity distinct values never needs more groups than the summary.
+description: A key with few distinct values keeps the aggregation cheap.
 sql: SELECT item, count(*) AS c FROM few_items GROUP BY item ORDER BY c DESC LIMIT 10
 raw_plan:
 Limit
@@ -740,6 +740,298 @@ TopN
                     ├── filters: []
                     ├── order by: []
                     └── limit: NONE
+
+
+=== unique_key_is_not_rewritten ===
+description: Without top-N stats, an almost unique key is expected to have too few frequent keys to prove the candidates.
+sql: SELECT item, count(*) AS c FROM uniq GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [uniq.item (#0) AS (#0), COUNT(*) (#1) AS (#1)]
+        └── Aggregate(Initial)
+            ├── group items: [uniq.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#1)]
+            └── EvalScalar
+                ├── scalars: [uniq.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.uniq (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [uniq.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#1)]
+    └── Aggregate(Partial)
+        ├── group items: [uniq.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#1)]
+        └── Scan
+            ├── table: default.uniq (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== forced_unique_key_is_rewritten ===
+description: enable_heavy_hitter_aggregate = 2 skips the cost heuristics.
+sql: SELECT item, count(*) AS c FROM uniq GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [uniq.item (#0) AS (#0), COUNT(*) (#1) AS (#1)]
+        └── Aggregate(Initial)
+            ├── group items: [uniq.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#1)]
+            └── EvalScalar
+                ├── scalars: [uniq.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.uniq (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [uniq.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#1)]
+    └── Aggregate(Partial)
+        ├── group items: [uniq.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#1)]
+        └── Filter
+            ├── filters: [is_topk_count_candidate(topk_count_candidates(10, 4096)(item) (#4), uniq.item (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Aggregate(Final)
+                │   ├── group items: []
+                │   ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#3)) AS (#4)]
+                │   └── Aggregate(Partial)
+                │       ├── group items: []
+                │       ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#3)) AS (#4)]
+                │       └── EvalScalar
+                │           ├── scalars: [item (#2) AS (#3)]
+                │           └── Scan
+                │               ├── table: default.uniq (#0)
+                │               ├── filters: []
+                │               ├── order by: []
+                │               └── limit: NONE
+                └── Scan
+                    ├── table: default.uniq (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== top_n_stats_with_enough_frequent_keys ===
+description: Top-N stats show 3 keys frequent enough for the summary to prove the first 3, although the key is almost unique.
+sql: SELECT item, count(*) AS c FROM hot GROUP BY item ORDER BY c DESC LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [hot.item (#0) AS (#0), COUNT(*) (#1) AS (#1)]
+        └── Aggregate(Initial)
+            ├── group items: [hot.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#1)]
+            └── EvalScalar
+                ├── scalars: [hot.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.hot (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [hot.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#1)]
+    └── Aggregate(Partial)
+        ├── group items: [hot.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#1)]
+        └── Filter
+            ├── filters: [is_topk_count_candidate(topk_count_candidates(3, 4096)(item) (#4), hot.item (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Aggregate(Final)
+                │   ├── group items: []
+                │   ├── aggregate functions: [topk_count_candidates(3, 4096)(item (#3)) AS (#4)]
+                │   └── Aggregate(Partial)
+                │       ├── group items: []
+                │       ├── aggregate functions: [topk_count_candidates(3, 4096)(item (#3)) AS (#4)]
+                │       └── EvalScalar
+                │           ├── scalars: [item (#2) AS (#3)]
+                │           └── Scan
+                │               ├── table: default.hot (#0)
+                │               ├── filters: []
+                │               ├── order by: []
+                │               └── limit: NONE
+                └── Scan
+                    ├── table: default.hot (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== top_n_stats_with_too_few_frequent_keys ===
+description: Top-N stats show only 3 frequent keys, so the summary cannot prove the first 10.
+sql: SELECT item, count(*) AS c FROM hot GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [hot.item (#0) AS (#0), COUNT(*) (#1) AS (#1)]
+        └── Aggregate(Initial)
+            ├── group items: [hot.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#1)]
+            └── EvalScalar
+                ├── scalars: [hot.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.hot (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [hot.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#1)]
+    └── Aggregate(Partial)
+        ├── group items: [hot.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#1)]
+        └── Scan
+            ├── table: default.hot (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== expensive_filter_is_not_rewritten ===
+description: Both scans would evaluate a filter that is not a comparison of a column with a constant.
+sql: SELECT item, count(*) AS c FROM events WHERE value % 2 = 0 GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Filter
+                    ├── filters: [eq(modulo(events.value (#2), 2), 0)]
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── EvalScalar
+            ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#5)]
+            └── Scan
+                ├── table: default.events (#0)
+                ├── filters: [eq(modulo(events.value (#2), 2), 0)]
+                ├── order by: []
+                └── limit: NONE
+
+
+=== selective_filter_is_not_rewritten ===
+description: A filter keeping few rows leaves little aggregation to save.
+sql: SELECT item, count(*) AS c FROM events WHERE value < 1000000 GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Filter
+                    ├── filters: [lt(events.value (#2), 1000000)]
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── EvalScalar
+            ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#5)]
+            └── Scan
+                ├── table: default.events (#0)
+                ├── filters: [lt(events.value (#2), 1000000)]
+                ├── order by: []
+                └── limit: NONE
 
 
 === non_deterministic_filter_is_not_rewritten ===

@@ -83,6 +83,10 @@ pub struct Statistics {
     pub histograms: HashMap<Symbol, Option<Histogram>>,
     pub top_n: HashMap<Symbol, ColumnTopN>,
     pub count_min_sketch: HashMap<Symbol, ColumnCountMinSketch>,
+    /// Top-N stats that may come from an older snapshot, with the number of
+    /// rows they summarize. Only a hint for heuristics, see
+    /// `ColumnStatisticsProvider::approx_top_n`.
+    pub approx_top_n: HashMap<Symbol, (ColumnTopN, u64)>,
 }
 
 impl Statistics {
@@ -159,6 +163,13 @@ impl Scan {
             .filter(|(col, _)| columns.contains(*col))
             .map(|(col, count_min_sketch)| (*col, count_min_sketch.clone()))
             .collect();
+        let approx_top_n = self
+            .statistics
+            .approx_top_n
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, top_n)| (*col, top_n.clone()))
+            .collect();
 
         Scan {
             table_index: self.table_index,
@@ -173,6 +184,7 @@ impl Scan {
                 histograms,
                 top_n,
                 count_min_sketch,
+                approx_top_n,
             }),
             prewhere,
             change_type: self.change_type.clone(),

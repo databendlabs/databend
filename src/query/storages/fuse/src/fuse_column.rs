@@ -33,6 +33,9 @@ pub struct FuseTableColumnStatisticsProvider {
     histograms: HashMap<ColumnId, Histogram>,
     top_n: BlockTopN,
     count_min_sketch: BlockCountMinSketch,
+    /// Top-N stats of the latest ANALYZE, fresh or not, and their row count.
+    approx_top_n: BlockTopN,
+    approx_top_n_rows: u64,
 }
 
 impl FuseTableColumnStatisticsProvider {
@@ -70,7 +73,17 @@ impl FuseTableColumnStatisticsProvider {
             count_min_sketch,
             stats_row_count,
             row_count,
+            approx_top_n: BlockTopN::default(),
+            approx_top_n_rows: 0,
         }
+    }
+
+    /// Keeps the top-N stats of an older snapshot as a hint, see
+    /// [`ColumnStatisticsProvider::approx_top_n`].
+    pub fn with_approx_top_n(mut self, top_n: BlockTopN, rows: u64) -> Self {
+        self.approx_top_n = top_n;
+        self.approx_top_n_rows = rows;
+        self
     }
 }
 
@@ -104,5 +117,10 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
 
     fn count_min_sketch(&self, column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         self.count_min_sketch.get(&column_id).cloned()
+    }
+
+    fn approx_top_n(&self, column_id: ColumnId) -> Option<(ColumnTopN, u64)> {
+        let top_n = self.approx_top_n.get(&column_id)?;
+        (self.approx_top_n_rows > 0).then(|| (top_n.clone(), self.approx_top_n_rows))
     }
 }

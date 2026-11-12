@@ -362,7 +362,10 @@ pub(super) async fn query_logical_pipeline(
         // Runs last: later rewrites must not move the candidate filter into the cross join.
         .add_if(
             settings.get_enable_heavy_hitter_aggregate()?,
-            HeavyHitterAggregateOptimizer::new(opt_ctx.clone()),
+            HeavyHitterAggregateOptimizer::new(
+                opt_ctx.clone(),
+                settings.get_force_heavy_hitter_aggregate()?,
+            ),
         );
     Ok(pipeline)
 }
