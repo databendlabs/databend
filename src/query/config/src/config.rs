@@ -2065,6 +2065,11 @@ pub struct QueryConfig {
     /// existing keys still merge. Automatic maintenance notifications are best-effort.
     #[clap(long, value_name = "VALUE", default_value = "1024")]
     pub table_maintenance_max_pending_tables: usize,
+
+    /// Accumulation window before starting an automatic Recluster generation, in seconds.
+    /// New notifications do not postpone it. Zero makes a generation immediately eligible.
+    #[clap(long, value_name = "VALUE", default_value = "600")]
+    pub table_maintenance_recluster_accumulation_window_secs: u64,
 }
 
 impl Default for QueryConfig {
@@ -2092,6 +2097,16 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 "table_hook_mode must be sync or async, got {}",
                 self.table_hook_mode
             )));
+        }
+        if std::time::Instant::now()
+            .checked_add(std::time::Duration::from_secs(
+                self.table_maintenance_recluster_accumulation_window_secs,
+            ))
+            .is_none()
+        {
+            return Err(ErrorCode::InvalidConfig(
+                "Recluster accumulation window exceeds the supported deadline range",
+            ));
         }
         if self.table_maintenance_max_threads == 0
             || self.table_maintenance_max_pending_tables == 0

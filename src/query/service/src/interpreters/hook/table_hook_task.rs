@@ -23,6 +23,7 @@ use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::table_maintenance::record_stopped;
@@ -229,6 +230,15 @@ const MAX_ACTION_FAILURES: u32 = 8;
 const MAX_ACTION_BLOCKED: Duration = Duration::from_secs(10 * 60);
 const ACTION_NAMES: [&str; 3] = ["refresh", "analyze", "recluster"];
 
+fn recluster_accumulation_window() -> Duration {
+    Duration::from_secs(
+        GlobalConfig::instance()
+            .query
+            .common
+            .table_maintenance_recluster_accumulation_window_secs,
+    )
+}
+
 enum MaintenanceOutcome {
     Completed,
     Progress,
@@ -326,7 +336,7 @@ impl TableHookRequest {
                         self.recluster_progress = None;
                         if self.recluster_again {
                             self.recluster_again = false;
-                            self.ready_at[2] = Instant::now() + Duration::from_secs(5);
+                            self.ready_at[2] = Instant::now() + recluster_accumulation_window();
                         } else {
                             self.recluster_target = None;
                         }
@@ -520,7 +530,7 @@ impl TableHookTask {
             operation_name: self.operation_name,
             main_operation_start: self.main_operation_start,
             refresh_pending: true,
-            ready_at: [now, now, now + Duration::from_secs(5)],
+            ready_at: [now, now, now + recluster_accumulation_window()],
             failures: [0; 3],
             blocked_since: [None; 3],
             turn: 0,

@@ -25,6 +25,12 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
   to yield; they cannot preempt an arbitrary synchronous CPU operation.
 - Recluster is triggered by successful automatic Compact, not by every write. It remains
   distributed and yields between rounds. Refresh and Analyze do not wait for convergence.
+- `query.table_maintenance_recluster_accumulation_window_secs` defaults to 600 (10 minutes).
+  The first dirty notification starts the window; merged notifications do not postpone it.
+  Demand arriving during a running generation requests another generation, whose window
+  starts after the current generation ends. Rounds within one generation do not repeat this
+  wait. Zero makes a generation immediately eligible; it does not disable maintenance.
+  Retry backoff and the short round/time-slice cooldowns are independent of this window.
 
 Later writes can request maintenance again. Without another trigger, a cold table may
 remain unmaintained indefinitely. Explicit `ALTER TABLE ... RECLUSTER`, `REFRESH ... INDEX`
