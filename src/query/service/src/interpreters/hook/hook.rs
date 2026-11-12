@@ -249,7 +249,7 @@ async fn enqueue_table_hook(task: TableHookTask) {
     let table_id = task.target.table_id;
     match task.into_request().await {
         Ok(request) => match TableHookScheduler::try_instance() {
-            Some(scheduler) => scheduler.enqueue(request).await,
+            Some(scheduler) => scheduler.enqueue(request),
             None => warn!("Async table hook scheduler is not initialized, table_id={table_id}"),
         },
         Err(e) => warn!("Failed to capture table maintenance request, table_id={table_id}: {e}"),

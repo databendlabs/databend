@@ -27,6 +27,7 @@ use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_metrics::table_maintenance::record_rejected;
 use log::warn;
 use parking_lot::Mutex;
 use tokio::sync::Notify;
@@ -54,7 +55,6 @@ struct SchedulerCore<T> {
     spawner: SchedulerSpawner,
     semaphore: Arc<Semaphore>,
     wake: Notify,
-    capacity: Notify,
     max_tables: usize,
     stopped: Notify,
 }
@@ -127,22 +127,19 @@ impl TableHookScheduler {
         self.core.shutdown().await;
     }
 
-    /// Apply backpressure only to a new table key. Values waiting here own no caller context
-    /// or table lock. Never silently discard the only notification when the mailbox is full.
-    pub(super) async fn enqueue(&self, mut request: TableHookRequest) {
-        loop {
-            let capacity = self.core.capacity.notified();
-            tokio::pin!(capacity);
-            capacity.as_mut().enable();
-            match self.core.try_enqueue(request) {
-                Ok(()) => return,
-                Err(pending) => request = pending,
-            }
-            if self.core.semaphore.is_closed() {
-                return;
-            }
-            warn!(table_id = request.target.table_id; "Table maintenance mailbox full; waiting for capacity");
-            capacity.await;
+    /// Best-effort admission must never wait for a maintenance slot on the write path.
+    /// Existing keys still merge at capacity; a rejected new key needs another notification
+    /// or explicit maintenance. Do not spawn an unbounded queue of waiting producers.
+    pub(super) fn enqueue(&self, request: TableHookRequest) {
+        if let Err(request) = self.core.try_enqueue(request) {
+            let reason = if self.core.semaphore.is_closed() {
+                "shutdown"
+            } else {
+                "capacity"
+            };
+            record_rejected(reason);
+            log::debug!(table_id = request.target.table_id, reason;
+                "Discard best-effort maintenance notification");
         }
     }
 }
@@ -165,7 +162,6 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             spawner: spawner.clone(),
             semaphore: Arc::new(Semaphore::new(max_concurrency)),
             wake: Notify::new(),
-            capacity: Notify::new(),
             max_tables,
             stopped: Notify::new(),
         });
@@ -250,7 +246,6 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             self.semaphore.close();
         }
         self.wake.notify_one();
-        self.capacity.notify_waiters();
         loop {
             let stopped = self.stopped.notified();
             tokio::pin!(stopped);
@@ -335,8 +330,6 @@ impl<T: SchedulerTask> SchedulerCore<T> {
                 .states
                 .insert(key.clone(), TableHookState::Queued(task));
             queue.ready.push_back(key);
-        } else {
-            self.capacity.notify_waiters();
         }
     }
 }
@@ -812,6 +805,22 @@ mod tests {
             .expect("shutdown must quiesce the dispatcher and any running unit");
         assert!(scheduler.queue.lock().states.is_empty());
         assert!(scheduler.try_enqueue(test_task(4)).is_err());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_full_mailbox_still_merges_existing_keys() {
+        let runner: SchedulerRunner<TestTask> = Arc::new(|_| unreachable!());
+        // Do not dispatch: admission alone must be synchronous even with no capacity release.
+        let scheduler = SchedulerCore::create(1, 1, runner, Arc::new(|_, _| {}));
+        assert!(scheduler.try_enqueue(test_task_with_payload(1, 1)).is_ok());
+        assert!(scheduler.try_enqueue(test_task(2)).is_err());
+        assert!(scheduler.try_enqueue(test_task_with_payload(1, 3)).is_ok());
+        let queue = scheduler.queue.lock();
+        assert_eq!(queue.states.len(), 1);
+        let Some(TableHookState::Queued(task)) = queue.states.get(&test_task(1).key()) else {
+            panic!("existing table should stay queued");
+        };
+        assert_eq!(task.payload, vec![1, 3]);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

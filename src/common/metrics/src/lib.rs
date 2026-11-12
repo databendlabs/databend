@@ -33,3 +33,4 @@ pub use crate::metrics::mysql;
 pub use crate::metrics::session;
 pub use crate::metrics::storage;
 pub use crate::metrics::system;
+pub use crate::metrics::table_maintenance;

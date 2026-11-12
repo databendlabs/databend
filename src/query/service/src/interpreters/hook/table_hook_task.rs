@@ -25,6 +25,7 @@ use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::table_maintenance::record_stopped;
 use databend_common_pipeline::core::SharedLockGuard;
 use log::info;
 use log::warn;
@@ -216,8 +217,13 @@ pub(super) struct TableHookRequest {
     pub main_operation_start: Instant,
     ready_at: [Instant; 3],
     failures: [u32; 3],
+    blocked_since: [Option<Instant>; 3],
     turn: usize,
 }
+
+const MAX_ACTION_FAILURES: u32 = 8;
+const MAX_ACTION_BLOCKED: Duration = Duration::from_secs(10 * 60);
+const ACTION_NAMES: [&str; 3] = ["refresh", "analyze", "recluster"];
 
 enum MaintenanceOutcome {
     Completed,
@@ -244,19 +250,42 @@ impl TableHookRequest {
         self.turn = (action + 1) % 3;
         let result = match CatchUnwindFuture::create(self.execute_action(action)).await {
             Ok(result) => result,
-            Err(error) => Err(ErrorCode::Internal(format!(
-                "Maintenance action panicked: {error}"
-            ))),
+            Err(error) => {
+                // Unwinding can drop carry taken out of a job, or hide a committed refresh.
+                // Never resume that partially mutated progress with a missing frozen scope.
+                match action {
+                    0 => {
+                        self.refresh_progress = None;
+                        self.refresh_base = None;
+                    }
+                    2 => self.recluster_progress = None,
+                    _ => {}
+                }
+                Err(ErrorCode::Internal(format!(
+                    "Maintenance action panicked: {error}"
+                )))
+            }
         };
+        self.apply_outcome(action, result);
+        (0..3).any(|action| self.pending(action)).then_some(self)
+    }
+
+    fn apply_outcome(&mut self, action: usize, result: Result<MaintenanceOutcome>) {
         match result {
             Ok(MaintenanceOutcome::Progress) => {
                 self.failures[action] = 0;
+                self.blocked_since[action] = None;
             }
             Ok(MaintenanceOutcome::Deferred(delay)) => {
-                self.ready_at[action] = Instant::now() + delay;
+                if self.blocked_too_long(action) {
+                    self.stop_action(action, "no_progress");
+                } else {
+                    self.ready_at[action] = Instant::now() + delay;
+                }
             }
             Ok(MaintenanceOutcome::Completed) => {
                 self.failures[action] = 0;
+                self.blocked_since[action] = None;
                 match action {
                     0 => {
                         self.refresh_pending = self.refresh_again;
@@ -290,18 +319,7 @@ impl TableHookRequest {
             {
                 warn!(table_id = self.target.table_id, action, error :? = e;
                     "Stop maintenance action because its target or execution identity is no longer valid");
-                match action {
-                    0 => {
-                        self.refresh_pending = false;
-                        self.refresh_progress = None;
-                    }
-                    1 => self.enable_auto_analyze = false,
-                    _ => {
-                        self.recluster_target = None;
-                        self.recluster_progress = None;
-                        self.recluster_again = false;
-                    }
-                }
+                self.stop_action(action, "invalid_target_or_identity");
             }
             Err(e) => {
                 if action == 2 {
@@ -313,6 +331,12 @@ impl TableHookRequest {
                     self.ready_at[0] = Instant::now();
                 }
                 self.failures[action] = self.failures[action].saturating_add(1);
+                if self.failures[action] >= MAX_ACTION_FAILURES || self.blocked_too_long(action) {
+                    warn!(table_id = self.target.table_id, action, error :? = e;
+                        "Abandon bounded best-effort maintenance attempt; another notification may retry");
+                    self.stop_action(action, "retry_exhausted");
+                    return;
+                }
                 let delay = Duration::from_secs(1u64 << self.failures[action].min(8))
                     + Duration::from_millis(rand::random::<u64>() % 1000);
                 self.ready_at[action] = Instant::now() + delay;
@@ -320,7 +344,34 @@ impl TableHookRequest {
                     "Defer maintenance action without holding execution resources");
             }
         }
-        (0..3).any(|action| self.pending(action)).then_some(self)
+    }
+
+    fn blocked_too_long(&mut self, action: usize) -> bool {
+        self.blocked_since[action]
+            .get_or_insert_with(Instant::now)
+            .elapsed()
+            >= MAX_ACTION_BLOCKED
+    }
+
+    fn stop_action(&mut self, action: usize, reason: &'static str) {
+        record_stopped(ACTION_NAMES[action], reason);
+        self.failures[action] = 0;
+        self.blocked_since[action] = None;
+        self.ready_at[action] = Instant::now();
+        match action {
+            0 => {
+                self.refresh_pending = false;
+                self.refresh_again = false;
+                self.refresh_progress = None;
+                self.refresh_base = None;
+            }
+            1 => self.enable_auto_analyze = false,
+            _ => {
+                self.recluster_target = None;
+                self.recluster_progress = None;
+                self.recluster_again = false;
+            }
+        }
     }
 
     async fn execute_action(&mut self, action: usize) -> Result<MaintenanceOutcome> {
@@ -412,6 +463,7 @@ impl TableHookTask {
             refresh_pending: true,
             ready_at: [now, now, now + Duration::from_secs(5)],
             failures: [0; 3],
+            blocked_since: [None; 3],
             turn: 0,
         })
     }
@@ -455,6 +507,8 @@ impl SchedulerTask for TableHookRequest {
             // New notifications do not bypass a failing action's backoff.
             other.ready_at[action] = other.ready_at[action].max(self.ready_at[action]);
             other.failures[action] = other.failures[action].max(self.failures[action]);
+            other.blocked_since[action] =
+                self.blocked_since[action].or(other.blocked_since[action]);
         }
 
         // Preserve active scope/carry. Compactions arriving during it request one
@@ -577,6 +631,62 @@ mod tests {
             crate::table_maintenance::MaintenanceResources::reserve().is_ok(),
             "dropping an action releases memory capacity"
         );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_bounded_failures_survive_notifications_and_allow_new_attempts() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut task = table_hook_task(ctx.clone(), "t").into_request().await?;
+        task.enable_auto_analyze = true;
+        task.recluster_target = Some(task.target.clone());
+        for attempt in 1..=MAX_ACTION_FAILURES {
+            task.apply_outcome(0, Err(ErrorCode::Internal("persistent index error")));
+            if attempt < MAX_ACTION_FAILURES {
+                assert!(task.refresh_pending);
+                let deadline = task.ready_at[0];
+                task.merge(table_hook_task(ctx.clone(), "t").into_request().await?);
+                assert_eq!(task.failures[0], attempt);
+                assert!(task.ready_at[0] >= deadline);
+            }
+        }
+        assert!(
+            !task.refresh_pending,
+            "fresh writes must not reset the failure limit"
+        );
+        assert!(
+            task.enable_auto_analyze,
+            "a failing index must not stop statistics"
+        );
+        assert!(task.recluster_target.is_some());
+        task.merge(table_hook_task(ctx, "t").into_request().await?);
+        assert!(
+            task.refresh_pending,
+            "a later notification may open a fresh attempt"
+        );
+        assert_eq!(task.failures[0], 0);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_no_progress_is_bounded_but_real_progress_resets_cooldown() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut task = table_hook_task(ctx, "t").into_request().await?;
+        task.recluster_target = Some(task.target.clone());
+        task.blocked_since[2] = Some(Instant::now() - MAX_ACTION_BLOCKED);
+        task.apply_outcome(2, Ok(MaintenanceOutcome::Deferred(Duration::from_secs(1))));
+        assert!(task.recluster_target.is_none());
+        assert!(task.refresh_pending);
+
+        task.failures[0] = MAX_ACTION_FAILURES - 1;
+        task.blocked_since[0] = Some(Instant::now() - MAX_ACTION_BLOCKED);
+        task.apply_outcome(0, Ok(MaintenanceOutcome::Progress));
+        assert_eq!(task.failures[0], 0);
+        assert!(task.blocked_since[0].is_none());
+        task.apply_outcome(0, Err(ErrorCode::Internal("transient error")));
+        assert!(task.refresh_pending);
         Ok(())
     }
 
