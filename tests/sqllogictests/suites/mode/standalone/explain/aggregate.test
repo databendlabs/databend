@@ -540,7 +540,7 @@ TopN(Final)
 ├── sort keys: [referer ASC NULLS LAST, isrefresh ASC NULLS LAST]
 ├── limit: 10
 ├── offset: 3
-├── estimated rows: 1.00
+├── estimated rows: 0.00
 └── TopN(Partial)
     ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1), #_order_col]
     ├── sort keys: [referer ASC NULLS LAST, isrefresh ASC NULLS LAST]
