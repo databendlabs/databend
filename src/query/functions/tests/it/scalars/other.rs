@@ -42,6 +42,47 @@ fn test_other() {
 }
 
 #[test]
+fn test_is_topk_count_candidate() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("topk_count.txt").unwrap();
+
+    let columns = &[
+        (
+            "a",
+            Int64Type::from_data_with_validity(vec![3, 4, 0, 5], vec![true, true, false, true]),
+        ),
+        (
+            "s",
+            StringType::from_data_with_validity(vec!["ab", "cd", ""], vec![true, true, false]),
+        ),
+    ];
+    // NULL and an encoded `None` keep every row.
+    run_ast(file, "is_topk_count_candidate(NULL, a)", &columns[..1]);
+    run_ast(
+        file,
+        "is_topk_count_candidate(from_hex('00'), a)",
+        &columns[..1],
+    );
+    // The candidates 3 and 5 keep their rows and the NULL rows.
+    run_ast(
+        file,
+        "is_topk_count_candidate(from_hex('010200000003000000000000000500000000000000'), a)",
+        &columns[..1],
+    );
+    run_ast(
+        file,
+        "is_topk_count_candidate(from_hex('0100000000'), 5::Int64)",
+        &[],
+    );
+    // The candidate 'ab'.
+    run_ast(
+        file,
+        "is_topk_count_candidate(from_hex('0101000000020000006162'), s)",
+        &columns[1..],
+    );
+}
+
+#[test]
 fn test_num_to_char() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("num_to_char.txt").unwrap();

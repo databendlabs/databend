@@ -40,6 +40,7 @@ mod obfuscator;
 mod other;
 mod string;
 mod string_multi_args;
+mod topk_count;
 mod tuple;
 mod variant;
 mod vector;
@@ -85,4 +86,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     geo_func::geography::register(registry);
     registry.register_context_dependent(dt_func::interval::register);
     obfuscator::register(registry);
+    topk_count::register(registry);
 }

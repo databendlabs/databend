@@ -505,6 +505,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_heavy_hitter_aggregate", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Plans a GROUP BY of one key ordered by COUNT(*) DESC with a LIMIT as a scan that finds candidate keys, followed by an aggregation of the candidate rows only. Aggregates every row when the candidates cannot be proven to hold the result.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",

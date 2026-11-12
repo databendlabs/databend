@@ -1,0 +1,787 @@
+=== top_count_single_key ===
+description: GROUP BY one key ORDER BY COUNT(*) DESC LIMIT n aggregates only the rows of candidate keys, found by a cross-joined summary of the same scan with fresh columns.
+sql: SELECT item, count(*) AS c FROM events GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Filter
+            ├── filters: [is_topk_count_candidate(topk_count_candidates(10, 4096)(item) (#10), events.item (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Aggregate(Final)
+                │   ├── group items: []
+                │   ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
+                │   └── Aggregate(Partial)
+                │       ├── group items: []
+                │       ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
+                │       └── EvalScalar
+                │           ├── scalars: [item (#5) AS (#9)]
+                │           └── Scan
+                │               ├── table: default.events (#0)
+                │               ├── filters: []
+                │               ├── order by: []
+                │               └── limit: NONE
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== top_count_filter_offset_and_tie_breaker ===
+description: A filter is cloned into the summary input, the summary keeps limit + offset keys, and later sort keys only break ties.
+sql: SELECT item, count(*) AS c FROM events WHERE value > 10 GROUP BY item ORDER BY c DESC, item LIMIT 10 OFFSET 5
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [5]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST, events.item (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Filter
+                    ├── filters: [gt(events.value (#2), 10)]
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST, events.item (#0) ASC NULLS LAST]
+├── limit: [10]
+├── offset: [5]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Filter
+            ├── filters: [is_topk_count_candidate(topk_count_candidates(15, 4096)(item) (#12), events.item (#0))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Aggregate(Final)
+                │   ├── group items: []
+                │   ├── aggregate functions: [topk_count_candidates(15, 4096)(item (#10)) AS (#12)]
+                │   └── Aggregate(Partial)
+                │       ├── group items: []
+                │       ├── aggregate functions: [topk_count_candidates(15, 4096)(item (#10)) AS (#12)]
+                │       └── EvalScalar
+                │           ├── scalars: [item (#6) AS (#10), value (#8) AS (#11)]
+                │           └── Scan
+                │               ├── table: default.events (#0)
+                │               ├── filters: [gt(value (#8), 10)]
+                │               ├── order by: []
+                │               └── limit: NONE
+                └── EvalScalar
+                    ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#5)]
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: [gt(events.value (#2), 10)]
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== top_count_nullable_string_key_with_other_aggregates ===
+description: Other aggregates of the candidate groups stay exact because every row of a candidate key passes the filter.
+sql: SELECT name, count(*), sum(value) FROM events GROUP BY name ORDER BY count(*) DESC LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.name (#1) AS (#1), COUNT(*) (#4) AS (#4), sum(value) (#5) AS (#5)]
+        └── Aggregate(Initial)
+            ├── group items: [events.name (#1) AS (#1)]
+            ├── aggregate functions: [count() AS (#4), sum(events.value (#2)) AS (#5)]
+            └── EvalScalar
+                ├── scalars: [events.name (#1) AS (#1), events.value (#2) AS (#2)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.name (#1) AS (#1)]
+    ├── aggregate functions: [count() AS (#4), sum(events.value (#2)) AS (#5)]
+    └── Aggregate(Partial)
+        ├── group items: [events.name (#1) AS (#1)]
+        ├── aggregate functions: [count() AS (#4), sum(events.value (#2)) AS (#5)]
+        └── Filter
+            ├── filters: [is_topk_count_candidate(topk_count_candidates(3, 4096)(name) (#12), events.name (#1))]
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── Aggregate(Final)
+                │   ├── group items: []
+                │   ├── aggregate functions: [topk_count_candidates(3, 4096)(name (#10)) AS (#12)]
+                │   └── Aggregate(Partial)
+                │       ├── group items: []
+                │       ├── aggregate functions: [topk_count_candidates(3, 4096)(name (#10)) AS (#12)]
+                │       └── EvalScalar
+                │           ├── scalars: [name (#7) AS (#10), value (#8) AS (#11)]
+                │           └── Scan
+                │               ├── table: default.events (#0)
+                │               ├── filters: []
+                │               ├── order by: []
+                │               └── limit: NONE
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== top_count_computed_key ===
+description: A computed group key is computed again by the cloned EvalScalar of the summary input.
+sql: SELECT item % 100000 AS k, count(*) AS c FROM events GROUP BY k ORDER BY c DESC LIMIT 5
+raw_plan:
+Limit
+├── limit: [5]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#5) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [COUNT(*) (#5) AS (#5), k (#4) AS (#6)]
+        └── Aggregate(Initial)
+            ├── group items: [modulo(events.item (#0), 100000) AS (#4)]
+            ├── aggregate functions: [count() AS (#5)]
+            └── EvalScalar
+                ├── scalars: [modulo(events.item (#0), 100000) AS (#4)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#5) DESC NULLS LAST]
+├── limit: [5]
+├── offset: [0]
+└── EvalScalar
+    ├── scalars: [COUNT(*) (#5) AS (#5), k (#4) AS (#6)]
+    └── Aggregate(Final)
+        ├── group items: [modulo(events.item (#0), 100000) AS (#4)]
+        ├── aggregate functions: [count() AS (#5)]
+        └── Aggregate(Partial)
+            ├── group items: [modulo(events.item (#0), 100000) AS (#4)]
+            ├── aggregate functions: [count() AS (#5)]
+            └── Filter
+                ├── filters: [is_topk_count_candidate(topk_count_candidates(5, 4096)(k) (#12), k (#4))]
+                └── Join(Cross)
+                    ├── build keys: []
+                    ├── probe keys: []
+                    ├── other filters: []
+                    ├── Aggregate(Final)
+                    │   ├── group items: []
+                    │   ├── aggregate functions: [topk_count_candidates(5, 4096)(k (#11)) AS (#12)]
+                    │   └── Aggregate(Partial)
+                    │       ├── group items: []
+                    │       ├── aggregate functions: [topk_count_candidates(5, 4096)(k (#11)) AS (#12)]
+                    │       └── EvalScalar
+                    │           ├── scalars: [modulo(item (#7), 100000) AS (#11)]
+                    │           └── Scan
+                    │               ├── table: default.events (#0)
+                    │               ├── filters: []
+                    │               ├── order by: []
+                    │               └── limit: NONE
+                    └── EvalScalar
+                        ├── scalars: [modulo(events.item (#0), 100000) AS (#4)]
+                        └── Scan
+                            ├── table: default.events (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== top_count_sort_with_limit ===
+description: Without the fused TopN, a Sort with a limit matches as well.
+sql: SELECT item, count(*) AS c FROM events GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [10]
+    └── Aggregate(Final)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Aggregate(Partial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── Filter
+                ├── filters: [is_topk_count_candidate(topk_count_candidates(10, 4096)(item) (#10), events.item (#0))]
+                └── Join(Cross)
+                    ├── build keys: []
+                    ├── probe keys: []
+                    ├── other filters: []
+                    ├── Aggregate(Final)
+                    │   ├── group items: []
+                    │   ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
+                    │   └── Aggregate(Partial)
+                    │       ├── group items: []
+                    │       ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
+                    │       └── EvalScalar
+                    │           ├── scalars: [item (#5) AS (#9)]
+                    │           └── Scan
+                    │               ├── table: default.events (#0)
+                    │               ├── filters: []
+                    │               ├── order by: []
+                    │               └── limit: NONE
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== ascending_count_is_not_rewritten ===
+description: The least frequent keys cannot be bounded by a heavy hitter summary.
+sql: SELECT item, count(*) AS c FROM events GROUP BY item ORDER BY c LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) ASC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== order_by_sum_is_not_rewritten ===
+description: Only COUNT(*) is bounded by the summary.
+sql: SELECT item, sum(value) AS s FROM events GROUP BY item ORDER BY s DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [sum(value) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), sum(value) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [sum(events.value (#2)) AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#2)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [sum(value) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [sum(events.value (#2)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [sum(events.value (#2)) AS (#4)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== count_of_nullable_column_is_not_rewritten ===
+description: COUNT of a nullable column does not count the rows the summary counts.
+sql: SELECT item, count(name) AS c FROM events GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [count(name) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), count(name) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count(events.name (#1)) AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0), events.name (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [count(name) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count(events.name (#1)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count(events.name (#1)) AS (#4)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== having_is_not_rewritten ===
+description: A filter between the aggregate and the TopN is not supported.
+sql: SELECT item, count(*) AS c FROM events GROUP BY item HAVING c > 1 ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Filter
+            ├── filters: [gt(COUNT(*) (#4), 1)]
+            └── Aggregate(Initial)
+                ├── group items: [events.item (#0) AS (#0)]
+                ├── aggregate functions: [count() AS (#4)]
+                └── EvalScalar
+                    ├── scalars: [events.item (#0) AS (#0)]
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Filter
+    ├── filters: [gt(COUNT(*) (#4), 1)]
+    └── Aggregate(Final)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Aggregate(Partial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── Scan
+                ├── table: default.events (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== multiple_group_keys_are_not_rewritten ===
+description: The summary supports a single group key.
+sql: SELECT item, value, count(*) AS c FROM events GROUP BY item, value ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#2), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0), events.value (#2) AS (#2)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#2)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0), events.value (#2) AS (#2)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0), events.value (#2) AS (#2)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== float_key_is_not_rewritten ===
+description: Float keys are not supported because their equality differs from their bytes.
+sql: SELECT score, count(*) AS c FROM events GROUP BY score ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.score (#3) AS (#3), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.score (#3) AS (#3)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.score (#3) AS (#3)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.score (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.score (#3) AS (#3)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== large_limit_is_not_rewritten ===
+description: limit + offset above 1000 is not rewritten.
+sql: SELECT item, count(*) AS c FROM events GROUP BY item ORDER BY c DESC LIMIT 1000 OFFSET 1
+raw_plan:
+Limit
+├── limit: [1000]
+├── offset: [1]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [1000]
+├── offset: [1]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== few_groups_are_not_rewritten ===
+description: A key with at most capacity distinct values never needs more groups than the summary.
+sql: SELECT item, count(*) AS c FROM few_items GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [few_items.item (#0) AS (#0), COUNT(*) (#1) AS (#1)]
+        └── Aggregate(Initial)
+            ├── group items: [few_items.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#1)]
+            └── EvalScalar
+                ├── scalars: [few_items.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.few_items (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [few_items.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#1)]
+    └── Aggregate(Partial)
+        ├── group items: [few_items.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#1)]
+        └── Scan
+            ├── table: default.few_items (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== small_input_is_not_rewritten ===
+description: An input with at most capacity rows never needs more groups than the summary.
+sql: SELECT item, count(*) AS c FROM small GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [small.item (#0) AS (#0), COUNT(*) (#1) AS (#1)]
+        └── Aggregate(Initial)
+            ├── group items: [small.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#1)]
+            └── EvalScalar
+                ├── scalars: [small.item (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.small (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#1) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [small.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#1)]
+    └── Aggregate(Partial)
+        ├── group items: [small.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#1)]
+        └── Scan
+            ├── table: default.small (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== join_input_is_not_rewritten ===
+description: The input is scanned twice, so it must be one table scan.
+sql: SELECT e.item, count(*) AS c FROM events e JOIN small s ON e.item = s.item GROUP BY e.item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#5) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#5) AS (#5)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#5)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Join(Inner)
+                    ├── build keys: [small.item (#4)]
+                    ├── probe keys: [events.item (#0)]
+                    ├── other filters: []
+                    ├── Scan
+                    │   ├── table: default.small (#1)
+                    │   ├── filters: []
+                    │   ├── order by: []
+                    │   └── limit: NONE
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#5) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#5)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#5)]
+        └── EvalScalar
+            ├── scalars: [events.item (#0) AS (#0), small.item (#4) AS (#6)]
+            └── Join(Inner)
+                ├── build keys: [small.item (#4)]
+                ├── probe keys: [events.item (#0)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.small (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== non_deterministic_filter_is_not_rewritten ===
+description: Two scans with a non-deterministic filter would not read the same rows.
+sql: SELECT item, count(*) AS c FROM events WHERE rand() < 0.5 GROUP BY item ORDER BY c DESC LIMIT 10
+raw_plan:
+Limit
+├── limit: [10]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.item (#0) AS (#0), COUNT(*) (#4) AS (#4)]
+        └── Aggregate(Initial)
+            ├── group items: [events.item (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#4)]
+            └── EvalScalar
+                ├── scalars: [events.item (#0) AS (#0)]
+                └── Filter
+                    ├── filters: [lt(rand(), 0.5)]
+                    └── Scan
+                        ├── table: default.events (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [COUNT(*) (#4) DESC NULLS LAST]
+├── limit: [10]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.item (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [events.item (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: [lt(rand(), 0.5)]
+            ├── order by: []
+            └── limit: NONE
+
+

@@ -435,6 +435,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_aggregate_final_top_n")? != 0)
     }
 
+    pub fn get_enable_heavy_hitter_aggregate(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_heavy_hitter_aggregate")? != 0)
+    }
+
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }

@@ -2351,6 +2351,7 @@ Functions overloads:
 1 is_timestamp(Variant NULL) :: Boolean NULL
 0 is_timestamp_tz(Variant) :: Boolean
 1 is_timestamp_tz(Variant NULL) :: Boolean NULL
+0 is_topk_count_candidate FACTORY
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
 0 isinf(Float32) :: Boolean
