@@ -27,8 +27,18 @@
 //! optionally expires after a number of hits; the [`FaultHandle`] returned on install
 //! reports how often the rule fired, so a test can assert the fault was actually exercised.
 //!
+//! A rule is process-global, so its path must scope it to the fixture that installed it: other
+//! tests in the same binary keep doing storage IO while it is installed, and they must not see
+//! it. The rule is removed when its [`FaultHandle`] is dropped, so a failing test cannot leave
+//! it behind for the rest of the process.
+//!
 //! ```ignore
-//! let fault = FaultInjection::install(FaultRule::new(FaultOp::Write, "_ss/", FaultKind::Permanent));
+//! let prefix = table_prefix(&fixture);
+//! let fault = FaultInjection::install(FaultRule::new(
+//!     FaultOp::Write,
+//!     format!("{prefix}/_ss/"),
+//!     FaultKind::Permanent,
+//! ));
 //! assert!(insert(...).await.is_err());
 //! assert_eq!(fault.hits(), 1);
 //! fault.remove();
@@ -93,8 +103,12 @@ impl FaultKind {
     }
 }
 
-/// A fault to inject: `kind` for every `op` whose path contains `path_contains`, at most
+/// A fault to inject: `kind` for every `op` on a path under `path_contains`, at most
 /// `remaining` times (unlimited when `None`).
+///
+/// `path_contains` is matched as a prefix, so a rule is anchored to the storage prefix of the
+/// fixture that installed it. A pattern like `_ss/` does not match another fixture's
+/// `1/11/_ss/…`, which a substring match would.
 #[derive(Debug, Clone)]
 pub struct FaultRule {
     pub op: FaultOp,
@@ -129,7 +143,7 @@ struct RuleState {
 impl RuleState {
     /// Returns the error to inject if this rule matches and has budget left.
     fn fire(&self, op: FaultOp, path: &str) -> Option<Error> {
-        if self.rule.op != op || !path.contains(&self.rule.path_contains) {
+        if self.rule.op != op || !path.starts_with(&self.rule.path_contains) {
             return None;
         }
         if let Some(remaining) = &self.remaining {
@@ -162,8 +176,15 @@ static RULES: LazyLock<Mutex<Vec<Arc<RuleState>>>> = LazyLock::new(|| Mutex::new
 pub struct FaultInjection;
 
 impl FaultInjection {
-    /// Install a rule; it applies to every operator until removed.
+    /// Install a rule; it applies to every operator that touches a matching path until the
+    /// returned handle is dropped (or [`FaultHandle::remove`] is called).
     pub fn install(rule: FaultRule) -> FaultHandle {
+        // An empty pattern matches every path, which would also fail unrelated tests that run
+        // storage IO in the same process. Rules are only useful when scoped.
+        assert!(
+            !rule.path_contains.is_empty(),
+            "a fault rule must be scoped to a path such as the fixture's table prefix"
+        );
         let state = Arc::new(RuleState {
             remaining: rule.remaining.map(AtomicUsize::new),
             hits: AtomicUsize::new(0),
@@ -209,6 +230,14 @@ impl FaultHandle {
 
     /// Uninstall this rule only.
     pub fn remove(self) {
+        // Dropping the handle uninstalls as well; this only makes it explicit.
+    }
+}
+
+impl Drop for FaultHandle {
+    /// A test that panics must not leave its rule installed for the rest of the process: the
+    /// registry is global and every later test would run against it.
+    fn drop(&mut self) {
         let mut rules = RULES.lock().unwrap();
         rules.retain(|r| !Arc::ptr_eq(r, &self.state));
         if rules.is_empty() {
@@ -360,6 +389,67 @@ mod tests {
         assert_eq!(fault.hits(), 2);
         fault.remove();
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn rule_scoped_to_one_prefix_does_not_fire_for_another() -> Result<()> {
+        let _serial = SERIAL.lock().await;
+        FaultInjection::clear();
+        let op = operator();
+        op.write("1/11/_ss/a", "x").await?;
+        op.write("2/22/_ss/b", "y").await?;
+
+        // The reported failure: a rule that only names the snapshot directory, not the table
+        // prefix, used to match every table's snapshot write in the process.
+        let fault =
+            FaultInjection::install(FaultRule::new(FaultOp::Read, "_ss/", FaultKind::NotFound));
+        assert_eq!(
+            op.read("2/22/_ss/b").await?.to_vec(),
+            b"y",
+            "a rule must not reach another prefix"
+        );
+        assert_eq!(fault.hits(), 0);
+
+        let fault = FaultInjection::install(FaultRule::new(
+            FaultOp::Read,
+            "1/11/_ss/",
+            FaultKind::NotFound,
+        ));
+        assert!(op.read("1/11/_ss/a").await.is_err());
+        assert_eq!(
+            op.read("2/22/_ss/b").await?.to_vec(),
+            b"y",
+            "other prefixes stay untouched"
+        );
+        assert_eq!(fault.hits(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dropping_the_handle_uninstalls_the_rule() -> Result<()> {
+        let _serial = SERIAL.lock().await;
+        FaultInjection::clear();
+        let op = operator();
+        op.write("_ss/1", "x").await?;
+        {
+            let _fault =
+                FaultInjection::install(FaultRule::new(FaultOp::Read, "_ss/", FaultKind::NotFound));
+            assert!(op.read("_ss/1").await.is_err());
+        }
+        assert_eq!(
+            op.read("_ss/1").await?.to_vec(),
+            b"x",
+            "a rule must not outlive its handle"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[should_panic(expected = "a fault rule must be scoped to a path")]
+    fn unscoped_rule_is_rejected() {
+        FaultInjection::clear();
+        let _fault =
+            FaultInjection::install(FaultRule::new(FaultOp::Write, "", FaultKind::Permanent));
     }
 
     #[tokio::test]
