@@ -36,6 +36,10 @@ pub struct OptimizerContext {
     #[educe(Debug(ignore))]
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
+    /// Values computed with it may enter the plan, so non-deterministic evaluations are
+    /// recorded for the planner cache.
+    function_context: FunctionContext,
+    /// Used only for estimates, so its evaluations are not recorded.
     stat_context: StatContext,
 
     // Optimizer configurations
@@ -45,6 +49,7 @@ pub struct OptimizerContext {
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
     enable_top_n: RwLock<bool>,
+    enable_aggregate_final_top_n: RwLock<bool>,
     skip_list: HashSet<String>,
     skip_list_str: String,
     grouping_sets_to_union: bool,
@@ -84,7 +89,8 @@ impl OptimizerContext {
         Arc::new(Self {
             table_ctx,
             metadata,
-            stat_context: StatContext::new(function_context, &settings),
+            stat_context: StatContext::new(function_context.clone(), &settings),
+            function_context,
 
             enable_distributed_optimization: RwLock::new(false),
             force_local_execution: RwLock::new(false),
@@ -92,6 +98,7 @@ impl OptimizerContext {
             enable_dphyp: RwLock::new(true),
             max_push_down_limit: RwLock::new(10000),
             enable_top_n: RwLock::new(false),
+            enable_aggregate_final_top_n: RwLock::new(false),
             sample_executor: RwLock::new(None),
             skip_list,
             skip_list_str,
@@ -106,6 +113,7 @@ impl OptimizerContext {
         *self.enable_dphyp.write() = settings.get_enable_dphyp()?;
         *self.max_push_down_limit.write() = settings.get_max_push_down_limit()?;
         *self.enable_top_n.write() = settings.get_enable_top_n()?;
+        *self.enable_aggregate_final_top_n.write() = settings.get_enable_aggregate_final_top_n()?;
         *self.enable_trace.write() = settings.get_enable_optimizer_trace()?;
 
         Ok(self)
@@ -125,6 +133,10 @@ impl OptimizerContext {
 
     pub fn get_stat_context(&self) -> &StatContext {
         &self.stat_context
+    }
+
+    pub fn get_function_context(&self) -> &FunctionContext {
+        &self.function_context
     }
 
     pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
@@ -179,6 +191,10 @@ impl OptimizerContext {
         *self.enable_top_n.read()
     }
 
+    pub fn get_enable_aggregate_final_top_n(&self) -> bool {
+        *self.enable_aggregate_final_top_n.read()
+    }
+
     pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> &Arc<Self> {
         let mut flags = self.flags.write();
         flags.insert(name.to_string(), value);
@@ -194,6 +210,25 @@ impl OptimizerContext {
         *self.enable_trace.read()
     }
 
+    /// Check if a rule is disabled. Equivalent to `is_optimizer_disabled(&rule_id.to_string())`,
+    /// but avoids formatting the rule name when the skip list is empty.
+    pub fn is_rule_disabled(&self, rule_id: RuleID) -> bool {
+        if !self.grouping_sets_to_union
+            && matches!(
+                rule_id,
+                RuleID::GroupingSetsToUnion | RuleID::HierarchicalGroupingSetsToUnion
+            )
+        {
+            return true;
+        }
+
+        if self.skip_list.is_empty() {
+            return false;
+        }
+
+        self.is_optimizer_disabled(&rule_id.to_string())
+    }
+
     /// Check if an optimizer or rule is disabled based on optimizer_skip_list setting
     pub fn is_optimizer_disabled(&self, name: &str) -> bool {
         if !self.grouping_sets_to_union
@@ -201,6 +236,10 @@ impl OptimizerContext {
                 || name == RuleID::HierarchicalGroupingSetsToUnion.to_string())
         {
             return true;
+        }
+
+        if self.skip_list.is_empty() {
+            return false;
         }
 
         let name_lower = name.to_lowercase();

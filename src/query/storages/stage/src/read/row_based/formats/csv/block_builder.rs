@@ -90,6 +90,9 @@ impl CsvDecoder {
                     builder.push_default();
                 }
                 EmptyFieldAs::String => match builder {
+                    ColumnBuilder::Binary(b) => {
+                        b.commit_row();
+                    }
                     ColumnBuilder::String(b) => {
                         b.put_and_commit("");
                     }
@@ -100,6 +103,15 @@ impl CsvDecoder {
                         }),
                     ) => {
                         b.put_and_commit("");
+                        validity.push(true);
+                    }
+                    ColumnBuilder::Nullable(
+                        deref!(NullableColumnBuilder {
+                            builder: ColumnBuilder::Binary(b),
+                            validity,
+                        }),
+                    ) => {
+                        b.commit_row();
                         validity.push(true);
                     }
                     ColumnBuilder::Nullable(_) => {

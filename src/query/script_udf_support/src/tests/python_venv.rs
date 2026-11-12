@@ -20,6 +20,7 @@ use databend_common_base::runtime::spawn;
 use databend_common_cache::Cache;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::Symbol;
+use databend_common_sql::plans::UDFType;
 
 use super::*;
 
@@ -44,6 +45,7 @@ fn test_python_venv_wait_does_not_starve_query_workers() {
         data_type: Box::new(DataType::Number(NumberDataType::Int64)),
         headers: BTreeMap::new(),
         udf_type: UDFType::Script(Box::new(UDFScriptCode {
+            external_access_integrations: vec![],
             language: UDFLanguage::Python,
             runtime_version: String::new(),
             imports_stage_info: vec![],

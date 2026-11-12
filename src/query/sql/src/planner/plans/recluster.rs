@@ -22,6 +22,8 @@ pub struct ReclusterPlan {
     pub database: String,
     pub table: String,
     pub target: MaintenanceTarget,
+    /// Pin automatic maintenance, including retries and history vacuum, to this table ID.
+    pub expected_table_id: Option<u64>,
 
     pub limit: Option<usize>,
     pub selection: Option<Expr>,

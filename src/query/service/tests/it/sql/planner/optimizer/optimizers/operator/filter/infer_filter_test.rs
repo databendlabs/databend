@@ -32,6 +32,43 @@ fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
 }
 
 #[test]
+fn test_nested_timezone_equality_does_not_transfer_display_predicates() -> anyhow::Result<()> {
+    let timezone = DataType::TimestampTz;
+    // Scalar and nullable timestamp predicates are covered by timezone_key_representation.test.
+    for data_type in [
+        DataType::Array(Box::new(timezone.clone())),
+        DataType::Map(Box::new(DataType::Tuple(vec![
+            DataType::String,
+            timezone.clone(),
+        ]))),
+        DataType::Tuple(vec![DataType::Array(Box::new(timezone))]),
+    ] {
+        let mut builder = ExprBuilder::new();
+        let left = builder.column("left_value", 0, "left_value", data_type.clone(), "", 0);
+        let right = builder.column("right_value", 1, "right_value", data_type, "", 1);
+        let text: ScalarExpr = FunctionCall {
+            span: None,
+            func_name: "to_string".into(),
+            params: vec![],
+            arguments: vec![left.clone()],
+            return_type: Box::new(DataType::String),
+        }
+        .into();
+        let display_filter: ScalarExpr = FunctionCall {
+            span: None,
+            func_name: "like".into(),
+            params: vec![],
+            arguments: vec![text, builder.string("%+0030")],
+            return_type: Box::new(DataType::Boolean),
+        }
+        .into();
+        let predicates = vec![builder.eq(left, right), display_filter];
+        assert_eq!(run_optimizer(predicates.clone())?, predicates);
+    }
+    Ok(())
+}
+
+#[test]
 fn test_equal_operator_combinations() -> anyhow::Result<()> {
     // Create a builder for expressions
     let mut builder = ExprBuilder::new();
@@ -1264,10 +1301,10 @@ fn equal_compatibility_cases() -> Vec<EqualCompatibilityCase> {
             true,
         ),
         case(
-            "timestamp_tz with timestamp_tz",
+            "timestamp_tz offsets are not interchangeable",
             timestamp_tz.clone(),
             timestamp_tz,
-            true,
+            false,
         ),
         case(
             "nullable number with number",

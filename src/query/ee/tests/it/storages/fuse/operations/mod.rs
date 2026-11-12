@@ -14,6 +14,7 @@
 
 mod clone;
 mod computed_columns;
+mod disk_cache;
 mod vacuum;
 mod vacuum2;
 mod vacuum_temporary_files;

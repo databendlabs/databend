@@ -431,6 +431,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_top_n")? != 0)
     }
 
+    pub fn get_enable_aggregate_final_top_n(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_aggregate_final_top_n")? != 0)
+    }
+
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
@@ -632,6 +636,10 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_partial_aggregate_mode(&self) -> Result<String> {
+        self.try_get_string("partial_aggregate_mode")
+    }
+
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
@@ -664,20 +672,8 @@ impl Settings {
         self.try_set_u64("enable_table_lock", value)
     }
 
-    pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
-    }
-
     pub fn get_enable_experimental_row_access_policy(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_row_access_policy")? != 0)
-    }
-
-    pub fn get_enable_experimental_connection_privilege_check(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_connection_privilege_check")? != 0)
-    }
-
-    pub fn get_enable_experimental_sequence_privilege_check(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_sequence_privilege_check")? != 0)
     }
 
     pub fn get_enable_expand_roles(&self) -> Result<bool> {
@@ -730,10 +726,6 @@ impl Settings {
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
-    }
-
-    pub fn get_enable_distributed_compact(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_compact")? != 0)
     }
 
     pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
@@ -840,10 +832,6 @@ impl Settings {
 
     pub fn get_compact_max_block_selection(&self) -> Result<u64> {
         self.try_get_u64("compact_max_block_selection")
-    }
-
-    pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
@@ -1107,6 +1095,18 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
 
+    pub fn get_enable_segment_zone_map(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_segment_zone_map")? == 1)
+    }
+
+    pub fn get_enable_segment_zone_map_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_segment_zone_map_pruning")? == 1)
+    }
+
+    pub fn get_segment_zone_map_full_segment_threshold(&self) -> Result<u64> {
+        self.try_get_u64("segment_zone_map_full_segment_threshold")
+    }
+
     pub fn get_persist_materialized_cte(&self) -> Result<bool> {
         Ok(self.try_get_u64("persist_materialized_cte")? != 0)
     }
@@ -1308,10 +1308,6 @@ impl Settings {
 
     pub fn get_enable_experimental_table_ref(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_table_ref")? != 0)
-    }
-
-    pub fn get_force_aggregate_shuffle_mode(&self) -> Result<String> {
-        self.try_get_string("force_aggregate_shuffle_mode")
     }
 
     pub fn get_system_tables_count_db_concurrency(&self) -> Result<u64> {

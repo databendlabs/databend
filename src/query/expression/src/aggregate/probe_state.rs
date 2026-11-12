@@ -27,7 +27,11 @@ pub type SelectVector = [RowID; BATCH_SIZE];
 pub struct ProbeState {
     pub(super) group_hashes: [u64; BATCH_SIZE],
     pub(super) addresses: [RowPtr; BATCH_SIZE],
+    /// The ids of the rows of the groups a probe round found or created, decoded into
+    /// `addresses` and `state_places` once the round has matched every row.
+    pub(super) row_ids: [u64; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
+    /// The states of the groups of the rows: a probe sets them with `addresses`.
     pub(super) state_places: [StateAddr; BATCH_SIZE],
 
     pub(super) empty_vector: SelectVector,
@@ -36,8 +40,10 @@ pub struct ProbeState {
     pub(super) no_match_vector: [RowID; BATCH_SIZE],
     pub(super) slots: [usize; BATCH_SIZE],
     pub(super) row_count: usize,
+    // The rows that created a group, set when probing with source states.
+    pub(super) new_groups: [bool; BATCH_SIZE],
 
-    pub partition_entries: Vec<(u16, SelectVector)>,
+    pub(super) partition_entries: Vec<(u16, SelectVector)>,
 }
 
 impl Default for ProbeState {
@@ -45,6 +51,7 @@ impl Default for ProbeState {
         Self {
             group_hashes: [0; BATCH_SIZE],
             addresses: [RowPtr::null(); BATCH_SIZE],
+            row_ids: [0; BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::null(); BATCH_SIZE],
             group_compare_vector: [RowID::default(); BATCH_SIZE],
@@ -53,6 +60,7 @@ impl Default for ProbeState {
             slots: [0; BATCH_SIZE],
 
             row_count: 0,
+            new_groups: [false; BATCH_SIZE],
             partition_entries: vec![],
         }
     }

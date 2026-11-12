@@ -14,7 +14,6 @@
 
 use core::ops::Range;
 
-use binary::BinaryColumnBuilder;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -27,9 +26,11 @@ use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::TakeIndex;
 use crate::Value;
+use crate::kernels::has_nested_decimal;
 use crate::types::binary::BinaryColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::with_opaque_mapped_type;
@@ -46,15 +47,11 @@ impl DataBlock {
             num_rows
         );
 
-        let mut taker = TakeRangeVisitor::new(ranges, num_rows);
+        let mut taker = TakeRangeVisitor::new(ranges, num_rows, false);
         let after_columns = self
             .columns()
             .iter()
-            .map(|entry| {
-                taker.visit_value(entry.value())?;
-                let result = taker.result.take().unwrap();
-                Ok(BlockEntry::new(result, || (entry.data_type(), num_rows)))
-            })
+            .map(|entry| taker.take_entry(entry))
             .collect::<Result<Vec<_>>>()?;
 
         Ok(DataBlock::new_with_meta(
@@ -80,19 +77,46 @@ impl DataBlock {
     }
 }
 
-struct TakeRangeVisitor<'a> {
+/// Whether `column` has a decimal child whose width is not the strict width
+/// of its precision. Such a child cannot be appended in bulk to a builder,
+/// which has the strict width; pushing row by row converts it. An encoded
+/// child is reported too, since the width of its decoded values is not known
+/// here.
+fn has_non_strict_child(column: &Column) -> bool {
+    match column {
+        Column::Decimal(decimal) => !decimal.is_strict_decimal(),
+        Column::Nullable(nullable) => has_non_strict_child(&nullable.column),
+        Column::Array(array) | Column::Map(array) => has_non_strict_child(array.values()),
+        Column::Tuple(fields) => fields.iter().any(has_non_strict_child),
+        Column::Encoded(_) => true,
+        _ => false,
+    }
+}
+
+pub(super) struct TakeRangeVisitor<'a> {
     ranges: &'a [Range<u32>],
     num_rows: usize,
+    /// Copies `String` values instead of sharing the data buffers.
+    optimize_size: bool,
     result: Option<Value<AnyType>>,
 }
 
 impl<'a> TakeRangeVisitor<'a> {
-    fn new(ranges: &'a [Range<u32>], num_rows: usize) -> Self {
+    pub(super) fn new(ranges: &'a [Range<u32>], num_rows: usize, optimize_size: bool) -> Self {
         Self {
             ranges,
             num_rows,
+            optimize_size,
             result: None,
         }
+    }
+
+    pub(super) fn take_entry(&mut self, entry: &BlockEntry) -> Result<BlockEntry> {
+        self.visit_value(entry.value())?;
+        let result = self.result.take().unwrap();
+        Ok(BlockEntry::new(result, || {
+            (entry.data_type(), self.num_rows)
+        }))
     }
 }
 
@@ -145,12 +169,22 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         column: T::Column,
         data_type: &DataType,
     ) -> Result<()> {
-        let mut builder = ColumnBuilder::with_capacity(data_type, T::column_len(&column));
+        // Only a nested type can hold a non-strict decimal child: a top-level
+        // decimal is taken by `visit_simple_type`.
+        let copy_runs = !has_nested_decimal(data_type)
+            || !has_non_strict_child(&T::upcast_column_with_type(column.clone(), data_type));
+
+        let mut builder = ColumnBuilder::with_capacity(data_type, self.num_rows);
         let mut inner_builder = T::downcast_builder(&mut builder);
 
         for range in self.ranges {
-            for index in range.iter() {
-                inner_builder.push_item(unsafe { T::index_column_unchecked(&column, index) });
+            let (start, end) = (range.start as usize, range.end as usize);
+            if copy_runs && end - start > 1 {
+                inner_builder.append_column(&T::slice_column(&column, start..end));
+            } else {
+                for index in start..end {
+                    inner_builder.push_item(unsafe { T::index_column_unchecked(&column, index) });
+                }
             }
         }
         drop(inner_builder);
@@ -239,19 +273,50 @@ impl TakeRangeVisitor<'_> {
         builder.into()
     }
 
+    /// Copies the bytes and the shifted offsets of each range at once.
     fn take_binary_types(&mut self, values: &BinaryColumn) -> BinaryColumn {
-        let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
+        let offsets = values.offsets().as_slice();
+        let bytes = values.data().as_slice();
+        let data_len = self
+            .ranges
+            .iter()
+            .map(|range| (offsets[range.end as usize] - offsets[range.start as usize]) as usize)
+            .sum();
+
+        let mut data = Vec::with_capacity(data_len);
+        let mut new_offsets = Vec::with_capacity(self.num_rows + 1);
+        new_offsets.push(0);
         for range in self.ranges {
-            for index in range.start as usize..range.end as usize {
-                let value = unsafe { values.index_unchecked(index) };
-                builder.put_slice(value);
-                builder.commit_row();
+            let (start, end) = (range.start as usize, range.end as usize);
+            let (first, last) = (offsets[start], offsets[end]);
+            let base = data.len() as u64;
+            data.extend_from_slice(&bytes[first as usize..last as usize]);
+            if end - start == 1 {
+                new_offsets.push(data.len() as u64);
+            } else {
+                new_offsets.extend(
+                    offsets[start + 1..=end]
+                        .iter()
+                        .map(|offset| base + (offset - first)),
+                );
             }
         }
-        builder.build()
+        BinaryColumn::new(data.into(), new_offsets.into())
     }
 
     fn take_string_types(&mut self, col: &StringColumn) -> StringColumn {
+        if self.optimize_size {
+            let mut builder = StringColumnBuilder::with_capacity(self.num_rows);
+            for range in self.ranges {
+                for index in range.start as usize..range.end as usize {
+                    unsafe {
+                        builder.put_and_commit(col.index_unchecked(index));
+                    }
+                }
+            }
+            return builder.build();
+        }
+
         let new_views = self.take_primitive_types(col.views().clone());
         unsafe {
             StringColumn::new_unchecked_unknown_md(new_views, col.data_buffers().clone(), None)

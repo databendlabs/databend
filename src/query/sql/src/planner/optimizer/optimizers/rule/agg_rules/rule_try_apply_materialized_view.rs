@@ -107,13 +107,8 @@ impl Rule for RuleTryApplyMaterializedView {
             return Ok(());
         }
 
-        // Row access policy tables must not use materialized-view rewrites, because
-        // the pre-aggregated results were computed over the full table without
-        // applying the policy's row-level filter.
-        if self.scan_has_secure_predicates(s_expr) {
-            return Ok(());
-        }
-
+        // A source with a row access or masking policy has no candidates: binding skips it
+        // before building any, because MV storage does not follow source policies.
         let (table_index, _, has_sample) = self.get_table(s_expr);
         if has_sample {
             // Candidate plans were bound without the query's SAMPLE. Rebinding
@@ -188,19 +183,6 @@ impl RuleTryApplyMaterializedView {
                 )
             }
             _ => self.get_table(s_expr.child(0).unwrap()),
-        }
-    }
-
-    fn scan_has_secure_predicates(&self, s_expr: &SExpr) -> bool {
-        match s_expr.plan() {
-            RelOperator::Scan(scan) => scan.secure_predicates.is_some(),
-            _ => {
-                if let Ok(child) = s_expr.child(0) {
-                    self.scan_has_secure_predicates(child)
-                } else {
-                    false
-                }
-            }
         }
     }
 }

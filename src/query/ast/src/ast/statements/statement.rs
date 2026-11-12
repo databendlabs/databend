@@ -801,6 +801,9 @@ impl Statement {
 
     pub fn allowed_in_multi_statement(&self) -> bool {
         match self {
+            Statement::OptimizeTable(stmt) => {
+                matches!(stmt.action, OptimizeTableAction::Compact { .. })
+            }
             Statement::Query(..)
             | Statement::Explain { .. }
             | Statement::ReportIssue { .. }
@@ -851,7 +854,6 @@ impl Statement {
             | Statement::ShowStatistics(..)
             | Statement::ShowTablesStatus(..)
             | Statement::ShowDropTables(..)
-            | Statement::OptimizeTable(..)
             | Statement::VacuumTable(..)
             | Statement::VacuumTables(..)
             | Statement::VacuumAll(..)

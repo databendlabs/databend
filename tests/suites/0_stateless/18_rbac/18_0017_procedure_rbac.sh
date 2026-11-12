@@ -168,7 +168,6 @@ echo "CALL procedure greet();" | $USER_TEST_USER_CONNECT
 
 # Test system.procedures visibility
 echo "=== Testing system.procedures visibility ==="
-echo "SET GLOBAL enable_experimental_rbac_check = 1;" | bendsql_connect_root
 
 echo "31. admin_user queries system.procedures (should see add_numbers, get_current_time via ownership)..."
 echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_ADMIN_USER_CONNECT
@@ -180,7 +179,6 @@ echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_curr
 echo "33. test_user queries system.procedures (should see get_current_time via grant, multiply_numbers via ownership)..."
 echo "SELECT name FROM system.procedures WHERE name IN ('add_numbers', 'get_current_time', 'multiply_numbers', 'greet') ORDER BY name;" | $USER_TEST_USER_CONNECT
 
-echo "SET GLOBAL enable_experimental_rbac_check = 0;" | bendsql_connect_root
 
 # Test procedure type normalization in RBAC paths
 echo "=== Testing procedure type normalization for RBAC ==="

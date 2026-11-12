@@ -19,7 +19,6 @@ mod clone;
 mod commit;
 mod common;
 mod compact;
-mod inverted_index;
 mod merge;
 mod merge_into;
 mod mutation;

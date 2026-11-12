@@ -46,6 +46,11 @@ impl StateAddr {
     }
 
     #[inline]
+    pub(super) fn as_ptr(&self) -> *mut u8 {
+        self.0
+    }
+
+    #[inline]
     #[must_use]
     pub fn next(&self, offset: usize) -> Self {
         unsafe { Self(self.0.add(offset)) }

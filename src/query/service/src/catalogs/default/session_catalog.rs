@@ -381,37 +381,6 @@ impl Catalog for SessionCatalog {
         Ok(table)
     }
 
-    async fn get_table_branch_with_expire_ctl(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch_name: &str,
-        include_expired: bool,
-    ) -> Result<Arc<dyn Table>> {
-        {
-            let guard = self.txn_mgr.lock();
-            if guard.is_active() {
-                let branch_desc = format!("'{}'.'{}'/'{}'", db_name, table_name, branch_name);
-                if let Some(table) = guard
-                    .get_table_from_buffer(&branch_desc)
-                    .map(|table_info| self.get_table_by_info(&table_info))
-                {
-                    return table;
-                }
-            }
-        }
-        self.inner
-            .get_table_branch_with_expire_ctl(
-                tenant,
-                db_name,
-                table_name,
-                branch_name,
-                include_expired,
-            )
-            .await
-    }
-
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
         self.inner.create_table_tag(req).await
     }
@@ -606,9 +575,14 @@ impl Catalog for SessionCatalog {
                         .retryable_update_multi_table_meta(tenant, req)
                         .await?
                 };
-                self.temp_tbl_mgr
-                    .lock()
-                    .update_multi_table_meta(update_temp_tables);
+                // An OCC conflict is an inner Err, not a successful commit.
+                // Keep temporary tables unchanged until persistent updates succeed;
+                // otherwise a failed retry can partially commit a mixed transaction.
+                if reply.is_ok() {
+                    self.temp_tbl_mgr
+                        .lock()
+                        .update_multi_table_meta(update_temp_tables);
+                }
                 Ok(reply)
             }
             TxnState::Active => {

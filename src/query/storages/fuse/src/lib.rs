@@ -48,7 +48,9 @@ pub(crate) mod test_utils {
         INIT.get_or_init(|| {
             GlobalInstance::init_production();
             GlobalIORuntime::init(1)?;
-            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)
+            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
+            crate::io::FuseCaches::init(&CacheManager::instance());
+            Ok(())
         })
         .clone()
     }
@@ -58,6 +60,7 @@ pub mod io;
 pub mod operations;
 pub mod pruning;
 mod pruning_pipeline;
+pub mod segment_zone_map;
 pub mod statistics;
 pub mod table_functions;
 

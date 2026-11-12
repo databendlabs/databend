@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+mod cache_policy;
 mod partitions;
 mod projection;
 mod pushdown;
