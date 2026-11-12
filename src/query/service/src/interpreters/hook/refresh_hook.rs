@@ -35,19 +35,17 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextCachePolicy;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 impl TableHookTask {
-    pub(super) async fn execute_refresh(&self) {
+    pub(super) async fn execute_refresh(&self) -> Result<()> {
         // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context
         // of the write, whose own reads are done by now.
         self.ctx
             .set_cache_policy(self.ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
         info!("Table hook starting refresh job");
-        match self.do_refresh(self.ctx.clone()).await {
-            Ok(_) => info!("Refresh job completed successfully"),
-            Err(e) => info!("Refresh job failed: {:?}", e),
-        }
+        self.do_refresh(self.ctx.clone()).await
     }
 
     async fn do_refresh(&self, ctx: Arc<QueryContext>) -> Result<()> {
@@ -94,6 +92,9 @@ impl TableHookTask {
             return Ok(());
         }
 
+        // The shared builder has per-index worker budgets; automatic maintenance uses
+        // one total pipeline budget rather than multiplying it by the number of indexes.
+        pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
         let query_ctx = ctx.clone();
         pipeline.set_on_finished(always_callback(move |_info: &ExecutionInfo| {
             hook_clear_m_cte_temp_table(&query_ctx)?;

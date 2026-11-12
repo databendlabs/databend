@@ -16,6 +16,9 @@
 
 mod context;
 mod identity;
+mod resources;
 
 pub(crate) use context::MaintenanceContext;
 pub(crate) use identity::MaintenanceIdentity;
+pub(crate) use resources::MaintenanceReservation;
+pub(crate) use resources::MaintenanceResources;

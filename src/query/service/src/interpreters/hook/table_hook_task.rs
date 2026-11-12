@@ -16,11 +16,14 @@
 databend_common_tracing::register_module_tag!("[TABLE-HOOK]");
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_storages_common_table_meta::meta::Location;
@@ -48,6 +51,10 @@ pub(super) trait SchedulerTask: Send + 'static {
     fn key(&self) -> TableHookTaskKey;
 
     fn merge(&mut self, other: Self);
+
+    fn ready_at(&self) -> Instant {
+        Instant::now()
+    }
 }
 
 #[derive(Clone)]
@@ -165,11 +172,15 @@ impl TableHookTask {
                     )
                 });
         }
-        self.execute_refresh().await;
+        self.execute_refresh()
+            .await
+            .unwrap_or_else(|e| warn!("Table refresh failed: {e}"));
         if let Some(guard) = self.lock_guard.take() {
             drop(guard.try_take());
         }
-        self.execute_analyze().await;
+        self.execute_analyze()
+            .await
+            .unwrap_or_else(|e| warn!("Table analyze failed: {e}"));
         if is_async {
             info!(
                 "Async table hook job completed for operation {}, table_id={}, table={}",
@@ -191,38 +202,126 @@ pub(super) struct TableHookRequest {
     pub target: TableHookTarget,
     pub recluster_target: Option<TableHookTarget>,
     pub written_segments: Vec<Location>,
+    pub refresh_pending: bool,
     pub enable_auto_analyze: bool,
     pub source_query_id: String,
     pub operation_name: String,
     pub main_operation_start: Instant,
+    ready_at: [Instant; 3],
+    failures: [u32; 3],
+    turn: usize,
 }
 
 impl TableHookRequest {
-    pub(super) async fn execute(self) -> Result<()> {
+    fn pending(&self, action: usize) -> bool {
+        match action {
+            0 => self.refresh_pending,
+            1 => self.enable_auto_analyze,
+            _ => self.recluster_target.is_some(),
+        }
+    }
+
+    /// Execute only one batch/round, then relinquish all execution resources. Each action
+    /// has its own backoff; a failing heavy action cannot hold up index or statistics work.
+    pub(super) async fn execute(mut self) -> Option<Self> {
+        let now = Instant::now();
+        let action = (0..3)
+            .map(|offset| (self.turn + offset) % 3)
+            .find(|&action| self.pending(action) && self.ready_at[action] <= now)?;
+        self.turn = (action + 1) % 3;
+        let result = match CatchUnwindFuture::create(self.execute_action(action)).await {
+            Ok(result) => result,
+            Err(error) => Err(ErrorCode::Internal(format!(
+                "Maintenance action panicked: {error}"
+            ))),
+        };
+        match result {
+            Ok(()) => {
+                self.failures[action] = 0;
+                match action {
+                    0 => {
+                        self.refresh_pending = false;
+                        self.written_segments.clear();
+                    }
+                    1 => self.enable_auto_analyze = false,
+                    _ => self.recluster_target = None,
+                }
+            }
+            Err(e)
+                if matches!(
+                    e.code(),
+                    ErrorCode::UNKNOWN_USER
+                        | ErrorCode::UNKNOWN_ROLE
+                        | ErrorCode::PERMISSION_DENIED
+                        | ErrorCode::AUTHENTICATE_FAILURE
+                        | ErrorCode::UNCLUSTERED_TABLE
+                        | ErrorCode::UNKNOWN_TABLE
+                        | ErrorCode::UNKNOWN_DATABASE
+                ) =>
+            {
+                warn!(table_id = self.target.table_id, action, error :? = e;
+                    "Stop maintenance action because its target or execution identity is no longer valid");
+                match action {
+                    0 => {
+                        self.refresh_pending = false;
+                        self.written_segments.clear();
+                    }
+                    1 => self.enable_auto_analyze = false,
+                    _ => self.recluster_target = None,
+                }
+            }
+            Err(e) => {
+                self.failures[action] = self.failures[action].saturating_add(1);
+                let delay = Duration::from_secs(1u64 << self.failures[action].min(8));
+                self.ready_at[action] = Instant::now() + delay;
+                warn!(table_id = self.target.table_id, action, delay_secs = delay.as_secs(), error :? = e;
+                    "Defer maintenance action without holding execution resources");
+            }
+        }
+        (0..3).any(|action| self.pending(action)).then_some(self)
+    }
+
+    async fn execute_action(&mut self, action: usize) -> Result<()> {
         let MaintenanceContext { ctx, tracking } =
             MaintenanceContext::from_identity(&self.identity).await?;
         ctx.written_segment_locations()
-            .extend(self.written_segments);
+            .extend(self.written_segments.clone());
         ctx.set_enable_auto_analyze(self.enable_auto_analyze);
-        info!(source_query_id = self.source_query_id.as_str(), table_id = self.target.table_id;
-            "Create independent table maintenance context");
-        TableHookTask {
+        info!(source_query_id = self.source_query_id.as_str(), table_id = self.target.table_id, action;
+            "Start async table hook job");
+        let task = TableHookTask {
             ctx,
             session_local: false,
-            tracking: Some(tracking),
-            target: self.target,
-            recluster_target: self.recluster_target,
+            tracking: Some(tracking.clone()),
+            target: self.target.clone(),
+            recluster_target: None,
             hook_settings: TableHookTaskSettings {
                 compact_after_write: false,
             },
             lock_opt: LockTableOption::LockWithRetry,
             lock_guard: None,
-            operation_name: self.operation_name,
+            operation_name: self.operation_name.clone(),
             main_operation_start: self.main_operation_start,
-        }
-        .execute_remaining_stages(true)
-        .await;
-        Ok(())
+        };
+        tracking
+            .tracking(async {
+                match action {
+                    0 => task.execute_refresh().await,
+                    1 => task.execute_analyze().await,
+                    _ => {
+                        let target = self
+                            .recluster_target
+                            .as_ref()
+                            .ok_or_else(|| ErrorCode::Internal("Missing recluster target"))?;
+                        task.execute_recluster(target).await?;
+                        self.written_segments = task.ctx.written_segment_locations().list();
+                        self.refresh_pending = true;
+                        self.ready_at[0] = Instant::now();
+                        Ok(())
+                    }
+                }
+            })
+            .await
     }
 }
 
@@ -237,11 +336,23 @@ impl TableHookTask {
             recluster_target: self.recluster_target,
             operation_name: self.operation_name,
             main_operation_start: self.main_operation_start,
+            refresh_pending: true,
+            ready_at: [Instant::now(); 3],
+            failures: [0; 3],
+            turn: 0,
         })
     }
 }
 
 impl SchedulerTask for TableHookRequest {
+    fn ready_at(&self) -> Instant {
+        (0..3)
+            .filter(|&action| self.pending(action))
+            .map(|action| self.ready_at[action])
+            .min()
+            .unwrap_or_else(Instant::now)
+    }
+
     fn key(&self) -> TableHookTaskKey {
         TableHookTaskKey {
             tenant: self.identity.tenant.tenant_name().to_string(),
@@ -256,6 +367,13 @@ impl SchedulerTask for TableHookRequest {
         other.written_segments.sort_unstable();
         other.written_segments.dedup();
         other.enable_auto_analyze |= self.enable_auto_analyze;
+        other.refresh_pending |= self.refresh_pending;
+        other.turn = self.turn;
+        for action in 0..3 {
+            // New notifications do not bypass a failing action's backoff.
+            other.ready_at[action] = other.ready_at[action].max(self.ready_at[action]);
+            other.failures[action] = other.failures[action].max(self.failures[action]);
+        }
 
         // Each compacted write asks for a recluster round; one round covers them all.
         if other.recluster_target.is_none() {
@@ -300,6 +418,7 @@ pub(super) async fn keep_progress<T>(ctx: &Arc<QueryContext>, work: impl Future<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sessions::TableContextSettings;
     use crate::test_kits::TestFixture;
 
     fn table_hook_task(ctx: Arc<QueryContext>, table: &str) -> TableHookTask {
@@ -346,6 +465,19 @@ mod tests {
         assert!(
             old_weak.upgrade().is_none(),
             "queued values must not retain the write context"
+        );
+        let maintenance = MaintenanceContext::from_identity(&task.identity).await?;
+        assert!(maintenance.ctx.is_automatic_maintenance());
+        assert!(maintenance.ctx.get_settings().get_max_threads()? <= 2);
+        let reservation = crate::table_maintenance::MaintenanceResources::reserve()?;
+        assert!(
+            crate::table_maintenance::MaintenanceResources::reserve().is_err(),
+            "all action memory is reserved"
+        );
+        drop(reservation);
+        assert!(
+            crate::table_maintenance::MaintenanceResources::reserve().is_ok(),
+            "dropping an action releases memory capacity"
         );
         Ok(())
     }

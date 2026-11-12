@@ -158,6 +158,9 @@ impl DataflowDiagramBuilder {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryEnv {
+    /// Remote fragments reserve and account against the same node-local maintenance budget.
+    #[serde(default)]
+    pub automatic_maintenance: bool,
     pub query_id: String,
     pub query_created_time: SystemTime,
     pub cluster: Arc<Cluster>,

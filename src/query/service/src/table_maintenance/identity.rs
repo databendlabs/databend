@@ -54,6 +54,21 @@ impl MaintenanceIdentity {
                 .get_settings()
                 .changes()
                 .iter()
+                // Long-lived maintenance uses current system budgets, not the statement's
+                // resource overrides. Preserve expression/semantic settings as values.
+                .filter(|entry| {
+                    !matches!(
+                        entry.key().as_str(),
+                        "max_threads"
+                            | "max_memory_usage"
+                            | "max_query_memory_usage"
+                            | "max_execute_time_in_seconds"
+                            | "max_storage_io_requests"
+                            | "recluster_block_size"
+                            | "query_out_of_memory_behavior"
+                            | "allow_query_exceeded_limit"
+                    )
+                })
                 .map(|entry| (entry.key().clone(), entry.value().value.to_string()))
                 .collect(),
         })

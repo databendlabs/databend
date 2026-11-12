@@ -26,6 +26,7 @@ use databend_common_management::WorkloadGroupResourceManager;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryEnv;
+use crate::table_maintenance::MaintenanceResources;
 
 pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 
@@ -40,6 +41,16 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
         tracking_workload_group = Some(workload_group);
     }
 
+    let reservation = if env.automatic_maintenance
+        && env.request_server_id != GlobalConfig::instance().query.node_id
+    {
+        let reservation = MaintenanceResources::reserve()?;
+        reservation.constrain(&env.settings)?;
+        parent_mem_stat = ParentMemStat::Normal(reservation.memory());
+        Some(reservation)
+    } else {
+        None
+    };
     let name = Some(env.query_id.clone());
     let query_mem_stat = MemStat::create_child(name, 0, parent_mem_stat);
 
@@ -56,7 +67,13 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
         .tracking(async move {
             let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
                 true => None,
-                false => Some(env.create_query_ctx().await?),
+                false => {
+                    let ctx = env.create_query_ctx().await?;
+                    if let Some(reservation) = reservation {
+                        ctx.set_maintenance_reservation(reservation);
+                    }
+                    Some(ctx)
+                }
             };
 
             if let Err(e) = DataExchangeManager::instance()

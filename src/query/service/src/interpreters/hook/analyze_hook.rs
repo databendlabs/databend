@@ -24,7 +24,6 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::AnalyzeOptions;
 use log::info;
-use log::warn;
 
 use crate::interpreters::hook::table_hook_task::TableHookTask;
 use crate::interpreters::hook::table_id_matches_target;
@@ -37,24 +36,16 @@ use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 impl TableHookTask {
-    pub(super) async fn execute_analyze(&self) {
+    pub(super) async fn execute_analyze(&self) -> Result<()> {
         // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context
         // of the write, whose own reads are done by now.
         self.ctx
             .set_cache_policy(self.ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
         info!("Table hook starting analyze job");
         if !self.ctx.get_enable_auto_analyze() {
-            return;
+            return Ok(());
         }
-
-        match self.do_analyze(self.ctx.clone()).await {
-            Ok(_) => {
-                info!("Analyze job completed successfully");
-            }
-            Err(e) => {
-                warn!("Analyze job failed (code {}): {}", e.code(), e);
-            }
-        }
+        self.do_analyze(self.ctx.clone()).await
     }
 
     async fn do_analyze(&self, ctx: Arc<QueryContext>) -> Result<()> {

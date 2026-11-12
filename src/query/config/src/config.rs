@@ -2052,6 +2052,18 @@ pub struct QueryConfig {
     /// Max number of async table hook jobs running concurrently.
     #[clap(long, value_name = "VALUE", default_value = "2")]
     pub table_hook_async_max_concurrency: usize,
+
+    /// Total reserved/tracked memory for automatic maintenance on each execution node.
+    #[clap(long, value_name = "VALUE", default_value = "2147483648")]
+    pub table_maintenance_max_memory_usage: u64,
+
+    /// Maximum pipeline threads per automatic maintenance action, including remote fragments.
+    #[clap(long, value_name = "VALUE", default_value = "2")]
+    pub table_maintenance_max_threads: u64,
+
+    /// Maximum table mailboxes. New keys wait for capacity rather than losing maintenance.
+    #[clap(long, value_name = "VALUE", default_value = "1024")]
+    pub table_maintenance_max_pending_tables: usize,
 }
 
 impl Default for QueryConfig {
@@ -2079,6 +2091,17 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 "table_hook_mode must be sync or async, got {}",
                 self.table_hook_mode
             )));
+        }
+        if self.table_maintenance_max_threads == 0
+            || self.table_maintenance_max_pending_tables == 0
+            || self.table_maintenance_max_memory_usage > i64::MAX as u64
+            || self.table_maintenance_max_memory_usage
+                / (self.table_hook_async_max_concurrency.max(1) as u64)
+                < 256 * 1024 * 1024
+        {
+            return Err(ErrorCode::InvalidConfig(
+                "Maintenance requires positive threads/queue capacity and at least 256 MiB per concurrent action",
+            ));
         }
         if self.table_hook_async_max_concurrency == 0 {
             return Err(ErrorCode::InvalidConfig(

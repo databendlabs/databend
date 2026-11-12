@@ -157,6 +157,8 @@ pub struct QueryContextShared {
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
     pub(super) enable_auto_analyze: Arc<AtomicBool>,
+    pub(super) maintenance_reservation:
+        RwLock<Option<Arc<crate::table_maintenance::MaintenanceReservation>>>,
     // Status info.
     pub(super) status: Arc<RwLock<String>>,
 
@@ -281,6 +283,7 @@ impl QueryContextShared {
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
             enable_auto_analyze: Arc::new(AtomicBool::new(false)),
+            maintenance_reservation: RwLock::new(None),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             join_spill_progress: Arc::new(Progress::create()),
