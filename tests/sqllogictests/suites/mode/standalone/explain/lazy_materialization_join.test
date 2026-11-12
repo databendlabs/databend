@@ -126,16 +126,16 @@ LIMIT 3;
 RowFetch
 ├── output columns: [t2._row_id (#8), t1.id (#0), t1._row_id (#7), t1.a (#1), t1.wide (#2), t2.b (#5), t2.wide2 (#6)]
 ├── columns to fetch: [b, wide2]
-├── estimated rows: 3.00
+├── estimated rows: 2.67
 └── RowFetch
     ├── output columns: [t2._row_id (#8), t1.id (#0), t1._row_id (#7), t1.a (#1), t1.wide (#2)]
     ├── columns to fetch: [a, wide]
-    ├── estimated rows: 3.00
+    ├── estimated rows: 2.67
     └── Limit
         ├── output columns: [t2._row_id (#8), t1.id (#0), t1._row_id (#7)]
         ├── limit: 3
         ├── offset: 0
-        ├── estimated rows: 3.00
+        ├── estimated rows: 2.67
         └── HashJoin
             ├── output columns: [t2._row_id (#8), t1.id (#0), t1._row_id (#7)]
             ├── join type: RIGHT OUTER
@@ -145,7 +145,7 @@ RowFetch
             ├── filters: []
             ├── build join filters:
             │   └── filter id:0, build key:t1.id (#0), probe targets:[t2.id (#4)@scan1], filter type:bloom,inlist,min_max
-            ├── estimated rows: 8.00
+            ├── estimated rows: 2.67
             ├── Limit(Build)
             │   ├── output columns: [t1.id (#0), t1._row_id (#7)]
             │   ├── limit: 3

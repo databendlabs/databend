@@ -32,7 +32,7 @@ Sequence
     ├── probe keys: [t.b (#1)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── estimated rows: 12.00
+    ├── estimated rows: 6.00
     ├── AggregateFinal(Build)
     │   ├── output columns: [max(a) (#6), cse_t.b (#4)]
     │   ├── group by: [b]

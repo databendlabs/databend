@@ -538,7 +538,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:CAST(b.id (#1) AS Int64 NULL), probe targets:[TRY_CAST(p.s (#0) AS Int64 NULL)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 8.00
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.rf_try_cast_build
 │   ├── scan id: 1

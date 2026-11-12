@@ -1,0 +1,284 @@
+=== small_build_is_broadcast ===
+description: A small, reliably estimated build side is broadcast.
+sql: SELECT p.v, d.v FROM p JOIN d ON p.k = d.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), d.v (#3) AS (#3), p.k (#0) AS (#4), d.k (#2) AS (#5)]
+    └── Join(Inner)
+        ├── build keys: [d.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Scan
+        │       ├── table: default.d (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== underestimated_join_build_is_shuffled ===
+description: A build side whose estimate is far below its input bound is not broadcast.
+sql: SELECT p.v FROM p JOIN (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j ON p.k = j.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), a.k (#2) AS (#5), k (#4) AS (#6), p.k (#0) AS (#7)]
+    └── Join(Inner)
+        ├── build keys: [a.k (#2), k (#4)]
+        ├── probe keys: [p.k (#0), p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [a.k (#2), k (#4)]
+        │   └── EvalScalar
+        │       ├── scalars: [a.k (#2) AS (#2), b.k (#3) AS (#4)]
+        │       └── Join(Inner)
+        │           ├── build keys: [b.k (#3)]
+        │           ├── probe keys: [a.k (#2)]
+        │           ├── other filters: []
+        │           ├── Exchange(Broadcast)
+        │           │   └── Scan
+        │           │       ├── table: default.b (#2)
+        │           │       ├── filters: []
+        │           │       ├── order by: []
+        │           │       └── limit: NONE
+        │           └── Scan
+        │               ├── table: default.a (#1)
+        │               ├── filters: []
+        │               ├── order by: []
+        │               └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [p.k (#0), p.k (#0)]
+            └── Scan
+                ├── table: default.p (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== enforced_broadcast_of_underestimated_join_build ===
+description: enforce_broadcast_join still broadcasts an underestimated build side.
+sql: SELECT p.v FROM p JOIN (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j ON p.k = j.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1"), ("enforce_broadcast_join", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), a.k (#2) AS (#5), k (#4) AS (#6), p.k (#0) AS (#7)]
+    └── Join(Inner)
+        ├── build keys: [a.k (#2), k (#4)]
+        ├── probe keys: [p.k (#0), p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── EvalScalar
+        │       ├── scalars: [a.k (#2) AS (#2), b.k (#3) AS (#4)]
+        │       └── Join(Inner)
+        │           ├── build keys: [b.k (#3)]
+        │           ├── probe keys: [a.k (#2)]
+        │           ├── other filters: []
+        │           ├── Exchange(Broadcast)
+        │           │   └── Scan
+        │           │       ├── table: default.b (#2)
+        │           │       ├── filters: []
+        │           │       ├── order by: []
+        │           │       └── limit: NONE
+        │           └── Scan
+        │               ├── table: default.a (#1)
+        │               ├── filters: []
+        │               ├── order by: []
+        │               └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== build_over_row_limit_is_shuffled ===
+description: A build side above max_broadcast_join_build_rows is not broadcast.
+sql: SELECT p.v FROM p JOIN m ON p.k = m.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#3), m.k (#2) AS (#4)]
+    └── Join(Inner)
+        ├── build keys: [m.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [m.k (#2)]
+        │   └── Scan
+        │       ├── table: default.m (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [p.k (#0)]
+            └── Scan
+                ├── table: default.p (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== zero_row_limit_disables_limit ===
+description: max_broadcast_join_build_rows = 0 disables the row limit.
+sql: SELECT p.v FROM p JOIN m ON p.k = m.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1"), ("max_broadcast_join_build_rows", "0")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#3), m.k (#2) AS (#4)]
+    └── Join(Inner)
+        ├── build keys: [m.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Scan
+        │       ├── table: default.m (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== serial_underestimated_build_is_broadcast ===
+description: A Serial build is broadcast within the row limit even when underestimated, because not broadcasting it would make the whole join Serial.
+sql: SELECT p.v FROM p JOIN (SELECT a.k FROM a JOIN b ON a.k = b.k LIMIT 1000) AS j ON p.k = j.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1")]
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#5), a.k (#2) AS (#6)]
+    └── Join(Inner)
+        ├── build keys: [a.k (#2)]
+        ├── probe keys: [p.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── EvalScalar
+        │       ├── scalars: [a.k (#2) AS (#2), b.k (#3) AS (#4)]
+        │       └── Limit
+        │           ├── limit: [1000]
+        │           ├── offset: [0]
+        │           └── Exchange(Merge)
+        │               └── Limit
+        │                   ├── limit: [1000]
+        │                   ├── offset: [0]
+        │                   └── Join(Inner)
+        │                       ├── build keys: [b.k (#3)]
+        │                       ├── probe keys: [a.k (#2)]
+        │                       ├── other filters: []
+        │                       ├── Exchange(Hash)
+        │                       │   ├── Exchange(Hash): keys: [b.k (#3)]
+        │                       │   └── Scan
+        │                       │       ├── table: default.b (#2)
+        │                       │       ├── filters: []
+        │                       │       ├── order by: []
+        │                       │       └── limit: NONE
+        │                       └── Exchange(Hash)
+        │                           ├── Exchange(Hash): keys: [a.k (#2)]
+        │                           └── Scan
+        │                               ├── table: default.a (#1)
+        │                               ├── filters: []
+        │                               ├── order by: []
+        │                               └── limit: NONE
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== serial_build_over_row_limit_stays_serial ===
+description: A Serial build whose bound exceeds max_broadcast_join_build_rows is not broadcast, although its estimate is 0.
+sql: SELECT p.v FROM p JOIN (SELECT a.k FROM a JOIN b ON a.k = b.k LIMIT 1000) AS j ON p.k = j.k
+cluster nodes: 2
+settings: [("disable_join_reorder", "1"), ("max_broadcast_join_build_rows", "500")]
+EvalScalar
+├── scalars: [p.v (#1) AS (#1), p.k (#0) AS (#5), a.k (#2) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [a.k (#2)]
+    ├── probe keys: [p.k (#0)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [a.k (#2) AS (#2), b.k (#3) AS (#4)]
+    │   └── Limit
+    │       ├── limit: [1000]
+    │       ├── offset: [0]
+    │       └── Exchange(Merge)
+    │           └── Limit
+    │               ├── limit: [1000]
+    │               ├── offset: [0]
+    │               └── Join(Inner)
+    │                   ├── build keys: [b.k (#3)]
+    │                   ├── probe keys: [a.k (#2)]
+    │                   ├── other filters: []
+    │                   ├── Exchange(Hash)
+    │                   │   ├── Exchange(Hash): keys: [b.k (#3)]
+    │                   │   └── Scan
+    │                   │       ├── table: default.b (#2)
+    │                   │       ├── filters: []
+    │                   │       ├── order by: []
+    │                   │       └── limit: NONE
+    │                   └── Exchange(Hash)
+    │                       ├── Exchange(Hash): keys: [a.k (#2)]
+    │                       └── Scan
+    │                           ├── table: default.a (#1)
+    │                           ├── filters: []
+    │                           ├── order by: []
+    │                           └── limit: NONE
+    └── Exchange(Merge)
+        └── Scan
+            ├── table: default.p (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== left_join_does_not_build_underestimated_join ===
+description: CommuteJoin ranks an underestimated join by its bound, so the small table stays the build side.
+sql: SELECT j.k, d.v FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) AS j LEFT JOIN d ON j.k = d.k
+cluster nodes: 1
+settings: []
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), v (#5) AS (#5), k (#6) AS (#7)]
+└── Join(Left)
+    ├── build keys: [k (#4), k (#4)]
+    ├── probe keys: [a.k (#0), k (#6)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [CAST(d.k (#2) AS Int64 NULL) AS (#4), CAST(d.v (#3) AS Int64 NULL) AS (#5)]
+    │   └── Scan
+    │       ├── table: default.d (#2)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [a.k (#0) AS (#0), b.k (#1) AS (#6)]
+        └── Join(Inner)
+            ├── build keys: [b.k (#1)]
+            ├── probe keys: [a.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.b (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.a (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
