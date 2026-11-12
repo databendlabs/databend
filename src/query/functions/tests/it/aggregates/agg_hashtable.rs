@@ -431,6 +431,7 @@ fn test_agg_hashtable_combine_rows() {
                 chunk,
                 AggregateHashTable::capacity_for_groups(0),
                 None,
+                None,
             )
             .unwrap();
         assert!(stats.windows > 0 && partial.partial_restarted());
