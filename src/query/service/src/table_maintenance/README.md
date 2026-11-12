@@ -14,9 +14,11 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
 - A new table at capacity is rejected immediately, without delaying a committed write.
 - Node shutdown discards queued notifications and in-memory progress. There is no durable
   queue, owner lease, task takeover or periodic compensation scan.
-- Each action stops after 8 consecutive errors, or 10 minutes of deferral without progress.
-  Notifications merged into that attempt do not reset its failure budget. A later notification
-  can start another attempt. Successful progress resets the failure/deferral budget.
+- Each action stops after 8 errors without a successful commit/completion, or 10 minutes
+  of scanning/deferral without a commit. Notifications merged into that attempt and
+  metadata-only scan steps do not reset its budget. A later notification can start another
+  attempt. Successful committed progress or completion resets the failure/deferral budget.
+  The no-commit timer begins at the first scan/deferral, not while waiting in the queue.
 - An action's context creation is limited to 60 seconds and each execution unit to 5 minutes.
   Cancellation interrupts its context, allows up to 3 seconds for normal pipeline cleanup,
   and tears down any remaining local exchange environment. These limits require async work
@@ -66,8 +68,9 @@ IDs. The exporter may prefix names with `databend_` and counters with the usual 
 - `table_maintenance_mailbox_tables`: admitted queued and running table keys.
 - `table_maintenance_running_units`: currently executing units.
 - `table_maintenance_units{action,outcome}` and `table_maintenance_unit_milliseconds{action}`:
-  completed/progress/deferred/error/cancelled unit counts and elapsed execution time.
-- `table_maintenance_last_success_timestamp_seconds{action}`: last completed or progressing unit.
+  completed/progress/scan/deferred/error/cancelled unit counts and elapsed execution time.
+- `table_maintenance_last_success_timestamp_seconds{action}`: last completed/committing unit
+  (not scan-only).
 - `table_maintenance_reserved_memory_bytes`: admitted coordinator/remote reservations on this node.
 
 Logs associate the source query ID and table ID with the independent execution query ID.
@@ -79,9 +82,49 @@ show node-level health, not durable per-table progress or guaranteed completion.
 Scheduler/admission/retry tests live in the trailing test modules in
 `../interpreters/hook/table_hook_{scheduler,task}.rs`. Context cancellation and reservation
 shutdown tests live beside this implementation. Storage/index publication integration tests
-live in `tests/it/indexes/` and `tests/it/storages/fuse/operations/clustering.rs`.
+live in `src/query/service/tests/it/indexes/` and
+`src/query/service/tests/it/storages/fuse/operations/clustering.rs`.
+The licensed MV post-commit regression lives in `src/query/ee/tests/it/materialized_view.rs`.
+Identity regressions verify that global-only settings (including enterprise license) reload
+from current node/tenant policy rather than being replayed as illegal session overrides;
+replayable semantic settings remain frozen values and resource overrides are excluded.
 
 The private-service regression `tests/suites/1_stateful/02_query/02_0013_async_table_hook.py`
 uses bounded coverage polling, not fixed sleeps or foreground-return assumptions. It stops
 only the exact service process handles it started. Normal SQL tests that depend on automatic
 index publication must likewise wait for observable coverage or explicitly refresh.
+
+### Local resource probe (2026-11-12)
+
+A debug-build smoke used one node, filesystem storage, 2 threads per query/unit, the default
+2 GiB maintenance budget, a one-table mailbox, and automatic Compact disabled to isolate
+Refresh. The target contained 100,000 rows across 500 segments (`ROW_PER_BLOCK=200`,
+`BLOCK_PER_SEGMENT=1`). Creating ASYNC inverted/Ngram indexes and appending one row triggered
+coverage of all 501 segments. A separate foreground query repeatedly calculated
+`sum(siphash64(number) % 10000)` over `numbers(1000000)`, with 3 warmups and 30 samples in each
+phase; the loaded phase overlapped an admitted maintenance request.
+
+| Observation | Result |
+| --- | --- |
+| Idle foreground median / maximum of 30 samples | 106.5 / 113.1 ms |
+| Foreground during Refresh median / maximum of 30 samples | 108.3 / 119.7 ms |
+| Triggering append response | 85 ms |
+| Another table's append while mailbox full | 91 ms, committed; capacity-rejection counter incremented |
+| Final coverage / row count | all index artifacts covered; 100,001 rows |
+| Idle mailbox / reserved memory after completion | 0 tables / 0 bytes |
+| Sampled RSS before / peak / after | 2152 / 2282 / 2262 MiB |
+| SIGTERM with another Refresh still admitted | normal exit in 2.22 seconds |
+
+A separate two-node cancellation smoke waited for an automatic remote Recluster fragment
+and a nonzero worker reservation, then sent SIGTERM to the exact coordinator process.
+The coordinator exited normally in 2.12 seconds; worker maintenance reservations and mailbox
+returned to zero. The surviving node still read 400,004 rows with `sum(id)=9,999,800,006`.
+This tests graceful coordinator cancellation, not guaranteed recovery after an ungraceful
+network partition or process crash.
+
+This checks obvious foreground blocking and resource/lifecycle regressions, not a production
+latency acceptance threshold. Thirty samples are insufficient for a stable tail-latency
+estimate; debug execution, filesystem caches and allocator retention affect both latency and
+RSS. RSS did not return to its initial baseline, and zero reservations do not prove absence
+of memory leaks. Million-segment metadata scaling, sustained multi-tenant pressure and
+bandwidth/CPU isolation remain unvalidated.
