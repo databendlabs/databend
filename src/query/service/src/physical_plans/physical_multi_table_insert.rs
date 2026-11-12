@@ -756,7 +756,6 @@ impl IPhysicalPlan for ChunkAppendData {
                 let vector_column_input_offset = vector_operator.vector_column_input_offset;
                 let dimension = vector_operator.info.dimension;
                 let distance_type = vector_operator.info.distance_type;
-                let max_rows = fuse_table.vector_index_rows_per_block();
                 vector_cluster_builders.push(Box::new(move |input, output| {
                     Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                         input,
@@ -766,7 +765,6 @@ impl IPhysicalPlan for ChunkAppendData {
                             dimension,
                             distance_type,
                             rows_per_block,
-                            max_rows,
                         ),
                     )))
                 }));

@@ -319,7 +319,8 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let block_count = indices.len();
-        if block_count < 2 || task_budget == 0 {
+        let full_pass = properties.vector_full_pass.is_some();
+        if block_count == 0 || task_budget == 0 || (block_count < 2 && !full_pass) {
             return Ok(Vec::new());
         }
 
@@ -363,7 +364,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         let average_depth = (10000.0 * sum_depth as f64 / block_count as f64).round() / 10000.0;
         // Vector overlap uses pairwise spheres, so any overlapping pair qualifies.
         let depth_threshold = properties.depth_threshold.min(1.0);
-        if !passes_depth_gate(depth_threshold, average_depth, max_depth) {
+        if !full_pass && !passes_depth_gate(depth_threshold, average_depth, max_depth) {
             debug!(
                 "recluster: vector candidate selection group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=below_vector_depth_gate",
                 group, block_count, average_depth, max_depth,
@@ -412,6 +413,34 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                 &task_indices,
                 blocks,
             ));
+        }
+        if full_pass {
+            // The full pass rewrites every block it holds: a block that overlaps no
+            // other block left, such as the only block of its partition, is rewritten
+            // on its own. Left at its level, it would count as not mixed, and start
+            // the full pass again at every FINAL. Blocks above the memory threshold
+            // are left out, as in every task.
+            for local_idx in 0..block_count {
+                if candidates.len() >= task_budget {
+                    break;
+                }
+                let block_size = blocks[indices[local_idx]].meta.block_size as usize;
+                if used[local_idx] || block_size > properties.memory_threshold {
+                    continue;
+                }
+                used[local_idx] = true;
+                candidates.push(task_candidate(
+                    self.supports_ordered_merge(),
+                    group,
+                    CandidateScore {
+                        selected_total_bytes: block_size,
+                        max_depth: 1,
+                        average_depth,
+                    },
+                    &[indices[local_idx]],
+                    blocks,
+                ));
+            }
         }
 
         debug!(

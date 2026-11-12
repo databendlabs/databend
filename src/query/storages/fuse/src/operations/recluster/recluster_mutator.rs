@@ -748,13 +748,15 @@ impl ReclusterMutator {
             .strategy
             .eligible_blocks(&self.properties, indices, blocks);
         let block_count = indices.len();
-        if block_count < 2 && !self.properties.split_sort_tasks {
+        // The full pass of a vector RECLUSTER FINAL rewrites every block it holds
+        // once, whatever their level and also alone, so that new data mixes with all
+        // of them and none stays unmixed (see `VectorReclusterStrategy`).
+        let full_pass = self.properties.vector_full_pass.is_some();
+        if block_count < 2 && !self.properties.split_sort_tasks && !full_pass {
             return Ok(Vec::new());
         }
-        // The full pass of a vector RECLUSTER FINAL rewrites every block it holds
-        // once, whatever their level, so that new data mixes with all of them.
         if block_count == 2
-            && self.properties.vector_full_pass.is_none()
+            && !full_pass
             && indices
                 .iter()
                 .all(|idx| blocks[*idx].stats().level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS)
@@ -841,7 +843,7 @@ impl ReclusterMutator {
             return Ok(candidates);
         }
 
-        if block_count < 2 {
+        if block_count < 2 && !full_pass {
             return Ok(Vec::new());
         }
         self.strategy
