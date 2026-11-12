@@ -18,34 +18,32 @@ use bumpalo::Bump;
 use itertools::Itertools;
 
 use super::BATCH_SIZE;
-use super::PayloadFlushState;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
 use super::payload::GroupRows;
 use super::payload::Payload;
-use super::payload::PayloadTransferBatch;
-use super::payload::PayloadTransferStateOffsets;
+use super::payload::RowCursor;
 use super::probe_state::ProbeState;
+use super::row_ptr::PageNumbering;
+use super::row_ptr::RowDecoder;
+use super::row_ptr::RowIds;
 use super::row_ptr::RowLayout;
-use crate::ProjectedBlock;
+use super::row_ptr::RowPtr;
 use crate::types::DataType;
 
-/// Maps a group hash to its radix partition. Every producer of rows for the same partitioned
-/// aggregate (payloads and raw rows) must use the same mask so that a key lands in one bucket.
+/// Maps a group hash to a partition of a table: `partition_count` partitions by the bits below
+/// bit 48 that start `start_bit` bits down. The final aggregate takes the next bits at each spill
+/// depth, so that a spilled partition splits further.
 #[derive(Debug, Clone, Copy)]
-pub struct PartitionMask {
+pub(super) struct PartitionMask {
     mask: u64,
     shift: u64,
 }
 
 impl PartitionMask {
-    fn new(partition_count: u64) -> Self {
-        Self::with_start_bit(partition_count, 0)
-    }
-
-    pub fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
+    fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
         debug_assert!(start_bit + radix_bits <= 48);
@@ -56,8 +54,57 @@ impl PartitionMask {
         Self { mask, shift }
     }
 
-    pub fn index(&self, hash: u64) -> usize {
+    fn index(&self, hash: u64) -> usize {
         ((hash & self.mask) >> self.shift) as _
+    }
+}
+
+/// Reserves the rows of new groups while a probe claims their slots, so that a slot takes the
+/// id of its row at once. A partition whose page is full opens the next one, and numbers it
+/// in the entries `PartitionedPayload::begin_rows` reserved.
+pub(in crate::aggregate) struct RowReserver<'a> {
+    payloads: &'a mut [Payload],
+    cursors: &'a mut [RowCursor],
+    numbering: PageNumbering<'a>,
+    partition_mask: PartitionMask,
+}
+
+impl<'a> RowReserver<'a> {
+    /// A reserver for a table of one partition.
+    #[cfg(test)]
+    pub(in crate::aggregate) fn single(
+        payloads: &'a mut [Payload],
+        cursors: &'a mut [RowCursor],
+        numbering: PageNumbering<'a>,
+    ) -> Self {
+        RowReserver {
+            payloads,
+            cursors,
+            numbering,
+            partition_mask: PartitionMask::with_start_bit(1, 0),
+        }
+    }
+
+    /// The id of a new row for a group of hash `hash`, and the index of its page in its
+    /// partition.
+    #[inline]
+    pub(in crate::aggregate) fn reserve(&mut self, hash: u64) -> (u64, usize) {
+        let partition = self.partition_mask.index(hash);
+        if self.cursors[partition].id == self.cursors[partition].end {
+            self.open_page(partition);
+        }
+        let cursor = &mut self.cursors[partition];
+        let id = cursor.id;
+        cursor.id += 1;
+        (id, cursor.page)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn open_page(&mut self, partition: usize) {
+        let payload = &mut self.payloads[partition];
+        payload.commit_cursor(&self.cursors[partition]);
+        self.cursors[partition] = payload.open_cursor(&mut self.numbering, partition);
     }
 }
 
@@ -70,8 +117,11 @@ pub struct PartitionedPayload {
 
     pub(super) arenas: Vec<Arc<Bump>>,
 
-    partition_start_bit: u64,
     partition_mask: PartitionMask,
+    /// The ids of the rows in the hash index.
+    pub(super) row_ids: RowIds,
+    /// The rows a probe reserves in each partition, see `RowReserver`.
+    cursors: Vec<RowCursor>,
 }
 
 unsafe impl Send for PartitionedPayload {}
@@ -83,15 +133,6 @@ impl PartitionedPayload {
         for payload in &self.payloads {
             payload.for_each_hash(&mut f);
         }
-    }
-
-    pub fn new(
-        group_types: Vec<DataType>,
-        aggrs: Vec<AggregateCallRef>,
-        partition_count: u64,
-        arenas: Vec<Arc<Bump>>,
-    ) -> Self {
-        Self::new_with_start_bit(group_types, aggrs, partition_count, 0, arenas)
     }
 
     pub(super) fn new_with_start_bit(
@@ -132,16 +173,47 @@ impl PartitionedPayload {
             ..payloads[0].row_layout.clone()
         };
 
+        let row_ids = RowIds::new(
+            partition_count as usize,
+            payloads[0].row_per_page,
+            payloads[0].tuple_size,
+            payloads[0].row_layout.states,
+        );
         PartitionedPayload {
             payloads,
             group_types,
             aggrs,
             row_layout,
+            row_ids,
+            cursors: vec![RowCursor::EMPTY; partition_count as usize],
 
             arenas,
-            partition_start_bit,
             partition_mask: PartitionMask::with_start_bit(partition_count, partition_start_bit),
         }
+    }
+
+    /// The row with id `id`.
+    #[inline]
+    pub(super) fn row_ptr(&self, id: u64) -> RowPtr {
+        self.row_ids.row_ptr(id)
+    }
+
+    /// The pages after `new_rows` more rows, however they spread over the partitions: each
+    /// partition may open one more page than its rows fill.
+    fn pages_after(&self, new_rows: usize) -> usize {
+        let pages = self.payloads.iter().map(|p| p.pages.len()).sum::<usize>();
+        pages + new_rows.div_ceil(self.payloads[0].row_per_page) + self.payloads.len()
+    }
+
+    /// The largest id a row may take after `new_rows` more rows.
+    pub(super) fn max_row_id(&self, new_rows: usize) -> u64 {
+        self.row_ids.max_row_id(self.pages_after(new_rows))
+    }
+
+    /// Number the pages again from 0, for an index rebuilt from the rows.
+    pub(super) fn renumber_pages(&mut self) {
+        self.row_ids
+            .renumber(self.payloads.iter().map(|p| p.pages.as_slice()));
     }
 
     pub fn into_bucket_payloads(self) -> impl Iterator<Item = (usize, Payload)> {
@@ -153,21 +225,35 @@ impl PartitionedPayload {
             .filter(|(_, payload)| payload.len() != 0)
     }
 
-    pub(super) fn into_single_payload(mut self) -> Payload {
-        assert_eq!(
-            self.partition_count(),
-            1,
-            "partitioned payload must contain exactly one payload"
-        );
-        self.payloads.pop().unwrap()
-    }
-
-    pub(super) fn mark_min_cardinality(&mut self) {
-        for payload in self.payloads.iter_mut() {
-            payload.mark_min_cardinality();
+    /// Start reserving rows for a probe of `row_count` rows: from the free rows of the writable
+    /// page of each partition, and room to number the pages the probe may open.
+    pub(super) fn begin_rows(&mut self, row_count: usize) {
+        self.row_ids.reserve_pages(self.pages_after(row_count));
+        let mut numbering = self.row_ids.numbering();
+        for (partition, (payload, cursor)) in self
+            .payloads
+            .iter_mut()
+            .zip(self.cursors.iter_mut())
+            .enumerate()
+        {
+            *cursor = payload.current_cursor(&mut numbering, partition);
         }
     }
 
+    /// Decodes the ids of the rows, and reserves new rows.
+    #[inline]
+    pub(super) fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>) {
+        let (rows, numbering) = self.row_ids.split();
+        (rows, RowReserver {
+            payloads: &mut self.payloads,
+            cursors: &mut self.cursors,
+            numbering,
+            partition_mask: self.partition_mask,
+        })
+    }
+
+    /// Write the rows the probe reserved for the groups of the first `new_group_rows` rows of
+    /// `state.empty_vector`.
     pub(super) fn append_rows(
         &mut self,
         state: &mut ProbeState,
@@ -175,8 +261,11 @@ impl PartitionedPayload {
         groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
+        for (payload, cursor) in self.payloads.iter_mut().zip(&self.cursors) {
+            payload.commit_cursor(cursor);
+        }
         if self.payloads.len() == 1 {
-            self.payloads[0].reserve_append_rows(
+            self.payloads[0].write_rows(
                 &state.empty_vector[..new_group_rows],
                 &state.group_hashes,
                 &mut state.addresses,
@@ -202,7 +291,7 @@ impl PartitionedPayload {
                 .zip(state.partition_entries.iter_mut())
             {
                 if *count > 0 {
-                    payload.reserve_append_rows(
+                    payload.write_rows(
                         &sel[..*count as _],
                         &state.group_hashes,
                         &mut state.addresses,
@@ -212,105 +301,6 @@ impl PartitionedPayload {
                     );
                 }
             }
-        }
-    }
-
-    pub fn repartition(self, new_partition_count: usize, state: &mut PayloadFlushState) -> Self {
-        if self.partition_count() == new_partition_count {
-            return self;
-        }
-
-        let PartitionedPayload {
-            payloads,
-            group_types,
-            aggrs,
-            arenas,
-            partition_start_bit,
-            ..
-        } = self;
-
-        // Repartition shallow-copies aggregate state addresses. Partition-local arenas would
-        // allow a source arena to be freed while a target partition still points into it.
-        assert_eq!(
-            arenas.len(),
-            1,
-            "partition-local aggregate arenas cannot be repartitioned"
-        );
-
-        let mut new_partition_payload = PartitionedPayload::new_with_start_bit(
-            group_types,
-            aggrs,
-            new_partition_count as u64,
-            partition_start_bit,
-            arenas,
-        );
-
-        state.clear();
-        for payload in payloads {
-            new_partition_payload.combine_single(payload, state)
-        }
-
-        new_partition_payload
-    }
-
-    pub(super) fn combine_single(&mut self, other: Payload, flush_state: &mut PayloadFlushState) {
-        if other.len() == 0 {
-            return;
-        }
-
-        if self.partition_count() == 1 {
-            self.payloads[0].combine(other);
-        } else {
-            flush_state.clear();
-
-            let mut state_offsets = PayloadTransferStateOffsets::default();
-            // flush for other's each page to correct partition
-            while let Some(batch) = self.scan_partition_transfer(&other, flush_state) {
-                batch.copy_all_partitions_to(&mut self.payloads, &mut state_offsets);
-            }
-
-            other.commit_transferred_state_offsets(state_offsets, &mut self.payloads);
-        }
-    }
-
-    fn scan_partition_transfer<'a>(
-        &self,
-        other: &Payload,
-        flush_state: &'a mut PayloadFlushState,
-    ) -> Option<PayloadTransferBatch<'a>> {
-        loop {
-            let page = other.pages.get(flush_state.flush_page)?;
-
-            if flush_state.flush_page_row >= page.rows {
-                flush_state.flush_page += 1;
-                flush_state.flush_page_row = 0;
-                flush_state.row_count = 0;
-                continue;
-            }
-
-            let end = (flush_state.flush_page_row + BATCH_SIZE).min(page.rows);
-            let rows = end - flush_state.flush_page_row;
-            flush_state.row_count = rows;
-
-            {
-                let state = &mut *flush_state.probe_state;
-                state.reset_partitions(self.partition_count());
-
-                for idx in 0..rows {
-                    let row_ptr = other.data_ptr(page, idx + flush_state.flush_page_row);
-                    flush_state.addresses[idx] = row_ptr;
-
-                    let hash = row_ptr.hash(&self.row_layout);
-                    let partition_idx = self.partition_mask.index(hash);
-
-                    let (count, sel) = &mut state.partition_entries[partition_idx];
-                    sel[*count as usize] = idx.into();
-                    *count += 1;
-                }
-            }
-
-            flush_state.flush_page_row = end;
-            return Some(PayloadTransferBatch::from_flush_state(flush_state));
         }
     }
 
@@ -327,51 +317,6 @@ impl PartitionedPayload {
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
     }
-
-    pub fn scatter_into_buckets(self, buckets: usize) -> Vec<PartitionedPayload> {
-        // Scatter also shallow-copies aggregate state addresses, just like repartition.
-        assert_eq!(
-            self.arenas.len(),
-            1,
-            "partition-local aggregate arenas cannot be scattered"
-        );
-        let group_types = self.group_types.clone();
-        let aggrs = self.aggrs.clone();
-        let partition_count = self.partition_count() as u64;
-        let arenas = self.arenas.clone();
-
-        let mut bucket_payloads = Vec::with_capacity(buckets);
-        for _ in 0..buckets {
-            bucket_payloads.push(PartitionedPayload::new(
-                group_types.clone(),
-                aggrs.clone(),
-                partition_count,
-                arenas.clone(),
-            ));
-        }
-
-        let mut state = PayloadFlushState::default();
-        let mut payloads = (0..buckets)
-            .map(|_| {
-                Payload::new(
-                    Arc::new(Bump::new()),
-                    group_types.clone(),
-                    aggrs.clone(),
-                    self.row_layout.states_layout.clone(),
-                )
-            })
-            .collect_vec();
-
-        for payload in self.payloads {
-            payload.transfer_hash_partitioned_rows(&mut payloads, &mut state);
-        }
-
-        for (bucket, payload) in payloads.into_iter().enumerate() {
-            bucket_payloads[bucket].combine_single(payload, &mut state);
-        }
-
-        bucket_payloads
-    }
 }
 
 #[cfg(test)]
@@ -380,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_partition_mask_with_start_bit() {
-        let top_bit_mask = PartitionMask::new(2);
+        let top_bit_mask = PartitionMask::with_start_bit(2, 0);
         assert_eq!(top_bit_mask.index(1_u64 << 47), 1);
         assert_eq!(top_bit_mask.index(1_u64 << 44), 0);
 

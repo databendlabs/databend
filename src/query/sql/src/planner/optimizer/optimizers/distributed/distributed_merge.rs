@@ -48,8 +48,7 @@ impl BroadcastToShuffleOptimizer {
         assert_eq!(right_exchange.children.len(), 1);
         let right_exchange_input = right_exchange.child(0)?;
 
-        let mut join: Join = s_expr.plan().clone().try_into()?;
-        join.need_hold_hash_table = true;
+        let join: Join = s_expr.plan().clone().try_into()?;
 
         let (left_conditions, right_conditions): (Vec<_>, Vec<_>) = join
             .equi_conditions
@@ -71,9 +70,7 @@ impl BroadcastToShuffleOptimizer {
                 Arc::new(right_exchange_input.clone()),
             )),
         ];
-        let mut join_s_expr = s_expr.replace_plan(Arc::new(PhysicalRelOperator::Join(join)));
-        join_s_expr = join_s_expr.replace_children(new_join_children);
-        Ok(join_s_expr)
+        Ok(s_expr.replace_children(new_join_children))
     }
 
     fn matcher() -> Matcher {

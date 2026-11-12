@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
@@ -596,7 +597,7 @@ impl FuseTable {
                 })
             });
 
-            let workers = futures::future::try_join_all(works).await?;
+            let workers = Runtime::try_join_all(works).await?;
             for worker in workers {
                 metas.extend(worker?);
             }

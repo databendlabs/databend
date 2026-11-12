@@ -28,6 +28,7 @@ use tokio::runtime::Handle;
 use tokio::runtime::Id;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
+use tokio::task::JoinError;
 use tokio::task::JoinHandle;
 
 use super::watchdog::WatchdogEvent;
@@ -220,7 +221,8 @@ impl Runtime {
     {
         let iter = futures.into_iter();
         let (lower, upper) = iter.size_hint();
-        let mut handlers = Vec::with_capacity(upper.unwrap_or(lower));
+        // Waiting for a permit, the caller may go away with tasks spawned.
+        let mut handlers = AbortOnDrop(Vec::with_capacity(upper.unwrap_or(lower)));
         for fut in iter {
             let semaphore = semaphore.clone();
             // Although async task is rather lightweight, it do consumes resources,
@@ -239,10 +241,23 @@ impl Runtime {
                     fut(permit).await
                 }),
             ));
-            handlers.push(handler)
+            handlers.0.push(handler)
         }
 
-        Ok(handlers)
+        Ok(std::mem::take(&mut handlers.0))
+    }
+
+    /// Waits for all the tasks of `handles`, like `futures::future::try_join_all`,
+    /// and aborts the ones that are not finished when it is dropped.
+    ///
+    /// A dropped `JoinHandle` detaches its task. On a runtime that outlives the
+    /// caller, such as a global one, the tasks of a caller that went away would
+    /// run to their end, e.g. reading from storage for a query that is gone.
+    pub async fn try_join_all<T>(
+        handles: impl IntoIterator<Item = JoinHandle<T>>,
+    ) -> std::result::Result<Vec<T>, JoinError> {
+        let mut handles = AbortOnDrop(handles.into_iter().collect());
+        future::try_join_all(handles.0.iter_mut()).await
     }
 
     // TODO(Winter): remove
@@ -299,6 +314,18 @@ impl Runtime {
 
         #[expect(clippy::disallowed_methods)]
         self.handle.spawn(task)
+    }
+}
+
+/// The handles of a batch of tasks, which are aborted when it is dropped.
+/// Aborting a finished task does nothing.
+struct AbortOnDrop<T>(Vec<JoinHandle<T>>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        for handle in &self.0 {
+            handle.abort();
+        }
     }
 }
 

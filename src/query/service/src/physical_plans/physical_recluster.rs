@@ -288,9 +288,12 @@ impl IPhysicalPlan for Recluster {
                     task.total_compressed,
                 );
 
-                let compact_thresholds = block_thresholds
-                    .set_rows_per_block(rows_per_block)
-                    .set_bytes_per_block(bytes_per_block);
+                // Cut lines never drop below the table thresholds, so every output block,
+                // including a constant-key one, is large enough to be judged complete.
+                // The layout pipelines keep the task-scaled `rows_per_block`: Hilbert sizes
+                // its partitions and vector clustering sizes its KMeans batches with it.
+                let compact_thresholds =
+                    block_thresholds.recluster_output_thresholds(rows_per_block, bytes_per_block);
 
                 if task.kind == ReclusterTaskKind::MergeBlocks && !cluster_stats_gen.is_linear() {
                     return Err(ErrorCode::Internal(

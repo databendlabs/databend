@@ -37,6 +37,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
@@ -136,11 +137,34 @@ impl HttpQueryRequest {
 
 impl Debug for HttpQueryRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.fmt_with_masked_sql(&mask_log_sql_secrets(&self.sql), f)
+    }
+}
+
+/// A request for logs, with its SQL already masked: masking tokenizes the whole
+/// statement, so a caller that logs the SQL more than once masks it once.
+pub(crate) struct MaskedRequest<'a> {
+    pub request: &'a HttpQueryRequest,
+    pub masked_sql: &'a str,
+}
+
+impl Debug for MaskedRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.request.fmt_with_masked_sql(self.masked_sql, f)
+    }
+}
+
+impl HttpQueryRequest {
+    fn fmt_with_masked_sql(
+        &self,
+        masked_sql: &str,
+        f: &mut std::fmt::Formatter,
+    ) -> std::fmt::Result {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
             // Mask before Debug escapes quotes and line breaks, and before truncation.
-            .field("sql", &short_sql(mask_log_sql_secrets(&self.sql), 1000))
+            .field("sql", &short_sql(masked_sql.to_string(), 1000))
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
@@ -670,6 +694,7 @@ pub enum TimeoutResult {
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) user_name: String,
+    tenant: Tenant,
     pub(crate) client_session_id: Option<String>,
     pagination: PaginationConf,
 
@@ -731,20 +756,22 @@ impl HttpQuery {
     #[fastrace::trace(name = "HttpQuery::try_create")]
     pub async fn try_create(
         http_ctx: &HttpQueryContext,
-        req: HttpQueryRequest,
+        req: &HttpQueryRequest,
+        masked_sql: &str,
         arrow_result_version: Option<u64>,
         arrow_features: Option<ArrowFeatures>,
     ) -> Result<HttpQuery> {
+        // Capture the authenticated tenant before restoring query settings,
+        // which may select a sandbox tenant for execution only.
+        let tenant = http_ctx.session.get_current_tenant();
         http_ctx.try_set_worksheet_session(&req.session).await?;
         let (session, ctx) = http_ctx
             .create_session(&req.session, SessionType::HTTPQuery)
             .await?;
         let query_id = http_ctx.query_id.clone();
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
-        let sql = &req.sql;
         let node_id = &GlobalConfig::instance().query.node_id;
-        let masked_sql = mask_log_sql_secrets(sql);
-        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql.as_str(); "Creating new query");
+        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql; "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,
@@ -779,8 +806,9 @@ impl HttpQuery {
         Ok(HttpQuery {
             id: query_id,
             user_name: http_ctx.user_name.clone(),
+            tenant,
             client_session_id: http_ctx.client_session_id.clone(),
-            pagination: req.pagination,
+            pagination: req.pagination.clone(),
             execute_state: executor,
             page_manager: Arc::new(TokioMutex::new(page_manager)),
             result_timeout_secs,
@@ -1107,13 +1135,22 @@ impl HttpQuery {
         }
     }
 
+    /// Query ownership is restricted to the originating tenant and user.
+    /// These fields are immutable, including after the executor releases its session.
+    pub(crate) fn check_owner(&self, ctx: &HttpQueryContext) -> poem::error::Result<()> {
+        if self.tenant != ctx.session.get_current_tenant() || self.user_name != ctx.user_name {
+            return Err(poem::error::Error::from_string(
+                "Authentication error: query owner mismatch",
+                StatusCode::UNAUTHORIZED,
+            ));
+        }
+        Ok(())
+    }
+
     pub fn check_client_session_id(&self, id: &Option<String>) -> poem::error::Result<()> {
         if *id != self.client_session_id {
             return Err(poem::error::Error::from_string(
-                format!(
-                    "Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
-                    self.client_session_id
-                ),
+                "Authentication error: client session mismatch",
                 StatusCode::UNAUTHORIZED,
             ));
         }

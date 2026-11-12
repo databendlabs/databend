@@ -332,9 +332,6 @@ pub struct Join {
     // marker_index is for MarkJoin only.
     pub marker_index: Option<Symbol>,
     pub from_correlated_subquery: bool,
-    // if we execute distributed merge into, we need to hold the
-    // hash table to get not match data from source.
-    pub need_hold_hash_table: bool,
     pub is_lateral: bool,
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
@@ -354,7 +351,6 @@ impl Default for Join {
             join_type: JoinType::Cross,
             marker_index: None,
             from_correlated_subquery: false,
-            need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,

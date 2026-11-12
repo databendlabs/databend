@@ -125,7 +125,6 @@ fn is_supported_cross_join(join: &Join) -> bool {
         && join.non_equi_conditions.is_empty()
         && join.marker_index.is_none()
         && !join.from_correlated_subquery
-        && !join.need_hold_hash_table
         && !join.is_lateral
         && join.single_to_inner.is_none()
         && join.build_side_cache_info.is_none()
