@@ -1,0 +1,20 @@
+0	v0
+1	v1
+2	v2
+3
+a	BIGINT	YES	NULL	
+d	DECIMAL(10, 2)	YES	NULL	
+li	ARRAY(DECIMAL(20, 0))	YES	NULL	
+0	0.00	[0,1]
+1	1.00	[1,2]
+d	DECIMAL(10, 2)	YES	NULL	
+st	TUPLE(K INT32, V STRING)	YES	NULL	
+li	ARRAY(INT32)	YES	NULL	
+mp	MAP(STRING, INT32)	YES	NULL	
+2
+1.25	(1,"x")	[1,2]	{"a":1}
+2.50	(2,"y")	[3]	{"b":2}
+2
+>>>> CREATE TABLE iceberg_ctas_types.too_wide (d decimal(76, 2))
+Error: APIError: QueryFailed: [1302]Iceberg does not support DECIMAL(76, 2): the precision must not exceed 38
+<<<<

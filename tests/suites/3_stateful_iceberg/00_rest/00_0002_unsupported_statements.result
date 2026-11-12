@@ -1,0 +1,20 @@
+3
+3
+>>>> INSERT OVERWRITE INTO iceberg_noop_ddl.t SELECT 9, 'z'
+Error: APIError: QueryFailed: [1302]INSERT OVERWRITE is not supported for the table 'iceberg_noop_ddl.t' which uses the 'iceberg' engine
+<<<<
+>>>> TRUNCATE TABLE iceberg_noop_ddl.t
+Error: APIError: QueryFailed: [1302]TRUNCATE TABLE is not supported for the table 'iceberg_noop_ddl.t' which uses the 'iceberg' engine
+<<<<
+>>>> ALTER TABLE iceberg_noop_ddl.t ADD COLUMN c int
+Error: APIError: QueryFailed: [1302]iceberg_noop_ddl.t engine is iceberg that doesn't support alter
+<<<<
+>>>> ALTER TABLE iceberg_noop_ddl.t DROP COLUMN b
+Error: APIError: QueryFailed: [1302]iceberg_noop_ddl.t engine is iceberg that doesn't support alter
+<<<<
+3
+1	x
+2	y
+3	z
+a	BIGINT	YES	NULL	
+b	VARCHAR	YES	NULL	
