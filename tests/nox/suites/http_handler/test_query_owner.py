@@ -155,6 +155,15 @@ def test_query_owner(users, mode, kill_method):
         session_id = query.get("session_id")
         query_path = f"/v1/query/{query['id']}"
         for caller in (other, root):
+            # A client-supplied query ID must not bypass ownership on retry.
+            response = request(
+                caller,
+                "POST",
+                "/v1/query",
+                headers={"x-databend-query-id": query["id"]},
+                json={"sql": "SELECT 1"},
+            )
+            assert_denied(response, owner_auth[0], session_id)
             # SUPER is deliberately not a bypass for the HTTP query API.
             for method, suffix in [
                 ("GET", ""),
@@ -194,6 +203,19 @@ def test_query_owner(users, mode, kill_method):
 
         # Both missing and different sessions are allowed for the same owner.
         assert state(no_session, query)["state"] == "Running"
+        for caller in (owner, no_session, different_session):
+            response = request(
+                caller,
+                "POST",
+                "/v1/query",
+                headers={"x-databend-query-id": query["id"]},
+                json={"sql": "SELECT 1"},
+            )
+            assert response.status_code == 200, response.text
+            retry = response.json()
+            assert retry.get("error") is None, retry
+            assert retry["id"] == query["id"], retry
+            assert retry["data"] == query["data"], retry
         caller = no_session if kill_method == "GET" else different_session
         response = request(caller, kill_method, query["kill_uri"])
         assert response.status_code == 200, response.text

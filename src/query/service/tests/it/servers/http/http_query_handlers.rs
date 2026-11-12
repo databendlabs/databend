@@ -2648,6 +2648,65 @@ async fn test_query_owner_with_sandbox_settings() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_client_query_id_retry_checks_tenant_owner() -> anyhow::Result<()> {
+    let config = ConfigBuilder::create().with_management_mode().config();
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert("x-databend-tenant", "owner-tenant".parse()?);
+    headers.insert("x-databend-query-id", "owner-retry-query".parse()?);
+    headers.insert(
+        header::COOKIE,
+        "cookie_enabled=true; session_id=owner-session".parse()?,
+    );
+    let mut owner = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "show settings",
+        "pagination": {"wait_time_secs": 1, "max_rows_per_page": 1},
+    }))
+    .with_headers(headers.clone());
+    let (status, query, _) = owner.fetch_begin().await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(query.error.is_none(), "{query:?}");
+    assert_eq!(query.id, "owner-retry-query");
+    assert_eq!(query.data.len(), 1);
+
+    // Matching usernames and session IDs must not allow a cross-tenant retry.
+    headers.insert("x-databend-tenant", "other-tenant".parse()?);
+    let other = TestHttpQueryRequest::new(owner.json.clone()).with_headers(headers.clone());
+    let response = other.do_request_raw(Method::POST, "/v1/query").await?;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let body = response.into_body().into_string().await?;
+    for secret in ["owner-tenant", "owner-session", "root"] {
+        assert!(!body.contains(secret), "{body}");
+    }
+
+    // The owner can still retry, with either its original or a separate session.
+    headers.insert("x-databend-tenant", "owner-tenant".parse()?);
+    for cookie in [
+        Some("cookie_enabled=true; session_id=owner-session"),
+        None,
+        Some("cookie_enabled=true; session_id=other-session"),
+    ] {
+        headers.remove(header::COOKIE);
+        if let Some(cookie) = cookie {
+            headers.insert(header::COOKIE, cookie.parse()?);
+        }
+        let retry = TestHttpQueryRequest::new(owner.json.clone()).with_headers(headers.clone());
+        let response = retry.do_request_raw(Method::POST, "/v1/query").await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let response: TestQueryResponse = response.into_body().into_json().await?;
+        assert!(response.error.is_none(), "{response:?}");
+        assert_eq!(response.id, query.id);
+        assert_eq!(response.data, query.data);
+    }
+    let response = owner
+        .do_request_raw(Method::POST, query.final_uri.as_ref().unwrap())
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_query_owner_tenant_and_token() -> anyhow::Result<()> {
     let config = ConfigBuilder::create().with_management_mode().config();
     let _fixture = TestFixture::setup_with_config(&config).await?;

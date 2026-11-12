@@ -735,45 +735,33 @@ pub(crate) async fn query_handler(
         let http_query_manager = HttpQueryManager::instance();
         if ctx.is_query_id_from_client {
             if let Some(query) = http_query_manager.get_query(&ctx.query_id) {
-                return if query.user_name != ctx.user_name {
-                    Err(poem::Error::from_string(
-                        format!(
-                            "fail to start query: query_id {} already exists",
-                            ctx.query_id
-                        ),
-                        StatusCode::BAD_REQUEST,
-                    ))
-                } else {
-                    info!("get retry to start query: {}", ctx.query_id);
-                    let resp = query.get_response_page(0).await.map_err(|err| {
-                        info!(
-                            "/query/{}/page/{} - get response page error (reason: {})",
-                            ctx.query_id,
-                            0,
-                            err.message()
-                        );
-                        poem::Error::from_string(
-                            format!("{}", err.message()),
-                            StatusCode::NOT_FOUND,
-                        )
-                    })?;
-                    let encoding = ResponseEncoding {
-                        format: query_result_format,
-                        arrow_result_version: require_negotiated_arrow_result_version(
-                            &ctx.query_id,
-                            query_result_format,
-                            resp.state.arrow_result_version,
-                        )
-                        .map_err(HttpErrorCode::bad_request)?,
-                        arrow_features: resp.state.arrow_features.clone(),
-                    };
-                    Ok(QueryResponse::from_internal(
-                        ctx.query_id.clone(),
-                        resp,
-                        false,
-                        encoding,
-                    ))
+                query.check_owner(ctx)?;
+                info!("get retry to start query: {}", ctx.query_id);
+                let resp = query.get_response_page(0).await.map_err(|err| {
+                    info!(
+                        "/query/{}/page/{} - get response page error (reason: {})",
+                        ctx.query_id,
+                        0,
+                        err.message()
+                    );
+                    poem::Error::from_string(format!("{}", err.message()), StatusCode::NOT_FOUND)
+                })?;
+                let encoding = ResponseEncoding {
+                    format: query_result_format,
+                    arrow_result_version: require_negotiated_arrow_result_version(
+                        &ctx.query_id,
+                        query_result_format,
+                        resp.state.arrow_result_version,
+                    )
+                    .map_err(HttpErrorCode::bad_request)?,
+                    arrow_features: resp.state.arrow_features.clone(),
                 };
+                return Ok(QueryResponse::from_internal(
+                    ctx.query_id.clone(),
+                    resp,
+                    false,
+                    encoding,
+                ));
             };
         }
 
