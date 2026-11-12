@@ -17,14 +17,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
+use arrow_schema::TimeUnit;
 use async_trait::async_trait;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableDataType::Null;
 use databend_common_expression::TableDataType::Timestamp;
@@ -198,7 +201,7 @@ impl Database for IcebergDatabase {
                     if exists {
                         return Ok(CreateTableReply {
                             table_id: 0,
-                            table_id_seq: None,
+                            table_id_seq: Some(0),
                             db_id: 0,
                             new_table: true,
                             prev_table_id: None,
@@ -250,7 +253,9 @@ impl Database for IcebergDatabase {
             })?;
         Ok(CreateTableReply {
             table_id: 0,
-            table_id_seq: None,
+            // Iceberg tables are not managed by the meta service, but callers such as CTAS
+            // expect the sequence number of the created table to be present.
+            table_id_seq: Some(0),
             db_id: 0,
             new_table: true,
             prev_table_id: None,
@@ -300,14 +305,20 @@ fn convert_table_schema(
     db_name: &str,
     table_name: &str,
 ) -> Result<IcebergSchema> {
-    let mut fields = vec![];
+    // Nested fields have no column id of their own, but iceberg requires a unique id on every
+    // field of the schema, including struct members, list elements and map keys/values.
+    let mut next_field_id = schema
+        .fields()
+        .iter()
+        .map(|f| f.column_id)
+        .max()
+        .unwrap_or(0)
+        + 1;
+    let mut fields = Vec::with_capacity(schema.fields().len());
     for f in schema.fields() {
-        let mut metadata = HashMap::new();
-        metadata.insert(
-            PARQUET_FIELD_ID_META_KEY.to_string(),
-            f.column_id.to_string(),
-        );
-        fields.push(Field::from(f).with_metadata(metadata));
+        let field =
+            databend_field_to_arrow(&f.name, &f.data_type, f.column_id, &mut next_field_id)?;
+        fields.push(field.with_nullable(f.is_nullable() || f.data_type.is_nullable()));
     }
     let metadata = schema
         .metadata
@@ -324,6 +335,119 @@ fn convert_table_schema(
     })?;
 
     Ok(schema) // Return the converted Iceberg schema
+}
+
+/// Convert a databend field to an arrow field that [`arrow_schema_to_schema`] accepts.
+///
+/// Decimals are restricted to `Decimal128` and every field carries the field id that iceberg
+/// expects in its metadata.
+fn databend_field_to_arrow(
+    name: &str,
+    ty: &TableDataType,
+    field_id: ColumnId,
+    next_field_id: &mut ColumnId,
+) -> Result<Field> {
+    let arrow_ty = databend_type_to_arrow(ty, next_field_id)?;
+    let metadata = HashMap::from([(PARQUET_FIELD_ID_META_KEY.to_string(), field_id.to_string())]);
+    Ok(Field::new(name, arrow_ty, ty.is_nullable()).with_metadata(metadata))
+}
+
+fn next_nested_field(
+    name: &str,
+    ty: &TableDataType,
+    next_field_id: &mut ColumnId,
+) -> Result<Field> {
+    let field_id = *next_field_id;
+    *next_field_id += 1;
+    databend_field_to_arrow(name, ty, field_id, next_field_id)
+}
+
+fn databend_type_to_arrow(
+    ty: &TableDataType,
+    next_field_id: &mut ColumnId,
+) -> Result<ArrowDataType> {
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::NumberDataType;
+
+    let arrow_ty = match ty {
+        TableDataType::Boolean => ArrowDataType::Boolean,
+        TableDataType::String => ArrowDataType::Utf8,
+        TableDataType::Binary => ArrowDataType::Binary,
+        TableDataType::Date => ArrowDataType::Date32,
+        TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+        TableDataType::TimestampTz => {
+            ArrowDataType::Timestamp(TimeUnit::Microsecond, Some("UTC".into()))
+        }
+        TableDataType::Number(number) => match number {
+            NumberDataType::Int8 | NumberDataType::Int16 | NumberDataType::Int32 => {
+                ArrowDataType::Int32
+            }
+            NumberDataType::Int64 => ArrowDataType::Int64,
+            NumberDataType::UInt8 | NumberDataType::UInt16 => ArrowDataType::Int32,
+            NumberDataType::UInt32 => ArrowDataType::Int64,
+            // Iceberg has no unsigned integer type; the full uint64 range fits this decimal.
+            NumberDataType::UInt64 => ArrowDataType::Decimal128(20, 0),
+            NumberDataType::Float32 => ArrowDataType::Float32,
+            NumberDataType::Float64 => ArrowDataType::Float64,
+        },
+        TableDataType::Decimal(decimal) => {
+            let (precision, scale) = match decimal {
+                DecimalDataType::Decimal64(size) => (size.precision(), size.scale() as i8),
+                DecimalDataType::Decimal128(size) => (size.precision(), size.scale() as i8),
+                // Iceberg only supports decimals with a precision of at most 38.
+                DecimalDataType::Decimal256(size) => (size.precision(), size.scale() as i8),
+            };
+            if precision > 38 {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "Iceberg does not support DECIMAL({precision}, {scale}): the precision must not exceed 38"
+                )));
+            }
+            ArrowDataType::Decimal128(precision, scale)
+        }
+        TableDataType::Nullable(inner) => databend_type_to_arrow(inner, next_field_id)?,
+        TableDataType::Array(inner) => {
+            let element = next_nested_field("element", inner, next_field_id)?;
+            ArrowDataType::List(Arc::new(element))
+        }
+        TableDataType::Map(inner) => {
+            let TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } = inner.as_ref()
+            else {
+                return Err(ErrorCode::TableEngineNotSupported(
+                    "Iceberg map type must have a key/value tuple".to_string(),
+                ));
+            };
+            let key = next_nested_field(&fields_name[0], &fields_type[0], next_field_id)?;
+            // Map keys are required in iceberg, and databend only allows non-null keys.
+            let key = key.with_nullable(false);
+            let value = next_nested_field(&fields_name[1], &fields_type[1], next_field_id)?;
+            let entries = Field::new(
+                "key_value",
+                ArrowDataType::Struct(vec![key, value].into()),
+                false,
+            );
+            ArrowDataType::Map(Arc::new(entries), false)
+        }
+        TableDataType::Tuple {
+            fields_name,
+            fields_type,
+        } => {
+            let mut fields = Vec::with_capacity(fields_name.len());
+            for (name, ty) in fields_name.iter().zip(fields_type) {
+                fields.push(next_nested_field(name, ty, next_field_id)?);
+            }
+            ArrowDataType::Struct(fields.into())
+        }
+        // Types without an iceberg equivalent keep the previous lossy mapping instead of
+        // failing DDL that worked before.
+        _ => {
+            let field = Field::from(&databend_common_expression::TableField::new("", ty.clone()));
+            field.data_type().clone()
+        }
+    };
+    Ok(arrow_ty)
 }
 
 fn is_invalid_partition_type(ty: &TableDataType) -> bool {
@@ -398,5 +522,136 @@ fn build_table_creation_option(
         }
     } else {
         Ok(builder.build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::NumberDataType;
+    use iceberg::spec::PrimitiveType;
+    use iceberg::spec::Type;
+
+    use super::*;
+
+    fn convert(fields: Vec<TableField>) -> IcebergSchema {
+        convert_table_schema(&TableSchema::new(fields), "db", "t").unwrap()
+    }
+
+    #[test]
+    fn test_decimal_columns_become_iceberg_decimals() {
+        // Databend stores a decimal(10, 2) as Decimal64 in arrow, which iceberg does not map.
+        for (decimal, precision, scale) in [
+            (
+                DecimalDataType::Decimal64(DecimalSize::new_unchecked(10, 2)),
+                10,
+                2,
+            ),
+            (
+                DecimalDataType::Decimal128(DecimalSize::new_unchecked(20, 4)),
+                20,
+                4,
+            ),
+            (
+                DecimalDataType::Decimal256(DecimalSize::new_unchecked(38, 6)),
+                38,
+                6,
+            ),
+        ] {
+            let schema = convert(vec![TableField::new("x", TableDataType::Decimal(decimal))]);
+            assert_eq!(
+                schema.field_by_name("x").unwrap().field_type.as_ref(),
+                &Type::Primitive(PrimitiveType::Decimal { precision, scale })
+            );
+        }
+    }
+
+    #[test]
+    fn test_decimal_above_iceberg_precision_is_rejected() {
+        let schema = TableSchema::new(vec![TableField::new(
+            "x",
+            TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new_unchecked(
+                39, 2,
+            ))),
+        )]);
+        let err = convert_table_schema(&schema, "db", "t").unwrap_err();
+        assert!(
+            err.message().contains("precision must not exceed 38"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn test_nested_columns_get_unique_field_ids() {
+        let schema = convert(vec![
+            TableField::new("st", TableDataType::Tuple {
+                fields_name: vec!["a".to_string(), "b".to_string()],
+                fields_type: vec![
+                    TableDataType::Number(NumberDataType::Int64),
+                    TableDataType::String,
+                ],
+            }),
+            TableField::new(
+                "li",
+                TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::Int64))),
+            ),
+            TableField::new(
+                "mp",
+                TableDataType::Map(Box::new(TableDataType::Tuple {
+                    fields_name: vec!["key".to_string(), "value".to_string()],
+                    fields_type: vec![
+                        TableDataType::String,
+                        TableDataType::Number(NumberDataType::Int64),
+                    ],
+                })),
+            ),
+        ]);
+
+        let Type::Struct(st) = schema.field_by_name("st").unwrap().field_type.as_ref() else {
+            panic!("expected a struct column");
+        };
+        assert_eq!(st.fields().len(), 2);
+        assert_eq!(
+            st.fields()[0].field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::Long)
+        );
+
+        let Type::List(li) = schema.field_by_name("li").unwrap().field_type.as_ref() else {
+            panic!("expected a list column");
+        };
+        assert_eq!(
+            li.element_field.field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::Long)
+        );
+
+        let Type::Map(mp) = schema.field_by_name("mp").unwrap().field_type.as_ref() else {
+            panic!("expected a map column");
+        };
+        assert!(mp.key_field.required, "iceberg map keys are required");
+        assert_eq!(
+            mp.value_field.field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::Long)
+        );
+
+        // `arrow_schema_to_schema` rejects duplicate ids, so a conversion that assigned the
+        // same id to two nested fields would already have failed above. Check the ids are
+        // distinct anyway, including against the top-level columns.
+        let mut ids: Vec<i32> = schema
+            .as_struct()
+            .fields()
+            .iter()
+            .map(|f| f.id)
+            .chain(std::iter::once(st.fields()[0].id))
+            .chain(std::iter::once(st.fields()[1].id))
+            .chain(std::iter::once(li.element_field.id))
+            .chain(std::iter::once(mp.key_field.id))
+            .chain(std::iter::once(mp.value_field.id))
+            .collect();
+        let total = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), total, "nested field ids must be unique");
     }
 }

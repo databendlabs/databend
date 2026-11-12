@@ -80,6 +80,9 @@ use crate::statistics::IcebergStatistics;
 const ICEBERG_TABLE_FORMAT_OPT: &str = "write.format.default";
 const ICEBERG_TABLE_FORMAT_OPT_ORC: &str = "orc";
 const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
+/// Set by [`IcebergTable::navigate_to`] so that every node rebuilding the table from
+/// `engine_options` scans the same snapshot as the node that bound the query.
+const ICEBERG_SNAPSHOT_ID_OPT: &str = "iceberg.snapshot_id";
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
@@ -99,6 +102,7 @@ impl IcebergTable {
     /// create a new table on the table directory
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let (table, statistics) = Self::parse_engine_options(&info.meta.engine_options)?;
+        let snapshot_id = Self::parse_snapshot_id(&info.meta.engine_options)?;
         let catalog = IcebergMutableCatalog::try_create(info.catalog_info.clone())?;
         let catalog = catalog.iceberg_catalog();
         let table = with_refreshing_credentials(catalog.clone(), table)?;
@@ -106,10 +110,23 @@ impl IcebergTable {
         Ok(Box::new(Self {
             info,
             table,
-            snapshot_id: None,
+            snapshot_id,
             statistics,
             catalog,
         }))
+    }
+
+    fn parse_snapshot_id(options: &BTreeMap<String, String>) -> Result<Option<i64>> {
+        options
+            .get(ICEBERG_SNAPSHOT_ID_OPT)
+            .map(|id| {
+                id.parse::<i64>().map_err(|err| {
+                    ErrorCode::ReadTableDataError(format!(
+                        "Invalid {ICEBERG_SNAPSHOT_ID_OPT} {id}: {err}"
+                    ))
+                })
+            })
+            .transpose()
     }
 
     pub fn iceberg_table(&self) -> &iceberg::table::Table {
@@ -725,14 +742,37 @@ impl Table for IcebergTable {
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
-        _overwrite: bool,
+        overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
+        if overwrite {
+            // The sink always commits a fast append, which keeps the files of the previous
+            // snapshot. Publishing the rows as new files and dropping the old manifests is not
+            // implemented yet, so reject instead of silently appending.
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "INSERT OVERWRITE is not supported for the table '{}.{}' which uses the '{}' engine",
+                self.get_table_info().desc,
+                self.name(),
+                self.get_table_info().engine(),
+            )));
+        }
         pipeline.try_resize(1)?;
         pipeline.add_sink(|input| IcebergCommitSink::try_create(input, ctx.clone(), self))?;
         Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
+        // Dropping every data file needs a snapshot that does not carry the current manifests
+        // forward; the default implementation of `truncate` is a silent no-op, which reports
+        // success while leaving all rows in place.
+        Err(ErrorCode::TableEngineNotSupported(format!(
+            "TRUNCATE TABLE is not supported for the table '{}' which uses the '{}' engine",
+            self.get_table_info().desc,
+            self.get_table_info().engine(),
+        )))
     }
 
     fn table_args(&self) -> Option<TableArgs> {
@@ -799,11 +839,30 @@ impl Table for IcebergTable {
                 "No historical data found at given point",
             ));
         }
-        let (table, statistics) = Self::parse_engine_options(&self.info.meta.engine_options)?;
+        let snapshot_id = snapshot_id.expect("checked above");
+        let (table, _) = Self::parse_engine_options(&self.info.meta.engine_options)?;
+        // The navigated snapshot has to travel with the table info: the coordinator plans the
+        // scan, but the pipeline is rebuilt from `engine_options` on every node (and on the
+        // coordinator again for the actual read), which would otherwise scan the current
+        // snapshot.
+        let snapshot = table
+            .metadata()
+            .snapshot_by_id(snapshot_id)
+            .ok_or_else(|| {
+                ErrorCode::TableHistoricalDataNotFound(format!(
+                    "Snapshot {snapshot_id} not found in table '{}'",
+                    self.name()
+                ))
+            })?;
+        let statistics = IcebergStatistics::parse_snapshot(&table, snapshot).await?;
+        let mut info = self.info.clone();
+        info.meta
+            .engine_options
+            .insert(ICEBERG_SNAPSHOT_ID_OPT.to_string(), snapshot_id.to_string());
         Ok(Arc::new(IcebergTable {
-            info: self.info.clone(),
+            info,
             table,
-            snapshot_id,
+            snapshot_id: Some(snapshot_id),
             statistics,
             catalog: self.catalog.clone(),
         }))
