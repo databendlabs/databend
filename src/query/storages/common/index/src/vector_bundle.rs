@@ -70,7 +70,10 @@ pub const VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 64 * 1024;
 
 const TRAILER_MAGIC: &[u8; 4] = b"DBVI";
 const FOOTER_MAGIC: &[u8; 4] = b"DBVF";
-const MAX_COMPONENT_SIZE: u64 = 1024 * 1024 * 1024;
+/// Bounds the decompression buffer of a ZSTD-compressed HNSW component. Plain
+/// components (FP16 pages, validity bitmaps) are not decompressed and have no
+/// component-level cap beyond the block and object limits.
+const MAX_COMPRESSED_COMPONENT_RAW_SIZE: u64 = 4 * 1024 * 1024 * 1024;
 /// ZSTD level for HNSW components. Level 1 matches the legacy Parquet default and,
 /// for SQ8 data (few repeats, skewed bytes), compresses better than higher levels:
 /// ~43% vs ~50% at level 3, and several times faster.
@@ -230,11 +233,16 @@ impl VectorBundlePageRead {
     /// Decodes `bytes` read from `range()`. The decoded size (and checksum, if any)
     /// is verified, which also rejects bytes of the wrong length.
     pub fn decode(&self, bytes: Bytes) -> Result<Bytes> {
-        // Bounds the decompression buffer.
-        if self.raw_length > MAX_COMPONENT_SIZE {
+        // Bounds the decompression buffer of compressed components. Plain reads
+        // return `bytes` without allocating.
+        if self.codec == VectorBundleCodec::Zstd
+            && self.raw_length > MAX_COMPRESSED_COMPONENT_RAW_SIZE
+        {
             return Err(invalid("Vector component exceeds size limit"));
         }
-        let decoded = self.codec.decode(bytes, self.raw_length as usize)?;
+        let raw_length = usize::try_from(self.raw_length)
+            .map_err(|_| invalid("Vector component exceeds size limit"))?;
+        let decoded = self.codec.decode(bytes, raw_length)?;
         if decoded.len() as u64 != self.raw_length
             || self
                 .checksum
@@ -302,6 +310,11 @@ impl VectorBundleFooter {
         for (name, entry) in &self.components {
             if entry.range()?.end > footer_start {
                 return Err(invalid(&format!("Vector component {name} out of bounds")));
+            }
+            if entry.codec == VectorBundleCodec::Plain && entry.raw_length != entry.length {
+                return Err(invalid(&format!(
+                    "Plain vector component {name} length mismatch"
+                )));
             }
         }
         Ok(())
@@ -394,7 +407,12 @@ impl VectorBundleBuilder {
     /// index is loaded into the object cache, so compression only costs on misses.
     /// A component that does not shrink (e.g. the tiny SQ8 meta) is stored plain.
     pub fn add_hnsw(&mut self, name: String, raw: &[u8]) -> Result<()> {
-        let start = self.begin(&name, raw.len())?;
+        if raw.len() as u64 > MAX_COMPRESSED_COMPONENT_RAW_SIZE {
+            return Err(invalid(&format!(
+                "Vector component {name} exceeds size limit"
+            )));
+        }
+        let start = self.begin(&name)?;
         let zstd = &mut self.zstd;
         let compressor = match zstd {
             Some(compressor) => compressor,
@@ -450,12 +468,16 @@ impl VectorBundleBuilder {
         if *dimension == 0 || column.len() as u64 != self.footer.row_count {
             return Err(invalid("Invalid FP16 component"));
         }
+        let byte_len = values
+            .len()
+            .checked_mul(2)
+            .ok_or_else(|| invalid("FP16 component size overflow"))?;
         let name = vector_fp16_data_name(column_id);
-        let start = self.begin(&name, values.len() * 2)?;
+        let start = self.begin(&name)?;
         // `OrderedFloat<f32>` is `repr(transparent)`; its `Pod` impl (ordered-float's
         // `bytemuck` feature) gives a zero-copy `&[f32]` view.
         let values: &[f32] = bytemuck::cast_slice(values.as_ref());
-        self.bytes.reserve(values.len() * 2);
+        self.bytes.reserve(byte_len);
         // The file buffer is at an arbitrary byte offset, so convert through a small
         // aligned scratch buffer and append its bytes.
         let mut scratch = [f16::ZERO; FP16_CONVERT_CHUNK];
@@ -499,23 +521,17 @@ impl VectorBundleBuilder {
     }
 
     fn add_plain(&mut self, name: String, raw: &[u8]) -> Result<()> {
-        let start = self.begin(&name, raw.len())?;
+        let start = self.begin(&name)?;
         self.bytes.extend_from_slice(raw);
         let entry = VectorBundleEntry::new(start, raw.len(), raw, VectorBundleCodec::Plain);
         self.footer.components.insert(name, entry);
         Ok(())
     }
 
-    /// Checks that `name` is new and `raw_length` within limits, and returns the
-    /// offset the component starts at.
-    fn begin(&self, name: &str, raw_length: usize) -> Result<usize> {
+    /// Checks that `name` is new and returns the offset the component starts at.
+    fn begin(&self, name: &str) -> Result<usize> {
         if self.footer.components.contains_key(name) {
             return Err(invalid(&format!("Duplicate vector component {name}")));
-        }
-        if raw_length as u64 > MAX_COMPONENT_SIZE {
-            return Err(invalid(&format!(
-                "Vector component {name} exceeds size limit"
-            )));
         }
         Ok(self.bytes.len())
     }
@@ -643,6 +659,63 @@ mod tests {
         );
         assert!(footer.validate(9).is_err());
         footer.validate(10)?;
+
+        // A plain component whose stored and raw lengths disagree is rejected.
+        footer
+            .components
+            .insert("bad_plain".to_owned(), VectorBundleEntry {
+                offset: 0,
+                length: 4,
+                raw_length: 8,
+                codec: VectorBundleCodec::Plain,
+                checksum: 0,
+            });
+        assert!(footer.validate(10).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_component_size_limits_by_codec() -> Result<()> {
+        // Plain FP16 components may exceed 1 GiB (e.g. 2M x 768D = 3.07 GB) and
+        // still address and decode individual pages without hitting a cap.
+        let total_rows = 2_000_000_u64;
+        let dim = 768_u64;
+        let row_bytes = dim * 2;
+        let total_bytes = total_rows * row_bytes;
+        assert!(total_bytes > 1024 * 1024 * 1024);
+
+        let entry = VectorBundleEntry {
+            offset: 128,
+            length: total_bytes,
+            raw_length: total_bytes,
+            codec: VectorBundleCodec::Plain,
+            checksum: 0,
+        };
+        let mut footer = VectorBundleFooter::new("vi".to_owned(), "v1".to_owned(), total_rows);
+        footer.components.insert(vector_fp16_data_name(0), entry);
+        footer.validate(128 + total_bytes)?;
+
+        let fp16 = &footer.components[&vector_fp16_data_name(0)];
+        assert_eq!(fp16.dimension(total_rows)?, dim as u32);
+        let tail_rows = (total_rows - 128)..total_rows;
+        let page_read = fp16.row_range_read(tail_rows, total_rows)?;
+        assert_eq!(page_read.offset, 128 + (total_rows - 128) * row_bytes);
+        assert_eq!(page_read.length, 128 * row_bytes);
+        let page_bytes = Bytes::from(vec![0x5a; (128 * row_bytes) as usize]);
+        assert_eq!(page_read.decode(page_bytes.clone())?, page_bytes);
+
+        // Compressed components remain bounded at MAX_COMPRESSED_COMPONENT_RAW_SIZE.
+        let oversized_zstd = VectorBundlePageRead {
+            offset: 0,
+            length: 16,
+            raw_length: MAX_COMPRESSED_COMPONENT_RAW_SIZE + 1,
+            codec: VectorBundleCodec::Zstd,
+            checksum: None,
+        };
+        let err = oversized_zstd
+            .decode(Bytes::from_static(&[0; 16]))
+            .unwrap_err();
+        assert!(err.message().contains("exceeds size limit"));
         Ok(())
     }
 }
