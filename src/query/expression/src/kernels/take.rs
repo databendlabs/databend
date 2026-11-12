@@ -129,18 +129,16 @@ where I: TakeIndex + ?Sized
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        self.visit_boolean(column.validity.clone())?;
+        let (column, validity) = column.destructure();
+        self.visit_boolean(validity)?;
         let validity =
             BooleanType::try_downcast_column(self.result.take().unwrap().as_column().unwrap())
                 .unwrap();
 
-        self.visit_column(column.column)?;
+        self.visit_column(column)?;
         let result = self.result.take().unwrap();
         let result = result.as_column().unwrap();
-        self.result = Some(Value::Column(NullableColumn::new_column(
-            result.clone(),
-            validity,
-        )));
+        self.result = Some(Value::Column(result.clone().wrap_nullable(Some(validity))));
         Ok(())
     }
 
@@ -306,8 +304,8 @@ impl Column {
         match self {
             Column::String(c) => Column::String(c.maybe_gc()),
             Column::Nullable(n) => {
-                let c = n.column.maybe_gc();
-                NullableColumn::new_column(c, n.validity)
+                let (column, validity) = n.destructure();
+                column.maybe_gc().wrap_nullable(Some(validity))
             }
             other => other,
         }

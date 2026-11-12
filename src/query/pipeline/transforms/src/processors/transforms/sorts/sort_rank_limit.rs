@@ -408,7 +408,7 @@ fn mark_changes<T: AccessType>(
 /// The values of a key column and, when it is nullable, its validity.
 fn split_validity(column: &Column) -> (&Column, Option<&Bitmap>) {
     match column {
-        Column::Nullable(column) => (&column.column, Some(&column.validity)),
+        Column::Nullable(column) => (column.column(), Some(column.validity())),
         column => (column, None),
     }
 }
