@@ -26,6 +26,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::table_maintenance::record_stopped;
+use databend_common_metrics::table_maintenance::record_unit;
 use databend_common_pipeline::core::SharedLockGuard;
 use log::info;
 use log::warn;
@@ -250,6 +251,7 @@ impl TableHookRequest {
             .map(|offset| (self.turn + offset) % 3)
             .find(|&action| self.pending(action) && self.ready_at[action] <= now)?;
         self.turn = (action + 1) % 3;
+        let started = Instant::now();
         let result = match CatchUnwindFuture::create(
             self.execute_action(action, cancellation.clone()),
         )
@@ -266,8 +268,16 @@ impl TableHookRequest {
             }
         };
         if cancellation.is_cancelled() {
+            record_unit(ACTION_NAMES[action], "cancelled", started.elapsed());
             return None;
         }
+        let outcome = match &result {
+            Ok(MaintenanceOutcome::Completed) => "completed",
+            Ok(MaintenanceOutcome::Progress) => "progress",
+            Ok(MaintenanceOutcome::Deferred(_)) => "deferred",
+            Err(_) => "error",
+        };
+        record_unit(ACTION_NAMES[action], outcome, started.elapsed());
         if result
             .as_ref()
             .is_err_and(|error| error.code() == ErrorCode::ABORTED_QUERY)
@@ -374,6 +384,8 @@ impl TableHookRequest {
 
     fn stop_action(&mut self, action: usize, reason: &'static str) {
         record_stopped(ACTION_NAMES[action], reason);
+        warn!(table_id = self.target.table_id, action = ACTION_NAMES[action], reason;
+            "Stop best-effort maintenance action without claiming completion");
         self.failures[action] = 0;
         self.blocked_since[action] = None;
         self.ready_at[action] = Instant::now();
@@ -407,7 +419,8 @@ impl TableHookRequest {
         };
         let cancellation_ctx = ctx.clone();
         ctx.set_enable_auto_analyze(self.enable_auto_analyze);
-        info!(source_query_id = self.source_query_id.as_str(), table_id = self.target.table_id, action;
+        info!(source_query_id = self.source_query_id.as_str(), query_id = ctx.get_id().as_str(),
+            table_id = self.target.table_id, action = ACTION_NAMES[action];
             "Start async table hook job");
         let task = TableHookTask {
             ctx,
@@ -595,8 +608,11 @@ pub(super) async fn keep_progress<T>(ctx: &Arc<QueryContext>, work: impl Future<
 
 #[cfg(test)]
 mod tests {
+    use futures::TryStreamExt;
+
     use super::*;
     use crate::sessions::TableContextSettings;
+    use crate::sessions::TableContextTableAccess;
     use crate::test_kits::TestFixture;
 
     fn table_hook_task(ctx: Arc<QueryContext>, table: &str) -> TableHookTask {
@@ -719,6 +735,175 @@ mod tests {
         assert!(task.blocked_since[0].is_none());
         task.apply_outcome(0, Err(ErrorCode::Internal("transient error")));
         assert!(task.refresh_pending);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_refresh_replans_after_history_gc_and_definition_change() -> Result<()> {
+        use databend_common_storages_fuse::FuseTable;
+        use databend_common_storages_fuse::io::FuseCaches;
+
+        let fixture = TestFixture::setup().await?;
+        crate::interpreters::TableHookScheduler::try_instance()
+            .unwrap()
+            .shutdown()
+            .await;
+        fixture.execute_command("CREATE DATABASE hook_gc").await?;
+        fixture
+            .execute_command(
+                "CREATE TABLE hook_gc.t(content STRING) ROW_PER_BLOCK=1 BLOCK_PER_SEGMENT=1000",
+            )
+            .await?;
+        fixture
+            .execute_command(
+                "INSERT INTO hook_gc.t SELECT concat('alpha-', to_string(number)) FROM numbers(40)",
+            )
+            .await?;
+        fixture
+            .execute_command("CREATE ASYNC INVERTED INDEX inv ON hook_gc.t(content)")
+            .await?;
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.set_enable_auto_analyze(false);
+        let table = ctx.get_table("default", "hook_gc", "t").await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let source = fuse.snapshot_loc().unwrap();
+        let mut task = table_hook_task(ctx, "t");
+        task.target.database = "hook_gc".into();
+        task.target.table_id = table.get_id();
+        let request = task.into_request().await?;
+        let request = request.execute(CancellationToken::new()).await.unwrap();
+        assert!(request.refresh_progress.is_some());
+        let current = fixture
+            .new_query_ctx()
+            .await?
+            .get_table("default", "hook_gc", "t")
+            .await?;
+        assert_ne!(
+            FuseTable::try_from_table(current.as_ref())?.snapshot_loc(),
+            Some(source.clone())
+        );
+        // Simulate history GC after a committed partial batch, never deleting the head.
+        fuse.get_operator().delete(&source).await?;
+        FuseCaches::instance().snapshots.evict(&source);
+        let request = request.execute(CancellationToken::new()).await.unwrap();
+        assert!(request.refresh_pending);
+        assert!(
+            request.refresh_progress.is_none(),
+            "missing history must replan, not confirm coverage"
+        );
+
+        let mut request = request.execute(CancellationToken::new()).await;
+        fixture
+            .execute_command("DROP INVERTED INDEX inv ON hook_gc.t")
+            .await?;
+        fixture
+            .execute_command(
+                "CREATE ASYNC INVERTED INDEX inv ON hook_gc.t(content) tokenizer='english'",
+            )
+            .await?;
+        // Model a fresh notification after DDL; it must invalidate any old definition baseline.
+        if request.is_none() {
+            let ctx = fixture.new_query_ctx().await?;
+            ctx.set_enable_auto_analyze(false);
+            let mut task = table_hook_task(ctx, "t");
+            task.target.database = "hook_gc".into();
+            task.target.table_id = table.get_id();
+            request = Some(task.into_request().await?);
+        }
+        for _ in 0..10 {
+            if let Some(unit) = request.take() {
+                request = unit.execute(CancellationToken::new()).await;
+            }
+        }
+        assert!(request.is_none());
+        let blocks = fixture
+            .execute_query("SELECT * FROM hook_gc.t WHERE match(content, 'alpha')")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(
+            blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+            40
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_queued_refresh_follows_rename_but_not_same_name_recreation() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        // Drive the captured request explicitly so the DDL interleaving is deterministic.
+        crate::interpreters::TableHookScheduler::try_instance()
+            .unwrap()
+            .shutdown()
+            .await;
+        fixture
+            .execute_command("CREATE DATABASE hook_lifecycle")
+            .await?;
+        fixture
+            .execute_command("CREATE TABLE hook_lifecycle.t(content STRING)")
+            .await?;
+        fixture
+            .execute_command("INSERT INTO hook_lifecycle.t VALUES ('alpha')")
+            .await?;
+        fixture
+            .execute_command("CREATE ASYNC INVERTED INDEX inv ON hook_lifecycle.t(content)")
+            .await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let table = ctx.get_table("default", "hook_lifecycle", "t").await?;
+        let mut task = table_hook_task(ctx, "t");
+        task.target.database = "hook_lifecycle".into();
+        task.target.table_id = table.get_id();
+        let mut request = Some(task.into_request().await?);
+        fixture
+            .execute_command("ALTER TABLE hook_lifecycle.t RENAME TO renamed")
+            .await?;
+        for _ in 0..8 {
+            if let Some(unit) = request.take() {
+                request = unit.execute(CancellationToken::new()).await;
+            }
+        }
+        assert!(
+            request.is_none(),
+            "one block must finish within the bounded batches"
+        );
+        let blocks = fixture
+            .execute_query("SELECT * FROM hook_lifecycle.renamed WHERE match(content, 'alpha')")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(
+            blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+            1
+        );
+
+        let ctx = fixture.new_query_ctx().await?;
+        let mut old = table_hook_task(ctx, "renamed");
+        old.target.database = "hook_lifecycle".into();
+        old.target.table_id = table.get_id();
+        let old = old.into_request().await?;
+        fixture
+            .execute_command("DROP TABLE hook_lifecycle.renamed")
+            .await?;
+        fixture
+            .execute_command("CREATE TABLE hook_lifecycle.renamed(content STRING)")
+            .await?;
+        fixture
+            .execute_command("INSERT INTO hook_lifecycle.renamed VALUES ('new-only')")
+            .await?;
+        fixture
+            .execute_command("CREATE ASYNC INVERTED INDEX inv ON hook_lifecycle.renamed(content)")
+            .await?;
+        assert!(old.execute(CancellationToken::new()).await.is_none());
+        let error = fixture
+            .execute_command("SELECT * FROM hook_lifecycle.renamed WHERE match(content, 'new')")
+            .await
+            .expect_err("an old table's notification must not refresh its replacement");
+        assert!(
+            error
+                .to_string()
+                .contains("missing or uses an outdated format"),
+            "{error}"
+        );
         Ok(())
     }
 

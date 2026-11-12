@@ -7,7 +7,7 @@ import subprocess
 import textwrap
 import time
 from pathlib import Path
-
+from urllib.request import urlopen
 
 CURDIR = Path(__file__).resolve().parent
 ROOT = CURDIR.parents[3]
@@ -205,6 +205,8 @@ def execute(sql):
         cwd=str(ROOT),
         text=True,
         capture_output=True,
+        check=False,
+        timeout=60,
     )
     if result.returncode != 0:
         raise RuntimeError(
@@ -216,15 +218,99 @@ def execute(sql):
     return [line.split("\t") for line in result.stdout.splitlines() if line]
 
 
-def wait_for_sql(sql, predicate, timeout=30):
-    deadline = time.time() + timeout
+def wait_for_sql(sql, predicate, timeout=30, retry_error=None):
+    deadline = time.monotonic() + timeout
     last = None
-    while time.time() < deadline:
-        last = execute(sql)
-        if predicate(last):
-            return last
-        time.sleep(0.5)
+    while time.monotonic() < deadline:
+        try:
+            last = execute(sql)
+        except RuntimeError as error:
+            if retry_error is None or retry_error not in str(error):
+                raise
+            last = str(error)
+        else:
+            if predicate(last):
+                return last
+        time.sleep(0.1)
     raise RuntimeError(f"condition not met for sql: {sql}; last result: {last}")
+
+
+def maintenance_metric(name):
+    with urlopen(f"http://127.0.0.1:{METRIC_PORT}/metrics", timeout=5) as response:
+        text = response.read().decode()
+    for line in text.splitlines():
+        if line.startswith(f"databend_{name} "):
+            return float(line.split()[1])
+    raise RuntimeError(f"missing maintenance metric: {name}")
+
+
+def wait_for_maintenance_idle(timeout=60):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        tables = maintenance_metric("table_maintenance_mailbox_tables")
+        reserved = maintenance_metric("table_maintenance_reserved_memory_bytes")
+        if tables == 0 and reserved == 0:
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"maintenance failed to release resources: tables={tables}, reserved={reserved}")
+
+
+def run_refresh_lifecycle_case():
+    table = f"{TEST_NAME}.coverage"
+    execute(
+        f"CREATE TABLE {table}(content STRING) ROW_PER_BLOCK=1 BLOCK_PER_SEGMENT=1000 "
+        "AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD=0"
+    )
+    execute(f"INSERT INTO {table} SELECT concat('alpha-', to_string(number)) FROM numbers(70)")
+    wait_for_maintenance_idle()
+    execute(f"CREATE ASYNC INVERTED INDEX inv ON {table}(content)")
+    execute(f"CREATE ASYNC NGRAM INDEX ng ON {table}(content)")
+    try:
+        execute(f"SELECT count(*) FROM {table} WHERE match(content, 'alpha')")
+    except RuntimeError as error:
+        assert "missing or uses an outdated format" in str(error), str(error)
+    else:
+        raise AssertionError("an unbuilt required inverted index must report missing coverage")
+
+    execute(f"INSERT INTO {table} VALUES ('beta')")
+    coverage = (
+        f"SELECT count(*) FROM fuse_block('{TEST_NAME}', 'coverage') "
+        "WHERE inverted_index_size IS NULL OR ngram_index_size IS NULL"
+    )
+    wait_for_sql(coverage, lambda rows: rows == [["0"]], timeout=60)
+    wait_for_maintenance_idle()
+    assert execute(f"SELECT count(*) FROM {table} WHERE match(content, 'alpha')") == [["70"]]
+
+    # Notifications carry table identity, not a name or context held by the old query.
+    execute(f"INSERT INTO {table} VALUES ('gamma')")
+    execute(f"ALTER TABLE {table} RENAME TO coverage_renamed")
+    table = f"{TEST_NAME}.coverage_renamed"
+    wait_for_maintenance_idle()
+    assert execute(f"SELECT count(*) FROM {table}") == [["72"]]
+    wait_for_log("incremental=true")
+
+    # Replacing a definition invalidates coverage. Missing current-version inverted
+    # artifacts are an expected transient query error, never an empty result.
+    execute(f"DROP INVERTED INDEX inv ON {table}")
+    execute(f"CREATE ASYNC INVERTED INDEX inv ON {table}(content) tokenizer='english'")
+    execute(f"INSERT INTO {table} VALUES ('delta')")
+    wait_for_sql(
+        f"SELECT count(*) FROM {table} WHERE match(content, 'alpha')",
+        lambda rows: rows == [["70"]],
+        timeout=60,
+        retry_error="missing or uses an outdated format",
+    )
+    wait_for_maintenance_idle()
+    assert execute(f"SELECT count(*) FROM {table}") == [["73"]]
+
+    # A stale queued/in-flight request must not publish onto a new table of the same name.
+    execute(f"INSERT INTO {table} VALUES ('old-target')")
+    execute(f"DROP TABLE {table}")
+    execute(f"CREATE TABLE {table}(id INT)")
+    execute(f"INSERT INTO {table} VALUES (999)")
+    wait_for_maintenance_idle()
+    assert execute(f"SELECT count(*), sum(id) FROM {table}") == [["1", "999"]]
+    print("async refresh: bounded coverage, missing-index semantics, rename/DDL and ID reuse: ok")
 
 
 def wait_for_log(pattern, timeout=30):
@@ -305,6 +391,7 @@ def run_case():
             timeout=60,
         )
         print("async table hook compact completed: ok")
+        run_refresh_lifecycle_case()
 
         execute(f"drop database if exists {TEST_NAME}")
     except Exception:

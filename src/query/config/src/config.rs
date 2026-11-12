@@ -2061,7 +2061,8 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "2")]
     pub table_maintenance_max_threads: u64,
 
-    /// Maximum table mailboxes. New keys wait for capacity rather than losing maintenance.
+    /// Maximum table mailboxes. At capacity, new keys are discarded without delaying writes;
+    /// existing keys still merge. Automatic maintenance notifications are best-effort.
     #[clap(long, value_name = "VALUE", default_value = "1024")]
     pub table_maintenance_max_pending_tables: usize,
 }

@@ -28,6 +28,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_metrics::table_maintenance::record_rejected;
+use databend_common_metrics::table_maintenance::set_mailbox;
 use log::warn;
 use parking_lot::Mutex;
 use tokio::sync::Notify;
@@ -159,6 +160,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
         runner: SchedulerRunner<T>,
         spawner: SchedulerSpawner,
     ) -> Arc<Self> {
+        set_mailbox(0, 0);
         let scheduler = Arc::new(Self {
             queue: Mutex::new(MailboxQueue {
                 states: HashMap::new(),
@@ -203,6 +205,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
                 queue.ready.push_back(key);
             }
         }
+        queue.record_metrics();
         drop(queue);
         self.wake.notify_one();
         Ok(())
@@ -253,6 +256,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
                 }
             });
             self.semaphore.close();
+            queue.record_metrics();
         }
         self.cancellation.cancel();
         self.wake.notify_one();
@@ -298,6 +302,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             else {
                 unreachable!()
             };
+            queue.record_metrics();
             return (Some((key, task)), earliest);
         }
         (None, earliest)
@@ -333,6 +338,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             return;
         };
         if queue.closed {
+            queue.record_metrics();
             self.stopped.notify_waiters();
             return;
         }
@@ -348,6 +354,13 @@ impl<T: SchedulerTask> SchedulerCore<T> {
                 .insert(key.clone(), TableHookState::Queued(task));
             queue.ready.push_back(key);
         }
+        queue.record_metrics();
+    }
+}
+
+impl<T> MailboxQueue<T> {
+    fn record_metrics(&self) {
+        set_mailbox(self.states.len(), self.states.len() - self.ready.len());
     }
 }
 

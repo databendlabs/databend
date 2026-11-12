@@ -23,6 +23,7 @@ use databend_common_base::runtime::MemStat;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::table_maintenance::add_reserved_memory;
 use databend_common_settings::Settings;
 use parking_lot::Mutex;
 
@@ -51,6 +52,7 @@ pub(crate) struct MaintenanceReservation {
 
 impl MaintenanceResources {
     pub(crate) fn init(total: u64, concurrency: usize) {
+        add_reserved_memory(0);
         let memory = MemStat::create_workload_group();
         memory.set_limit(total as i64, false);
         GlobalInstance::set(Arc::new(Self {
@@ -86,6 +88,7 @@ impl MaintenanceResources {
                 "Maintenance memory reservation unavailable",
             ));
         }
+        add_reserved_memory(resources.unit as i64);
         drop(state);
         Ok(Arc::new(MaintenanceReservation { resources }))
     }
@@ -150,6 +153,7 @@ impl MaintenanceReservation {
 
 impl Drop for MaintenanceReservation {
     fn drop(&mut self) {
+        add_reserved_memory(-(self.resources.unit as i64));
         self.resources
             .reserved
             .fetch_sub(self.resources.unit, Ordering::AcqRel);
