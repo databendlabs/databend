@@ -359,6 +359,210 @@ Exchange(Merge)
             └── num_rows: [2]
 
 
+=== count_ordered_window_keeps_null_on_no_match ===
+description: Replacing a COUNT-ordered window sort must clear count fixup so an unmatched scalar subquery remains NULL.
+sql: SELECT o.k, (SELECT row_number() OVER (ORDER BY count(*)) FROM cw_inner i WHERE i.k = o.k GROUP BY i.k LIMIT 1) FROM (VALUES (1), (2)) o(k)
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0), SUBQUERY AS (#3) AS (#4)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: row_number() OVER (ORDER BY COUNT(*)) (#3)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [row_number() OVER (ORDER BY COUNT(*)) (#3) AS (#3)]
+│               └── Window
+│                   ├── aggregate function: row_number
+│                   ├── partition items: []
+│                   ├── order by items: [COUNT(*) (#2) AS (#2)]
+│                   ├── frame: [Range: Preceding(None) ~ CurrentRow]
+│                   └── Sort
+│                       ├── sort keys: [COUNT(*) (#2) ASC NULLS LAST]
+│                       ├── limit: [NONE]
+│                       └── EvalScalar
+│                           ├── scalars: [COUNT(*) (#2) AS (#2)]
+│                           └── Aggregate(Initial)
+│                               ├── group items: [cw_inner.k (#1) AS (#1)]
+│                               ├── aggregate functions: [count() AS (#2)]
+│                               └── EvalScalar
+│                                   ├── scalars: [cw_inner.k (#1) AS (#1)]
+│                                   └── Filter
+│                                       ├── filters: [eq(cw_inner.k (#1), k (#0))]
+│                                       └── Scan
+│                                           ├── table: default.cw_inner (#0)
+│                                           ├── filters: []
+│                                           ├── order by: []
+│                                           └── limit: NONE
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [k (#0) AS (#0), row_number() OVER (ORDER BY COUNT(*)) (#3) AS (#4)]
+    └── Join(LeftSingle)
+        ├── build keys: [k (#5)]
+        ├── probe keys: [k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [k (#5) AS (#5)]
+        │           ├── order by items: []
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Window
+        │               ├── aggregate function: row_number
+        │               ├── partition items: [k (#5) AS (#5)]
+        │               ├── order by items: [COUNT(*) (#2) AS (#2)]
+        │               ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │               └── Sort
+        │                   ├── sort keys: [k (#5) ASC NULLS LAST, COUNT(*) (#2) ASC NULLS LAST]
+        │                   ├── limit: [NONE]
+        │                   ├── window top: NONE
+        │                   ├── window function: RowNumber
+        │                   └── Exchange(Hash)
+        │                       ├── Exchange(Hash): keys: [k (#5)]
+        │                       └── Aggregate(Final)
+        │                           ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                           ├── aggregate functions: [count() AS (#2)]
+        │                           └── Aggregate(Partial)
+        │                               ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                               ├── aggregate functions: [count() AS (#2)]
+        │                               └── Exchange(Hash)
+        │                                   ├── Exchange(Hash): keys: [cw_inner.k (#1)]
+        │                                   └── Join(Inner)
+        │                                       ├── build keys: [cw_inner.k (#1)]
+        │                                       ├── probe keys: [k (#5)]
+        │                                       ├── other filters: []
+        │                                       ├── Exchange(Broadcast)
+        │                                       │   └── Scan
+        │                                       │       ├── table: default.cw_inner (#0)
+        │                                       │       ├── filters: []
+        │                                       │       ├── order by: []
+        │                                       │       └── limit: NONE
+        │                                       └── Aggregate(Final)
+        │                                           ├── group items: [k (#5) AS (#5)]
+        │                                           ├── aggregate functions: []
+        │                                           └── Aggregate(Partial)
+        │                                               ├── group items: [k (#5) AS (#5)]
+        │                                               ├── aggregate functions: []
+        │                                               └── Exchange(Hash)
+        │                                                   ├── Exchange(Hash): keys: [k (#5)]
+        │                                                   └── ConstantTableScan
+        │                                                       ├── columns: [k (#5)]
+        │                                                       └── num_rows: [2]
+        └── ConstantTableScan
+            ├── columns: [k (#0)]
+            └── num_rows: [2]
+
+
+=== distinct_count_ordered_window_keeps_null_on_no_match ===
+description: COUNT(DISTINCT) in the replaced window sort must also prevent filling a missing row_number with zero.
+sql: SELECT o.k, (SELECT row_number() OVER (ORDER BY count(DISTINCT i.k)) FROM cw_inner i WHERE i.k = o.k GROUP BY i.k LIMIT 1) FROM (VALUES (1), (2)) o(k)
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0), SUBQUERY AS (#3) AS (#4)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: row_number() OVER (ORDER BY count(DISTINCT i.k)) (#3)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [row_number() OVER (ORDER BY count(DISTINCT i.k)) (#3) AS (#3)]
+│               └── Window
+│                   ├── aggregate function: row_number
+│                   ├── partition items: []
+│                   ├── order by items: [count(DISTINCT i.k) (#2) AS (#2)]
+│                   ├── frame: [Range: Preceding(None) ~ CurrentRow]
+│                   └── Sort
+│                       ├── sort keys: [count(DISTINCT i.k) (#2) ASC NULLS LAST]
+│                       ├── limit: [NONE]
+│                       └── EvalScalar
+│                           ├── scalars: [count(DISTINCT i.k) (#2) AS (#2)]
+│                           └── Aggregate(Initial)
+│                               ├── group items: [cw_inner.k (#1) AS (#1)]
+│                               ├── aggregate functions: [count_distinct(cw_inner.k (#1)) AS (#2)]
+│                               └── EvalScalar
+│                                   ├── scalars: [cw_inner.k (#1) AS (#1)]
+│                                   └── Filter
+│                                       ├── filters: [eq(cw_inner.k (#1), k (#0))]
+│                                       └── Scan
+│                                           ├── table: default.cw_inner (#0)
+│                                           ├── filters: []
+│                                           ├── order by: []
+│                                           └── limit: NONE
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [k (#0) AS (#0), row_number() OVER (ORDER BY count(DISTINCT i.k)) (#3) AS (#4)]
+    └── Join(LeftSingle)
+        ├── build keys: [k (#5)]
+        ├── probe keys: [k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [k (#5) AS (#5)]
+        │           ├── order by items: []
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Window
+        │               ├── aggregate function: row_number
+        │               ├── partition items: [k (#5) AS (#5)]
+        │               ├── order by items: [count(DISTINCT i.k) (#2) AS (#2)]
+        │               ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │               └── Sort
+        │                   ├── sort keys: [k (#5) ASC NULLS LAST, count(DISTINCT i.k) (#2) ASC NULLS LAST]
+        │                   ├── limit: [NONE]
+        │                   ├── window top: NONE
+        │                   ├── window function: RowNumber
+        │                   └── Exchange(Hash)
+        │                       ├── Exchange(Hash): keys: [k (#5)]
+        │                       └── Aggregate(Final)
+        │                           ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                           ├── aggregate functions: [count_distinct(cw_inner.k (#1)) AS (#2)]
+        │                           └── Aggregate(Partial)
+        │                               ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                               ├── aggregate functions: [count_distinct(cw_inner.k (#1)) AS (#2)]
+        │                               └── Exchange(Hash)
+        │                                   ├── Exchange(Hash): keys: [cw_inner.k (#1)]
+        │                                   └── Join(Inner)
+        │                                       ├── build keys: [cw_inner.k (#1)]
+        │                                       ├── probe keys: [k (#5)]
+        │                                       ├── other filters: []
+        │                                       ├── Exchange(Broadcast)
+        │                                       │   └── Scan
+        │                                       │       ├── table: default.cw_inner (#0)
+        │                                       │       ├── filters: []
+        │                                       │       ├── order by: []
+        │                                       │       └── limit: NONE
+        │                                       └── Aggregate(Final)
+        │                                           ├── group items: [k (#5) AS (#5)]
+        │                                           ├── aggregate functions: []
+        │                                           └── Aggregate(Partial)
+        │                                               ├── group items: [k (#5) AS (#5)]
+        │                                               ├── aggregate functions: []
+        │                                               └── Exchange(Hash)
+        │                                                   ├── Exchange(Hash): keys: [k (#5)]
+        │                                                   └── ConstantTableScan
+        │                                                       ├── columns: [k (#5)]
+        │                                                       └── num_rows: [2]
+        └── ConstantTableScan
+            ├── columns: [k (#0)]
+            └── num_rows: [2]
+
+
 === uncorrelated_window_keeps_global_input ===
 description: An uncorrelated global window needs no outer partition sort.
 sql: SELECT (SELECT sum(t2.b) OVER () FROM (VALUES (10), (20)) t2(b) LIMIT 1) FROM (VALUES (1), (2)) t1(a)

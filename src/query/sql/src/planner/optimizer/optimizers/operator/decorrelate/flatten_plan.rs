@@ -900,17 +900,7 @@ impl SubqueryDecorrelatorOptimizer {
             need_cross_join,
             derived_columns,
         )?;
-        // Check if sort contains `count() or distinct count()`.
-        if sort.items.iter().any(|item| {
-            let metadata = self.ctx.metadata_read();
-            let col = metadata.column(item.index);
-            if let ColumnEntry::DerivedColumn(derived_col) = col {
-                // A little tricky here, we'll check if a sort item is a count aggregation function later.
-                derived_col.alias.to_lowercase().starts_with("count")
-            } else {
-                false
-            }
-        }) {
+        if self.sort_contains_count(sort) {
             flatten_info.from_count_func = false;
         }
         let mut sort = sort.clone();
@@ -922,6 +912,18 @@ impl SubqueryDecorrelatorOptimizer {
             }
         })?;
         Ok((flatten_plan.build_unary(sort), derived_columns))
+    }
+
+    fn sort_contains_count(&self, sort: &Sort) -> bool {
+        let metadata = self.ctx.metadata_read();
+        sort.items.iter().any(|item| {
+            if let ColumnEntry::DerivedColumn(derived_col) = metadata.column(item.index) {
+                // Keep the existing alias-based check for count() and count(distinct ...).
+                derived_col.alias.to_lowercase().starts_with("count")
+            } else {
+                false
+            }
+        })
     }
 
     fn flatten_sub_limit(
@@ -945,15 +947,7 @@ impl SubqueryDecorrelatorOptimizer {
                     derived_columns,
                 )?;
 
-                if sort.items.iter().any(|item| {
-                    let metadata = self.ctx.metadata_read();
-                    let col = metadata.column(item.index);
-                    if let ColumnEntry::DerivedColumn(derived_col) = col {
-                        derived_col.alias.to_lowercase().starts_with("count")
-                    } else {
-                        false
-                    }
-                }) {
+                if self.sort_contains_count(sort) {
                     flatten_info.from_count_func = false;
                 }
 
@@ -1198,6 +1192,7 @@ impl SubqueryDecorrelatorOptimizer {
         // Replace the binder's window sort: decorrelation adds partition keys,
         // so neither its ordering nor its partition exchange is sufficient.
         let mut input = subquery.unary_child();
+        let mut skipped_count_sort = false;
         if let RelOperator::Sort(sort) = input.plan()
             && sort.limit.is_none()
             && sort
@@ -1206,6 +1201,7 @@ impl SubqueryDecorrelatorOptimizer {
                 .is_none_or(|partition| partition.top.is_none())
             && (!window.partition_by.is_empty() || !window.order_by.is_empty())
         {
+            skipped_count_sort = self.sort_contains_count(sort);
             input = input.unary_child();
         }
         let (flatten_plan, derived_columns) = self.flatten_plan_with_scope(
@@ -1216,6 +1212,10 @@ impl SubqueryDecorrelatorOptimizer {
             true,
             derived_columns,
         )?;
+        // Preserve flatten_sub_sort's bookkeeping after the aggregate below has been flattened.
+        if skipped_count_sort {
+            flatten_info.from_count_func = false;
+        }
         let window = self.flatten_window(window, correlated_columns, &derived_columns)?;
 
         // TransformWindow consumes contiguous, ordered partitions. Even OVER ()

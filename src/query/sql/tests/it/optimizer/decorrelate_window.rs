@@ -50,6 +50,18 @@ async fn test_decorrelated_window_ordering() -> Result<()> {
             sql: "SELECT (SELECT sum(t1.a + t2.b) OVER (PARTITION BY t2.k ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM (VALUES (1, 10), (1, 20), (2, 100), (2, 200)) t2(k, b) ORDER BY t2.k, t2.b DESC NULLS LAST LIMIT 1 OFFSET 1) FROM (VALUES (1), (2)) t1(a)",
         },
         SqlTestCase {
+            name: "count_ordered_window_keeps_null_on_no_match",
+            description: "Replacing a COUNT-ordered window sort must clear count fixup so an unmatched scalar subquery remains NULL.",
+            setup_sqls: &["CREATE TABLE cw_inner(k INT)"],
+            sql: "SELECT o.k, (SELECT row_number() OVER (ORDER BY count(*)) FROM cw_inner i WHERE i.k = o.k GROUP BY i.k LIMIT 1) FROM (VALUES (1), (2)) o(k)",
+        },
+        SqlTestCase {
+            name: "distinct_count_ordered_window_keeps_null_on_no_match",
+            description: "COUNT(DISTINCT) in the replaced window sort must also prevent filling a missing row_number with zero.",
+            setup_sqls: &["CREATE TABLE cw_inner(k INT)"],
+            sql: "SELECT o.k, (SELECT row_number() OVER (ORDER BY count(DISTINCT i.k)) FROM cw_inner i WHERE i.k = o.k GROUP BY i.k LIMIT 1) FROM (VALUES (1), (2)) o(k)",
+        },
+        SqlTestCase {
             name: "uncorrelated_window_keeps_global_input",
             description: "An uncorrelated global window needs no outer partition sort.",
             setup_sqls: &[],
