@@ -894,7 +894,8 @@ mod tests {
         let Column::Nullable(nullable) = column else {
             unreachable!()
         };
-        let Column::TimestampTz(source) = nullable.column else {
+        let (source, _) = nullable.destructure();
+        let Column::TimestampTz(source) = source else {
             unreachable!()
         };
         assert_eq!(source[0].seconds_offset(), 1800);

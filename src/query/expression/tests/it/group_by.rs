@@ -17,6 +17,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VectorColumn;
@@ -124,7 +125,9 @@ fn test_timezone_equality_keys_keep_source_offsets() -> anyhow::Result<()> {
     )));
     for column in [
         timestamps.clone(),
-        NullableColumn::new_column(timestamps.clone(), Bitmap::from([true; 3])),
+        timestamps
+            .clone()
+            .wrap_nullable(Some(Bitmap::from([true; 3]))),
         arrays.clone(),
         maps,
         Column::Tuple(vec![arrays]),
