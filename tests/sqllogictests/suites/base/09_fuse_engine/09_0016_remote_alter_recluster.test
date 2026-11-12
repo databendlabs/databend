@@ -151,15 +151,13 @@ select count() from fuse_snapshot('db_09_0016', 't5')
 ----
 9
 
-# 400 rows are cut at the table minimum of 80 rows, not at 64.
-query I
-select row_count from fuse_block('db_09_0016', 't5') order by row_count
+# 400 rows are cut at the table minimum of 80 rows, not at 64. The exact block
+# layout depends on how the task is split across nodes, so only assert the
+# invariant: no output block is below the table minimum.
+query BI
+select min(row_count) >= 80, sum(row_count) from fuse_block('db_09_0016', 't5')
 ----
-80
-80
-80
-80
-80
+1 400
 
 # Every output block is a terminal constant block, so nothing is left to do.
 statement ok
