@@ -29,6 +29,7 @@ use databend_common_metrics::table_maintenance::record_stopped;
 use databend_common_pipeline::core::SharedLockGuard;
 use log::info;
 use log::warn;
+use tokio_util::sync::CancellationToken;
 
 use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
 use crate::interpreters::hook::recluster_hook::ReclusterProgress;
@@ -41,6 +42,7 @@ use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryIdentity;
 use crate::table_maintenance::MaintenanceContext;
 use crate::table_maintenance::MaintenanceIdentity;
+use crate::table_maintenance::run_maintenance_unit;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) struct TableHookTaskKey {
@@ -242,30 +244,36 @@ impl TableHookRequest {
 
     /// Execute only one batch/round, then relinquish all execution resources. Each action
     /// has its own backoff; a failing heavy action cannot hold up index or statistics work.
-    pub(super) async fn execute(mut self) -> Option<Self> {
+    pub(super) async fn execute(mut self, cancellation: CancellationToken) -> Option<Self> {
         let now = Instant::now();
         let action = (0..3)
             .map(|offset| (self.turn + offset) % 3)
             .find(|&action| self.pending(action) && self.ready_at[action] <= now)?;
         self.turn = (action + 1) % 3;
-        let result = match CatchUnwindFuture::create(self.execute_action(action)).await {
+        let result = match CatchUnwindFuture::create(
+            self.execute_action(action, cancellation.clone()),
+        )
+        .await
+        {
             Ok(result) => result,
             Err(error) => {
                 // Unwinding can drop carry taken out of a job, or hide a committed refresh.
                 // Never resume that partially mutated progress with a missing frozen scope.
-                match action {
-                    0 => {
-                        self.refresh_progress = None;
-                        self.refresh_base = None;
-                    }
-                    2 => self.recluster_progress = None,
-                    _ => {}
-                }
+                self.reset_progress(action);
                 Err(ErrorCode::Internal(format!(
                     "Maintenance action panicked: {error}"
                 )))
             }
         };
+        if cancellation.is_cancelled() {
+            return None;
+        }
+        if result
+            .as_ref()
+            .is_err_and(|error| error.code() == ErrorCode::ABORTED_QUERY)
+        {
+            self.reset_progress(action);
+        }
         self.apply_outcome(action, result);
         (0..3).any(|action| self.pending(action)).then_some(self)
     }
@@ -346,6 +354,17 @@ impl TableHookRequest {
         }
     }
 
+    fn reset_progress(&mut self, action: usize) {
+        match action {
+            0 => {
+                self.refresh_progress = None;
+                self.refresh_base = None;
+            }
+            2 => self.recluster_progress = None,
+            _ => {}
+        }
+    }
+
     fn blocked_too_long(&mut self, action: usize) -> bool {
         self.blocked_since[action]
             .get_or_insert_with(Instant::now)
@@ -374,9 +393,19 @@ impl TableHookRequest {
         }
     }
 
-    async fn execute_action(&mut self, action: usize) -> Result<MaintenanceOutcome> {
-        let MaintenanceContext { ctx, tracking } =
-            MaintenanceContext::from_identity(&self.identity).await?;
+    async fn execute_action(
+        &mut self,
+        action: usize,
+        cancellation: CancellationToken,
+    ) -> Result<MaintenanceOutcome> {
+        let MaintenanceContext { ctx, tracking } = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Err(ErrorCode::AbortedQuery("Maintenance scheduler closed")),
+            context = tokio::time::timeout(Duration::from_secs(60), MaintenanceContext::from_identity(&self.identity)) => {
+                context.map_err(|_| ErrorCode::AbortedQuery("Maintenance context creation timed out"))??
+            }
+        };
+        let cancellation_ctx = ctx.clone();
         ctx.set_enable_auto_analyze(self.enable_auto_analyze);
         info!(source_query_id = self.source_query_id.as_str(), table_id = self.target.table_id, action;
             "Start async table hook job");
@@ -395,8 +424,10 @@ impl TableHookRequest {
             operation_name: self.operation_name.clone(),
             main_operation_start: self.main_operation_start,
         };
-        tracking
-            .tracking(async {
+        run_maintenance_unit(
+            &cancellation_ctx,
+            cancellation,
+            tracking.tracking(async {
                 match action {
                     0 => task
                         .execute_refresh_batch(&mut self.refresh_base, &mut self.refresh_progress)
@@ -438,8 +469,9 @@ impl TableHookRequest {
                         }
                     }
                 }
-            })
-            .await
+            }),
+        )
+        .await
     }
 }
 

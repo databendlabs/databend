@@ -33,14 +33,16 @@ use parking_lot::Mutex;
 use tokio::sync::Notify;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
+use tokio_util::sync::CancellationToken;
 
 use crate::interpreters::hook::table_hook_task::SchedulerTask;
 use crate::interpreters::hook::table_hook_task::TableHookRequest;
 use crate::interpreters::hook::table_hook_task::TableHookTaskKey;
 
 type SchedulerFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-type SchedulerRunner<T> =
-    Arc<dyn Fn(T) -> Pin<Box<dyn Future<Output = Option<T>> + Send>> + Send + Sync>;
+type SchedulerRunner<T> = Arc<
+    dyn Fn(T, CancellationToken) -> Pin<Box<dyn Future<Output = Option<T>> + Send>> + Send + Sync,
+>;
 type SchedulerSpawner = Arc<dyn Fn(SchedulerFuture, String) + Send + Sync>;
 
 pub struct TableHookScheduler {
@@ -57,6 +59,7 @@ struct SchedulerCore<T> {
     wake: Notify,
     max_tables: usize,
     stopped: Notify,
+    cancellation: CancellationToken,
 }
 
 struct MailboxQueue<T> {
@@ -74,7 +77,7 @@ enum TableHookState<T> {
 impl TableHookScheduler {
     pub fn init(max_concurrency: usize) -> Result<()> {
         let runner: SchedulerRunner<TableHookRequest> =
-            Arc::new(|request| Box::pin(request.execute()));
+            Arc::new(|request, cancellation| Box::pin(request.execute(cancellation)));
         let spawner: SchedulerSpawner = Arc::new(|future, name| {
             GlobalIORuntime::instance().spawn_named(future, name);
         });
@@ -121,8 +124,13 @@ impl TableHookScheduler {
         coverage.insert(key, (definition, location));
     }
 
-    /// Stop admitting work and wait for in-flight units to release their contexts. Call
-    /// before destroying the services used by maintenance. Pending work is not durable yet.
+    /// Close admission and discard pending work before shutting down its dependencies.
+    pub fn close(&self) {
+        self.core.close();
+    }
+
+    /// Cancel running units and wait for their normal pipeline/remote cleanup. Production
+    /// shutdown must bound this wait: best-effort work must not prevent a node from exiting.
     pub async fn shutdown(&self) {
         self.core.shutdown().await;
     }
@@ -164,6 +172,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             wake: Notify::new(),
             max_tables,
             stopped: Notify::new(),
+            cancellation: CancellationToken::new(),
         });
         spawner(
             Box::pin(Self::dispatch(scheduler.clone())),
@@ -231,7 +240,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
         }
     }
 
-    async fn shutdown(&self) {
+    fn close(&self) {
         {
             let mut queue = self.queue.lock();
             queue.closed = true;
@@ -245,7 +254,12 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             });
             self.semaphore.close();
         }
+        self.cancellation.cancel();
         self.wake.notify_one();
+    }
+
+    async fn shutdown(&self) {
+        self.close();
         loop {
             let stopped = self.stopped.notified();
             tokio::pin!(stopped);
@@ -295,7 +309,10 @@ impl<T: SchedulerTask> SchedulerCore<T> {
         task: T,
         permit: OwnedSemaphorePermit,
     ) {
-        let result = CatchUnwindFuture::create(async { (scheduler.runner)(task).await }).await;
+        let result = CatchUnwindFuture::create(async {
+            (scheduler.runner)(task, scheduler.cancellation.clone()).await
+        })
+        .await;
         let continuation = match result {
             Ok(continuation) => continuation,
             Err(e) => {
@@ -305,8 +322,8 @@ impl<T: SchedulerTask> SchedulerCore<T> {
         };
         // A round/batch ends here. Neither retry delays nor the rest of a long logical job
         // holds a concurrency permit, a query context, a memory reservation or table claims.
-        scheduler.finish_table_job(key, continuation);
         drop(permit);
+        scheduler.finish_table_job(key, continuation);
         scheduler.wake.notify_one();
     }
 
@@ -385,7 +402,7 @@ mod tests {
         SchedulerCore::create(
             concurrency,
             32,
-            Arc::new(move |task| {
+            Arc::new(move |task, _cancellation| {
                 let future = runner(task);
                 Box::pin(async move {
                     future.await;
@@ -761,7 +778,7 @@ mod tests {
             let first_started = first_started.clone();
             let release_first = release_first.clone();
             let runs = runs.clone();
-            Arc::new(move |mut task| {
+            Arc::new(move |mut task, _cancellation| {
                 let first_started = first_started.clone();
                 let release_first = release_first.clone();
                 let runs = runs.clone();
@@ -808,8 +825,46 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_shutdown_cancels_running_units_and_discards_followups() {
+        let started = Arc::new(Notify::new());
+        let runs = Arc::new(AtomicUsize::new(0));
+        let runner: SchedulerRunner<TestTask> = {
+            let started = started.clone();
+            let runs = runs.clone();
+            Arc::new(move |task, cancellation| {
+                let started = started.clone();
+                let runs = runs.clone();
+                Box::pin(async move {
+                    runs.fetch_add(1, Ordering::SeqCst);
+                    started.notify_one();
+                    cancellation.cancelled().await;
+                    Some(task)
+                })
+            })
+        };
+        let scheduler = SchedulerCore::create(1, 2, runner, tokio_spawner());
+        scheduler.enqueue(test_task(1));
+        timeout(Duration::from_secs(1), started.notified())
+            .await
+            .unwrap();
+        scheduler.enqueue(test_task(1));
+        scheduler.enqueue(test_task(2));
+        scheduler.close();
+        assert!(scheduler.try_enqueue(test_task(3)).is_err());
+        timeout(Duration::from_secs(1), scheduler.shutdown())
+            .await
+            .unwrap();
+        assert_eq!(runs.load(Ordering::SeqCst), 1);
+        assert!(scheduler.queue.lock().states.is_empty());
+        assert_eq!(scheduler.semaphore.available_permits(), 1);
+        timeout(Duration::from_secs(1), scheduler.shutdown())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_full_mailbox_still_merges_existing_keys() {
-        let runner: SchedulerRunner<TestTask> = Arc::new(|_| unreachable!());
+        let runner: SchedulerRunner<TestTask> = Arc::new(|_, _| unreachable!());
         // Do not dispatch: admission alone must be synchronous even with no capacity release.
         let scheduler = SchedulerCore::create(1, 1, runner, Arc::new(|_, _| {}));
         assert!(scheduler.try_enqueue(test_task_with_payload(1, 1)).is_ok());

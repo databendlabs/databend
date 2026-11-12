@@ -71,7 +71,7 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
                 false => {
                     let ctx = env.create_query_ctx().await?;
                     if let Some(reservation) = reservation {
-                        ctx.set_maintenance_reservation(reservation);
+                        ctx.set_maintenance_reservation(reservation)?;
                         // Match the coordinator's zero-spill maintenance envelope.
                         ctx.set_enable_sort_spill(false);
                     }

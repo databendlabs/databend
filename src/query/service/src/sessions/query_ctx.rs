@@ -209,8 +209,10 @@ impl QueryContext {
     pub(crate) fn set_maintenance_reservation(
         &self,
         reservation: Arc<crate::table_maintenance::MaintenanceReservation>,
-    ) {
+    ) -> Result<()> {
+        reservation.register(Arc::downgrade(&self.shared))?;
         *self.shared.maintenance_reservation.write() = Some(reservation);
+        Ok(())
     }
 
     // Each table will create a new QueryContext
