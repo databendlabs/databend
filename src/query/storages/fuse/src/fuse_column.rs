@@ -30,6 +30,8 @@ pub struct FuseTableColumnStatisticsProvider {
     stats_row_count: u64,
     row_count: u64,
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+    // Columns whose exact null count equals the snapshot row count.
+    all_null_counts: HashMap<ColumnId, u64>,
     histograms: HashMap<ColumnId, Histogram>,
     top_n: BlockTopN,
     count_min_sketch: BlockCountMinSketch,
@@ -46,6 +48,14 @@ impl FuseTableColumnStatisticsProvider {
         row_count: u64,
     ) -> Self {
         let distinct_map = column_distinct_values.as_ref();
+        // Snapshot null counts are exact sums of block statistics. An all-NULL
+        // column has no min/max and is dropped by `get_useful_stat`, so keep
+        // this fact separately.
+        let all_null_counts = column_stats
+            .iter()
+            .filter(|(_, stat)| row_count > 0 && stat.null_count == row_count)
+            .map(|(column_id, stat)| (*column_id, stat.null_count))
+            .collect();
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
@@ -65,6 +75,7 @@ impl FuseTableColumnStatisticsProvider {
             .collect();
         Self {
             column_stats,
+            all_null_counts,
             histograms,
             top_n,
             count_min_sketch,
@@ -104,5 +115,9 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
 
     fn count_min_sketch(&self, column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         self.count_min_sketch.get(&column_id).cloned()
+    }
+
+    fn all_null_count(&self, column_id: ColumnId) -> Option<u64> {
+        self.all_null_counts.get(&column_id).copied()
     }
 }

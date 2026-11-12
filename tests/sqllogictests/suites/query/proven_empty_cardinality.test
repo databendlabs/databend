@@ -1,6 +1,6 @@
 ## A filter or join is only treated as exactly empty when that can be proven
-## without column statistics. COUNT(*) over a non-empty result must not be
-## folded to 0.
+## from type domains or exact row and null counts, without column value
+## statistics. COUNT(*) over a non-empty result must not be folded to 0.
 
 statement ok
 CREATE OR REPLACE DATABASE proven_empty_cardinality
@@ -73,6 +73,33 @@ query I
 SELECT count(*) FROM w LEFT JOIN (SELECT * FROM e WHERE v > 10) AS f ON w.k = f.k WHERE w.k < 10
 ----
 10
+
+## Every row of n is NULL. After a non-NULL row is appended, the exact null
+## count no longer covers every row and the matching row must be counted.
+
+statement ok
+CREATE TABLE z(k UInt64 NOT NULL, n UInt64 NULL)
+
+statement ok
+INSERT INTO z SELECT number, NULL FROM numbers(500)
+
+query I
+SELECT count(*) FROM z WHERE n > 10
+----
+0
+
+statement ok
+INSERT INTO z VALUES (500, 20)
+
+query I
+SELECT count(*) FROM z WHERE n > 10
+----
+1
+
+query I
+SELECT count(*) FROM z WHERE n IS NOT NULL
+----
+1
 
 statement ok
 DROP DATABASE proven_empty_cardinality
