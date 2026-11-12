@@ -727,13 +727,10 @@ impl QueueData for QueryEntry {
         lock_key
     }
 
-    fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
-        match key {
-            None => ErrorCode::AbortedQuery("Query was killed while in queue"),
-            Some(key) => {
-                ErrorCode::AbortedQuery(format!("Query {} was killed while in queue", key))
-            }
-        }
+    fn remove_error_message(_key: Option<Self::Key>) -> ErrorCode {
+        // Explicit removal of a queued QueryEntry is the SQL KILL path. Keep its
+        // cancellation message consistent with running queries, not shutdown errors.
+        ErrorCode::AbortedQuery("Query canceled by KILL QUERY")
     }
 
     fn lock_ttl(&self) -> Duration {

@@ -34,16 +34,36 @@ pub struct KillQueryRequest {
     pub access: KillQueryAccess,
 }
 
-pub async fn kill_query(plan: KillPlan) -> Result<bool> {
-    // Legacy senders already required SUPER at plan time. Keep this action compatible,
-    // but never send non-SUPER requests here: old receivers would kill unconditionally.
+/// Old receivers deserialize only the flattened plan and ignore access. Old senders
+/// omit access; upgraded senders include it so SUPER cannot bypass tenant checks.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct LegacyKillQueryRequest {
+    #[serde(flatten)]
+    pub plan: KillPlan,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<KillQueryAccess>,
+}
+
+pub async fn kill_query(request: LegacyKillQueryRequest) -> Result<bool> {
+    // Old senders required SUPER but did not transmit a tenant. Bound this trusted
+    // compatibility path to the receiver's configured tenant, never a wildcard.
+    let access = request.access.unwrap_or_else(|| KillQueryAccess {
+        tenant: GlobalConfig::instance()
+            .query
+            .tenant_id
+            .tenant_name()
+            .to_string(),
+        user: UserIdentity::default(),
+        is_super: true,
+    });
+    if !access.is_super {
+        return Err(ErrorCode::PermissionDenied(
+            "The legacy KILL action requires global SUPER privilege",
+        ));
+    }
     kill_query_v2(KillQueryRequest {
-        plan,
-        access: KillQueryAccess {
-            tenant: String::new(),
-            user: UserIdentity::default(),
-            is_super: true,
-        },
+        plan: request.plan,
+        access,
     })
     .await
 }

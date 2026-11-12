@@ -31,6 +31,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::servers::flight::v1::actions::KILL_QUERY_V2;
 use crate::servers::flight::v1::actions::KillQueryRequest;
+use crate::servers::flight::v1::actions::LegacyKillQueryRequest;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::SESSION_ID_PREFIX;
@@ -49,7 +50,9 @@ pub struct KillQueryAccess {
 
 impl KillQueryAccess {
     pub fn can_kill(&self, target_tenant: &str, target_user: Option<&UserIdentity>) -> bool {
-        self.is_super || (self.tenant == target_tenant && target_user == Some(&self.user))
+        !self.tenant.is_empty()
+            && self.tenant == target_tenant
+            && (self.is_super || target_user == Some(&self.user))
     }
 }
 
@@ -123,8 +126,13 @@ impl KillInterpreter {
             }
 
             let result = if access.is_super {
-                // The legacy action is safe only for SUPER requesters, and works on old nodes.
-                let message = HashMap::from([(node_info.id.clone(), self.plan.clone())]);
+                // Keep the legacy action for old receivers, which ignore the extra access
+                // field. Upgraded receivers enforce the sender's tenant for SUPER too.
+                let request = LegacyKillQueryRequest {
+                    plan: self.plan.clone(),
+                    access: Some(access.clone()),
+                };
+                let message = HashMap::from([(node_info.id.clone(), request)]);
                 warehouse
                     .do_action::<_, bool>(KILL_QUERY, message, flight_params)
                     .await
@@ -201,11 +209,9 @@ impl KillInterpreter {
         };
         self.check_access(&access, &kill_session)?;
 
+        let cause = ErrorCode::AbortedQuery("Query canceled by KILL QUERY");
         if by_query_id {
-            return match kill_session.force_kill_query_if_id(
-                &self.plan.id,
-                ErrorCode::AbortedQuery("Query canceled by KILL QUERY"),
-            ) {
+            return match kill_session.force_kill_query_if_id(&self.plan.id, cause) {
                 true => Ok(PipelineBuildResult::create()),
                 false => Err(self.unknown_session()),
             };
@@ -221,20 +227,24 @@ impl KillInterpreter {
         if self.plan.kill_connection {
             kill_session.force_kill_session();
         } else {
-            kill_session.force_kill_query(ErrorCode::aborting());
+            kill_session.force_kill_query(cause);
         }
         Ok(PipelineBuildResult::create())
     }
 
     fn check_access(&self, access: &KillQueryAccess, kill_session: &Session) -> Result<()> {
+        let target_tenant = kill_session.get_current_tenant();
+        if access.tenant != target_tenant.tenant_name() {
+            return Err(ErrorCode::PermissionDenied(format!(
+                "Permission denied: cannot kill target {} outside the requester's tenant",
+                self.plan.id
+            )));
+        }
         let target_user = kill_session
             .get_current_user()
             .ok()
             .map(|user| user.identity());
-        if !access.can_kill(
-            kill_session.get_current_tenant().tenant_name(),
-            target_user.as_ref(),
-        ) {
+        if !access.can_kill(target_tenant.tenant_name(), target_user.as_ref()) {
             return Err(ErrorCode::PermissionDenied(format!(
                 "Permission denied: not owner of target {}; global SUPER privilege is required",
                 self.plan.id

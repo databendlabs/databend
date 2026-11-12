@@ -19,6 +19,7 @@ use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_version::BUILD_INFO;
 use databend_query::interpreters::KillTarget;
 use databend_query::sessions::QueriesQueueManager;
@@ -80,7 +81,9 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
             let ctx = requester.create_query_context(&BUILD_INFO).await?;
             execute_command(ctx, &sql).await?;
             assert_eq!(queue.length(), 0);
-            assert_eq!(acquire.await.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+            let error = acquire.await.unwrap_err();
+            assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
+            assert_eq!(error.message(), "Query canceled by KILL QUERY");
         }
     }
     Ok(())
@@ -94,7 +97,12 @@ async fn test_kill_with_super_from_role() -> anyhow::Result<()> {
         .execute_command("GRANT SUPER ON *.* TO ROLE kill_admin")
         .await?;
 
-    for (kind, by_query_id) in [("QUERY", false), ("CONNECTION", false), ("QUERY", true)] {
+    for (kind, id_type) in [
+        ("QUERY", "session"),
+        ("CONNECTION", "session"),
+        ("QUERY", "query"),
+        ("QUERY", "mysql"),
+    ] {
         let target = fixture.new_session_with_type(SessionType::MySQL).await?;
         target
             .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
@@ -106,14 +114,86 @@ async fn test_kill_with_super_from_role() -> anyhow::Result<()> {
         user.grants.grant_role("kill_admin".to_string());
         requester.set_authed_user(user, None).await?;
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
-        let id = if by_query_id {
-            target_ctx.get_id()
-        } else {
-            target.get_id()
+        let id = match id_type {
+            "query" => target_ctx.get_id(),
+            "mysql" => target.get_mysql_conn_id().unwrap().to_string(),
+            _ => target.get_id(),
         };
         execute_command(ctx, &format!("KILL {} '{}'", kind, id)).await?;
         assert_eq!(target.is_aborting(), kind == "CONNECTION");
-        assert!(target_ctx.get_abort_checker().try_check_aborting().is_err());
+        let error = target_ctx
+            .get_abort_checker()
+            .try_check_aborting()
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
+        if kind == "QUERY" {
+            assert_eq!(error.message(), "Query canceled by KILL QUERY");
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_kill_super_respects_tenant_before_queue_removal() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.max_running_queries = 1;
+    config.query.common.global_statement_queue = false;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    fixture.execute_command("CREATE ROLE kill_admin").await?;
+    fixture
+        .execute_command("GRANT SUPER ON *.* TO ROLE kill_admin")
+        .await?;
+    let manager = SessionManager::instance();
+    let queue = QueriesQueueManager::instance();
+    for role_super in [false, true] {
+        for queued in [false, true] {
+            for (kind, by_query_id) in [("QUERY", false), ("CONNECTION", false), ("QUERY", true)] {
+                let holder_ctx = fixture.new_query_ctx().await?;
+                let _holder = if queued {
+                    Some(
+                        queue
+                            .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
+                            .await?,
+                    )
+                } else {
+                    None
+                };
+                let mut target = manager.create_session(SessionType::Local).await?;
+                target.set_current_tenant(Tenant::new_literal("other_tenant"))?;
+                let target = manager.register_session(target)?;
+                target
+                    .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+                    .await?;
+                let target_ctx = target.create_query_context(&BUILD_INFO).await?;
+                let mut acquire =
+                    Box::pin(queue.acquire(QueryEntry::create_entry(&target_ctx, true)?));
+                if queued {
+                    assert!(futures::poll!(acquire.as_mut()).is_pending());
+                }
+                let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
+                if role_super {
+                    let mut user = UserInfo::new_no_auth("u2", "%");
+                    user.grants.grant_role("kill_admin".to_string());
+                    requester.set_authed_user(user, None).await?;
+                }
+                let ctx = requester.create_query_context(&BUILD_INFO).await?;
+                let id = if by_query_id {
+                    target_ctx.get_id()
+                } else {
+                    target.get_id()
+                };
+                let error = execute_command(ctx, &format!("KILL {} '{}'", kind, id))
+                    .await
+                    .unwrap_err();
+                assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
+                assert!(error.message().contains("outside the requester's tenant"));
+                assert_eq!(queue.length(), usize::from(queued));
+                assert!(!target.is_aborting());
+                assert!(target_ctx.get_abort_checker().try_check_aborting().is_ok());
+                drop(acquire);
+                assert_eq!(queue.length(), 0);
+            }
+        }
     }
     Ok(())
 }

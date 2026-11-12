@@ -38,11 +38,13 @@ arbitrary distributed fragment.
 
 A user may cancel their own queries or connections without `SUPER`. Ownership
 requires the same tenant and the complete user identity (username and hostname).
-Other targets, including sessions with no authenticated user, require global
-`SUPER`; role grants are included. Authorization precedes queue removal and
-cancellation. A denied target returns `PermissionDenied` (1063); a missing target
-returns `UnknownSession` (1053). This distinction makes permission failures more
-actionable than a misleading not-found error. Session and query ids are already
+Other targets in the same tenant, including sessions with no authenticated user,
+require global `SUPER`; role grants are included. Requests carrying requester
+identity must stay within that tenant even for SUPER; an empty tenant is not a
+wildcard. Authorization precedes queue removal and cancellation. A denied target
+returns `PermissionDenied` (1063); a missing target returns `UnknownSession` (1053).
+This distinction makes permission failures more actionable than a misleading
+not-found error. Session and query ids are already
 visible through `system.processes` where callers can access those rows, but this
 change also gives callers a target-existence signal outside that visibility.
 It deliberately replaces the previous existence-hiding error contract; it does
@@ -53,21 +55,30 @@ session's context-slot lock. Queue removal happens before releasing that lock,
 and only the pinned context is canceled. A connection attaching its next query
 cannot cause that new context to be canceled by the old query's id.
 
-SUPER requesters retain the legacy Flight kill action. Other requesters use only
-`/actions/kill_query_v2`, with their tenant, user identity, and SUPER status. An
-old node that does not support v2 is treated as not finding the target; there is
-no fallback to the unrestricted legacy action. Old receivers interpret a query
-id as a session id, so query-id KILL against a coordinator on an old node is not
-supported during rolling upgrades. Its actual session id remains usable, with
-the pre-upgrade authorization requirements.
+SUPER requesters retain the legacy Flight kill action, but upgraded senders append
+optional requester access fields to the unchanged top-level plan fields. Upgraded
+receivers enforce that tenant; old receivers ignore the extra fields. Requests
+from genuinely old senders lack access fields, so upgraded receivers restrict
+those trusted SUPER requests to the receiver's configured tenant. Empty tenants
+in an explicit access payload are rejected rather than treated as legacy requests.
+This does not recover an old sender's actual tenant: old receivers and identity-less
+old senders remain a rolling-upgrade limitation, not a claim of full isolation.
+
+Other requesters use only `/actions/kill_query_v2`, with their tenant, user identity,
+and SUPER status. An old node that does not support v2 is treated as not finding
+the target; there is no fallback to the unrestricted legacy action. Old receivers
+interpret a query id as a session id, so query-id KILL against a coordinator on an
+old node is not supported during rolling upgrades. Its actual session id remains
+usable, with the pre-upgrade authorization requirements.
 
 ## HTTP query lifecycle
 
 SQL KILL does not call or change the HTTP query-kill endpoint. After execution
 stops, `/page` and `/final` return the normal HTTP 200 query-response envelope
-with `state: Failed` and `AbortedQuery` (1043). Running queries canceled by query
-id include `Query canceled by KILL QUERY`; queued queries may instead report
-that they were killed while queued. Buffered result rows do not turn the failed
+with `state: Failed` and `AbortedQuery` (1043). SQL `KILL QUERY` uses the message
+`Query canceled by KILL QUERY` for query-id and session/connection-id cancellation,
+as well as explicit removal from the query queue. Shutdown and connection-kill
+errors retain their own semantics. Buffered result rows do not turn the failed
 query into success. The query-log event is classified as `Aborted`.
 
 The normal HTTP lifecycle remains in effect: clients should finalize results;

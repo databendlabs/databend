@@ -39,6 +39,7 @@ pub use init_query_fragments::init_query_fragments;
 pub use kill_query::KILL_QUERY;
 pub use kill_query::KILL_QUERY_V2;
 pub use kill_query::KillQueryRequest;
+pub use kill_query::LegacyKillQueryRequest;
 pub use perf::PERF;
 pub use perf::PerfNodeStatus;
 pub use perf::PerfRequest;
