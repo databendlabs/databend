@@ -1288,7 +1288,7 @@ fn join_selectivity(selectivity: Selectivity) -> f64 {
         Selectivity::Unknown | Selectivity::LowerBound => DEFAULT_NON_EQUI_SELECTIVITY,
         Selectivity::Zero => 0.0,
         Selectivity::All => 1.0,
-        Selectivity::N(value) => value,
+        Selectivity::N(value) | Selectivity::StatisticsZero(value) => value,
     }
 }
 

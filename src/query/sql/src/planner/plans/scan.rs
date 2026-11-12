@@ -398,7 +398,7 @@ impl Operator for Scan {
             .and_then(|stat| stat.num_rows);
 
         let mut proven_empty = false;
-        let cardinality = match (precise_cardinality, &self.prewhere) {
+        let (cardinality, max_cardinality) = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(prewhere)) => {
                 // Derive cardinality
                 let mut sb = SelectivityEstimator::new(
@@ -409,16 +409,20 @@ impl Operator for Scan {
                 .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch))
                 .with_and_strategy(stat_ctx.filter_and_strategy);
                 let cardinality = sb.apply(&prewhere.predicates, &stat_ctx.function_context)?;
+                let max_cardinality = sb.max_cardinality(cardinality, precise_cardinality as f64);
                 proven_empty = sb.is_proven_empty();
                 column_stats = if proven_empty {
                     Default::default()
                 } else {
                     sb.into_column_stats()
                 };
-                cardinality
+                (cardinality, max_cardinality)
             }
-            (Some(precise_cardinality), None) => precise_cardinality as f64,
-            (_, _) => 0.0,
+            (Some(precise_cardinality), None) => {
+                let cardinality = precise_cardinality as f64;
+                (cardinality, cardinality)
+            }
+            (_, _) => (0.0, 0.0),
         };
 
         // If prewhere is not none, we can't get precise cardinality unless the
@@ -444,7 +448,7 @@ impl Operator for Scan {
             // domains and exact all-null counts), so publishing one tells no
             // more than executing the scan would.
             let mut proven_empty = precise_cardinality == Some(0);
-            let cardinality = match &self.secure_predicates {
+            let (cardinality, max_cardinality) = match &self.secure_predicates {
                 Some(preds) if !preds.is_empty() => {
                     let input_cardinality = precise_cardinality
                         .map(StatCardinality::exact)
@@ -454,14 +458,23 @@ impl Operator for Scan {
                         .with_count_min_sketch(output_count_min_sketch)
                         .with_and_strategy(stat_ctx.filter_and_strategy);
                     let cardinality = sb.apply(preds, &stat_ctx.function_context)?;
+                    // Keep the prewhere bound, reduced by the secure
+                    // predicates' selectivity, when it exceeds the estimate.
+                    let prewhere_max_cardinality = match input_cardinality.value() {
+                        rows if rows > 0.0 => max_cardinality * (cardinality / rows),
+                        _ => cardinality,
+                    };
+                    let max_cardinality = sb
+                        .max_cardinality(cardinality, max_cardinality)
+                        .max(prewhere_max_cardinality);
                     proven_empty |= sb.is_proven_empty();
-                    cardinality
+                    (cardinality, max_cardinality)
                 }
-                _ => cardinality,
+                _ => (cardinality, max_cardinality),
             };
             return Ok(Arc::new(StatInfo {
                 cardinality,
-                max_cardinality: cardinality,
+                max_cardinality,
                 statistics: OpStatistics {
                     precise_cardinality: proven_empty.then_some(0),
                     column_stats: Default::default(),
@@ -474,7 +487,7 @@ impl Operator for Scan {
 
         Ok(Arc::new(StatInfo {
             cardinality,
-            max_cardinality: cardinality,
+            max_cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
@@ -510,12 +523,20 @@ impl PhysicalOperator for Scan {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_statistics::Datum;
     use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
     use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Visibility;
     use crate::optimizer::ir::RelExpr;
     use crate::optimizer::ir::SExpr;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::ConstantExpr;
+    use crate::plans::FunctionCall;
     use crate::plans::RelOperator;
 
     #[test]
@@ -666,6 +687,106 @@ mod tests {
         assert!(sampled_stats.statistics.top_n.is_empty());
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 
+        Ok(())
+    }
+
+    fn int_column_statistics(min: i64, max: i64, ndv: u64) -> Option<ScanColumnStatistics> {
+        Some(ScanColumnStatistics {
+            basic: BasicColumnStatistics {
+                min: Some(Datum::Int(min)),
+                max: Some(Datum::Int(max)),
+                ndv: Some(ndv),
+                null_count: 0,
+                in_memory_size: 8 * ndv,
+                ndv_is_inferred: false,
+            },
+            histogram_spacing_unit: 1.0,
+        })
+    }
+
+    fn int_comparison(func_name: &str, name: &str, column: Symbol, value: i64) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments: vec![
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ColumnBindingBuilder::new(
+                        name.to_string(),
+                        column,
+                        Box::new(DataType::Number(NumberDataType::Int64)),
+                        Visibility::Visible,
+                    )
+                    .build(),
+                }),
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(NumberScalar::Int64(value)),
+                }),
+            ],
+            return_type: Box::new(DataType::Boolean),
+        })
+    }
+
+    #[test]
+    fn test_range_outside_statistics_keeps_unknown_filter_bound() -> Result<()> {
+        // 1e9 rows; `t` is recorded in [1, 1000] and `v` in [1, 100].
+        let t = Symbol::new(1);
+        let v = Symbol::new(2);
+        let statistics = Arc::new(Statistics {
+            table_stats: Some(TableStatistics {
+                num_rows: Some(1_000_000_000),
+                ..Default::default()
+            }),
+            column_stats: [
+                (t, int_column_statistics(1, 1000, 1000)),
+                (v, int_column_statistics(1, 100, 100)),
+            ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        });
+        let columns: ColumnSet = [t, v].into_iter().collect();
+        let scan = Scan {
+            columns: columns.clone(),
+            statistics,
+            prewhere: Some(Prewhere {
+                output_columns: columns.clone(),
+                prewhere_columns: [t].into_iter().collect(),
+                predicates: vec![int_comparison("gt", "t", t, 1000)],
+            }),
+            ..Default::default()
+        };
+        let derive = |scan: &Scan| {
+            let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
+            scan.derive_stats(
+                &RelExpr::with_s_expr(&s_expr),
+                &StatContext::without_settings(Default::default()),
+            )
+        };
+
+        // Expected rows use the 1/2500 selectivity, the bound the 1/5
+        // unknown-filter selectivity.
+        let stats = derive(&scan)?;
+        assert!((stats.cardinality - 400_000.0).abs() < 1e-6);
+        assert!((stats.max_cardinality - 200_000_000.0).abs() < 1e-3);
+        assert_eq!(stats.statistics.precise_cardinality, None);
+
+        // A row access policy predicate reduces both by its own selectivity.
+        let secure_scan = Scan {
+            secure_predicates: Some(vec![int_comparison("eq", "v", v, 5)]),
+            ..scan
+        };
+        let secure_stats = derive(&secure_scan)?;
+        assert!(secure_stats.cardinality > 0.0);
+        assert!(secure_stats.cardinality < 400_000.0);
+        assert!(
+            (secure_stats.max_cardinality / secure_stats.cardinality - 500.0).abs() < 1e-6,
+            "cardinality={}, max_cardinality={}",
+            secure_stats.cardinality,
+            secure_stats.max_cardinality
+        );
         Ok(())
     }
 }

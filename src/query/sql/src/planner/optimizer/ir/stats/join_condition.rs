@@ -647,4 +647,118 @@ mod tests {
                 .starts_with("numeric join condition requires numeric statistics bounds")
         );
     }
+
+    fn int_comparison(func_name: &str, index: usize, value: i64) -> ScalarExpr {
+        ScalarExpr::FunctionCall(crate::plans::FunctionCall {
+            span: None,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments: vec![
+                int_column(index),
+                ScalarExpr::ConstantExpr(crate::plans::ConstantExpr {
+                    span: None,
+                    value: databend_common_expression::Scalar::Number(
+                        databend_common_expression::types::NumberScalar::Int64(value),
+                    ),
+                }),
+            ],
+            return_type: Box::new(DataType::Boolean),
+        })
+    }
+
+    #[test]
+    fn residual_range_outside_statistics_keeps_small_selectivity() -> Result<()> {
+        // `c0` is recorded in [1, 50].
+        let input = statistics(100, [(Symbol::new(0), int_stat(1, 50, 50.0))]);
+        let estimate = |predicate: &ScalarExpr| {
+            NonEquiCondition::estimate_locally(
+                predicate,
+                &input,
+                StatCardinality::estimate(100.0),
+                &HashMap::new(),
+                &FunctionContext::default(),
+                FilterAndStrategy::Independent,
+            )
+            .map(|condition| condition.selectivity)
+        };
+
+        let Selectivity::StatisticsZero(selectivity) = estimate(&int_comparison("gt", 0, 100))?
+        else {
+            panic!("expected a small estimate for a range outside the column statistics");
+        };
+        assert!((selectivity - 1.0 / 2500.0).abs() < 1e-12);
+        // Statistics-derived domains would fold this arm away; the OR keeps it.
+        let range_or_equality = ScalarExpr::FunctionCall(crate::plans::FunctionCall {
+            span: None,
+            func_name: "or_filters".to_string(),
+            params: vec![],
+            arguments: vec![int_comparison("gt", 0, 100), int_comparison("eq", 0, 5)],
+            return_type: Box::new(DataType::Boolean),
+        });
+        assert!(matches!(
+            estimate(&range_or_equality)?,
+            Selectivity::StatisticsZero(selectivity) if selectivity > 1.0 / 2500.0
+        ));
+        // `NOT (c0 <= 50)` is the range `c0 > 50` outside the statistics.
+        let negated_range = ScalarExpr::FunctionCall(crate::plans::FunctionCall {
+            span: None,
+            func_name: "not".to_string(),
+            params: vec![],
+            arguments: vec![int_comparison("lte", 0, 50)],
+            return_type: Box::new(DataType::Boolean),
+        });
+        assert!(matches!(
+            estimate(&negated_range)?,
+            Selectivity::StatisticsZero(_)
+        ));
+        // An equality outside the column statistics keeps the folded zero.
+        assert!(matches!(
+            estimate(&int_comparison("eq", 0, 100))?,
+            Selectivity::Zero
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn residual_over_all_null_column_stays_proven_empty() -> Result<()> {
+        // 100 rows of `c0` are all NULL, joined with 50 peer rows: 5000 pairs.
+        let input = statistics(100, [(Symbol::new(0), ColumnStat::AllNull {
+            null_count: StatCount::exact(100),
+        })]);
+        let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "c0".to_string(),
+                Symbol::new(0),
+                Box::new(DataType::Number(NumberDataType::Int64).wrap_nullable()),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        let predicate = ScalarExpr::FunctionCall(crate::plans::FunctionCall {
+            span: None,
+            func_name: "gt".to_string(),
+            params: vec![],
+            arguments: vec![
+                column,
+                ScalarExpr::ConstantExpr(crate::plans::ConstantExpr {
+                    span: None,
+                    value: databend_common_expression::Scalar::Number(
+                        databend_common_expression::types::NumberScalar::Int64(5),
+                    ),
+                }),
+            ],
+            return_type: Box::new(DataType::Boolean.wrap_nullable()),
+        });
+        let condition = NonEquiCondition::estimate_locally(
+            &predicate,
+            &input,
+            StatCardinality::exact(5000),
+            &HashMap::from([(Symbol::new(0), StatCardinality::exact(50))]),
+            &FunctionContext::default(),
+            FilterAndStrategy::Independent,
+        )?;
+        assert!(matches!(condition.selectivity, Selectivity::Zero));
+        Ok(())
+    }
 }
