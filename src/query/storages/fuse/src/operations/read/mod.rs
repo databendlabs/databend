@@ -13,14 +13,13 @@
 // limitations under the License.
 
 mod block_format;
-mod fuse_rows_fetcher;
 pub mod fuse_source;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
-mod parquet_rows_fetcher;
 mod read_block_context;
 mod read_data_transform;
 mod read_state;
+mod row_fetch;
 pub(crate) mod runtime_filter_wait;
 
 mod block_partition_meta;
@@ -29,11 +28,11 @@ mod partition_stream;
 mod util;
 
 pub use block_partition_meta::BlockPartitionMeta;
-pub use fuse_rows_fetcher::row_fetch_processor;
 pub use fuse_source::build_fuse_source_pipeline;
 pub use parquet_data_source_deserializer::DeserializeDataTransform;
 pub use read_state::BlockScanStats;
 pub use read_state::ReadState;
 pub use read_state::ReadStateOutput;
+pub use row_fetch::build_row_fetch_pipeline;
 pub use util::need_reserve_block_info;
 pub use util::selected_row_offsets;

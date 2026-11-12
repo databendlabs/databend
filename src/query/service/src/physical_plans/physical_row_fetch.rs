@@ -22,13 +22,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_pipeline::core::InputPort;
-use databend_common_pipeline::core::OutputPort;
-use databend_common_pipeline::core::Pipe;
-use databend_common_pipeline::core::PipeItem;
-use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_storages_fuse::operations::BlockIdPartitionExchange;
-use databend_common_storages_fuse::operations::row_fetch_processor;
+use databend_common_storages_fuse::operations::build_row_fetch_pipeline;
 use itertools::Itertools;
 
 use crate::physical_plans::MutationSplit;
@@ -129,18 +124,9 @@ impl IPhysicalPlan for RowFetch {
         self.input.build_pipeline(builder)?;
 
         let max_threads = builder.settings.get_max_threads()? as usize;
-        let io_semaphore = builder.ctx.get_row_fetch_io_semaphore(max_threads);
-        let processor = row_fetch_processor(
-            builder.ctx.clone(),
-            self.row_id_col_offset,
-            &self.source,
-            self.cols_to_fetch.clone(),
-            self.need_wrap_nullable,
-            self.cache_policy,
-            io_semaphore,
-        )?;
+        let mixed_matched = MutationSplit::check_physical_plan(&self.input);
 
-        if !MutationSplit::check_physical_plan(&self.input) {
+        if !mixed_matched {
             // For MatchedOnly MERGE INTO, add block_id repartition before RowFetch
             // to reduce duplicate block reads.
             // Not applicable to SELECT+LIMIT: pipeline.exchange() merges partitions
@@ -157,27 +143,19 @@ impl IPhysicalPlan for RowFetch {
                     builder.main_pipeline.exchange(max_threads, exchange)?;
                 }
             }
-            builder.main_pipeline.add_transform(processor)?;
-        } else {
-            // MixedMatched path: MutationSplit is upstream.
-            // Repartition already happened in MutationSplit::build_pipeline2.
-            let output_len = builder.main_pipeline.output_len();
-            let mut pipe_items = Vec::with_capacity(output_len);
-            for i in 0..output_len {
-                if i % 2 == 0 {
-                    let input = InputPort::create();
-                    let output = OutputPort::create();
-                    let processor_ptr = processor(input.clone(), output.clone())?;
-                    pipe_items.push(PipeItem::create(processor_ptr, vec![input], vec![output]));
-                } else {
-                    pipe_items.push(create_dummy_item());
-                }
-            }
-            builder
-                .main_pipeline
-                .add_pipe(Pipe::create(output_len, output_len, pipe_items));
         }
 
-        Ok(())
+        // MixedMatched path: MutationSplit is upstream, where the repartition already
+        // happened, and only its even lanes fetch rows.
+        build_row_fetch_pipeline(
+            builder.ctx.clone(),
+            &mut builder.main_pipeline,
+            self.row_id_col_offset,
+            &self.source,
+            self.cols_to_fetch.clone(),
+            self.need_wrap_nullable,
+            self.cache_policy,
+            |lane| !mixed_matched || lane % 2 == 0,
+        )
     }
 }
