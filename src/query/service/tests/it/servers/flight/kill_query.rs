@@ -28,7 +28,7 @@ use databend_query::servers::flight::v1::actions::KILL_QUERY_V2;
 use databend_query::servers::flight::v1::actions::KillQueryRequest;
 use databend_query::servers::flight::v1::actions::LegacyKillQueryRequest;
 use databend_query::servers::flight::v1::actions::flight_actions;
-use databend_query::sessions::SESSION_ID_PREFIX;
+use databend_query::sessions::INTERNAL_SESSION_ID_PREFIX;
 use databend_query::sessions::SessionManager;
 use databend_query::test_kits::TestFixture;
 
@@ -126,7 +126,12 @@ async fn test_legacy_kill_respects_tenant() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let manager = SessionManager::instance();
     let actions = flight_actions();
-    for (kill_connection, by_query_id) in [(false, false), (true, false), (false, true)] {
+    for (kill_connection, by_query_id, prefixed) in [
+        (false, false, false),
+        (true, false, false),
+        (false, true, false),
+        (false, true, true),
+    ] {
         for (requester_tenant, is_super, target_tenant, expected) in [
             (Some("test"), true, "test", true),
             (Some("other_tenant"), true, "test", false),
@@ -142,6 +147,9 @@ async fn test_legacy_kill_respects_tenant() -> anyhow::Result<()> {
                 .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
                 .await?;
             let ctx = target.create_query_context(&BUILD_INFO).await?;
+            if prefixed {
+                ctx.update_init_query_id(format!("p-{}", uuid::Uuid::new_v4()));
+            }
             let request = LegacyKillQueryRequest {
                 plan: KillPlan {
                     id: if by_query_id {
@@ -186,7 +194,7 @@ async fn test_kill_query_id_ignores_fragment_sessions() -> anyhow::Result<()> {
     let fragment_ctx = fragment.create_query_context(&BUILD_INFO).await?;
     let id = coordinator_ctx.get_id();
     fragment_ctx.update_init_query_id(id.clone());
-    assert!(fragment.get_id().starts_with(SESSION_ID_PREFIX));
+    assert!(fragment.get_id().starts_with(INTERNAL_SESSION_ID_PREFIX));
     let manager = SessionManager::instance();
     assert_eq!(
         manager.get_session_by_query_id(&id).unwrap().get_id(),
@@ -209,7 +217,12 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let actions = flight_actions();
 
-    for (kill_connection, by_query_id) in [(false, false), (true, false), (false, true)] {
+    for (kill_connection, by_query_id, prefixed) in [
+        (false, false, false),
+        (true, false, false),
+        (false, true, false),
+        (false, true, true),
+    ] {
         for (user, tenant, is_super, expected) in [
             ("u2", "test", false, false),
             ("u1", "other_tenant", false, false),
@@ -223,6 +236,9 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
                 .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
                 .await?;
             let target_ctx = target.create_query_context(&BUILD_INFO).await?;
+            if prefixed {
+                target_ctx.update_init_query_id(format!("p-{}", uuid::Uuid::new_v4()));
+            }
             let request = KillQueryRequest {
                 plan: KillPlan {
                     id: if by_query_id {

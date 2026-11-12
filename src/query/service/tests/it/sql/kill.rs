@@ -22,9 +22,9 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_version::BUILD_INFO;
 use databend_query::interpreters::KillTarget;
+use databend_query::sessions::INTERNAL_SESSION_ID_PREFIX;
 use databend_query::sessions::QueriesQueueManager;
 use databend_query::sessions::QueryEntry;
-use databend_query::sessions::SESSION_ID_PREFIX;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionContext;
 use databend_query::sessions::SessionManager;
@@ -45,8 +45,8 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
         .await?;
 
     for kind in ["QUERY", "CONNECTION"] {
-        for id_type in ["session", "mysql", "query"] {
-            if kind == "CONNECTION" && id_type == "query" {
+        for id_type in ["session", "mysql", "query", "query_prefixed"] {
+            if kind == "CONNECTION" && id_type.starts_with("query") {
                 continue;
             }
             let target = fixture.new_session_with_type(SessionType::MySQL).await?;
@@ -54,13 +54,16 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
                 .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
                 .await?;
             let target_ctx = target.create_query_context(&BUILD_INFO).await?;
+            if id_type == "query_prefixed" {
+                target_ctx.update_init_query_id(format!("p-{}", uuid::Uuid::new_v4()));
+            }
             let mut acquire = Box::pin(queue.acquire(QueryEntry::create_entry(&target_ctx, true)?));
             assert!(futures::poll!(acquire.as_mut()).is_pending());
             assert_eq!(queue.length(), 1);
 
             let id = match id_type {
                 "mysql" => target.get_mysql_conn_id().unwrap().to_string(),
-                "query" => target_ctx.get_id(),
+                "query" | "query_prefixed" => target_ctx.get_id(),
                 _ => target.get_id(),
             };
             let sql = format!("KILL {} '{}'", kind, id);
@@ -205,6 +208,8 @@ async fn test_kill_client_query_id_formats() -> anyhow::Result<()> {
         uuid::Uuid::new_v4().simple().to_string(),
         uuid::Uuid::new_v4().to_string(),
         format!("{}.2", uuid::Uuid::new_v4()),
+        format!("p-{}", uuid::Uuid::new_v4()),
+        "p-".to_string(),
     ] {
         let target = fixture.new_session_with_type(SessionType::MySQL).await?;
         target
@@ -233,14 +238,18 @@ async fn test_kill_client_query_id_formats() -> anyhow::Result<()> {
 fn test_kill_target_parsing() {
     assert_eq!(KillTarget::parse("42"), KillTarget::MySqlConnection(42));
     assert_eq!(KillTarget::parse("00042"), KillTarget::MySqlConnection(42));
-    let session = format!("{}{}", SESSION_ID_PREFIX, uuid::Uuid::new_v4());
-    assert_eq!(KillTarget::parse(&session), KillTarget::Session(&session));
+    let session = format!("{}{}", INTERNAL_SESSION_ID_PREFIX, uuid::Uuid::new_v4());
+    assert_eq!(
+        KillTarget::parse(&session),
+        KillTarget::SessionOrQuery(&session)
+    );
+    assert_eq!(KillTarget::parse("p-"), KillTarget::SessionOrQuery("p-"));
     for id in [
         "0123456789abcdef0123456789abcdef",
         "55b05b74-80a6-49fd-b813-3ef25bf0f110.1",
         "55b05b74-80a6-49fd-b813-3ef25bf0f110",
     ] {
-        assert_eq!(KillTarget::parse(id), KillTarget::QueryOrLegacySession(id));
+        assert_eq!(KillTarget::parse(id), KillTarget::QueryOrSession(id));
     }
 }
 
@@ -302,20 +311,26 @@ async fn test_kill_connection_rejects_query_id_and_numeric_id_is_connection() ->
     let fixture = TestFixture::setup().await?;
     let target = fixture.new_session_with_type(SessionType::MySQL).await?;
     let target_ctx = target.create_query_context(&BUILD_INFO).await?;
-    let query_id = target_ctx.get_id();
-    let ctx = fixture.new_query_ctx().await?;
-    let err = execute_command(ctx, &format!("KILL CONNECTION '{}'", query_id))
-        .await
-        .unwrap_err();
-    assert_eq!(err.code(), ErrorCode::BAD_ARGUMENTS);
-    assert!(
-        target_ctx
-            .clone()
-            .get_abort_checker()
-            .try_check_aborting()
-            .is_ok()
-    );
-    assert!(!target.is_aborting());
+    for query_id in [
+        target_ctx.get_id(),
+        format!("p-{}", uuid::Uuid::new_v4()),
+        "p-".to_string(),
+    ] {
+        target_ctx.update_init_query_id(query_id.clone());
+        let ctx = fixture.new_query_ctx().await?;
+        let err = execute_command(ctx, &format!("KILL CONNECTION '{}'", query_id))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), ErrorCode::BAD_ARGUMENTS);
+        assert!(
+            target_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_ok()
+        );
+        assert!(!target.is_aborting());
+    }
 
     target_ctx.update_init_query_id(u32::MAX.to_string());
     let ctx = fixture.new_query_ctx().await?;
@@ -324,6 +339,107 @@ async fn test_kill_connection_rejects_query_id_and_numeric_id_is_connection() ->
         .unwrap_err();
     assert_eq!(err.code(), ErrorCode::UNKNOWN_SESSION);
     assert!(target_ctx.get_abort_checker().try_check_aborting().is_ok());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let manager = SessionManager::instance();
+    for prefixed in [false, true] {
+        let id = if prefixed {
+            format!("p-{}", uuid::Uuid::new_v4())
+        } else {
+            uuid::Uuid::new_v4().to_string()
+        };
+        let sid_target = manager.register_session(Session::try_create(
+            id.clone(),
+            SessionType::MySQL,
+            Box::new(SessionContext::try_create(
+                fixture.default_session().get_settings(),
+                SessionType::MySQL,
+                None,
+            )?),
+            Some(manager.alloc_mysql_conn_id()),
+        )?)?;
+        let query_target = fixture.new_session_with_type(SessionType::MySQL).await?;
+        // Only the lower-priority match belongs to the requester initially.
+        sid_target
+            .set_authed_user(
+                UserInfo::new_no_auth(if prefixed { "u2" } else { "u1" }, "%"),
+                None,
+            )
+            .await?;
+        query_target
+            .set_authed_user(
+                UserInfo::new_no_auth(if prefixed { "u1" } else { "u2" }, "%"),
+                None,
+            )
+            .await?;
+        let sid_ctx = sid_target.create_query_context(&BUILD_INFO).await?;
+        let query_ctx = query_target.create_query_context(&BUILD_INFO).await?;
+        query_ctx.update_init_query_id(id.clone());
+        let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
+        requester
+            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        let err = execute_command(ctx, &format!("KILL QUERY '{}'", id))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), ErrorCode::PERMISSION_DENIED);
+        assert!(
+            sid_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_ok()
+        );
+        assert!(
+            query_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_ok()
+        );
+
+        sid_target
+            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        query_target
+            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        execute_command(ctx, &format!("KILL QUERY '{}'", id)).await?;
+        assert_eq!(
+            sid_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_err(),
+            prefixed
+        );
+        assert_eq!(
+            query_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_err(),
+            !prefixed
+        );
+        assert!(!sid_target.is_aborting());
+        assert!(!query_target.is_aborting());
+
+        // CONNECTION always chooses the actual sid, even if an unprefixed query
+        // with the same string exists. It never disconnects the query's session.
+        let next_query = query_target.create_query_context(&BUILD_INFO).await?;
+        next_query.update_init_query_id(id.clone());
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        execute_command(ctx, &format!("KILL CONNECTION '{}'", id)).await?;
+        assert!(sid_target.is_aborting());
+        assert!(!query_target.is_aborting());
+        assert!(next_query.get_abort_checker().try_check_aborting().is_ok());
+    }
     Ok(())
 }
 

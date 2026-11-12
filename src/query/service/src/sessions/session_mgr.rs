@@ -157,7 +157,11 @@ impl SessionManager {
         user: Option<UserInfo>,
         mysql_conn_id: Option<u32>,
     ) -> Result<Session> {
-        let id = format!("{}{}", super::SESSION_ID_PREFIX, uuid::Uuid::new_v4());
+        let id = format!(
+            "{}{}",
+            super::INTERNAL_SESSION_ID_PREFIX,
+            uuid::Uuid::new_v4()
+        );
         let mysql_conn_id = match typ {
             SessionType::MySQL => Some(
                 mysql_conn_id

@@ -609,7 +609,7 @@ async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
     .await?;
     assert!(created.error.is_none(), "{created:?}");
 
-    for queued in [false, true] {
+    for (queued, prefixed) in [(false, false), (true, false), (false, true), (true, true)] {
         let holder_ctx = fixture.new_query_ctx().await?;
         let _holder = if queued {
             Some(
@@ -620,7 +620,11 @@ async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
         } else {
             None
         };
-        let id = uuid::Uuid::new_v4().simple().to_string();
+        let id = if prefixed {
+            format!("p-{}", uuid::Uuid::new_v4())
+        } else {
+            uuid::Uuid::new_v4().simple().to_string()
+        };
         let mut headers = HeaderMap::new();
         headers.insert("x-databend-query-id", id.parse()?);
         let (_, started) = post_json_to_endpoint(
@@ -717,28 +721,40 @@ async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_client_query_id_rejects_reserved_session_prefix() -> anyhow::Result<()> {
+async fn test_internal_session_id_sql() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    // Keep these expressions aligned with 01_0009_system_processes.test: this
+    // also checks SQL function/operator support, not just the Rust id generator.
+    for sql in [
+        "SELECT connection_id() LIKE 'p-%'",
+        "SELECT count(*) > 0 FROM system.processes WHERE id = connection_id() AND id LIKE 'p-%'",
+    ] {
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::new()).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{result:?}");
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        assert_eq!(result.data, vec![vec![Some("1".to_string())]]);
+        get_uri_checked(&ep, result.final_uri.as_ref().unwrap()).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_client_query_id_accepts_internal_session_prefix() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
     for id in ["p-", "p-55b05b74-80a6-49fd-b813-3ef25bf0f110"] {
-        let req = Request::builder()
-            .method(Method::POST)
-            .uri("/v1/query".parse()?)
-            .header(header::CONTENT_TYPE, "application/json")
-            .header(header::AUTHORIZATION, "Basic cm9vdDo=")
-            .header("X-DATABEND-QUERY-ID", id)
-            // Rejection must happen before sticky-node lookup/forwarding.
-            .header("X-DATABEND-STICKY-NODE", "nonexistent-peer")
-            .body(r#"{"sql":"select 1"}"#);
-        let response = ep.get_response(req).await;
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(
-            response
-                .into_body()
-                .into_string()
-                .await?
-                .contains("reserved session prefix")
-        );
+        let mut headers = HeaderMap::new();
+        headers.insert("x-databend-query-id", id.parse()?);
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, "SELECT 1", 5, headers).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{result:?}");
+        assert_eq!(result.id, id);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        get_uri_checked(&ep, result.final_uri.as_ref().unwrap()).await?;
     }
     Ok(())
 }

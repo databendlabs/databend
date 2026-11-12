@@ -81,7 +81,12 @@ def query_state(query_id, auth):
 
 @pytest.mark.parametrize(
     "kind,id_type",
-    [("QUERY", "session"), ("CONNECTION", "session"), ("QUERY", "query")],
+    [
+        ("QUERY", "session"),
+        ("CONNECTION", "session"),
+        ("QUERY", "query"),
+        ("QUERY", "query_prefixed"),
+    ],
 )
 @pytest.mark.parametrize("killer", ["owner", "root"])
 @pytest.mark.parametrize("remote", [False, True], ids=["local", "remote"])
@@ -94,7 +99,8 @@ def test_sql_kill_privileges(users, kind, id_type, killer, remote):
         kill_url = "http://localhost:8002"
 
     owner, other = users
-    query_id = uuid.uuid4().hex
+    by_query_id = id_type.startswith("query")
+    query_id = f"p-{uuid.uuid4()}" if id_type == "query_prefixed" else uuid.uuid4().hex
     started = query(
         "SELECT sleep(0.5), number FROM numbers(15000000000)",
         owner,
@@ -126,9 +132,9 @@ def test_sql_kill_privileges(users, kind, id_type, killer, remote):
         assert str(uuid.UUID(session_id.removeprefix("p-"))) == session_id.removeprefix(
             "p-"
         )
-        target_id = query_id if id_type == "query" else session_id
+        target_id = query_id if by_query_id else session_id
 
-        if id_type == "query":
+        if by_query_id:
             rejected, _ = command(f"KILL CONNECTION '{query_id}'", owner, kill_url)
             assert rejected["error"]["code"] == 1006, rejected  # BadArguments
             assert "not a query id" in rejected["error"]["message"], rejected
@@ -155,7 +161,7 @@ def test_sql_kill_privileges(users, kind, id_type, killer, remote):
             time.sleep(0.1)
         assert state["state"] == "Failed", state
         assert state["error"]["code"] == 1043, state  # AbortedQuery
-        if id_type == "query":
+        if by_query_id:
             assert next_uri is not None
             page_response = requests.get(BASE_URL + next_uri, auth=owner, timeout=30)
             page_response.raise_for_status()

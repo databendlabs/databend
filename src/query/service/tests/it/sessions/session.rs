@@ -15,7 +15,7 @@
 use databend_common_catalog::session_type::SessionType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_version::BUILD_INFO;
-use databend_query::sessions::SESSION_ID_PREFIX;
+use databend_query::sessions::INTERNAL_SESSION_ID_PREFIX;
 use databend_query::sessions::SessionManager;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
@@ -28,7 +28,7 @@ async fn test_session() -> anyhow::Result<()> {
 
     let id = session.get_id();
     let uuid = id
-        .strip_prefix(SESSION_ID_PREFIX)
+        .strip_prefix(INTERNAL_SESSION_ID_PREFIX)
         .expect("session id prefix");
     assert!(uuid::Uuid::parse_str(uuid).is_ok());
 

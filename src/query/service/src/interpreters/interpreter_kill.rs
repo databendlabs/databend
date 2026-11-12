@@ -12,6 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! SQL KILL identifiers, authorization, and compatibility.
+//!
+//! # Identifiers and lookup
+//!
+//! Server-generated internal session ids use `p-<UUID>` (`p` for the SQL process,
+//! not an OS PID), as exposed by `connection_id()` and `system.processes.id`.
+//! HTTP login/client-session ids and MySQL numeric protocol ids are unchanged;
+//! temporary-table keys and logs treat internal session ids as opaque strings.
+//! Client query ids may use any prefix, including `p-`; there is no reserved
+//! query-id namespace. Hex, UUID and UUID-plus-sequence ids remain supported.
+//!
+//! [`KillTarget`] resolves a node-local MySQL `u32` connection id first. For
+//! KILL QUERY, `p-` ids prefer a session match and fall back to query lookup;
+//! other strings prefer a query match and fall back to a legacy session id.
+//! The prefix is only a lookup-order hint. If both kinds exist on a node, the
+//! preferred match wins. Only absence triggers the alternate identifier lookup:
+//! denial or a failed conditional cancellation never tries the other kind.
+//! Numeric query ids that parse as `u32` retain connection-id semantics.
+//! KILL CONNECTION looks up sessions regardless of prefix, rejecting query-only matches with
+//! `BadArguments` rather than disconnecting their sessions.
+//!
+//! Lookup includes queued queries but excludes FlightRPC fragment sessions,
+//! which are not registered as active client sessions. A local match stops the
+//! search; otherwise warehouse peers are searched until one target matches.
+//! Numeric MySQL connection ids are never forwarded.
+//!
+//! # Authorization and cancellation
+//!
+//! Requester identity requires a nonempty matching tenant, even for SUPER.
+//! Within that tenant, ownership compares username and hostname; other targets,
+//! including userless sessions, require global SUPER (including role grants).
+//! Authorization precedes queue removal and cancellation. Denial returns
+//! `PermissionDenied` (1063); missing targets return `UnknownSession` (1053).
+//! This intentionally distinguishes target existence, including beyond rows
+//! visible to the caller in `system.processes`.
+//!
+//! Query-id cancellation checks and pins the matching context under the session's
+//! context-slot lock, and removes its queue entry before releasing the lock.
+//! Only that pinned context is canceled, never the connection's next statement.
+//!
+//! # Flight and rolling upgrades
+//!
+//! SUPER retains the legacy action, with upgraded senders appending optional
+//! requester access fields to the unchanged top-level plan fields. Upgraded
+//! receivers check that tenant; old receivers ignore the extra fields. Trusted
+//! old requests without access fields are limited to the receiver's configured
+//! tenant, not a wildcard. Their actual requester tenant cannot be recovered:
+//! identity-less old senders and old receivers remain an isolation limitation.
+//!
+//! Non-SUPER uses only `/actions/kill_query_v2`, carrying tenant, user identity
+//! and SUPER status. Unsupported v2 is treated as not found, with no legacy
+//! fallback. Old coordinators cannot resolve query-id KILL; use their actual
+//! session ids subject to the old node's privilege requirements.
+//!
+//! # HTTP query lifecycle
+//!
+//! SQL KILL does not call or change the HTTP query-kill endpoint. After stopping,
+//! `/page` and `/final` return normal HTTP 200 envelopes with `Failed` and
+//! `AbortedQuery` (1043). Query/session/MySQL-id KILL QUERY and explicit queue
+//! removal use `Query canceled by KILL QUERY`; shutdown and connection-kill
+//! errors retain their own semantics. Buffered rows do not make failure succeed;
+//! the query-log event is `Aborted`. Clients still finalize results: finalization
+//! decrements the active count, and HttpQueryManager removes retained records
+//! after its existing timeout. The HTTP `/kill` closed-query response is unchanged.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,9 +97,9 @@ use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::servers::flight::v1::actions::KILL_QUERY_V2;
 use crate::servers::flight::v1::actions::KillQueryRequest;
 use crate::servers::flight::v1::actions::LegacyKillQueryRequest;
+use crate::sessions::INTERNAL_SESSION_ID_PREFIX;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
-use crate::sessions::SESSION_ID_PREFIX;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::TableContextCluster;
@@ -56,23 +121,23 @@ impl KillQueryAccess {
     }
 }
 
-/// Unprefixed strings are ambiguous during rolling upgrades: prefer a query id,
-/// then fall back to a legacy session id. Numeric ids retain MySQL semantics.
+/// The internal session prefix selects lookup order, not a reserved namespace.
+/// Numeric ids retain MySQL semantics and are never resolved as query ids.
 #[derive(Debug, PartialEq, Eq)]
 pub enum KillTarget<'a> {
     MySqlConnection(u32),
-    Session(&'a str),
-    QueryOrLegacySession(&'a str),
+    SessionOrQuery(&'a str),
+    QueryOrSession(&'a str),
 }
 
 impl<'a> KillTarget<'a> {
     pub fn parse(id: &'a str) -> Self {
         if let Ok(id) = id.parse::<u32>() {
             Self::MySqlConnection(id)
-        } else if id.starts_with(SESSION_ID_PREFIX) {
-            Self::Session(id)
+        } else if id.starts_with(INTERNAL_SESSION_ID_PREFIX) {
+            Self::SessionOrQuery(id)
         } else {
-            Self::QueryOrLegacySession(id)
+            Self::QueryOrSession(id)
         }
     }
 }
@@ -185,18 +250,29 @@ impl KillInterpreter {
                 let session_id = manager
                     .get_id_by_mysql_conn_id(&Some(id))
                     .ok_or_else(|| self.unknown_session())?;
-                (manager.get_session_by_id(&session_id), false)
+                // The mapping can outlive the session briefly during concurrent
+                // cleanup. A stale numeric id must not fall through to peer lookup.
+                let session = manager
+                    .get_session_by_id(&session_id)
+                    .ok_or_else(|| self.unknown_session())?;
+                (Some(session), false)
             }
-            KillTarget::Session(id) => (manager.get_session_by_id(id), false),
-            KillTarget::QueryOrLegacySession(id) => match manager.get_session_by_query_id(id) {
-                Some(session) => {
-                    if self.plan.kill_connection {
-                        return Err(ErrorCode::BadArguments(
-                            "KILL CONNECTION requires a connection id or session id, not a query id",
-                        ));
-                    }
-                    (Some(session), true)
+            KillTarget::SessionOrQuery(id) | KillTarget::QueryOrSession(id)
+                if self.plan.kill_connection =>
+            {
+                // CONNECTION accepts sessions only. A query-only match is used just
+                // to return a clear error; it must never disconnect that session.
+                match manager.get_session_by_id(id) {
+                    Some(session) => (Some(session), false),
+                    None => (manager.get_session_by_query_id(id), true),
                 }
+            }
+            KillTarget::SessionOrQuery(id) => match manager.get_session_by_id(id) {
+                Some(session) => (Some(session), false),
+                None => (manager.get_session_by_query_id(id), true),
+            },
+            KillTarget::QueryOrSession(id) => match manager.get_session_by_query_id(id) {
+                Some(session) => (Some(session), true),
                 None => (manager.get_session_by_id(id), false),
             },
         };
@@ -207,6 +283,11 @@ impl KillInterpreter {
                 false => Err(self.unknown_session()),
             };
         };
+        if by_query_id && self.plan.kill_connection {
+            return Err(ErrorCode::BadArguments(
+                "KILL CONNECTION requires a connection id or session id, not a query id",
+            ));
+        }
         self.check_access(&access, &kill_session)?;
 
         let cause = ErrorCode::AbortedQuery("Query canceled by KILL QUERY");

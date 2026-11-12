@@ -635,21 +635,13 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         let headers = req.headers().clone();
 
-        // Validate the reserved namespace before forwarding, including to old peers
-        // that would otherwise accept a client-supplied session-looking query id.
+        // Validate header encoding before forwarding; query ids may use any prefix.
         let (query_id, is_query_id_from_client) = if let Some(v) = headers.get(HEADER_QUERY_ID) {
             let id = v.to_str().map_err(|_| {
                 HttpErrorCode::bad_request(ErrorCode::BadArguments(
                     "X-DATABEND-QUERY-ID must be valid UTF-8",
                 ))
             })?;
-            if id.starts_with(crate::sessions::SESSION_ID_PREFIX) {
-                return Err(HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
-                    "Query id must not start with reserved session prefix '{}'",
-                    crate::sessions::SESSION_ID_PREFIX,
-                )))
-                .into());
-            }
             (id.to_string(), true)
         } else {
             (Uuid::now_v7().simple().to_string(), false)
