@@ -250,6 +250,13 @@ SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.va
 5 55 5 55 5
 6 NULL NULL NULL NULL
 
+# The CTE and the query reading it bind the same virtual column of one scan.
+query IT
+WITH h AS (SELECT id, val FROM t2 WHERE val['a'] IS NOT NULL QUALIFY row_number() OVER (ORDER BY val['c']::STRING DESC) = 1)
+SELECT h.id, h.val['c']::STRING FROM h
+----
+4 value
+
 statement ok
 REFRESH VIRTUAL COLUMN FOR t2;
 

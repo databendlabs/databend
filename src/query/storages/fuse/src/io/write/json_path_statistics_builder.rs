@@ -158,16 +158,14 @@ impl JsonPathStatisticsBuilder {
                 else {
                     continue;
                 };
-                RawJsonb::new(jsonb_bytes)
-                    .visit_scalar_key_paths(true, |key_paths| {
-                        self.observe_path(source_column_id, key_paths);
-                        Ok(())
-                    })
-                    .map_err(|error| {
-                        ErrorCode::VirtualColumnError(format!(
-                            "failed to collect JSON path statistics: {error}"
-                        ))
-                    })?;
+                // Values loaded with `disable_variant_check` may not be valid JSONB
+                // and have no readable paths: skip them instead of failing the write.
+                // Paths visited before the decoding error stay counted, which only
+                // overcounts heuristics for layout selection.
+                let _ = RawJsonb::new(jsonb_bytes).visit_scalar_key_paths(true, |key_paths| {
+                    self.observe_path(source_column_id, key_paths);
+                    Ok(())
+                });
             }
         }
         Ok(())
@@ -215,7 +213,9 @@ mod tests {
     use std::borrow::Cow;
     use std::sync::Arc;
 
+    use databend_common_expression::FromData;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::VariantType;
 
     use super::*;
 
@@ -251,5 +251,27 @@ mod tests {
         let cloned = &cloned_statistics[&source_column_id];
         assert!(!cloned.path_statistics_complete);
         assert_eq!(cloned.path_counts, vec![("a".to_string(), 2)]);
+    }
+
+    #[test]
+    fn test_add_block_skips_invalid_jsonb() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "v",
+            TableDataType::Variant,
+        )]));
+        let source_column_id = schema.fields[0].column_id;
+        let mut builder =
+            JsonPathStatisticsBuilder::try_create(schema, VirtualColumnLayoutPolicy::default())
+                .unwrap();
+        // `disable_variant_check` stores what it fails to parse, e.g. empty bytes.
+        let valid = r#"{"a":1}"#.parse::<jsonb::OwnedJsonb>().unwrap().to_vec();
+        let block =
+            DataBlock::new_from_columns(vec![VariantType::from_data(vec![Vec::new(), valid])]);
+        builder.add_block(&block).unwrap();
+
+        let statistics = builder.finalize();
+        let source = &statistics[&source_column_id];
+        assert!(source.path_statistics_complete);
+        assert_eq!(source.path_counts, vec![("a".to_string(), 1)]);
     }
 }

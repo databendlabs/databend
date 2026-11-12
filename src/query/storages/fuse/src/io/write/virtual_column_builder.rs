@@ -245,6 +245,9 @@ impl VirtualColumnBuilder {
         end_row: usize,
         hash_to_index: &mut [StackHashMap<u128, usize, 16>],
     ) -> Result<()> {
+        // Indexes in `virtual_values` that the current row pushed to, so that the
+        // row can be rolled back when its JSONB turns out to be invalid.
+        let mut row_value_indexes = Vec::new();
         for (i, offset) in self.variant_offsets.iter().enumerate() {
             let column = block.get_by_offset(*offset);
             for row in start_row..end_row {
@@ -253,8 +256,9 @@ impl VirtualColumnBuilder {
                     continue;
                 };
                 let raw_jsonb = RawJsonb::new(jsonb_bytes);
+                row_value_indexes.clear();
 
-                raw_jsonb
+                if raw_jsonb
                     .visit_scalar_key_values(true, |key_paths, jsonb_value| {
                         let scalar = Self::jsonb_value_to_scalar(jsonb_value);
                         // Blocks are added repeatedly, so the actual rows need to add the rows of the previous blocks
@@ -272,6 +276,7 @@ impl VirtualColumnBuilder {
                         // Use hash value to lookup instead of key paths
                         if let Some(index) = hash_to_index[i].get(&hash_value) {
                             self.virtual_values[*index].push(scalar_value);
+                            row_value_indexes.push(*index);
                         } else {
                             // The index was not found. Create a new key path
                             let index = self.virtual_values.len();
@@ -295,14 +300,24 @@ impl VirtualColumnBuilder {
 
                             self.virtual_paths[i].insert(owned_key_paths, index);
                             self.virtual_values.push(vec![scalar_value]);
+                            row_value_indexes.push(index);
                         }
                         Ok(())
                     })
-                    .map_err(|error| {
-                        ErrorCode::VirtualColumnError(format!(
-                            "failed to extract virtual column values: {error}"
-                        ))
-                    })?;
+                    .is_err()
+                {
+                    // Values loaded with `disable_variant_check` may not be valid
+                    // JSONB and have no readable paths: drop what this row pushed
+                    // and leave it absent from every virtual column. A path first
+                    // seen in this row keeps its entry with no values, which every
+                    // consumer of `virtual_values` skips.
+                    for index in row_value_indexes.drain(..) {
+                        let popped = self.virtual_values[index].pop();
+                        debug_assert!(
+                            popped.is_some_and(|value| value.row == self.total_rows + row)
+                        );
+                    }
+                }
             }
         }
         Ok(())
@@ -1181,18 +1196,26 @@ struct JsonbScalarValue {
 #[cfg(test)]
 mod type_inference_tests {
     use std::collections::HashSet;
+    use std::sync::Arc;
 
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::DecimalDataType;
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::VariantType;
     use databend_common_expression::types::i256;
     use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
 
     use super::JsonbScalarValue;
     use super::VirtualColumnBuilder;
+    use crate::io::VirtualColumnLayoutPolicy;
 
     fn types(values: impl IntoIterator<Item = DataType>) -> HashSet<DataType> {
         values.into_iter().collect()
@@ -1396,5 +1419,59 @@ mod type_inference_tests {
                 DecimalDataType::Decimal64(size)
             )
         );
+    }
+
+    #[test]
+    fn invalid_jsonb_rows_are_rolled_back() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "v",
+            TableDataType::Variant,
+        )]));
+        let source_column_id = schema.fields[0].column_id;
+        let mut builder =
+            VirtualColumnBuilder::try_create(schema, VirtualColumnLayoutPolicy::default()).unwrap();
+        let jsonb = |json: &str| json.parse::<jsonb::OwnedJsonb>().unwrap().to_vec();
+        // Cut inside the value of `b`: `a` is visited before the error.
+        let mut truncated = jsonb(r#"{"a":1,"b":"xyz"}"#);
+        truncated.pop();
+        let block = DataBlock::new_from_columns(vec![VariantType::from_data(vec![
+            // `a` is a new path of an invalid row.
+            truncated.clone(),
+            // `disable_variant_check` stores what it fails to parse, e.g. empty bytes.
+            Vec::new(),
+            jsonb(r#"{"a":2,"b":"x"}"#),
+            // `a` is a known path of an invalid row.
+            truncated,
+        ])]);
+        builder.add_block(&block).unwrap();
+        assert_eq!(builder.total_rows, 4);
+
+        let rows = |path: &str| {
+            let index = builder.virtual_paths[0]
+                .iter()
+                .find(|(key_paths, _)| key_paths.to_canonical_path() == path)
+                .map(|(_, index)| *index)
+                .unwrap();
+            builder.virtual_values[index]
+                .iter()
+                .map(|value| value.row)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(rows("a"), vec![2]);
+        assert_eq!(rows("b"), vec![2]);
+
+        let statistics = VirtualColumnBuilder::build_path_statistics(
+            &builder.variant_fields,
+            &builder.virtual_paths,
+            &builder.virtual_values,
+            &HashSet::new(),
+            builder.max_path_statistics,
+        );
+        let source = &statistics[&source_column_id];
+        assert!(source.path_statistics_complete);
+        assert_eq!(source.path_counts, vec![
+            ("a".to_string(), 1),
+            ("b".to_string(), 1)
+        ]);
     }
 }
