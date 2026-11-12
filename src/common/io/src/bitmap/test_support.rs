@@ -195,3 +195,51 @@ pub(crate) fn create_format_spec_portable_64_bitmap() -> RoaringTreemap {
     }
     bitmap
 }
+
+/// Serializes a legacy treemap whose prefix count collide with the hybrid magic.
+///
+/// 82,504 = 0x0001_4248 prefixes serialize to a u64 LE count that starts with
+/// [0x48, 0x42, 0x01, 0x00]: hybrid magic, version, and SMALL kind. Content
+/// checks must route such a buffer to the legacy decoder.
+pub(crate) fn serialize_legacy_collision_hybrid_small() -> (Vec<u8>, u64) {
+    let mut bitmap = RoaringTreemap::new();
+    for i in 0..82_504u64 {
+        bitmap.insert(i << 32);
+    }
+    let mut buf = Vec::new();
+    bitmap.serialize_into(&mut buf).unwrap();
+    (buf, 82_504)
+}
+
+/// Builds a legacy treemap buffer with `containers` singleton containers whose
+/// values are `i << 32`, without materializing a RoaringTreemap.
+///
+/// Inserting 16,859,720 values into a RoaringTreemap is too slow for a debug
+/// test build, so the stable serialized layout is written directly: u64
+/// bucket count, then per container a u32 treemap prefix followed by a
+/// singleton RoaringBitmap (cookie, container count, key u16, cardinality - 1
+/// u16, offset u32, value u16).
+pub(crate) fn serialize_legacy_collision_large() -> (Vec<u8>, u64) {
+    const SERIAL_COOKIE_NO_RUNCONTAINER: u32 = 12346;
+    let containers: u64 = 16859720;
+    let mut buf = Vec::with_capacity(8 + containers as usize * 26);
+    // bucket count
+    buf.extend_from_slice(&containers.to_le_bytes());
+    for i in 0..containers {
+        //   0..4    u32 prefix (the high 32 bits of value i << 32)
+        buf.extend_from_slice(&(i as u32).to_le_bytes());
+        //   4..8    u32 RoaringBitmap serial cookie
+        buf.extend_from_slice(&SERIAL_COOKIE_NO_RUNCONTAINER.to_le_bytes());
+        //   8..12   u32 container count of the embedded RoaringBitmap
+        buf.extend_from_slice(&1_u32.to_le_bytes());
+        //   12..14  u16 container key
+        buf.extend_from_slice(&0_u16.to_le_bytes());
+        //   14..16  u16 cardinality - 1
+        buf.extend_from_slice(&0_u16.to_le_bytes());
+        //   16..20  u32 value offset, start from cookie
+        buf.extend_from_slice(&16_u32.to_le_bytes());
+        //   20..22  u16 value
+        buf.extend_from_slice(&0_u16.to_le_bytes());
+    }
+    (buf, containers)
+}

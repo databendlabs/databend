@@ -713,16 +713,17 @@ pub fn deserialize_bitmap(buf: &[u8]) -> Result<HybridBitmap> {
         return Ok(HybridBitmap::new());
     }
 
-    if let Some(result) = try_decode_hybrid_bitmap(buf) {
-        return result;
+    if let Ok(Some(bitmap)) = try_decode_hybrid_bitmap(buf) {
+        return Ok(bitmap);
     }
 
     RoaringTreemap::deserialize_unchecked_from(buf)
         .map(HybridBitmap::from)
         .map_err(|e| {
-            let len = buf.len();
-            let msg = format!("fail to decode bitmap from buffer of size {len}: {e}");
-            ErrorCode::BadBytes(msg)
+            ErrorCode::BadBytes(format!(
+                "fail to decode bitmap from buffer of size {}: {e}",
+                buf.len()
+            ))
         })
 }
 
@@ -743,18 +744,88 @@ fn is_hybrid(buf: &[u8]) -> bool {
     buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION
 }
 
+/// A colliding legacy buffer with 82504 bitmaps with following bytes:
+/// ```text
+/// [                     Legacy                         ]
+/// [         count        ]  [  prefix ]  [    bitmap   ]
+/// 48 42 01 00  00 00 00 00  00 00 00 00  00 00 00 00 ...
+/// [  header ]  [         count        ]  [ prefix  ] [    bitmap   ]
+/// [                     Hybrid                                     ]
+/// ```
+/// It may be misread as a HybridBitmap Small kind with 0 length, but
+/// a valid hybrid small will have a length byte and 8-byte values.
+/// So we check the actual payload length to distinguish them.
+#[inline]
+fn hybrid_small_is_sane(payload: &[u8]) -> bool {
+    match payload.first() {
+        Some(&len) => payload.len() == 1 + len as usize * 8,
+        None => false,
+    }
+}
+
+/// A colliding legacy buffer with 16,859,720 (0x01014248) bitmaps with following bytes:
+/// ```text
+/// [                     Legacy                         ]
+/// [         count        ]  [  prefix ]  [    bitmap   ]
+/// 48 42 01 01  00 00 00 00  00 00 00 00  00 00 00 00 ...
+/// [ Header  ]  [         count        ]  [ prefix  ] [    bitmap   ]
+/// [                     Hybrid                                     ]
+/// ```
+/// It may be misread as a HybridBitmap Large kind with 0 count, but
+/// a valid hybrid large will have a 8-byte count and 4-byte prefixes
+/// and bitmaps.
+/// We need a new hybrid format to avoid the collision, before that
+/// following check distinguishes most of them. The minimum exception
+/// will be a legacy bitmap with first prefix of 1 and total length
+/// 48GB (2^32 bitmaps), which is unlikely to happen in practice.
+#[inline]
+fn hybrid_large_is_sane(body: &[u8]) -> bool {
+    if body.len() < 8 {
+        return false;
+    }
+    // If count is 0, the body must contain only the 8-byte count. If count is non-zero,
+    // the body must contain at least 12 bytes per container (prefix + cookie + count).
+    match read_u64_le(&body[..8]) {
+        0 => body.len() == 8,
+        count => count <= (body.len() - 8) as u64 / 12,
+    }
+}
+
 #[inline]
 pub fn is_hybrid_large(buf: &[u8]) -> bool {
-    is_hybrid(buf) && buf[3] == HYBRID_KIND_LARGE
+    is_hybrid(buf) && buf[3] == HYBRID_KIND_LARGE && hybrid_large_is_sane(&buf[HYBRID_HEADER_LEN..])
+}
+
+/// The decoded shape of a serialized bitmap buffer.
+enum BitmapClass<'a> {
+    HybridLarge(&'a [u8]),
+    HybridSmall(&'a [u8]),
+    Legacy(&'a [u8]),
+}
+
+/// Classifies a serialized bitmap buffer by payload content.
+///
+/// A legacy treemap with 82504 (0x0001_4248) or 16859720 (0x0101_4248)
+/// prefixes may collide with HybridBitmap ('H', 'B', 1, *), this function
+/// resolves the ambiguity via helper function `hybrid_large_is_sane` and
+/// `hybrid_small_is_sane`.
+fn classify_bitmap(buf: &[u8]) -> BitmapClass<'_> {
+    if !is_hybrid(buf) {
+        return BitmapClass::Legacy(buf);
+    }
+    let payload = &buf[HYBRID_HEADER_LEN..];
+    match buf[3] {
+        HYBRID_KIND_LARGE if hybrid_large_is_sane(payload) => BitmapClass::HybridLarge(payload),
+        HYBRID_KIND_SMALL if hybrid_small_is_sane(payload) => BitmapClass::HybridSmall(payload),
+        _ => BitmapClass::Legacy(buf),
+    }
 }
 
 fn as_roaring(buf: &[u8]) -> Option<&[u8]> {
-    if is_hybrid_large(buf) {
-        Some(&buf[HYBRID_HEADER_LEN..])
-    } else if !is_hybrid(buf) {
-        Some(buf) // Legacy
-    } else {
-        None // HybridSmall
+    match classify_bitmap(buf) {
+        BitmapClass::HybridLarge(body) => Some(body),
+        BitmapClass::Legacy(buf) => Some(buf),
+        BitmapClass::HybridSmall(_) => None,
     }
 }
 
@@ -861,32 +932,13 @@ impl<'a> SmallReader<'a> {
 pub(crate) fn validate_serialized_bitmap_header_and_length(buf: &[u8]) -> Result<()> {
     if buf.is_empty() {
         return Ok(());
-    } else if is_hybrid(buf) {
-        match buf[3] {
-            HYBRID_KIND_SMALL => {
-                // HybridSmall payload: at least 1 byte (length byte)
-                if buf.len() < HYBRID_HEADER_LEN + 1 {
-                    return Err(ErrorCode::BadBytes("hybrid small bitmap: buffer too short"));
-                }
-            }
-            HYBRID_KIND_LARGE => {
-                // HybridLarge payload: at least 8 bytes (u64 prefix bucket count)
-                if buf.len() < HYBRID_HEADER_LEN + 8 {
-                    return Err(ErrorCode::BadBytes("hybrid large bitmap: buffer too short"));
-                }
-            }
-            kind => {
-                return Err(ErrorCode::BadBytes(format!(
-                    "hybrid bitmap: invalid kind {kind}"
-                )));
-            }
-        }
-    } else if buf.len() < 8 {
-        // Legacy RoaringTreemap: minimum 8 bytes (u64 prefix bucket count)
-        return Err(ErrorCode::BadBytes("bitmap: buffer too short"));
     }
-
-    Ok(())
+    match classify_bitmap(buf) {
+        BitmapClass::Legacy(buf) if buf.len() < 8 => {
+            Err(ErrorCode::BadBytes("bitmap: buffer too short"))
+        }
+        _ => Ok(()),
+    }
 }
 
 pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
@@ -1018,88 +1070,57 @@ fn parse_bitmap_rhs(buf: &[u8]) -> Result<BitmapRhsView<'_>> {
         return Ok(BitmapRhsView::Empty);
     }
 
-    if is_hybrid(buf) {
-        let payload = &buf[HYBRID_HEADER_LEN..];
-        match buf[3] {
-            HYBRID_KIND_SMALL => {
-                let (_, bytes) = decode_small_payload(payload)?;
-                Ok(BitmapRhsView::Small(SmallValues::Serialized(bytes)))
-            }
-            HYBRID_KIND_LARGE => Ok(BitmapRhsView::SerializedLarge(payload)),
-            kind => Err(ErrorCode::BadBytes(format!(
-                "unknown hybrid bitmap kind: {kind}"
-            ))),
+    match classify_bitmap(buf) {
+        BitmapClass::HybridLarge(body) => Ok(BitmapRhsView::SerializedLarge(body)),
+        BitmapClass::HybridSmall(payload) => {
+            let (_, bytes) = decode_small_payload(payload)?;
+            Ok(BitmapRhsView::Small(SmallValues::Serialized(bytes)))
         }
-    } else {
-        Ok(BitmapRhsView::try_from(BitmapRhs::Bitmap(
+        BitmapClass::Legacy(buf) => Ok(BitmapRhsView::try_from(BitmapRhs::Bitmap(
             deserialize_bitmap(buf)?,
-        ))?)
+        ))?),
     }
 }
 
 fn validate_serialized_bitmap(buf: &[u8]) -> Result<()> {
-    if buf.is_empty() {
-        return Ok(());
+    // Small values are checked structurally; decoding them is unnecessary.
+    match classify_bitmap(buf) {
+        BitmapClass::HybridSmall(payload) => decode_small_payload(payload).map(|_| ()),
+        _ => deserialize_bitmap(buf).map(|_| ()),
     }
-
-    if is_hybrid(buf) {
-        let payload = &buf[HYBRID_HEADER_LEN..];
-        match buf[3] {
-            HYBRID_KIND_SMALL => {
-                decode_small_payload(payload)?;
-            }
-            HYBRID_KIND_LARGE => {
-                RoaringTreemap::deserialize_unchecked_from(payload).map_err(|e| {
-                    let len = payload.len();
-                    let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
-                    ErrorCode::BadBytes(msg)
-                })?;
-            }
-            kind => {
-                return Err(ErrorCode::BadBytes(format!(
-                    "unknown hybrid bitmap kind: {kind}"
-                )));
-            }
-        }
-    } else {
-        deserialize_bitmap(buf).map(|_| ())?;
-    }
-
-    Ok(())
 }
 
-fn try_decode_hybrid_bitmap(buf: &[u8]) -> Option<Result<HybridBitmap>> {
-    if buf.len() < HYBRID_HEADER_LEN {
-        return None;
-    }
-
-    if buf[0..2] != HYBRID_MAGIC {
-        return None;
+fn try_decode_hybrid_bitmap(buf: &[u8]) -> Result<Option<HybridBitmap>> {
+    if buf.len() < HYBRID_HEADER_LEN || buf[0..2] != HYBRID_MAGIC {
+        return Ok(None);
     }
 
     let version = buf[2];
     if version != HYBRID_VERSION {
-        return Some(Err(ErrorCode::BadBytes(format!(
+        return Err(ErrorCode::BadBytes(format!(
             "unsupported hybrid bitmap version: {version}"
-        ))));
+        )));
     }
 
     let kind = buf[3];
     let payload = &buf[HYBRID_HEADER_LEN..];
     match kind {
-        HYBRID_KIND_SMALL => Some(decode_small_bitmap(payload)),
-        HYBRID_KIND_LARGE => Some(
+        HYBRID_KIND_SMALL => Ok(Some(decode_small_bitmap(payload)?)),
+        HYBRID_KIND_LARGE if hybrid_large_is_sane(payload) => Ok(Some(
             RoaringTreemap::deserialize_unchecked_from(payload)
                 .map(HybridBitmap::from)
                 .map_err(|e| {
                     let len = payload.len();
                     let msg = format!("fail to decode roaring bitmap payload of size {len}: {e}");
                     ErrorCode::BadBytes(msg)
-                }),
-        ),
-        _ => Some(Err(ErrorCode::BadBytes(format!(
+                })?,
+        )),
+        // A failed sanity check means the buffer is either a colliding legacy
+        // treemap or corrupt; both must fall back to the legacy decoder.
+        HYBRID_KIND_LARGE => Ok(None),
+        kind => Err(ErrorCode::BadBytes(format!(
             "unknown hybrid bitmap kind: {kind}"
-        )))),
+        ))),
     }
 }
 
@@ -1431,6 +1452,8 @@ mod tests {
 
     use smallvec::smallvec;
 
+    use super::test_support::serialize_legacy_collision_hybrid_small;
+    use super::test_support::serialize_legacy_collision_large;
     use super::*;
 
     #[test]
@@ -2194,5 +2217,45 @@ mod tests {
                 assert_eq!(actual, expected);
             }
         }
+    }
+
+    #[test]
+    fn test_legacy_bitmap_collision_hybrid_handled_correctly() {
+        let (buf, len) = serialize_legacy_collision_hybrid_small();
+        assert_collision_buffer_decodes_as_legacy(&buf, len);
+    }
+
+    // The large collision fixture serializes ~438MB with 16,859,720 containers
+    // and the assertions deserialize it several times, taking minutes in debug
+    // builds, ignored to avoid long test times.
+    // Use `cargo test -- --ignored` to run this test.
+    #[test]
+    #[ignore]
+    fn test_legacy_collision_hybrid_large_handled_correctly() {
+        let (buf, len) = serialize_legacy_collision_large();
+        assert_collision_buffer_decodes_as_legacy(&buf, len);
+    }
+
+    fn assert_collision_buffer_decodes_as_legacy(buf: &[u8], len: u64) {
+        let probe: HybridBitmap = [0_u64, 7].into_iter().collect();
+        let mut probe_buf = Vec::new();
+        probe.serialize_into(&mut probe_buf).unwrap();
+
+        assert_eq!(bitmap_len(buf).unwrap(), len);
+        assert!(bitmap_contains(buf, 0).unwrap());
+        assert!(bitmap_contains(buf, 5 << 32).unwrap());
+        assert!(!bitmap_contains(buf, 5).unwrap());
+        assert_eq!(bitmap_min(buf).unwrap(), Some(0));
+        assert_eq!(bitmap_max(buf).unwrap(), Some((len - 1) << 32));
+        assert!(bitmap_has_any(buf, &probe_buf).unwrap());
+        assert!(!bitmap_has_all(buf, &probe_buf).unwrap());
+
+        let mut lhs: HybridBitmap = (1..=10_u64).collect();
+        lhs.bitor_assign_rhs(BitmapRhs::Serialized(buf)).unwrap();
+        assert_eq!(lhs.len(), len + 10);
+
+        let mut lhs: HybridBitmap = (1..=10_u64).collect();
+        lhs.bitand_assign_rhs(BitmapRhs::Serialized(buf)).unwrap();
+        assert!(lhs.is_empty());
     }
 }
