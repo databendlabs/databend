@@ -752,9 +752,8 @@ impl Table for IcebergTable {
             // snapshot. Publishing the rows as new files and dropping the old manifests is not
             // implemented yet, so reject instead of silently appending.
             return Err(ErrorCode::TableEngineNotSupported(format!(
-                "INSERT OVERWRITE is not supported for the table '{}.{}' which uses the '{}' engine",
+                "INSERT OVERWRITE is not supported for the table '{}' which uses the '{}' engine",
                 self.get_table_info().desc,
-                self.name(),
                 self.get_table_info().engine(),
             )));
         }
