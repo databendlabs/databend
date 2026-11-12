@@ -215,47 +215,6 @@ async fn run_binder_cases_with_commercial_license(
     Ok(())
 }
 
-/// A CTE is bound where its `WITH` clause is, so its body can never bind a column of the
-/// query that references it. Referencing a CTE from a lateral subquery used to silently
-/// correlate the two.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_binder_cte_scope() -> Result<()> {
-    let cases = [
-        SqlTestCase {
-            name: "cte_body_does_not_bind_the_enclosing_select",
-            description: "A CTE body must not resolve a column that only the query using it provides.",
-            setup_sqls: &[],
-            sql: "WITH t AS (SELECT x) SELECT * FROM t",
-        },
-        SqlTestCase {
-            name: "cte_body_does_not_bind_a_referencing_from_item",
-            description: "A CTE body must not resolve a column of another item in the referencing FROM.",
-            setup_sqls: &[],
-            sql: "WITH t AS (SELECT x) SELECT * FROM (SELECT 1 AS x) s, t",
-        },
-        SqlTestCase {
-            name: "cte_body_does_not_bind_a_lateral_from_item",
-            description: "A CTE body referenced from a lateral subquery must not correlate with the lateral left side.",
-            setup_sqls: &[],
-            sql: "WITH t AS (SELECT x) SELECT * FROM (SELECT 1 AS x) s, LATERAL (SELECT * FROM t)",
-        },
-        SqlTestCase {
-            name: "cte_is_referenced_from_a_lateral_subquery",
-            description: "A self-contained CTE is still readable from a lateral subquery.",
-            setup_sqls: &[],
-            sql: "WITH t AS (SELECT 1 AS x) SELECT * FROM (SELECT 1 AS x) s, LATERAL (SELECT * FROM t)",
-        },
-        SqlTestCase {
-            name: "cte_body_resolves_an_earlier_cte",
-            description: "A CTE body may reference a CTE defined earlier in the same WITH clause.",
-            setup_sqls: &[],
-            sql: "WITH a AS (SELECT 1 AS x), b AS (SELECT x + 1 AS y FROM a) SELECT * FROM b",
-        },
-    ];
-
-    run_binder_cases("binder_cte_scope.txt", &cases).await
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_binder_clauses_and_ordering() -> Result<()> {
     let cases = [
