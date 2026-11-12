@@ -164,11 +164,8 @@ impl Interpreter for ReclusterTableInterpreter {
                         Ok(Some(blocks)) => {
                             let plan = vector_final_plan(&blocks);
                             if plan == VectorFinalPlan::FullPass {
-                                let blocks: HashSet<String> = blocks
-                                    .into_iter()
-                                    .filter(|block| block.level >= 0)
-                                    .map(|block| block.location)
-                                    .collect();
+                                let blocks: HashSet<String> =
+                                    blocks.into_iter().map(|block| block.location).collect();
                                 info!(
                                     event = "recluster.vector_full_pass",
                                     blocks = blocks.len();

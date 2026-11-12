@@ -287,14 +287,9 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         }
     }
 
-    /// Blocks written by a vector recluster task (level >= 1) are already laid out
-    /// by k-means, and are not rewritten again: in high dimensions their spheres
-    /// overlap regardless, and they may stay below the small-block compaction
-    /// threshold. Selecting them by overlap or by size would rewrite the same rows
-    /// every round, until the level limit, without improving the layout. Only blocks
-    /// not clustered by a recluster task yet (`VECTOR_LEVEL_NEW`, such as INSERT
-    /// output) are eligible, except in the full pass of RECLUSTER FINAL, whose blocks
-    /// were selected by the mutator.
+    /// Only level-0 blocks, except in the full pass of RECLUSTER FINAL. Blocks
+    /// written by a recluster task always overlap in high dimensions; selecting them
+    /// again would rewrite the same rows every round.
     fn eligible_blocks(
         &self,
         properties: &ReclusterProperties,

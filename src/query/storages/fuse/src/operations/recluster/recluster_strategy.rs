@@ -205,9 +205,8 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         window_len: usize,
     ) -> Result<Vec<Vec<SelectedReclusterSegment>>>;
 
-    /// The blocks of a level group that may be rewritten. Applied before every
-    /// selection path, including small-block compaction, so a strategy can keep
-    /// blocks out of rewrites regardless of their size.
+    /// The blocks of a group that may be rewritten, before any selection, including
+    /// small-block compaction. All by default.
     fn eligible_blocks(
         &self,
         _properties: &ReclusterProperties,
