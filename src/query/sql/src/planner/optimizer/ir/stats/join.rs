@@ -340,6 +340,10 @@ pub(crate) struct JoinStatsEstimator {
     right_input: Arc<StatInfo>,
     contributions: Vec<JoinConditionContribution>,
     unique_key_output_bound: Option<f64>,
+    confident_unique_key_output_bound: Option<f64>,
+    /// Whether the rows of the left/right input appear at most once in the
+    /// output, so its observed NDV columns stay observed.
+    keeps_observed_ndv: (bool, bool),
 }
 
 impl JoinStatsEstimator {
@@ -354,6 +358,8 @@ impl JoinStatsEstimator {
             right_input,
             contributions: Vec::new(),
             unique_key_output_bound: None,
+            confident_unique_key_output_bound: None,
+            keeps_observed_ndv: (false, false),
         }
     }
 
@@ -371,12 +377,15 @@ impl JoinStatsEstimator {
             .precise_cardinality
             .map(StatCardinality::exact)
             .unwrap_or_else(|| StatCardinality::estimate(self.right_input.cardinality));
-        let unique_key_output_bound = join
-            .equi_conditions
-            .iter()
-            .filter_map(|condition| self.unique_key_bound(condition))
-            .reduce(f64::min);
-        self.unique_key_output_bound = unique_key_output_bound;
+        let left_rows = self.left_input.cardinality;
+        let right_rows = self.right_input.cardinality;
+        self.unique_key_output_bound =
+            self.unique_key_bound(join, left_rows, right_rows, UniqueKeyEvidence::Expected);
+        let left_bound = self.left_input.max_cardinality.max(left_rows);
+        let right_bound = self.right_input.max_cardinality.max(right_rows);
+        self.confident_unique_key_output_bound =
+            self.unique_key_bound(join, left_bound, right_bound, UniqueKeyEvidence::Confident);
+        self.keeps_observed_ndv = self.rows_kept_at_most_once(join, left_bound, right_bound);
         for condition in &join.equi_conditions {
             let (left, right) = condition.canonical_keys();
             let evaluated = EquiCondition::estimate_locally(
@@ -438,6 +447,7 @@ impl JoinStatsEstimator {
                     column_stats: HashMap::new(),
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    observed_ndv_columns: Default::default(),
                 },
             }));
         }
@@ -461,24 +471,38 @@ impl JoinStatsEstimator {
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                observed_ndv_columns: self.output_observed_ndv_columns(),
             },
         }))
     }
 
     /// A unique join key caps fan-out: every row on the peer side matches at
-    /// most one row on the unique side. Uniqueness comes from statistics, so
-    /// this only bounds the expected output, not `max_cardinality`.
-    fn unique_key_bound(&self, condition: &JoinEquiCondition) -> Option<f64> {
-        let left_rows = self.left_input.cardinality;
-        let right_rows = self.right_input.cardinality;
-        let (left, right) = condition.canonical_keys();
-        let is_unique = |key: &ScalarExpr, input: &StatInfo, rows: f64| {
-            identity_column(key)
-                .and_then(|column| input.statistics.column_stats.get(&column))
-                .is_some_and(|stat| is_unique_join_key(stat, rows, condition.is_null_equal))
-        };
-        let left_unique = is_unique(left, &self.left_input, left_rows);
-        let right_unique = is_unique(right, &self.right_input, right_rows);
+    /// most one row on the unique side. Returns the tightest bound over all
+    /// equi conditions, in terms of the given input row counts.
+    fn unique_key_bound(
+        &self,
+        join: &Join,
+        left_rows: f64,
+        right_rows: f64,
+        evidence: UniqueKeyEvidence,
+    ) -> Option<f64> {
+        join.equi_conditions
+            .iter()
+            .filter_map(|condition| {
+                self.condition_unique_key_bound(condition, left_rows, right_rows, evidence)
+            })
+            .reduce(f64::min)
+    }
+
+    fn condition_unique_key_bound(
+        &self,
+        condition: &JoinEquiCondition,
+        left_rows: f64,
+        right_rows: f64,
+        evidence: UniqueKeyEvidence,
+    ) -> Option<f64> {
+        let (left_unique, right_unique) =
+            self.condition_unique_keys(condition, left_rows, right_rows, evidence);
         match self.join_type {
             JoinType::Inner | JoinType::InnerAny => match (left_unique, right_unique) {
                 (true, true) => Some(left_rows.min(right_rows)),
@@ -493,11 +517,92 @@ impl JoinStatsEstimator {
         }
     }
 
+    /// Whether the left/right key of `condition` is unique with `evidence`.
+    fn condition_unique_keys(
+        &self,
+        condition: &JoinEquiCondition,
+        left_rows: f64,
+        right_rows: f64,
+        evidence: UniqueKeyEvidence,
+    ) -> (bool, bool) {
+        let (left, right) = condition.canonical_keys();
+        let is_unique = |key: &ScalarExpr, input: &StatInfo, rows: f64| {
+            identity_column(key).is_some_and(|column| {
+                evidence.is_unique(&input.statistics, column, rows, condition.is_null_equal)
+            })
+        };
+        (
+            is_unique(left, &self.left_input, left_rows),
+            is_unique(right, &self.right_input, right_rows),
+        )
+    }
+
+    /// Whether each input row appears at most once in the output, per side.
+    /// Joins bounded by one input keep that input's rows at most once; other
+    /// joins do so for a side only when the peer key is confidently unique.
+    fn rows_kept_at_most_once(
+        &self,
+        join: &Join,
+        left_bound: f64,
+        right_bound: f64,
+    ) -> (bool, bool) {
+        match self.join_type {
+            JoinType::LeftSemi
+            | JoinType::LeftAnti
+            | JoinType::LeftAny
+            | JoinType::LeftSingle
+            | JoinType::RightMark => (true, false),
+            JoinType::RightSemi
+            | JoinType::RightAnti
+            | JoinType::RightAny
+            | JoinType::RightSingle
+            | JoinType::LeftMark => (false, true),
+            JoinType::Inner
+            | JoinType::InnerAny
+            | JoinType::Left
+            | JoinType::Right
+            | JoinType::Full => join
+                .equi_conditions
+                .iter()
+                .map(|condition| {
+                    self.condition_unique_keys(
+                        condition,
+                        left_bound,
+                        right_bound,
+                        UniqueKeyEvidence::Confident,
+                    )
+                })
+                .fold(
+                    (false, false),
+                    |(left, right), (left_unique, right_unique)| {
+                        (left || right_unique, right || left_unique)
+                    },
+                ),
+            _ => (false, false),
+        }
+    }
+
+    /// Observed NDV columns of the inputs whose rows appear at most once in
+    /// the output. A join that may repeat an input row repeats its key values,
+    /// so that input's NDV no longer shows uniqueness.
+    fn output_observed_ndv_columns(&self) -> ColumnSet {
+        let (left, right) = self.keeps_observed_ndv;
+        let mut columns = ColumnSet::new();
+        if left {
+            columns.extend(&self.left_input.statistics.observed_ndv_columns);
+        }
+        if right {
+            columns.extend(&self.right_input.statistics.observed_ndv_columns);
+        }
+        columns
+    }
+
     /// Conservative bound of the rows that may reach the join output. Joins
     /// that output at most one row per row of one input are bounded by that
     /// input, a full join by the sum and a cross join by the product of its
     /// input bounds. Otherwise skew and fan-out make the output estimate
-    /// unsafe, so keep the largest input bound.
+    /// unsafe, so keep the largest input bound. A confidently unique join key
+    /// can tighten these bounds.
     fn max_output_cardinality(&self, output_rows: f64) -> f64 {
         let left = self
             .left_input
@@ -518,11 +623,19 @@ impl JoinStatsEstimator {
             | JoinType::RightAny
             | JoinType::RightSingle
             | JoinType::LeftMark => right.max(output_rows),
-            // A full join can return the unmatched rows of both inputs.
-            JoinType::Full | JoinType::FullAsof => output_rows.max(left + right),
-            // A cross join returns every pair of input rows.
-            JoinType::Cross => output_rows.max(left * right),
-            _ => output_rows.max(left).max(right),
+            _ => {
+                let input_bound = match self.join_type {
+                    // A full join can return the unmatched rows of both inputs.
+                    JoinType::Full | JoinType::FullAsof => output_rows.max(left + right),
+                    // A cross join returns every pair of input rows.
+                    JoinType::Cross => output_rows.max(left * right),
+                    _ => output_rows.max(left).max(right),
+                };
+                // Only tighten the input bound. A FULL join bound by its
+                // unique key (left + right rows) never goes below it.
+                self.confident_unique_key_output_bound
+                    .map_or(input_bound, |bound| bound.max(output_rows).min(input_bound))
+            }
         }
     }
 
@@ -1367,6 +1480,7 @@ fn combined_input_statistics(
             .chain(&right.count_min_sketch)
             .map(|(column, sketch)| (*column, sketch.clone()))
             .collect(),
+        observed_ndv_columns: Default::default(),
     };
     (statistics, column_row_scales)
 }
@@ -1379,6 +1493,56 @@ fn is_unique_join_key(stat: &ColumnStat, cardinality: f64, is_null_equal: bool) 
     let non_null_rows =
         (cardinality - join_key_null_count_for_cardinality(stat, cardinality)).max(0.0);
     stat.ndv().expected.is_some_and(|ndv| ndv >= non_null_rows)
+}
+
+/// Evidence required to treat a join key as unique.
+#[derive(Clone, Copy)]
+enum UniqueKeyEvidence {
+    /// Bounds the expected output: `is_unique_join_key`.
+    Expected,
+    /// Bounds `max_cardinality`: `is_confident_unique_join_key` on a column
+    /// whose NDV was collected over all rows rather than inferred.
+    Confident,
+}
+
+impl UniqueKeyEvidence {
+    fn is_unique(
+        self,
+        statistics: &Statistics,
+        column: Symbol,
+        rows: f64,
+        is_null_equal: bool,
+    ) -> bool {
+        let Some(stat) = statistics.column_stats.get(&column) else {
+            return false;
+        };
+        match self {
+            Self::Expected => is_unique_join_key(stat, rows, is_null_equal),
+            Self::Confident => {
+                statistics.observed_ndv_columns.contains(&column)
+                    && is_confident_unique_join_key(stat, rows, is_null_equal)
+            }
+        }
+    }
+}
+
+/// Like `is_unique_join_key`, but used for `max_cardinality`, so it also
+/// rejects an NDV that reaches the size of the key's discrete value domain.
+/// Statistics providers and `ColumnStat` clamp NDV to that size, so such an
+/// NDV may be a repaired overestimate rather than an observed count.
+///
+/// NULL-safe equality matches NULL keys with each other, so it also requires
+/// an exact NULL count of at most one. Filters and outer joins scale or add to
+/// the NULL count, so its upper value is then an estimate, not a bound.
+fn is_confident_unique_join_key(stat: &ColumnStat, cardinality: f64, is_null_equal: bool) -> bool {
+    if is_null_equal && !matches!(stat.null_count(), StatCount::Exact(0 | 1)) {
+        return false;
+    }
+    let ndv_reaches_domain = stat
+        .bounds()
+        .and_then(|bounds| bounds.finite_ndv_upper())
+        .is_some_and(|domain| stat.ndv().expected.is_some_and(|ndv| ndv >= domain));
+    !ndv_reaches_domain && is_unique_join_key(stat, cardinality, is_null_equal)
 }
 
 fn identity_column(expression: &ScalarExpr) -> Option<Symbol> {
@@ -1450,5 +1614,62 @@ mod tests {
             1_000.0,
             false
         ));
+    }
+
+    #[test]
+    fn test_confident_unique_join_key_rejects_ndv_at_domain_size() {
+        // `int_key` has the domain [1, 1000]: an NDV of 1000 may have been
+        // clamped to the domain size, so it only counts as unique for the
+        // expected output.
+        let at_domain = int_key(NdvEstimate::exact(1_000.0), 0);
+        assert!(is_unique_join_key(&at_domain, 1_000.0, false));
+        assert!(!is_confident_unique_join_key(&at_domain, 1_000.0, false));
+
+        let below_domain = int_key(NdvEstimate::exact(500.0), 0);
+        assert!(is_confident_unique_join_key(&below_domain, 500.0, false));
+        assert!(!is_confident_unique_join_key(&below_domain, 600.0, false));
+        assert!(!is_confident_unique_join_key(
+            &int_key(NdvEstimate::upper_bound(500.0), 0),
+            500.0,
+            false
+        ));
+    }
+
+    #[test]
+    fn test_confident_unique_join_key_rejects_repeated_nulls_for_null_safe_equality() {
+        let key = int_key(NdvEstimate::exact(500.0), 10);
+        assert!(is_confident_unique_join_key(&key, 510.0, false));
+        assert!(!is_confident_unique_join_key(&key, 510.0, true));
+    }
+
+    #[test]
+    fn test_confident_unique_join_key_requires_exact_null_count_for_null_safe_equality() {
+        let mut key = int_key(NdvEstimate::exact(500.0), 1);
+        assert!(is_confident_unique_join_key(&key, 501.0, true));
+
+        // A filter keeping 10% of rows scales ten NULLs to an estimate of one.
+        // The filtered rows may still hold several NULLs.
+        let null_count = StatCount::exact(10).reduce_by_selectivity(0.1);
+        assert_eq!(null_count.upper(), 1.0);
+        key.set_null_count(null_count);
+        assert!(is_unique_join_key(&key, 501.0, true));
+        assert!(!is_confident_unique_join_key(&key, 501.0, true));
+        assert!(is_confident_unique_join_key(&key, 501.0, false));
+    }
+
+    #[test]
+    fn test_confident_unique_key_requires_observed_ndv() {
+        let column = Symbol::new(0);
+        let mut statistics = Statistics {
+            column_stats: HashMap::from([(column, int_key(NdvEstimate::exact(500.0), 0))]),
+            ..Default::default()
+        };
+        // An inferred NDV still caps the expected output.
+        assert!(UniqueKeyEvidence::Expected.is_unique(&statistics, column, 500.0, false));
+        assert!(!UniqueKeyEvidence::Confident.is_unique(&statistics, column, 500.0, false));
+
+        statistics.observed_ndv_columns.insert(column);
+        assert!(UniqueKeyEvidence::Confident.is_unique(&statistics, column, 500.0, false));
+        assert!(!UniqueKeyEvidence::Confident.is_unique(&statistics, Symbol::new(1), 500.0, false));
     }
 }

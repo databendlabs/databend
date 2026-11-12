@@ -1454,6 +1454,7 @@ impl LiteTableContext {
                                             ndv: Some(num_rows),
                                             null_count: 0,
                                             in_memory_size: num_rows.saturating_mul(8),
+                                            ndv_is_inferred: false,
                                         },
                                     );
                                 }

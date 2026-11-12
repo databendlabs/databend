@@ -81,6 +81,7 @@ fn all_null_column_statistics(null_count: u64) -> BasicColumnStatistics {
         ndv: Some(0),
         null_count,
         in_memory_size: 0,
+        ndv_is_inferred: false,
     }
 }
 

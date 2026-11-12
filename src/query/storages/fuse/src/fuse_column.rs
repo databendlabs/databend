@@ -59,16 +59,22 @@ impl FuseTableColumnStatisticsProvider {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = distinct_map
-                    .and_then(|map| map.get(&column_id).cloned())
-                    .or(stat.distinct_of_values)
-                    .unwrap_or(row_count);
+                // Only the table-level HLL counts each value once. The summary
+                // NDV sums per-block NDVs, so values in several blocks are
+                // counted more than once. `get_useful_stat` fills a missing NDV
+                // from the row count and marks it as inferred.
+                let (ndv, ndv_is_inferred) =
+                    match distinct_map.and_then(|map| map.get(&column_id).copied()) {
+                        Some(ndv) => (Some(ndv), false),
+                        None => (stat.distinct_of_values, stat.distinct_of_values.is_some()),
+                    };
                 let stat = BasicColumnStatistics {
                     min: stat.min.to_datum(),
                     max: stat.max.to_datum(),
-                    ndv: Some(ndv),
+                    ndv,
                     null_count: stat.null_count,
                     in_memory_size: stat.in_memory_size,
+                    ndv_is_inferred,
                 };
                 (column_id, stat.get_useful_stat(row_count, stats_row_count))
             })
@@ -119,5 +125,56 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
 
     fn all_null_count(&self, column_id: ColumnId) -> Option<u64> {
         self.all_null_counts.get(&column_id).copied()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_statistics::Datum;
+
+    use super::*;
+
+    fn int_column_stat(distinct_of_values: Option<u64>) -> FuseColumnStatistics {
+        FuseColumnStatistics::new(
+            Scalar::Number(NumberScalar::Int64(1)),
+            Scalar::Number(NumberScalar::Int64(1_000_000)),
+            0,
+            8_000,
+            distinct_of_values,
+        )
+    }
+
+    #[test]
+    fn test_ndv_without_table_hll_is_marked_as_inferred() {
+        // Column 2 has a table-level HLL NDV. Column 1 only has the summary NDV,
+        // which sums per-block NDVs, and column 0 has no NDV at all.
+        let provider = FuseTableColumnStatisticsProvider::new(
+            HashMap::from([
+                (0, int_column_stat(None)),
+                (1, int_column_stat(Some(1_000))),
+                (2, int_column_stat(Some(1_000))),
+            ]),
+            HashMap::new(),
+            Default::default(),
+            Default::default(),
+            Some(HashMap::from([(2, 500)])),
+            1_000,
+            1_000,
+        );
+
+        let missing = provider.column_statistics(0).unwrap();
+        assert_eq!(missing.min, Some(Datum::Int(1)));
+        assert_eq!(missing.ndv, Some(1_000));
+        assert!(missing.ndv_is_inferred);
+
+        let summed = provider.column_statistics(1).unwrap();
+        assert_eq!(summed.ndv, Some(1_000));
+        assert!(summed.ndv_is_inferred);
+
+        let collected = provider.column_statistics(2).unwrap();
+        assert_eq!(collected.ndv, Some(500));
+        assert!(!collected.ndv_is_inferred);
     }
 }

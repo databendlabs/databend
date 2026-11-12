@@ -103,6 +103,7 @@ impl ColumnStats {
             ndv: self.ndv,
             null_count: self.null_count.unwrap_or(0),
             in_memory_size: 0,
+            ndv_is_inferred: false,
         }
     }
 }
