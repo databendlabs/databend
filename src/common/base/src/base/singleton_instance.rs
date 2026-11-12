@@ -63,6 +63,19 @@ impl SingletonType {
         }
     }
 
+    /// The value of type `T`, `None` if it is not set.
+    fn try_get<T: Clone + 'static>(&self) -> Option<T> {
+        match self {
+            SingletonType::Production => GLOBAL.get()?.try_get::<T>().cloned(),
+            #[cfg(debug_assertions)]
+            SingletonType::Testing => {
+                let thread = std::thread::current();
+                let guard = LOCAL.get()?.read();
+                guard.get(thread.name()?)?.try_get::<T>().cloned()
+            }
+        }
+    }
+
     fn set<T: Send + Sync + 'static>(&self, value: T) -> bool {
         match self {
             SingletonType::Production => GLOBAL.wait().set(value),
@@ -141,8 +154,10 @@ impl GlobalInstance {
             .get()
     }
 
+    /// Get data from global data registry, `None` if the registry is not
+    /// initiated or the data is not set.
     pub fn try_get<T: Clone + 'static>() -> Option<T> {
-        SINGLETON_TYPE.get().map(|v| v.get())
+        SINGLETON_TYPE.get()?.try_get()
     }
 
     /// Set data into global data registry.
