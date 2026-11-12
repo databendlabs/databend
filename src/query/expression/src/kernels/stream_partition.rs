@@ -120,7 +120,11 @@ impl PendingColumn {
                 data_type: pending_type,
                 rows: pending_rows,
                 ..
-            } if pending == scalar && pending_type == data_type => {
+            } if pending == scalar
+                && pending_type == data_type
+                // SQL equality alone cannot prove that presentation offsets are identical.
+                && !data_type.contains_timestamp_tz() =>
+            {
                 *pending_rows += rows;
                 true
             }
@@ -573,6 +577,9 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                 copy_primitive_type(builder, column, indices);
             }
             (ColumnBuilder::Interval(builder), Column::Interval(column)) => {
+                copy_primitive_type(builder, column, indices);
+            }
+            (ColumnBuilder::TimestampTz(builder), Column::TimestampTz(column)) => {
                 copy_primitive_type(builder, column, indices);
             }
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(column)) => {

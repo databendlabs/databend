@@ -21,13 +21,13 @@
 //! - `registry`: what a cache kind is (`CacheDef`) and the registry of the built-in kinds.
 //! - `kinds`: the definitions of the built-in kinds, by domain, with their values.
 //! - `legacy` and `shared`: the two backends; `backend` is the interface both implement.
-//! - `disk`: the disk tier of the kinds that define one.
+//! - `disk`: the disk cache of raw object bytes, below the readers (`DiskCachedStorage`).
 //! - `handle`: the typed cache a reader gets (`MemCache`); `read`: loading into it.
 //! - `local`: plain LRU caches owned by a single component.
 
 mod accessor;
 pub mod backend;
-mod disk;
+pub mod disk;
 mod handle;
 pub mod kinds;
 pub mod legacy;
@@ -43,6 +43,8 @@ mod temp_dir;
 pub use accessor::CacheAccessor;
 pub use backend::KindLimit;
 pub use backend::Unit;
+pub use databend_common_catalog::cache_policy::CacheFill;
+pub use databend_common_catalog::cache_policy::CachePolicy;
 pub use databend_common_catalog::plan::PartStatistics;
 pub use databend_common_catalog::plan::Partitions;
 pub use databend_common_catalog::table::Table;
@@ -65,7 +67,15 @@ pub use databend_storages_common_table_meta::meta::SegmentStatistics;
 pub use databend_storages_common_table_meta::meta::TableSnapshot;
 pub use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 pub use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
-pub use disk::*;
+pub use disk::DiskCache;
+pub use disk::DiskCacheStats;
+pub use disk::DiskCachedStorage;
+pub use disk::DiskKey;
+pub use disk::DiskKindEvents;
+pub use disk::DiskKindStats;
+pub use disk::DiskPoolStats;
+pub use disk::UnitsRead;
+pub use disk::split_caps;
 pub use handle::CacheRef;
 pub use handle::MemCache;
 pub use handle::Reservation;
@@ -73,6 +83,7 @@ pub use handle::Usage;
 pub use kinds::column::CachedColumnArray;
 pub use kinds::column::ColumnData;
 pub use kinds::column::SizedColumnArray;
+pub use kinds::column::TableDataCacheKey;
 pub use kinds::iceberg::IcebergTableCacheValue;
 pub use kinds::vector::CachedVectorIndex;
 pub use local::CacheValue;

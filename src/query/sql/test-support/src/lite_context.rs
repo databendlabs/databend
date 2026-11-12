@@ -69,6 +69,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::QuerySpecificValues;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -764,6 +765,7 @@ pub struct LiteTableContext {
     queued_duration: RwLock<Duration>,
     next_table_id: AtomicU64,
     license_key: RwLock<String>,
+    query_specific_values: QuerySpecificValues,
 }
 
 impl LiteTableContext {
@@ -1013,6 +1015,7 @@ impl LiteTableContext {
             queued_duration: RwLock::new(Duration::default()),
             next_table_id: AtomicU64::new(1),
             license_key: RwLock::new(String::new()),
+            query_specific_values: QuerySpecificValues::tracked(),
         });
         ctx.reset_user_api_state().await?;
         Ok(ctx)
@@ -1566,7 +1569,10 @@ impl TableContextSession for LiteTableContext {
 
 impl TableContextSettings for LiteTableContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
-        Ok(FunctionContext::default())
+        Ok(FunctionContext {
+            query_specific_values: self.query_specific_values.clone(),
+            ..Default::default()
+        })
     }
 
     fn get_settings(&self) -> Arc<Settings> {
@@ -1587,6 +1593,8 @@ impl TableContextSettings for LiteTableContext {
         self.shared_settings.clone()
     }
 }
+
+impl TableContextCachePolicy for LiteTableContext {}
 
 impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {
@@ -1917,26 +1925,14 @@ impl TableContextTableAccess for LiteTableContext {
             .await
     }
 
-    async fn get_table_with_branch(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        _branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table(catalog, database, table).await
-    }
-
     async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        self.get_table_with_branch(catalog, database, table, branch)
-            .await
+        self.get_table(catalog, database, table).await
     }
 
     async fn acquire_table_lock(

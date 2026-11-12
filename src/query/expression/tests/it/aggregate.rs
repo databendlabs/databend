@@ -41,12 +41,12 @@ use databend_common_expression::PartialAddStats;
 use databend_common_expression::PartialAggregateMode;
 use databend_common_expression::PartialObservation;
 use databend_common_expression::PartialState;
+use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::SerializedPayload;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::aggregate_function::EagerAggregation;
@@ -554,7 +554,7 @@ fn test_singleton_group_keys_merge_across_blocks() -> Result<()> {
                     (&[]).into(),
                     1,
                 )?;
-                assert_eq!(hashtable.len(), 1, "group key: {data_type:?}");
+                assert_eq!(hashtable.payload.len(), 1, "group key: {data_type:?}");
             }
         }
     }
@@ -567,7 +567,7 @@ fn test_partitioned_payload_public_bucket_iterators() {
 
     {
         let hashtable = fixture.build_from_rows(0, HashTableConfig::default());
-        let rows = hashtable.len();
+        let rows = hashtable.payload.len();
         let buckets = hashtable.payload.into_bucket_payloads().collect::<Vec<_>>();
         assert_eq!(buckets.len(), 8);
         assert_eq!(
@@ -579,7 +579,7 @@ fn test_partitioned_payload_public_bucket_iterators() {
         );
 
         let hashtable = fixture.build_from_rows(0, HashTableConfig::default());
-        let rows = hashtable.len();
+        let rows = hashtable.payload.len();
         let non_empty = hashtable
             .payload
             .into_non_empty_bucket_payloads()
@@ -598,15 +598,24 @@ fn test_partitioned_payload_public_bucket_iterators() {
     fixture.assert_all_states_dropped();
 }
 
+/// Scatter every partition of `hashtable` into `buckets` payloads, as the partial aggregate
+/// routes its output to the final aggregates.
+fn scatter_into_buckets(hashtable: AggregateHashTable, buckets: usize) -> Vec<Payload> {
+    hashtable
+        .into_payloads()
+        .into_iter()
+        .flat_map(|payload| payload.scatter_into_buckets(buckets))
+        .collect()
+}
+
 #[test]
-fn test_partitioned_payload_scatter_preserves_results() {
+fn test_payload_scatter_preserves_results() {
     let fixture = TrackedHeapFixture::new();
 
     {
         let hashtable = fixture.build_from_rows(0, HashTableConfig::default());
-        let rows = hashtable.len();
-        let scattered = hashtable.payload.scatter_into_buckets(3);
-        assert_eq!(scattered.len(), 3);
+        let rows = hashtable.payload.len();
+        let scattered = scatter_into_buckets(hashtable, 3);
         assert_eq!(
             scattered.iter().map(|payload| payload.len()).sum::<usize>(),
             rows
@@ -615,7 +624,7 @@ fn test_partitioned_payload_scatter_preserves_results() {
         let mut merged = fixture.empty_table(HashTableConfig::default());
         let mut flush_state = PayloadFlushState::default();
         for payload in &scattered {
-            merged.combine_payloads(payload, &mut flush_state).unwrap();
+            merged.combine_payload(payload, &mut flush_state).unwrap();
         }
         fixture.assert_result(&mut merged);
     }
@@ -624,69 +633,38 @@ fn test_partitioned_payload_scatter_preserves_results() {
 }
 
 #[test]
-fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
+fn test_add_serialized_groups_matches_combine_and_drops_states() {
     let fixture = TrackedHeapFixture::new();
 
     {
         let hashtable =
             fixture.build_from_rows(0, HashTableConfig::default().with_initial_radix_bits(0));
-        let serialized_block = hashtable.payload.aggregate_flush_all().unwrap();
-        let serialized = SerializedPayload {
-            bucket: 0,
-            data_block: serialized_block.clone(),
-            max_partition_count: 1,
-        };
+        let serialized = hashtable.payload.aggregate_flush_all().unwrap();
+        let rows = serialized.num_rows();
+        let states = ProjectedBlock::project(&[0], &serialized);
+        let groups = ProjectedBlock::project(&[1], &serialized);
 
-        let mut restored = serialized
-            .convert_to_aggregate_table(
-                vec![Int64Type::data_type()],
-                fixture.aggrs(),
-                1,
-                0,
-                Arc::new(Bump::new()),
-                true,
-            )
+        let mut direct = fixture.empty_table(HashTableConfig::default());
+        let mut flush_state = PayloadFlushState::default();
+        direct
+            .add_serialized_groups(&mut flush_state, groups, states, rows)
             .unwrap();
-        fixture.assert_result(&mut restored);
+        fixture.assert_result(&mut direct);
 
-        let partitioned = SerializedPayload {
-            bucket: 0,
-            data_block: serialized_block.clone(),
-            max_partition_count: 1,
+        // Merged again into existing groups, like through a temporary table.
+        direct
+            .add_serialized_groups(&mut flush_state, groups, states, rows)
+            .unwrap();
+        let mut combined = fixture.empty_table(HashTableConfig::default());
+        for _ in 0..2 {
+            combined
+                .combine_payloads(&hashtable.payload, &mut PayloadFlushState::default())
+                .unwrap();
         }
-        .convert_to_partitioned_payload(
-            vec![Int64Type::data_type()],
-            fixture.aggrs(),
-            1,
-            0,
-            Arc::new(Bump::new()),
-        )
-        .unwrap();
-        let mut merged_partitioned = fixture.empty_table(HashTableConfig::default());
-        merged_partitioned
-            .combine_payloads(&partitioned, &mut PayloadFlushState::default())
-            .unwrap();
-        fixture.assert_result(&mut merged_partitioned);
-
-        let single_payload = SerializedPayload {
-            bucket: 0,
-            data_block: serialized_block.clone(),
-            max_partition_count: 1,
-        }
-        .convert_to_single_payload(
-            vec![Int64Type::data_type()],
-            fixture.aggrs(),
-            1,
-            Arc::new(Bump::new()),
-        )
-        .unwrap();
-        let mut merged_single = fixture.empty_table(HashTableConfig::default());
-        merged_single
-            .combine_payload(&single_payload, &mut PayloadFlushState::default())
-            .unwrap();
-        fixture.assert_result(&mut merged_single);
-
-        assert!(fixture.live_bytes() > 0);
+        assert_block_value_sort_eq(
+            &fixture.merge_result_block(&mut direct),
+            &fixture.merge_result_block(&mut combined),
+        );
     }
 
     fixture.assert_all_states_dropped();
@@ -726,14 +704,14 @@ fn test_tracked_heap_merge_failure_drops_states() {
 
     {
         let hashtable = fixture.build_from_rows(FAIL_ON_MERGE, HashTableConfig::default());
-        rows_before = hashtable.len();
-        let scattered = hashtable.payload.scatter_into_buckets(3);
+        rows_before = hashtable.payload.len();
+        let scattered = scatter_into_buckets(hashtable, 3);
 
         let mut merged = fixture.empty_table(HashTableConfig::default());
         let mut flush_state = PayloadFlushState::default();
         let result = scattered
             .iter()
-            .try_for_each(|payload| merged.combine_payloads(payload, &mut flush_state));
+            .try_for_each(|payload| merged.combine_payload(payload, &mut flush_state));
 
         assert!(result.is_err());
         assert!(fixture.live_bytes() > (ROWS * BYTES_PER_ROW) as isize);
@@ -750,13 +728,13 @@ fn test_tracked_heap_merge_result_failure_drops_states() {
 
     {
         let hashtable = fixture.build_from_rows(FAIL_ON_MERGE_RESULT, HashTableConfig::default());
-        rows_before = hashtable.len();
-        let scattered = hashtable.payload.scatter_into_buckets(3);
+        rows_before = hashtable.payload.len();
+        let scattered = scatter_into_buckets(hashtable, 3);
 
         let mut merged = fixture.empty_table(HashTableConfig::default());
         let mut flush_state = PayloadFlushState::default();
         for payload in &scattered {
-            merged.combine_payloads(payload, &mut flush_state).unwrap();
+            merged.combine_payload(payload, &mut flush_state).unwrap();
         }
 
         let result = merged.merge_result(&mut PayloadFlushState::default());
@@ -789,22 +767,6 @@ fn test_tracked_heap_payload_scatter_failure_drops_states() {
                 .iter()
                 .any(|payload| payload.aggregate_flush_all().is_err())
         );
-        assert!(fixture.live_bytes() > 0);
-    }
-
-    fixture.assert_all_states_dropped();
-}
-
-#[test]
-fn test_partitioned_payload_repartition_failure_drops_states() {
-    let fixture = TrackedHeapFixture::new();
-
-    {
-        let hashtable = fixture.build_from_rows(FAIL_ON_SERIALIZE, HashTableConfig::default());
-        let repartitioned = hashtable
-            .payload
-            .repartition(16, &mut PayloadFlushState::default());
-        assert!(repartitioned.aggregate_flush_all().is_err());
         assert!(fixture.live_bytes() > 0);
     }
 
@@ -931,7 +893,10 @@ fn test_payload_split_pages_keeps_rows_and_states() -> Result<()> {
         for piece in &pieces {
             merged.combine_payload(piece, &mut flush_state)?;
         }
-        assert_eq!(merged.len(), pieces.iter().map(|p| p.len()).sum::<usize>());
+        assert_eq!(
+            merged.payload.len(),
+            pieces.iter().map(|p| p.len()).sum::<usize>()
+        );
         drop(unmerged);
         drop(pieces);
         assert!(fixture.live_bytes() > 0);
@@ -941,9 +906,6 @@ fn test_payload_split_pages_keeps_rows_and_states() -> Result<()> {
     Ok(())
 }
 
-/// `accepts_arity` is a pruning aid, so it must never reject an argument list
-/// that `matches_types` would accept. Both are derived from the same pattern,
-/// and this pins the two together for the shapes used by real functions.
 fn group_hashes(entry: BlockEntry) -> Vec<u64> {
     let entries = vec![entry];
     let mut hashes = vec![0; entries[0].len()];
@@ -1023,22 +985,7 @@ fn test_partial_grows_with_margin_over_estimate() {
     // Just under what an index of 65536 slots holds, so an estimate a little low would size it
     // that small.
     const KEYS: u64 = 48_000;
-    let mut partial = PartialState::new(PartialAggregateMode::Auto);
-    let sampler = partial.sampler().unwrap();
-    sampler.start(0);
-    sampler.observe(&group_hashes(
-        UInt64Type::from_data((0..KEYS).collect::<Vec<_>>()).into(),
-    ));
-    let stats = PartialAddStats {
-        rows: 256 * 1024,
-        new_groups: 256 * 1024,
-        windows: 10,
-    };
-    let reason = partial.step(
-        observed(stats, 0),
-        MAX_PARTIAL_TABLE_BYTES,
-        unexpected_pressure,
-    );
+    let (partial, reason) = learn_keys(KEYS, 256 * 1024, 256 * 1024, 0, MAX_PARTIAL_TABLE_BYTES);
     assert_eq!(reason, Some(EmitReason::Grow), "{partial:?}");
     let keys = KEYS as usize;
     assert!(partial.capacity() >= AggregateHashTable::capacity_for_groups(keys + keys / 20));
@@ -1056,16 +1003,27 @@ fn learn_recurring_keys_within(
     group_bytes: usize,
     max_table_bytes: usize,
 ) -> (PartialState, Option<EmitReason>) {
+    let rows = 16 * keys as usize;
+    learn_keys(keys, rows, rows, group_bytes, max_table_bytes)
+}
+
+/// Learn `keys` distinct groups in `rows` rows, of which `new_groups` were materialized.
+fn learn_keys(
+    keys: u64,
+    rows: usize,
+    new_groups: usize,
+    group_bytes: usize,
+    max_table_bytes: usize,
+) -> (PartialState, Option<EmitReason>) {
     let mut partial = PartialState::new(PartialAggregateMode::Auto);
     let sampler = partial.sampler().unwrap();
     sampler.start(0);
     sampler.observe(&group_hashes(
         UInt64Type::from_data((0..keys).collect::<Vec<_>>()).into(),
     ));
-    let rows = 16 * keys as usize;
     let stats = PartialAddStats {
         rows,
-        new_groups: rows,
+        new_groups,
         windows: rows / 24_000,
     };
     let reason = partial.step(
@@ -1076,44 +1034,76 @@ fn learn_recurring_keys_within(
     (partial, reason)
 }
 
-/// The partial aggregate grows up to `MAX_GROW_CAPACITY`, and does not grow at all when the
-/// distinct groups would not fit: a smaller table would absorb little of them.
+/// The partial aggregate grows up to `MAX_GROW_CAPACITY`, one of the sizes of an index, and does
+/// not grow at all when the distinct groups would not fit: a smaller table would absorb little of
+/// them. With a window that absorbs nothing either, it bypasses.
 #[test]
 fn test_partial_grows_up_to_max_capacity() {
-    let (partial, reason) = learn_recurring_keys(2_000_000, 0);
+    assert_eq!(
+        AggregateHashTable::capacity_for_groups(4_400_000),
+        MAX_GROW_CAPACITY
+    );
+
+    let (partial, reason) = learn_recurring_keys(4_000_000, 0);
     assert_eq!(reason, Some(EmitReason::Grow));
     assert_eq!(partial.capacity(), MAX_GROW_CAPACITY);
 
-    let (partial, reason) = learn_recurring_keys(3_000_000, 0);
-    assert_eq!(reason, None);
-    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+    let (partial, reason) = learn_recurring_keys(5_000_000, 0);
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
 }
 
 /// The grown table must also fit in `MAX_PARTIAL_TABLE_BYTES` with the bytes a group takes:
 /// a table cut short by its memory would absorb little of the distinct groups.
 #[test]
 fn test_partial_grows_within_table_bytes() {
-    // 2M groups of 50 bytes: 36 MiB of index and 105 MiB of groups.
+    // 2M groups of 50 bytes: 16 MiB of index and 105 MiB of groups.
+    let grown_capacity = AggregateHashTable::capacity_for_groups(2_200_000);
     let (partial, reason) = learn_recurring_keys(2_000_000, 50);
     assert_eq!(reason, Some(EmitReason::Grow));
-    assert_eq!(partial.capacity(), MAX_GROW_CAPACITY);
+    assert_eq!(partial.capacity(), grown_capacity);
 
-    // 2M groups of 150 bytes: 36 MiB of index and 315 MiB of groups.
+    // 2M groups of 150 bytes: 16 MiB of index and 315 MiB of groups.
     let (partial, reason) = learn_recurring_keys(2_000_000, 150);
-    assert_eq!(reason, None);
-    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
 
     // Few groups that take much memory each, such as large `array_agg` states.
     let (_, reason) = learn_recurring_keys(100_000, 4096);
-    assert_eq!(reason, None);
+    assert_eq!(reason, Some(EmitReason::Bypass));
     let (_, reason) = learn_recurring_keys(100_000, 1024);
     assert_eq!(reason, Some(EmitReason::Grow));
 
     let index = AggregateHashTable::index_bytes_for(MAX_GROW_CAPACITY);
     assert!(index < MAX_PARTIAL_TABLE_BYTES / 4);
 
-    // The same 2M groups of 50 bytes do not fit in a table of 128 MiB.
-    let (partial, reason) = learn_recurring_keys_within(2_000_000, 50, 128 << 20);
+    // The same 2M groups of 50 bytes do not fit in a table that leaves them 100 MiB.
+    let table_bytes = AggregateHashTable::index_bytes_for(grown_capacity) + (100 << 20);
+    let (partial, reason) = learn_recurring_keys_within(2_000_000, 50, table_bytes);
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
+}
+
+/// Only a table that can be built counts: when no grown table holds the distinct groups, the
+/// window decides, so the partial aggregate bypasses only if the window absorbs nothing.
+#[test]
+fn test_partial_bypasses_only_what_no_table_absorbs() {
+    // Keys repeat far apart (D / R = 0.5), but 5M of them do not fit a grown table and the
+    // window absorbs nothing: bypass.
+    let (partial, reason) =
+        learn_keys(5_000_000, 10_000_000, 9_800_000, 0, MAX_PARTIAL_TABLE_BYTES);
+    assert_eq!(reason, Some(EmitReason::Bypass));
+    assert!(matches!(partial, PartialState::Bypass), "{partial:?}");
+
+    // The same keys with a window that absorbs half the rows: keep learning.
+    let (partial, reason) =
+        learn_keys(5_000_000, 10_000_000, 5_000_000, 0, MAX_PARTIAL_TABLE_BYTES);
+    assert_eq!(reason, None);
+    assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
+
+    // 1M keys fit a grown table, which would absorb 1 / 6 of 1.2M rows: neither bypass nor grow
+    // pays yet, keep learning.
+    let (partial, reason) = learn_keys(1_000_000, 1_200_000, 1_200_000, 0, MAX_PARTIAL_TABLE_BYTES);
     assert_eq!(reason, None);
     assert!(matches!(partial, PartialState::Learning(_)), "{partial:?}");
 }
@@ -1251,7 +1241,7 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
             .step(observed(stats, 0), MAX_PARTIAL_TABLE_BYTES, || false)
             .is_some()
         {
-            table.take_partial_hot();
+            table.take_partial_payload();
             assert!(!table.partial_restarted());
         }
     }
@@ -1265,6 +1255,9 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
     Ok(())
 }
 
+/// `accepts_arity` is a pruning aid, so it must never reject an argument list
+/// that `matches_types` would accept. Both are derived from the same pattern,
+/// and this pins the two together for the shapes used by real functions.
 #[test]
 fn test_argument_pattern_accepts_arity_agrees_with_matches_types() {
     let any = ArgumentPattern::any;

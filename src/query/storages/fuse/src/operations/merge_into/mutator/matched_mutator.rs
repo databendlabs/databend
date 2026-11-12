@@ -43,6 +43,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_metrics::storage::*;
 use databend_common_sql::StreamContext;
 use databend_common_storage::MutationStatus;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -301,7 +302,7 @@ impl MatchedAggregatorConfig {
             data_accessor,
             target_table_schema.clone(),
             projection,
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let stream_ctx = if table.change_tracking_enabled() {
             Some(StreamContext::try_create(
@@ -315,8 +316,10 @@ impl MatchedAggregatorConfig {
             None
         };
         Ok(Self {
+            segment_cache: FuseCaches::instance()
+                .segments
+                .with_policy(ctx.cache_policy()),
             ctx,
-            segment_cache: FuseCaches::instance().segments.clone(),
             segment_reader,
             aggregation_ctx: Arc::new(AggregationContext {
                 write_settings,

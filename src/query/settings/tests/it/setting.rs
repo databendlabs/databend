@@ -113,6 +113,18 @@ async fn test_set_settings() {
         }
 
         {
+            assert!(settings.get_grouping_sets_to_union().unwrap());
+            assert!(settings.get_enable_cascading_grouping_sets().unwrap());
+            for name in ["grouping_sets_to_union", "enable_cascading_grouping_sets"] {
+                settings
+                    .set_setting(name.to_string(), "0".to_string())
+                    .unwrap();
+            }
+            assert!(!settings.get_grouping_sets_to_union().unwrap());
+            assert!(!settings.get_enable_cascading_grouping_sets().unwrap());
+        }
+
+        {
             assert!(!settings.get_enable_spatial_join().unwrap());
             assert_eq!(
                 settings.get_spatial_join_max_build_rows().unwrap(),

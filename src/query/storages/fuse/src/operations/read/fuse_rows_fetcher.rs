@@ -35,6 +35,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use tokio::sync::Semaphore;
 
@@ -50,7 +51,7 @@ pub fn row_fetch_processor(
     source: &DataSourcePlan,
     projection: Projection,
     need_wrap_nullable: bool,
-    populate_cache: bool,
+    cache_policy: CachePolicy,
     io_semaphore: Arc<Semaphore>,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
@@ -68,7 +69,7 @@ pub fn row_fetch_processor(
         .map(|field| DataType::from(field.data_type()))
         .collect::<Vec<_>>();
     let block_reader =
-        fuse_table.create_block_reader(ctx.clone(), projection.clone(), populate_cache)?;
+        fuse_table.create_block_reader(ctx.clone(), projection.clone(), cache_policy)?;
 
     match &fuse_table.storage_format {
         FuseStorageFormat::Parquet => {

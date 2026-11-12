@@ -30,6 +30,7 @@ use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelinePullingExecutor;
 use databend_query::sessions::QueryContext;
+use databend_storages_common_cache::CachePolicy;
 
 use super::common::paimon_it_lock;
 use super::common::shared_fixture;
@@ -152,7 +153,7 @@ pub async fn read_blocks_via_pipeline_with_ctx(
         .read_plan(ctx.clone(), push_downs, None, false, false)
         .await?;
     let mut pipeline = databend_common_pipeline::core::Pipeline::create();
-    table.read_data(ctx.clone(), &plan, &mut pipeline, false)?;
+    table.read_data(ctx.clone(), &plan, &mut pipeline, CachePolicy::READ_ONLY)?;
     let settings = ExecutorSettings::try_create(ctx)?;
     let mut executor = PipelinePullingExecutor::try_create(pipeline, settings)?;
     executor.start();

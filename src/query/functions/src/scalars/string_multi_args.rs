@@ -662,7 +662,7 @@ fn inner_regexp_extract(
                 }
                 Err(err) => {
                     ctx.set_error(builder.len(), err);
-                    builder.put_str("");
+                    StringType::push_default(&mut builder);
                     continue;
                 }
             }

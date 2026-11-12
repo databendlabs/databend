@@ -625,6 +625,18 @@ impl DataType {
         matches!(self, DataType::Timestamp | DataType::Date)
     }
 
+    /// Whether SQL equality can hide a stored timezone offset, including in nested values.
+    pub fn contains_timestamp_tz(&self) -> bool {
+        match self {
+            DataType::TimestampTz => true,
+            DataType::Nullable(inner) | DataType::Array(inner) | DataType::Map(inner) => {
+                inner.contains_timestamp_tz()
+            }
+            DataType::Tuple(fields) => fields.iter().any(Self::contains_timestamp_tz),
+            _ => false,
+        }
+    }
+
     /// Whether values that are equal as group keys are also indistinguishable to every function,
     /// so an expression of a group key can be computed after the aggregation from any row of its
     /// group. Keep this in line with the hash and equality of group keys.

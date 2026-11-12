@@ -382,6 +382,51 @@ select count() from t_refresh_multi where match(other, 'gamma');
 ----
 2
 
+# Automatic compaction must wait for COMMIT. REPLACE's statement locks must not
+# prevent post-commit maintenance from completing.
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 3;
+
+statement ok
+set enable_table_lock = 1;
+
+statement ok
+set acquire_lock_timeout = 2;
+
+statement ok
+create table t_txn_replace_hook(c int) row_per_block=3 block_per_segment=10;
+
+statement ok
+begin;
+
+statement ok
+replace into t_txn_replace_hook on(c) values (1);
+
+statement ok
+replace into t_txn_replace_hook on(c) values (2);
+
+statement ok
+replace into t_txn_replace_hook on(c) values (3);
+
+query II
+select block_count, row_count from fuse_snapshot('i15760', 't_txn_replace_hook') limit 1;
+----
+3 3
+
+statement ok
+commit;
+
+query II
+select block_count, row_count from fuse_snapshot('i15760', 't_txn_replace_hook') limit 1;
+----
+1 3
+
+statement ok
+unset acquire_lock_timeout;
+
+statement ok
+unset enable_table_lock;
+
 statement ok
 set auto_compaction_imperfect_blocks_threshold = 0;
 

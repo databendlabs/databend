@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -20,8 +19,6 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::type_check::common_super_type;
@@ -204,7 +201,6 @@ impl SubqueryDecorrelatorOptimizer {
             },
             marker_index: None,
             from_correlated_subquery: true,
-            need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
@@ -321,7 +317,6 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type,
                     marker_index: None,
                     from_correlated_subquery: true,
-                    need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
@@ -383,7 +378,6 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
-                    need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
@@ -470,7 +464,6 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
-                    need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
@@ -654,18 +647,13 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut constant_scalar = None;
                 if scalar_expr.used_columns().is_empty() && !scalar_expr.has_subquery() {
                     let func_ctx = self.ctx.get_table_ctx().get_function_context()?;
-                    let (folded, _) = ConstantFolder::fold(
-                        Cow::Owned(scalar_expr.as_expr()?),
-                        &func_ctx,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    if let EExpr::Constant(constant) = folded.into_owned() {
+                    if let Some((value, data_type)) = scalar_expr.constant_value(&func_ctx) {
                         constant_scalar = Some(ScalarExpr::TypedConstantExpr(
                             ConstantExpr {
                                 span: scalar_expr.span(),
-                                value: constant.scalar,
+                                value,
                             },
-                            constant.data_type.wrap_nullable(),
+                            data_type.wrap_nullable(),
                         ));
                     }
                 }
@@ -765,7 +753,10 @@ impl SubqueryDecorrelatorOptimizer {
                 if srf.arguments.len() != 1 {
                     return Ok(None);
                 }
-                let Ok(const_scalar) = ConstantExpr::try_from(srf.arguments[0].clone()) else {
+                // Only the array value matters: its elements become constants.
+                let (ScalarExpr::ConstantExpr(const_scalar)
+                | ScalarExpr::TypedConstantExpr(const_scalar, _)) = &srf.arguments[0]
+                else {
                     return Ok(None);
                 };
                 let Some(child_expr) = &subquery.child_expr else {

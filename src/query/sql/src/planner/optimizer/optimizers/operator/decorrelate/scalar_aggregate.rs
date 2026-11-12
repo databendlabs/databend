@@ -23,18 +23,15 @@
 //! evaluated after the join, where both outer columns and the filled aggregate values are
 //! available.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::eval_aggr;
 
 use super::DerivedColumnScope;
@@ -336,7 +333,6 @@ impl SubqueryDecorrelatorOptimizer {
             join_type: JoinType::Left,
             marker_index: None,
             from_correlated_subquery: !is_lateral,
-            need_hold_hash_table: false,
             is_lateral,
             single_to_inner: None,
             build_side_cache_info: None,
@@ -606,10 +602,7 @@ fn fold_with_values(
             .replace_column_with_scalar(column, &replacement)
             .ok()?;
     }
-    let expr = scalar.as_expr().ok()?;
-    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
-    let constant = expr.into_owned().into_constant().ok()?;
-    Some((constant.scalar, constant.data_type))
+    scalar.constant_value(func_ctx)
 }
 
 /// Makes `scalar` evaluate only on rows where `matched` is true; other rows get the
@@ -617,7 +610,9 @@ fn fold_with_values(
 fn guard_scalar(scalar: &mut ScalarExpr, matched: &ScalarExpr) -> Result<()> {
     if matches!(
         scalar,
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_)
+        ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _)
     ) {
         return Ok(());
     }
@@ -717,7 +712,13 @@ fn is_true_constant(scalar: &ScalarExpr) -> bool {
         ScalarExpr::ConstantExpr(ConstantExpr {
             value: Scalar::Boolean(true),
             ..
-        })
+        }) | ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                value: Scalar::Boolean(true),
+                ..
+            },
+            _
+        )
     )
 }
 

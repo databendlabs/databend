@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
@@ -456,6 +457,7 @@ async fn write_new_snapshot_and_build_table_meta(
             insert_rows,
             insert_top_n,
             refresh_top_n,
+            CachePolicy::DEFAULT,
         )
         .await?;
     let mut table_statistics = table_stats_gen.take_table_statistics();

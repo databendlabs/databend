@@ -316,7 +316,7 @@ GROUP BY o_custkey",
         },
         SqlTestCase {
             name: "grouping_sets_are_not_eager",
-            description: "Grouping-set descriptors must not be copied to pruned join inputs.",
+            description: "Grouping-set UNION branches must aggregate the materialized join result, not pruned join inputs.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
             sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
 FROM orders JOIN lineitem ON o_orderkey = l_orderkey
@@ -324,7 +324,7 @@ GROUP BY GROUPING SETS ((o_custkey), ())",
         },
         SqlTestCase {
             name: "rollup_is_not_eager",
-            description: "ROLLUP must retain its grouping-set expansion above the join.",
+            description: "ROLLUP must aggregate UNION branches above the materialized join.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
             sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
 FROM orders JOIN lineitem ON o_orderkey = l_orderkey
@@ -332,7 +332,7 @@ GROUP BY ROLLUP (o_custkey)",
         },
         SqlTestCase {
             name: "cube_is_not_eager",
-            description: "CUBE must retain its grouping-set expansion above the join.",
+            description: "CUBE must aggregate UNION branches above the materialized join.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
             sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
 FROM orders JOIN lineitem ON o_orderkey = l_orderkey

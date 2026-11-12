@@ -17,6 +17,9 @@ mod vector_index_loader;
 mod vector_index_object_loader;
 mod vector_index_reader;
 
+pub use vector_index_bundle_loader::BundleReadCache;
+pub use vector_index_bundle_loader::full_read_settings;
+pub use vector_index_bundle_loader::load_bundle_reads;
 pub use vector_index_loader::VectorIndexIdentity;
 pub use vector_index_loader::load_vector_index_files;
 pub use vector_index_loader::load_vector_index_meta;

@@ -98,13 +98,16 @@ pub fn parse_settings_directives(content: &str) -> std::result::Result<Vec<Setti
             continue;
         };
         let comment = comment.trim_start();
-        if comment.len() < DIRECTIVE.len()
-            || !comment[..DIRECTIVE.len()].eq_ignore_ascii_case(DIRECTIVE)
-        {
+        // `comment` is arbitrary user text, so the DIRECTIVE-length prefix must be taken as a
+        // char boundary: a multi-byte character can straddle that byte index.
+        let Some(rest) = comment
+            .get(..DIRECTIVE.len())
+            .filter(|head| head.eq_ignore_ascii_case(DIRECTIVE))
+            .map(|_| &comment[DIRECTIVE.len()..])
+        else {
             continue;
-        }
-        let group = parse_settings_group(&comment[DIRECTIVE.len()..])
-            .map_err(|e| format!("line {}: {e}", idx + 1))?;
+        };
+        let group = parse_settings_group(rest).map_err(|e| format!("line {}: {e}", idx + 1))?;
         groups.push(group);
     }
     Ok(groups)
@@ -148,6 +151,22 @@ select 1
             groups[1].to_string(),
             "enable_experimental_new_join=0,sql_dialect=PostgreSQL"
         );
+    }
+
+    #[test]
+    fn comment_with_multi_byte_chars_is_not_a_directive() {
+        // Byte 18 lands inside a three-byte box-drawing character.
+        for content in [
+            "#── ── ── ── ── ──\nstatement ok\nselect 1\n",
+            "# ─────────────────\n",
+            "# run-with-settingš: key=1\n",
+            "# run-with-settings\n",
+        ] {
+            assert!(
+                parse_settings_directives(content).unwrap().is_empty(),
+                "{content:?}"
+            );
+        }
     }
 
     #[test]

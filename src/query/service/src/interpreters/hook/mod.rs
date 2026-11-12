@@ -16,6 +16,7 @@ pub(crate) mod analyze_hook;
 pub(crate) mod compact_hook;
 pub(crate) mod refresh_hook;
 pub(crate) mod table_hook_scheduler;
+pub(crate) mod table_hook_task;
 pub(crate) mod vacuum_hook;
 
 #[allow(clippy::module_inception)]
@@ -25,14 +26,17 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 pub use hook::HookOperator;
+pub(crate) use hook::execute_deferred_table_hooks;
 use log::info;
 use log::warn;
 pub use table_hook_scheduler::TableHookScheduler;
 
+use crate::interpreters::common::check_expected_table_id;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 
+/// Adapt the shared identity check to the hooks' log-and-skip behavior.
 pub(crate) fn table_id_matches_target(
     hook_name: &str,
     expected_table_id: Option<u64>,
@@ -45,7 +49,7 @@ pub(crate) fn table_id_matches_target(
         return true;
     };
 
-    if expected_table_id == actual_table_id {
+    if check_expected_table_id(actual_table_id, Some(expected_table_id)).is_ok() {
         return true;
     }
 
@@ -72,6 +76,12 @@ pub(crate) async fn resolve_current_table_name_by_id(
     let Some(table_id) = expected_table_id else {
         return Ok(Some((database.to_string(), table.to_string())));
     };
+
+    // Most hooks still target the original name. Refresh and verify it first so the
+    // common path needs no ID-to-name lookup and leaves a current table in the cache.
+    if table_id_exists_in_database(ctx, catalog_name, database, table, table, table_id).await? {
+        return Ok(Some((database.to_string(), table.to_string())));
+    }
 
     let catalog = ctx.get_catalog(catalog_name).await?;
     let Some(current_table_name) = catalog.get_table_name_by_id(table_id).await? else {
@@ -169,14 +179,17 @@ async fn table_id_exists_in_database(
     expected_table_id: u64,
 ) -> Result<bool> {
     ctx.evict_table_from_cache(catalog_name, database, original_table)?;
-    ctx.evict_table_from_cache(catalog_name, database, current_table_name)?;
+    if current_table_name != original_table {
+        ctx.evict_table_from_cache(catalog_name, database, current_table_name)?;
+    }
     ctx.clear_table_meta_timestamps_cache();
 
     match ctx
         .get_table(catalog_name, database, current_table_name)
         .await
     {
-        Ok(table) => Ok(table.get_id() == expected_table_id),
+        // A mismatch is a failed name candidate, not a resolver error.
+        Ok(table) => Ok(check_expected_table_id(table.get_id(), Some(expected_table_id)).is_ok()),
         Err(_) => Ok(false),
     }
 }

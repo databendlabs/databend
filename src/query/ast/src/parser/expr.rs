@@ -30,6 +30,8 @@ use crate::ast::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::common::*;
+use crate::parser::error::EXPR_DEPTH_LIMIT;
+use crate::parser::error::EXPR_STACK_LIMIT;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::*;
@@ -51,8 +53,22 @@ pub fn values(i: Input) -> IResult<Vec<Expr>> {
     map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v).parse(i)
 }
 
+// Bound structural recursion before expr_element() can allocate another stack segment.
+const MAX_EXPR_DEPTH: usize = 256;
+
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     move |i| {
+        if i.expr_depth >= MAX_EXPR_DEPTH {
+            return Err(nom::Err::Failure(Error::from_error_kind(
+                i,
+                ErrorKind::other(EXPR_DEPTH_LIMIT),
+            )));
+        }
+        let parent_depth = i.expr_depth;
+        let i = Input {
+            expr_depth: parent_depth + 1,
+            ..i
+        };
         let higher_prec_expr_element = |i| {
             expr_element(i).and_then(|(rest, elem)| match elem.elem.affix() {
                 Affix::Infix(prec, _) | Affix::Prefix(prec) | Affix::Postfix(prec)
@@ -137,7 +153,15 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        run_pratt_parser(ExprParser, expr_elements, rest, i)
+        let (rest, expr) = run_pratt_parser(ExprParser, expr_elements, rest, i)?;
+        // Sibling expressions must share the parent's budget, not accumulate depth.
+        Ok((
+            Input {
+                expr_depth: parent_depth,
+                ..rest
+            },
+            expr,
+        ))
     }
 }
 
@@ -549,12 +573,21 @@ impl Expr {
 
 struct ExprParser;
 
+// Reserve room for the next Pratt frame and error propagation.
+const MIN_PRATT_STACK: usize = 256 * 1024;
+
 impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
     type Error = &'static str;
     type Input = WithSpan<'a, ExprElement>;
     type Output = Expr;
 
     fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
+        // Pratt calls query() before descending into operands, so stop here
+        // rather than replacing its default recursive parser.
+        let remaining = stacker::remaining_stack().ok_or(EXPR_STACK_LIMIT)?;
+        if remaining < MIN_PRATT_STACK {
+            return Err(EXPR_STACK_LIMIT);
+        }
         Ok(elem.elem.affix())
     }
 
@@ -1049,7 +1082,86 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
         Ok(expr)
     }
 }
+
+/// Parses the elements of an array.
+fn array_elements(i: Input) -> IResult<Vec<Expr>> {
+    match numeric_array_elements(i) {
+        Some(parsed) => Ok(parsed),
+        None => comma_separated_list0_ignore_trailing(subexpr(0)).parse(i),
+    }
+}
+
+/// Parses the elements of an array of plain numeric literals, such as the query
+/// vector `[0.12, -3.4, 5e-2]` of a vector search, straight from the tokens.
+///
+/// It returns what `comma_separated_list0_ignore_trailing(subexpr(0))` returns
+/// for the same tokens, without running the expression parser for every element.
+/// It returns `None` for anything else, which is then left to that parser: other
+/// kinds of elements, an element that is an expression, and a number that fails
+/// to parse.
+fn numeric_array_elements(i: Input) -> Option<(Input, Vec<Expr>)> {
+    // The expression parser refuses elements at this depth.
+    if i.expr_depth >= MAX_EXPR_DEPTH {
+        return None;
+    }
+
+    // The tokens are checked before any element is built: an array that is not
+    // of numeric literals costs a scan, not the elements parsed so far.
+    let tokens = i.tokens;
+    let kind = |pos: usize| tokens.get(pos).map(|token| token.kind);
+    let mut len = 0;
+    let mut pos = 0;
+    loop {
+        if kind(pos) == Some(Minus) {
+            pos += 1;
+        }
+        match tokens.get(pos) {
+            Some(number) if number.kind == LiteralInteger => {}
+            // `.5` is a map access for the expression parser.
+            Some(number) if number.kind == LiteralFloat && !number.text().starts_with('.') => {}
+            _ => return None,
+        }
+        len += 1;
+        pos += 1;
+        // The caller takes a trailing comma and the closing bracket.
+        match (kind(pos), kind(pos + 1)) {
+            (Some(RBracket), _) | (Some(Comma), Some(RBracket)) => break,
+            (Some(Comma), _) => pos += 1,
+            _ => return None,
+        }
+    }
+    let end = pos;
+
+    let mut exprs = Vec::with_capacity(len);
+    let mut pos = 0;
+    while pos < end {
+        let minus = (tokens[pos].kind == Minus).then(|| {
+            pos += 1;
+            tokens[pos - 1].span
+        });
+        let number = &tokens[pos];
+        let value = match number.kind {
+            LiteralInteger => parse_uint(number.text(), 10),
+            _ => parse_float(number.text()),
+        }
+        .ok()?;
+        let span = Some(number.span);
+        exprs.push(match minus {
+            // The same folding as `ExprParser::prefix`.
+            Some(minus) => Expr::Literal {
+                span: merge_span(Some(minus), span),
+                value: try_negate_literal(&value)?,
+            },
+            None => Expr::Literal { span, value },
+        });
+        // The number, and the comma after it.
+        pos += 2;
+    }
+    Some((i.slice(end..), exprs))
+}
+
 #[allow(unreachable_code)]
+#[recursive::recursive]
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         column: ColumnRef {
@@ -1381,7 +1493,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         // and then will be converted back to an array if the map access is not following
         // a primary element nor a postfix element.
         rule! {
-            "[" ~ #comma_separated_list0_ignore_trailing(subexpr(0))? ~ ","? ~ ^"]"
+            "[" ~ #array_elements? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
             let mut exprs = opt_args.unwrap_or_default();

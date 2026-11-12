@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
@@ -163,7 +164,7 @@ impl SimpleTableFunc for FuseInvertedIndexTable {
         let chunk_size = concurrency.min(snapshot.segments.len()).max(1);
         'outer: for segment_chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(segment_chunk, true)
+                .read_segments::<SegmentInfo>(segment_chunk, CachePolicy::DEFAULT)
                 .await?;
             for (segment_location, segment) in segment_chunk.iter().zip(segments) {
                 let segment = segment?;
