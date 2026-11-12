@@ -25,7 +25,7 @@ pub struct ReclusterTaskBudget {
 
 impl ReclusterTaskBudget {
     /// Bound independent pipelines without adding a session setting.
-    pub const MAX_TASKS_PER_NODE: usize = 2;
+    pub const MAX_TASKS_PER_NODE: usize = 4;
 
     pub fn max_tasks(&self) -> usize {
         self.nodes

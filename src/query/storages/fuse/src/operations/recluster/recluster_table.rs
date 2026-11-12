@@ -780,6 +780,14 @@ mod tests {
         let selected = select_task_candidates(&windows, &ranked, 3);
 
         assert_eq!(selected, vec![vec![0], vec![], vec![0]]);
+        assert_eq!(
+            select_batched_task_candidates(&windows, &ranked, ReclusterTaskBudget {
+                nodes: 3,
+                threads_per_node: 1,
+                bytes_per_node: 100,
+            }),
+            selected
+        );
     }
 
     #[test]
@@ -827,7 +835,11 @@ mod tests {
         let mut joint = window("joint", 2);
         joint.tasks = vec![candidate([0]), candidate([1])];
         joint.atomic_tasks = true;
-        let other = window("other", 1);
+        for task in &mut joint.tasks {
+            task.kind = ReclusterTaskKind::MergeBlocks;
+        }
+        let mut other = window("other", 1);
+        other.tasks[0].kind = ReclusterTaskKind::MergeBlocks;
         let windows = vec![joint, other];
         let ranked = vec![
             (0, 0, score(3), false),
@@ -838,5 +850,53 @@ mod tests {
         let selected = select_task_candidates(&windows, &ranked, 2);
 
         assert_eq!(selected, vec![vec![0, 1], vec![]]);
+        assert_eq!(
+            select_batched_task_candidates(&windows, &ranked, ReclusterTaskBudget {
+                nodes: 1,
+                threads_per_node: 4,
+                bytes_per_node: 2,
+            }),
+            selected
+        );
+    }
+
+    #[test]
+    fn test_batched_selection_keeps_four_task_winner_within_node_budget() {
+        for (task_count, threads, bytes, accepted) in [
+            (4, 4, 100, true),
+            (4, 4, 101, true),
+            (4, 4, 99, false),
+            (4, 3, 100, false),
+            (5, 8, 125, false),
+        ] {
+            let mut joint = window("joint", task_count);
+            joint.atomic_tasks = true;
+            joint.tasks = (0..task_count)
+                .map(|index| {
+                    let mut task = candidate([index]);
+                    task.kind = ReclusterTaskKind::MergeBlocks;
+                    task.score.selected_total_bytes = 25;
+                    task
+                })
+                .collect();
+            // A sort task must remain exclusive even when the byte budget has room.
+            let other = window("other", 1);
+            let windows = vec![joint, other];
+            let ranked = vec![(0, 0, score(2), false), (1, 0, score(1), false)];
+            let expected = if accepted {
+                vec![(0..task_count).collect(), vec![]]
+            } else {
+                vec![vec![], vec![0]]
+            };
+            assert_eq!(
+                select_batched_task_candidates(&windows, &ranked, ReclusterTaskBudget {
+                    nodes: 1,
+                    threads_per_node: threads,
+                    bytes_per_node: bytes,
+                }),
+                expected,
+                "tasks={task_count}, threads={threads}, bytes={bytes}"
+            );
+        }
     }
 }
