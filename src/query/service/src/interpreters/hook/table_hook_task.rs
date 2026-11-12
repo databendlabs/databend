@@ -216,7 +216,6 @@ pub(super) struct TableHookRequest {
     refresh_again: bool,
     pub refresh_pending: bool,
     pub enable_auto_analyze: bool,
-    analyze_after_recluster: bool,
     pub source_query_id: String,
     pub operation_name: String,
     pub main_operation_start: Instant,
@@ -363,10 +362,9 @@ impl TableHookRequest {
                 if action == 2 {
                     // A failed callback may hide a successful commit. A subsequent
                     // generation must check replacements absent from the old scope.
+                    // Data and all inline indexes share that commit, even if its result
+                    // is unknown. Do not turn this into an unrelated Refresh demand.
                     self.recluster_again = true;
-                    self.refresh_pending = true;
-                    self.refresh_again |= self.refresh_progress.is_some();
-                    self.ready_at[0] = Instant::now();
                 }
                 self.failures[action] = self.failures[action].saturating_add(1);
                 if self.failures[action] >= MAX_ACTION_FAILURES || self.blocked_too_long(action) {
@@ -488,11 +486,9 @@ impl TableHookRequest {
                             .await?
                         {
                             ReclusterUnitOutcome::Committed => {
-                                self.refresh_pending = true;
-                                self.refresh_again |= self.refresh_progress.is_some();
-                                self.refresh_base = None;
-                                self.ready_at[0] = Instant::now();
-                                self.enable_auto_analyze |= self.analyze_after_recluster;
+                                // The new blocks already carry their indexes. Existing
+                                // write/DDL Refresh and Analyze demands remain independent;
+                                // neither their scopes nor covered baselines advance here.
                                 self.ready_at[2] = Instant::now() + Duration::from_millis(100);
                                 Ok(MaintenanceOutcome::Progress)
                             }
@@ -523,7 +519,6 @@ impl TableHookTask {
             refresh_progress: None,
             refresh_again: false,
             enable_auto_analyze: self.ctx.get_enable_auto_analyze(),
-            analyze_after_recluster: self.ctx.get_enable_auto_analyze(),
             source_query_id: self.ctx.get_id(),
             target: self.target,
             recluster_target: self.recluster_target,
@@ -569,7 +564,6 @@ impl SchedulerTask for TableHookRequest {
         }
         other.refresh_again |= self.refresh_again;
         other.enable_auto_analyze |= self.enable_auto_analyze;
-        other.analyze_after_recluster |= self.analyze_after_recluster;
         other.refresh_pending |= self.refresh_pending;
         other.turn = self.turn;
         for action in 0..3 {

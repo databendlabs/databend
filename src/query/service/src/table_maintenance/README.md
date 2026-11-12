@@ -31,6 +31,25 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
   starts after the current generation ends. Rounds within one generation do not repeat this
   wait. Zero makes a generation immediately eligible; it does not disable maintenance.
   Retry backoff and the short round/time-slice cooldowns are independent of this window.
+- Background Recluster builds both SYNC and ASYNC indexes for newly rewritten blocks:
+  Bloom/Ngram, Spatial and Vector are rebuilt; compatible inverted indexes are merged
+  only when all source metadata and row lineage permit it, otherwise they are rebuilt.
+  Data and index references are published in one snapshot commit. Any builder/merge failure
+  aborts that round rather than publishing a block missing an expected index.
+- Indexed Recluster uses the same local/remote admission and memory group as other
+  maintenance. Its planner leaves additional input-byte headroom for index writers (more
+  for inverted/vector indexes). This is a heuristic, not an index-size guarantee: the hard
+  tracked memory limit and bounded failure/retry policy remain authoritative. No sort spill
+  or remote load probe is enabled to hide a too-large task.
+- Before publication, and again on each OCC rebase, schema, index definitions, Bloom
+  options and the Recluster key must still match those used to build the artifacts.
+  Segment claims and the normal commit lock are unchanged. Unpublished objects are left
+  for normal vacuum; cancellation or an unknown commit result must not blindly delete
+  potentially committed data/index objects.
+- A Recluster commit or error does not register Refresh or re-arm Analyze. Write-triggered
+  Refresh, historical coverage and explicit index Refresh remain independent. Recluster
+  also does not advance their frozen scopes or covered baselines: untouched old blocks
+  may still need Refresh, and a later write may conservatively fall back to FullCheck.
 
 Later writes can request maintenance again. Without another trigger, a cold table may
 remain unmaintained indefinitely. Explicit `ALTER TABLE ... RECLUSTER`, `REFRESH ... INDEX`
