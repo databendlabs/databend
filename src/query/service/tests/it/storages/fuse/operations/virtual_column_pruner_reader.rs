@@ -44,6 +44,7 @@ use databend_storages_common_pruner::VirtualColumnSharedDataType;
 use databend_storages_common_pruner::VirtualFieldReadPlan;
 use databend_storages_common_pruner::VirtualReadSlot;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+use databend_storages_common_table_meta::meta::VirtualPathKind;
 use databend_storages_common_table_meta::meta::VirtualSegmentColumnPath;
 use databend_storages_common_table_meta::meta::VirtualSegmentPath;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
@@ -165,6 +166,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
             .virtual_location
             .clone(),
         virtual_columns_complete: false,
+        sources: Default::default(),
     };
 
     let pruner =
@@ -403,6 +405,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         virtual_column_size: draft_columns.virtual_column_size,
         virtual_location: draft_columns.virtual_location.clone(),
         virtual_columns_complete: true,
+        sources: Default::default(),
     };
     let segment_schema = VirtualSegmentSchema {
         column_paths: vec![VirtualSegmentColumnPath {
@@ -410,6 +413,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
             paths: vec![VirtualSegmentPath {
                 path: "id".to_string(),
                 column_id: segment_column_id,
+                kind: VirtualPathKind::Value,
             }],
         }],
     };
@@ -535,6 +539,16 @@ fn collect_plan_kinds(plan: &VirtualFieldReadPlan, kinds: &mut HashSet<&'static 
         VirtualFieldReadPlan::Missing => {
             kinds.insert("Missing");
         }
+        VirtualFieldReadPlan::ArrayGroup { element, .. } => {
+            kinds.insert("ArrayGroup");
+            collect_plan_kinds(element, kinds);
+        }
+        VirtualFieldReadPlan::WithOverflow { value, .. } => {
+            kinds.insert("WithOverflow");
+            if let Some(child) = value {
+                collect_plan_kinds(child, kinds);
+            }
+        }
     }
 }
 
@@ -581,6 +595,14 @@ fn collect_shared_data_types(
         }
         VirtualFieldReadPlan::Object { entries } => {
             for (_, child) in entries {
+                collect_shared_data_types(child, read_slots, data_types);
+            }
+        }
+        VirtualFieldReadPlan::ArrayGroup { element, .. } => {
+            collect_shared_data_types(element, read_slots, data_types);
+        }
+        VirtualFieldReadPlan::WithOverflow { value, .. } => {
+            if let Some(child) = value {
                 collect_shared_data_types(child, read_slots, data_types);
             }
         }

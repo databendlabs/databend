@@ -19,6 +19,8 @@ use databend_common_catalog::plan::VirtualColumnPath;
 use databend_common_expression::ColumnId;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnPathStatistics;
+use databend_storages_common_table_meta::meta::VirtualColumnPhysicalType;
+use databend_storages_common_table_meta::meta::VirtualPathKind;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 use log::debug;
 
@@ -156,7 +158,7 @@ impl VirtualColumnLayoutPlanner {
                 source.paths.iter().map(move |path| {
                     (
                         path.column_id,
-                        (source.source_column_id, path.path.as_str()),
+                        (source.source_column_id, path.path.as_str(), path.kind),
                     )
                 })
             })
@@ -167,11 +169,32 @@ impl VirtualColumnLayoutPlanner {
 
             if let Some(virtual_meta) = &block.virtual_block_meta {
                 for (column_id, meta) in &virtual_meta.virtual_column_metas {
-                    let Some((source_column_id, path)) = column_id_to_path.get(column_id).copied()
+                    let Some((source_column_id, path, kind)) =
+                        column_id_to_path.get(column_id).copied()
                     else {
                         self.statistics_complete = false;
                         continue;
                     };
+                    // Structural columns describe the shape of a path; only
+                    // `Value` columns count as path values for layout selection.
+                    // The root is always direct and never selected by the layout.
+                    if kind != VirtualPathKind::Value || path.is_empty() {
+                        continue;
+                    }
+                    // List leaves count Parquet elements, not source rows. Typed
+                    // array leaf frequencies are recorded separately; root-group
+                    // element paths are not candidates for source-row layouts.
+                    if matches!(meta.physical_type(), VirtualColumnPhysicalType::Array(_))
+                        || jsonb::keypath::decode_canonical_structure_path(path).is_some_and(
+                            |parts| {
+                                parts.iter().any(|part| {
+                                    matches!(part, jsonb::OwnedJsonbPathSegment::Element)
+                                })
+                            },
+                        )
+                    {
+                        continue;
+                    }
                     let value_count = meta
                         .column_stat
                         .as_ref()
@@ -181,8 +204,8 @@ impl VirtualColumnLayoutPlanner {
                 }
             }
 
-            // Direct paths represented by `virtual_column_metas` are not stored
-            // again in `virtual_path_statistics`; these sources are disjoint.
+            // Scalar direct paths are counted from metadata above. Typed Array
+            // paths use source-row frequencies here instead of num_values.
             if let Some(statistics) = &block.virtual_path_statistics {
                 for (source_column_id, source) in statistics {
                     self.statistics_complete &= source.path_statistics_complete;
@@ -290,10 +313,12 @@ mod tests {
                     VirtualSegmentPath {
                         path: "a".to_string(),
                         column_id: 0,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "b".to_string(),
                         column_id: 1,
+                        kind: VirtualPathKind::Value,
                     },
                 ],
             }],
@@ -309,10 +334,12 @@ mod tests {
                 data_type: 0,
                 extended_physical_type: None,
                 column_stat: None,
+                value_state_mask: 0,
             })]),
             virtual_column_size: 1,
             virtual_location: ("virtual.parquet".to_string(), 0),
             virtual_columns_complete: complete,
+            sources: Default::default(),
         }
     }
 
@@ -392,6 +419,7 @@ mod tests {
             data_type: 0,
             extended_physical_type: None,
             column_stat: None,
+            value_state_mask: 0,
         })]);
         let wrong_path_id = HashMap::from([(1, VirtualColumnPathStatistics {
             path_counts: vec![(99, 5)],
