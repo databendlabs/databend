@@ -25,13 +25,14 @@ use databend_common_exception::Result;
 use roaring::RoaringBitmap;
 use roaring::RoaringTreemap;
 
-use crate::bitmap::HYBRID_HEADER_LEN;
+use crate::bitmap::BitmapClass;
 use crate::bitmap::HYBRID_KIND_LARGE;
 use crate::bitmap::HYBRID_KIND_SMALL;
 use crate::bitmap::HYBRID_MAGIC;
 use crate::bitmap::HYBRID_VERSION;
 use crate::bitmap::HybridBitmap;
 use crate::bitmap::LARGE_THRESHOLD;
+use crate::bitmap::classify_bitmap;
 use crate::bitmap::decode_small_values;
 use crate::bitmap::reader::TreemapReader;
 
@@ -249,7 +250,7 @@ impl FastTreemap {
     }
 
     fn apply_serialized(&mut self, operation: FastTreemapOp, buf: &[u8]) -> Result<()> {
-        match parse_serialized_treemap(buf)? {
+        match parse_serialized_treemap(buf) {
             SerializedTreemap::Empty => {
                 if matches!(operation, FastTreemapOp::And) {
                     self.map.clear();
@@ -476,29 +477,16 @@ enum SerializedTreemap<'a> {
     Roaring(&'a [u8]),
 }
 
-fn parse_serialized_treemap(buf: &[u8]) -> Result<SerializedTreemap<'_>> {
+fn parse_serialized_treemap(buf: &[u8]) -> SerializedTreemap<'_> {
     if buf.is_empty() {
-        return Ok(SerializedTreemap::Empty);
+        return SerializedTreemap::Empty;
     }
-    if buf.len() >= 2 && buf[..2] == HYBRID_MAGIC {
-        if buf.len() < HYBRID_HEADER_LEN {
-            return Err(ErrorCode::BadBytes("hybrid bitmap: buffer too short"));
+    match classify_bitmap(buf) {
+        BitmapClass::HybridSmall(payload) => SerializedTreemap::Small(payload),
+        BitmapClass::HybridLarge(body) | BitmapClass::Legacy(body) => {
+            SerializedTreemap::Roaring(body)
         }
-        if buf[2] != HYBRID_VERSION {
-            return Err(ErrorCode::BadBytes(format!(
-                "unsupported hybrid bitmap version: {}",
-                buf[2]
-            )));
-        }
-        return match buf[3] {
-            HYBRID_KIND_SMALL => Ok(SerializedTreemap::Small(&buf[HYBRID_HEADER_LEN..])),
-            HYBRID_KIND_LARGE => Ok(SerializedTreemap::Roaring(&buf[HYBRID_HEADER_LEN..])),
-            kind => Err(ErrorCode::BadBytes(format!(
-                "unknown hybrid bitmap kind: {kind}"
-            ))),
-        };
     }
-    Ok(SerializedTreemap::Roaring(buf))
 }
 
 #[cfg(test)]
@@ -515,6 +503,8 @@ mod tests {
     use crate::bitmap::test_support::create_format_spec_64_bitmap;
     use crate::bitmap::test_support::create_format_spec_portable_64_bitmap;
     use crate::bitmap::test_support::serialization_strategy;
+    use crate::bitmap::test_support::serialize_legacy_collision_hybrid_small;
+    use crate::bitmap::test_support::serialize_legacy_collision_large;
 
     fn roaring_treemap(values: impl IntoIterator<Item = u64>) -> RoaringTreemap {
         values.into_iter().collect()
@@ -876,5 +866,23 @@ mod tests {
                 prop_assert_eq!(treemap_values(&fast), expected, "{:?}", op);
             }
         }
+    }
+
+    #[test]
+    fn deserialize_decodes_legacy_magic_collision() {
+        let (buf, len) = serialize_legacy_collision_hybrid_small();
+        let fast = FastTreemap::deserialize(&buf).unwrap();
+        assert_eq!(fast.len(), len);
+    }
+
+    // The large collision fixture serializes ~438MB and FastTreemap deserialization
+    // takes ~45s in debug builds, ignored to avoid slowing down the test suite.
+    // Use `cargo test -- --ignored` to run this test.
+    #[test]
+    #[ignore]
+    fn deserialize_decodes_legacy_magic_collision_large() {
+        let (buf, len) = serialize_legacy_collision_large();
+        let fast = FastTreemap::deserialize(&buf).unwrap();
+        assert_eq!(fast.len(), len);
     }
 }
