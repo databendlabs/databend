@@ -19,6 +19,9 @@ use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_settings::DefaultSettings;
+use databend_common_settings::SettingMode;
+use databend_common_settings::SettingScope;
 use databend_common_settings::Settings;
 
 use crate::sessions::QueryContext;
@@ -57,17 +60,22 @@ impl MaintenanceIdentity {
                 // Long-lived maintenance uses current system budgets, not the statement's
                 // resource overrides. Preserve expression/semantic settings as values.
                 .filter(|entry| {
-                    !matches!(
-                        entry.key().as_str(),
-                        "max_threads"
-                            | "max_memory_usage"
-                            | "max_query_memory_usage"
-                            | "max_execute_time_in_seconds"
-                            | "max_storage_io_requests"
-                            | "recluster_block_size"
-                            | "query_out_of_memory_behavior"
-                            | "allow_query_exceeded_limit"
-                    )
+                    // Global-only/read-only values (notably enterprise_license) cannot be
+                    // replayed with SET SESSION. Reload them from current node/tenant policy.
+                    DefaultSettings::check_setting_scope(entry.key(), SettingScope::Session).is_ok()
+                        && DefaultSettings::check_setting_mode(entry.key(), SettingMode::Write)
+                            .is_ok()
+                        && !matches!(
+                            entry.key().as_str(),
+                            "max_threads"
+                                | "max_memory_usage"
+                                | "max_query_memory_usage"
+                                | "max_execute_time_in_seconds"
+                                | "max_storage_io_requests"
+                                | "recluster_block_size"
+                                | "query_out_of_memory_behavior"
+                                | "allow_query_exceeded_limit"
+                        )
                 })
                 .map(|entry| (entry.key().clone(), entry.value().value.to_string()))
                 .collect(),
@@ -76,6 +84,7 @@ impl MaintenanceIdentity {
 
     pub(crate) async fn create_session(&self) -> Result<Arc<Session>> {
         let settings = Settings::create(self.tenant.clone());
+        settings.load_changes().await?;
         settings.set_batch_settings(&self.settings, false)?;
         let manager = SessionManager::instance();
         let mut session = manager.create_with_settings(SessionType::Dummy, settings, None)?;
@@ -94,5 +103,42 @@ impl MaintenanceIdentity {
             .set_current_warehouse(self.warehouse.clone())
             .await?;
         Ok(session)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_version::BUILD_INFO;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_global_only_settings_reload_without_session_scope_replay() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+        settings
+            .set_global_setting("enterprise_license".into(), "old-global-policy".into())
+            .await?;
+        settings.set_setting("timezone".into(), "Asia/Shanghai".into())?;
+        settings.set_max_threads(32)?;
+        let identity = MaintenanceIdentity::capture(&ctx).await?;
+        assert!(!identity.settings.contains_key("enterprise_license"));
+        assert!(!identity.settings.contains_key("max_threads"));
+        assert_eq!(
+            identity.settings.get("timezone").map(String::as_str),
+            Some("Asia/Shanghai")
+        );
+        settings
+            .set_global_setting("enterprise_license".into(), "current-global-policy".into())
+            .await?;
+        let session = identity.create_session().await?;
+        assert_eq!(
+            session.get_settings().get_enterprise_license(&BUILD_INFO),
+            "current-global-policy"
+        );
+        assert_eq!(session.get_settings().get_timezone()?, "Asia/Shanghai");
+        Ok(())
     }
 }
