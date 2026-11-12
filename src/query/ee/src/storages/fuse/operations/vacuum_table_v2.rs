@@ -241,6 +241,8 @@ pub async fn do_vacuum2(
         .block_vector_index_prefix();
     // Bundles (`vector_index_metas`) and legacy combined files (`vector_index_location`).
     let mut protected_vector_locations = HashSet::new();
+    let target_bloom_index_prefix = fuse_table.meta_location_generator().bloom_refresh_prefix();
+    let mut protected_bloom_locations = HashSet::new();
     for (chunk_idx, segment_chunk) in protected_segments
         .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
         .enumerate()
@@ -260,6 +262,11 @@ pub async fn do_vacuum2(
         for segment in segments {
             let blocks = segment?.block_metas()?;
             for block in &blocks {
+                if let Some(location) = &block.bloom_filter_index_location {
+                    if location.0.starts_with(&target_bloom_index_prefix) {
+                        protected_bloom_locations.insert(location.0.clone());
+                    }
+                }
                 if block.location.0.starts_with(target_block_prefix) {
                     gc_root_blocks.insert(block_path_hash(&block.location.0));
                 }
@@ -326,6 +333,19 @@ pub async fn do_vacuum2(
         removed_inverted_index_v2,
     ));
 
+    // Immutable Bloom bundles use the same UUID-v7 age/last-modified guards as
+    // vector bundles. Their references come from protected BlockMeta, including clones.
+    let removed_bloom_index = purge_immutable_index_objects(
+        fuse_table.get_operator_ref(),
+        &ctx,
+        &target_bloom_index_prefix,
+        false,
+        &protected_bloom_locations,
+        gc_root_timestamp,
+        gc_root_meta_ts,
+    )
+    .await?;
+
     // Column-oriented segments do not carry `vector_index_metas` yet. Never sweep
     // the namespace based on an incomplete reference set.
     let start = std::time::Instant::now();
@@ -335,7 +355,7 @@ pub async fn do_vacuum2(
             (target_vector_index_prefix, false),
             (target_legacy_vector_index_prefix, true),
         ] {
-            removed_vector_index += purge_vector_index_objects(
+            removed_vector_index += purge_immutable_index_objects(
                 fuse_table.get_operator_ref(),
                 &ctx,
                 prefix,
@@ -446,6 +466,7 @@ pub async fn do_vacuum2(
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 
     let removed_files = removed_inverted_index_v2
+        + removed_bloom_index
         + removed_vector_index
         + block_gc_stats.removed_files
         + stats_to_gc.len()
@@ -520,13 +541,13 @@ async fn purge_inverted_index_dict_objects(
     Ok(removed)
 }
 
-/// Removes vector index files under `prefix` not referenced by protected blocks.
+/// Removes immutable Bloom/vector index files under `prefix` not referenced by protected blocks.
 ///
 /// Bundles (`_i_v_v2`, like inverted-index V2): only `h`-prefixed objects whose
 /// UUID v7 is older than the GC root. Legacy combined files (`_i_v`,
 /// `{uuid}_v{N}.parquet`): no longer written, so like legacy blocks they are
 /// candidates once last modified a full transaction before the GC root.
-async fn purge_vector_index_objects(
+async fn purge_immutable_index_objects(
     operator: &Operator,
     ctx: &Arc<dyn TableContext>,
     prefix: &str,
@@ -543,7 +564,7 @@ async fn purge_vector_index_objects(
     while let Some(entry) = lister.try_next().await? {
         if let Err(err) = ctx.check_aborting() {
             return Err(err.with_context(format!(
-                "aborted while scanning vector-index objects under {prefix}"
+                "aborted while scanning index objects under {prefix}"
             )));
         }
         if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
@@ -555,7 +576,7 @@ async fn purge_vector_index_objects(
                 Ok(_) => continue,
                 Err(error) => {
                     warn!(
-                        "skip vector-index bundle with unparsable UUID during vacuum: path={}, error={}",
+                        "skip index bundle with unparsable UUID during vacuum: path={}, error={}",
                         entry.path(),
                         error
                     );

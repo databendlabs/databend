@@ -225,6 +225,9 @@ impl HookOperator {
         Some(TableHookTask {
             ctx: self.ctx.clone(),
             session_local: table.is_temp(),
+            // An unverified pre-write snapshot is not a covered baseline. Start with a
+            // frozen FullCheck rather than silently skipping pre-existing missing indexes.
+            refresh_base: None,
             tracking: None,
             recluster_target: None,
             target: TableHookTarget {
@@ -298,6 +301,7 @@ async fn create_deferred_table_hook_task(
     Ok(TableHookTask {
         ctx,
         session_local,
+        refresh_base: None,
         tracking: Some(tracking),
         recluster_target: None,
         target: TableHookTarget {

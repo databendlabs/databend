@@ -38,7 +38,6 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::StreamExt;
 use futures::TryStreamExt;
-use futures::future::try_join_all;
 use futures::stream::iter;
 use opendal::ErrorKind;
 use opendal::Operator;
@@ -66,6 +65,7 @@ pub async fn collect_refresh_plan(
     snapshot: &TableSnapshot,
     index_names: &[String],
     segment_locs: Option<Vec<Location>>,
+    limits: Option<(usize, u64)>,
 ) -> Result<RefreshPlan> {
     let schema = table.schema();
     let operator = table.get_operator();
@@ -108,7 +108,8 @@ pub async fn collect_refresh_plan(
     let mut readers = BTreeMap::new();
     let mut blocks = VecDeque::new();
     // Locate targets only once. No other segment metadata or block data is read.
-    for (segment_idx, location) in snapshot.segments.iter().enumerate() {
+    let mut selected_bytes = 0u64;
+    'segments: for (segment_idx, location) in snapshot.segments.iter().enumerate() {
         if targets
             .as_ref()
             .is_some_and(|targets| !targets.contains(location))
@@ -127,7 +128,7 @@ pub async fn collect_refresh_plan(
             }
             None => None,
         };
-        let checks = iter(metas.into_iter().enumerate())
+        let mut checks = iter(metas.into_iter().enumerate())
             .map(|(block_idx, meta)| {
                 let specs = &specs;
                 let operator = &operator;
@@ -141,17 +142,16 @@ pub async fn collect_refresh_plan(
                         check_policy,
                     )
                     .await?;
-                    let missing = try_join_all(specs.iter().map(|spec| async {
-                        Ok::<_, ErrorCode>(
-                            needs_refresh(operator, &meta, &spec.index, &spec.schema, &existing)
-                                .await?
-                                .then(|| spec.index.name.clone()),
-                        )
-                    }))
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect::<HashSet<_>>();
+                    let mut missing = HashSet::new();
+                    // The outer block stream owns the IO budget: do not multiply it
+                    // by the number of indexes with nested per-index fan-out.
+                    for spec in specs {
+                        if needs_refresh(operator, &meta, &spec.index, &spec.schema, &existing)
+                            .await?
+                        {
+                            missing.insert(spec.index.name.clone());
+                        }
+                    }
                     Ok::<_, ErrorCode>((
                         block_idx,
                         meta,
@@ -168,10 +168,14 @@ pub async fn collect_refresh_plan(
                     ))
                 }
             })
-            .buffered(REFRESH_CHECK_CONCURRENCY)
-            .try_collect::<Vec<_>>()
-            .await?;
-        for (block_idx, meta, missing, existing, hlls, top_n) in checks {
+            .buffered(
+                REFRESH_CHECK_CONCURRENCY
+                    .min(ctx.get_settings().get_max_storage_io_requests()? as usize)
+                    .max(1),
+            );
+        while let Some((block_idx, meta, missing, existing, hlls, top_n)) =
+            checks.try_next().await?
+        {
             if missing.is_empty() {
                 continue;
             }
@@ -193,6 +197,7 @@ pub async fn collect_refresh_plan(
                     reader
                 }
             };
+            selected_bytes = selected_bytes.saturating_add(meta.block_size);
             blocks.push_back(Arc::new(RefreshBlock {
                 index: BlockMetaIndex {
                     segment_idx,
@@ -206,6 +211,10 @@ pub async fn collect_refresh_plan(
                 projection,
                 reader,
             }));
+            if limits.is_some_and(|(count, bytes)| blocks.len() >= count || selected_bytes >= bytes)
+            {
+                break 'segments;
+            }
         }
     }
     if blocks.is_empty() {
@@ -323,8 +332,15 @@ async fn bloom_meta(
     block: &BlockMeta,
     policy: CachePolicy,
 ) -> Result<Option<Arc<BloomIndexMeta>>> {
-    let path =
-        TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&block.location.0);
+    let path = block
+        .bloom_filter_index_location
+        .as_ref()
+        .map(|location| location.0.clone())
+        .unwrap_or_else(|| {
+            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
+                &block.location.0,
+            )
+        });
     // Match the original Ngram check: stat failures are treated as absent.
     let Ok(stat) = operator.stat(&path).await else {
         return Ok(None);

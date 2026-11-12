@@ -26,14 +26,13 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::SharedLockGuard;
-use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use log::warn;
 
 use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
+use crate::interpreters::hook::refresh_hook::RefreshProgress;
 use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryIdentity;
@@ -97,6 +96,7 @@ impl TableHookTarget {
 pub struct TableHookTask {
     pub ctx: Arc<QueryContext>,
     pub session_local: bool,
+    pub refresh_base: Option<String>,
     /// Tracking of a context created for this task. `None` when the task runs on the
     /// triggering statement's context and is accounted to that statement.
     pub tracking: Option<Arc<TrackingPayload>>,
@@ -201,7 +201,9 @@ pub(super) struct TableHookRequest {
     pub identity: MaintenanceIdentity,
     pub target: TableHookTarget,
     pub recluster_target: Option<TableHookTarget>,
-    pub written_segments: Vec<Location>,
+    pub refresh_base: Option<String>,
+    refresh_progress: Option<RefreshProgress>,
+    refresh_again: bool,
     pub refresh_pending: bool,
     pub enable_auto_analyze: bool,
     pub source_query_id: String,
@@ -210,6 +212,11 @@ pub(super) struct TableHookRequest {
     ready_at: [Instant; 3],
     failures: [u32; 3],
     turn: usize,
+}
+
+enum MaintenanceOutcome {
+    Completed,
+    Progress,
 }
 
 impl TableHookRequest {
@@ -236,12 +243,17 @@ impl TableHookRequest {
             ))),
         };
         match result {
-            Ok(()) => {
+            Ok(MaintenanceOutcome::Progress) => {
+                self.failures[action] = 0;
+            }
+            Ok(MaintenanceOutcome::Completed) => {
                 self.failures[action] = 0;
                 match action {
                     0 => {
-                        self.refresh_pending = false;
-                        self.written_segments.clear();
+                        self.refresh_pending = self.refresh_again;
+                        self.refresh_again = false;
+                        self.refresh_progress = None;
+                        self.refresh_base = None;
                     }
                     1 => self.enable_auto_analyze = false,
                     _ => self.recluster_target = None,
@@ -264,7 +276,7 @@ impl TableHookRequest {
                 match action {
                     0 => {
                         self.refresh_pending = false;
-                        self.written_segments.clear();
+                        self.refresh_progress = None;
                     }
                     1 => self.enable_auto_analyze = false,
                     _ => self.recluster_target = None,
@@ -281,17 +293,16 @@ impl TableHookRequest {
         (0..3).any(|action| self.pending(action)).then_some(self)
     }
 
-    async fn execute_action(&mut self, action: usize) -> Result<()> {
+    async fn execute_action(&mut self, action: usize) -> Result<MaintenanceOutcome> {
         let MaintenanceContext { ctx, tracking } =
             MaintenanceContext::from_identity(&self.identity).await?;
-        ctx.written_segment_locations()
-            .extend(self.written_segments.clone());
         ctx.set_enable_auto_analyze(self.enable_auto_analyze);
         info!(source_query_id = self.source_query_id.as_str(), table_id = self.target.table_id, action;
             "Start async table hook job");
         let task = TableHookTask {
             ctx,
             session_local: false,
+            refresh_base: None,
             tracking: Some(tracking.clone()),
             target: self.target.clone(),
             recluster_target: None,
@@ -306,18 +317,31 @@ impl TableHookRequest {
         tracking
             .tracking(async {
                 match action {
-                    0 => task.execute_refresh().await,
-                    1 => task.execute_analyze().await,
+                    0 => task
+                        .execute_refresh_batch(&mut self.refresh_base, &mut self.refresh_progress)
+                        .await
+                        .map(|covered| {
+                            if covered {
+                                MaintenanceOutcome::Completed
+                            } else {
+                                MaintenanceOutcome::Progress
+                            }
+                        }),
+                    1 => task
+                        .execute_analyze()
+                        .await
+                        .map(|_| MaintenanceOutcome::Completed),
                     _ => {
                         let target = self
                             .recluster_target
                             .as_ref()
                             .ok_or_else(|| ErrorCode::Internal("Missing recluster target"))?;
                         task.execute_recluster(target).await?;
-                        self.written_segments = task.ctx.written_segment_locations().list();
                         self.refresh_pending = true;
+                        self.refresh_again |= self.refresh_progress.is_some();
+                        self.refresh_base = None;
                         self.ready_at[0] = Instant::now();
-                        Ok(())
+                        Ok(MaintenanceOutcome::Completed)
                     }
                 }
             })
@@ -329,7 +353,9 @@ impl TableHookTask {
     pub(super) async fn into_request(self) -> Result<TableHookRequest> {
         Ok(TableHookRequest {
             identity: MaintenanceIdentity::capture(&self.ctx).await?,
-            written_segments: self.ctx.written_segment_locations().list(),
+            refresh_base: self.refresh_base,
+            refresh_progress: None,
+            refresh_again: false,
             enable_auto_analyze: self.ctx.get_enable_auto_analyze(),
             source_query_id: self.ctx.get_id(),
             target: self.target,
@@ -363,9 +389,17 @@ impl SchedulerTask for TableHookRequest {
 
     /// Combine pending values, never mutate another query's context.
     fn merge(&mut self, mut other: Self) {
-        other.written_segments.append(&mut self.written_segments);
-        other.written_segments.sort_unstable();
-        other.written_segments.dedup();
+        // Continue the already-claimed frozen scope. New demand gets a subsequent FullCheck
+        // rather than restarting a large in-flight scan on every write.
+        if self.refresh_progress.is_some() {
+            other.refresh_progress = self.refresh_progress.take();
+            other.refresh_base = self.refresh_base.take();
+            other.refresh_again = true;
+        } else if self.refresh_pending {
+            // Combining different base snapshots cannot be ordered by UUID. Widen safely.
+            other.refresh_base = None;
+        }
+        other.refresh_again |= self.refresh_again;
         other.enable_auto_analyze |= self.enable_auto_analyze;
         other.refresh_pending |= self.refresh_pending;
         other.turn = self.turn;
@@ -426,6 +460,7 @@ mod tests {
         TableHookTask {
             ctx,
             session_local: false,
+            refresh_base: None,
             tracking: None,
             recluster_target: None,
             target: TableHookTarget {
@@ -448,20 +483,18 @@ mod tests {
         let old_ctx = fixture.new_query_ctx().await?;
         let latest_ctx = fixture.new_query_ctx().await?;
 
-        old_ctx
-            .written_segment_locations()
-            .extend(vec![("a".into(), 1)]);
-        latest_ctx
-            .written_segment_locations()
-            .extend(vec![("b".into(), 1)]);
         let old_weak = Arc::downgrade(&old_ctx);
-        let mut task = table_hook_task(old_ctx, "t").into_request().await?;
-        task.merge(table_hook_task(latest_ctx, "t").into_request().await?);
+        let mut old_task = table_hook_task(old_ctx, "t");
+        old_task.refresh_base = Some("old_snapshot".into());
+        let mut task = old_task.into_request().await?;
+        let mut latest = table_hook_task(latest_ctx, "t");
+        latest.refresh_base = Some("new_snapshot".into());
+        task.merge(latest.into_request().await?);
 
-        assert_eq!(task.written_segments, vec![
-            ("a".into(), 1),
-            ("b".into(), 1)
-        ]);
+        assert!(
+            task.refresh_base.is_none(),
+            "merging incomparable bases must widen to FullCheck"
+        );
         assert!(
             old_weak.upgrade().is_none(),
             "queued values must not retain the write context"

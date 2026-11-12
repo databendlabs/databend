@@ -21,6 +21,7 @@ use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::AnalyzeOptions;
 use log::info;
@@ -68,6 +69,30 @@ impl TableHookTask {
             return Ok(());
         }
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        // The notification requests a check; current table policy and statistics decide
+        // whether work is still needed after coalescing or a concurrent manual ANALYZE.
+        if fuse_table.get_option(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE, 0u32) == 0 {
+            return Ok(());
+        }
+        if let Some(snapshot) = fuse_table
+            .read_table_snapshot_with_policy(ctx.cache_policy())
+            .await?
+        {
+            if snapshot
+                .summary
+                .additional_stats_meta
+                .as_ref()
+                .is_some_and(|stats| {
+                    let actual = snapshot
+                        .summary
+                        .row_count
+                        .saturating_sub(stats.unstats_rows);
+                    stats.row_count.abs_diff(actual).saturating_mul(10) < actual
+                })
+            {
+                return Ok(());
+            }
+        }
         let options =
             AnalyzeOptions::from_table_options(fuse_table.get_table_info().options())?.no_scan();
         execute_analyze(ctx, fuse_table, options).await

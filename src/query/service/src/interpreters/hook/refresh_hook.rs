@@ -15,17 +15,22 @@
 // Logs from this module will show up as "[REFRESH-HOOK] ...".
 databend_common_tracing::register_module_tag!("[REFRESH-HOOK]");
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::cache_policy::CachePolicy;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Location;
 use log::info;
 
+use crate::interpreters::hook::table_hook_scheduler::TableHookScheduler;
 use crate::interpreters::hook::table_hook_task::TableHookTask;
+use crate::interpreters::hook::table_hook_task::TableHookTaskKey;
 use crate::interpreters::hook::table_id_matches_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -38,6 +43,31 @@ use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
+/// Frozen coverage boundary. Only snapshot references and a cursor survive between batches;
+/// no unbounded written-segment list, block plan, query context or executor is queued.
+pub(super) struct RefreshProgress {
+    snapshot: String,
+    definition: String,
+    offset: usize,
+    replacement: Option<Location>,
+    // Remains Some only while the scope's snapshot evolves exclusively by our own
+    // refresh commits. Concurrent writes do not block coverage, but prohibit publishing
+    // their unverified segments as part of a covered snapshot baseline.
+    covered_head: Option<String>,
+}
+
+impl RefreshProgress {
+    fn complete(&self, key: TableHookTaskKey) -> bool {
+        if let (Some(scheduler), Some(location)) = (
+            TableHookScheduler::try_instance(),
+            self.covered_head.as_ref(),
+        ) {
+            scheduler.record_refresh_coverage(key, self.definition.clone(), location.clone());
+        }
+        true
+    }
+}
+
 impl TableHookTask {
     pub(super) async fn execute_refresh(&self) -> Result<()> {
         // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context
@@ -46,6 +76,179 @@ impl TableHookTask {
             .set_cache_policy(self.ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
         info!("Table hook starting refresh job");
         self.do_refresh(self.ctx.clone()).await
+    }
+
+    /// Cover one source segment with bounded block/byte work. Return true only when the
+    /// frozen scope is covered. Replacement segment references preserve intra-segment
+    /// progress when a bounded refresh rewrites only some of its blocks.
+    pub(super) async fn execute_refresh_batch(
+        &self,
+        base: &mut Option<String>,
+        progress: &mut Option<RefreshProgress>,
+    ) -> Result<bool> {
+        let ctx = &self.ctx;
+        ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
+        let Some(desc) = self.target.resolve(ctx, "refresh").await? else {
+            return Ok(true);
+        };
+        let table = ctx
+            .get_table(&desc.catalog, &desc.database, &desc.table)
+            .await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let names = table
+            .get_table_info()
+            .meta
+            .indexes
+            .values()
+            .filter(|index| !index.sync_creation)
+            .map(|index| index.name.clone())
+            .collect::<Vec<_>>();
+        if names.is_empty() {
+            return Ok(true);
+        }
+        let key = TableHookTaskKey {
+            tenant: ctx.get_tenant().tenant_name().to_string(),
+            catalog: desc.catalog.clone(),
+            table_id: desc.table_id,
+        };
+        let definition = serde_json::to_string(&(
+            &table.get_table_info().meta.schema,
+            &table.get_table_info().meta.indexes,
+        ))?;
+        if progress
+            .as_ref()
+            .is_some_and(|progress| progress.definition != definition)
+        {
+            *progress = None;
+            *base = None;
+        }
+        if progress.is_none() {
+            let Some(snapshot) = fuse.snapshot_loc() else {
+                return Ok(true);
+            };
+            *base = TableHookScheduler::try_instance()
+                .and_then(|scheduler| scheduler.refresh_base(&key, &definition));
+            info!(event = "refresh.scope_started", table_id = desc.table_id,
+                snapshot = snapshot.as_str(), incremental = base.is_some();
+                "Start frozen index coverage scope");
+            *progress = Some(RefreshProgress {
+                covered_head: Some(snapshot.clone()),
+                snapshot,
+                definition,
+                offset: 0,
+                replacement: None,
+            });
+        }
+        let state = progress.as_mut().expect("refresh progress initialized");
+        if state.covered_head != fuse.snapshot_loc() {
+            state.covered_head = None;
+        }
+        let source = match fuse
+            .read_table_snapshot_with_location(Some(state.snapshot.clone()))
+            .await
+        {
+            Ok(Some(snapshot)) => snapshot,
+            Ok(None) => return Ok(true),
+            Err(error) if error.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                // History GC/Flashback may invalidate a reference. Recheck current coverage;
+                // never interpret an unreadable historical boundary as successful coverage.
+                info!(table_id = desc.table_id; "Refresh boundary expired; schedule FullCheck");
+                *progress = None;
+                *base = None;
+                return Ok(false);
+            }
+            Err(error) => return Err(error),
+        };
+        let baseline = if let Some(location) = base.as_ref() {
+            match fuse
+                .read_table_snapshot_with_location(Some(location.clone()))
+                .await
+            {
+                Ok(snapshot) => snapshot,
+                Err(error) if error.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                    *base = None;
+                    None
+                }
+                Err(error) => return Err(error),
+            }
+        } else {
+            None
+        };
+        let old = baseline
+            .as_ref()
+            .map(|snapshot| snapshot.segments.iter().collect::<HashSet<_>>());
+        // Metadata-only diff: do not decode unchanged segments. Scan a bounded number of
+        // source entries per unit even if there is no index work in this part of the scope.
+        let end = source.segments.len().min(state.offset.saturating_add(64));
+        while state.offset < end {
+            let original = &source.segments[state.offset];
+            if state.replacement.is_none() && old.as_ref().is_some_and(|old| old.contains(original))
+            {
+                state.offset += 1;
+                continue;
+            }
+            let location = state.replacement.as_ref().unwrap_or(original).clone();
+            let mut pipeline = Pipeline::create();
+            let count = fuse
+                .do_refresh_indexes_batch(
+                    ctx.clone(),
+                    &names,
+                    vec![location],
+                    &mut pipeline,
+                    (32, ctx.get_settings().get_max_query_memory_usage()? / 4),
+                )
+                .await?;
+            if pipeline.is_empty() {
+                state.offset += 1;
+                state.replacement = None;
+                return Ok(state.offset >= source.segments.len() && state.complete(key));
+            }
+            pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+            let query_ctx = ctx.clone();
+            pipeline.set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+                hook_clear_m_cte_temp_table(&query_ctx)?;
+                hook_vacuum_temp_files(&query_ctx)?;
+                hook_disk_temp_dir(&query_ctx)?;
+                Ok(())
+            }));
+            let executor = PipelineCompleteExecutor::try_create(
+                pipeline,
+                ExecutorSettings::try_create(ctx.clone())?,
+            )?;
+            ctx.set_executor(executor.get_inner())?;
+            executor.execute().await?;
+            if state.covered_head.is_some() {
+                let previous = fuse
+                    .read_table_snapshot()
+                    .await?
+                    .ok_or_else(|| ErrorCode::Internal("Refresh source snapshot disappeared"))?;
+                let current = ctx
+                    .get_catalog(&desc.catalog)
+                    .await?
+                    .get_table(&ctx.get_tenant(), &desc.database, &desc.table)
+                    .await?;
+                let current = FuseTable::try_from_table(current.as_ref())?;
+                let committed = current.read_table_snapshot().await?;
+                state.covered_head = committed
+                    .filter(|snapshot| {
+                        snapshot
+                            .prev_snapshot_id
+                            .is_some_and(|(id, _)| id == previous.snapshot_id)
+                    })
+                    .and_then(|_| current.snapshot_loc());
+            }
+            let outputs = ctx.written_segment_locations().list();
+            if outputs.len() != 1 {
+                return Err(ErrorCode::Internal(
+                    "A one-segment refresh must publish exactly one replacement",
+                ));
+            }
+            state.replacement = outputs.into_iter().next();
+            info!(table_id = desc.table_id, segment_offset = state.offset, refreshed_blocks = count;
+                "Refresh batch committed; coverage remains pending");
+            return Ok(false);
+        }
+        Ok(state.offset >= source.segments.len() && state.complete(key))
     }
 
     async fn do_refresh(&self, ctx: Arc<QueryContext>) -> Result<()> {

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -42,15 +43,22 @@ pub struct MutationGenerator {
 
     pub(crate) mutation_kind: MutationKind,
     logical_change_delta: (u64, u64),
+    refresh_definition: Option<TableMeta>,
 }
 
 impl MutationGenerator {
+    pub(crate) fn with_refresh_definition(mut self, meta: TableMeta) -> Self {
+        self.refresh_definition = Some(meta);
+        self
+    }
+
     pub fn new(base_snapshot: Option<Arc<TableSnapshot>>, mutation_kind: MutationKind) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
             logical_change_delta: (0, 0),
+            refresh_definition: None,
         }
     }
 }
@@ -84,6 +92,13 @@ impl SnapshotGenerator for MutationGenerator {
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
+        if self.refresh_definition.as_ref().is_some_and(|expected| {
+            expected.schema != table_info.meta.schema || expected.indexes != table_info.meta.indexes
+        }) {
+            return Err(ErrorCode::RefreshIndexError(
+                "Index definitions or schema changed during refresh",
+            ));
+        }
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
                 if let Some((removed, replaced)) =

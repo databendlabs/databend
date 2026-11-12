@@ -44,6 +44,8 @@ type SchedulerSpawner = Arc<dyn Fn(SchedulerFuture, String) + Send + Sync>;
 
 pub struct TableHookScheduler {
     core: Arc<SchedulerCore<TableHookRequest>>,
+    // Only proven covered snapshots, never a triggering write's unverified head.
+    refresh_coverage: Mutex<HashMap<TableHookTaskKey, (String, String)>>,
 }
 
 struct SchedulerCore<T> {
@@ -54,11 +56,14 @@ struct SchedulerCore<T> {
     wake: Notify,
     capacity: Notify,
     max_tables: usize,
+    stopped: Notify,
 }
 
 struct MailboxQueue<T> {
     states: HashMap<TableHookTaskKey, TableHookState<T>>,
     ready: VecDeque<TableHookTaskKey>,
+    closed: bool,
+    dispatch_stopped: bool,
 }
 
 enum TableHookState<T> {
@@ -82,12 +87,44 @@ impl TableHookScheduler {
             runner,
             spawner,
         );
-        GlobalInstance::set(Arc::new(Self { core }));
+        GlobalInstance::set(Arc::new(Self {
+            core,
+            refresh_coverage: Mutex::new(HashMap::new()),
+        }));
         Ok(())
     }
 
     pub fn try_instance() -> Option<Arc<Self>> {
         GlobalInstance::try_get()
+    }
+
+    pub(super) fn refresh_base(&self, key: &TableHookTaskKey, definition: &str) -> Option<String> {
+        self.refresh_coverage
+            .lock()
+            .get(key)
+            .filter(|(covered_definition, _)| covered_definition == definition)
+            .map(|(_, location)| location.clone())
+    }
+
+    pub(super) fn record_refresh_coverage(
+        &self,
+        key: TableHookTaskKey,
+        definition: String,
+        location: String,
+    ) {
+        let mut coverage = self.refresh_coverage.lock();
+        if coverage.len() >= self.core.max_tables && !coverage.contains_key(&key) {
+            if let Some(evict) = coverage.keys().next().cloned() {
+                coverage.remove(&evict);
+            }
+        }
+        coverage.insert(key, (definition, location));
+    }
+
+    /// Stop admitting work and wait for in-flight units to release their contexts. Call
+    /// before destroying the services used by maintenance. Pending work is not durable yet.
+    pub async fn shutdown(&self) {
+        self.core.shutdown().await;
     }
 
     /// Apply backpressure only to a new table key. Values waiting here own no caller context
@@ -100,6 +137,9 @@ impl TableHookScheduler {
             match self.core.try_enqueue(request) {
                 Ok(()) => return,
                 Err(pending) => request = pending,
+            }
+            if self.core.semaphore.is_closed() {
+                return;
             }
             warn!(table_id = request.target.table_id; "Table maintenance mailbox full; waiting for capacity");
             capacity.await;
@@ -118,6 +158,8 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             queue: Mutex::new(MailboxQueue {
                 states: HashMap::new(),
                 ready: VecDeque::new(),
+                closed: false,
+                dispatch_stopped: false,
             }),
             runner,
             spawner: spawner.clone(),
@@ -125,6 +167,7 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             wake: Notify::new(),
             capacity: Notify::new(),
             max_tables,
+            stopped: Notify::new(),
         });
         spawner(
             Box::pin(Self::dispatch(scheduler.clone())),
@@ -136,6 +179,9 @@ impl<T: SchedulerTask> SchedulerCore<T> {
     fn try_enqueue(&self, task: T) -> std::result::Result<(), T> {
         let key = task.key();
         let mut queue = self.queue.lock();
+        if queue.closed {
+            return Err(task);
+        }
         match queue.states.get_mut(&key) {
             Some(TableHookState::Queued(pending)) => pending.merge(task),
             Some(TableHookState::Running { pending }) => match pending {
@@ -162,6 +208,11 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             let notified = scheduler.wake.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
+            if scheduler.semaphore.is_closed() {
+                scheduler.queue.lock().dispatch_stopped = true;
+                scheduler.stopped.notify_waiters();
+                return;
+            }
             if let Ok(permit) = scheduler.semaphore.clone().try_acquire_owned() {
                 let (task, deadline) = scheduler.take_ready_task();
                 if let Some((key, task)) = task {
@@ -184,8 +235,41 @@ impl<T: SchedulerTask> SchedulerCore<T> {
         }
     }
 
+    async fn shutdown(&self) {
+        {
+            let mut queue = self.queue.lock();
+            queue.closed = true;
+            queue.ready.clear();
+            queue.states.retain(|_, state| match state {
+                TableHookState::Queued(_) => false,
+                TableHookState::Running { pending } => {
+                    *pending = None;
+                    true
+                }
+            });
+            self.semaphore.close();
+        }
+        self.wake.notify_one();
+        self.capacity.notify_waiters();
+        loop {
+            let stopped = self.stopped.notified();
+            tokio::pin!(stopped);
+            stopped.as_mut().enable();
+            {
+                let queue = self.queue.lock();
+                if queue.dispatch_stopped && queue.states.is_empty() {
+                    return;
+                }
+            }
+            stopped.await;
+        }
+    }
+
     fn take_ready_task(&self) -> (Option<(TableHookTaskKey, T)>, Option<Instant>) {
         let mut queue = self.queue.lock();
+        if queue.closed {
+            return (None, None);
+        }
         let now = Instant::now();
         let mut earliest: Option<Instant> = None;
         for _ in 0..queue.ready.len() {
@@ -236,6 +320,10 @@ impl<T: SchedulerTask> SchedulerCore<T> {
         let Some(TableHookState::Running { pending }) = queue.states.remove(&key) else {
             return;
         };
+        if queue.closed {
+            self.stopped.notify_waiters();
+            return;
+        }
         if let Some(pending) = pending {
             match &mut continuation {
                 Some(task) => task.merge(pending),
@@ -719,6 +807,11 @@ mod tests {
         assert_eq!(*runs.lock(), vec![1, 2, 1]);
         wait_until(|| scheduler.queue.lock().states.is_empty()).await;
         assert!(scheduler.try_enqueue(test_task(3)).is_ok());
+        timeout(Duration::from_secs(1), scheduler.shutdown())
+            .await
+            .expect("shutdown must quiesce the dispatcher and any running unit");
+        assert!(scheduler.queue.lock().states.is_empty());
+        assert!(scheduler.try_enqueue(test_task(4)).is_err());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

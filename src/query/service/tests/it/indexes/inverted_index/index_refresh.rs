@@ -308,22 +308,26 @@ async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()>
     let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.summary.row_count, 4);
     assert_eq!(snapshot.summary.block_count, 2);
-    let reader = SegmentInfoReader::new(fuse_table.get_operator(), table.schema());
-    let mut block_rows = Vec::new();
-    for (location, version) in &snapshot.segments {
-        let segment = reader
-            .read(&(location.clone(), *version), &CachePolicy::BYPASS)
-            .await?;
-        for block in segment.block_metas()? {
-            block_rows.push(block.row_count);
-            assert!(
+    // Compact is complete at statement return; index coverage is now asynchronous.
+    let blocks = tokio::time::timeout(std::time::Duration::from_secs(20), async {
+        loop {
+            let (_, blocks) = refresh_batch_blocks(&fixture).await?;
+            if blocks.iter().all(|block| {
                 block
                     .inverted_index_metas
                     .as_deref()
-                    .is_some_and(|metas| { metas.iter().any(|meta| meta.index_name == "idx") })
-            );
+                    .is_some_and(|metas| metas.iter().any(|meta| meta.index_name == "idx"))
+            }) {
+                break anyhow::Ok(blocks);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
-    }
+    })
+    .await??;
+    let mut block_rows = blocks
+        .iter()
+        .map(|block| block.row_count)
+        .collect::<Vec<_>>();
     block_rows.sort_unstable();
     assert_eq!(block_rows, vec![1, 3]);
     Ok(())
@@ -444,10 +448,15 @@ async fn test_refresh_batch_shared_reads_and_hint_scope() -> anyhow::Result<()> 
                 .iter()
                 .find(|old| old.location == block.location)
                 .unwrap();
-            // Ngram refresh still writes the original block-derived file.
-            assert_eq!(
+            // Published Ngram replacements are immutable; old snapshots retain their file.
+            assert_ne!(
                 Some(bloom_location),
                 old.bloom_filter_index_location.as_ref()
+            );
+            assert!(
+                bloom_location
+                    .0
+                    .starts_with(&fuse.meta_location_generator().bloom_refresh_prefix())
             );
             let bloom = load_index_meta(
                 fuse.get_operator(),
@@ -587,8 +596,57 @@ async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Resu
     );
     let (failed, _) = refresh_batch_blocks(&fixture).await?;
     assert_eq!(failed.snapshot_id, before.snapshot_id);
-    // Preserve the old Ngram in-place behavior. This test promises metadata
-    // publication atomicity, not rollback of physical files on commit failure.
+    // Immutable Ngram artifacts cannot alter files referenced by the failed snapshot.
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_background_refresh_batch_bounds_work_and_keeps_old_bloom() -> anyhow::Result<()> {
+    let fixture = refresh_batch_fixture(RefreshBatchMode::StaleAndValid).await?;
+    let (before, blocks) = refresh_batch_blocks(&fixture).await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let operator = fuse.get_operator();
+    let mut old_files = Vec::new();
+    for block in &blocks {
+        let path = &block.bloom_filter_index_location.as_ref().unwrap().0;
+        old_files.push((path.clone(), operator.read(path).await?.to_vec()));
+    }
+    let names = table
+        .get_table_info()
+        .meta
+        .indexes
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    let ctx = fixture.new_query_ctx().await?;
+    let mut pipeline = Pipeline::create();
+    assert_eq!(
+        fuse.do_refresh_indexes_batch(
+            ctx.clone(),
+            &names,
+            before.segments.clone(),
+            &mut pipeline,
+            (1, u64::MAX)
+        )
+        .await?,
+        1
+    );
+    PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx)?)?
+        .execute()
+        .await?;
+    let (_, after) = refresh_batch_blocks(&fixture).await?;
+    assert_eq!(
+        after
+            .iter()
+            .zip(&blocks)
+            .filter(|(new, old)| new.bloom_filter_index_location != old.bloom_filter_index_location)
+            .count(),
+        1
+    );
+    for (path, bytes) in old_files {
+        assert_eq!(operator.read(&path).await?.to_vec(), bytes);
+    }
     Ok(())
 }
 

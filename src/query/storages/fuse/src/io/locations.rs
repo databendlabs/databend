@@ -134,6 +134,24 @@ impl TableMetaLocationGenerator {
         &self.block_location_prefix
     }
 
+    /// Refreshed Bloom/Ngram bundles are immutable and protected by BlockMeta references.
+    pub fn bloom_refresh_prefix(&self) -> String {
+        format!("{}refresh/", self.block_bloom_index_prefix())
+    }
+
+    pub fn gen_bloom_refresh_location(&self) -> Location {
+        (
+            format!(
+                "{}{}{}_v{}.parquet",
+                self.bloom_refresh_prefix(),
+                VACUUM2_OBJECT_KEY_PREFIX,
+                Uuid::now_v7().as_simple(),
+                BlockFilter::VERSION
+            ),
+            BlockFilter::VERSION,
+        )
+    }
+
     pub fn block_bloom_index_prefix(&self) -> &str {
         &self.bloom_index_location_prefix
     }
