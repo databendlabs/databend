@@ -26,6 +26,7 @@ use databend_common_management::WorkloadGroupResourceManager;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryEnv;
+use crate::sessions::TableContextPartitionStats;
 use crate::table_maintenance::MaintenanceResources;
 
 pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
@@ -71,6 +72,8 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
                     let ctx = env.create_query_ctx().await?;
                     if let Some(reservation) = reservation {
                         ctx.set_maintenance_reservation(reservation);
+                        // Match the coordinator's zero-spill maintenance envelope.
+                        ctx.set_enable_sort_spill(false);
                     }
                     Some(ctx)
                 }

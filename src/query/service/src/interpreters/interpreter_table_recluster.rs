@@ -70,6 +70,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
@@ -84,8 +85,9 @@ const ZONE_MAP_REFRESH_ROUNDS: usize = 10;
 
 /// Result of one recluster round, the unit a recluster job advances by.
 #[derive(Debug)]
-enum ReclusterRoundOutcome {
+pub(crate) enum ReclusterRoundOutcome {
     Committed,
+    ScanProgress,
     NoParts,
     ClaimRetriesExhausted,
     /// The round lost a retryable race with a concurrent change. The job keeps its
@@ -96,7 +98,7 @@ enum ReclusterRoundOutcome {
 impl ReclusterRoundOutcome {
     fn stop_reason(&self) -> Option<&'static str> {
         match self {
-            Self::Committed | Self::Conflict(_) => None,
+            Self::Committed | Self::ScanProgress | Self::Conflict(_) => None,
             Self::NoParts => Some("no_recluster_parts"),
             Self::ClaimRetriesExhausted => Some("claim_retries_exhausted"),
         }
@@ -249,16 +251,33 @@ impl Interpreter for ReclusterTableInterpreter {
 
 /// Progress of one recluster job across its rounds. The job holds no query context;
 /// each round runs on the context it is given.
-struct ReclusterJob {
+pub(crate) struct ReclusterJob {
     plan: ReclusterPlan,
     allow_segment_claims: bool,
     push_downs: Option<PushDownInfo>,
     carry: ReclusterFinalCarry,
     committed_rounds: usize,
     zone_map_rounds: usize,
+    background: bool,
 }
 
 impl ReclusterJob {
+    pub(crate) fn background(
+        plan: ReclusterPlan,
+        allow_segment_claims: bool,
+        snapshot: &TableSnapshot,
+    ) -> Self {
+        let mut job = Self::new(plan, allow_segment_claims);
+        job.background = true;
+        job.carry.set_background_scope(&snapshot.segments);
+        job
+    }
+
+    pub(crate) fn set_target_name(&mut self, database: String, table: String) {
+        self.plan.database = database;
+        self.plan.table = table;
+    }
+
     fn new(plan: ReclusterPlan, allow_segment_claims: bool) -> Self {
         Self {
             plan,
@@ -267,18 +286,26 @@ impl ReclusterJob {
             carry: ReclusterFinalCarry::default(),
             committed_rounds: 0,
             zone_map_rounds: 0,
+            background: false,
         }
     }
 
     /// Run one round: plan on the latest snapshot, rewrite, and commit. A retryable
     /// conflict is reported as [`ReclusterRoundOutcome::Conflict`] and keeps the
     /// job's progress.
-    async fn run_round(&mut self, ctx: &Arc<QueryContext>) -> Result<ReclusterRoundOutcome> {
+    pub(crate) async fn run_round(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+    ) -> Result<ReclusterRoundOutcome> {
         let mut push_downs = self.push_downs.take();
         let mut carry = std::mem::take(&mut self.carry);
+        carry.set_yield_after_scan(self.background);
         let result = self
             .execute_recluster(ctx, &mut push_downs, &mut carry)
             .await;
+        if self.background {
+            carry.release_round_resources();
+        }
         self.push_downs = push_downs;
         self.carry = carry;
 
@@ -300,7 +327,7 @@ impl ReclusterJob {
 
     /// Cover the rounds committed since the last zone map refresh, then vacuum the
     /// table history once for the whole job.
-    async fn finish(&self, ctx: &Arc<QueryContext>) {
+    pub(crate) async fn finish(&self, ctx: &Arc<QueryContext>) {
         if self.committed_rounds > self.zone_map_rounds {
             self.refresh_segment_zone_map(ctx).await;
         }
@@ -325,6 +352,7 @@ impl ReclusterJob {
             let table = ctx
                 .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
                 .await?;
+            check_expected_table_id(table.get_id(), self.plan.expected_table_id)?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let threshold = settings.get_segment_zone_map_full_segment_threshold()?;
             let ctx = ctx.clone();
@@ -447,6 +475,15 @@ impl ReclusterJob {
                 )
                 .await?;
             let Some((parts, snapshot, segments)) = candidate else {
+                if self.background && linear_final_carry.scan_incomplete() {
+                    return Ok(ReclusterRoundOutcome::ScanProgress);
+                }
+                if self.background && linear_final_carry.skipped_claimed_ranges() {
+                    // A manual FINAL may delegate claimed ranges; an automatic job
+                    // must revisit them after claim owners fail or finish.
+                    linear_final_carry.reset_candidates();
+                    return Ok(ReclusterRoundOutcome::ClaimRetriesExhausted);
+                }
                 return Ok(ReclusterRoundOutcome::NoParts);
             };
             let Some(claim_manager) = &claim_manager else {
@@ -473,13 +510,22 @@ impl ReclusterJob {
             claim_retries += 1;
 
             // Let concurrent losers spread out before selecting another candidate set.
-            *linear_final_carry = ReclusterFinalCarry::default();
+            linear_final_carry.reset_candidates();
             let delay_ms = rand::thread_rng().gen_range(5..=20);
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
 
             ctx.evict_table_from_cache(catalog, database, table)?;
             tbl = ctx.get_table(catalog, database, table).await?;
             check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
+        };
+        let removed = if self.background {
+            parts
+                .removed_segment_indexes
+                .iter()
+                .map(|index| snapshot.segments[*index].0.clone())
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
         };
         let mut physical_plan =
             self.build_linear_plan(ctx, tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
@@ -544,6 +590,10 @@ impl ReclusterJob {
         drop(complete_executor);
 
         execution_result?;
+        if self.background {
+            linear_final_carry
+                .commit_background_scope(&removed, ctx.written_segment_locations().list());
+        }
         Ok(ReclusterRoundOutcome::Committed)
     }
 

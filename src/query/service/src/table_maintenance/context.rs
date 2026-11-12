@@ -27,6 +27,7 @@ use uuid::Uuid;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextQueryInfo;
 use crate::table_maintenance::MaintenanceIdentity;
 use crate::table_maintenance::MaintenanceResources;
@@ -64,6 +65,9 @@ impl MaintenanceContext {
             .await?;
         ctx.update_init_query_id(query_id);
         ctx.set_maintenance_reservation(reservation);
+        // Until maintenance has its own disk/remote-spill budget, use a zero-spill
+        // envelope. Oversized rounds fail/defer instead of consuming foreground disk.
+        ctx.set_enable_sort_spill(false);
         Ok(Self { ctx, tracking })
     }
 

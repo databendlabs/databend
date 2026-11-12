@@ -142,9 +142,63 @@ pub struct ReclusterFinalCarry {
     pub(crate) cluster_key_id: u32,
     // Reuse block-meta decode workers across rounds of one recluster job.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
+    // Automatic maintenance yields after a stable scan range rather than planning
+    // through the whole table while holding a scheduler execution slot.
+    pub(crate) yield_after_scan: bool,
+    pub(crate) scan_incomplete: bool,
+    pub(crate) background_scope: Option<HashSet<String>>,
+    pub(crate) skipped_claimed_ranges: bool,
 }
 
 impl ReclusterFinalCarry {
+    /// Freeze the job's input population. Only outputs of its own committed rounds
+    /// may extend this set; unrelated appends belong to the next dirty generation.
+    pub fn set_background_scope(&mut self, segments: &[Location]) {
+        self.background_scope = Some(segments.iter().map(|(path, _)| path.clone()).collect());
+    }
+
+    pub fn scope_contains(&self, segment: &str) -> bool {
+        self.background_scope
+            .as_ref()
+            .is_none_or(|scope| scope.contains(segment))
+    }
+
+    pub fn commit_background_scope(&mut self, removed: &[String], outputs: Vec<Location>) {
+        if let Some(scope) = &mut self.background_scope {
+            for segment in removed {
+                scope.remove(segment);
+            }
+            scope.extend(outputs.into_iter().map(|(path, _)| path));
+            // Replacement segments can be inserted ahead of the current scan range.
+            self.scan_cursor = 0;
+        }
+    }
+
+    pub fn skipped_claimed_ranges(&self) -> bool {
+        self.skipped_claimed_ranges
+    }
+
+    pub fn reset_candidates(&mut self) {
+        self.skipped_claimed_ranges = false;
+        self.pending.clear();
+        self.scan_cursor = 0;
+        self.scan_incomplete = false;
+        self.release_round_resources();
+    }
+
+    pub fn set_yield_after_scan(&mut self, enabled: bool) {
+        self.yield_after_scan = enabled;
+    }
+
+    pub fn scan_incomplete(&self) -> bool {
+        self.scan_incomplete
+    }
+
+    /// Keep pure candidate/scan progress while releasing round-local decode workers.
+    pub fn release_round_resources(&mut self) {
+        self.decode_runtime = None;
+    }
+
     /// Lazily create or reuse the block-meta decode runtime of the job.
     pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
         if self.decode_runtime.is_none() {

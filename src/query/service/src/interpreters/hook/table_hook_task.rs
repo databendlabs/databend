@@ -30,6 +30,8 @@ use log::info;
 use log::warn;
 
 use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
+use crate::interpreters::hook::recluster_hook::ReclusterProgress;
+use crate::interpreters::hook::recluster_hook::ReclusterUnitOutcome;
 use crate::interpreters::hook::refresh_hook::RefreshProgress;
 use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::sessions::QueryContext;
@@ -201,11 +203,14 @@ pub(super) struct TableHookRequest {
     pub identity: MaintenanceIdentity,
     pub target: TableHookTarget,
     pub recluster_target: Option<TableHookTarget>,
+    recluster_progress: Option<ReclusterProgress>,
+    recluster_again: bool,
     pub refresh_base: Option<String>,
     refresh_progress: Option<RefreshProgress>,
     refresh_again: bool,
     pub refresh_pending: bool,
     pub enable_auto_analyze: bool,
+    analyze_after_recluster: bool,
     pub source_query_id: String,
     pub operation_name: String,
     pub main_operation_start: Instant,
@@ -217,6 +222,7 @@ pub(super) struct TableHookRequest {
 enum MaintenanceOutcome {
     Completed,
     Progress,
+    Deferred(Duration),
 }
 
 impl TableHookRequest {
@@ -246,6 +252,9 @@ impl TableHookRequest {
             Ok(MaintenanceOutcome::Progress) => {
                 self.failures[action] = 0;
             }
+            Ok(MaintenanceOutcome::Deferred(delay)) => {
+                self.ready_at[action] = Instant::now() + delay;
+            }
             Ok(MaintenanceOutcome::Completed) => {
                 self.failures[action] = 0;
                 match action {
@@ -256,7 +265,15 @@ impl TableHookRequest {
                         self.refresh_base = None;
                     }
                     1 => self.enable_auto_analyze = false,
-                    _ => self.recluster_target = None,
+                    _ => {
+                        self.recluster_progress = None;
+                        if self.recluster_again {
+                            self.recluster_again = false;
+                            self.ready_at[2] = Instant::now() + Duration::from_secs(5);
+                        } else {
+                            self.recluster_target = None;
+                        }
+                    }
                 }
             }
             Err(e)
@@ -279,12 +296,25 @@ impl TableHookRequest {
                         self.refresh_progress = None;
                     }
                     1 => self.enable_auto_analyze = false,
-                    _ => self.recluster_target = None,
+                    _ => {
+                        self.recluster_target = None;
+                        self.recluster_progress = None;
+                        self.recluster_again = false;
+                    }
                 }
             }
             Err(e) => {
+                if action == 2 {
+                    // A failed callback may hide a successful commit. A subsequent
+                    // generation must check replacements absent from the old scope.
+                    self.recluster_again = true;
+                    self.refresh_pending = true;
+                    self.refresh_again |= self.refresh_progress.is_some();
+                    self.ready_at[0] = Instant::now();
+                }
                 self.failures[action] = self.failures[action].saturating_add(1);
-                let delay = Duration::from_secs(1u64 << self.failures[action].min(8));
+                let delay = Duration::from_secs(1u64 << self.failures[action].min(8))
+                    + Duration::from_millis(rand::random::<u64>() % 1000);
                 self.ready_at[action] = Instant::now() + delay;
                 warn!(table_id = self.target.table_id, action, delay_secs = delay.as_secs(), error :? = e;
                     "Defer maintenance action without holding execution resources");
@@ -336,12 +366,25 @@ impl TableHookRequest {
                             .recluster_target
                             .as_ref()
                             .ok_or_else(|| ErrorCode::Internal("Missing recluster target"))?;
-                        task.execute_recluster(target).await?;
-                        self.refresh_pending = true;
-                        self.refresh_again |= self.refresh_progress.is_some();
-                        self.refresh_base = None;
-                        self.ready_at[0] = Instant::now();
-                        Ok(MaintenanceOutcome::Completed)
+                        match task
+                            .execute_recluster_round(target, &mut self.recluster_progress)
+                            .await?
+                        {
+                            ReclusterUnitOutcome::Committed => {
+                                self.refresh_pending = true;
+                                self.refresh_again |= self.refresh_progress.is_some();
+                                self.refresh_base = None;
+                                self.ready_at[0] = Instant::now();
+                                self.enable_auto_analyze |= self.analyze_after_recluster;
+                                self.ready_at[2] = Instant::now() + Duration::from_millis(100);
+                                Ok(MaintenanceOutcome::Progress)
+                            }
+                            ReclusterUnitOutcome::ScanProgress => Ok(MaintenanceOutcome::Progress),
+                            ReclusterUnitOutcome::Converged => Ok(MaintenanceOutcome::Completed),
+                            ReclusterUnitOutcome::Deferred(delay) => {
+                                Ok(MaintenanceOutcome::Deferred(delay))
+                            }
+                        }
                     }
                 }
             })
@@ -351,19 +394,23 @@ impl TableHookRequest {
 
 impl TableHookTask {
     pub(super) async fn into_request(self) -> Result<TableHookRequest> {
+        let now = Instant::now();
         Ok(TableHookRequest {
             identity: MaintenanceIdentity::capture(&self.ctx).await?,
+            recluster_progress: None,
+            recluster_again: false,
             refresh_base: self.refresh_base,
             refresh_progress: None,
             refresh_again: false,
             enable_auto_analyze: self.ctx.get_enable_auto_analyze(),
+            analyze_after_recluster: self.ctx.get_enable_auto_analyze(),
             source_query_id: self.ctx.get_id(),
             target: self.target,
             recluster_target: self.recluster_target,
             operation_name: self.operation_name,
             main_operation_start: self.main_operation_start,
             refresh_pending: true,
-            ready_at: [Instant::now(); 3],
+            ready_at: [now, now, now + Duration::from_secs(5)],
             failures: [0; 3],
             turn: 0,
         })
@@ -401,6 +448,7 @@ impl SchedulerTask for TableHookRequest {
         }
         other.refresh_again |= self.refresh_again;
         other.enable_auto_analyze |= self.enable_auto_analyze;
+        other.analyze_after_recluster |= self.analyze_after_recluster;
         other.refresh_pending |= self.refresh_pending;
         other.turn = self.turn;
         for action in 0..3 {
@@ -409,7 +457,17 @@ impl SchedulerTask for TableHookRequest {
             other.failures[action] = other.failures[action].max(self.failures[action]);
         }
 
-        // Each compacted write asks for a recluster round; one round covers them all.
+        // Preserve active scope/carry. Compactions arriving during it request one
+        // subsequent generation, never widen or restart the current job.
+        if self.recluster_progress.is_some() {
+            other.recluster_again |= other.recluster_target.is_some();
+            other.recluster_progress = self.recluster_progress.take();
+        }
+        other.recluster_again |= self.recluster_again;
+        if self.recluster_target.is_some() {
+            // Accumulate from the first dirty notification, not the most recent write.
+            other.ready_at[2] = self.ready_at[2];
+        }
         if other.recluster_target.is_none() {
             other.recluster_target = self.recluster_target.take();
         }
@@ -486,10 +544,17 @@ mod tests {
         let old_weak = Arc::downgrade(&old_ctx);
         let mut old_task = table_hook_task(old_ctx, "t");
         old_task.refresh_base = Some("old_snapshot".into());
+        old_task.recluster_target = Some(old_task.target.clone());
         let mut task = old_task.into_request().await?;
+        let dirty_deadline = task.ready_at[2];
         let mut latest = table_hook_task(latest_ctx, "t");
         latest.refresh_base = Some("new_snapshot".into());
         task.merge(latest.into_request().await?);
+        assert!(task.recluster_target.is_some());
+        assert_eq!(
+            task.ready_at[2], dirty_deadline,
+            "new writes must not postpone the first dirty deadline"
+        );
 
         assert!(
             task.refresh_base.is_none(),

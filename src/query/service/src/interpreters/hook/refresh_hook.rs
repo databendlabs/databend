@@ -94,7 +94,9 @@ impl TableHookTask {
         let table = ctx
             .get_table(&desc.catalog, &desc.database, &desc.table)
             .await?;
-        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let Ok(fuse) = FuseTable::try_from_table(table.as_ref()) else {
+            return Ok(true);
+        };
         let names = table
             .get_table_info()
             .meta
