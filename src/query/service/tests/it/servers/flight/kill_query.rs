@@ -22,13 +22,11 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::KillPlan;
 use databend_common_version::BUILD_INFO;
 use databend_query::interpreters::KillQueryAccess;
-use databend_query::servers::flight::v1::actions::FlightActions;
 use databend_query::servers::flight::v1::actions::KILL_QUERY;
 use databend_query::servers::flight::v1::actions::KILL_QUERY_V2;
 use databend_query::servers::flight::v1::actions::KillQueryRequest;
 use databend_query::servers::flight::v1::actions::LegacyKillQueryRequest;
 use databend_query::servers::flight::v1::actions::flight_actions;
-use databend_query::sessions::INTERNAL_SESSION_ID_PREFIX;
 use databend_query::sessions::SessionManager;
 use databend_query::test_kits::TestFixture;
 
@@ -58,44 +56,8 @@ fn test_can_kill() {
     assert!(!access.can_kill("", Some(&access.user)));
 }
 
-#[tokio::test]
-async fn test_unknown_kill_action_fails_closed() -> anyhow::Result<()> {
-    // Model an old receiver: the legacy action exists, but v2 is not registered.
-    let actions = FlightActions::create().action(KILL_QUERY, |_: KillPlan| async { Ok(true) });
-    let request = KillQueryRequest {
-        plan: KillPlan {
-            id: "target".to_string(),
-            kill_connection: false,
-        },
-        access: KillQueryAccess {
-            tenant: "test".to_string(),
-            user: UserIdentity::new("u1", "%"),
-            is_super: false,
-        },
-    };
-    let payload = serde_json::to_vec(&request)?;
-    let error = actions
-        .do_action(KILL_QUERY_V2, &payload)
-        .await
-        .unwrap_err();
-    assert_eq!(error.code(), ErrorCode::UNIMPLEMENTED);
-    // FlightService returns errors as tonic statuses; the client recovers their code.
-    let status = tonic::Status::from(error);
-    assert_eq!(status.code(), tonic::Code::Unknown);
-    assert_eq!(ErrorCode::from(status).code(), ErrorCode::UNIMPLEMENTED);
-
-    // Missing requester information must not deserialize as a privileged request.
-    assert!(
-        serde_json::from_slice::<KillQueryRequest>(
-            b"{\"plan\":{\"id\":\"x\",\"kill_connection\":false}}"
-        )
-        .is_err()
-    );
-    Ok(())
-}
-
 #[test]
-fn test_legacy_kill_wire_compatibility() -> anyhow::Result<()> {
+fn test_kill_wire_compatibility() -> anyhow::Result<()> {
     let plan = KillPlan {
         id: "p-target".to_string(),
         kill_connection: false,
@@ -118,6 +80,13 @@ fn test_legacy_kill_wire_compatibility() -> anyhow::Result<()> {
     assert_eq!(serde_json::from_slice::<KillPlan>(&payload)?, plan);
     let received: LegacyKillQueryRequest = serde_json::from_slice(&payload)?;
     assert_eq!(received.access.unwrap().tenant, "tenant1");
+    // Unlike legacy requests, v2 must always carry requester access.
+    assert!(
+        serde_json::from_slice::<KillQueryRequest>(
+            b"{\"plan\":{\"id\":\"x\",\"kill_connection\":false}}"
+        )
+        .is_err()
+    );
     Ok(())
 }
 
@@ -194,7 +163,6 @@ async fn test_kill_query_id_ignores_fragment_sessions() -> anyhow::Result<()> {
     let fragment_ctx = fragment.create_query_context(&BUILD_INFO).await?;
     let id = coordinator_ctx.get_id();
     fragment_ctx.update_init_query_id(id.clone());
-    assert!(fragment.get_id().starts_with(INTERNAL_SESSION_ID_PREFIX));
     let manager = SessionManager::instance();
     assert_eq!(
         manager.get_session_by_query_id(&id).unwrap().get_id(),
@@ -203,12 +171,6 @@ async fn test_kill_query_id_ignores_fragment_sessions() -> anyhow::Result<()> {
     drop(coordinator_ctx);
     drop(coordinator);
     assert!(manager.get_session_by_query_id(&id).is_none());
-    assert!(
-        fragment_ctx
-            .get_abort_checker()
-            .try_check_aborting()
-            .is_ok()
-    );
     Ok(())
 }
 

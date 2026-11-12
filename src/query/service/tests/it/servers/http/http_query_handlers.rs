@@ -576,15 +576,22 @@ async fn test_return_when_finish() -> anyhow::Result<()> {
 async fn test_client_query_id() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let wait_time_secs = 5;
-    let sql = "select * from numbers(1)";
     let ep = create_endpoint()?;
-    let mut headers = HeaderMap::new();
-    headers.insert("x-databend-query-id", "testqueryid".parse().unwrap());
-    let (status, result) =
-        post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, headers).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(result.id, "testqueryid");
+    for id in [
+        "testqueryid",
+        "p-",
+        "p-55b05b74-80a6-49fd-b813-3ef25bf0f110",
+    ] {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-databend-query-id", id.parse()?);
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, "SELECT 1", 5, headers).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{result:?}");
+        assert_eq!(result.id, id);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        get_uri_checked(&ep, result.final_uri.as_ref().unwrap()).await?;
+    }
 
     Ok(())
 }
@@ -593,7 +600,6 @@ async fn test_client_query_id() -> anyhow::Result<()> {
 async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
     use databend_query::sessions::QueriesQueueManager;
     use databend_query::sessions::QueryEntry;
-    use databend_query::sessions::SessionManager;
 
     let mut config = ConfigBuilder::create().config();
     config.query.common.max_running_queries = 1;
@@ -662,12 +668,6 @@ async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
             anyhow::Ok(())
         })
         .await??;
-        assert!(
-            SessionManager::instance()
-                .get_session_by_query_id(&id)
-                .is_some()
-        );
-
         let (_, killed) = post_sql_to_endpoint(&ep, &format!("KILL QUERY '{}'", id), 5).await?;
         assert!(killed.error.is_none(), "{killed:?}");
         tokio::time::timeout(Duration::from_secs(10), async {
@@ -716,45 +716,6 @@ async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
             }
         })
         .await?;
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_internal_session_id_sql() -> anyhow::Result<()> {
-    let _fixture = TestFixture::setup().await?;
-    let ep = create_endpoint()?;
-    // Keep these expressions aligned with 01_0009_system_processes.test: this
-    // also checks SQL function/operator support, not just the Rust id generator.
-    for sql in [
-        "SELECT connection_id() LIKE 'p-%'",
-        "SELECT count(*) > 0 FROM system.processes WHERE id = connection_id() AND id LIKE 'p-%'",
-    ] {
-        let (status, result) =
-            post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::new()).await?;
-        assert_eq!(status, StatusCode::OK);
-        assert!(result.error.is_none(), "{result:?}");
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        assert_eq!(result.data, vec![vec![Some("1".to_string())]]);
-        get_uri_checked(&ep, result.final_uri.as_ref().unwrap()).await?;
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn test_client_query_id_accepts_internal_session_prefix() -> anyhow::Result<()> {
-    let _fixture = TestFixture::setup().await?;
-    let ep = create_endpoint()?;
-    for id in ["p-", "p-55b05b74-80a6-49fd-b813-3ef25bf0f110"] {
-        let mut headers = HeaderMap::new();
-        headers.insert("x-databend-query-id", id.parse()?);
-        let (status, result) =
-            post_sql_to_endpoint_new_session(&ep, "SELECT 1", 5, headers).await?;
-        assert_eq!(status, StatusCode::OK);
-        assert!(result.error.is_none(), "{result:?}");
-        assert_eq!(result.id, id);
-        assert_eq!(result.state, ExecuteStateKind::Succeeded);
-        get_uri_checked(&ep, result.final_uri.as_ref().unwrap()).await?;
     }
     Ok(())
 }

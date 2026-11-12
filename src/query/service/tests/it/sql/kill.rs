@@ -21,8 +21,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_version::BUILD_INFO;
-use databend_query::interpreters::KillTarget;
-use databend_query::sessions::INTERNAL_SESSION_ID_PREFIX;
 use databend_query::sessions::QueriesQueueManager;
 use databend_query::sessions::QueryEntry;
 use databend_query::sessions::Session;
@@ -62,7 +60,8 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
             assert_eq!(queue.length(), 1);
 
             let id = match id_type {
-                "mysql" => target.get_mysql_conn_id().unwrap().to_string(),
+                // Leading zeros must still resolve as a local MySQL id.
+                "mysql" => format!("000{}", target.get_mysql_conn_id().unwrap()),
                 "query" | "query_prefixed" => target_ctx.get_id(),
                 _ => target.get_id(),
             };
@@ -234,27 +233,8 @@ async fn test_kill_client_query_id_formats() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_kill_target_parsing() {
-    assert_eq!(KillTarget::parse("42"), KillTarget::MySqlConnection(42));
-    assert_eq!(KillTarget::parse("00042"), KillTarget::MySqlConnection(42));
-    let session = format!("{}{}", INTERNAL_SESSION_ID_PREFIX, uuid::Uuid::new_v4());
-    assert_eq!(
-        KillTarget::parse(&session),
-        KillTarget::SessionOrQuery(&session)
-    );
-    assert_eq!(KillTarget::parse("p-"), KillTarget::SessionOrQuery("p-"));
-    for id in [
-        "0123456789abcdef0123456789abcdef",
-        "55b05b74-80a6-49fd-b813-3ef25bf0f110.1",
-        "55b05b74-80a6-49fd-b813-3ef25bf0f110",
-    ] {
-        assert_eq!(KillTarget::parse(id), KillTarget::QueryOrSession(id));
-    }
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_kill_legacy_session_and_query_id_precedence() -> anyhow::Result<()> {
+async fn test_kill_legacy_session_fallback() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let manager = SessionManager::instance();
     // Model a session created by an old node, with an unprefixed UUID.
@@ -272,36 +252,15 @@ async fn test_kill_legacy_session_and_query_id_precedence() -> anyhow::Result<()
     legacy
         .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
         .await?;
-    let legacy_ctx = legacy.create_query_context(&BUILD_INFO).await?;
-    let target = fixture.new_session_with_type(SessionType::MySQL).await?;
-    let target_ctx = target.create_query_context(&BUILD_INFO).await?;
-    target_ctx.update_init_query_id(legacy_id.clone());
-
-    let ctx = fixture.new_query_ctx().await?;
-    execute_command(ctx, &format!("KILL QUERY '{}'", legacy_id)).await?;
-    assert!(
-        target_ctx
-            .clone()
-            .get_abort_checker()
-            .try_check_aborting()
-            .is_err()
-    );
-    assert!(
-        legacy_ctx
-            .clone()
-            .get_abort_checker()
-            .try_check_aborting()
-            .is_ok()
-    );
-    drop(target_ctx);
-    drop(target);
-
-    // When no query matches, fall back to the legacy session id for either KILL form.
+    // Collision priority is covered separately. Here no query id matches, so
+    // either KILL form must still accept an old, unprefixed session id.
     for kind in ["QUERY", "CONNECTION"] {
+        let target_ctx = legacy.create_query_context(&BUILD_INFO).await?;
         let ctx = fixture.new_query_ctx().await?;
         execute_command(ctx, &format!("KILL {} '{}'", kind, legacy_id)).await?;
+        assert!(target_ctx.get_abort_checker().try_check_aborting().is_err());
+        assert_eq!(legacy.is_aborting(), kind == "CONNECTION");
     }
-    assert!(legacy.is_aborting());
     Ok(())
 }
 

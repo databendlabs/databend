@@ -3,14 +3,14 @@ SELECT count(*)>0 FROM system.processes
 ----
 1
 
-# SQL connection ids and system.processes expose the internal session id prefix.
+# SQL exposes canonical p-<UUID> internal session ids, not protocol/login ids.
 query B
-SELECT connection_id() LIKE 'p-%'
+SELECT regexp_like(connection_id(), '^p-[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$', 'c')
 ----
 1
 
 query B
-SELECT count(*) > 0 FROM system.processes WHERE id = connection_id() AND id LIKE 'p-%'
+SELECT count(*) = 1 FROM system.processes WHERE id = connection_id()
 ----
 1
 

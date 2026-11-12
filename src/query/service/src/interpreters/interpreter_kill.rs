@@ -23,7 +23,7 @@
 //! Client query ids may use any prefix, including `p-`; there is no reserved
 //! query-id namespace. Hex, UUID and UUID-plus-sequence ids remain supported.
 //!
-//! [`KillTarget`] resolves a node-local MySQL `u32` connection id first. For
+//! `KillTarget` resolves a node-local MySQL `u32` connection id first. For
 //! KILL QUERY, `p-` ids prefer a session match and fall back to query lookup;
 //! other strings prefer a query match and fall back to a legacy session id.
 //! The prefix is only a lookup-order hint. If both kinds exist on a node, the
@@ -123,15 +123,14 @@ impl KillQueryAccess {
 
 /// The internal session prefix selects lookup order, not a reserved namespace.
 /// Numeric ids retain MySQL semantics and are never resolved as query ids.
-#[derive(Debug, PartialEq, Eq)]
-pub enum KillTarget<'a> {
+enum KillTarget<'a> {
     MySqlConnection(u32),
     SessionOrQuery(&'a str),
     QueryOrSession(&'a str),
 }
 
 impl<'a> KillTarget<'a> {
-    pub fn parse(id: &'a str) -> Self {
+    fn parse(id: &'a str) -> Self {
         if let Ok(id) = id.parse::<u32>() {
             Self::MySqlConnection(id)
         } else if id.starts_with(INTERNAL_SESSION_ID_PREFIX) {
