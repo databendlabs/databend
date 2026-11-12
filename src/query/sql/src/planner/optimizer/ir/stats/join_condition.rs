@@ -682,7 +682,10 @@ mod tests {
             .map(|condition| condition.selectivity)
         };
 
-        let Selectivity::StatisticsZero(selectivity) = estimate(&int_comparison("gt", 0, 100))?
+        let Selectivity::StatisticsZero {
+            expected: selectivity,
+            ..
+        } = estimate(&int_comparison("gt", 0, 100))?
         else {
             panic!("expected a small estimate for a range outside the column statistics");
         };
@@ -697,7 +700,7 @@ mod tests {
         });
         assert!(matches!(
             estimate(&range_or_equality)?,
-            Selectivity::StatisticsZero(selectivity) if selectivity > 1.0 / 2500.0
+            Selectivity::StatisticsZero { expected: selectivity, .. } if selectivity > 1.0 / 2500.0
         ));
         // `NOT (c0 <= 50)` is the range `c0 > 50` outside the statistics.
         let negated_range = ScalarExpr::FunctionCall(crate::plans::FunctionCall {
@@ -709,7 +712,7 @@ mod tests {
         });
         assert!(matches!(
             estimate(&negated_range)?,
-            Selectivity::StatisticsZero(_)
+            Selectivity::StatisticsZero { .. }
         ));
         // An equality outside the column statistics keeps the folded zero.
         assert!(matches!(
