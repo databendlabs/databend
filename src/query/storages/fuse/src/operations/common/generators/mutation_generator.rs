@@ -28,6 +28,8 @@ use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
@@ -95,10 +97,18 @@ impl SnapshotGenerator for MutationGenerator {
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
         if self.index_definition.as_ref().is_some_and(|expected| {
-            expected.schema != table_info.meta.schema || expected.indexes != table_info.meta.indexes
+            expected.schema != table_info.meta.schema
+                || expected.indexes != table_info.meta.indexes
+                || [OPT_KEY_BLOOM_INDEX_COLUMNS, OPT_KEY_BLOOM_INDEX_TYPE]
+                    .iter()
+                    .any(|key| expected.options.get(*key) != table_info.meta.options.get(*key))
+                || (matches!(self.mutation_kind, MutationKind::Recluster)
+                    && (expected.cluster_key != table_info.meta.cluster_key
+                        || expected.cluster_key_v2 != table_info.meta.cluster_key_v2
+                        || expected.cluster_key_seq != table_info.meta.cluster_key_seq))
         }) {
             return Err(ErrorCode::RefreshIndexError(format!(
-                "Index definitions or schema changed during {}",
+                "Index definitions or schema changed during {} (including Bloom options and Recluster key)",
                 self.mutation_kind.to_string().to_ascii_lowercase()
             )));
         }

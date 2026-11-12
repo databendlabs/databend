@@ -296,7 +296,32 @@ impl ReclusterMutator {
             _ => DEFAULT_RECLUSTER_DEPTH,
         } as f64;
 
-        let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
+        let mut memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
+        if ctx.is_automatic_maintenance() {
+            // Input bytes are not the whole working set: serialization and per-block
+            // index writers coexist with sorting. Leave a conservative allowance for
+            // all indexes, including ASYNC ones built by background Recluster.
+            let index_cost =
+                table
+                    .get_table_info()
+                    .meta
+                    .indexes
+                    .values()
+                    .fold(4u64, |cost, index| {
+                        cost.saturating_add(match index.index_type {
+                            databend_common_meta_app::schema::TableIndexType::Vector => 4,
+                            databend_common_meta_app::schema::TableIndexType::Inverted => 2,
+                            _ => 1,
+                        })
+                    });
+            let indexed_budget = ctx.get_settings().get_max_query_memory_usage()? / index_cost;
+            if indexed_budget == 0 {
+                return Err(ErrorCode::MemoryExceedsLimit(
+                    "No memory for indexed Recluster output",
+                ));
+            }
+            memory_threshold = memory_threshold.min(indexed_budget as usize);
+        }
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
         if !cluster.is_empty() {

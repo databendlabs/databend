@@ -235,7 +235,15 @@ pub fn create_block_index_specs_with_mode(
         // newly rewritten block without its index. Foreground behavior is unchanged.
         for index in indexes.values() {
             for column_id in &index.column_ids {
-                schema.field_of_column_id(*column_id)?;
+                let field = schema.field_of_column_id(*column_id)?;
+                if field.column_id() != *column_id {
+                    return Err(databend_common_exception::ErrorCode::RefreshIndexError(
+                        format!(
+                            "Index {} references a nested column unsupported by block-index writers",
+                            index.name
+                        ),
+                    ));
+                }
             }
         }
     }

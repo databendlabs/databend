@@ -212,6 +212,12 @@ pub trait TableContext:
 
     fn written_segment_locations(&self) -> &SegmentLocationsState;
 
+    /// Node-admitted automatic maintenance, including its remote fragments. This does
+    /// not include synchronous write hooks or explicit user maintenance statements.
+    fn is_automatic_maintenance(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> &dyn Any;
 }
 

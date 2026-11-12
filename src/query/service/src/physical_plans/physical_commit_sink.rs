@@ -197,7 +197,13 @@ impl IPhysicalPlan for CommitSink {
                         });
                 }
 
-                let snapshot_gen = MutationGenerator::new(self.snapshot.clone(), *kind);
+                let mut snapshot_gen = MutationGenerator::new(self.snapshot.clone(), *kind);
+                if matches!(kind, MutationKind::Recluster) && builder.ctx.is_automatic_maintenance()
+                {
+                    // Pin the same definitions used by local and remote block writers;
+                    // OCC may rebase data changes, but not stale index artifacts.
+                    snapshot_gen = snapshot_gen.with_index_definition(self.table_info.meta.clone());
+                }
                 builder.main_pipeline.add_sink(|input| {
                     FuseCommitSink::try_create(
                         table,

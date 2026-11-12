@@ -48,7 +48,8 @@ use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::VirtualColumnBuilder;
-use crate::io::block_index::create_block_index_specs;
+use crate::io::block_index::BlockIndexBuildMode;
+use crate::io::block_index::create_block_index_specs_with_mode;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -197,7 +198,14 @@ impl TransformSerializeBlock {
         } else {
             None
         };
-        let block_index_specs = create_block_index_specs(table, source_schema.clone())?;
+        let index_mode =
+            if matches!(kind, MutationKind::Recluster) && ctx.is_automatic_maintenance() {
+                BlockIndexBuildMode::All
+            } else {
+                BlockIndexBuildMode::Synchronous
+            };
+        let block_index_specs =
+            create_block_index_specs_with_mode(table, source_schema.clone(), index_mode)?;
 
         // Recluster/compact/refresh materialize virtual columns and reuse the
         // path frequencies collected by VirtualColumnBuilder. Other mutations
