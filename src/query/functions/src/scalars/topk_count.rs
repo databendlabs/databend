@@ -79,7 +79,9 @@ pub fn register(registry: &mut FunctionRegistry) {
 struct CandidateFilter<K>(PhantomData<fn(K)>);
 
 /// The decoded candidate set; `None` keeps every key.
-type CandidateSet<K> = Option<HashSet<<K as TopKCountKey>::Key>>;
+type CandidateSet<K> = Option<KeySet<K>>;
+
+type KeySet<K> = HashSet<<K as TopKCountKey>::Key, ahash::RandomState>;
 
 impl<K: TopKCountKey> CandidateFilter<K> {
     fn decode(candidates: ScalarRef<'_>) -> Result<CandidateSet<K>, String> {
@@ -106,7 +108,7 @@ impl<K: TopKCountKey> CandidateFilter<K> {
     }
 
     /// Filters a whole key column by one candidate set.
-    fn filter_column(set: &HashSet<K::Key>, keys: &Column) -> Column {
+    fn filter_column(set: &KeySet<K>, keys: &Column) -> Column {
         let (keys, validity) = match keys {
             Column::Nullable(nullable) => (&nullable.column, Some(&nullable.validity)),
             keys => (keys, None),

@@ -150,7 +150,7 @@ pub fn topk_count_capacity(limit: usize) -> usize {
 pub(crate) struct HeavyHitterSummary<K: Hash + Eq> {
     capacity: usize,
     error: u64,
-    counters: HashMap<K, u64>,
+    counters: HashMap<K, u64, ahash::RandomState>,
 }
 
 impl<K: Hash + Eq + Clone> HeavyHitterSummary<K> {
@@ -158,7 +158,7 @@ impl<K: Hash + Eq + Clone> HeavyHitterSummary<K> {
         Self {
             capacity: capacity.max(1),
             error: 0,
-            counters: HashMap::new(),
+            counters: HashMap::default(),
         }
     }
 
@@ -293,7 +293,10 @@ impl<K: Hash + Eq + BorshDeserialize> BorshDeserialize for HeavyHitterSummary<K>
         let capacity = u64::deserialize_reader(reader)? as usize;
         let error = u64::deserialize_reader(reader)?;
         let len = u64::deserialize_reader(reader)? as usize;
-        let mut counters = HashMap::with_capacity(len.min(capacity.saturating_mul(2) + 1));
+        let mut counters = HashMap::with_capacity_and_hasher(
+            len.min(capacity.saturating_mul(2) + 1),
+            ahash::RandomState::default(),
+        );
         for _ in 0..len {
             let key = K::deserialize_reader(reader)?;
             let count = u64::deserialize_reader(reader)?;
