@@ -304,6 +304,7 @@ impl Operator for EvalScalar {
         Ok(Arc::new(StatInfo {
             cardinality: input.cardinality,
             max_cardinality: input.max_cardinality,
+            statistics_zero_bound: input.statistics_zero_bound,
             statistics: Statistics {
                 precise_cardinality: input.statistics.precise_cardinality,
                 column_stats,
@@ -422,6 +423,7 @@ mod tests {
             Some(Arc::new(StatInfo {
                 cardinality: 10.0,
                 max_cardinality: 10.0,
+                statistics_zero_bound: false,
                 statistics: Statistics {
                     precise_cardinality: Some(10),
                     column_stats,
@@ -442,6 +444,7 @@ mod tests {
         let input_stats = Arc::new(StatInfo {
             cardinality: 10.0,
             max_cardinality: 10.0,
+            statistics_zero_bound: false,
             statistics: Statistics {
                 precise_cardinality: Some(10),
                 column_stats: HashMap::from([(Symbol::new(0), column_stat(1, 3, 3.0))]),

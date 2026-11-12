@@ -943,19 +943,33 @@ impl PhysicalOperator for Join {
 /// Whether a build input has valid estimates and neither its estimate nor its
 /// bound exceeds `max_build_rows`. `max_build_rows = 0` disables the row limit.
 fn broadcast_build_within_row_limit(stat_info: &StatInfo, max_build_rows: u64) -> bool {
-    let cardinality = stat_info.cardinality;
-    let subtree_cardinality = stat_info.max_cardinality;
-    let max_cardinality = subtree_cardinality.max(cardinality);
-    cardinality.is_finite()
-        && subtree_cardinality.is_finite()
-        && cardinality >= 0.0
-        && subtree_cardinality >= 0.0
+    let max_cardinality = stat_info.max_cardinality.max(stat_info.cardinality);
+    has_valid_estimates(stat_info)
         && (max_build_rows == 0 || max_cardinality <= max_build_rows as f64)
 }
 
+fn has_valid_estimates(stat_info: &StatInfo) -> bool {
+    stat_info.cardinality.is_finite()
+        && stat_info.max_cardinality.is_finite()
+        && stat_info.cardinality >= 0.0
+        && stat_info.max_cardinality >= 0.0
+}
+
 /// Whether a build input is small and reliably estimated enough to broadcast.
+///
+/// The row limit applies to the bound, except when the bound only comes from
+/// ranges that column statistics estimate to match no rows
+/// (`StatInfo::statistics_zero_bound`). Such a bound treats the range as an
+/// unknown filter over the whole input, so the limit applies to the expected
+/// rows, and the underestimation check still rejects a bound far above them.
 fn is_safe_broadcast_build(stat_info: &StatInfo, max_build_rows: u64) -> bool {
-    broadcast_build_within_row_limit(stat_info, max_build_rows)
+    let limited_cardinality = if stat_info.statistics_zero_bound {
+        stat_info.cardinality
+    } else {
+        stat_info.max_cardinality.max(stat_info.cardinality)
+    };
+    has_valid_estimates(stat_info)
+        && (max_build_rows == 0 || limited_cardinality <= max_build_rows as f64)
         && !stat_info.cardinality_is_severely_underestimated()
 }
 
@@ -1195,6 +1209,63 @@ mod tests {
                 !is_safe_broadcast_build(&build_stat(cardinality, max_cardinality), 0),
                 "cardinality={cardinality}, max_cardinality={max_cardinality}"
             );
+            assert!(
+                !is_safe_broadcast_build(
+                    &statistics_zero_build_stat(cardinality, max_cardinality),
+                    0
+                ),
+                "cardinality={cardinality}, max_cardinality={max_cardinality}"
+            );
         }
+    }
+
+    fn statistics_zero_build_stat(cardinality: f64, max_cardinality: f64) -> StatInfo {
+        StatInfo {
+            statistics_zero_bound: true,
+            ..build_stat(cardinality, max_cardinality)
+        }
+    }
+
+    #[test]
+    fn test_safe_broadcast_build_limits_expected_rows_of_statistics_zero_bound() {
+        // 1e9 input rows filtered by a range outside the column statistics:
+        // 4e5 expected rows (1/2500), a 2e8 unknown-filter bound (1/5).
+        assert!(is_safe_broadcast_build(
+            &statistics_zero_build_stat(400_000.0, 200_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        // A bound from another source keeps the row limit on the bound.
+        assert!(!is_safe_broadcast_build(
+            &build_stat(400_000.0, 200_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        // Expected rows above the limit are not broadcast.
+        assert!(!is_safe_broadcast_build(
+            &statistics_zero_build_stat(200_000_000.0, 1_000_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        assert!(is_safe_broadcast_build(
+            &statistics_zero_build_stat(200_000_000.0, 1_000_000_000.0),
+            0
+        ));
+        // A Serial build keeps the row limit on the bound.
+        assert!(!broadcast_build_within_row_limit(
+            &statistics_zero_build_stat(400_000.0, 200_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+    }
+
+    #[test]
+    fn test_safe_broadcast_build_rejects_severe_underestimate_of_statistics_zero_bound() {
+        // A selective predicate next to the range lowers the expected rows to
+        // 400 while the bound stays at 2e8, a 500000-fold gap.
+        assert!(!is_safe_broadcast_build(
+            &statistics_zero_build_stat(400.0, 200_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
+        assert!(!is_safe_broadcast_build(
+            &statistics_zero_build_stat(0.0, 200_000_000.0),
+            MAX_BROADCAST_BUILD_ROWS
+        ));
     }
 }

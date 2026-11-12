@@ -398,6 +398,7 @@ impl Operator for Scan {
             .and_then(|stat| stat.num_rows);
 
         let mut proven_empty = false;
+        let mut statistics_zero_bound = false;
         let (cardinality, max_cardinality) = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(prewhere)) => {
                 // Derive cardinality
@@ -410,6 +411,7 @@ impl Operator for Scan {
                 .with_and_strategy(stat_ctx.filter_and_strategy);
                 let cardinality = sb.apply(&prewhere.predicates, &stat_ctx.function_context)?;
                 let max_cardinality = sb.max_cardinality(cardinality, precise_cardinality as f64);
+                statistics_zero_bound = sb.uses_statistics_zero_bound();
                 proven_empty = sb.is_proven_empty();
                 column_stats = if proven_empty {
                     Default::default()
@@ -467,6 +469,7 @@ impl Operator for Scan {
                     let max_cardinality = sb
                         .max_cardinality(cardinality, max_cardinality)
                         .max(prewhere_max_cardinality);
+                    statistics_zero_bound |= sb.uses_statistics_zero_bound();
                     proven_empty |= sb.is_proven_empty();
                     (cardinality, max_cardinality)
                 }
@@ -475,6 +478,7 @@ impl Operator for Scan {
             return Ok(Arc::new(StatInfo {
                 cardinality,
                 max_cardinality,
+                statistics_zero_bound: statistics_zero_bound && !proven_empty,
                 statistics: OpStatistics {
                     precise_cardinality: proven_empty.then_some(0),
                     column_stats: Default::default(),
@@ -488,6 +492,7 @@ impl Operator for Scan {
         Ok(Arc::new(StatInfo {
             cardinality,
             max_cardinality,
+            statistics_zero_bound,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
@@ -771,6 +776,7 @@ mod tests {
         let stats = derive(&scan)?;
         assert!((stats.cardinality - 400_000.0).abs() < 1e-6);
         assert!((stats.max_cardinality - 200_000_000.0).abs() < 1e-3);
+        assert!(stats.statistics_zero_bound);
         assert_eq!(stats.statistics.precise_cardinality, None);
 
         // A row access policy predicate reduces both by its own selectivity.
@@ -787,6 +793,20 @@ mod tests {
             secure_stats.cardinality,
             secure_stats.max_cardinality
         );
+        assert!(secure_stats.statistics_zero_bound);
+
+        // A range inside the column statistics bounds the scan by its estimate.
+        let inside_scan = Scan {
+            prewhere: Some(Prewhere {
+                output_columns: columns,
+                prewhere_columns: [t].into_iter().collect(),
+                predicates: vec![int_comparison("gt", "t", t, 999)],
+            }),
+            ..secure_scan
+        };
+        let inside_stats = derive(&inside_scan)?;
+        assert!((inside_stats.max_cardinality - inside_stats.cardinality).abs() < 1e-6);
+        assert!(!inside_stats.statistics_zero_bound);
         Ok(())
     }
 }

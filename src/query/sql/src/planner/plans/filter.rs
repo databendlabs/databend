@@ -93,12 +93,24 @@ impl Operator for Filter {
                 .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone())
                 .with_and_strategy(stat_ctx.filter_and_strategy);
         let cardinality = sb.apply(&self.predicates, &stat_ctx.function_context)?;
-        let max_cardinality = sb.max_cardinality(
+        let mut max_cardinality = sb.max_cardinality(
             cardinality,
             stat_info.max_cardinality.max(stat_info.cardinality),
         );
+        let proven_empty = sb.is_proven_empty();
+        // See `StatInfo::statistics_zero_bound`. This filter adds such a bound
+        // only to an input whose bound is its estimate; an input bound from
+        // another source, such as join fan-out, keeps the strict row limit.
+        let statistics_zero_bound = !proven_empty
+            && (stat_info.statistics_zero_bound
+                || (sb.uses_statistics_zero_bound()
+                    && stat_info.max_cardinality <= stat_info.cardinality));
+        if stat_info.statistics_zero_bound && !proven_empty {
+            // A filter only removes rows, so the input bound still holds.
+            max_cardinality = max_cardinality.max(stat_info.max_cardinality);
+        }
         // Only a proven-empty result is precise; an estimated zero stays imprecise.
-        let precise_cardinality = sb.is_proven_empty().then_some(0);
+        let precise_cardinality = proven_empty.then_some(0);
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
             HashMap::new()
@@ -108,6 +120,7 @@ impl Operator for Filter {
         Ok(Arc::new(StatInfo {
             cardinality,
             max_cardinality,
+            statistics_zero_bound,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats,
