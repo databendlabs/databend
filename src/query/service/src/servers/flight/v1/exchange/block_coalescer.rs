@@ -155,12 +155,105 @@ mod tests {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::AccessType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::StringType;
 
     use super::*;
+
+    #[test]
+    fn test_coalescer_preserves_published_string_bounds_with_duplicate_buffers() -> Result<()> {
+        let source = StringType::from_data(vec!["z".repeat(95), "r".repeat(32)]);
+        let block = DataBlock::new_from_columns(vec![source.slice(1..2)]).compact_string_buffers();
+        let original =
+            StringType::try_downcast_column(&block.get_by_offset(0).to_column()).unwrap();
+        assert_eq!(original.total_buffer_len(), 127); // 127 < 4 * 32, so still shared.
+        for (threshold, expected_rows, buffers) in [
+            (None, vec![1, 1], false),
+            (
+                Some(CoalesceThreshold::create(1, usize::MAX)),
+                vec![1, 1],
+                false,
+            ),
+            (
+                Some(CoalesceThreshold::create(100, usize::MAX)),
+                vec![2],
+                true,
+            ),
+        ] {
+            let mut coalescer = BlockCoalescer::create(threshold);
+            assert_eq!(coalescer.buffered(), (0, 0));
+            coalescer.push(block.clone())?;
+            assert_eq!(
+                coalescer.buffered(),
+                if buffers {
+                    (1, block.memory_size())
+                } else {
+                    (0, 0)
+                }
+            );
+            coalescer.push(block.clone())?;
+            assert_eq!(
+                coalescer.buffered(),
+                if buffers {
+                    (2, 2 * block.memory_size())
+                } else {
+                    (0, 0)
+                }
+            );
+            assert_eq!(coalescer.flush()?, buffers);
+            assert_eq!(coalescer.buffered(), (0, 0));
+            assert!(!coalescer.flush()?);
+            assert_eq!(coalescer.buffered(), (0, 0));
+            let outputs = std::iter::from_fn(|| coalescer.pop()).collect::<Vec<_>>();
+            assert_eq!(
+                outputs.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
+                expected_rows
+            );
+            assert_eq!(outputs.iter().map(DataBlock::num_rows).sum::<usize>(), 2);
+            for output in outputs {
+                assert_eq!(output.num_columns(), 1);
+                assert_eq!(
+                    output.get_by_offset(0).to_column(),
+                    StringType::from_data(vec!["r".repeat(32); output.num_rows()])
+                );
+                let strings =
+                    StringType::try_downcast_column(&output.get_by_offset(0).to_column()).unwrap();
+                assert_eq!(strings.total_buffer_len(), output.num_rows() * 127);
+                assert!(strings.total_buffer_len() < 4 * output.num_rows() * 32);
+                assert_eq!(strings.data_buffers().len(), output.num_rows());
+                for buffer in strings.data_buffers().iter() {
+                    assert_eq!(buffer.as_ptr(), original.data_buffers()[0].as_ptr());
+                }
+            }
+        }
+        // Metadata forces pass-through. Producer compaction still preserves the metadata/rows.
+        let meta = DataBlock::new_with_meta(
+            vec![
+                StringType::from_data(vec!["z".repeat(1024), "a".to_string()])
+                    .slice(1..2)
+                    .into(),
+            ],
+            1,
+            Some(Box::new(())),
+        )
+        .compact_string_buffers();
+        let mut coalescer =
+            BlockCoalescer::create(Some(CoalesceThreshold::create(100, usize::MAX)));
+        coalescer.push(meta.clone())?;
+        let output = coalescer.pop().unwrap();
+        assert_eq!(output.num_rows(), 1);
+        assert_eq!(output.get_meta(), meta.get_meta());
+        assert_eq!(
+            output.get_by_offset(0).to_column(),
+            StringType::from_data(vec!["a"])
+        );
+        assert_eq!(output.memory_size(), 16);
+        Ok(())
+    }
 
     fn block(rows: usize) -> DataBlock {
         DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32; rows])])

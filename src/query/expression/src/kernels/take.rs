@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use binary::BinaryColumnBuilder;
+use databend_common_column::binview::View;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
@@ -29,6 +30,8 @@ use crate::SELECTIVITY_THRESHOLD;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
 use crate::types::date::CoreDate;
+use crate::types::encoded::DictColumn;
+use crate::types::encoded::EncodedColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::simple_type::SimpleType;
 use crate::types::string::StringColumn;
@@ -302,6 +305,58 @@ where I: TakeIndex + ?Sized
 }
 
 impl Column {
+    /// Compact excess string backing buffers recursively, without changing values or validity.
+    pub fn compact_string_buffers(self) -> Self {
+        match self {
+            Column::String(column) => {
+                if column.data_buffers().is_empty() {
+                    return Column::String(column);
+                }
+                // Inline bytes live in the views, not the backing buffers. Count only buffered
+                // values when deciding whether a selection is sparse. A ratio guard avoids
+                // copying nearly dense buffers to save a few bytes. No absolute savings cutoff:
+                // even tiny unused buffers can multiply across remote destinations.
+                let buffered_bytes: usize = column
+                    .views()
+                    .iter()
+                    .filter(|view| view.length > View::MAX_INLINE_SIZE)
+                    .map(|view| view.length as usize)
+                    .sum();
+                if column.total_buffer_len() >= buffered_bytes.saturating_mul(4) {
+                    Column::String(column.gc())
+                } else {
+                    Column::String(column)
+                }
+            }
+            Column::Nullable(column) => {
+                let (column, validity) = column.destructure();
+                NullableColumn::new_column(column.compact_string_buffers(), validity)
+            }
+            Column::Tuple(fields) => Column::Tuple(
+                fields
+                    .into_iter()
+                    .map(Column::compact_string_buffers)
+                    .collect(),
+            ),
+            Column::Array(column) => Column::Array(Box::new(ArrayColumn::new(
+                column.underlying_column().compact_string_buffers(),
+                column.underlying_offsets(),
+            ))),
+            Column::Map(column) => Column::Map(Box::new(ArrayColumn::new(
+                column.underlying_column().compact_string_buffers(),
+                column.underlying_offsets(),
+            ))),
+            Column::Encoded(column) => Column::Encoded(Box::new(match *column {
+                EncodedColumn::Dict(dict) => EncodedColumn::Dict(DictColumn::new(
+                    dict.keys,
+                    dict.values.compact_string_buffers(),
+                )),
+                encoded => encoded,
+            })),
+            other => other,
+        }
+    }
+
     pub fn maybe_gc(self) -> Self {
         match self {
             Column::String(c) => Column::String(c.maybe_gc()),
