@@ -6073,6 +6073,7 @@ dependencies = [
  "half",
  "itertools 0.13.0",
  "jsonb",
+ "libc",
  "log",
  "match-template",
  "num-traits",

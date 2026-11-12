@@ -31,6 +31,7 @@ use crate::hnsw_index::common::bitpacking::packed_bits;
 use crate::hnsw_index::common::bitpacking_links::MIN_BITS_PER_VALUE;
 use crate::hnsw_index::common::bitpacking_links::pack_links;
 use crate::hnsw_index::common::bitpacking_ordered;
+use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::zeros::WriteZerosExt;
 use crate::hnsw_index::graph_links::GraphLinksView;
@@ -171,7 +172,10 @@ impl GraphLinksSerializer {
         self.serialize_to_writer(&mut data).unwrap();
         debug_assert_eq!(data.len(), size);
         // Unwrap should be safe as we just created the data.
-        GraphLinks::try_new(data, |x| GraphLinksView::load(x, format)).unwrap()
+        GraphLinks::try_new(HugePageBytes::from_slice(&data), |x| {
+            GraphLinksView::load(x, format)
+        })
+        .unwrap()
     }
 
     pub(crate) fn serialize_to_writer(&self, writer: &mut impl Write) -> std::io::Result<()> {
