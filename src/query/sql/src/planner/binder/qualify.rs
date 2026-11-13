@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -22,13 +21,15 @@ use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
+use crate::binder::SelectItems;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::into_conjunctions;
 use crate::binder::window::WindowInputColumns;
 use crate::binder::window::WindowRewriter;
 use crate::binder::window::find_replaced_window_function;
 use crate::optimizer::ir::SExpr;
-use crate::planner::semantic::GroupingChecker;
+use crate::planner::semantic::CoreExprArena;
+use crate::planner::semantic::CoreExprId;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
@@ -39,12 +40,13 @@ use crate::plans::walk_expr_mut;
 impl Binder {
     /// Analyze window in qualify clause, this will rewrite window functions.
     /// See `WindowRewriter` for more details.
-    pub fn analyze_window_qualify(
+    pub(crate) fn analyze_window_qualify(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
-        qualify: &Expr,
-        needs_window_rewrite: bool,
+        select_items: Option<SelectItems<'_>>,
+        arena: &CoreExprArena<'_>,
+        qualify: CoreExprId,
     ) -> Result<ScalarExpr> {
         bind_context.expr_context = ExprContext::QualifyClause;
         let mut scalar_binder = ScalarBinder::new(
@@ -54,16 +56,14 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
-        let (mut scalar, _) = scalar_binder.bind(qualify)?;
+        let (mut scalar, _) = scalar_binder.bind_lowered(arena, qualify, select_items)?;
         AggregateRewriter::rewrite_existing_expr(
             &bind_context.aggregate_info,
             &mut scalar,
             "Qualify clause must not contain aggregate functions",
         )?;
-        if needs_window_rewrite {
-            let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
-            rewriter.visit(&mut scalar)?;
-        }
+        let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
+        rewriter.visit(&mut scalar)?;
         Ok(scalar)
     }
 
@@ -78,17 +78,8 @@ impl Binder {
 
         let scalar = {
             let mut qualify = qualify;
-            if bind_context.in_grouping {
-                // If we are in grouping context, we will perform the grouping check
-                let mut grouping_checker = GroupingChecker::new(
-                    bind_context,
-                    Some("Qualify clause must not contain aggregate functions"),
-                );
-                grouping_checker.visit(&mut qualify)?;
-            } else {
-                let mut qualify_checker = QualifyChecker::new(bind_context);
-                qualify_checker.visit(&mut qualify)?;
-            }
+            let mut qualify_checker = QualifyChecker::new(bind_context);
+            qualify_checker.visit(&mut qualify)?;
             window_inputs.visit(&mut qualify)?;
             qualify
         };

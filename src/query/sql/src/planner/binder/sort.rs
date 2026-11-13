@@ -24,13 +24,14 @@ use super::ExprContext;
 use crate::BindContext;
 use crate::Symbol;
 use crate::binder::Binder;
-use crate::binder::aggregate::AggregateRewriter;
+use crate::binder::SelectItems;
+use crate::binder::SetReturningAnalyzer;
+use crate::binder::aggregate::check_post_aggregate_expr;
 use crate::binder::project::SelectInfo;
 use crate::binder::scalar::ScalarBinder;
-use crate::binder::select::SelectClauseFact;
 use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::SExpr;
-use crate::planner::semantic::GroupingChecker;
+use crate::planner::binder::SelectClauseExprs;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
@@ -53,74 +54,25 @@ pub struct OrderItem {
     pub nulls_first: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct OrderByRewriteFlags {
-    needs_recursive_rewrite: bool,
-    needs_select_item_replacement: bool,
-    needs_aggregate_rewrite: bool,
-    needs_window_rewrite: bool,
-    needs_post_aggregate_rewrite: bool,
-}
-
-impl OrderByRewriteFlags {
-    const fn no_rewrite() -> Self {
-        Self {
-            needs_recursive_rewrite: false,
-            needs_select_item_replacement: false,
-            needs_aggregate_rewrite: false,
-            needs_window_rewrite: false,
-            needs_post_aggregate_rewrite: false,
-        }
-    }
-
-    fn from_select_clause_fact(fact: &SelectClauseFact) -> Self {
-        let needs_select_item_replacement = fact.needs_order_by_select_item_replacement();
-        let needs_aggregate_rewrite = fact.contains_or_references_aggregate();
-        let needs_window_rewrite = fact.contains_or_references_window();
-        Self {
-            needs_recursive_rewrite: needs_select_item_replacement
-                || needs_aggregate_rewrite
-                || needs_window_rewrite,
-            needs_select_item_replacement,
-            needs_aggregate_rewrite,
-            needs_window_rewrite,
-            needs_post_aggregate_rewrite: needs_select_item_replacement && needs_aggregate_rewrite,
-        }
-    }
-}
-
 impl Binder {
     pub(crate) fn analyze_order_items(
         &mut self,
         bind_context: &mut BindContext,
         select_info: &mut SelectInfo,
         aliases: &[(String, ScalarExpr)],
-        order_by_facts: Option<&[SelectClauseFact]>,
+        mut select_items: Option<SelectItems<'_>>,
         order_by: &[OrderByExpr],
+        clauses: &SelectClauseExprs<'_>,
         distinct: bool,
     ) -> Result<OrderItems> {
         bind_context.expr_context = ExprContext::OrderByClause;
         let settings = self.ctx.get_settings();
         let default_nulls_first = settings.get_nulls_first();
 
-        let rewrite_flags = if let Some(order_by_facts) = order_by_facts {
-            assert_eq!(
-                order_by_facts.len(),
-                order_by.len(),
-                "ORDER BY facts must align with ORDER BY expressions",
-            );
-            order_by_facts
-                .iter()
-                .map(OrderByRewriteFlags::from_select_clause_fact)
-                .collect()
-        } else {
-            vec![OrderByRewriteFlags::no_rewrite(); order_by.len()]
-        };
-
         let order_items = order_by
             .iter()
-            .zip(rewrite_flags)
-            .filter_map(|(order, flags)| match &order.expr {
+            .enumerate()
+            .filter_map(|(position, order)| match &order.expr {
                 Expr::Literal {
                     value: Literal::UInt64(index),
                     ..
@@ -154,24 +106,28 @@ impl Binder {
                         self.metadata.clone(),
                         aliases,
                     );
-                    let (bound_expr, _) = match scalar_binder.bind(&order.expr) {
+                    let (mut bound_expr, _) = match scalar_binder.bind_lowered(
+                        clauses.arena(),
+                        clauses.order_by(position),
+                        select_items.as_mut().map(SelectItems::reborrow),
+                    ) {
                         Ok(bound_expr) => bound_expr,
                         Err(err) => return Some(Err(err)),
                     };
+                    // A set-returning function is evaluated in the ProjectSet
+                    // of the SELECT list, as the same function if it is one
+                    // of the SELECT list.
+                    if let Err(err) = SetReturningAnalyzer::new(bind_context, self.metadata.clone())
+                        .visit(&mut bound_expr)
+                    {
+                        return Some(Err(err));
+                    }
 
-                    if let Some((idx, (_, scalar))) = aliases
+                    if let Some((idx, _)) = aliases
                         .iter()
                         .enumerate()
                         .find(|(_, (_, scalar))| bound_expr.eq(scalar))
                     {
-                        if bind_context.in_grouping {
-                            let mut group_checker = GroupingChecker::new(bind_context, None);
-                            let mut scalar = scalar.clone();
-                            if let Err(err) = group_checker.visit(&mut scalar) {
-                                return Some(Err(err));
-                            }
-                        }
-
                         // The order by expression is in the select list.
                         let asc = order.asc.unwrap_or(true);
                         return Some(Ok(OrderItem {
@@ -189,28 +145,19 @@ impl Binder {
                                 .to_string(),
                         )));
                     }
-                    let mut rewrite_scalar = if flags.needs_recursive_rewrite {
-                        match self.rewrite_scalar_with_replacement(
-                            bind_context,
-                            select_info,
-                            &bound_expr,
-                            flags,
-                        ) {
-                            Ok(scalar) => scalar,
-                            Err(err) => {
-                                return Some(Err(ErrorCode::SemanticError(err.message())));
-                            }
+                    let mut rewrite_scalar = match self.rewrite_scalar_with_replacement(
+                        bind_context,
+                        select_info,
+                        &bound_expr,
+                    ) {
+                        Ok(scalar) => scalar,
+                        Err(err) => {
+                            return Some(Err(ErrorCode::SemanticError(err.message())));
                         }
-                    } else {
-                        bound_expr
                     };
 
-                    if flags.needs_post_aggregate_rewrite
-                        && let Err(err) = AggregateRewriter::rewrite_expr(
-                            &mut bind_context.aggregate_info,
-                            self.metadata.clone(),
-                            &mut rewrite_scalar,
-                        )
+                    if let Err(err) =
+                        check_post_aggregate_expr(&bind_context.aggregate_info, &mut rewrite_scalar)
                     {
                         return Some(Err(err));
                     }
@@ -276,10 +223,10 @@ impl Binder {
         bind_context: &mut BindContext,
         select_info: &SelectInfo,
         original_scalar: &ScalarExpr,
-        rewrite_flags: OrderByRewriteFlags,
     ) -> Result<ScalarExpr> {
-        if rewrite_flags.needs_select_item_replacement
-            && let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = original_scalar
+        // An alias of a SELECT item that is projected as its own column, e.g.
+        // a window function, stands for the expression of the item.
+        if let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = original_scalar
             && let Some(replacement) = select_info
                 .source_scalar_item(column.index)
                 .map(|scalar_item| scalar_item.scalar.clone())
@@ -288,49 +235,20 @@ impl Binder {
         }
 
         match original_scalar {
-            aggregate @ ScalarExpr::AggregateFunction(_) => {
-                if !rewrite_flags.needs_aggregate_rewrite {
-                    return Ok(aggregate.clone());
-                }
+            aggregate @ (ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_)) => {
                 let mut aggregate = aggregate.clone();
-                AggregateRewriter::rewrite_expr(
-                    &mut bind_context.aggregate_info,
-                    self.metadata.clone(),
-                    &mut aggregate,
-                )?;
+                check_post_aggregate_expr(&bind_context.aggregate_info, &mut aggregate)?;
                 Ok(aggregate)
-            }
-            udaf @ ScalarExpr::UDAFCall(_) => {
-                if !rewrite_flags.needs_aggregate_rewrite {
-                    return Ok(udaf.clone());
-                }
-                let mut udaf = udaf.clone();
-                AggregateRewriter::rewrite_expr(
-                    &mut bind_context.aggregate_info,
-                    self.metadata.clone(),
-                    &mut udaf,
-                )?;
-                Ok(udaf)
             }
             ScalarExpr::LambdaFunction(lambda_func) => {
                 let args = lambda_func
                     .args
                     .iter()
-                    .map(|arg| {
-                        self.rewrite_scalar_with_replacement(
-                            bind_context,
-                            select_info,
-                            arg,
-                            rewrite_flags,
-                        )
-                    })
+                    .map(|arg| self.rewrite_scalar_with_replacement(bind_context, select_info, arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(ScalarExpr::LambdaFunction(lambda_func.with_args(args)?))
             }
             window @ ScalarExpr::WindowFunction(_) => {
-                if !rewrite_flags.needs_window_rewrite {
-                    return Ok(window.clone());
-                }
                 let mut window = window.clone();
                 let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
                 rewriter.visit(&mut window)?;
@@ -340,14 +258,7 @@ impl Binder {
                 let arguments = func
                     .arguments
                     .iter()
-                    .map(|arg| {
-                        self.rewrite_scalar_with_replacement(
-                            bind_context,
-                            select_info,
-                            arg,
-                            rewrite_flags,
-                        )
-                    })
+                    .map(|arg| self.rewrite_scalar_with_replacement(bind_context, select_info, arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(ScalarExpr::FunctionCall(FunctionCall {
                     span: func.span,
@@ -367,7 +278,6 @@ impl Binder {
                     bind_context,
                     select_info,
                     argument,
-                    rewrite_flags,
                 )?);
                 Ok(ScalarExpr::CastExpr(CastExpr {
                     span: *span,
@@ -380,14 +290,7 @@ impl Binder {
                 let new_args = udf
                     .arguments
                     .iter()
-                    .map(|arg| {
-                        self.rewrite_scalar_with_replacement(
-                            bind_context,
-                            select_info,
-                            arg,
-                            rewrite_flags,
-                        )
-                    })
+                    .map(|arg| self.rewrite_scalar_with_replacement(bind_context, select_info, arg))
                     .collect::<Result<Vec<_>>>()?;
                 Ok(UDFCall {
                     span: udf.span,

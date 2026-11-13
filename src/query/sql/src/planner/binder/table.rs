@@ -189,7 +189,7 @@ impl Binder {
             srf_info: Default::default(),
             cte_context: bind_context.cte_context.clone(),
             definition_scope: bind_context.definition_scope.clone(),
-            in_grouping: false,
+            grouping_key_scope: None,
             binding_views: bind_context.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,

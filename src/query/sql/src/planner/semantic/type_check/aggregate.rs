@@ -269,6 +269,9 @@ where A: TypeCheckAdapter
         let in_window = self.in_window_function;
         self.in_window_function = self.in_window_function || in_window_call;
         let in_aggregate_function = self.in_aggregate_function;
+        // The arguments of a grouped aggregate are evaluated before it, those of
+        // a window aggregate after it.
+        let suspended = !in_window_call && self.suspend_grouping_key_scope();
         let result = (|| {
             let arguments =
                 self.resolve_aggregate_arguments(arena, span, func_name, args, order_by)?;
@@ -284,6 +287,7 @@ where A: TypeCheckAdapter
                 remove_count_args,
             )
         })();
+        self.resume_grouping_key_scope(suspended);
         self.in_window_function = in_window;
         self.in_aggregate_function = in_aggregate_function;
         result

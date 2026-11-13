@@ -744,6 +744,50 @@ SELECT array_reverse(['a', 'b', 'c', null])
 [NULL,"c","b","a"]
 
 
+# Lambda parameters get symbols past every symbol of the query, so they never
+# collide with the columns a lambda body captures.
+statement ok
+CREATE OR REPLACE TABLE lambda_scope_t(a Int32 NOT NULL)
+
+statement ok
+INSERT INTO lambda_scope_t VALUES (1), (2)
+
+query IT rowsort
+SELECT a, (SELECT array_transform([10], x -> x + 1)) FROM lambda_scope_t
+----
+1 [11]
+2 [11]
+
+query T
+SELECT (SELECT array_transform([10], x -> x + s.a) FROM lambda_scope_t s ORDER BY s.a LIMIT 1)
+----
+[11]
+
+# TODO: a lambda in a subquery can't capture columns of the outer query yet.
+statement error (?s)1065.*lambda functions in a subquery can't reference column "a" of an outer query
+SELECT (SELECT array_transform([10], x -> x + t.a)) FROM lambda_scope_t t
+
+statement error (?s)1065.*subqueries are not supported in the lambda body of array_transform
+SELECT array_transform([1, 2], x -> (SELECT 10))
+
+statement error (?s)1065.*subqueries are not supported in the lambda body of array_transform
+SELECT array_transform([1, 2], x -> x IN (SELECT 1))
+
+# A long IN list is not rewritten into a subquery in a lambda body.
+statement ok
+SET inlist_to_join_threshold = 2
+
+query T
+SELECT array_transform([1, 2], x -> x IN (1, 3, 5))
+----
+[1,0]
+
+statement ok
+UNSET inlist_to_join_threshold
+
+statement ok
+DROP TABLE lambda_scope_t
+
 statement ok
 USE default
 

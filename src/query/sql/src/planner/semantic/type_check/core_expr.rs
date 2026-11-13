@@ -58,6 +58,14 @@ impl<'a> CoreExprArena<'a> {
         }
     }
 
+    /// An arena for expressions that `adapter` type checks.
+    pub(crate) fn for_adapter<A: TypeCheckAdapter>(adapter: &A) -> Result<Self> {
+        Ok(Self::with_aggregate_function_registry(
+            adapter.function_context()?.week_start as u64,
+            adapter.aggregate_function_registry(),
+        ))
+    }
+
     pub(super) fn with_aggregate_function_registry(
         week_start: u64,
         aggregate_function_registry: &'static AggregateRegistry,
@@ -71,7 +79,7 @@ impl<'a> CoreExprArena<'a> {
     }
 
     #[recursive::recursive]
-    pub(super) fn lower_ast_expr(&mut self, expr: &'a Expr) -> Result<CoreExprId> {
+    pub(crate) fn lower_ast_expr(&mut self, expr: &'a Expr) -> Result<CoreExprId> {
         let id = match expr {
             Expr::ColumnRef { span, column } => self.alloc(CoreExpr::ColumnRef {
                 span: *span,
@@ -509,22 +517,111 @@ impl<'a> CoreExprArena<'a> {
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
-    /// Drive ordinary child traversal before invoking bound-child node kernels.
-    /// Order-sensitive rewrites run first; aggregate/window/lambda and other
-    /// specialized traversals keep their existing context and validation order.
-    #[recursive::recursive]
+    /// Bind a node to a scalar and the type it reports, through
+    /// [`Self::resolve_core_bound`] like every node.
     pub(super) fn resolve_core(
         &mut self,
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        match arena.get(id) {
-            CoreExpr::Literal { .. }
-            | CoreExpr::Call { .. }
-            | CoreExpr::ScalarFunction { .. }
-            | CoreExpr::Cast { .. } => self
-                .resolve_core_bound(arena, id)
-                .map(BoundScalar::into_pair),
+        self.resolve_core_bound(arena, id)
+            .map(BoundScalar::into_pair)
+    }
+
+    /// Shared entry for binding, including grouping-key input memoization.
+    /// Ordinary scalars carry facts from their children and cached input forms;
+    /// specialized producers derive facts from their bound result.
+    #[recursive::recursive]
+    pub(super) fn resolve_core_bound(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+    ) -> Result<BoundScalar> {
+        if let Some(position) = self.grouping_key_input_scope() {
+            return self.resolve_grouping_key_input_node(arena, id, position);
+        }
+        self.resolve_core_bound_node(arena, id)
+    }
+
+    /// Bind below the input memo boundary, still matching enclosing scopes.
+    pub(super) fn resolve_core_bound_node(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+    ) -> Result<BoundScalar> {
+        if let Some(bound) = self.try_resolve_grouping_key(arena, id)? {
+            return Ok(bound);
+        }
+        // Ordinary scalars return above, from kernels over bound children;
+        // the other nodes have specialized traversals, which keep their
+        // context and validation order, and derive facts from the result.
+        let mut result = match arena.get(id) {
+            CoreExpr::Literal { span, value } => {
+                let (value, data_type) = infer_literal_data_type(value.clone());
+                return Ok(BoundScalar::constant(
+                    crate::plans::ConstantExpr { span: *span, value },
+                    data_type,
+                ));
+            }
+            CoreExpr::Call {
+                span,
+                func_name,
+                args,
+            } => {
+                if let Some(result) = self.try_resolve_call(arena, *span, func_name, args) {
+                    return result.map(|pair| self.bind_derived_pair(pair));
+                }
+                let is_grouping = func_name.eq_ignore_ascii_case("grouping");
+                let bound_args = if is_grouping {
+                    self.resolve_grouping_arguments(arena, args)?
+                } else {
+                    args.iter()
+                        .map(|arg| self.resolve_core_bound(arena, *arg))
+                        .collect::<Result<Vec<_>>>()?
+                };
+                let result = self.resolve_call(*span, func_name, bound_args)?;
+                if !is_grouping {
+                    return Ok(result);
+                }
+                let mut scalar = result.scalar;
+                self.rewrite_grouped_output(&mut scalar)?;
+                return Ok(self.bind_derived(scalar, result.data_type));
+            }
+            CoreExpr::ScalarFunction {
+                span,
+                func_name,
+                params,
+                args,
+            } => {
+                let params = self.resolve_core_function_params(arena, *span, params, "scalar")?;
+                let args = args
+                    .iter()
+                    .map(|arg| self.resolve_core_bound(arena, *arg))
+                    .collect::<Result<Vec<_>>>()?;
+                return self.resolve_bound_function_call(*span, func_name, params, args);
+            }
+            CoreExpr::Cast {
+                span,
+                is_try,
+                expr,
+                target_type,
+            } => {
+                // The pushdown binds the base of the access directly, which
+                // would skip matching the access itself to a grouping key.
+                if !self.matches_grouping_keys()
+                    && let Some(result) = self.try_resolve_variant_cast_pushdown(
+                        arena,
+                        *span,
+                        *expr,
+                        target_type,
+                        *is_try,
+                    )?
+                {
+                    return Ok(self.bind_derived_pair(result));
+                }
+                let child = self.resolve_core_bound(arena, *expr)?;
+                return self.resolve_bound_cast(*span, child, target_type, *is_try);
+            }
             CoreExpr::Array { span, exprs } => {
                 let arguments = exprs
                     .iter()
@@ -611,8 +708,10 @@ where A: TypeCheckAdapter
                 span,
                 name,
                 args,
+                ast_args,
+                has_window,
                 filter,
-            } => self.resolve_udf_call(arena, *span, name, args, *filter),
+            } => self.resolve_udf_call(arena, *span, name, args, ast_args, *has_window, *filter),
             CoreExpr::LambdaFunction {
                 span,
                 func_name,
@@ -704,85 +803,9 @@ where A: TypeCheckAdapter
                 .into(),
                 DataType::String,
             ))),
-        }
-    }
-
-    /// Like `resolve_core`, and also returns facts used to fold the parent.
-    /// Ordinary scalar nodes carry facts from their children; other nodes
-    /// derive them from the bound result.
-    #[recursive::recursive]
-    pub(super) fn resolve_core_bound(
-        &mut self,
-        arena: &CoreExprArena<'_>,
-        id: CoreExprId,
-    ) -> Result<BoundScalar> {
-        match arena.get(id) {
-            CoreExpr::Literal { span, value } => {
-                let (value, data_type) = infer_literal_data_type(value.clone());
-                Ok(BoundScalar::constant(
-                    crate::plans::ConstantExpr { span: *span, value },
-                    data_type,
-                ))
-            }
-            CoreExpr::Call {
-                span,
-                func_name,
-                args,
-            } => {
-                if let Some(result) = self.try_resolve_call(arena, *span, func_name, args) {
-                    return result.map(|pair| self.bind_derived_pair(pair));
-                }
-                let is_grouping = func_name.eq_ignore_ascii_case("grouping");
-                let mut bound_args = Vec::with_capacity(args.len());
-                for arg in args {
-                    let mut bound = self.resolve_core_bound(arena, *arg)?;
-                    if is_grouping
-                        && let Some(group_item) =
-                            self.grouping_argument_group_item(arena, *arg, &bound.scalar)
-                    {
-                        let data_type = group_item.data_type().into_owned();
-                        bound = self.bind_derived(group_item, data_type);
-                    }
-                    bound_args.push(bound);
-                }
-                self.resolve_call(*span, func_name, bound_args)
-            }
-            CoreExpr::ScalarFunction {
-                span,
-                func_name,
-                params,
-                args,
-            } => {
-                let params = self.resolve_core_function_params(arena, *span, params, "scalar")?;
-                let args = args
-                    .iter()
-                    .map(|arg| self.resolve_core_bound(arena, *arg))
-                    .collect::<Result<Vec<_>>>()?;
-                self.resolve_bound_function_call(*span, func_name, params, args)
-            }
-            CoreExpr::Cast {
-                span,
-                is_try,
-                expr,
-                target_type,
-            } => {
-                if let Some(result) = self.try_resolve_variant_cast_pushdown(
-                    arena,
-                    *span,
-                    *expr,
-                    target_type,
-                    *is_try,
-                )? {
-                    return Ok(self.bind_derived_pair(result));
-                }
-                let child = self.resolve_core_bound(arena, *expr)?;
-                self.resolve_bound_cast(*span, child, target_type, *is_try)
-            }
-            _ => {
-                let result = self.resolve_core(arena, id)?;
-                Ok(self.bind_derived_pair(result))
-            }
-        }
+        }?;
+        self.rewrite_grouped_output(&mut result.0)?;
+        Ok(self.bind_derived_pair(result))
     }
 
     pub(super) fn resolve_expr_args(

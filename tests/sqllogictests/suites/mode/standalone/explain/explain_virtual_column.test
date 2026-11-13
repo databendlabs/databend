@@ -626,107 +626,99 @@ data_aggregation AS (
 )
 SELECT * FROM data_aggregation;
 ----
-EvalScalar
-├── output columns: [a.entity_id (#0), a.source_id (#1), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19), event_date (#15), type_code (#21)]
-├── expressions: [group_item (#20)]
+AggregateFinal
+├── output columns: [a.entity_id (#0), a.source_id (#1), type_code (#17), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19), event_date (#14)]
+├── group by: [entity_id, source_id, type_code, content_object['category_a']::String, content_object['category_b']::String, event_date]
+├── aggregate functions: []
 ├── estimated rows: 1.00
-└── AggregateFinal
-    ├── output columns: [a.entity_id (#0), a.source_id (#1), type_code (#20), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19), event_date (#15)]
+└── AggregatePartial
     ├── group by: [entity_id, source_id, type_code, content_object['category_a']::String, content_object['category_b']::String, event_date]
     ├── aggregate functions: []
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── group by: [entity_id, source_id, type_code, content_object['category_a']::String, content_object['category_b']::String, event_date]
-        ├── aggregate functions: []
-        ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── output columns: [event_date (#15), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19), a.entity_id (#0), a.source_id (#1), type_code (#20)]
-            ├── expressions: [CAST(if(CAST(is_not_null(data_source_a.metadata_object['type']::String (#17)) AS Boolean NULL), assume_not_null(data_source_a.metadata_object['type']::String (#17)), 'Unknown') AS String NULL)]
+    └── EvalScalar
+        ├── output columns: [event_date (#14), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19), a.entity_id (#0), a.source_id (#1), type_code (#17)]
+        ├── expressions: [CAST(if(CAST(is_not_null(data_source_a.metadata_object['type']::String (#16)) AS Boolean NULL), assume_not_null(data_source_a.metadata_object['type']::String (#16)), 'Unknown') AS String NULL)]
+        ├── estimated rows: 0.20
+        └── HashJoin
+            ├── output columns: [event_date (#14), a.metadata_object['type']::String (#16), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19), a.entity_id (#0), a.source_id (#1)]
+            ├── join type: INNER
+            ├── build keys: [a.entity_id (#0), a.source_id (#1), CAST(CAST(data_source_a.content_object['event_date']::Int64 (#15) AS Timestamp NULL) AS Date NULL)]
+            ├── probe keys: [p.entity_id (#5), p.source_id (#6), p.event_date (#14)]
+            ├── keys is null equal: [false, false, false]
+            ├── filters: []
+            ├── build join filters:
+            │   ├── filter id:2, build key:a.entity_id (#0), probe targets:[p.entity_id (#5)@scan1], filter type:bloom,inlist,min_max
+            │   └── filter id:3, build key:a.source_id (#1), probe targets:[p.source_id (#6)@scan1], filter type:bloom,inlist,min_max
             ├── estimated rows: 0.20
-            └── HashJoin
-                ├── output columns: [event_date (#15), a.metadata_object['type']::String (#17), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19), a.entity_id (#0), a.source_id (#1)]
-                ├── join type: INNER
-                ├── build keys: [a.entity_id (#0), a.source_id (#1), CAST(CAST(data_source_a.content_object['event_date']::Int64 (#16) AS Timestamp NULL) AS Date NULL)]
-                ├── probe keys: [p.entity_id (#5), p.source_id (#6), p.event_date (#15)]
-                ├── keys is null equal: [false, false, false]
-                ├── filters: []
-                ├── build join filters:
-                │   ├── filter id:2, build key:a.entity_id (#0), probe targets:[p.entity_id (#5)@scan1], filter type:bloom,inlist,min_max
-                │   └── filter id:3, build key:a.source_id (#1), probe targets:[p.source_id (#6)@scan1], filter type:bloom,inlist,min_max
-                ├── estimated rows: 0.20
-                ├── Filter(Build)
-                │   ├── output columns: [a.entity_id (#0), a.source_id (#1), a.content_object['event_date']::Int64 (#16), a.metadata_object['type']::String (#17), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19)]
-                │   ├── filters: [is_not_null(data_source_a.content_object['category_a']::String (#18)), is_not_null(data_source_a.content_object['category_b']::String (#19)), is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#16) AS Timestamp NULL) AS Date NULL))]
-                │   ├── estimated rows: 0.20
-                │   └── TableScan
-                │       ├── table: default.test_virtual_db.data_source_a
-                │       ├── scan id: 0
-                │       ├── output columns: [entity_id (#0), source_id (#1), content_object['event_date']::Int64 (#16), metadata_object['type']::String (#17), content_object['category_a']::String (#18), content_object['category_b']::String (#19)]
-                │       ├── read rows: 1
-                │       ├── read size: < 1 KiB
-                │       ├── partitions total: 1
-                │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                │       ├── push downs: [filters: [is_not_null(data_source_a.content_object['category_a']::String (#18)) and is_not_null(data_source_a.content_object['category_b']::String (#19)) and is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#16) AS Timestamp NULL) AS Date NULL))], limit: NONE]
-                │       ├── virtual columns: [content_object['category_a']::String, content_object['category_b']::String, content_object['event_date']::Int64, metadata_object['type']::String]
-                │       └── estimated rows: 1.00
-                └── EvalScalar(Probe)
-                    ├── output columns: [a.entity_id (#5), a.source_id (#6), event_date (#15)]
-                    ├── expressions: [group_item (#14)]
+            ├── Filter(Build)
+            │   ├── output columns: [a.entity_id (#0), a.source_id (#1), a.content_object['event_date']::Int64 (#15), a.metadata_object['type']::String (#16), a.content_object['category_a']::String (#18), a.content_object['category_b']::String (#19)]
+            │   ├── filters: [is_not_null(data_source_a.content_object['category_a']::String (#18)), is_not_null(data_source_a.content_object['category_b']::String (#19)), is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#15) AS Timestamp NULL) AS Date NULL))]
+            │   ├── estimated rows: 0.20
+            │   └── TableScan
+            │       ├── table: default.test_virtual_db.data_source_a
+            │       ├── scan id: 0
+            │       ├── output columns: [entity_id (#0), source_id (#1), content_object['event_date']::Int64 (#15), metadata_object['type']::String (#16), content_object['category_a']::String (#18), content_object['category_b']::String (#19)]
+            │       ├── read rows: 1
+            │       ├── read size: < 1 KiB
+            │       ├── partitions total: 1
+            │       ├── partitions scanned: 1
+            │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │       ├── push downs: [filters: [is_not_null(data_source_a.content_object['category_a']::String (#18)) and is_not_null(data_source_a.content_object['category_b']::String (#19)) and is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#15) AS Timestamp NULL) AS Date NULL))], limit: NONE]
+            │       ├── virtual columns: [content_object['category_a']::String, content_object['category_b']::String, content_object['event_date']::Int64, metadata_object['type']::String]
+            │       └── estimated rows: 1.00
+            └── AggregateFinal(Probe)
+                ├── output columns: [a.entity_id (#5), a.source_id (#6), event_date (#14)]
+                ├── group by: [entity_id, source_id, event_date]
+                ├── aggregate functions: []
+                ├── estimated rows: 1.00
+                └── AggregatePartial
+                    ├── group by: [entity_id, source_id, event_date]
+                    ├── aggregate functions: []
                     ├── estimated rows: 1.00
-                    └── AggregateFinal
+                    └── EvalScalar
                         ├── output columns: [a.entity_id (#5), a.source_id (#6), event_date (#14)]
-                        ├── group by: [entity_id, source_id, event_date]
-                        ├── aggregate functions: []
-                        ├── estimated rows: 1.00
-                        └── AggregatePartial
-                            ├── group by: [entity_id, source_id, event_date]
-                            ├── aggregate functions: []
-                            ├── estimated rows: 1.00
-                            └── EvalScalar
-                                ├── output columns: [a.entity_id (#5), a.source_id (#6), event_date (#14)]
-                                ├── expressions: [CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL)]
-                                ├── estimated rows: 0.20
-                                └── HashJoin
-                                    ├── output columns: [a.content_object['event_date']::Int64 (#13), a.entity_id (#5), a.source_id (#6)]
-                                    ├── join type: INNER
-                                    ├── build keys: [a.entity_id (#5), a.source_id (#6)]
-                                    ├── probe keys: [c.entity_id (#10), c.source_id (#11)]
-                                    ├── keys is null equal: [false, false]
-                                    ├── filters: []
-                                    ├── build join filters:
-                                    │   ├── filter id:0, build key:a.entity_id (#5), probe targets:[c.entity_id (#10)@scan2], filter type:bloom,inlist,min_max
-                                    │   └── filter id:1, build key:a.source_id (#6), probe targets:[c.source_id (#11)@scan2], filter type:bloom,inlist,min_max
-                                    ├── estimated rows: 0.20
-                                    ├── Filter(Build)
-                                    │   ├── output columns: [a.entity_id (#5), a.source_id (#6), a.content_object['event_date']::Int64 (#13)]
-                                    │   ├── filters: [is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL))]
-                                    │   ├── estimated rows: 0.20
-                                    │   └── TableScan
-                                    │       ├── table: default.test_virtual_db.data_source_a
-                                    │       ├── scan id: 1
-                                    │       ├── output columns: [entity_id (#5), source_id (#6), content_object['event_date']::Int64 (#13)]
-                                    │       ├── read rows: 1
-                                    │       ├── read size: < 1 KiB
-                                    │       ├── partitions total: 1
-                                    │       ├── partitions scanned: 1
-                                    │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-                                    │       ├── push downs: [filters: [is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL))], limit: NONE]
-                                    │       ├── apply join filters: [#2, #3]
-                                    │       ├── virtual columns: [content_object['event_date']::Int64]
-                                    │       └── estimated rows: 1.00
-                                    └── TableScan(Probe)
-                                        ├── table: default.test_virtual_db.config_table
-                                        ├── scan id: 2
-                                        ├── output columns: [entity_id (#10), source_id (#11)]
-                                        ├── read rows: 1
-                                        ├── read size: < 1 KiB
-                                        ├── partitions total: 1
-                                        ├── partitions scanned: 1
-                                        ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-                                        ├── push downs: [filters: [is_true(config_table.process_mode (#12) = 'standard_mode')], limit: NONE]
-                                        ├── apply join filters: [#0, #1]
-                                        └── estimated rows: 1.00
+                        ├── expressions: [CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL)]
+                        ├── estimated rows: 0.20
+                        └── HashJoin
+                            ├── output columns: [a.content_object['event_date']::Int64 (#13), a.entity_id (#5), a.source_id (#6)]
+                            ├── join type: INNER
+                            ├── build keys: [a.entity_id (#5), a.source_id (#6)]
+                            ├── probe keys: [c.entity_id (#10), c.source_id (#11)]
+                            ├── keys is null equal: [false, false]
+                            ├── filters: []
+                            ├── build join filters:
+                            │   ├── filter id:0, build key:a.entity_id (#5), probe targets:[c.entity_id (#10)@scan2], filter type:bloom,inlist,min_max
+                            │   └── filter id:1, build key:a.source_id (#6), probe targets:[c.source_id (#11)@scan2], filter type:bloom,inlist,min_max
+                            ├── estimated rows: 0.20
+                            ├── Filter(Build)
+                            │   ├── output columns: [a.entity_id (#5), a.source_id (#6), a.content_object['event_date']::Int64 (#13)]
+                            │   ├── filters: [is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL))]
+                            │   ├── estimated rows: 0.20
+                            │   └── TableScan
+                            │       ├── table: default.test_virtual_db.data_source_a
+                            │       ├── scan id: 1
+                            │       ├── output columns: [entity_id (#5), source_id (#6), content_object['event_date']::Int64 (#13)]
+                            │       ├── read rows: 1
+                            │       ├── read size: < 1 KiB
+                            │       ├── partitions total: 1
+                            │       ├── partitions scanned: 1
+                            │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                            │       ├── push downs: [filters: [is_not_null(CAST(CAST(data_source_a.content_object['event_date']::Int64 (#13) AS Timestamp NULL) AS Date NULL))], limit: NONE]
+                            │       ├── apply join filters: [#2, #3]
+                            │       ├── virtual columns: [content_object['event_date']::Int64]
+                            │       └── estimated rows: 1.00
+                            └── TableScan(Probe)
+                                ├── table: default.test_virtual_db.config_table
+                                ├── scan id: 2
+                                ├── output columns: [entity_id (#10), source_id (#11)]
+                                ├── read rows: 1
+                                ├── read size: < 1 KiB
+                                ├── partitions total: 1
+                                ├── partitions scanned: 1
+                                ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+                                ├── push downs: [filters: [is_true(config_table.process_mode (#12) = 'standard_mode')], limit: NONE]
+                                ├── apply join filters: [#0, #1]
+                                └── estimated rows: 1.00
 
 query TTTTT?
 WITH processed_dates AS (

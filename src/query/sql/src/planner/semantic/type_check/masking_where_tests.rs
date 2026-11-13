@@ -35,6 +35,8 @@ use databend_common_storages_basic::NullTable;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
 use parking_lot::RwLock;
 
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::TypeCheckAdapter;
 use super::persisted::NoUdfAdapter;
 use crate::BaseTableColumn;
@@ -152,30 +154,35 @@ fn where_uses_original_only_for_authorized_base_columns() -> Result<()> {
     let adapter = MaskingAdapter {
         loads: Arc::new(AtomicUsize::new(0)),
     };
+    // The SELECT item that the WHERE alias `email_alias` stands for.
+    let email_expr = ast("v['secret']")?;
+    let mut arena = CoreExprArena::for_adapter(&adapter)?;
+    let email_root = arena.lower_ast_expr(&email_expr)?;
+    let email_original = [("email_alias".to_string(), email_root)];
     let resolve = |context: &mut BindContext,
                    sql: &str,
                    is_where: bool,
                    aliases: &[(String, ScalarExpr)],
-                   originals: Vec<(String, Expr)>|
+                   originals: &[(String, CoreExprId)]|
      -> Result<ScalarExpr> {
         let mut binder =
             ScalarBinder::with_adapter(context, adapter.clone(), &names, metadata.clone(), aliases);
         if is_where {
-            binder.set_masking_where_aliases(originals);
+            binder.set_masking_where_aliases(&arena, originals);
         }
         Ok(binder.bind(&ast(sql)?)?.0)
     };
 
-    let select = resolve(&mut context, "v['secret']", false, &[], vec![])?;
+    let select = resolve(&mut context, "v['secret']", false, &[], &[])?;
     assert!(format_scalar(&select).contains("object_delete"));
     let loads = adapter.loads.load(Ordering::SeqCst);
-    let raw = resolve(&mut context, "v['secret']", true, &[], vec![])?;
+    let raw = resolve(&mut context, "v['secret']", true, &[], &[])?;
     assert!(matches!(raw, ScalarExpr::BoundColumnRef(_)));
     assert_eq!(adapter.loads.load(Ordering::SeqCst), loads);
-    let still_masked = resolve(&mut context, "w['secret']", true, &[], vec![])?;
+    let still_masked = resolve(&mut context, "w['secret']", true, &[], &[])?;
     assert!(format_scalar(&still_masked).contains("object_delete"));
     // A later non-WHERE binder must not inherit the exception.
-    let select_again = resolve(&mut context, "v['secret']", false, &[], vec![])?;
+    let select_again = resolve(&mut context, "v['secret']", false, &[], &[])?;
     assert!(format_scalar(&select_again).contains("object_delete"));
 
     let alias = resolve(
@@ -183,7 +190,7 @@ fn where_uses_original_only_for_authorized_base_columns() -> Result<()> {
         "email_alias",
         true,
         &[("email_alias".into(), select)],
-        vec![("email_alias".into(), ast("v['secret']")?)],
+        &email_original,
     )?;
     assert_eq!(alias, raw);
 
@@ -192,15 +199,6 @@ fn where_uses_original_only_for_authorized_base_columns() -> Result<()> {
         unreachable!()
     };
     let identifier = raw_column.column.column_name.replace('"', "\"\"");
-    assert!(
-        resolve(
-            &mut context,
-            &format!("\"{identifier}\""),
-            false,
-            &[],
-            vec![]
-        )
-        .is_err()
-    );
+    assert!(resolve(&mut context, &format!("\"{identifier}\""), false, &[], &[]).is_err());
     Ok(())
 }

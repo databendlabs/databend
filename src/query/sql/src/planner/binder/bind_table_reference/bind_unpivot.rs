@@ -48,7 +48,7 @@ impl Binder {
 
         let mut source_indices = ColumnSet::new();
         for srf in &bind_context.srf_info.srfs {
-            srf.scalar.collect_used_columns(&mut source_indices);
+            srf.item.scalar.collect_used_columns(&mut source_indices);
         }
         let (database_name, table_name, table_index) =
             Self::common_source_identity(&bind_context.columns, &source_indices);

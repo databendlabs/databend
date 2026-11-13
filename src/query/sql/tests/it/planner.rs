@@ -17,6 +17,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_ast::ast::GroupBy;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_exception::ErrorCode;
@@ -26,13 +30,16 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
+use databend_common_sql::dataframe::Dataframe;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
@@ -642,6 +649,45 @@ async fn test_unpivot_binds_as_table_reference_output() -> Result<()> {
         .await
         .unwrap_err();
     assert_eq!(err.code(), 1065, "unexpected error: {err:?}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_dataframe_aggregate_computes_having_aggregates() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE TABLE t(a UInt64, b UInt64)")
+        .await?;
+    let parse = |sql: &str| parse_expr(&tokenize_sql(sql)?, Dialect::PostgreSQL);
+
+    // `sum(b)` is only in HAVING, so the Aggregate must compute it.
+    let df = Dataframe::scan(ctx.clone(), Some("default"), "t")
+        .await?
+        .aggregate(
+            GroupBy::Normal(vec![parse("a")?]),
+            vec![parse("a")?],
+            Some(parse("sum(b) > 1")?),
+        )
+        .await?;
+
+    fn aggregate_functions(s_expr: &SExpr, names: &mut Vec<String>) {
+        if let RelOperator::Aggregate(aggregate) = s_expr.plan() {
+            names.extend(
+                aggregate
+                    .aggregate_functions
+                    .iter()
+                    .map(|item| format!("{:?}", item.scalar)),
+            );
+        }
+        for child in s_expr.children() {
+            aggregate_functions(child, names);
+        }
+    }
+    let mut names = Vec::new();
+    aggregate_functions(df.get_expr(), &mut names);
+    assert!(
+        names.len() == 1 && names[0].contains("func_name: \"sum\""),
+        "unexpected aggregate functions: {names:?}"
+    );
     Ok(())
 }
 

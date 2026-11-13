@@ -31,6 +31,7 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::binder::AliasLookup;
+use crate::binder::ScalarFoldingPolicy;
 use crate::plans::ScalarExpr;
 
 impl<'a, A> TypeChecker<'a, A>
@@ -43,27 +44,26 @@ where A: TypeCheckAdapter
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
     ) -> Result<Self> {
-        Self::try_create_with_adapter_and_alias_fallback(
+        Self::try_create_with_adapter_and_aliases(
             bind_context,
             adapter,
             name_resolution_ctx,
             metadata,
             AliasLookup::all(aliases),
-            None,
         )
     }
 
-    pub fn try_create_with_adapter_and_alias_fallback(
+    pub fn try_create_with_adapter_and_aliases(
         bind_context: &'a mut BindContext,
         adapter: A,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: AliasLookup<'a>,
-        fallback_aliases: Option<AliasLookup<'a>>,
     ) -> Result<Self> {
         let func_ctx = adapter.function_context()?;
         let dialect = adapter.sql_dialect()?;
         Ok(Self {
+            folding_policy: ScalarFoldingPolicy::Normal,
             bind_context,
             adapter,
             dialect,
@@ -71,7 +71,7 @@ where A: TypeCheckAdapter
             name_resolution_ctx,
             metadata,
             aliases,
-            fallback_aliases,
+            select_items: None,
             in_aggregate_function: false,
             in_window_function: false,
             in_masking_policy: false,
@@ -79,7 +79,16 @@ where A: TypeCheckAdapter
             masking_where_aliases: None,
             resolving_masking_where_aliases: Vec::new(),
             forbid_virtual_computed_column: false,
+            grouping_key: Default::default(),
+            grouping_key_memo: Default::default(),
         })
+    }
+
+    /// Bind with `policy`, e.g. to keep column-dependent expressions unfolded
+    /// in the keys of grouping sets and the pre-aggregate forms matched
+    /// against them. A type checker folds normally otherwise.
+    pub fn set_folding_policy(&mut self, policy: ScalarFoldingPolicy) {
+        self.folding_policy = policy;
     }
 
     /// Only maintenance bindings opt out; normal SELECT and DML use masking policies.
@@ -87,8 +96,14 @@ where A: TypeCheckAdapter
         self.apply_masking_policy = apply;
     }
 
-    pub(crate) fn set_masking_where_aliases(&mut self, aliases: &'a [(String, Expr)]) {
-        self.masking_where_aliases = Some(aliases);
+    /// Let an alias in a SELECT WHERE that uses unmasked values stand for
+    /// the expression at its node in `arena`, bound in place.
+    pub(crate) fn set_masking_where_aliases(
+        &mut self,
+        arena: &'a CoreExprArena<'a>,
+        aliases: &'a [(String, CoreExprId)],
+    ) {
+        self.masking_where_aliases = Some((arena, aliases));
     }
 
     pub(crate) fn set_forbid_virtual_computed_column(&mut self, forbid: bool) {
@@ -102,13 +117,15 @@ where A: TypeCheckAdapter
         )
     }
 
-    pub(super) fn resolve_checked_core(
+    /// Resolve the node `root` of `arena`, which the caller lowered, maybe
+    /// with the other clauses of its query.
+    pub(crate) fn resolve_checked_core(
         &mut self,
         arena: &CoreExprArena<'_>,
         root: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         self.adapter.check_core_expr_context(arena)?;
-        self.resolve_core(arena, root)
+        self.with_own_grouping_key_memo(|type_checker| type_checker.resolve_core(arena, root))
     }
 
     pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {

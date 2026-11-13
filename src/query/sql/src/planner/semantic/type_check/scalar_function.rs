@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::TypeName;
@@ -51,9 +49,6 @@ use super::rewrite_function;
 use super::rewrite_function::rewrite_function_name;
 use super::scalar_fold::BoundScalar;
 use super::scalar_fold::ScalarFacts;
-use crate::binder::AliasLookup;
-use crate::binder::NameResolutionResult;
-use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -216,62 +211,6 @@ where A: TypeCheckAdapter
             ))
             .set_span(span)
         }
-    }
-
-    /// GROUPING arguments must match grouping-sets items exactly (see
-    /// `AggregateInfo::replace_grouping`), but alias-preferring clauses such as
-    /// HAVING and ORDER BY can resolve a bare name to a same-name SELECT alias
-    /// like `if(grouping(x) = 1, 0, x) AS x`, shadowing the group column `x`.
-    /// Retarget such an argument to the input column when that column is a
-    /// grouping-sets item. This only fires on arguments that would otherwise
-    /// be rejected, so it never changes a previously working query.
-    pub(super) fn grouping_argument_group_item(
-        &self,
-        arena: &CoreExprArena<'_>,
-        arg: CoreExprId,
-        resolved: &ScalarExpr,
-    ) -> Option<ScalarExpr> {
-        let aggregate_info = &self.bind_context.aggregate_info;
-        if aggregate_info.grouping_sets().is_none()
-            || aggregate_info.is_grouping_sets_item(resolved)
-        {
-            return None;
-        }
-
-        // Only bare unqualified names can be shadowed by SELECT aliases.
-        let CoreExpr::ColumnRef {
-            span,
-            column:
-                ColumnRef {
-                    database: None,
-                    table: None,
-                    column: ColumnID::Name(ident),
-                },
-        } = arena.get(arg)
-        else {
-            return None;
-        };
-
-        // Unknown or ambiguous names keep the original resolution.
-        let column = match self.bind_context.resolve_name(
-            None,
-            None,
-            ident,
-            AliasLookup::all(&[]),
-            self.name_resolution_ctx,
-        ) {
-            Ok(NameResolutionResult::Column(column)) => column,
-            _ => return None,
-        };
-
-        let candidate: ScalarExpr = BoundColumnRef {
-            span: *span,
-            column,
-        }
-        .into();
-        aggregate_info
-            .is_grouping_sets_item(&candidate)
-            .then_some(candidate)
     }
 
     /// Rewrites that must run before generic child traversal. A recognized

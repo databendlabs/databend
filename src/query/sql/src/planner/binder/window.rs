@@ -511,27 +511,7 @@ impl<'a> WindowRewriter<'a> {
         if let ScalarExpr::BoundColumnRef(col) = &arg {
             Ok((col.clone(), arg.clone()))
         } else {
-            // For window expr works with group by expr alias, we need to replace the expr with the alias index
-            // eg: select number %3 a, number %4 b ,  row_number() over(partition by b % 2) from range(1, 10) t(number)  group by a,b;
-            let mut arg = arg.clone();
-            for group_expr in self.bind_context.aggregate_info.group_items() {
-                if !group_expr.scalar.is_column_ref() {
-                    let column = ColumnBindingBuilder::new(
-                        "group_item".to_string(),
-                        group_expr.index,
-                        Box::new(group_expr.scalar.data_type().into_owned()),
-                        Visibility::Visible,
-                    )
-                    .build();
-                    let col = BoundColumnRef {
-                        span: arg.span(),
-                        column,
-                    };
-                    let expr = ScalarExpr::BoundColumnRef(col.clone());
-                    arg.replace_sub_scalar(group_expr.scalar.clone(), expr)?;
-                }
-            }
-
+            // Grouped window inputs already reference key output symbols.
             let ty = arg.data_type().into_owned();
             let index = self
                 .metadata
@@ -556,21 +536,14 @@ impl<'a> WindowRewriter<'a> {
     }
 
     fn rewrite_aggregate_expr(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        if self.bind_context.aggregate_info.has_group_items()
-            || self.bind_context.aggregate_info.has_aggregate_calls()
-        {
-            AggregateRewriter::rewrite_expr(
-                &mut self.bind_context.aggregate_info,
-                self.metadata.clone(),
-                expr,
-            )?;
-        } else {
-            AggregateRewriter::rewrite_existing_expr(
-                &self.bind_context.aggregate_info,
-                expr,
-                "Window specification and arguments cannot contain aggregate functions",
-            )?;
-        }
+        // In a grouped SELECT the aggregate functions are already rewritten as
+        // they are bound, see `TypeChecker::rewrite_grouped_output`; one that is
+        // left is outside a grouped SELECT.
+        AggregateRewriter::rewrite_existing_expr(
+            &self.bind_context.aggregate_info,
+            expr,
+            "Window specification and arguments cannot contain aggregate functions",
+        )?;
 
         WindowExprChecker.visit(expr)?;
 

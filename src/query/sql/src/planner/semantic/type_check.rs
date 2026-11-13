@@ -47,6 +47,8 @@ use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::AliasLookup;
+use crate::binder::ScalarFoldingPolicy;
+use crate::binder::SelectItems;
 use crate::optimizer::ir::SExpr;
 use crate::planner::expression::UDFValidator;
 use crate::planner::expression::UdfValidationConfig;
@@ -57,14 +59,20 @@ const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
 mod adapter;
 mod aggregate;
+mod aggregate_facts;
+pub(crate) use aggregate_facts::UdafNames;
+pub(crate) use udf::sql_udf_aggregates;
+pub(crate) use udf::sql_udf_body;
 mod async_functions;
 mod column;
 mod core_expr;
 mod date;
+mod grouping_key;
 mod in_list;
 mod lambda;
 mod literal;
 mod persisted;
+mod pre_aggregate;
 pub use persisted::PersistedTypeCheckAdapter;
 mod resolve;
 mod rewrite_function;
@@ -83,7 +91,7 @@ mod vector;
 mod window;
 
 #[derive(Clone, Copy)]
-struct CoreExprId {
+pub(crate) struct CoreExprId {
     index: usize,
 }
 
@@ -138,6 +146,12 @@ enum CoreExpr<'a> {
         span: Span,
         name: &'a Identifier,
         args: CoreUdfCallArgs,
+        /// The arguments as written, which a SQL UDF that aggregates is
+        /// expanded with, see `udf.rs`.
+        ast_args: &'a [Expr],
+        /// Whether the call has an OVER clause, which no user-defined function
+        /// supports.
+        has_window: bool,
         // Carried through to UDF resolution, where scalar UDFs and UDAFs are
         // distinguished before a FILTER clause can be handled or rejected.
         filter: Option<&'a Expr>,
@@ -510,7 +524,9 @@ pub struct TypeChecker<'a, A> {
     metadata: MetadataRef,
 
     aliases: AliasLookup<'a>,
-    fallback_aliases: Option<AliasLookup<'a>>,
+    // The SELECT items of a grouped query whose pre-aggregate forms the
+    // aliases may resolve to, see `type_check/pre_aggregate.rs`.
+    select_items: Option<SelectItems<'a>>,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
@@ -526,9 +542,17 @@ pub struct TypeChecker<'a, A> {
     apply_masking_policy: bool,
     /// Only the ScalarBinder for a SELECT WHERE enables this. New binders used by
     /// subqueries, JOIN, HAVING, and policy expressions do not inherit it.
-    masking_where_aliases: Option<&'a [(String, Expr)]>,
+    masking_where_aliases: Option<(&'a CoreExprArena<'a>, &'a [(String, CoreExprId)])>,
     resolving_masking_where_aliases: Vec<String>,
     forbid_virtual_computed_column: bool,
+
+    // Folding policy is independent of the grouping-key binding phase.
+    folding_policy: ScalarFoldingPolicy,
+    // Grouping-key matching state, see `grouping_key.rs`.
+    grouping_key: grouping_key::GroupingKeyState,
+    // Grouping-key matching work memoized for the arena being bound, see
+    // `grouping_key.rs`.
+    grouping_key_memo: grouping_key::GroupingKeyMemo,
 }
 
 #[cfg(test)]

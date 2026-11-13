@@ -27,6 +27,10 @@ use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
 
+/// Under every execution strategy, an EvalScalar of a grouping-sets plan
+/// replaces a key symbol instead of projecting it twice, and a CTE consumer
+/// has the schema of its producer. The results of grouping-sets queries are
+/// in the sqllogictests of `query/grouping_sets`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grouping_sets_project_redefined_keys_once() -> Result<()> {
     let fixture = TestFixture::setup().await?;

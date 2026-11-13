@@ -1,0 +1,240 @@
+# Values of ordinary GROUP BY and global aggregates, which bind along the
+# same path as grouping sets: keys named by position and alias, GROUP BY ALL,
+# aggregates only outside the SELECT list, set-returning functions below and
+# above the aggregate, and ungrouped columns. The grouping-sets forms are in
+# key_binding.test and null_injection.test.
+
+statement ok
+CREATE OR REPLACE DATABASE grouping_ordinary
+
+statement ok
+USE grouping_ordinary
+
+statement ok
+CREATE TABLE t(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO t VALUES (1, 3), (1, 4), (2, 5)
+
+## Naming a key
+
+# Positions name SELECT items; `a + 1` depends on the key `a`.
+query III rowsort
+SELECT a, a + 1 AS k, sum(b) FROM (VALUES (1, 3), (1, 4), (2, 5)) t(a, b) GROUP BY 1, 2
+----
+1 2 7
+2 3 5
+
+# In WHERE and in aggregate arguments an alias stands for its input form.
+query II rowsort
+SELECT a + 1 AS k, sum(k) FROM (VALUES (1), (1), (2)) t(a) WHERE k > 0 GROUP BY k
+----
+2 4
+3 3
+
+# A subquery key named by position.
+query II
+SELECT (SELECT max(a) FROM t) AS k, count(*) FROM t GROUP BY 1
+----
+2 3
+
+## GROUP BY ALL
+
+# The keys are the items without aggregates, over aliases of earlier items.
+query IIII rowsort
+SELECT a + 1 AS k, k + 1, sum(b) AS s, s + 1 FROM (VALUES (1, 3), (1, 4), (2, 5)) t(a, b) GROUP BY ALL
+----
+2 3 7 8
+3 4 5 6
+
+# `b` is the input column, not the alias of the aggregate item.
+query II rowsort
+SELECT sum(a) AS b, b FROM t GROUP BY ALL
+----
+1 3
+1 4
+2 5
+
+query III rowsort
+SELECT *, count(*) FROM t GROUP BY ALL
+----
+1 3 1
+1 4 1
+2 5 1
+
+## Global aggregates
+
+# An aggregate whose result is folded away still makes the SELECT aggregate,
+# so it returns one row also over an empty input.
+query I
+SELECT (count(*) IS NOT NULL)::INT FROM (VALUES (1), (2)) t(a) WHERE false
+----
+1
+
+query I
+SELECT 1 FROM (VALUES (1), (2)) t(a) HAVING count(*) = 2
+----
+1
+
+query I
+SELECT 1 FROM (VALUES (1), (2)) t(a) ORDER BY sum(a)
+----
+1
+
+# Without an aggregate, HAVING filters the rows.
+query I rowsort
+SELECT a FROM t HAVING a > 0
+----
+1
+1
+2
+
+## Expressions over keys
+
+query TI rowsort
+SELECT array_transform([1, 2], x -> x + a), sum(b) FROM t GROUP BY a
+----
+[2,3] 7
+[3,4] 5
+
+query II rowsort
+SELECT a % 2 AS k, row_number() OVER (ORDER BY sum(b)) FROM (VALUES (1, 3), (1, 4), (2, 5)) t(a, b) GROUP BY k
+----
+0 1
+1 2
+
+query II rowsort
+SELECT a % 2 AS k, row_number() OVER (PARTITION BY k ORDER BY sum(b)) FROM t GROUP BY k
+----
+0 1
+1 1
+
+## Set-returning functions
+
+# A constant set-returning function is evaluated after the aggregate.
+query II rowsort
+SELECT a, unnest([1, 2]) FROM (VALUES (1), (1), (2)) t(a) GROUP BY a
+----
+1 1
+1 2
+2 1
+2 2
+
+query I rowsort
+SELECT unnest(array_agg(a)) FROM (VALUES (1), (2)) t(a)
+----
+1
+2
+
+# In an aggregate argument it is evaluated before the aggregate.
+query I
+SELECT sum(unnest([a, a + 1])) FROM (VALUES (1), (2)) t(a)
+----
+8
+
+query III rowsort
+SELECT a, sum(unnest([a, a + 1])), unnest([a, a + 1]) FROM (VALUES (1), (1), (2)) t(a) GROUP BY a
+----
+1 6 1
+1 6 2
+2 5 2
+2 5 3
+
+# As a key it is evaluated before the aggregate too.
+query III rowsort
+SELECT a, unnest([a, a + 1]) AS s, count(*) FROM (VALUES (1), (1), (2)) t(a) GROUP BY a, s
+----
+1 1 2
+1 2 2
+2 2 1
+2 3 1
+
+statement error (?s)1065.*set-returning functions evaluated before the aggregate can't contain aggregate functions
+SELECT unnest([sum(a)]) AS s FROM t GROUP BY s
+
+## What makes a SELECT grouped
+
+# An aggregate in a window argument.
+statement error (?s)1065.*column "b" must appear in the GROUP BY clause
+SELECT b, sum(sum(a)) OVER () FROM t
+
+statement error (?s)1065.*aggregate functions can not be used in lambda function
+SELECT array_transform([1, 2], x -> x + sum(a)) FROM t
+
+# A SQL UDF whose body aggregates, also through another UDF, is expanded
+# where it is called. A name in a lambda of the body is the lambda parameter.
+statement ok
+CREATE OR REPLACE FUNCTION grouping_ordinary_sum AS (x) -> sum(x)
+
+statement ok
+CREATE OR REPLACE FUNCTION grouping_ordinary_sum_plus AS (x, y) -> sum(x) + y
+
+statement ok
+CREATE OR REPLACE FUNCTION grouping_ordinary_sum_typed (x INT) RETURNS BIGINT AS $$ sum(x) $$
+
+statement ok
+CREATE OR REPLACE FUNCTION grouping_ordinary_sum_nested AS (x) -> grouping_ordinary_sum(x) + 1
+
+statement ok
+CREATE OR REPLACE FUNCTION grouping_ordinary_sum_lambda AS (x) -> sum(x) + array_transform([1], x -> x + 1)[1]
+
+query IIII
+SELECT grouping_ordinary_sum(a), grouping_ordinary_sum_typed(a), grouping_ordinary_sum_nested(a), grouping_ordinary_sum_lambda(a) FROM t
+----
+4 4 5 6
+
+query II rowsort
+SELECT a, grouping_ordinary_sum(b) FROM t GROUP BY ALL
+----
+1 7
+2 5
+
+query I rowsort
+SELECT grouping_ordinary_sum_plus(a, b) FROM t GROUP BY b
+----
+4
+5
+7
+
+statement error (?s)1065.*column "b" must appear in the GROUP BY clause
+SELECT b, grouping_ordinary_sum(a) FROM t
+
+# The argument outside the aggregate in the body must be a key.
+statement error (?s)1065.*column "a" must appear in the GROUP BY clause
+SELECT grouping_ordinary_sum_plus(a, a) FROM t GROUP BY b
+
+statement error (?s)1065.*window syntax is not supported for user-defined functions
+SELECT grouping_ordinary_sum(a) OVER () FROM t
+
+statement ok
+DROP FUNCTION grouping_ordinary_sum_lambda
+
+statement ok
+DROP FUNCTION grouping_ordinary_sum_nested
+
+statement ok
+DROP FUNCTION grouping_ordinary_sum_typed
+
+statement ok
+DROP FUNCTION grouping_ordinary_sum_plus
+
+statement ok
+DROP FUNCTION grouping_ordinary_sum
+
+## Ungrouped columns
+
+# A column in a branch that folding removes is still checked.
+statement error (?s)1065.*column "a" must appear in the GROUP BY clause
+SELECT if(true, 1, a), count(*) FROM t GROUP BY b
+
+statement error (?s)1065.*column "b" must appear in the GROUP BY clause
+SELECT * FROM t GROUP BY a
+
+statement error (?s)1065.*column "a" must appear in the GROUP BY clause
+SELECT a, sum(b) FROM t
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE grouping_ordinary

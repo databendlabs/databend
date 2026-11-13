@@ -237,7 +237,7 @@ regions:
     main:
       consumers: [A0]
       name_shapes: [N0, N1, N2, N3, N4, N5]
-      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+      producers: [I0, S0, S1, S2, S3, S4, N0]
     cases:
       - key: A0N1S0_3_
         name: aggregate_argument_qualified_name_does_not_consume_prior_select_alias

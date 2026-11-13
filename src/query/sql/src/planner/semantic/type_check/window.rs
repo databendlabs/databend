@@ -77,6 +77,20 @@ pub(super) struct CoreWindowFrame {
     end_bound: CoreWindowFrameBound,
 }
 
+impl CoreWindowFrame {
+    /// The offset expressions of the bounds.
+    pub(super) fn exprs(&self) -> impl Iterator<Item = CoreExprId> + '_ {
+        [&self.start_bound, &self.end_bound]
+            .into_iter()
+            .filter_map(|bound| match bound {
+                CoreWindowFrameBound::CurrentRow => None,
+                CoreWindowFrameBound::Preceding(expr) | CoreWindowFrameBound::Following(expr) => {
+                    *expr
+                }
+            })
+    }
+}
+
 pub(super) enum CoreWindowFrameBound {
     CurrentRow,
     Preceding(Option<CoreExprId>),
@@ -397,13 +411,15 @@ where A: TypeCheckAdapter
                     .clone();
                 let mut named_arena = self.core_expr_arena();
                 let named_spec = named_arena.lower_window_spec(&spec)?;
-                return self.resolve_window_spec(
-                    &named_arena,
-                    span,
-                    display_name,
-                    &named_spec,
-                    func,
-                );
+                return self.with_own_grouping_key_memo(|type_checker| {
+                    type_checker.resolve_window_spec(
+                        &named_arena,
+                        span,
+                        display_name,
+                        &named_spec,
+                        func,
+                    )
+                });
             }
         };
         self.resolve_window_spec(arena, span, display_name, spec, func)

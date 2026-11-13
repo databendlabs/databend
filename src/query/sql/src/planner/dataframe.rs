@@ -41,7 +41,10 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
+use crate::planner::binder::ScalarFoldingPolicy;
+use crate::planner::binder::SelectClauses;
 use crate::planner::binder::SelectInfo;
+use crate::planner::binder::SelectItemForms;
 use crate::plans::Limit;
 
 pub struct Dataframe {
@@ -193,21 +196,26 @@ impl Dataframe {
             alias: None,
         }];
 
-        let mut select_list = self
+        let clauses = self
             .binder
-            .normalize_select_list(&mut self.bind_context, &select_list)?;
-
-        self.binder
-            .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
+            .lower_select_clauses(&self.bind_context, SelectClauses {
+                select_list: &select_list,
+                ..Default::default()
+            })?;
+        let (select_list, _) = self.binder.bind_grouped_select_list(
+            &mut self.bind_context,
+            &clauses,
+            &Default::default(),
+        )?;
 
         let select_info = self
             .binder
             .analyze_projection(&self.bind_context, &select_list)?;
+        self.bind_context.grouping_key_scope = None;
 
         self.s_expr = self
             .binder
             .bind_aggregate(&mut self.bind_context, self.s_expr)?;
-
         self.apply_select_output(select_info)
     }
 
@@ -225,42 +233,53 @@ impl Dataframe {
             })
             .collect();
 
-        let select_list = self
+        let clauses = self
             .binder
-            .normalize_select_list(&mut self.bind_context, &select_list)?;
-
+            .lower_select_clauses(&self.bind_context, SelectClauses {
+                select_list: &select_list,
+                group_by: Some(&groupby),
+                having: having.as_ref(),
+                ..Default::default()
+            })?;
+        let udafs = self
+            .binder
+            .analyze_select_aggregates(&self.bind_context, &clauses)?
+            .udaf_names;
+        let (mut select_list, mut grouped) =
+            self.binder
+                .bind_grouped_select_list(&mut self.bind_context, &clauses, &udafs)?;
+        self.binder
+            .analyze_project_set_select(&mut self.bind_context, &mut select_list)?;
         let alias_catalog = select_list.alias_catalog();
-        let aliases = alias_catalog.all_aliases();
 
-        let group_by_aliases = alias_catalog.group_by_bindings();
-        self.binder.analyze_group_items(
-            &mut self.bind_context,
-            &select_list,
-            &group_by_aliases,
-            &groupby,
-        )?;
+        // As in a SELECT, every clause after the SELECT list is bound before
+        // the aggregate is built, so that the aggregate functions it
+        // registers, e.g. in HAVING, are computed by the aggregate.
+        let select_info = self
+            .binder
+            .analyze_projection(&self.bind_context, &select_list)?;
+        let having = clauses
+            .having()
+            .map(|having| {
+                self.binder.analyze_aggregate_having(
+                    &mut self.bind_context,
+                    alias_catalog.all_aliases(),
+                    Some(grouped.lend_items()),
+                    clauses.arena(),
+                    having,
+                )
+            })
+            .transpose()?;
+        self.bind_context.grouping_key_scope = None;
 
-        if self.bind_context.aggregate_info.has_aggregate_calls()
-            || self.bind_context.aggregate_info.has_group_items()
-        {
-            self.s_expr = self
-                .binder
-                .bind_aggregate(&mut self.bind_context, self.s_expr)?;
-        }
-
-        if let Some(having) = &having {
-            let having =
-                self.binder
-                    .analyze_aggregate_having(&mut self.bind_context, aliases, having)?;
+        self.s_expr = self
+            .binder
+            .bind_aggregate(&mut self.bind_context, self.s_expr)?;
+        if let Some(having) = having {
             self.s_expr = self
                 .binder
                 .bind_having(&mut self.bind_context, having, self.s_expr)?;
         }
-
-        let select_info = self
-            .binder
-            .analyze_projection(&self.bind_context, &select_list)?;
-
         self.apply_select_output(select_info)
     }
 
@@ -346,9 +365,17 @@ impl Dataframe {
                 nulls_first,
             });
         }
-        let select_list = self
+        let clauses = self
             .binder
-            .normalize_select_list(&mut self.bind_context, select_list.as_slice())?;
+            .lower_select_clauses(&self.bind_context, SelectClauses {
+                select_list: &select_list,
+                order_by: &order,
+                ..Default::default()
+            })?;
+        let mut forms = SelectItemForms::new(&clauses, ScalarFoldingPolicy::Normal);
+        let select_list =
+            self.binder
+                .bind_select_list(&mut self.bind_context, &clauses, &mut forms)?;
         let aliases = select_list
             .items
             .iter()
@@ -363,6 +390,7 @@ impl Dataframe {
             &aliases,
             None,
             &order,
+            &clauses,
             distinct,
         )?;
         self.binder

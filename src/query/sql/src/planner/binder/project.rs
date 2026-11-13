@@ -46,14 +46,20 @@ use databend_enterprise_data_mask_feature::get_datamask_handler;
 use itertools::Itertools;
 
 use super::AggregateInfo;
+use super::grouped_select::SelectItemForms;
+use super::grouped_select::SelectItems;
+use super::select_clauses::SelectClauses;
+use super::select_clauses::SelectItemSource;
 use crate::ColumnEntry;
 use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::TypeChecker;
 use crate::WindowChecker;
+use crate::binder::AliasLookup;
+use crate::binder::AliasTable;
 use crate::binder::ExprContext;
+use crate::binder::ScalarFoldingPolicy;
 use crate::binder::Visibility;
-use crate::binder::aggregate_prepass::collect_function_names;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowInfo;
@@ -62,8 +68,8 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ColumnBinding;
+use crate::planner::binder::SelectClauseExprs;
 use crate::planner::binder::scalar::ScalarBinder;
-use crate::planner::semantic::GroupingChecker;
 use crate::planner::semantic::compare_table_name;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
@@ -191,25 +197,14 @@ impl SelectInfo {
 }
 
 impl Binder {
-    fn use_grouping_projection(bind_context: &BindContext) -> bool {
-        bind_context.in_grouping
-            || bind_context.aggregate_info.has_group_items()
-            || bind_context.aggregate_info.has_aggregate_calls()
-    }
-
     pub(super) fn prepare_select_output_scalar(
         &self,
         bind_context: &BindContext,
         scalar: &ScalarExpr,
     ) -> Result<ScalarExpr> {
         let mut scalar = scalar.clone();
-        if Self::use_grouping_projection(bind_context) {
-            let mut grouping_checker = GroupingChecker::new(bind_context, None);
-            grouping_checker.visit(&mut scalar)?;
-        } else {
-            let mut window_checker = WindowChecker::new(bind_context);
-            window_checker.visit(&mut scalar)?;
-        }
+        let mut window_checker = WindowChecker::new(bind_context);
+        window_checker.visit(&mut scalar)?;
         Ok(scalar)
     }
 
@@ -244,10 +239,10 @@ impl Binder {
         window_info: &WindowInfo,
         item: &SelectItem<'_>,
     ) -> Result<ColumnBinding> {
-        // This item is a grouping sets item, its data type should be nullable.
-        let is_grouping_sets_item = agg_info.is_grouping_sets_item(&item.scalar);
-
-        let mut column_binding = match &item.scalar {
+        // A key of grouping sets is bound to its nullable output; an item that
+        // equals the input of a key without being bound to it, e.g. a
+        // constant, is evaluated after the aggregate and keeps its type.
+        let column_binding = match &item.scalar {
             ScalarExpr::BoundColumnRef(column_ref) => {
                 let mut column_binding = column_ref.column.clone();
                 // A virtual column explicitly projected by the SELECT list must be visible.
@@ -262,14 +257,10 @@ impl Binder {
                 }
                 column_binding
             }
-            ScalarExpr::AggregateFunction(agg) => {
-                debug_assert!(!is_grouping_sets_item);
-                agg_info
-                    .lookup_aggregate_function_column(agg, &item.alias)
-                    .unwrap()
-            }
+            ScalarExpr::AggregateFunction(agg) => agg_info
+                .lookup_aggregate_function_column(agg, &item.alias)
+                .unwrap(),
             ScalarExpr::UDAFCall(udaf) => {
-                debug_assert!(!is_grouping_sets_item);
                 agg_info.lookup_udaf_call_column(udaf, &item.alias).unwrap()
             }
             ScalarExpr::WindowFunction(win) => {
@@ -280,10 +271,6 @@ impl Binder {
                 item.scalar.data_type().into_owned(),
             ),
         };
-
-        if is_grouping_sets_item {
-            column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
-        }
 
         Ok(column_binding)
     }
@@ -346,118 +333,100 @@ impl Binder {
         bind_context.columns = plan.output_columns;
         Ok(new_expr)
     }
-    /// Normalize select list into a BindContext.
-    /// There are three kinds of select target:
-    ///
-    ///   * Qualified name, e.g. `SELECT t.a FROM t`
-    ///   * Qualified name with wildcard, e.g. `SELECT t.* FROM t, t1`
-    ///   * Qualified name with exclude, e.g. `SELECT t.* EXCLUDE (c1, c2) FROM t, t1`
-    ///   * Scalar expression or aggregate expression, e.g. `SELECT COUNT(*)+1 AS count FROM t`
-    ///
-    /// For qualified names, we just resolve it with the input `BindContext`. If successful, we
-    /// will get a `ColumnBinding` and the `expr` field is left `None`.
-    ///
-    /// The qualified names with wildcard will be expanded into qualified names for resolution.
-    /// For example, `SELECT * FROM t` may be expanded into `SELECT t.a, t.b FROM t`.
-    ///
-    /// For scalar expressions and aggregate expressions, we will register new columns for
-    /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
-    /// in this function.
+
+    /// Bind a SELECT list that is not part of a SELECT statement, e.g. the
+    /// select list of a COPY transform. It is lowered and bound like the
+    /// SELECT list of a query without aggregates, see
+    /// [`Self::bind_select_list`].
     pub fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
+        let clauses = self.lower_select_clauses(input_context, SelectClauses {
+            select_list,
+            ..Default::default()
+        })?;
+        let mut forms = SelectItemForms::new(&clauses, ScalarFoldingPolicy::Normal);
+        self.bind_select_list(input_context, &clauses, &mut forms)
+    }
+
+    /// Bind the SELECT items collected in `clauses` by `lower_select_clauses`.
+    ///
+    /// In a grouped query the list is bound after the keys are known, within
+    /// the grouping scope, so that every expression over a key binds to the
+    /// key output; `forms` holds the pre-aggregate forms that GROUP BY and
+    /// WHERE refer to, see `grouped_select.rs`. Without a grouping scope the
+    /// items are bound as they are, and no item has a pre-aggregate form.
+    pub(crate) fn bind_select_list<'a>(
+        &mut self,
+        input_context: &mut BindContext,
+        clauses: &SelectClauseExprs<'a>,
+        forms: &mut SelectItemForms,
+    ) -> Result<SelectList<'a>> {
         input_context.expr_context = ExprContext::SelectClause;
 
+        let grouped = input_context.grouping_key_scope.is_some();
+        let mut pre_group = SelectItems::new(clauses, forms);
+        let select_item_keys = input_context.aggregate_info.select_item_keys().to_vec();
         let mut output = SelectList::default();
-        let mut prev_aliases = Vec::new();
+        // The bound items before the current one by position, and the
+        // positions of those whose aliases later items see, so that an alias
+        // resolves to the pre-aggregate form of its item where needed.
+        let mut prev_items = Vec::with_capacity(clauses.len());
+        let mut prev_expr_positions = Vec::new();
 
-        for select_target in select_list {
-            match select_target {
-                SelectTarget::StarColumns {
-                    qualified: names,
-                    column_filter,
-                } => {
-                    if names.len() > 3 || names.is_empty() {
-                        return Err(ErrorCode::SemanticError("Unsupported indirection type"));
-                    }
-
-                    let span = match names.last() {
-                        Some(Indirection::Star(span)) => *span,
-                        _ => None,
-                    };
-
-                    self.resolve_star_columns(
-                        span,
-                        input_context,
-                        select_target,
-                        names.as_slice(),
-                        column_filter,
-                        &mut output,
-                    )?;
+        for position in 0..clauses.len() {
+            let item = clauses.item(position);
+            // An item that GROUP BY refers to by position or alias is the key.
+            let is_key = select_item_keys.contains(&position);
+            let scalar = match &item.source {
+                SelectItemSource::Star(scalar) if grouped => {
+                    bind_grouped_star_item(input_context, scalar, is_key)?
                 }
-                SelectTarget::AliasedExpr { expr, alias } => {
-                    let used_functions =
-                        collect_function_names(&self.name_resolution_ctx, expr.as_ref());
-                    let mut scalar_binder = ScalarBinder::new(
-                        input_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        &prev_aliases,
-                    );
-                    let (bound_expr, _) = scalar_binder.bind(expr)?;
-
-                    fn get_expr_name(
-                        expr: &Expr,
-                        alias: &Option<Identifier>,
-                        name_resolution_ctx: &NameResolutionContext,
-                    ) -> String {
-                        match (expr, alias) {
-                            (
-                                Expr::ColumnRef {
-                                    column:
-                                        ColumnRef {
-                                            column: ColumnID::Name(column),
-                                            ..
-                                        },
-                                    ..
-                                },
-                                None,
-                            ) => normalize_identifier(column, name_resolution_ctx).name,
-                            (
-                                Expr::Cast {
-                                    expr: internal_expr,
-                                    ..
-                                },
-                                None,
-                            ) => get_expr_name(internal_expr.as_ref(), &None, name_resolution_ctx),
-                            (_, Some(alias)) => {
-                                normalize_identifier(alias, name_resolution_ctx).name
-                            }
-                            _ => {
-                                let mut expr = expr.clone();
-                                let mut remove_quote_visitor = RemoveIdentifierQuote;
-                                expr.walk_mut(&mut remove_quote_visitor).unwrap();
-                                format!("{:#}", expr)
-                            }
+                SelectItemSource::Star(scalar) => scalar.clone(),
+                SelectItemSource::Expr { expr, .. } => {
+                    let key = is_key
+                        .then(|| pre_group.bound_form(position))
+                        .flatten()
+                        .and_then(|form| {
+                            input_context
+                                .aggregate_info
+                                .lookup_grouping_key_output(&form)
+                        });
+                    if let Some(column) = key {
+                        BoundColumnRef {
+                            span: expr.span(),
+                            column,
                         }
+                        .into()
+                    } else {
+                        let mut type_checker = TypeChecker::try_create_with_aliases(
+                            input_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            AliasLookup::new(
+                                AliasTable::Bound(&prev_items),
+                                Some(&prev_expr_positions),
+                            ),
+                            false,
+                        )?;
+                        type_checker.set_select_items(pre_group.reborrow());
+                        type_checker.resolve_select_item(position)?.0
                     }
-
-                    // If alias is not specified, we will generate a name for the scalar expression.
-                    let expr_name = get_expr_name(expr.as_ref(), alias, &self.name_resolution_ctx);
-
-                    prev_aliases.push((expr_name.clone(), bound_expr.clone()));
-
-                    output.items.push(SelectItem {
-                        select_target,
-                        scalar: bound_expr,
-                        alias: expr_name,
-                        used_functions,
-                    });
                 }
+            };
+
+            prev_items.push((item.alias.clone(), scalar.clone()));
+            if matches!(item.source, SelectItemSource::Expr { .. }) {
+                prev_expr_positions.push(position);
             }
+            output.items.push(SelectItem {
+                select_target: clauses.target(position),
+                scalar,
+                alias: item.alias.clone(),
+            });
         }
         Ok(output)
     }
@@ -519,11 +488,10 @@ impl Binder {
             select_target,
             scalar,
             alias: column_binding.column_name.clone(),
-            used_functions: Default::default(),
         })
     }
 
-    fn resolve_star_columns<'a>(
+    pub(super) fn resolve_star_columns<'a>(
         &self,
         span: Span,
         input_context: &BindContext,
@@ -893,4 +861,75 @@ impl Binder {
         let (scalar, _data_type) = *type_checker.resolve(&replaced_expr)?;
         Ok(Some(scalar))
     }
+}
+
+/// The name of a SELECT item: its alias, or a name derived from the expression.
+pub(super) fn select_item_name(
+    expr: &Expr,
+    alias: &Option<Identifier>,
+    name_resolution_ctx: &NameResolutionContext,
+) -> String {
+    match (expr, alias) {
+        (
+            Expr::ColumnRef {
+                column:
+                    ColumnRef {
+                        column: ColumnID::Name(column),
+                        ..
+                    },
+                ..
+            },
+            None,
+        ) => normalize_identifier(column, name_resolution_ctx).name,
+        (
+            Expr::Cast {
+                expr: internal_expr,
+                ..
+            },
+            None,
+        ) => select_item_name(internal_expr.as_ref(), &None, name_resolution_ctx),
+        (_, Some(alias)) => normalize_identifier(alias, name_resolution_ctx).name,
+        _ => {
+            let mut expr = expr.clone();
+            let mut remove_quote_visitor = RemoveIdentifierQuote;
+            expr.walk_mut(&mut remove_quote_visitor).unwrap();
+            format!("{:#}", expr)
+        }
+    }
+}
+
+/// Bind a column expanded from `*` in a grouped SELECT. It is built without
+/// the type checker, which matches the other items to keys: a key, or a
+/// column whose expression is a key, binds to the key output, and any other
+/// column must be a key output.
+fn bind_grouped_star_item(
+    input_context: &BindContext,
+    scalar: &ScalarExpr,
+    is_key: bool,
+) -> Result<ScalarExpr> {
+    let mut scalar = scalar.clone();
+    if (is_key || !scalar.used_columns().is_empty())
+        && let Some(column) = input_context
+            .aggregate_info
+            .lookup_grouping_key_output(&scalar)
+    {
+        scalar = BoundColumnRef {
+            span: scalar.span(),
+            column,
+        }
+        .into();
+    }
+    if let Some(column) = input_context.columns.iter().find(|column| {
+        scalar.used_columns().contains(&column.index)
+            && !input_context
+                .aggregate_info
+                .is_grouping_key_output(column.index)
+    }) {
+        return Err(ErrorCode::SemanticError(format!(
+            "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
+            column.column_name,
+        ))
+        .set_span(scalar.span()));
+    }
+    Ok(scalar)
 }

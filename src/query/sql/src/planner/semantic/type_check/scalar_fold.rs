@@ -45,6 +45,7 @@ use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::ColumnBinding;
 use crate::Symbol;
+use crate::binder::ScalarFoldingPolicy;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -138,6 +139,10 @@ fn full_domain(data_type: &DataType) -> Option<Domain> {
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
+    pub(super) fn scalar_folding_policy(&self) -> ScalarFoldingPolicy {
+        self.folding_policy
+    }
+
     /// Attaches facts to an expression bound without them.
     pub(super) fn bind_derived(&self, scalar: ScalarExpr, data_type: DataType) -> BoundScalar {
         let facts = self.derive_facts(&scalar);
@@ -621,7 +626,9 @@ where A: TypeCheckAdapter
         if !arg.deterministic {
             self.adapter.set_result_cache_uncacheable();
         }
-        if let Some(value) = arg.constant {
+        if self.scalar_folding_policy().allows_folding()
+            && let Some(value) = arg.constant
+        {
             return Self::folded_constant_of_type(cast.span(), value, cast.data_type().clone());
         }
         let EExpr::Cast(cast) = cast else {
@@ -668,7 +675,16 @@ where A: TypeCheckAdapter
         let is_grouping = Self::is_grouping(&call);
         let all_removable = arg_facts.iter().all(|arg| arg.removable);
         let mut domain = None;
-        if !is_srf && !is_grouping && call.args.len() <= FoldRules::MAX_FUNCTION_ARGS_TO_FOLD {
+        // Pre-aggregate forms of grouping-set keys retain their structure: a
+        // type-derived constant such as is_null(non_null_key) changes once the
+        // key receives injected NULLs, and a folded constant would be matched
+        // to any key that folds to it.
+        let allow_folding = self.scalar_folding_policy().allows_folding();
+        if allow_folding
+            && !is_srf
+            && !is_grouping
+            && call.args.len() <= FoldRules::MAX_FUNCTION_ARGS_TO_FOLD
+        {
             if name == "if" && call.args.len() >= 3 && !call.args.len().is_multiple_of(2) {
                 match FoldRules::if_pruning(call.args.len(), |index| {
                     arg_facts[index].constant.as_ref()
@@ -817,6 +833,7 @@ where A: TypeCheckAdapter
                 |(((checked_arg, is_generic), arg), facts)| match &facts.constant {
                     Some(value)
                         if arg.facts.evaluable
+                            && self.scalar_folding_policy().allows_folding()
                             && !is_generic
                             && checked_arg.data_type() != &arg.data_type =>
                     {
