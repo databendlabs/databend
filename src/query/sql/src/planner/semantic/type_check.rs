@@ -47,6 +47,8 @@ use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::AliasLookup;
+use crate::binder::ScalarFoldingPolicy;
+use crate::binder::SelectItems;
 use crate::optimizer::ir::SExpr;
 use crate::planner::expression::UDFValidator;
 use crate::planner::expression::UdfValidationConfig;
@@ -61,10 +63,12 @@ mod async_functions;
 mod column;
 mod core_expr;
 mod date;
+mod grouping_key;
 mod in_list;
 mod lambda;
 mod literal;
 mod persisted;
+mod pre_aggregate;
 pub use persisted::PersistedTypeCheckAdapter;
 mod resolve;
 mod rewrite_function;
@@ -83,7 +87,7 @@ mod vector;
 mod window;
 
 #[derive(Clone, Copy)]
-struct CoreExprId {
+pub(crate) struct CoreExprId {
     index: usize,
 }
 
@@ -511,6 +515,9 @@ pub struct TypeChecker<'a, A> {
 
     aliases: AliasLookup<'a>,
     fallback_aliases: Option<AliasLookup<'a>>,
+    // The SELECT items of a GROUPING SETS query whose pre-aggregate forms the
+    // aliases may resolve to, see `type_check/pre_aggregate.rs`.
+    select_items: Option<SelectItems<'a>>,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.
@@ -529,6 +536,14 @@ pub struct TypeChecker<'a, A> {
     masking_where_aliases: Option<&'a [(String, Expr)]>,
     resolving_masking_where_aliases: Vec<String>,
     forbid_virtual_computed_column: bool,
+
+    // Folding policy is independent of the grouping-key binding phase.
+    folding_policy: ScalarFoldingPolicy,
+    // Grouping-key matching state, see `grouping_key.rs`.
+    grouping_key: grouping_key::GroupingKeyState,
+    // Grouping-key matching work memoized for the arena being bound, see
+    // `grouping_key.rs`.
+    grouping_key_memo: grouping_key::GroupingKeyMemo,
 }
 
 #[cfg(test)]

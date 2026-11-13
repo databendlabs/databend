@@ -64,6 +64,7 @@ where A: TypeCheckAdapter
         let func_ctx = adapter.function_context()?;
         let dialect = adapter.sql_dialect()?;
         Ok(Self {
+            folding_policy: bind_context.scalar_folding_policy,
             bind_context,
             adapter,
             dialect,
@@ -72,6 +73,7 @@ where A: TypeCheckAdapter
             metadata,
             aliases,
             fallback_aliases,
+            select_items: None,
             in_aggregate_function: false,
             in_window_function: false,
             in_masking_policy: false,
@@ -79,6 +81,8 @@ where A: TypeCheckAdapter
             masking_where_aliases: None,
             resolving_masking_where_aliases: Vec::new(),
             forbid_virtual_computed_column: false,
+            grouping_key: Default::default(),
+            grouping_key_memo: Default::default(),
         })
     }
 
@@ -108,7 +112,7 @@ where A: TypeCheckAdapter
         root: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         self.adapter.check_core_expr_context(arena)?;
-        self.resolve_core(arena, root)
+        self.with_own_grouping_key_memo(|type_checker| type_checker.resolve_core(arena, root))
     }
 
     pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {

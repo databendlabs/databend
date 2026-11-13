@@ -24,6 +24,7 @@ use super::ExprContext;
 use crate::BindContext;
 use crate::Symbol;
 use crate::binder::Binder;
+use crate::binder::SelectItems;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::project::SelectInfo;
 use crate::binder::scalar::ScalarBinder;
@@ -95,6 +96,7 @@ impl Binder {
         bind_context: &mut BindContext,
         select_info: &mut SelectInfo,
         aliases: &[(String, ScalarExpr)],
+        mut select_items: Option<SelectItems<'_>>,
         order_by_facts: Option<&[SelectClauseFact]>,
         order_by: &[OrderByExpr],
         distinct: bool,
@@ -154,7 +156,10 @@ impl Binder {
                         self.metadata.clone(),
                         aliases,
                     );
-                    let (bound_expr, _) = match scalar_binder.bind(&order.expr) {
+                    let (bound_expr, _) = match scalar_binder.bind_with_select_items(
+                        &order.expr,
+                        select_items.as_mut().map(SelectItems::reborrow),
+                    ) {
                         Ok(bound_expr) => bound_expr,
                         Err(err) => return Some(Err(err)),
                     };

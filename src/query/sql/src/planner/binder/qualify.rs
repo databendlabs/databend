@@ -22,6 +22,7 @@ use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
+use crate::binder::SelectItems;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::into_conjunctions;
 use crate::binder::window::WindowInputColumns;
@@ -39,10 +40,11 @@ use crate::plans::walk_expr_mut;
 impl Binder {
     /// Analyze window in qualify clause, this will rewrite window functions.
     /// See `WindowRewriter` for more details.
-    pub fn analyze_window_qualify(
+    pub(crate) fn analyze_window_qualify(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
+        select_items: Option<SelectItems<'_>>,
         qualify: &Expr,
         needs_window_rewrite: bool,
     ) -> Result<ScalarExpr> {
@@ -54,7 +56,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
-        let (mut scalar, _) = scalar_binder.bind(qualify)?;
+        let (mut scalar, _) = scalar_binder.bind_with_select_items(qualify, select_items)?;
         AggregateRewriter::rewrite_existing_expr(
             &bind_context.aggregate_info,
             &mut scalar,

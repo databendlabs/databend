@@ -784,7 +784,6 @@ mod tests {
         grouping_sets.grouping_sets = Some(GroupingSets {
             grouping_id_index: Symbol::new(2),
             sets: vec![vec![Symbol::new(0)], vec![]],
-            dup_group_items: vec![],
         });
         let mut ranked = group.clone();
         ranked.rank_limit = Some((vec![], 1));

@@ -498,9 +498,12 @@ impl Binder {
         facts: &AggregatePrepassFacts,
     ) -> Result<()> {
         for fact in &facts.items {
+            // Only the aggregate calls registered here are kept, and aliases
+            // do not resolve in their arguments.
             self.bind_and_rewrite_aggregate_expr(
                 bind_context,
                 aliases,
+                None,
                 fact.expr_context,
                 &fact.expr,
             )?;

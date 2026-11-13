@@ -74,6 +74,7 @@ use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::binder::ScalarFoldingPolicy;
 use crate::binder::Visibility;
 use crate::binder::conjunctions;
 use crate::binder::table_args::execute_subquery_for_scalar;
@@ -190,6 +191,8 @@ impl Binder {
             cte_context: bind_context.cte_context.clone(),
             definition_scope: bind_context.definition_scope.clone(),
             in_grouping: false,
+            grouping_key_scope: None,
+            scalar_folding_policy: ScalarFoldingPolicy::Normal,
             binding_views: bind_context.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,

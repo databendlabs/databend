@@ -22,6 +22,7 @@ use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::planner::binder::BindContext;
+use crate::planner::binder::SelectItems;
 use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeCheckAdapter;
@@ -104,6 +105,17 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
     }
 
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
+        self.bind_with_select_items(expr, None)
+    }
+
+    /// Bind `expr`, letting aliases resolve to the pre-aggregate forms of the
+    /// SELECT items of a GROUPING SETS query, see
+    /// `TypeChecker::set_select_items`.
+    pub(crate) fn bind_with_select_items(
+        &mut self,
+        expr: &Expr,
+        select_items: Option<SelectItems<'_>>,
+    ) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::try_create_with_adapter(
             self.bind_context,
             self.adapter.clone()?,
@@ -116,6 +128,9 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             type_checker.set_masking_where_aliases(aliases);
         }
         type_checker.set_forbid_virtual_computed_column(self.forbid_virtual_computed_column);
+        if let Some(items) = select_items {
+            type_checker.set_select_items(items);
+        }
         Ok(*type_checker.resolve(expr)?)
     }
 

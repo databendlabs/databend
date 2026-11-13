@@ -45,6 +45,8 @@ pub use name_resolution::VariableNormalizer;
 pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use type_check::AuthFunction;
+pub(crate) use type_check::CoreExprArena;
+pub(crate) use type_check::CoreExprId;
 pub use type_check::FullTypeCheckAdapter;
 pub use type_check::NamespaceFunction;
 pub use type_check::PersistedTypeCheckAdapter;

@@ -178,6 +178,8 @@ where A: super::TypeCheckAdapter
             self.metadata.clone(),
             &[],
         )?;
+        // The new type checker binds the body with grouping-key matching work
+        // of its own, as pre-aggregate forms depend on the parameters.
         let resolved = type_checker.resolve_core(arena, lambda_expr)?;
         // Only subqueries allocate symbols while binding an expression.
         if self.metadata.read().next_column_index() != first_symbol {
@@ -573,7 +575,13 @@ where A: super::TypeCheckAdapter
                 if !self.arg_index.insert(index) {
                     return Ok(());
                 }
-                if self.bind_context.columns.iter().any(|c| c.index == index) {
+                // The output of a grouping key is a column of the scope too.
+                if self.bind_context.columns.iter().any(|c| c.index == index)
+                    || self
+                        .bind_context
+                        .aggregate_info
+                        .is_grouping_key_output(index)
+                {
                     self.args.push(ScalarExpr::BoundColumnRef(col.clone()));
                     self.fields.push(DataField::new(
                         &format!("{index}"),

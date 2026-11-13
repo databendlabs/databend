@@ -59,42 +59,73 @@ use crate::Symbol;
 use crate::VirtualColumn;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::column_binding::ColumnBinding;
+use crate::binder::grouping_sets_select::SelectItemExpr;
 use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::ScalarExpr;
 
+/// SELECT items that a name may resolve to by alias.
 #[derive(Clone, Copy)]
 pub struct AliasLookup<'a> {
-    aliases: &'a [(String, ScalarExpr)],
+    table: AliasTable<'a>,
     indices: Option<&'a [usize]>,
 }
 
-impl<'a> AliasLookup<'a> {
-    pub fn all(aliases: &'a [(String, ScalarExpr)]) -> Self {
-        Self {
-            aliases,
-            indices: None,
-        }
-    }
+#[derive(Clone, Copy)]
+pub(crate) enum AliasTable<'a> {
+    /// Items bound up front.
+    Bound(&'a [(String, ScalarExpr)]),
+    /// The items of a GROUPING SETS query, whose pre-aggregate forms are bound
+    /// when a name first resolves to them, see `grouping_sets_select.rs`.
+    PreAggregate(&'a [SelectItemExpr<'a>]),
+}
 
-    pub fn indexed(aliases: &'a [(String, ScalarExpr)], indices: &'a [usize]) -> Self {
-        Self {
-            aliases,
-            indices: Some(indices),
+impl<'a> AliasTable<'a> {
+    pub(crate) fn name(self, index: usize) -> &'a str {
+        match self {
+            AliasTable::Bound(aliases) => &aliases[index].0,
+            AliasTable::PreAggregate(entries) => &entries[index].alias,
         }
     }
 
     fn len(self) -> usize {
-        self.indices.map_or(self.aliases.len(), <[usize]>::len)
+        match self {
+            AliasTable::Bound(aliases) => aliases.len(),
+            AliasTable::PreAggregate(entries) => entries.len(),
+        }
+    }
+}
+
+impl<'a> AliasLookup<'a> {
+    pub fn all(aliases: &'a [(String, ScalarExpr)]) -> Self {
+        Self::new(AliasTable::Bound(aliases), None)
     }
 
-    fn iter(self) -> impl Iterator<Item = &'a (String, ScalarExpr)> {
-        (0..self.len()).map(move |index| {
-            let index = self.indices.map_or(index, |indices| indices[index]);
-            &self.aliases[index]
-        })
+    pub(crate) fn new(table: AliasTable<'a>, indices: Option<&'a [usize]>) -> Self {
+        Self { table, indices }
+    }
+
+    fn indices(self) -> impl Iterator<Item = usize> + 'a {
+        let len = self.indices.map_or(self.table.len(), <[usize]>::len);
+        (0..len).map(move |index| self.indices.map_or(index, |indices| indices[index]))
+    }
+
+    fn push_candidates(self, name: &str, result: &mut NameResolutionCandidates) {
+        for index in self.indices() {
+            if self.table.name(index) != name {
+                continue;
+            }
+            match self.table {
+                AliasTable::Bound(aliases) => result.push(NameResolutionResult::Alias {
+                    alias: name.to_string(),
+                    scalar: aliases[index].1.clone(),
+                    index,
+                }),
+                AliasTable::PreAggregate(_) => result.select_items.push(index),
+            }
+        }
     }
 }
 
@@ -156,26 +187,51 @@ pub struct InternalColumnBinding {
 pub enum NameResolutionResult {
     Column(ColumnBinding),
     InternalColumn(InternalColumnBinding),
-    Alias { alias: String, scalar: ScalarExpr },
+    Alias {
+        alias: String,
+        scalar: ScalarExpr,
+        /// The position of the alias in its table.
+        index: usize,
+    },
+    /// The pre-aggregate SELECT items of a GROUPING SETS query named by the
+    /// alias. The name is ambiguous unless their forms are equal, which the
+    /// caller checks once it has bound them.
+    SelectItems {
+        alias: String,
+        positions: Vec<usize>,
+    },
 }
 
 #[derive(Default)]
 struct NameResolutionCandidates {
     first: Option<NameResolutionResult>,
     ambiguous: bool,
+    select_items: Vec<usize>,
 }
 
 impl NameResolutionCandidates {
     fn push(&mut self, candidate: NameResolutionResult) {
+        // Aliases of equal expressions are not ambiguous.
+        let same = |first: &NameResolutionResult| match (first, &candidate) {
+            (
+                NameResolutionResult::Alias { alias, scalar, .. },
+                NameResolutionResult::Alias {
+                    alias: other_alias,
+                    scalar: other_scalar,
+                    ..
+                },
+            ) => alias == other_alias && scalar == other_scalar,
+            (first, candidate) => first == candidate,
+        };
         match &self.first {
-            Some(first) if first != &candidate => self.ambiguous = true,
+            Some(first) if !same(first) => self.ambiguous = true,
             Some(_) => {}
             None => self.first = Some(candidate),
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.first.is_none()
+        self.first.is_none() && self.select_items.is_empty()
     }
 }
 
@@ -250,6 +306,22 @@ pub struct ViewIdent {
     pub name: String,
 }
 
+/// Which scalar simplifications are allowed while binding an expression.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScalarFoldingPolicy {
+    #[default]
+    Normal,
+    /// Retain column-dependent structure for grouping-key input matching;
+    /// literal-only expressions are still evaluated.
+    PreserveColumnStructure,
+}
+
+impl ScalarFoldingPolicy {
+    pub(crate) fn allows_folding(self, column_free: bool) -> bool {
+        self == Self::Normal || column_free
+    }
+}
+
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
 pub struct BindContext {
@@ -287,6 +359,15 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
+    /// Post-aggregate binding state of a SELECT with GROUPING SETS. Only the
+    /// context of that SELECT owns it; nested contexts see it via `parent`.
+    pub grouping_key_scope: Option<GroupingKeyScope>,
+
+    /// Keep column-dependent expressions unfolded while binding the
+    /// pre-aggregate forms that grouping keys are matched against. Not
+    /// inherited by nested contexts.
+    pub scalar_folding_policy: ScalarFoldingPolicy,
+
     /// Views that are on the current binding path.
     pub binding_views: HashSet<ViewIdent>,
 
@@ -316,6 +397,27 @@ pub struct BindContext {
     pub planning_materialized_view_rewrite: bool,
 
     pub window_definitions: DashMap<String, WindowSpec>,
+}
+
+/// Whether the expressions being bound in a grouped SELECT are evaluated
+/// after its aggregate.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GroupingScopeState {
+    /// After the aggregate: nodes are matched to the keys.
+    #[default]
+    Active,
+    /// Before the aggregate, in the arguments of its aggregate functions:
+    /// the keys are not matched.
+    Suspended,
+}
+
+/// Post-aggregate binding state of a SELECT with GROUPING SETS.
+///
+/// While active, a node whose pre-aggregate form is exactly a grouping key
+/// binds to the nullable output of that key. See `TypeChecker` for the rules.
+#[derive(Clone, Debug, Default)]
+pub struct GroupingKeyScope {
+    pub state: GroupingScopeState,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -388,6 +490,12 @@ pub struct MaterializedCTEInfo {
 }
 
 impl BindContext {
+    /// The state of the grouping scope of this SELECT, if it is grouped and
+    /// its expressions after the aggregate are being bound.
+    pub fn grouping_scope_state(&self) -> Option<GroupingScopeState> {
+        self.grouping_key_scope.as_ref().map(|scope| scope.state)
+    }
+
     pub fn new() -> Self {
         Self {
             parent: None,
@@ -401,6 +509,8 @@ impl BindContext {
             cte_context: CteContext::default(),
             definition_scope: DefinitionScope::session(),
             in_grouping: false,
+            grouping_key_scope: None,
+            scalar_folding_policy: ScalarFoldingPolicy::Normal,
             binding_views: HashSet::new(),
             have_async_func: false,
             have_udf_script: false,
@@ -452,6 +562,8 @@ impl BindContext {
             cte_context: parent.cte_context.clone(),
             definition_scope: parent.definition_scope.clone(),
             in_grouping: false,
+            grouping_key_scope: None,
+            scalar_folding_policy: ScalarFoldingPolicy::Normal,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,
@@ -636,13 +748,8 @@ impl BindContext {
                 &mut result,
             );
         } else if self.expr_context.prefer_resolve_alias() {
-            for (alias, scalar) in available_aliases.iter() {
-                if database.is_none() && table.is_none() && name == alias {
-                    result.push(NameResolutionResult::Alias {
-                        alias: alias.clone(),
-                        scalar: scalar.clone(),
-                    });
-                }
+            if database.is_none() && table.is_none() {
+                available_aliases.push_candidates(name, &mut result);
             }
 
             if result.is_empty() {
@@ -663,15 +770,8 @@ impl BindContext {
                 &mut result,
             );
 
-            if result.is_empty() {
-                for (alias, scalar) in available_aliases.iter() {
-                    if database.is_none() && table.is_none() && name == alias {
-                        result.push(NameResolutionResult::Alias {
-                            alias: alias.clone(),
-                            scalar: scalar.clone(),
-                        });
-                    }
-                }
+            if result.is_empty() && database.is_none() && table.is_none() {
+                available_aliases.push_candidates(name, &mut result);
             }
         }
 
@@ -692,6 +792,11 @@ impl BindContext {
 
         if let Some(result) = result.first {
             Ok(result)
+        } else if !result.select_items.is_empty() {
+            Ok(NameResolutionResult::SelectItems {
+                alias: name.clone(),
+                positions: result.select_items,
+            })
         } else {
             let err = if column.is_quoted() {
                 ErrorCode::SemanticError(format!(

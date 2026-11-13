@@ -397,13 +397,15 @@ where A: TypeCheckAdapter
                     .clone();
                 let mut named_arena = self.core_expr_arena();
                 let named_spec = named_arena.lower_window_spec(&spec)?;
-                return self.resolve_window_spec(
-                    &named_arena,
-                    span,
-                    display_name,
-                    &named_spec,
-                    func,
-                );
+                return self.with_own_grouping_key_memo(|type_checker| {
+                    type_checker.resolve_window_spec(
+                        &named_arena,
+                        span,
+                        display_name,
+                        &named_spec,
+                        func,
+                    )
+                });
             }
         };
         self.resolve_window_spec(arena, span, display_name, spec, func)

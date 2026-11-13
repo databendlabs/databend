@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
@@ -26,6 +27,8 @@ use databend_query::physical_plans::PhysicalPlan;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::execute_query;
+use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grouping_sets_project_redefined_keys_once() -> Result<()> {
@@ -67,6 +70,72 @@ async fn test_grouping_sets_project_redefined_keys_once() -> Result<()> {
         let mut producer_schemas = HashMap::new();
         collect_producer_schemas(&plan, &mut producer_schemas)?;
         assert_consistent_outputs(&plan, &producer_schemas)?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_grouping_sets_nested_bound_children() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let cases = [
+        (
+            "SELECT coalesce(CAST(a + 1 AS BIGINT), 100), coalesce(a + 1, 100), coalesce(a, 100)
+             FROM (VALUES (1::INT), (2::INT)) t(a)
+             GROUP BY GROUPING SETS ((a), (a + 1), (CAST(a + 1 AS BIGINT)))",
+            vec![
+                "100 100 1",
+                "100 100 2",
+                "100 2 100",
+                "100 3 100",
+                "2 100 100",
+                "3 100 100",
+            ],
+        ),
+        (
+            "SELECT coalesce(CAST(a IS NULL AS INT), 100)
+             FROM (VALUES (1::INT), (2::INT)) t(a) GROUP BY ROLLUP(a IS NULL)",
+            vec!["0", "100"],
+        ),
+    ];
+    for (union, cascade, skip) in [
+        ("0", "0", ""),
+        ("1", "0", ""),
+        ("1", "1", ""),
+        ("1", "1", "HierarchicalGroupingSetsToUnion"),
+    ] {
+        for (sql, expected) in &cases {
+            let ctx = fixture.new_query_ctx().await?;
+            for (name, value) in [
+                ("grouping_sets_to_union", union),
+                ("enable_cascading_grouping_sets", cascade),
+                ("optimizer_skip_list", skip),
+            ] {
+                ctx.get_settings()
+                    .set_setting(name.to_string(), value.to_string())?;
+            }
+            let blocks = execute_query(ctx, sql)
+                .await?
+                .try_collect::<Vec<DataBlock>>()
+                .await?;
+            let mut rows = Vec::new();
+            for block in blocks {
+                for row in 0..block.num_rows() {
+                    rows.push(
+                        block
+                            .columns()
+                            .iter()
+                            .map(|column| column.value().index(row).unwrap().to_string())
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                    );
+                }
+            }
+            rows.sort();
+            assert_eq!(
+                &rows, expected,
+                "union={union}, cascade={cascade}, skip={skip}: {sql}"
+            );
+        }
     }
     Ok(())
 }
