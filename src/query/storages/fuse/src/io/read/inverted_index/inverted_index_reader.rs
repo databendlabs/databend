@@ -30,7 +30,8 @@ use tantivy::tokenizer::TokenizerManager;
 use crate::io::read::inverted_index::inverted_index_bundle_loader::load_bundle_search_directory;
 use crate::io::read::inverted_index::inverted_index_warmup::InvertedIndexWarmupInfo;
 
-pub type InvertedIndexFilterResult = Option<(Vec<usize>, Option<Vec<F32>>)>;
+/// The matched rows of a block, with their scores when the reader scores them.
+pub type InvertedIndexFilterResult = Option<(Vec<u32>, Option<Vec<F32>>)>;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
@@ -136,9 +137,7 @@ impl InvertedIndexReader {
             let mut matched_rows = Vec::with_capacity(docs.len());
             let mut matched_scores = Vec::with_capacity(docs.len());
             for (score, doc_addr) in docs {
-                matched_rows.push(usize::try_from(doc_addr.doc_id).map_err(|_| {
-                    ErrorCode::StorageOther("inverted-index document id exceeds this platform")
-                })?);
+                matched_rows.push(doc_addr.doc_id);
                 matched_scores.push(F32::from(score));
             }
             (matched_rows, Some(matched_scores))
@@ -146,12 +145,8 @@ impl InvertedIndexReader {
             let docs = searcher.search(&query, &DocSetCollector)?;
             let matched_rows = docs
                 .into_iter()
-                .map(|doc_addr| {
-                    usize::try_from(doc_addr.doc_id).map_err(|_| {
-                        ErrorCode::StorageOther("inverted-index document id exceeds this platform")
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
+                .map(|doc_addr| doc_addr.doc_id)
+                .collect::<Vec<_>>();
             (matched_rows, None)
         };
         metrics_inc_block_inverted_index_search_milliseconds(

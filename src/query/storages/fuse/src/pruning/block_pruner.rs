@@ -21,9 +21,9 @@ use std::time::Instant;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
-use databend_common_expression::types::F32;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
@@ -296,9 +296,8 @@ impl BlockPruner {
                         block_location: prune_result.block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
-                        matched_rows: prune_result.matched_rows.clone(),
-                        matched_scores: prune_result.matched_scores.clone(),
-                        vector_scores: None,
+                        inverted_index_matches: prune_result.inverted_index_matches,
+                        vector_index_matches: None,
                         virtual_block_meta: prune_result.virtual_block_meta.clone(),
                     },
                     block,
@@ -382,7 +381,7 @@ impl BlockPruner {
                 metrics_inc_bytes_block_inverted_index_pruning_before(block_meta.block_size);
                 pruning_stats.set_blocks_inverted_index_pruning_before(1);
 
-                let matched_rows = pruning_cost
+                prune_result.inverted_index_matches = pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksInverted,
                         inverted_index_pruner.should_keep(
@@ -393,12 +392,7 @@ impl BlockPruner {
                     )
                     .await?;
 
-                if let Some((rows, scores)) = matched_rows {
-                    prune_result.matched_rows = Some(rows);
-                    prune_result.matched_scores = scores;
-                } else {
-                    prune_result.keep = false;
-                }
+                prune_result.keep = prune_result.inverted_index_matches.is_some();
 
                 if prune_result.keep {
                     metrics_inc_blocks_inverted_index_pruning_after(1);
@@ -514,9 +508,8 @@ impl BlockPruner {
                         block_location: block_meta.as_ref().location.0.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
-                        matched_rows: None,
-                        matched_scores: None,
-                        vector_scores: None,
+                        inverted_index_matches: None,
+                        vector_index_matches: None,
                         virtual_block_meta: None,
                     },
                     block_meta.clone(),
@@ -545,11 +538,8 @@ struct BlockPruneResult {
     keep: bool,
     // the page ranges should be kept in the block
     range: Option<Range<usize>>,
-    // the matched rows in the block (aligned with `matched_scores` when present)
-    // only used by inverted index search
-    matched_rows: Option<Vec<usize>>,
-    // optional scores for the matched rows
-    matched_scores: Option<Vec<F32>>,
+    // the rows matched by the inverted index
+    inverted_index_matches: Option<IndexMatches>,
     // the optional block meta of virtual columns
     virtual_block_meta: Option<VirtualBlockMetaIndex>,
 }
@@ -561,8 +551,7 @@ impl BlockPruneResult {
             block_location,
             keep: false,
             range: None,
-            matched_rows: None,
-            matched_scores: None,
+            inverted_index_matches: None,
             virtual_block_meta: None,
         }
     }
@@ -573,16 +562,14 @@ impl BlockPruneResult {
             block_location: block_meta_index.block_location.clone(),
             keep: true,
             range: block_meta_index.range.clone(),
-            matched_rows: block_meta_index.matched_rows.clone(),
-            matched_scores: block_meta_index.matched_scores.clone(),
+            inverted_index_matches: block_meta_index.inverted_index_matches.clone(),
             virtual_block_meta: block_meta_index.virtual_block_meta.clone(),
         }
     }
 
     fn apply_to_block_meta_index(self, mut block_meta_index: BlockMetaIndex) -> BlockMetaIndex {
         block_meta_index.range = self.range;
-        block_meta_index.matched_rows = self.matched_rows;
-        block_meta_index.matched_scores = self.matched_scores;
+        block_meta_index.inverted_index_matches = self.inverted_index_matches;
         block_meta_index.virtual_block_meta = self.virtual_block_meta;
         block_meta_index
     }
