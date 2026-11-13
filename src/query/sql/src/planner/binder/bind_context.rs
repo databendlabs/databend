@@ -151,8 +151,16 @@ pub enum ExprContext {
 }
 
 impl ExprContext {
+    /// Whether a name resolves to a SELECT alias before an input column. In
+    /// SELECT, WHERE and GROUP BY, which includes the arguments of
+    /// `grouping()`, a name is an input column first; in the other clauses,
+    /// e.g. ORDER BY and QUALIFY, an alias. Whether HAVING should resolve
+    /// input columns first is not settled; it prefers aliases for now.
     pub fn prefer_resolve_alias(&self) -> bool {
-        !matches!(self, ExprContext::SelectClause | ExprContext::WhereClause)
+        !matches!(
+            self,
+            ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue
+        )
     }
 
     pub fn allow_resolve_alias(&self) -> bool {
@@ -671,37 +679,6 @@ impl BindContext {
             available_aliases,
             name_resolution_ctx,
         )?;
-        Self::finish_resolve_name(column, result)
-    }
-
-    pub(crate) fn resolve_name_with_alias_fallback(
-        &self,
-        database: Option<&str>,
-        table: Option<&str>,
-        column: &Identifier,
-        available_aliases: AliasLookup<'_>,
-        fallback_aliases: Option<AliasLookup<'_>>,
-        name_resolution_ctx: &NameResolutionContext,
-    ) -> Result<NameResolutionResult> {
-        let mut result = self.resolve_name_candidates(
-            database,
-            table,
-            column,
-            available_aliases,
-            name_resolution_ctx,
-        )?;
-        if result.is_empty()
-            && let Some(fallback_aliases) = fallback_aliases
-        {
-            result = self.resolve_name_candidates(
-                database,
-                table,
-                column,
-                fallback_aliases,
-                name_resolution_ctx,
-            )?;
-        }
-
         Self::finish_resolve_name(column, result)
     }
 

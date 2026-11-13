@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -38,8 +37,6 @@ use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::Symbol;
 use crate::Visibility;
-use crate::binder::AliasLookup;
-use crate::binder::AliasTable;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
@@ -66,117 +63,6 @@ use crate::plans::Visitor;
 #[derive(Debug, Default)]
 pub struct SelectList<'a> {
     pub items: Vec<SelectItem<'a>>,
-}
-
-pub(crate) struct ClauseAliasBindings<'a> {
-    table: AliasTable<'a>,
-    available: Vec<usize>,
-}
-
-pub(crate) type ClauseAliasLookup<'a> = (AliasLookup<'a>, Option<AliasLookup<'a>>);
-
-pub(crate) struct GroupItemAliasState<'a> {
-    table: AliasTable<'a>,
-    available: &'a [usize],
-    prior_group_aliases: Vec<usize>,
-}
-
-impl<'a> ClauseAliasBindings<'a> {
-    pub(crate) fn new(table: AliasTable<'a>, available: Vec<usize>) -> Self {
-        Self { table, available }
-    }
-
-    pub(crate) fn group_item_state(&self) -> GroupItemAliasState<'_> {
-        GroupItemAliasState {
-            table: self.table,
-            available: &self.available,
-            prior_group_aliases: Vec::new(),
-        }
-    }
-}
-
-impl GroupItemAliasState<'_> {
-    fn lookup<'a>(&'a self, indices: &'a [usize]) -> AliasLookup<'a> {
-        AliasLookup::new(self.table, Some(indices))
-    }
-
-    /// The aliases a GROUP BY item sees, given its name if it is an
-    /// unqualified column reference.
-    pub(crate) fn group_item_aliases(
-        &self,
-        simple_name: Option<&str>,
-        disable_select_alias_fallback: bool,
-    ) -> ClauseAliasLookup<'_> {
-        // Complex GROUP BY items bind input columns first, then fall back to
-        // SELECT aliases only for unresolved names in a normal GROUP BY.
-        //
-        // `SELECT i AS k FROM t GROUP BY k` may bind `k` as the alias for `i`.
-        // `SELECT 1 AS k FROM t GROUP BY k + 1` may bind `k` from the SELECT
-        // list if there is no input column named `k`.
-        // Once `k` falls back to a SELECT alias, `GROUP BY k, abs(k)` should
-        // reuse that earlier GROUP BY item alias inside the later expression.
-        if simple_name.is_none() {
-            // GROUPING SETS keep prior alias reuse scoped to the current
-            // generated set. A complex item in a later set must not bypass that
-            // boundary by falling back to SELECT aliases directly.
-            let fallback_aliases = if disable_select_alias_fallback || self.available.is_empty() {
-                None
-            } else {
-                Some(self.lookup(self.available))
-            };
-
-            return (self.lookup(&self.prior_group_aliases), fallback_aliases);
-        }
-
-        // Bind input columns first. Alias fallback remains available for simple
-        // names that do not exist in the input scope.
-        //
-        // GROUPING SETS items also prefer input columns: a SELECT alias like
-        // `if(grouping(x)=1, 0, x) AS x` must not shadow the underlying column
-        // `x` inside GROUP BY sets.
-        (
-            self.lookup(&[]),
-            (!self.available.is_empty()).then(|| self.lookup(self.available)),
-        )
-    }
-
-    /// The available aliases named `simple_name`, the name of a GROUP BY
-    /// item that is an unqualified column reference: the item uses the one
-    /// it matches.
-    pub(crate) fn same_name_aliases(&self, simple_name: Option<&str>) -> Vec<usize> {
-        let Some(column_name) = simple_name else {
-            return Vec::new();
-        };
-        self.available
-            .iter()
-            .copied()
-            .filter(|index| self.table.name(*index).eq_ignore_ascii_case(column_name))
-            .collect()
-    }
-
-    pub(crate) fn register_group_item_alias(&mut self, alias_index: usize) {
-        if !self.prior_group_aliases.contains(&alias_index) {
-            self.prior_group_aliases.push(alias_index);
-        }
-    }
-}
-
-/// The name of `expr`, as written, if it is an unqualified column reference.
-pub(crate) fn simple_unqualified_column_name(expr: &Expr) -> Option<&str> {
-    let Expr::ColumnRef {
-        column:
-            ColumnRef {
-                database: None,
-                table: None,
-                column,
-            },
-        ..
-    } = expr
-    else {
-        return None;
-    };
-
-    Some(column.name())
 }
 
 /// The aliases of the SELECT items as bound, which later clauses resolve.
@@ -294,13 +180,12 @@ impl Binder {
         let scalar = bind_context.with_expr_context(
             ExprContext::WhereClause,
             |bind_context| -> Result<ScalarExpr> {
-                let mut type_checker = TypeChecker::try_create_with_alias_fallback(
+                let mut type_checker = TypeChecker::try_create_with_aliases(
                     bind_context,
                     self.ctx.clone(),
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     exprs.lookup(),
-                    None,
                     false,
                 )?;
                 if let Some(masking_aliases) = &masking_aliases {

@@ -57,12 +57,11 @@ where A: TypeCheckAdapter
         Ok(match ident {
             ColumnID::Name(ident) => {
                 let column = normalize_identifier(ident, self.name_resolution_ctx);
-                self.bind_context.resolve_name_with_alias_fallback(
+                self.bind_context.resolve_name(
                     database.as_deref(),
                     table.as_deref(),
                     &column,
                     self.aliases,
-                    self.fallback_aliases,
                     self.name_resolution_ctx,
                 )?
             }

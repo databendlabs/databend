@@ -44,23 +44,21 @@ where A: TypeCheckAdapter
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
     ) -> Result<Self> {
-        Self::try_create_with_adapter_and_alias_fallback(
+        Self::try_create_with_adapter_and_aliases(
             bind_context,
             adapter,
             name_resolution_ctx,
             metadata,
             AliasLookup::all(aliases),
-            None,
         )
     }
 
-    pub fn try_create_with_adapter_and_alias_fallback(
+    pub fn try_create_with_adapter_and_aliases(
         bind_context: &'a mut BindContext,
         adapter: A,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: AliasLookup<'a>,
-        fallback_aliases: Option<AliasLookup<'a>>,
     ) -> Result<Self> {
         let func_ctx = adapter.function_context()?;
         let dialect = adapter.sql_dialect()?;
@@ -73,7 +71,6 @@ where A: TypeCheckAdapter
             name_resolution_ctx,
             metadata,
             aliases,
-            fallback_aliases,
             select_items: None,
             in_aggregate_function: false,
             in_window_function: false,

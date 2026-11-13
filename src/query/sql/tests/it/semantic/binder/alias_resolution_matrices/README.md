@@ -32,10 +32,11 @@ Included features:
 - WHERE, GROUP BY, HAVING, QUALIFY, ORDER BY, aggregate arguments, and window
   specifications can resolve names against the query block's supported alias
   namespaces.
-- GROUP BY-family syntax can resolve SELECT aliases and can also create local
-  aliases from earlier GROUP BY items for later GROUP BY expressions.
-- GROUPING SETS, ROLLUP, CUBE, and combined GROUP BY forms introduce grouping
-  item scope boundaries.
+- GROUP BY-family syntax resolves a name to an input column first and
+  otherwise to an explicit SELECT alias, in every grouping set alike; it
+  creates no aliases of its own.
+- GROUPING SETS, ROLLUP, CUBE, and combined GROUP BY forms expand into
+  grouping sets.
 - Alias expressions have expression kinds: scalar, aggregate, window, and SRF.
   Those kinds affect whether an alias is legal in a consumer position.
 - Query blocks, subqueries, CTEs, and named-window paths define visibility
@@ -250,18 +251,17 @@ This matrix owns GROUP BY-family consumers:
 - `cube`
 - `combined-group-by`
 
-It owns name resolution between input columns, SELECT scalar aliases, and local
-GROUP BY aliases. Its defining property is that GROUP BY has two alias
-mechanisms that interact:
+It owns name resolution between input columns and SELECT scalar aliases in
+GROUP BY. A name is an input column first, and otherwise an explicit SELECT
+alias; a bare name that is an alias is that SELECT item. The `prior-group-alias`
+producer marks a name that an earlier GROUP BY item also uses as an alias; it
+binds as any other name, so the cases document that no scope or reuse rule
+applies.
 
-- SELECT-list aliases can be used by GROUP BY.
-- Earlier GROUP BY items can create names for later GROUP BY expressions.
-
-This matrix also owns grouping construct scope. `GROUPING SETS`, `ROLLUP`, and
-`CUBE` are not only syntactic variants of GROUP BY; they create expanded item
-lists and set boundaries. That makes same-list reuse, same-set reuse,
-separate-set isolation, and generated-single-expression sets part of the same
-semantic region.
+This matrix also covers grouping constructs. `GROUPING SETS`, `ROLLUP`, and
+`CUBE` expand into item lists and sets, and the same rule holds in each of
+them: same-list, same-set, separate-set, and generated-single-expression sets
+resolve names alike.
 
 Local context axes:
 
@@ -438,7 +438,7 @@ The first three facts are the global dimensions. The last fact is interpreted by
 the owning matrix. The matrices are split at these semantic discontinuities:
 
 - ordered alias production in the SELECT list
-- GROUP BY's mix of SELECT aliases and local group-item aliases
+- GROUP BY's column-first resolution with SELECT alias fallback
 - expression-kind legality for scalar, aggregate, window, and SRF aliases
 - predicate consumers with clause-specific legality
 - ORDER BY ambiguity and ordering-name reuse

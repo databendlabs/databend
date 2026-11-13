@@ -40,7 +40,6 @@ use databend_common_users::UserApiProvider;
 
 use super::aggregate::LoweredGroupBy;
 use super::project::select_item_name;
-use super::select::ClauseAliasBindings;
 use super::select::SelectList;
 use crate::NameResolutionContext;
 use crate::planner::binder::AliasLookup;
@@ -211,15 +210,6 @@ impl<'a> SelectClauseExprs<'a> {
         &self.items[position].alias
     }
 
-    /// Whether the item is a column reference, the only kind of expression
-    /// item whose form is a column.
-    pub(crate) fn is_column_ref(&self, position: usize) -> bool {
-        matches!(self.items[position].source, SelectItemSource::Expr {
-            expr: Expr::ColumnRef { .. },
-            ..
-        })
-    }
-
     /// The aliases of all items, as WHERE sees them.
     pub(crate) fn lookup(&self) -> AliasLookup<'_> {
         AliasLookup::new(AliasTable::PreAggregate(&self.items), None)
@@ -235,10 +225,13 @@ impl<'a> SelectClauseExprs<'a> {
         )
     }
 
-    pub(crate) fn group_by_bindings(&self) -> ClauseAliasBindings<'_> {
-        ClauseAliasBindings::new(
+    /// The aliases that GROUP BY sees: those of the items with an explicit
+    /// alias. A name in GROUP BY is an input column first, see
+    /// `ExprContext::prefer_resolve_alias`.
+    pub(crate) fn group_by_aliases(&self) -> AliasLookup<'_> {
+        AliasLookup::new(
             AliasTable::PreAggregate(&self.items),
-            self.aliased_positions.clone(),
+            Some(&self.aliased_positions),
         )
     }
 }

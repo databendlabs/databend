@@ -401,7 +401,7 @@ impl Binder {
                         }
                         .into()
                     } else {
-                        let mut type_checker = TypeChecker::try_create_with_alias_fallback(
+                        let mut type_checker = TypeChecker::try_create_with_aliases(
                             input_context,
                             self.ctx.clone(),
                             &self.name_resolution_ctx,
@@ -410,7 +410,6 @@ impl Binder {
                                 AliasTable::Bound(&prev_items),
                                 Some(&prev_expr_positions),
                             ),
-                            None,
                             false,
                         )?;
                         type_checker.set_select_items(pre_group.reborrow());

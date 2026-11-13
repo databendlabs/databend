@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
@@ -39,25 +40,26 @@ use super::reject_grouping_functions;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::Symbol;
+use crate::binder::AliasLookup;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::GroupingKeyScope;
 use crate::binder::GroupingScopeState;
+use crate::binder::NameResolutionResult;
 use crate::binder::ScalarFoldingPolicy;
 use crate::binder::SelectClauseExprs;
 use crate::binder::SelectItems;
 use crate::binder::Visibility;
 use crate::binder::project_set::SetReturningAnalyzer;
 use crate::binder::scalar::ScalarBinder;
-use crate::binder::select::ClauseAliasBindings;
 use crate::binder::select::SelectList;
-use crate::binder::select::simple_unqualified_column_name;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::CoreExprArena;
 use crate::planner::semantic::CoreExprId;
 use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::TypeChecker;
+use crate::planner::semantic::normalize_identifier;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -138,13 +140,7 @@ pub struct GroupingSetsInfo {
 /// A GROUP BY item, lowered with the other clauses of its SELECT, see
 /// `select_clauses.rs`.
 #[derive(Clone)]
-pub(crate) struct GroupItem {
-    key: GroupKey,
-    disable_select_alias_fallback: bool,
-}
-
-#[derive(Clone)]
-enum GroupKey {
+pub(crate) enum GroupItem {
     /// The SELECT item at a zero-based position, written as a one-based
     /// position or standing for one in GROUP BY ALL.
     Position(usize),
@@ -152,24 +148,14 @@ enum GroupKey {
         root: CoreExprId,
         /// The name of the key output: the expression as written.
         name: String,
-        /// The name if the expression is an unqualified column reference,
-        /// as written, which may be a SELECT alias.
-        simple_name: Option<String>,
     },
 }
 
 impl GroupItem {
-    fn position(position: usize) -> Self {
-        Self {
-            key: GroupKey::Position(position),
-            disable_select_alias_fallback: false,
-        }
-    }
-
     /// Lower a GROUP BY item of a SELECT with `select_len` items. An integer
     /// literal is a one-based position in the SELECT list.
     fn lower<'a>(arena: &mut CoreExprArena<'a>, expr: &'a Expr, select_len: usize) -> Result<Self> {
-        let key = match expr {
+        Ok(match expr {
             Expr::Literal {
                 span,
                 value: Literal::UInt64(position),
@@ -186,25 +172,13 @@ impl GroupItem {
                     ))
                     .set_span(*span));
                 }
-                GroupKey::Position(*position as usize - 1)
+                Self::Position(*position as usize - 1)
             }
-            expr => GroupKey::Expr {
+            expr => Self::Expr {
                 root: arena.lower_ast_expr(expr)?,
                 name: format!("{:#}", expr),
-                simple_name: simple_unqualified_column_name(expr).map(str::to_string),
             },
-        };
-        Ok(Self {
-            key,
-            disable_select_alias_fallback: false,
         })
-    }
-
-    fn in_grouping_construct(self) -> Self {
-        Self {
-            disable_select_alias_fallback: true,
-            ..self
-        }
     }
 }
 
@@ -1095,21 +1069,24 @@ impl Binder {
                 clauses
                     .group_by_all(&self.name_resolution_ctx, udaf_names, input_context)
                     .into_iter()
-                    .map(GroupItem::position)
+                    .map(GroupItem::Position)
                     .collect(),
             )),
             LoweredGroupBy::Expanded(group) => Some(group.clone()),
         }
     }
 
-    /// We have supported three kinds of `group by` items:
+    /// Bind the keys of GROUP BY. An item is one of:
     ///
-    ///   - Index, a integral literal, e.g. `GROUP BY 1`. It choose the 1st item in select as
-    ///     group item.
-    ///   - Alias, the aliased expressions specified in `SELECT` clause, e.g. column `b` in
-    ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
-    ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
-    ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
+    ///   - A position, an integer literal, e.g. `GROUP BY 1`: the key is the
+    ///     SELECT item at that position.
+    ///   - A bare name that no input column has but the explicit alias of
+    ///     SELECT items, e.g. `b` in `SELECT a AS b, count(a) FROM t GROUP BY
+    ///     b`: the key is those items, as for a position.
+    ///   - Any other expression, over input columns, e.g. `a` and `a + 1` in
+    ///     `SELECT a AS b, count(a) FROM t GROUP BY a, a + 1`. A name in it is
+    ///     an input column first, and otherwise an explicit SELECT alias,
+    ///     which stands for the pre-aggregate form of its item.
     ///
     /// The keys are bound with the folding policy of the SELECT items, which
     /// their pre-aggregate forms are bound with as well.
@@ -1117,7 +1094,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         mut select_items: SelectItems<'_>,
-        group_by_aliases: &ClauseAliasBindings<'_>,
+        group_by_aliases: AliasLookup<'_>,
         group_by: &ExpandedGroup,
     ) -> Result<()> {
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
@@ -1161,23 +1138,19 @@ impl Binder {
             ))),
             GroupBy::GroupingSets(sets) => Ok(ExpandedGroup::GroupingSets(
                 sets.iter()
-                    .map(|set| {
-                        Ok(Self::in_grouping_construct(Self::lower_group_items(
-                            arena, set, select_len,
-                        )?))
-                    })
+                    .map(|set| Self::lower_group_items(arena, set, select_len))
                     .collect::<Result<_>>()?,
             )),
             GroupBy::Cube(exprs) => {
                 // Expand CUBE to GroupingSets
                 Ok(ExpandedGroup::GroupingSets(Self::generate_cube_sets(
-                    Self::in_grouping_construct(Self::lower_group_items(arena, exprs, select_len)?),
+                    Self::lower_group_items(arena, exprs, select_len)?,
                 )))
             }
             GroupBy::Rollup(exprs) => {
                 // Expand ROLLUP to GroupingSets
                 Ok(ExpandedGroup::GroupingSets(Self::generate_rollup_sets(
-                    Self::in_grouping_construct(Self::lower_group_items(arena, exprs, select_len)?),
+                    Self::lower_group_items(arena, exprs, select_len)?,
                 )))
             }
             GroupBy::Combined(groups) => {
@@ -1206,13 +1179,6 @@ impl Binder {
         exprs
             .iter()
             .map(|expr| GroupItem::lower(arena, expr, select_len))
-            .collect()
-    }
-
-    fn in_grouping_construct(items: Vec<GroupItem>) -> Vec<GroupItem> {
-        items
-            .into_iter()
-            .map(GroupItem::in_grouping_construct)
             .collect()
     }
 
@@ -1367,7 +1333,7 @@ impl Binder {
         bind_context: &mut BindContext,
         mut select_items: SelectItems<'_>,
         sets: &[Vec<GroupItem>],
-        group_by_aliases: &ClauseAliasBindings<'_>,
+        group_by_aliases: AliasLookup<'_>,
     ) -> Result<()> {
         let mut grouping_sets = Vec::with_capacity(sets.len());
         for set in sets {
@@ -1444,81 +1410,60 @@ impl Binder {
         bind_context: &mut BindContext,
         mut select_items: SelectItems<'_>,
         group_by: &[GroupItem],
-        group_by_aliases: &ClauseAliasBindings<'_>,
+        group_by_aliases: AliasLookup<'_>,
         collect_grouping_sets: bool,
         grouping_sets: &mut Vec<Vec<ScalarExpr>>,
     ) -> Result<()> {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
-        let mut group_by_aliases = group_by_aliases.group_item_state();
         let arena = select_items.exprs().arena();
         for item in group_by.iter() {
             // An item that refers to a SELECT item, by position or by alias,
             // is that item, which is a key itself.
-            let (scalar, name, select_item) = match &item.key {
-                GroupKey::Position(position) => {
-                    let scalar = self.resolve_pre_aggregate_form(
+            let positions = match item {
+                GroupItem::Position(position) => Ok((None, vec![*position])),
+                GroupItem::Expr { root, name } => self
+                    .group_item_alias_positions(bind_context, arena, *root, group_by_aliases)
+                    .ok_or((*root, name)),
+            };
+            let (scalar, name, select_item_positions) = match positions {
+                Ok((span, positions)) => {
+                    let scalar = self.resolve_select_item_key(
                         bind_context,
                         select_items.reborrow(),
-                        *position,
+                        span,
+                        &positions,
                     )?;
-                    let alias = select_items.exprs().alias(*position).to_string();
-                    (scalar, alias, Some(*position))
+                    let alias = select_items.exprs().alias(positions[0]).to_string();
+                    (scalar, alias, positions)
                 }
-                GroupKey::Expr {
-                    root,
-                    name,
-                    simple_name,
-                } => {
-                    let simple_name = simple_name.as_deref();
-                    let (preferred_aliases, fallback_aliases) = group_by_aliases
-                        .group_item_aliases(simple_name, item.disable_select_alias_fallback);
-
+                Err((root, name)) => {
                     let (mut scalar, _) = {
-                        let mut type_checker = TypeChecker::try_create_with_alias_fallback(
+                        let mut type_checker = TypeChecker::try_create_with_aliases(
                             bind_context,
                             self.ctx.clone(),
                             &self.name_resolution_ctx,
                             self.metadata.clone(),
-                            preferred_aliases,
-                            fallback_aliases,
+                            group_by_aliases,
                             false,
                         )?;
                         type_checker.set_folding_policy(select_items.folding_policy());
                         type_checker.set_select_items(select_items.reborrow());
-                        *type_checker.resolve_checked_core(arena, *root)?
+                        *type_checker.resolve_checked_core(arena, root)?
                     };
-
-                    // If a simple GROUP BY item matched a SELECT alias, remember that
-                    // alias as a group item column for later GROUP BY items.
-                    //
-                    // `SELECT i AS k FROM t GROUP BY k, abs(k)` should let `abs(k)`
-                    // use the preceding group item alias `k`.
-                    // Without a preceding group item alias, complex GROUP BY items
-                    // still bind input columns before falling back to SELECT aliases.
-                    let group_alias = self.matched_group_item_alias(
-                        bind_context,
-                        select_items.reborrow(),
-                        group_by_aliases.same_name_aliases(simple_name),
-                        &scalar,
-                    )?;
-                    if let Some(alias_index) = group_alias {
-                        group_by_aliases.register_group_item_alias(alias_index);
-                    }
-
                     let mut analyzer =
                         SetReturningAnalyzer::new(bind_context, self.metadata.clone());
                     analyzer.visit(&mut scalar)?;
-                    (scalar, name.clone(), group_alias)
+                    (scalar, name.clone(), vec![])
                 }
             };
 
             let agg_info = &mut bind_context.aggregate_info;
-            if let Some(position) = select_item
-                && !agg_info.select_item_keys.contains(&position)
-            {
-                agg_info.select_item_keys.push(position);
+            for position in select_item_positions {
+                if !agg_info.select_item_keys.contains(&position) {
+                    agg_info.select_item_keys.push(position);
+                }
             }
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar) {
                 grouping_sets.last_mut().unwrap().push(scalar.clone());
@@ -1593,31 +1538,51 @@ impl Binder {
         Ok(())
     }
 
-    /// The alias among `candidates` whose item a GROUP BY item that is a
-    /// simple name binds to. A pre-aggregate item that is not yet bound is
-    /// only bound if it may be that column, so that nothing else is bound for
-    /// the comparison.
-    fn matched_group_item_alias(
+    /// The SELECT items that a GROUP BY item names, and the span of the
+    /// name, if the item is a bare name that no input column has but the
+    /// explicit alias of SELECT items.
+    fn group_item_alias_positions(
+        &self,
+        bind_context: &BindContext,
+        arena: &CoreExprArena<'_>,
+        root: CoreExprId,
+        aliases: AliasLookup<'_>,
+    ) -> Option<(Span, Vec<usize>)> {
+        let name = normalize_identifier(arena.bare_name(root)?, &self.name_resolution_ctx);
+        // Other results, errors included, are left to the type checker.
+        match bind_context.resolve_name(None, None, &name, aliases, &self.name_resolution_ctx) {
+            Ok(NameResolutionResult::SelectItems { positions, .. }) => Some((name.span, positions)),
+            _ => None,
+        }
+    }
+
+    /// The key that the SELECT items at `positions` are: their pre-aggregate
+    /// form, which must be the same for all of them. Several items share an
+    /// alias, e.g. `SELECT a AS x, a AS x ... GROUP BY x`.
+    fn resolve_select_item_key(
         &self,
         bind_context: &mut BindContext,
         mut select_items: SelectItems<'_>,
-        candidates: Vec<usize>,
-        scalar_expr: &ScalarExpr,
-    ) -> Result<Option<usize>> {
-        for index in candidates {
-            if select_items.bound_form(index).is_none()
-                && !select_items.exprs().is_column_ref(index)
-            {
-                continue;
-            }
-            let matched =
-                &self.resolve_pre_aggregate_form(bind_context, select_items.reborrow(), index)?
-                    == scalar_expr;
-            if matched {
-                return Ok(Some(index));
+        span: Span,
+        positions: &[usize],
+    ) -> Result<ScalarExpr> {
+        let mut key: Option<ScalarExpr> = None;
+        for position in positions {
+            let form =
+                self.resolve_pre_aggregate_form(bind_context, select_items.reborrow(), *position)?;
+            match &key {
+                Some(key) if key != &form => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "column {} reference or alias is ambiguous, please use another alias name",
+                        select_items.exprs().alias(*position)
+                    ))
+                    .set_span(span));
+                }
+                Some(_) => {}
+                None => key = Some(form),
             }
         }
-        Ok(None)
+        key.ok_or_else(|| ErrorCode::Internal("a GROUP BY alias names no SELECT item"))
     }
 
     fn resolve_pre_aggregate_form(

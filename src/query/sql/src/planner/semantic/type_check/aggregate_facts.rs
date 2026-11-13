@@ -23,6 +23,7 @@
 
 use std::collections::HashSet;
 
+use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Identifier;
 use smallvec::SmallVec;
@@ -114,6 +115,23 @@ impl<'a> CoreExprArena<'a> {
             }
         });
         column_refs
+    }
+
+    /// The name of the node if it is a bare name: an unqualified column
+    /// reference by name.
+    pub(crate) fn bare_name(&self, id: CoreExprId) -> Option<&'a Identifier> {
+        match self.get(id) {
+            CoreExpr::ColumnRef {
+                column:
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(ident),
+                    },
+                ..
+            } => Some(ident),
+            _ => None,
+        }
     }
 
     /// The names of the calls of user-defined functions outside subqueries.

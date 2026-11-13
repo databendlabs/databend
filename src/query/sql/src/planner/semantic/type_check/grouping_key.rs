@@ -103,7 +103,9 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Visibility;
 use crate::binder::AggregateRewriter;
+use crate::binder::AliasLookup;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::ExprContext;
 use crate::binder::GroupingScopeState;
 use crate::binder::SetReturningAnalyzer;
 use crate::plans::BoundColumnRef;
@@ -372,8 +374,12 @@ where A: TypeCheckAdapter
         scope: usize,
         bind: impl FnOnce(&mut Self) -> Result<R>,
     ) -> (Result<R>, GroupingKeyState) {
+        // The arguments of `grouping()` stay so: an alias in them names the
+        // pre-aggregate form of an item, which a matched node binds too.
+        let in_grouping_arguments = self.grouping_key.in_grouping_arguments;
         let state = std::mem::replace(&mut self.grouping_key, GroupingKeyState {
             phase: GroupingKeyPhase::Input { scope },
+            in_grouping_arguments,
             ..Default::default()
         });
         // Without a scope yet, as for GROUP BY, the forms are bound with the
@@ -454,8 +460,18 @@ where A: TypeCheckAdapter
         Ok(())
     }
 
+    /// Whether the arguments of a `grouping()` call are being bound.
+    pub(super) fn in_grouping_arguments(&self) -> bool {
+        self.grouping_key.in_grouping_arguments
+    }
+
     /// Bind the arguments of a `grouping()` call. An ungrouped column of this
     /// SELECT in them is reported as an argument that is not a key.
+    ///
+    /// The arguments are keys, so they are bound as in GROUP BY, whichever
+    /// clause the call is in: a name is an input column first, and otherwise
+    /// the explicit alias of a SELECT item, which stands for its
+    /// pre-aggregate form.
     pub(super) fn resolve_grouping_arguments(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -463,21 +479,20 @@ where A: TypeCheckAdapter
     ) -> Result<Vec<BoundScalar>> {
         let in_grouping_arguments =
             std::mem::replace(&mut self.grouping_key.in_grouping_arguments, true);
+        let expr_context = self
+            .bind_context
+            .replace_expr_context(ExprContext::GroupClaue);
+        let group_by_aliases = match &self.select_items {
+            Some(items) => items.exprs().group_by_aliases(),
+            None => AliasLookup::all(&[]),
+        };
+        let aliases = std::mem::replace(&mut self.aliases, group_by_aliases);
         let result = args
             .iter()
-            .map(|arg| {
-                let bound = self.resolve_core_bound(arena, *arg)?;
-                Ok(
-                    match self.grouping_argument_group_item(arena, *arg, &bound.scalar) {
-                        Some(group_item) => {
-                            let data_type = group_item.data_type().into_owned();
-                            self.bind_derived(group_item, data_type)
-                        }
-                        None => bound,
-                    },
-                )
-            })
+            .map(|arg| self.resolve_core_bound(arena, *arg))
             .collect();
+        self.aliases = aliases;
+        self.bind_context.expr_context = expr_context;
         self.grouping_key.in_grouping_arguments = in_grouping_arguments;
         result
     }

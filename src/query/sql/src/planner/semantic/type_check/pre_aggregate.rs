@@ -76,6 +76,16 @@ where A: TypeCheckAdapter
         let mut resolved: Option<ScalarExpr> = None;
         for position in positions {
             let Some(form) = self.pre_aggregate_form(*position)? else {
+                // After the aggregate, only the arguments of `grouping()`
+                // see these aliases, and an item without a form, e.g. one
+                // over an aggregate function, is not a key.
+                if self.in_grouping_arguments() {
+                    return Err(self
+                        .bind_context
+                        .aggregate_info
+                        .grouping_argument_error()
+                        .set_span(span));
+                }
                 return Err(ErrorCode::Internal(format!(
                     "SELECT item {} named by alias {alias} has no pre-aggregate form",
                     position + 1
@@ -147,13 +157,12 @@ where A: TypeCheckAdapter
 
         let expr_context = bind_context.replace_expr_context(ExprContext::SelectClause);
         let result = (|| -> Result<Option<ScalarExpr>> {
-            let mut type_checker = TypeChecker::try_create_with_adapter_and_alias_fallback(
+            let mut type_checker = TypeChecker::try_create_with_adapter_and_aliases(
                 &mut *bind_context,
                 adapter.clone(),
                 name_resolution_ctx,
                 metadata.clone(),
                 exprs.select_item_lookup(position),
-                None,
             )?;
             // Before the aggregate, the form is bound with the policy of the
             // keys, also if WHERE refers to the item first; after it, the

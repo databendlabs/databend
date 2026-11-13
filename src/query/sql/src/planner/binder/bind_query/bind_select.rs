@@ -238,7 +238,7 @@ impl Binder {
             self.analyze_group_items(
                 from_context,
                 SelectItems::new(items.exprs, &mut items.forms),
-                &items.exprs.group_by_bindings(),
+                items.exprs.group_by_aliases(),
                 group_by,
             )?;
         }

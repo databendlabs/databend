@@ -524,7 +524,6 @@ pub struct TypeChecker<'a, A> {
     metadata: MetadataRef,
 
     aliases: AliasLookup<'a>,
-    fallback_aliases: Option<AliasLookup<'a>>,
     // The SELECT items of a grouped query whose pre-aggregate forms the
     // aliases may resolve to, see `type_check/pre_aggregate.rs`.
     select_items: Option<SelectItems<'a>>,

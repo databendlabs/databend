@@ -780,6 +780,24 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT *, count(*) FROM t GROUP BY 1, 2, 4",
         },
         SqlTestCase {
+            name: "group_by_alias_of_duplicate_items_is_those_items",
+            description: "A GROUP BY alias that several SELECT items with the same form share is all of them, so each is the key output.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a + 1 AS x, a + 1 AS x, count(*) FROM t GROUP BY x",
+        },
+        SqlTestCase {
+            name: "group_by_alias_of_duplicate_lambda_items_is_those_items",
+            description: "Items whose form is not matched to keys, such as lambdas, are keys as SELECT items, also when several share the GROUP BY alias.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT array_transform([a], v -> v + 1) AS x, array_transform([a], v -> v + 1) AS x, count(*) FROM t GROUP BY x",
+        },
+        SqlTestCase {
+            name: "group_by_alias_of_different_items_is_ambiguous",
+            description: "A GROUP BY alias of SELECT items with different forms is ambiguous.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a AS x, b AS x, count(*) FROM t GROUP BY x",
+        },
+        SqlTestCase {
             name: "group_by_rejects_udaf_item",
             description: "Explicit GROUP BY items must reject UDAF calls just like builtin aggregates.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
@@ -921,10 +939,28 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k",
         },
         SqlTestCase {
-            name: "grouping_in_order_by_keeps_alias_that_is_group_item",
-            description: "GROUPING arguments must keep resolving to a same-name alias that is itself a group item, even when an input column shares the name.",
+            name: "grouping_in_order_by_prefers_input_column_over_key_alias",
+            description: "GROUPING arguments resolve as in GROUP BY, input column first: the input column i is not a key, so it is rejected even though the same-name alias is.",
             setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
             sql: "SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i",
+        },
+        SqlTestCase {
+            name: "grouping_argument_in_having_uses_explicit_key_alias",
+            description: "A GROUPING argument in HAVING that is the explicit alias of a key item stands for its pre-aggregate form, which is the key.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a + 1 AS k, count(*) FROM t GROUP BY GROUPING SETS ((k), ()) HAVING grouping(k) = 0",
+        },
+        SqlTestCase {
+            name: "grouping_argument_in_having_rejects_implicit_item_name",
+            description: "GROUPING arguments see the aliases GROUP BY sees, only explicit ones, so the implicit name of a SELECT item is not resolved in HAVING either.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a + 1, count(*) FROM t GROUP BY GROUPING SETS ((a + 1), ()) HAVING grouping(\"a + 1\") = 0",
+        },
+        SqlTestCase {
+            name: "grouping_argument_rejects_alias_of_aggregate_item",
+            description: "A GROUPING argument that is the alias of an item over an aggregate function is not a key.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT sum(a) AS s, count(*) FROM t GROUP BY GROUPING SETS ((b), ()) HAVING grouping(s) = 0",
         },
         SqlTestCase {
             name: "grouping_alias_case_when_with_lateral_alias",
