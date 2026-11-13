@@ -1,5 +1,8 @@
 # Best-effort automatic table maintenance
 
+The reliability follow-up, metadata measurements and remaining evidence gaps are recorded in
+[RELIABILITY.md](RELIABILITY.md).
+
 ## Contract
 
 For persistent tables, automatic Compact still finishes before the writing statement
