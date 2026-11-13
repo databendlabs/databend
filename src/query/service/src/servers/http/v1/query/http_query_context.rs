@@ -44,6 +44,8 @@ pub struct HttpQueryContext {
     pub session: Arc<Session>,
     /// Snapshot before request-body settings can change the execution tenant.
     pub authenticated_tenant: Tenant,
+    /// Bound during HTTP authentication, before the context reaches a handler.
+    pub(crate) authenticated_query: Option<Arc<HttpQuery>>,
     pub credential: Credential,
     pub query_id: String,
     pub is_query_id_from_client: bool,
@@ -121,21 +123,43 @@ impl HttpQueryContext {
         Ok(())
     }
 
-    pub(crate) fn check_query_access(&self, query: &HttpQuery) -> poem::Result<()> {
-        let invalid_token = match &self.credential {
-            Credential::QueryToken { token, .. } => !query.query_token.verify(token),
-            _ => false,
-        };
-        if invalid_token
-            || query.owner_tenant != self.authenticated_tenant
-            || query.user_name != self.user_name
+    pub(crate) fn authorize_query(&self) -> poem::Result<()> {
+        if let Some(query) = &self.authenticated_query {
+            self.check_node_id(&query.id)?;
+            if query.owner_tenant != self.authenticated_tenant || query.user_name != self.user_name
+            {
+                return Err(poem::Error::from_string(
+                    "Query ownership mismatch",
+                    StatusCode::UNAUTHORIZED,
+                ));
+            }
+            query.check_client_session_id(&self.client_session_id)?;
+        }
+        Ok(())
+    }
+
+    /// Fetch the current query only if it is the object authorized by middleware.
+    /// Keeping the authenticated Arc alive also prevents pointer-address reuse.
+    pub(crate) fn get_query(&self, query_id: &str) -> poem::Result<Option<Arc<HttpQuery>>> {
+        let query = HttpQueryManager::instance().get_query(query_id);
+        if let Some(query) = &query {
+            self.check_query_access(query)?;
+        }
+        Ok(query)
+    }
+
+    pub(crate) fn check_query_access(&self, query: &Arc<HttpQuery>) -> poem::Result<()> {
+        if !self
+            .authenticated_query
+            .as_ref()
+            .is_some_and(|authenticated| Arc::ptr_eq(authenticated, query))
         {
             return Err(poem::Error::from_string(
-                "Query ownership mismatch",
+                "Query identity mismatch",
                 StatusCode::UNAUTHORIZED,
             ));
         }
-        query.check_client_session_id(&self.client_session_id)
+        Ok(())
     }
 
     pub async fn try_refresh_worksheet_session(&self) -> databend_common_exception::Result<()> {

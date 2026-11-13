@@ -16,6 +16,7 @@ pub const HEADER_SESSION: &str = "X-DATABEND-SESSION";
 pub const HEADER_SESSION_ID: &str = "X-DATABEND-SESSION-ID";
 pub const HEADER_TENANT: &str = "X-DATABEND-TENANT";
 pub const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
+pub const HEADER_QUERY_TOKEN: &str = "X-DATABEND-QUERY-TOKEN";
 pub const HEADER_USER: &str = "X-DATABEND-USER";
 pub const HEADER_SQL: &str = "X-DATABEND-SQL";
 

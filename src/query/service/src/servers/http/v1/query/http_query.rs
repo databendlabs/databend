@@ -126,7 +126,6 @@ impl HttpQueryRequest {
         });
         Json(QueryResponse {
             id: "".to_string(),
-            query_token: None,
             stats: QueryStats::default(),
             state: ExecuteStateKind::Failed,
             affect: None,
@@ -787,7 +786,7 @@ impl HttpQuery {
         };
 
         Ok(HttpQueryResponseInternal {
-            query_token: Some(self.query_token.clone()),
+            query_token: None,
             data,
             state,
             session,
@@ -801,7 +800,7 @@ impl HttpQuery {
         let state = self.get_state();
 
         Ok(HttpQueryResponseInternal {
-            query_token: Some(self.query_token.clone()),
+            query_token: None,
             data: None,
             session_id: self.client_session_id.clone().unwrap_or_default(),
             node_id: HttpQueryManager::instance().server_info.id.clone(),

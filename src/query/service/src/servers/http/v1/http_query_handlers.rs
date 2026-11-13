@@ -21,6 +21,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
+use databend_common_base::headers::HEADER_QUERY_TOKEN;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
@@ -185,9 +186,6 @@ impl ArrowFeatures {
 #[derive(Serialize, Debug, Clone)]
 pub struct QueryResponse {
     pub id: String,
-    /// Only authorizes follow-up requests for this query, not new SQL.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub query_token: Option<super::query::QueryToken>,
     pub session_id: Option<String>,
     pub node_id: String,
 
@@ -299,7 +297,6 @@ impl QueryResponse {
 
         let mut res = QueryResponse {
             id: id.clone(),
-            query_token,
             session_id: Some(session_id),
             node_id,
             state,
@@ -322,7 +319,7 @@ impl QueryResponse {
             settings: response_settings,
         };
 
-        match encoding.format {
+        let mut response = match encoding.format {
             QueryResultFormat::Arrow if !schema.fields.is_empty() && !data.is_empty() => {
                 let buf: Result<_, ErrorCode> = try {
                     const META_KEY: &str = "response_header";
@@ -351,7 +348,21 @@ impl QueryResponse {
                     .with_header(HEADER_QUERY_PAGE_ROWS, rows)
                     .into_response()
             }
+        };
+        if let Some(token) = query_token {
+            response
+                .headers_mut()
+                .insert(HEADER_QUERY_TOKEN, token.to_header_value());
+            response.headers_mut().insert(
+                http::header::CACHE_CONTROL,
+                HeaderValue::from_static("no-store"),
+            );
+            response.headers_mut().append(
+                http::header::ACCESS_CONTROL_EXPOSE_HEADERS,
+                HeaderValue::from_static("X-DATABEND-QUERY-ID, X-DATABEND-QUERY-TOKEN"),
+            );
         }
+        response
     }
 }
 
@@ -595,10 +606,8 @@ async fn query_state_handler(
     let root = get_http_tracing_span("http::query_state_handler", ctx, &query_id);
 
     async {
-        let http_query_manager = HttpQueryManager::instance();
-        match http_query_manager.get_query(&query_id) {
+        match ctx.get_query(&query_id)? {
             Some(query) => {
-                ctx.check_query_access(&query)?;
                 if let Some(reason) = query.check_closed() {
                     Ok(StateResponse::closed(&query_id, reason.reason).into_response())
                 } else {
@@ -623,9 +632,7 @@ async fn query_page_handler(
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
 
-    let http_query_manager = HttpQueryManager::instance();
-
-    let Some(query) = http_query_manager.get_query(&query_id) else {
+    let Some(query) = ctx.get_query(&query_id)? else {
         return Err(query_id_not_found(&query_id, &ctx.node_id));
     };
 
@@ -637,7 +644,6 @@ async fn query_page_handler(
     let query_page_handle = {
         let query_id = query_id.clone();
         async move {
-            ctx.check_query_access(&query)?;
             if let Some(st) = query.check_closed() {
                 info!(
                     "/query/{}/page/{} - query is close (reason: {:?})",
@@ -748,7 +754,7 @@ pub(crate) async fn query_handler(
                     ))
                 } else {
                     info!("get retry to start query: {}", ctx.query_id);
-                    let resp = query.get_response_page(0).await.map_err(|err| {
+                    let mut resp = query.get_response_page(0).await.map_err(|err| {
                         info!(
                             "/query/{}/page/{} - get response page error (reason: {})",
                             ctx.query_id,
@@ -760,6 +766,9 @@ pub(crate) async fn query_handler(
                             StatusCode::NOT_FOUND,
                         )
                     })?;
+                    // A retried submission must recover the original capability
+                    // if the first response was lost. Ordinary page retries do not.
+                    resp.query_token = Some(query.query_token.clone());
                     let encoding = ResponseEncoding {
                         format: query_result_format,
                         arrow_result_version: require_negotiated_arrow_result_version(
@@ -815,7 +824,7 @@ pub(crate) async fn query_handler(
                     }
                     Ok(query) => query,
                 };
-                let resp = query
+                let mut resp = query
                     .get_response_page(0)
                     .await
                     .map_err(|err| err.display_with_sql(&sql))
@@ -826,6 +835,7 @@ pub(crate) async fn query_handler(
                         )
                     })?;
 
+                resp.query_token = Some(query.query_token.clone());
                 if matches!(resp.state.state, ExecuteStateKind::Failed) {
                     ctx.set_fail();
                 }
@@ -1285,8 +1295,131 @@ impl<'a> FromRequest<'a> for QueryResultFormat {
 
 #[cfg(test)]
 mod tests {
+    use parking_lot::Mutex;
+    use poem::Endpoint;
+
     use super::*;
     use crate::servers::http::v1::query::HttpQueryRequest;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_authenticated_query_rejects_reused_id() -> anyhow::Result<()> {
+        async fn submit(ep: &Route, timeout_secs: u64) -> anyhow::Result<String> {
+            let req = Request::builder()
+                .method(poem::http::Method::POST)
+                .uri("/v1/query".parse()?)
+                .header("authorization", "Basic cm9vdDo=")
+                .header("content-type", "application/json")
+                .header("x-databend-query-id", "reused-identity-id")
+                .body(serde_json::to_vec(&serde_json::json!({
+                    "sql": "SELECT 1",
+                    "pagination": {"wait_time_secs": 5},
+                    "session": {"settings": {"http_handler_result_timeout_secs": timeout_secs.to_string()}}
+                }))?);
+            let response = ep.call(req).await?;
+            assert_eq!(response.status(), StatusCode::OK);
+            let token = response.headers()[HEADER_QUERY_TOKEN].to_str()?.to_string();
+            let body: serde_json::Value = response.into_body().into_json().await?;
+            assert!(body.get("query_token").is_none());
+            Ok(token)
+        }
+
+        async fn capture_context(
+            authorization: &str,
+            query_token: bool,
+        ) -> anyhow::Result<HttpQueryContext> {
+            let captured = Arc::new(Mutex::new(None));
+            let slot = captured.clone();
+            let ep = Route::new().at(
+                "/query/:id",
+                poem::endpoint::make_sync(move |req| {
+                    *slot.lock() = req.extensions().get::<HttpQueryContext>().cloned();
+                    StatusCode::OK
+                })
+                .with(HTTPSessionMiddleware::create(
+                    HttpHandlerKind::Query,
+                    EndpointKind::PollQuery,
+                ))
+                .with(CookieJarManager::new()),
+            );
+            let mut req = Request::builder()
+                .uri("/query/reused-identity-id".parse()?)
+                .header("authorization", authorization);
+            if query_token {
+                req = req.header("x-databend-auth-method", "query-token");
+            }
+            let response = ep.call(req.finish()).await?;
+            assert_eq!(response.status(), StatusCode::OK);
+            let ctx = captured.lock().take().unwrap();
+            Ok(ctx)
+        }
+
+        let _fixture = TestFixture::setup().await?;
+        let ep = Route::new().nest("/v1", query_route());
+        let original = submit(&ep, 2).await?;
+        let basic = capture_context("Basic cm9vdDo=", false).await?;
+        let capability = capture_context(&format!("Bearer {original}"), true).await?;
+        let manager = HttpQueryManager::instance();
+        let old_query = basic.get_query("reused-identity-id")?.unwrap();
+        assert!(Arc::ptr_eq(
+            &old_query,
+            capability.authenticated_query.as_ref().unwrap()
+        ));
+
+        // Simulate query removal between authentication and handler execution.
+        // The old Arc remains alive, but the same ID must not grant access to a
+        // replacement with even the same owner and client session.
+        manager
+            .close_query(&old_query.id, CloseReason::Finalized, None)
+            .await?;
+        // Holding authenticated Arcs must not prevent the manager from removing
+        // the old record. Wait for observed cleanup before reusing its ID.
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            while manager.get_query(&old_query.id).is_some() {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await?;
+        let replacement = submit(&ep, 60).await?;
+        assert_ne!(original, replacement);
+        let current = HttpQueryManager::instance()
+            .get_query(&old_query.id)
+            .unwrap();
+        assert!(!Arc::ptr_eq(&old_query, &current));
+
+        // Invoke the actual handlers with the contexts captured after middleware
+        // authentication, rather than re-authenticating against the new object.
+        let handlers = Route::new()
+            .at("/query/:id", get(query_state_handler))
+            .at("/query/:id/page/:page_no", get(query_page_handler))
+            .at("/query/:id/final", get(query_final_handler))
+            .at("/query/:id/kill", get(query_cancel_handler));
+        for ctx in [&basic, &capability] {
+            for suffix in ["", "/page/0", "/final", "/kill"] {
+                let mut req = Request::builder()
+                    .uri(format!("/query/{}{suffix}", old_query.id).parse()?)
+                    .finish();
+                req.extensions_mut().insert(ctx.clone());
+                let response = handlers.call(req).await.err().unwrap();
+                assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+                assert!(current.check_closed().is_none());
+            }
+        }
+        let mut unbound = basic.clone();
+        unbound.authenticated_query = None;
+        assert_eq!(
+            unbound.check_query_access(&current).unwrap_err().status(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        let fresh = capture_context("Basic cm9vdDo=", false).await?;
+        let mut req = Request::builder()
+            .uri(format!("/query/{}/final", old_query.id).parse()?)
+            .finish();
+        req.extensions_mut().insert(fresh);
+        assert_eq!(handlers.call(req).await?.status(), StatusCode::OK);
+        Ok(())
+    }
 
     fn dummy_request(arrow_features: Option<ArrowFeatures>) -> HttpQueryRequest {
         HttpQueryRequest {

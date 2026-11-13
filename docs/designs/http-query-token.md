@@ -4,11 +4,25 @@ Tracking discussion: <https://github.com/databendlabs/databend/issues/21043>.
 
 ## Protocol
 
-A successfully created HTTP query returns an additional `query_token` field in
-its JSON response, or in the `response_header` schema metadata for Arrow results.
-Clients can detect support by the presence of this field. Older clients may
-ignore it; existing Basic, JWT, key-pair and native session authentication remain
-available.
+A successfully created HTTP query returns its capability only in the
+`X-DATABEND-QUERY-TOKEN` response header, for both JSON and Arrow results. Neither
+the JSON body nor Arrow `response_header` schema metadata contains a
+`query_token` field. Clients detect support by the presence of the response
+header. Older clients may ignore it; existing Basic, JWT, key-pair and native
+session authentication remain available.
+
+```http
+HTTP/1.1 200 OK
+X-DATABEND-QUERY-ID: <query-id>
+X-DATABEND-QUERY-TOKEN: <query-token>
+Cache-Control: no-store
+Access-Control-Expose-Headers: X-DATABEND-QUERY-ID, X-DATABEND-QUERY-TOKEN
+```
+
+Save the query ID and capability as soon as response headers arrive, before
+reading the result body. If the headers arrive but the body is lost, the client
+can still authenticate query follow-ups. Loss of the entire initial response
+remains ambiguous; this does not make SQL submission safe to replay.
 
 Submit new queries with the normal authentication method. For subsequent state,
 page, final and kill requests for that query, use:
@@ -16,7 +30,7 @@ page, final and kill requests for that query, use:
 ```http
 GET /v1/query/<query-id>/page/1
 Authorization: Bearer <query_token>
-X-DATABEND-AUTH-METHOD: query
+X-DATABEND-AUTH-METHOD: query-token
 ```
 
 Retain the existing query-node routing headers and, when the query was created
@@ -60,11 +74,14 @@ not the execution tenant: `session.settings.sandbox_tenant` may change where SQL
 executes, but must not change who owns the query. Follow-ups have no body, and
 submission retries compare against the same immutable authenticated tenant.
 
-Every handler checks the actual query object's owner tenant, user and client
-session before exposing results or its token. Query-token authentication is
-revalidated against that object; final/kill perform this check while holding the query map
-lock, so a reused query ID cannot let a request authenticated for an old query
-close a replacement query.
+HTTP middleware checks the query capability (when selected), owner tenant,
+user and client session once, and retains the exact authenticated `Arc<HttpQuery>`
+in the request context. State/page handlers fetch through the context and check
+object identity with `Arc::ptr_eq`, rather than verifying the capability again.
+Final/kill check this identity while holding the query map lock, so a reused query
+ID cannot let an already-authenticated request read or close a replacement query.
+Retaining an Arc for an in-flight request does not keep the query discoverable in
+the manager or allow closed result pages to be read.
 
 An authenticated retry of query submission with the same query ID can return
 the existing query and token only for the same tenant, user and client session.
@@ -92,10 +109,12 @@ has already disappeared.
   to work without sending the settings again.
 - Multiple `X-DATABEND-AUTH-METHOD` headers are rejected on authenticated
   endpoints, rather than accepting the first value.
-- Submission responses, pages, submission/page retries and the legacy final
-  response include `query_token`. Retaining it on these authorized responses
-  supports response recovery but expands the number of responses carrying the
-  capability. State responses and successful kill responses do not include it.
+- Only initial query submission responses and authenticated submission retries
+  include `X-DATABEND-QUERY-TOKEN`. Page responses (even page zero and page
+  retries), state, final and kill responses do not include that header. Clients
+  retain the capability from submission; an absent header on a follow-up response
+  must not clear it. Submission retries can recover a lost initial
+  capability only while the existing query and replayable response are retained.
 
 ## Security and credential changes
 
@@ -104,10 +123,21 @@ An existing query remains accessible after that user's password changes or
 the user is dropped. This is intentional capability-based authorization, not
 immediate per-request user revocation. New SQL still requires valid credentials.
 
-Use TLS. Never put the token in a URL or log/trace an unredacted response body.
-Server `Debug` formatting redacts the token, and authentication errors do not
-include it. The token is transmitted in the standard Authorization header,
-which existing request-header sanitization already redacts.
+Use TLS. Never put the token in a URL or log/trace its unredacted response header.
+Capability-bearing responses use `Cache-Control: no-store`. Server `Debug`
+formatting redacts the token; its HTTP `HeaderValue` is marked sensitive, and
+request-header sanitization also masks `X-DATABEND-QUERY-TOKEN` if a client sends
+it back accidentally. Authentication errors do not include it. Follow-up
+requests transmit it in the standard Authorization header, which request-header
+sanitization already redacts. Proxies and APM systems must independently redact
+the new response header: the in-process sensitive flag is not an HTTP wire flag.
+
+The server appends an `Access-Control-Expose-Headers` entry for the query ID and
+token. This does not enable additional origins or change credential policies.
+Cross-origin browser deployments must preserve these exposed headers through
+the gateway and edge CORS policy. Deployment-specific CORS and logging behavior
+still requires validation; embedding a token in a header is not inherently safer
+than a body without these protections.
 
 For self-password changes, a future client implementation can retain the new
 password from its parsed SQL, fetch terminal success using this query token,
@@ -120,13 +150,18 @@ Focused service integration tests cover follow-up requests and retries,
 query/tenant/session isolation, old credentials after password changes,
 access after user deletion, token removal with query cleanup, loss of node-local
 state, missing-query 404 versus wrong-token 401, routing diagnostics, explicit
-auth dispatch, and Arrow metadata. Sandbox compatibility tests also cover Basic
+auth dispatch, JSON/Arrow response-header delivery, and Arrow-to-JSON fallback.
+They assert token omission from result bodies and all follow-up response headers,
+submission-retry stability, no-store/CORS headers, and self-password-change
+polling after discarding the initial body. Sandbox compatibility tests also cover Basic
 and native session-token state/page/final/kill requests and submission retries,
 including session settings returned by `SET sandbox_tenant`. The token primitive
-has a serialization/validation/redaction unit test.
+has a sensitive-header encoding/validation/redaction unit test. Middleware/handler unit
+regressions cover missing-query audit handling and reuse of a query ID after
+middleware authentication, including Basic and query-capability requests.
 
 ```sh
-cargo test -p databend-query --lib query_token
+cargo test -p databend-query --lib servers::http::
 cargo test -p databend-query --test it servers::http::query_token
 cargo test -p databend-query --test it servers::http::http_query_handlers
 cargo clippy -p databend-query --lib --tests -- -D warnings

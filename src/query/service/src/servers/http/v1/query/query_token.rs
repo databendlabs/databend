@@ -14,15 +14,14 @@
 
 use std::fmt;
 
+use http::HeaderValue;
 use rand::RngCore;
 use rand::rngs::OsRng;
-use serde::Serialize;
-use serde::Serializer;
 use subtle::ConstantTimeEq;
 
 /// A bearer capability for one retained HTTP query. Its lifetime is the query's
 /// lifetime, including the closed-query retention period used for final retries.
-/// Never format the secret except when serializing an authorized response.
+/// Only disclose the secret in an authorized submission's sensitive HTTP header.
 #[derive(Clone)]
 pub struct QueryToken([u8; 32]);
 
@@ -31,6 +30,13 @@ impl QueryToken {
         let mut bytes = [0; 32];
         OsRng.fill_bytes(&mut bytes);
         Self(bytes)
+    }
+
+    pub(crate) fn to_header_value(&self) -> HeaderValue {
+        let mut value = HeaderValue::from_str(&hex::encode(self.0))
+            .expect("hex query token must be a valid HTTP header");
+        value.set_sensitive(true);
+        value
     }
 
     pub(crate) fn verify(&self, token: &str) -> bool {
@@ -45,12 +51,6 @@ impl fmt::Debug for QueryToken {
     }
 }
 
-impl Serialize for QueryToken {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&hex::encode(self.0))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::QueryToken;
@@ -58,8 +58,10 @@ mod tests {
     #[test]
     fn query_token_roundtrip_and_redaction() {
         let token = QueryToken::new();
-        let encoded = serde_json::to_value(&token).unwrap();
-        let secret = encoded.as_str().unwrap();
+        let encoded = token.to_header_value();
+        let secret = encoded.to_str().unwrap();
+        assert!(encoded.is_sensitive());
+        assert!(!format!("{encoded:?}").contains(secret));
         assert_eq!(secret.len(), 64);
         assert!(token.verify(secret));
         assert!(token.clone().verify(secret));

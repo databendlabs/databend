@@ -36,7 +36,6 @@ use log::info;
 use serde::Serialize;
 
 use crate::servers::http::v1::ClientSessionManager;
-use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
 
 pub struct AuthMgr {
@@ -132,27 +131,11 @@ impl AuthMgr {
             .unwrap_or_default();
         match credential {
             Credential::NoNeed => Ok(("".to_string(), None)),
-            Credential::QueryToken { query_id, token } => {
-                // Only the HTTP middleware's query-follow-up path may construct
-                // this credential. Never use it to initialize SQL privileges.
-                if need_user_info {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "Query tokens cannot authenticate this endpoint",
-                    ));
-                }
-                let manager = HttpQueryManager::instance();
-                let query = manager.get_query(query_id).ok_or_else(|| {
-                    ErrorCode::UnknownQuery(format!(
-                        "Query ID {query_id} not found on node {}",
-                        manager.server_info.id
-                    ))
-                })?;
-                if !query.query_token.verify(token) {
-                    return Err(ErrorCode::AuthenticateFailure("Invalid query token"));
-                }
-                session.set_current_tenant(query.owner_tenant.clone())?;
-                Ok((query.user_name.clone(), query.client_session_id.clone()))
-            }
+            // HTTP middleware authorizes query capabilities against a specific
+            // query object. They must never initialize ordinary SQL privileges.
+            Credential::QueryToken { .. } => Err(ErrorCode::AuthenticateFailure(
+                "Query tokens require HTTP query authorization",
+            )),
             Credential::DatabendToken { token } => {
                 let claim = ClientSessionManager::instance().verify_token(token).await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;

@@ -22,6 +22,7 @@ use databend_common_base::headers::HEADER_AUTH_METHOD;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_QUERY_TOKEN;
 use databend_common_base::headers::HEADER_SESSION;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_query::test_kits::ConfigBuilder;
@@ -49,7 +50,7 @@ fn basic_headers(user: &str, password: &str) -> HeaderMap {
 
 fn token_headers(token: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
-    headers.insert(HEADER_AUTH_METHOD, HeaderValue::from_static("query"));
+    headers.insert(HEADER_AUTH_METHOD, HeaderValue::from_static("query-token"));
     headers.insert(
         http::header::AUTHORIZATION,
         HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
@@ -64,13 +65,47 @@ async fn request(
     headers: HeaderMap,
     body: serde_json::Value,
 ) -> Response {
+    let submission = method == Method::POST && uri == "/v1/query";
     let mut req = Request::builder()
         .method(method)
         .uri(uri.parse().unwrap())
         .header(http::header::CONTENT_TYPE, "application/json")
         .body(serde_json::to_vec(&body).unwrap());
     req.headers_mut().extend(headers);
-    ep.call(req).await.unwrap_or_else(|err| err.into_response())
+    let response = ep.call(req).await.unwrap_or_else(|err| err.into_response());
+    if !submission {
+        assert!(!response.headers().contains_key(HEADER_QUERY_TOKEN));
+    }
+    response
+}
+
+fn response_token(response: &Response) -> anyhow::Result<Option<String>> {
+    let token = response.headers().get(HEADER_QUERY_TOKEN);
+    if let Some(token) = token {
+        assert_eq!(response.headers()[http::header::CACHE_CONTROL], "no-store");
+        for name in [HEADER_QUERY_ID, HEADER_QUERY_TOKEN] {
+            assert!(
+                response.headers()[http::header::ACCESS_CONTROL_EXPOSE_HEADERS]
+                    .to_str()?
+                    .split(',')
+                    .any(|header| header.trim().eq_ignore_ascii_case(name))
+            );
+        }
+        assert!(token.is_sensitive());
+        assert_eq!(token.to_str()?.len(), 64);
+    }
+    Ok(token
+        .map(|token| token.to_str().map(str::to_string))
+        .transpose()?)
+}
+
+async fn decode_json(response: Response) -> anyhow::Result<TestQueryResponse> {
+    let query_token = response_token(&response)?;
+    let value: serde_json::Value = response.into_body().into_json().await?;
+    assert!(value.get("query_token").is_none());
+    let mut result: TestQueryResponse = serde_json::from_value(value)?;
+    result.query_token = query_token;
+    Ok(result)
 }
 
 fn client_session_header(id: &str) -> HeaderValue {
@@ -111,10 +146,8 @@ async fn start_query(
         }),
     )
     .await;
-    let status = response.status();
-    let body = response.into_body().into_string().await?;
-    assert_eq!(status, StatusCode::OK, "{body}");
-    let result: TestQueryResponse = serde_json::from_str(&body)?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let result = decode_json(response).await?;
     assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 1);
     assert_eq!(result.query_token.as_ref().unwrap().len(), 64);
@@ -157,12 +190,17 @@ async fn test_query_token_followups_and_retries() -> anyhow::Result<()> {
     assert!(state.get("query_token").is_none());
 
     let page = result.next_uri.as_ref().unwrap();
-    for _ in 0..2 {
-        let response = request(&ep, Method::GET, page, headers.clone(), json!(null)).await;
-        assert_eq!(response.status(), StatusCode::OK);
-        let response: TestQueryResponse = response.into_body().into_json().await?;
-        assert_eq!(response.data.len(), 1);
-        assert_eq!(response.query_token.as_ref(), Some(token));
+    // Token delivery is tied to submission, not page number: even page/0 and
+    // retries of an authorized page must omit the capability.
+    for uri in [format!("/v1/query/{}/page/0", result.id), page.clone()] {
+        for _ in 0..2 {
+            let response = request(&ep, Method::GET, &uri, headers.clone(), json!(null)).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let response: serde_json::Value = response.into_body().into_json().await?;
+            assert!(response.get("query_token").is_none());
+            let response: TestQueryResponse = serde_json::from_value(response)?;
+            assert_eq!(response.data.len(), 1);
+        }
     }
 
     // Retain the capability for the same closed-query period as legacy final
@@ -177,6 +215,8 @@ async fn test_query_token_followups_and_retries() -> anyhow::Result<()> {
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
+        let response: serde_json::Value = response.into_body().into_json().await?;
+        assert!(response.get("query_token").is_none());
     }
     let closed = request(&ep, Method::GET, page, headers, json!(null)).await;
     assert_eq!(closed.status(), StatusCode::BAD_REQUEST);
@@ -233,17 +273,23 @@ async fn test_query_token_scope_and_auth_dispatch() -> anyhow::Result<()> {
     }
     // This token is not a JWT or a native session/refresh token; dispatch is
     // explicit, and Basic authentication cannot masquerade as a query token.
-    let mut no_method = token_headers(token);
-    no_method.remove(HEADER_AUTH_METHOD);
-    let response = request(
-        &ep,
-        Method::GET,
-        first.next_uri.as_ref().unwrap(),
-        no_method,
-        json!(null),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    // The former spelling is not an alias for the explicit query-token method.
+    for method in [None, Some("query")] {
+        let mut headers = token_headers(token);
+        headers.remove(HEADER_AUTH_METHOD);
+        if let Some(method) = method {
+            headers.insert(HEADER_AUTH_METHOD, HeaderValue::from_static(method));
+        }
+        let response = request(
+            &ep,
+            Method::GET,
+            first.next_uri.as_ref().unwrap(),
+            headers,
+            json!(null),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
     for invalid in ["Basic cm9vdDo=", "", "B", "Bearer", "BearerX token"] {
         let mut headers = token_headers(token);
         headers.insert(
@@ -261,6 +307,7 @@ async fn test_query_token_scope_and_auth_dispatch() -> anyhow::Result<()> {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
     let mut mixed_case = token_headers(token);
+    mixed_case.insert(HEADER_AUTH_METHOD, HeaderValue::from_static("QuErY-ToKeN"));
     mixed_case.insert(
         http::header::AUTHORIZATION,
         format!("bEaReR {token}").parse()?,
@@ -468,8 +515,24 @@ async fn test_query_token_self_password_change_result() -> anyhow::Result<()> {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let mut result: TestQueryResponse = response.into_body().into_json().await?;
-    let token = result.query_token.clone().unwrap();
+    // Keep the capability as soon as headers arrive, even if the initial body
+    // is lost after the SQL has started changing the user's credentials.
+    let token = response_token(&response)?.unwrap();
+    let initial_page_uri = format!(
+        "/v1/query/{}/page/0",
+        response.headers()[HEADER_QUERY_ID].to_str()?
+    );
+    drop(response);
+    let response = request(
+        &ep,
+        Method::GET,
+        &initial_page_uri,
+        token_headers(&token),
+        json!(null),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut result = decode_json(response).await?;
     tokio::time::timeout(Duration::from_secs(10), async {
         while !result.state.is_stopped() {
             let page = request(
@@ -562,7 +625,7 @@ async fn test_query_token_tenant_and_session_isolation() -> anyhow::Result<()> {
     )
     .await;
     assert_eq!(retry.status(), StatusCode::OK);
-    let retry: TestQueryResponse = retry.into_body().into_json().await?;
+    let retry = decode_json(retry).await?;
     assert_eq!(retry.query_token.as_ref(), Some(token));
     let page = result.next_uri.as_ref().unwrap();
     // Tenant comes from the validated query capability when omitted.
@@ -715,7 +778,7 @@ async fn test_sandbox_owner_with_legacy_auth() -> anyhow::Result<()> {
             )
             .await;
             assert_eq!(response.status(), StatusCode::OK);
-            let mut result: TestQueryResponse = response.into_body().into_json().await?;
+            let mut result = decode_json(response).await?;
             assert!(result.error.is_none(), "{:?}", result.error);
             let retry = request(&ep, Method::POST, "/v1/query", headers.clone(), body).await;
             assert_eq!(
@@ -723,7 +786,7 @@ async fn test_sandbox_owner_with_legacy_auth() -> anyhow::Result<()> {
                 StatusCode::OK,
                 "{method} sandbox submission retry"
             );
-            let retry: TestQueryResponse = retry.into_body().into_json().await?;
+            let retry = decode_json(retry).await?;
             assert_eq!(retry.query_token, result.query_token);
             let mut capability = headers.clone();
             capability.extend(token_headers(result.query_token.as_ref().unwrap()));
@@ -806,7 +869,7 @@ async fn test_query_token_preserves_sandbox_owner() -> anyhow::Result<()> {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let result: TestQueryResponse = response.into_body().into_json().await?;
+    let result = decode_json(response).await?;
     assert!(result.error.is_none(), "{:?}", result.error);
     let token = result.query_token.as_ref().unwrap();
     let mut headers = token_headers(token);
@@ -888,7 +951,19 @@ async fn test_query_token_expires_with_query_state() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_query_token_in_arrow_metadata() -> anyhow::Result<()> {
+async fn test_query_token_in_arrow_response_header() -> anyhow::Result<()> {
+    async fn decode_arrow(response: Response) -> anyhow::Result<TestQueryResponse> {
+        let query_token = response_token(&response)?;
+        let reader =
+            StreamReader::try_new(Cursor::new(response.into_body().into_vec().await?), None)?;
+        let value: serde_json::Value =
+            serde_json::from_str(&reader.schema().metadata()["response_header"])?;
+        assert!(value.get("query_token").is_none());
+        let mut result: TestQueryResponse = serde_json::from_value(value)?;
+        result.query_token = query_token;
+        Ok(result)
+    }
+
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
     let mut headers = basic_headers("root", "");
@@ -896,18 +971,31 @@ async fn test_query_token_in_arrow_metadata() -> anyhow::Result<()> {
         http::header::ACCEPT,
         HeaderValue::from_static("application/vnd.apache.arrow.stream"),
     );
+    headers.insert(
+        HEADER_QUERY_ID,
+        HeaderValue::from_static("arrow-token-retry"),
+    );
     let body = json!({
         "sql": "SELECT * FROM numbers(5)",
         "pagination": {"wait_time_secs": 5, "max_rows_per_page": 1},
         "arrow_result_version_max": 2
     });
-    let response = request(&ep, Method::POST, "/v1/query", headers, body).await;
+    let response = request(
+        &ep,
+        Method::POST,
+        "/v1/query",
+        headers.clone(),
+        body.clone(),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = response.into_body().into_vec().await?;
-    let reader = StreamReader::try_new(Cursor::new(bytes), None)?;
-    let result: TestQueryResponse =
-        serde_json::from_str(&reader.schema().metadata()["response_header"])?;
+    let result = decode_arrow(response).await?;
     let token = result.query_token.as_ref().unwrap();
+    // Arrow submission retries recover the same capability only via HTTP headers.
+    let retry = request(&ep, Method::POST, "/v1/query", headers, body).await;
+    assert_eq!(retry.status(), StatusCode::OK);
+    let retry = decode_arrow(retry).await?;
+    assert_eq!(retry.query_token.as_ref(), Some(token));
     let mut headers = token_headers(token);
     headers.insert(
         http::header::ACCEPT,
@@ -922,11 +1010,42 @@ async fn test_query_token_in_arrow_metadata() -> anyhow::Result<()> {
     )
     .await;
     assert_eq!(page.status(), StatusCode::OK);
-    let bytes = page.into_body().into_vec().await?;
-    let reader = StreamReader::try_new(Cursor::new(bytes), None)?;
-    let page: TestQueryResponse =
-        serde_json::from_str(&reader.schema().metadata()["response_header"])?;
-    assert_eq!(page.query_token.as_ref(), Some(token));
+    let page = decode_arrow(page).await?;
+    assert!(page.query_token.is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_token_header_for_arrow_json_fallback() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let mut headers = basic_headers("root", "");
+    headers.insert(
+        http::header::ACCEPT,
+        HeaderValue::from_static("application/vnd.apache.arrow.stream"),
+    );
+    let response = request(
+        &ep,
+        Method::POST,
+        "/v1/query",
+        headers,
+        json!({
+            "sql": "SELECT 1 WHERE false",
+            "pagination": {"wait_time_secs": 5},
+            "arrow_result_version_max": 2
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()[http::header::CONTENT_TYPE],
+        "application/json; charset=utf-8"
+    );
+    let result = decode_json(response).await?;
+    assert!(result.error.is_none(), "{:?}", result.error);
+    assert_eq!(result.state.to_string(), "Succeeded");
+    assert!(result.data.is_empty());
+    assert!(result.query_token.is_some());
     Ok(())
 }
 

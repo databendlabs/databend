@@ -96,8 +96,8 @@ impl Queries {
         let q = self.active.get(query_id).cloned();
         if let Some(q) = q {
             if let Some(ctx) = auth_context {
-                // Revalidate against the query being closed under the map lock:
-                // its ID could have been reused since middleware authenticated.
+                // Check object identity under the map lock: this ID could
+                // have been reused since middleware authorized a different Arc.
                 ctx.check_query_access(&q)?;
             }
             let closed_state = q.mark_closed(reason);

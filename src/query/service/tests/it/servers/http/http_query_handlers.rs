@@ -115,6 +115,8 @@ struct TestHttpQueryRequest {
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestQueryResponse {
     pub id: String,
+    /// Test-only credential captured from HTTP headers, never the JSON body.
+    #[serde(skip)]
     pub query_token: Option<String>,
     pub session_id: Option<String>,
     pub node_id: String,
