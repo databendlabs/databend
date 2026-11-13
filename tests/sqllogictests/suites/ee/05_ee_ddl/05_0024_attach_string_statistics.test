@@ -150,5 +150,66 @@ DROP TABLE attach_stats_target;
 statement ok
 DROP TABLE attach_stats_source;
 
+## Dropped columns keep their settings: time travel can restore them even when
+## the schema in the latest hint no longer contains those column IDs.
+statement ok
+CREATE TABLE attach_stats_source(id INT, s STRING STATS_TRUNCATE_LEN 4,
+    wide STRING STATS_TRUNCATE_LEN 40)
+'fs:///tmp/attach_string_statistics/' row_per_block=100;
+
+statement ok
+INSERT INTO attach_stats_source VALUES (1, 'abcdefghijklmnop', 'abcdefghijklmnopqrst');
+
+statement ok
+SET VARIABLE attach_stats_history = (
+    SELECT snapshot_id FROM fuse_snapshot('default', 'attach_stats_source')
+);
+
+statement ok
+ALTER TABLE attach_stats_source DROP COLUMN s;
+
+statement ok
+ALTER TABLE attach_stats_source DROP COLUMN wide;
+
+## Publish a hint whose schema contains neither string column.
+statement ok
+INSERT INTO attach_stats_source VALUES (2);
+
+statement ok
+SET VARIABLE attach_stats_sql = (
+    SELECT 'ATTACH TABLE attach_stats_target ''fs:///tmp/attach_string_statistics/'
+           || split_part(snapshot_location, '/_ss/', 1) || ''''
+    FROM fuse_snapshot('default', 'attach_stats_source')
+    ORDER BY timestamp DESC LIMIT 1
+);
+
+statement ok
+EXECUTE IMMEDIATE $attach_stats_sql;
+
+query BB
+SELECT MIN(s) = 'abcdefghijklmnop', MAX(s) = 'abcdefghijklmnop'
+FROM attach_stats_target AT (SNAPSHOT => $attach_stats_history);
+----
+1 1
+
+query T
+EXPLAIN SELECT MIN(wide), MAX(wide)
+FROM attach_stats_target AT (SNAPSHOT => $attach_stats_history);
+----
+EvalScalar
+├── output columns: [MIN(wide) (#3), MAX(wide) (#4)]
+├── expressions: ['abcdefghijklmnopqrst', 'abcdefghijklmnopqrst']
+├── estimated rows: 1.00
+└── DummyTableScan
+
+statement ok
+DROP TABLE attach_stats_target;
+
+statement ok
+DROP TABLE attach_stats_source;
+
+statement ok
+UNSET VARIABLE attach_stats_history;
+
 statement ok
 UNSET VARIABLE attach_stats_sql;

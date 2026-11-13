@@ -58,21 +58,11 @@ pub struct SnapshotHint {
 }
 
 impl SnapshotHint {
-    /// Install settings for the same snapshot/schema as this hint. Keep the
-    /// known/unknown distinction in TableMeta so distributed planning preserves it.
+    /// Install the source settings, including dropped and unselected columns:
+    /// time travel can restore their stable IDs from an older snapshot schema.
+    /// Keep the known/unknown distinction in TableMeta for distributed planning.
     pub fn apply_stats_truncate_len(&self, meta: &mut TableMeta) {
-        meta.field_stats_truncate_len = self
-            .field_stats_truncate_len
-            .as_ref()
-            .map(|settings| {
-                let column_ids = meta.schema.to_column_ids();
-                settings
-                    .iter()
-                    .filter(|(id, _)| column_ids.contains(id))
-                    .map(|(&id, &len)| (id, len))
-                    .collect()
-            })
-            .unwrap_or_default();
+        meta.field_stats_truncate_len = self.field_stats_truncate_len.clone().unwrap_or_default();
         match self.field_stats_truncate_len {
             Some(_) => {
                 meta.options.insert(
