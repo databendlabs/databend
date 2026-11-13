@@ -626,9 +626,7 @@ where A: TypeCheckAdapter
         if !arg.deterministic {
             self.adapter.set_result_cache_uncacheable();
         }
-        if self
-            .scalar_folding_policy()
-            .allows_folding(child.facts.column_free)
+        if self.scalar_folding_policy().allows_folding()
             && let Some(value) = arg.constant
         {
             return Self::folded_constant_of_type(cast.span(), value, cast.data_type().clone());
@@ -677,12 +675,11 @@ where A: TypeCheckAdapter
         let is_grouping = Self::is_grouping(&call);
         let all_removable = arg_facts.iter().all(|arg| arg.removable);
         let mut domain = None;
-        // Pre-aggregate forms must retain column-dependent structure: even a
+        // Pre-aggregate forms of grouping-set keys retain their structure: a
         // type-derived constant such as is_null(non_null_key) changes once the
-        // grouping key receives injected NULLs. Literal-only children still fold.
-        let allow_folding = self
-            .scalar_folding_policy()
-            .allows_folding(args.iter().all(|arg| arg.facts.column_free));
+        // key receives injected NULLs, and a folded constant would be matched
+        // to any key that folds to it.
+        let allow_folding = self.scalar_folding_policy().allows_folding();
         if allow_folding
             && !is_srf
             && !is_grouping
@@ -836,9 +833,7 @@ where A: TypeCheckAdapter
                 |(((checked_arg, is_generic), arg), facts)| match &facts.constant {
                     Some(value)
                         if arg.facts.evaluable
-                            && self
-                                .scalar_folding_policy()
-                                .allows_folding(arg.facts.column_free)
+                            && self.scalar_folding_policy().allows_folding()
                             && !is_generic
                             && checked_arg.data_type() != &arg.data_type =>
                     {

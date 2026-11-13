@@ -370,7 +370,7 @@ EvalScalar
     ├── group items: [k + 1 (#1) AS (#1), _grouping_id (#2) AS (#2)]
     ├── aggregate functions: [count() AS (#3)]
     └── EvalScalar
-        ├── scalars: [CAST(2 AS UInt8 NULL) AS (#1)]
+        ├── scalars: [CAST(plus(1, 1) AS UInt16 NULL) AS (#1)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []

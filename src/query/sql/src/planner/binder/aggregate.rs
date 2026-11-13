@@ -223,7 +223,7 @@ impl ExpandedGroup {
     pub(crate) fn folding_policy(&self) -> ScalarFoldingPolicy {
         match self {
             ExpandedGroup::Normal(_) => ScalarFoldingPolicy::Normal,
-            ExpandedGroup::GroupingSets(_) => ScalarFoldingPolicy::PreserveColumnStructure,
+            ExpandedGroup::GroupingSets(_) => ScalarFoldingPolicy::PreserveStructure,
         }
     }
 }

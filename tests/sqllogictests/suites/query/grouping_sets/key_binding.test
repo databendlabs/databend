@@ -291,10 +291,13 @@ SELECT a IS NULL, count(*) FROM t GROUP BY ROLLUP(a IS NULL)
 0 2
 NULL 2
 
-# Keys are compared as written, without normalization; columns of different
-# tables are different keys.
+# Keys are compared as written, without normalization, also of constants;
+# columns of different tables are different keys.
 statement error (?s)1065.*column "a" must appear in the GROUP BY clause
 SELECT 1 + a FROM t GROUP BY ROLLUP(a + 1)
+
+statement error (?s)1065.*column "a" must appear in the GROUP BY clause
+SELECT a + (1 + 1) FROM t GROUP BY ROLLUP(a + 2)
 
 statement error (?s)1065.*column "a" must appear in the GROUP BY clause
 SELECT y.a FROM t x JOIN t y ON x.a = y.a GROUP BY ROLLUP(x.a)

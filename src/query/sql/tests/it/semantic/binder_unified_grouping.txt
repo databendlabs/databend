@@ -424,9 +424,9 @@ EvalScalar
     ├── group items: [coalesce(a, 0) + 1 (#2) AS (#2), coalesce(a, 0) (#3) AS (#3), _grouping_id (#4) AS (#4)]
     ├── aggregate functions: [count() AS (#5)]
     └── EvalScalar
-        ├── scalars: [plus(if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), true, 0, NULL), 1) AS (#2), if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), true, 0, NULL) AS (#3)]
+        ├── scalars: [plus(if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), is_not_null(0), assume_not_null(0), NULL), 1) AS (#2), if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), is_not_null(0), assume_not_null(0), NULL) AS (#3)]
         └── Filter
-            ├── filters: [gt(if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), true, 0, NULL), 0)]
+            ├── filters: [gt(if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), is_not_null(0), assume_not_null(0), NULL), 0)]
             └── Scan
                 ├── table: default.t (#0)
                 ├── filters: []

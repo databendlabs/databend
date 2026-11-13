@@ -482,15 +482,15 @@ EvalScalar
 
 === speculative_deterministic_constant_key_in_grouping_sets ===
 sql: SELECT 2, 1 + 1, count(*) FROM t GROUP BY ROLLUP(1 + 1)
-metadata: tables=1, columns=7
+metadata: tables=1, columns=6
 status: ok
 EvalScalar
-├── scalars: [COUNT(*) (#4) AS (#4), 2 AS (#5), 2 AS (#6)]
+├── scalars: [1 + 1 (#2) AS (#2), COUNT(*) (#4) AS (#4), 2 AS (#5)]
 └── Aggregate(Initial)
     ├── group items: [1 + 1 (#2) AS (#2), _grouping_id (#3) AS (#3)]
     ├── aggregate functions: [count() AS (#4)]
     └── EvalScalar
-        ├── scalars: [CAST(2 AS UInt8 NULL) AS (#2)]
+        ├── scalars: [CAST(plus(1, 1) AS UInt16 NULL) AS (#2)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []

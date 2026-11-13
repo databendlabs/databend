@@ -319,14 +319,15 @@ pub struct ViewIdent {
 pub enum ScalarFoldingPolicy {
     #[default]
     Normal,
-    /// Retain column-dependent structure for grouping-key input matching;
-    /// literal-only expressions are still evaluated.
-    PreserveColumnStructure,
+    /// Retain the structure as written, for matching grouping-set keys:
+    /// nothing is folded, not even literal-only expressions, so that `1 + 1`
+    /// is not the same key as `2`, or as `coalesce(1 + 1, 100)`.
+    PreserveStructure,
 }
 
 impl ScalarFoldingPolicy {
-    pub(crate) fn allows_folding(self, column_free: bool) -> bool {
-        self == Self::Normal || column_free
+    pub(crate) fn allows_folding(self) -> bool {
+        self == Self::Normal
     }
 }
 

@@ -62,7 +62,7 @@ async fn test_deferred_column_folding_preserves_column_predicates() -> Result<()
         let (deferred, _) = resolve_with_policy(
             &sql,
             TestTypeCheckAdapter::new(settings.clone()),
-            ScalarFoldingPolicy::PreserveColumnStructure,
+            ScalarFoldingPolicy::PreserveStructure,
         )?;
         assert!(matches!(deferred, ScalarExpr::FunctionCall(_)));
         assert!(deferred.used_columns().contains(&Symbol::new(0)));
@@ -84,7 +84,7 @@ async fn test_deferred_column_folding_preserves_nested_bound_children() -> Resul
         let (scalar, _) = resolve_with_policy(
             sql,
             TestTypeCheckAdapter::new(settings.clone()),
-            ScalarFoldingPolicy::PreserveColumnStructure,
+            ScalarFoldingPolicy::PreserveStructure,
         )?;
         assert!(scalar.used_columns().contains(&Symbol::new(0)), "{sql}");
     }
@@ -107,7 +107,7 @@ async fn test_deferred_column_folding_preserves_udf_condition() -> Result<()> {
     let (scalar, _) = resolve_with_policy(
         "with_default(number)",
         adapter,
-        ScalarFoldingPolicy::PreserveColumnStructure,
+        ScalarFoldingPolicy::PreserveStructure,
     )?;
     let ScalarExpr::UDFLambdaCall(udf) = scalar else {
         panic!("expected an expanded lambda UDF")
@@ -124,38 +124,38 @@ async fn test_deferred_column_folding_preserves_udf_condition() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_deferred_column_folding_keeps_pure_constant_evaluation() -> Result<()> {
+async fn test_preserved_structure_keeps_literal_only_expressions() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
     let (scalar, _) = resolve_with_policy(
         "coalesce(NULL, 40 + 2)",
         TestTypeCheckAdapter::new(settings),
-        ScalarFoldingPolicy::PreserveColumnStructure,
+        ScalarFoldingPolicy::PreserveStructure,
     )?;
-    let ScalarExpr::ConstantExpr(constant) = scalar else {
-        panic!("literal-only expressions should still be evaluated during binding")
-    };
-    assert_eq!(constant.value.get_i64(), Some(42));
+    assert!(
+        !matches!(scalar, ScalarExpr::ConstantExpr(_)),
+        "a literal-only expression must keep its structure: {scalar:?}"
+    );
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_preserved_column_structure_still_folds_literal_children() -> Result<()> {
+async fn test_preserved_structure_keeps_literal_only_children() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
     let (scalar, data_type) = resolve_with_policy(
         "number + (40 + 2)",
         TestTypeCheckAdapter::new(settings),
-        ScalarFoldingPolicy::PreserveColumnStructure,
+        ScalarFoldingPolicy::PreserveStructure,
     )?;
     let ScalarExpr::FunctionCall(call) = &scalar else {
         panic!("a column-dependent call must retain its structure")
     };
     assert!(matches!(call.arguments[0], ScalarExpr::BoundColumnRef(_)));
-    let ScalarExpr::ConstantExpr(constant) = &call.arguments[1] else {
-        panic!("a literal-only child must still fold")
+    let ScalarExpr::FunctionCall(child) = &call.arguments[1] else {
+        panic!("a literal-only child must keep its structure")
     };
-    assert_eq!(constant.value.get_i64(), Some(42));
+    assert_eq!(child.func_name, "plus");
     assert_eq!(scalar.data_type().as_ref(), &data_type);
     assert_eq!(scalar.as_expr()?.data_type(), &data_type);
     Ok(())

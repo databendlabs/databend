@@ -23,7 +23,8 @@
 //!   window or aggregate function, nor `grouping()`, and it references a
 //!   column or calls a function;
 //! - its pre-aggregate form is not a deterministic expression without
-//!   columns, unless the node references a column;
+//!   columns, unless the node references a column or `K` is a key of grouping
+//!   sets of this SELECT;
 //! - its pre-aggregate form equals the pre-aggregate expression of `K`,
 //!   compared with `ScalarExpr::eq` without any normalization. The
 //!   pre-aggregate form is the node bound again with matching suspended and
@@ -31,14 +32,22 @@
 //!   for grouping sets), resolving SELECT aliases to the
 //!   pre-aggregate forms of their items, see `pre_aggregate.rs`.
 //!
-//! A deterministic node without columns, such as `1 + 1`, is not matched: it
-//! evaluates to the same value after the aggregate, and once folded, any
-//! equal literal would match it, so `2` in `SELECT 2 FROM t GROUP BY 1 + 1`
-//! would become the key. A node that is not deterministic, such as `rand()`,
-//! `now()`, `nextval(s)` or a script UDF, is matched like any other, since
-//! evaluating it again after the aggregate gives another value than the key.
-//! Literals and constant tuples call no function, so they are never bound to
-//! be tried.
+//! A deterministic node without columns, such as `1 + 1`, is not matched to
+//! an ordinary key: it evaluates to the same value after the aggregate, and
+//! once folded, any expression that folds to the same constant would match
+//! it. It is matched to a key of grouping sets, whose output is NULL in the
+//! rows of the sets without the key, so `1 + 1` in `SELECT 1 + 1 FROM t GROUP
+//! BY ROLLUP(1 + 1)` is NULL in the grand total. Forms of grouping-set keys
+//! are not folded, so `coalesce(1 + 1, 100)` is not that key but an
+//! expression over it, and `a + (1 + 1)` is not the key `a + 2`. Such a node
+//! is not matched to a key of an enclosing SELECT, which it does not refer
+//! to.
+//!
+//! A node that is not deterministic, such as `rand()`, `now()`, `nextval(s)`
+//! or a script UDF, is matched like any other, since evaluating it again after
+//! the aggregate gives another value than the key. Literals and constant
+//! tuples call no function, so they are never bound to be tried: `2` in
+//! `SELECT 2 FROM t GROUP BY ROLLUP(1 + 1)` is 2 in every row.
 //!
 //! The outermost matching node wins, as with GROUP BY, so `a + 1` in
 //! `GROUPING SETS ((a), (a + 1))` binds to the key `a + 1` rather than to the
@@ -546,23 +555,21 @@ where A: TypeCheckAdapter
             let Some(input) = self.resolve_grouping_key_input(arena, id, position)? else {
                 continue;
             };
-            // A deterministic form without columns evaluates to the same
-            // value after the aggregate, see the module documentation.
+            let context = context_chain(self.bind_context).nth(position).unwrap();
+            // A deterministic form without columns is only matched to a key
+            // of grouping sets of this SELECT, see the module documentation.
             let constant = input.facts.column_free && input.facts.deterministic;
-            if constant && !eligibility.has_column {
+            if constant
+                && !eligibility.has_column
+                && (position != 0 || context.aggregate_info.grouping_sets().is_none())
+            {
                 return Ok(None);
             }
             let input = input.scalar;
-            let context = context_chain(self.bind_context).nth(position).unwrap();
             let column = if is_srf {
                 lookup_grouping_key_srf(context, &input)?
-            } else if context.aggregate_info.grouping_sets().is_none()
-                || !constant
-                || !input.used_columns().is_empty()
-            {
-                context.aggregate_info.lookup_grouping_key_output(&input)
             } else {
-                None
+                context.aggregate_info.lookup_grouping_key_output(&input)
             };
             if let Some(column) = column {
                 let data_type = (*column.data_type).clone();
@@ -812,7 +819,7 @@ mod tests {
         );
         context.grouping_key_scope = Some(GroupingKeyScope {
             state: GroupingScopeState::Suspended,
-            input_folding_policy: ScalarFoldingPolicy::PreserveColumnStructure,
+            input_folding_policy: ScalarFoldingPolicy::PreserveStructure,
             input_columns: context.column_set(),
         });
         let names = NameResolutionContext::default();
@@ -877,7 +884,7 @@ mod tests {
         with_checker(|checker| {
             for policy in [
                 ScalarFoldingPolicy::Normal,
-                ScalarFoldingPolicy::PreserveColumnStructure,
+                ScalarFoldingPolicy::PreserveStructure,
             ] {
                 checker.folding_policy = policy;
                 for sql in [
@@ -918,7 +925,7 @@ mod tests {
             let grouping_sets = BindContext {
                 grouping_key_scope: Some(GroupingKeyScope {
                     state: GroupingScopeState::Active,
-                    input_folding_policy: ScalarFoldingPolicy::PreserveColumnStructure,
+                    input_folding_policy: ScalarFoldingPolicy::PreserveStructure,
                     input_columns: Default::default(),
                 }),
                 parent: Some(Box::new(ordinary)),
@@ -929,7 +936,7 @@ mod tests {
                 assert_eq!(checker.grouping_key_input_scope(), Some(1));
                 assert_eq!(
                     checker.scalar_folding_policy(),
-                    ScalarFoldingPolicy::PreserveColumnStructure
+                    ScalarFoldingPolicy::PreserveStructure
                 );
                 let (nested, _) = checker.with_grouping_key_input(2, |checker| {
                     assert_eq!(checker.grouping_key_input_scope(), Some(2));
@@ -940,7 +947,7 @@ mod tests {
                 assert_eq!(checker.grouping_key_input_scope(), Some(1));
                 assert_eq!(
                     checker.scalar_folding_policy(),
-                    ScalarFoldingPolicy::PreserveColumnStructure
+                    ScalarFoldingPolicy::PreserveStructure
                 );
                 nested
             });

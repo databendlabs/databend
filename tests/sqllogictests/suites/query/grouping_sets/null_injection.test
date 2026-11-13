@@ -70,6 +70,42 @@ x [1] 0 1 1
 y NULL 1 NULL 1
 y [2,3] 0 2 1
 
+## Constant keys
+
+# An expression without columns that is a key is NULL in the sets without it,
+# like any key, and expressions over it see that NULL. A literal is not
+# matched to a key, and a subquery does not refer to the keys of the enclosing
+# SELECT.
+query IIII rowsort
+SELECT 2, 1 + 1, coalesce(1 + 1, 100), count(*) FROM t GROUP BY ROLLUP(1 + 1)
+----
+2 2 2 2
+2 NULL 100 2
+
+query II rowsort
+SELECT a, 1 + 1 FROM t GROUP BY GROUPING SETS ((a), (1 + 1))
+----
+1 NULL
+2 NULL
+NULL 2
+
+query II rowsort
+SELECT 1 + 1 AS k, count(*) FROM t GROUP BY CUBE(k) HAVING coalesce(k, 100) = 100
+----
+NULL 2
+
+query II rowsort
+SELECT 1 + 1, (SELECT 1 + 1) FROM t GROUP BY ROLLUP(1 + 1)
+----
+2 2
+NULL 2
+
+query T rowsort
+SELECT array_transform([1], x -> x + (1 + 1)) FROM t GROUP BY ROLLUP(1 + 1)
+----
+[3]
+[NULL]
+
 ## Aggregates read the input
 
 query IIIII rowsort
