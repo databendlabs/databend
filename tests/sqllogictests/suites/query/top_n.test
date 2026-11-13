@@ -340,6 +340,86 @@ unset max_block_size;
 statement ok
 unset max_threads;
 
+# Rank limit over group keys that ORDER BY covers only in part, or not at all.
+# Within each batch the partial aggregate drops the rows of the groups that rank
+# after the limit, so only the first groups by all the group keys are whole,
+# and the limit must return those. Every value is in two of the five blocks
+# below, so every group has two rows; a block is one batch, which keeps the rows
+# of its three smallest values only. With several final aggregates, the groups
+# that lost a row reach the limit too.
+statement ok
+create or replace table t_rank_limit_ties (cat int, val int);
+
+statement ok
+insert into t_rank_limit_ties select 1, number from numbers(100);
+
+statement ok
+insert into t_rank_limit_ties select 1, number + 50 from numbers(100);
+
+statement ok
+insert into t_rank_limit_ties select 1, number + 100 from numbers(100);
+
+statement ok
+insert into t_rank_limit_ties select 1, number + 150 from numbers(100);
+
+statement ok
+insert into t_rank_limit_ties select 1, if(number < 50, number, number + 150) from numbers(100);
+
+query III
+select count(*), min(c), max(c) from (select cat, val, count(*) as c from t_rank_limit_ties group by cat, val) s
+----
+250 2 2
+
+# ORDER BY a part of the group keys: all the groups tie.
+query III
+settings (max_threads = 4, max_block_size = 100) select count(*), min(c), max(c) from (select cat, val, count(*) as c from t_rank_limit_ties group by cat, val order by cat limit 3) s
+----
+3 2 2
+
+query III
+settings (max_threads = 4, max_block_size = 100, enable_top_n = 0) select count(*), min(c), max(c) from (select cat, val, count(*) as c from t_rank_limit_ties group by cat, val order by cat limit 3) s
+----
+3 2 2
+
+query III
+settings (max_threads = 4, max_block_size = 100) select count(*), min(c), max(c) from (select cat, val, count(*) as c from t_rank_limit_ties group by cat, val order by cat desc limit 2 offset 1) s
+----
+2 2 2
+
+# The group key that breaks the ties is not selected.
+query II
+settings (max_threads = 4, max_block_size = 100) select cat, count(*) from t_rank_limit_ties group by cat, val order by cat limit 3
+----
+1 2
+1 2
+1 2
+
+# A group key the sort cannot order by: nothing can break the ties.
+query III
+settings (max_threads = 4, max_block_size = 100) select count(*), min(c), max(c) from (select cat, [val] as a, count(*) as c from t_rank_limit_ties group by cat, a order by cat limit 3) s
+----
+3 2 2
+
+query III
+settings (max_threads = 4, max_block_size = 100) select count(*), min(c), max(c) from (select cat, [val] as a, count(*) as c from t_rank_limit_ties group by cat, a limit 3) s
+----
+3 2 2
+
+# Without aggregate functions a group that lost rows is still the same group,
+# so the rank limit stays, even with a group key the sort cannot order by.
+query II
+settings (max_threads = 4, max_block_size = 100) select count(*), count(distinct a) from (select distinct cat, [val] as a from t_rank_limit_ties limit 3) s
+----
+3 3
+
+query II
+settings (max_threads = 4, max_block_size = 100) select count(*), count(distinct a) from (select distinct cat, [val] as a from t_rank_limit_ties order by cat limit 3) s
+----
+3 3
+
+statement ok
+drop table t_rank_limit_ties;
+
 # Runtime TopN over a multi-block FUSE table: `row_per_block` forces many
 # small blocks so the shared-boundary block pruning, per-node scheduling and
 # row-level filtering paths are all exercised. Results must match the plain

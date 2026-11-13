@@ -129,7 +129,7 @@ fn test_agg_hashtable() {
             .unwrap();
 
         let mut flush_state = PayloadFlushState::default();
-        let _ = hashtable.combine(hashtable2, &mut flush_state);
+        let _ = hashtable.combine_payloads(&hashtable2.payload, &mut flush_state);
 
         let mut merge_state = PayloadFlushState::default();
         let mut blocks = Vec::new();
@@ -360,17 +360,17 @@ fn test_agg_hashtable_combine_rows() {
     use databend_common_column::bitmap::Bitmap;
     use databend_common_expression::Column;
     use databend_common_expression::types::ArrayColumn;
-    use databend_common_expression::types::NullableColumn;
 
     // More keys per chunk than the partial index holds, so that it restarts.
-    let (n, chunk) = (120_000, 40_000);
-    let key = |i: usize| i % 36_000;
+    let keys = AggregateHashTable::capacity_for_groups(0);
+    let chunk = keys / 9 * 10;
+    let n = chunk * 3;
+    let key = |i: usize| i % keys;
     let columns = |rows: std::ops::Range<usize>| -> Vec<BlockEntry> {
         let strings = rows.clone().map(|i| format!("s{}", key(i) % 300));
-        let nullable = NullableColumn::new_column(
-            StringType::from_data(strings.collect_vec()),
+        let nullable = StringType::from_data(strings.collect_vec()).wrap_nullable(Some(
             Bitmap::from_iter(rows.clone().map(|i| key(i) % 5 != 0)),
-        );
+        ));
         // 0.0 and -0.0 are equal, but serialize differently.
         let sign = |i: usize| {
             if (i / chunk).is_multiple_of(2) {
@@ -432,7 +432,9 @@ fn test_agg_hashtable_combine_rows() {
             )
             .unwrap();
         assert!(stats.windows > 0 && partial.partial_restarted());
-        final_table.combine(partial, &mut flush_state).unwrap();
+        final_table
+            .combine_payloads(&partial.payload, &mut flush_state)
+            .unwrap();
     }
 
     let mut merge_state = PayloadFlushState::default();

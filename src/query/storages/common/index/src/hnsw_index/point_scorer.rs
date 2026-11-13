@@ -19,6 +19,7 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorScalarRef;
 
 use crate::DistanceType;
+use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::prefetch::MAX_UNPREFETCHED_BATCH;
 use crate::hnsw_index::common::prefetch::prefetch_whole_slice;
 use crate::hnsw_index::common::types::PointOffsetType;
@@ -43,7 +44,7 @@ pub struct OriginalRawScorer<'a> {
 
 pub struct QuantizedRawScorer<'a> {
     pub query: EncodedQueryU8,
-    pub vector: &'a EncodedVectorsU8<Vec<u8>>,
+    pub vector: &'a EncodedVectorsU8<HugePageBytes>,
 }
 
 impl RawScorer<'_> {
@@ -245,12 +246,17 @@ mod tests {
             distance_type: DistanceType::L2,
             invert: true,
         };
-        let vectors = EncodedVectorsU8::encode(
+        let encoded = EncodedVectorsU8::encode(
             data.chunks(dim),
             Vec::new(),
             &params,
             None,
             &AtomicBool::new(false),
+        )?;
+        let vectors = EncodedVectorsU8::<HugePageBytes>::load(
+            &encoded.build_data()?,
+            &encoded.build_meta()?,
+            &params,
         )?;
         assert!(vectors.prefetch_windows().is_some());
         let query: Vec<f32> = (0..dim).map(|i| (i as f32 - 128.0) / 64.0).collect();

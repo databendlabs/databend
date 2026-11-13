@@ -70,7 +70,6 @@ pub const VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 64 * 1024;
 
 const TRAILER_MAGIC: &[u8; 4] = b"DBVI";
 const FOOTER_MAGIC: &[u8; 4] = b"DBVF";
-const MAX_COMPONENT_SIZE: u64 = 1024 * 1024 * 1024;
 /// ZSTD level for HNSW components. Level 1 matches the legacy Parquet default and,
 /// for SQ8 data (few repeats, skewed bytes), compresses better than higher levels:
 /// ~43% vs ~50% at level 3, and several times faster.
@@ -230,11 +229,12 @@ impl VectorBundlePageRead {
     /// Decodes `bytes` read from `range()`. The decoded size (and checksum, if any)
     /// is verified, which also rejects bytes of the wrong length.
     pub fn decode(&self, bytes: Bytes) -> Result<Bytes> {
-        // Bounds the decompression buffer.
-        if self.raw_length > MAX_COMPONENT_SIZE {
-            return Err(invalid("Vector component exceeds size limit"));
-        }
-        let decoded = self.codec.decode(bytes, self.raw_length as usize)?;
+        // `raw_length` comes from the footer, whose checksum was verified when it
+        // was read, so it is trusted to size the decompression buffer. Component
+        // sizes are bounded by the table's block size, not by a separate cap.
+        let raw_length = usize::try_from(self.raw_length)
+            .map_err(|_| invalid("Vector component size overflow"))?;
+        let decoded = self.codec.decode(bytes, raw_length)?;
         if decoded.len() as u64 != self.raw_length
             || self
                 .checksum
@@ -302,6 +302,11 @@ impl VectorBundleFooter {
         for (name, entry) in &self.components {
             if entry.range()?.end > footer_start {
                 return Err(invalid(&format!("Vector component {name} out of bounds")));
+            }
+            if entry.codec == VectorBundleCodec::Plain && entry.raw_length != entry.length {
+                return Err(invalid(&format!(
+                    "Plain vector component {name} length mismatch"
+                )));
             }
         }
         Ok(())
@@ -394,7 +399,7 @@ impl VectorBundleBuilder {
     /// index is loaded into the object cache, so compression only costs on misses.
     /// A component that does not shrink (e.g. the tiny SQ8 meta) is stored plain.
     pub fn add_hnsw(&mut self, name: String, raw: &[u8]) -> Result<()> {
-        let start = self.begin(&name, raw.len())?;
+        let start = self.begin(&name)?;
         let zstd = &mut self.zstd;
         let compressor = match zstd {
             Some(compressor) => compressor,
@@ -442,7 +447,7 @@ impl VectorBundleBuilder {
     pub fn add_fp16_data(&mut self, column_id: u32, column: &Column) -> Result<()> {
         let column = column
             .as_nullable()
-            .map_or(column, |nullable| &nullable.column);
+            .map_or(column, |nullable| nullable.column());
         let (values, dimension) = column
             .as_vector()
             .and_then(|vector| vector.as_float32())
@@ -450,12 +455,16 @@ impl VectorBundleBuilder {
         if *dimension == 0 || column.len() as u64 != self.footer.row_count {
             return Err(invalid("Invalid FP16 component"));
         }
+        let byte_len = values
+            .len()
+            .checked_mul(2)
+            .ok_or_else(|| invalid("FP16 component size overflow"))?;
         let name = vector_fp16_data_name(column_id);
-        let start = self.begin(&name, values.len() * 2)?;
+        let start = self.begin(&name)?;
         // `OrderedFloat<f32>` is `repr(transparent)`; its `Pod` impl (ordered-float's
         // `bytemuck` feature) gives a zero-copy `&[f32]` view.
         let values: &[f32] = bytemuck::cast_slice(values.as_ref());
-        self.bytes.reserve(values.len() * 2);
+        self.bytes.reserve(byte_len);
         // The file buffer is at an arbitrary byte offset, so convert through a small
         // aligned scratch buffer and append its bytes.
         let mut scratch = [f16::ZERO; FP16_CONVERT_CHUNK];
@@ -499,23 +508,17 @@ impl VectorBundleBuilder {
     }
 
     fn add_plain(&mut self, name: String, raw: &[u8]) -> Result<()> {
-        let start = self.begin(&name, raw.len())?;
+        let start = self.begin(&name)?;
         self.bytes.extend_from_slice(raw);
         let entry = VectorBundleEntry::new(start, raw.len(), raw, VectorBundleCodec::Plain);
         self.footer.components.insert(name, entry);
         Ok(())
     }
 
-    /// Checks that `name` is new and `raw_length` within limits, and returns the
-    /// offset the component starts at.
-    fn begin(&self, name: &str, raw_length: usize) -> Result<usize> {
+    /// Checks that `name` is new and returns the offset the component starts at.
+    fn begin(&self, name: &str) -> Result<usize> {
         if self.footer.components.contains_key(name) {
             return Err(invalid(&format!("Duplicate vector component {name}")));
-        }
-        if raw_length as u64 > MAX_COMPONENT_SIZE {
-            return Err(invalid(&format!(
-                "Vector component {name} exceeds size limit"
-            )));
         }
         Ok(self.bytes.len())
     }
@@ -558,7 +561,7 @@ mod tests {
         let mut builder = VectorBundleBuilder::new("vi".to_owned(), "v1".to_owned(), ROWS as u64);
         builder.add_hnsw("0-l2_graph_links".to_owned(), b"links")?;
         builder.add_hnsw("0-l2_encoded_u8_data".to_owned(), &sq8)?;
-        builder.add_validity(0, &column.as_nullable().unwrap().validity)?;
+        builder.add_validity(0, column.as_nullable().unwrap().validity())?;
         builder.add_fp16_data(0, &column)?;
         let bytes = builder.finish()?;
 
@@ -643,6 +646,18 @@ mod tests {
         );
         assert!(footer.validate(9).is_err());
         footer.validate(10)?;
+
+        // A plain component whose stored and raw lengths disagree is rejected.
+        footer
+            .components
+            .insert("bad_plain".to_owned(), VectorBundleEntry {
+                offset: 0,
+                length: 4,
+                raw_length: 8,
+                codec: VectorBundleCodec::Plain,
+                checksum: 0,
+            });
+        assert!(footer.validate(10).is_err());
         Ok(())
     }
 }

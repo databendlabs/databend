@@ -40,7 +40,6 @@ use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::sessions::QueryContext;
 
@@ -122,21 +121,31 @@ impl TransformPartialAggregate {
         Ok(AccumulatingTransformer::create(
             input,
             output,
-            TransformPartialAggregate {
-                table: None,
-                config,
-                probe_state: ProbeState::default(),
-                settings: MemorySettings::from_aggregate_settings(&ctx)?,
-                statistics: AggregationStatistics::new("PartialAggregate"),
-                state: PartialState::new(mode),
-                max_table_bytes,
-                memory: MemoryMeter::default(),
-                output_rows: 0,
-                total: PartialAddStats::default(),
-                emits: EmitCounts::default(),
-                params,
-            },
+            Self::new(&ctx, params, config, mode, max_table_bytes)?,
         ))
+    }
+
+    fn new(
+        ctx: &Arc<QueryContext>,
+        params: Arc<AggregatorParams>,
+        config: HashTableConfig,
+        mode: PartialAggregateMode,
+        max_table_bytes: usize,
+    ) -> Result<Self> {
+        Ok(TransformPartialAggregate {
+            table: None,
+            config,
+            probe_state: ProbeState::default(),
+            settings: MemorySettings::from_aggregate_settings(ctx)?,
+            statistics: AggregationStatistics::new("PartialAggregate"),
+            state: PartialState::new(mode),
+            max_table_bytes,
+            memory: MemoryMeter::default(),
+            output_rows: 0,
+            total: PartialAddStats::default(),
+            emits: EmitCounts::default(),
+            params,
+        })
     }
 
     #[inline(always)]
@@ -148,37 +157,6 @@ impl TransformPartialAggregate {
             .iter()
             .map(|function_arguments| ProjectedBlock::project(function_arguments, block))
             .collect::<Vec<_>>()
-    }
-
-    fn transform_block(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
-        let rows_num = block.num_rows();
-        self.statistics.record_block(rows_num, block.memory_size());
-
-        // Aggregate a large block in slices, so that the state can change within it.
-        let mut output = vec![];
-        let mut start = 0;
-        while start < rows_num {
-            if matches!(self.state, PartialState::Bypass) {
-                // The rows are forwarded as is: the shuffle routes them by their group keys. The
-                // final aggregate reads a block with a meta as states, so an upstream meta goes.
-                self.output_rows += rows_num - start;
-                let mut rows = match start {
-                    0 => block,
-                    _ => block.slice(start..rows_num),
-                };
-                rows.take_meta();
-                output.push(rows);
-                break;
-            }
-            let end = (start + DECISION_ROWS).min(rows_num);
-            let slice = match (start, end) {
-                (0, end) if end == rows_num => block.clone(),
-                _ => block.slice(start..end),
-            };
-            output.extend(self.aggregate_slice(&slice)?);
-            start = end;
-        }
-        Ok(output)
     }
 
     fn aggregate_slice(&mut self, block: &DataBlock) -> Result<Vec<DataBlock>> {
@@ -213,7 +191,7 @@ impl TransformPartialAggregate {
             held_bytes: self.memory.bytes(),
             group_bytes: Self::group_bytes(&self.memory, &self.total),
             payload_full: table.partial_restarted()
-                && table.partial_hot_bytes() >= self.params.max_block_bytes,
+                && table.partial_payload_bytes() >= self.params.max_block_bytes,
         };
         let settings = &self.settings;
         let Some(reason) = self
@@ -223,7 +201,7 @@ impl TransformPartialAggregate {
             return Ok(vec![]);
         };
         self.emits.add(reason);
-        let payload = table.take_partial_hot();
+        let payload = table.take_partial_payload();
         Ok(self.emit(payload))
     }
 
@@ -258,7 +236,7 @@ impl TransformPartialAggregate {
                     && (rows + payload.len() > max_rows
                         || bytes + payload.memory_size() > max_bytes)
                 {
-                    blocks.push(Self::payload_block(std::mem::take(&mut payloads)));
+                    blocks.push(AggregateMeta::payloads_block(std::mem::take(&mut payloads)));
                     (rows, bytes) = (0, 0);
                 }
                 rows += payload.len();
@@ -266,21 +244,13 @@ impl TransformPartialAggregate {
                 payloads.push(AggregatePayload {
                     bucket: bucket as isize,
                     payload,
-                    max_partition_count: 0,
                 });
             }
         }
         if !payloads.is_empty() {
-            blocks.push(Self::payload_block(payloads));
+            blocks.push(AggregateMeta::payloads_block(payloads));
         }
         blocks
-    }
-
-    fn payload_block(payloads: Vec<AggregatePayload>) -> DataBlock {
-        DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
-            None,
-            PartitionedData::AggregatePayload(payloads),
-        ))
     }
 }
 
@@ -288,14 +258,41 @@ impl AccumulatingTransform for TransformPartialAggregate {
     const NAME: &'static str = "TransformPartialAggregate";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
-        self.transform_block(block)
+        let rows_num = block.num_rows();
+        self.statistics.record_block(rows_num, block.memory_size());
+
+        // Aggregate a large block in slices, so that the state can change within it.
+        let mut output = vec![];
+        let mut start = 0;
+        while start < rows_num {
+            if matches!(self.state, PartialState::Bypass) {
+                // The rows are forwarded as is: the shuffle routes them by their group keys. The
+                // final aggregate reads a block with a meta as states, so an upstream meta goes.
+                self.output_rows += rows_num - start;
+                let mut rows = match start {
+                    0 => block,
+                    _ => block.slice(start..rows_num),
+                };
+                rows.take_meta();
+                output.push(rows);
+                break;
+            }
+            let end = (start + DECISION_ROWS).min(rows_num);
+            let slice = match (start, end) {
+                (0, end) if end == rows_num => block.clone(),
+                _ => block.slice(start..end),
+            };
+            output.extend(self.aggregate_slice(&slice)?);
+            start = end;
+        }
+        Ok(output)
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
         // No table means no rows were aggregated: they were bypassed, or there were none.
         let table = self.table.take();
         let (table_rows, hash_index_resizes) = table.as_ref().map_or((0, 0), |table| {
-            (table.len(), table.hash_index_resize_count())
+            (table.payload.len(), table.hash_index_resize_count())
         });
         self.statistics
             .log_partial_finish_statistics(self.output_rows + table_rows, hash_index_resizes);
@@ -327,6 +324,7 @@ mod tests {
     use databend_common_expression::types::UInt64Type;
 
     use super::*;
+    use crate::pipelines::processors::transforms::aggregator::PartitionedData;
     use crate::test_kits::TestFixture;
 
     // Boxed like in the pipeline: the probe state alone is about 100KB, too large to
@@ -342,24 +340,16 @@ mod tests {
             &[0],
             &[],
             &[],
-            false,
             1024,
             1024 * 1024,
         )?;
-        Ok(Box::new(TransformPartialAggregate {
-            table: None,
-            config: HashTableConfig::partial_aggregate(),
-            probe_state: ProbeState::default(),
+        Ok(Box::new(TransformPartialAggregate::new(
+            ctx,
             params,
-            statistics: AggregationStatistics::new("PartialAggregate"),
-            settings: MemorySettings::from_aggregate_settings(ctx)?,
-            state: PartialState::new(PartialAggregateMode::Auto),
-            max_table_bytes: 64 * 1024 * 1024,
-            memory: MemoryMeter::default(),
-            output_rows: 0,
-            total: PartialAddStats::default(),
-            emits: EmitCounts::default(),
-        }))
+            HashTableConfig::partial_aggregate(),
+            PartialAggregateMode::Auto,
+            64 * 1024 * 1024,
+        )?))
     }
 
     fn output_rows(blocks: &[DataBlock]) -> usize {
@@ -367,10 +357,8 @@ mod tests {
             .iter()
             .map(|block| {
                 let meta = block.get_meta().and_then(AggregateMeta::downcast_ref_from);
-                let Some(AggregateMeta::Partitioned {
-                    data: PartitionedData::AggregatePayload(payloads),
-                    ..
-                }) = meta
+                let Some(AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads))) =
+                    meta
                 else {
                     unreachable!("partial aggregate only outputs aggregate payloads here")
                 };

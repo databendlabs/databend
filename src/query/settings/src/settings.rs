@@ -150,7 +150,7 @@ impl<'de> serde::Deserialize<'de> for Settings {
         #[derive(serde::Deserialize)]
         struct DeserializeSettings {
             tenant: String,
-            changes: DashMap<String, ChangeValue>,
+            changes: HashMap<String, ChangeValue>,
         }
 
         let deserialize_settings =
@@ -160,10 +160,14 @@ impl<'de> serde::Deserialize<'de> for Settings {
             Some(config) => config.query.settings.clone(),
         };
 
+        // As few shards as in `Settings::create`.
+        let mut changes = DashMap::with_shard_amount(4);
+        changes.extend(deserialize_settings.changes);
+
         Ok(Settings {
             configs,
             tenant: Tenant::new_literal(&deserialize_settings.tenant),
-            changes: Arc::new(deserialize_settings.changes),
+            changes: Arc::new(changes),
             query_level_change: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -177,7 +181,9 @@ impl Settings {
         };
         Arc::new(Settings {
             tenant,
-            changes: Arc::new(DashMap::new()),
+            // A handful of entries, read on every `get_settings`: few shards keep
+            // `is_empty` and iteration from locking `4 * cores` shards each time.
+            changes: Arc::new(DashMap::with_shard_amount(4)),
             configs,
             query_level_change: Arc::new(AtomicBool::new(false)),
         })

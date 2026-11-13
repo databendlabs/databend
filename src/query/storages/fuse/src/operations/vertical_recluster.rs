@@ -1449,11 +1449,11 @@ fn compare_key_column_rows(
             compare_buffers!(left, left_row, right, right_row)
         }
         (Column::Nullable(left), Column::Nullable(right)) => match (
-            left.validity.get_bit(left_row),
-            right.validity.get_bit(right_row),
+            left.validity().get_bit(left_row),
+            right.validity().get_bit(right_row),
         ) {
             (true, true) => {
-                compare_key_column_rows(&left.column, left_row, &right.column, right_row)
+                compare_key_column_rows(left.column(), left_row, right.column(), right_row)
             }
             (true, false) => Ordering::Less,
             (false, true) => Ordering::Greater,
@@ -1478,7 +1478,6 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::BinaryType;
     use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::nullable::NullableColumn;
     use databend_common_expression::types::number::Float64Type;
     use databend_common_expression::types::number::Int32Type;
     use databend_common_expression::types::string::StringType;
@@ -1930,14 +1929,10 @@ mod tests {
 
     #[test]
     fn test_nullable_float_and_binary_order_match_horizontal() {
-        let nullable0 = NullableColumn::new_column(
-            Int32Type::from_data(vec![1, 0]),
-            [true, false].into_iter().collect(),
-        );
-        let nullable1 = NullableColumn::new_column(
-            Int32Type::from_data(vec![2, 0]),
-            [true, false].into_iter().collect(),
-        );
+        let nullable0 = Int32Type::from_data(vec![1, 0])
+            .wrap_nullable(Some([true, false].into_iter().collect()));
+        let nullable1 = Int32Type::from_data(vec![2, 0])
+            .wrap_nullable(Some([true, false].into_iter().collect()));
         assert_matches_horizontal(&[vec![nullable0], vec![nullable1]]);
 
         assert_matches_horizontal(&[

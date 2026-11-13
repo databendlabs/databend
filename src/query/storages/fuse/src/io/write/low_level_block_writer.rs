@@ -1106,9 +1106,9 @@ impl ColumnSizeState {
             },
             Column::Nullable(column) => Self::Nullable {
                 rows: column.len(),
-                any_valid: column.validity.true_count() > 0,
+                any_valid: column.validity().true_count() > 0,
                 omit_values_if_all_null,
-                values: Box::new(Self::from_column(&column.column, false)),
+                values: Box::new(Self::from_column(column.column(), false)),
             },
             Column::Tuple(fields) => Self::Tuple(
                 fields
@@ -1160,8 +1160,8 @@ impl ColumnSizeState {
                 Column::Nullable(column),
             ) => {
                 *rows += column.len();
-                *any_valid |= column.validity.true_count() > 0;
-                values.add_column(&column.column)?;
+                *any_valid |= column.validity().true_count() > 0;
+                values.add_column(column.column())?;
             }
             (Self::Tuple(states), Column::Tuple(fields)) if states.len() == fields.len() => {
                 for (state, field) in states.iter_mut().zip(fields) {

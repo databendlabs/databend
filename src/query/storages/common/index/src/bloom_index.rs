@@ -544,12 +544,12 @@ impl BloomIndex {
     fn calculate_nullable_column_digests<T: ValueType>(column: &Column) -> Result<Vec<u64>>
     where for<'a> T::ScalarRef<'a>: DFHash {
         let (column, validity) = if let Column::Nullable(deref!(inner)) = column {
-            let validity = if inner.validity.null_count() == 0 {
+            let validity = if inner.validity().null_count() == 0 {
                 None
             } else {
-                Some(&inner.validity)
+                Some(inner.validity())
             };
-            (&inner.column, validity)
+            (inner.column(), validity)
         } else {
             (column, None)
         };
@@ -591,7 +591,8 @@ impl BloomIndex {
                 &DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
             )?;
             let nullable_column = NullableType::<UInt64Type>::try_downcast_column(&col).unwrap();
-            (nullable_column.column, Some(nullable_column.validity))
+            let (column, validity) = nullable_column.destructure();
+            (column, Some(validity))
         } else {
             let col = Self::calculate_column_digest(
                 func_ctx,
@@ -917,7 +918,7 @@ impl BytesThreshold {
 
     fn update(&mut self, column: &Column) {
         let (column, values) = match column {
-            Column::Nullable(inner) => (&inner.column, inner.validity.true_count()),
+            Column::Nullable(inner) => (inner.column(), inner.validity().true_count()),
             column => (column, column.len()),
         };
         if let Column::String(column) = column {
@@ -1074,7 +1075,7 @@ impl BloomIndexBuilder {
                         let nullable_column =
                             NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(&column)
                                 .unwrap();
-                        nullable_column.column
+                        nullable_column.destructure().0
                     } else {
                         MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap()
                     };
@@ -1169,7 +1170,8 @@ impl BloomIndexBuilder {
                     let map_column = if field_type.is_nullable() {
                         NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(&input)
                             .unwrap()
-                            .column
+                            .destructure()
+                            .0
                     } else {
                         MapType::<AnyType, AnyType>::try_downcast_column(&input).unwrap()
                     };

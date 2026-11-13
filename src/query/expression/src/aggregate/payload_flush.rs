@@ -46,7 +46,6 @@ use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::i256;
-use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::with_number_mapped_type;
@@ -325,7 +324,7 @@ impl Payload {
             let b = self.flush_type_column::<BooleanType>(validity_offset, state);
             let validity = b.into_boolean().unwrap();
 
-            NullableColumn::new_column(col, validity)
+            col.wrap_nullable(Some(validity))
         } else {
             col
         }
@@ -403,11 +402,8 @@ impl Payload {
 
         unsafe {
             for address in &state.addresses[..len] {
-                let str_len = address.read::<u32>(col_offset) as usize;
-                let data_address = address.read::<u64>(col_offset + 4) as usize as *const u8;
-
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
-                let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+                let scalar: Scalar =
+                    bincode_deserialize_from_slice(address.read_bytes(col_offset)).unwrap();
 
                 builder.push(scalar.as_ref());
             }

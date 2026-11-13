@@ -39,6 +39,7 @@ use rayon::ThreadPoolBuilder;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 
+use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
 use crate::hnsw_index::common::utils::check_process_stopped;
@@ -129,7 +130,7 @@ pub fn hnsw_component_names(column_id: ColumnId, distance_type: DistanceType) ->
 pub struct HNSWIndex {
     graph_layers: GraphLayers,
     distance_type: DistanceType,
-    encoded_vectors: EncodedVectorsU8<Vec<u8>>,
+    encoded_vectors: EncodedVectorsU8<HugePageBytes>,
     // Column validity, present only when the column has NULLs (none in old files).
     // Only `generate_scores` needs it: NULL rows are not linked into the graph.
     validity: Option<Bitmap>,
@@ -161,7 +162,7 @@ impl HNSWIndex {
             invert,
         };
 
-        let encoded_vectors: EncodedVectorsU8<Vec<u8>> =
+        let encoded_vectors: EncodedVectorsU8<HugePageBytes> =
             EncodedVectorsU8::load(encoded_data.as_ref(), encoded_meta.as_ref(), &params)?;
 
         let validity = validity
@@ -191,7 +192,7 @@ impl HNSWIndex {
         std::mem::size_of::<Self>() + self.graph_layers.memory_size()
             - std::mem::size_of::<GraphLayers>()
             + self.encoded_vectors.memory_size()
-            - std::mem::size_of::<EncodedVectorsU8<Vec<u8>>>()
+            - std::mem::size_of::<EncodedVectorsU8<HugePageBytes>>()
             + self
                 .validity
                 .as_ref()
@@ -282,7 +283,7 @@ impl HNSWIndex {
         let num_vectors = column.len();
         let validity = column
             .as_nullable()
-            .map(|nullable| nullable.validity.clone())
+            .map(|nullable| nullable.validity().clone())
             .filter(|bitmap| bitmap.null_count() != 0);
 
         let column = column.remove_nullable();

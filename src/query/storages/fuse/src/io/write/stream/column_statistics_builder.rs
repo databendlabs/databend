@@ -320,7 +320,7 @@ where
             self.streaming_fragments += 1;
             match column {
                 Column::Nullable(inner) => {
-                    self.streaming_payload_size += inner.column.memory_size(true);
+                    self.streaming_payload_size += inner.column().memory_size(true);
                     self.streaming_nullable_rows += inner.len();
                 }
                 Column::Null { .. } => {
@@ -333,12 +333,12 @@ where
         }
         let (column, validity) = match column {
             Column::Nullable(deref!(inner)) => {
-                let validity = if inner.validity.null_count() == 0 {
+                let validity = if inner.validity().null_count() == 0 {
                     None
                 } else {
-                    Some(&inner.validity)
+                    Some(inner.validity())
                 };
-                (&inner.column, validity)
+                (inner.column(), validity)
             }
             Column::Null { len } => {
                 self.null_count += *len;

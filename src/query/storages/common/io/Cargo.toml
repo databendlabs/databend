@@ -25,6 +25,7 @@ parquet = { workspace = true }
 [dev-dependencies]
 databend-common-config = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

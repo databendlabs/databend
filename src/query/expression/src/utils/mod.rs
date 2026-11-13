@@ -243,7 +243,7 @@ pub fn column_merge_validity(entry: &BlockEntry, bitmap: Option<Bitmap>) -> Opti
                     Some(validity.clone())
                 }
             }
-            Some(v) => Some(&c.validity & (&v)),
+            Some(v) => Some(c.validity() & &v),
         },
         _ => bitmap,
     }

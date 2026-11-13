@@ -16,6 +16,8 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::hnsw_index::common::hugepage::HugePageBytes;
+
 pub trait EncodedStorage {
     fn get_vector_data(&self, index: usize, vector_size: usize) -> &[u8];
 
@@ -54,6 +56,33 @@ impl EncodedStorage for Vec<u8> {
 
     fn to_vec(&self) -> Result<Vec<u8>> {
         Ok(self.clone())
+    }
+}
+
+/// The storage of a loaded index: read-only, and backed by huge pages.
+impl EncodedStorage for HugePageBytes {
+    fn get_vector_data(&self, index: usize, vector_size: usize) -> &[u8] {
+        &self[vector_size * index..vector_size * (index + 1)]
+    }
+
+    fn from_slice(
+        slice: &[u8],
+        quantized_vector_size: usize,
+        vectors_count: usize,
+    ) -> Result<Self> {
+        let expected_size = quantized_vector_size * vectors_count;
+        if slice.len() == expected_size {
+            Ok(HugePageBytes::from_slice(slice))
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Loaded storage size {} is not equal to expected size {expected_size}",
+                slice.len()
+            )))
+        }
+    }
+
+    fn to_vec(&self) -> Result<Vec<u8>> {
+        Ok(self[..].to_vec())
     }
 }
 

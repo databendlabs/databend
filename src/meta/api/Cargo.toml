@@ -36,8 +36,11 @@ uuid = { workspace = true }
 zstd = { workspace = true }
 
 [dev-dependencies]
+bytes = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-meta-runtime = { workspace = true }
+h2 = { workspace = true }
+http = { workspace = true }
 
 [lints]
 workspace = true
