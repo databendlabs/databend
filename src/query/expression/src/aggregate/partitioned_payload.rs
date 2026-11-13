@@ -18,10 +18,15 @@ use bumpalo::Bump;
 use itertools::Itertools;
 
 use super::BATCH_SIZE;
+use super::MAX_PAGE_SIZE;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
+use super::group_hash_route_index;
+
+/// Smallest pages of a table routed to the final aggregates, see `new_routed`.
+const MIN_ROUTED_PAGE_SIZE: usize = 16 * 1024;
 use super::payload::GroupRows;
 use super::payload::Payload;
 use super::payload::RowCursor;
@@ -33,13 +38,16 @@ use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
 use crate::types::DataType;
 
-/// Maps a group hash to a partition of a table: `partition_count` partitions by the bits below
-/// bit 48 that start `start_bit` bits down. The final aggregate takes the next bits at each spill
-/// depth, so that a spilled partition splits further.
+/// Maps a group hash to a partition of a table.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct PartitionMask {
-    mask: u64,
-    shift: u64,
+pub(super) enum PartitionMask {
+    /// `partition_count` partitions by the bits below bit 48 that start `start_bit` bits down.
+    /// The final aggregate takes the next bits at each spill depth, so that a spilled partition
+    /// splits further.
+    Radix { mask: u64, shift: u64 },
+    /// The final aggregate a row is routed to, see `group_hash_route_index`: a partial table
+    /// split this way hands each partition to its final aggregate without copying the rows.
+    Route(u64),
 }
 
 impl PartitionMask {
@@ -51,11 +59,15 @@ impl PartitionMask {
         let shift = 48 - start_bit - radix_bits;
         let mask = ((1 << radix_bits) - 1) << shift;
 
-        Self { mask, shift }
+        Self::Radix { mask, shift }
     }
 
+    #[inline]
     fn index(&self, hash: u64) -> usize {
-        ((hash & self.mask) >> self.shift) as _
+        match *self {
+            Self::Radix { mask, shift } => ((hash & mask) >> shift) as _,
+            Self::Route(partitions) => group_hash_route_index(hash, partitions) as _,
+        }
     }
 }
 
@@ -142,6 +154,37 @@ impl PartitionedPayload {
         partition_start_bit: u64,
         arenas: Vec<Arc<Bump>>,
     ) -> Self {
+        let mask = PartitionMask::with_start_bit(partition_count, partition_start_bit);
+        Self::with_mask(
+            group_types,
+            aggrs,
+            partition_count,
+            mask,
+            arenas,
+            MAX_PAGE_SIZE,
+        )
+    }
+
+    /// A payload of `partitions` partitions, one per final aggregate its rows are routed to.
+    pub(super) fn new_routed(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateCallRef>,
+        partitions: u64,
+        arenas: Vec<Arc<Bump>>,
+    ) -> Self {
+        let page_size = (MAX_PAGE_SIZE / partitions as usize).max(MIN_ROUTED_PAGE_SIZE);
+        let mask = PartitionMask::Route(partitions);
+        Self::with_mask(group_types, aggrs, partitions, mask, arenas, page_size)
+    }
+
+    fn with_mask(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateCallRef>,
+        partition_count: u64,
+        partition_mask: PartitionMask,
+        arenas: Vec<Arc<Bump>>,
+        page_size: usize,
+    ) -> Self {
         assert!(
             arenas.len() == 1 || arenas.len() == partition_count as usize,
             "arenas must be shared or match the payload partition count"
@@ -164,6 +207,7 @@ impl PartitionedPayload {
                     group_types.clone(),
                     aggrs.clone(),
                     states_layout.clone(),
+                    page_size,
                 )
             })
             .collect_vec();
@@ -188,7 +232,7 @@ impl PartitionedPayload {
             cursors: vec![RowCursor::EMPTY; partition_count as usize],
 
             arenas,
-            partition_mask: PartitionMask::with_start_bit(partition_count, partition_start_bit),
+            partition_mask,
         }
     }
 
@@ -217,7 +261,17 @@ impl PartitionedPayload {
     }
 
     pub fn into_bucket_payloads(self) -> impl Iterator<Item = (usize, Payload)> {
-        self.payloads.into_iter().enumerate()
+        let routed = match self.partition_mask {
+            PartitionMask::Route(partitions) => partitions as usize,
+            PartitionMask::Radix { .. } => 0,
+        };
+        self.payloads
+            .into_iter()
+            .map(move |mut payload| {
+                payload.routed_partitions = routed;
+                payload
+            })
+            .enumerate()
     }
 
     pub fn into_non_empty_bucket_payloads(self) -> impl Iterator<Item = (usize, Payload)> {

@@ -121,14 +121,31 @@ impl AggregateHashTable {
         config: HashTableConfig,
         arena: Arc<Bump>,
     ) -> Self {
-        let payload = PartitionedPayload::new_with_start_bit(
+        let payload = Self::new_payload(&config, group_types, aggrs, arena);
+        Self::with_payload(config, payload)
+    }
+
+    fn new_payload(
+        config: &HashTableConfig,
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateCallRef>,
+        arena: Arc<Bump>,
+    ) -> PartitionedPayload {
+        if config.route_partitions > 1 {
+            return PartitionedPayload::new_routed(
+                group_types,
+                aggrs,
+                config.route_partitions,
+                vec![arena],
+            );
+        }
+        PartitionedPayload::new_with_start_bit(
             group_types,
             aggrs,
             1 << config.initial_radix_bits,
             config.partition_start_bit,
             vec![arena],
-        );
-        Self::with_payload(config, payload)
+        )
     }
 
     pub fn new_with_partitioned_arenas(
@@ -500,12 +517,11 @@ impl AggregateHashTable {
 
     /// Move the groups out and restart with an empty index of the initial capacity.
     pub fn take_partial_payload(&mut self) -> PartitionedPayload {
-        let fresh = PartitionedPayload::new_with_start_bit(
+        let fresh = Self::new_payload(
+            &self.config,
             self.payload.group_types.clone(),
             self.payload.aggrs.clone(),
-            self.payload.partition_count() as u64,
-            self.config.partition_start_bit,
-            vec![Arc::new(Bump::new())],
+            Arc::new(Bump::new()),
         );
         let payload = std::mem::replace(&mut self.payload, fresh);
         self.hash_index = HashIndex::dummy();
