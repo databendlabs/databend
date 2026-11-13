@@ -564,6 +564,7 @@ mod tests {
             spatial_stats: None,
             vector_stats: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta: None,
             compression: Compression::None,
             create_on: None,
