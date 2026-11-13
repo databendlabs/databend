@@ -2069,7 +2069,7 @@ pub struct QueryConfig {
     /// Accumulation window before starting an automatic Recluster generation, in seconds.
     /// New notifications do not postpone it. Zero makes a generation immediately eligible.
     #[clap(long, value_name = "VALUE", default_value = "600")]
-    pub table_maintenance_recluster_accumulation_window_secs: u64,
+    pub recluster_accumulation_secs: u64,
 }
 
 impl Default for QueryConfig {
@@ -2100,7 +2100,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
         }
         if std::time::Instant::now()
             .checked_add(std::time::Duration::from_secs(
-                self.table_maintenance_recluster_accumulation_window_secs,
+                self.recluster_accumulation_secs,
             ))
             .is_none()
         {

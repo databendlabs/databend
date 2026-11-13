@@ -26,7 +26,7 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
 - Recluster is triggered by successful automatic Compact on a clustered table, not by every
   write. It remains distributed and yields between rounds. Refresh and Analyze do not wait
   for convergence.
-- `query.table_maintenance_recluster_accumulation_window_secs` defaults to 600 (10 minutes).
+- `query.recluster_accumulation_secs` defaults to 600 (10 minutes).
   The first dirty notification starts the window; merged notifications do not postpone it.
   Demand arriving during a frozen generation requests another generation without widening
   the active scope. A subsequent generation has its own accumulation window; rounds within

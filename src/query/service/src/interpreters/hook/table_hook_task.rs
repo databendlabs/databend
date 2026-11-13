@@ -234,7 +234,7 @@ fn recluster_accumulation_window() -> Duration {
         GlobalConfig::instance()
             .query
             .common
-            .table_maintenance_recluster_accumulation_window_secs,
+            .recluster_accumulation_secs,
     )
 }
 
