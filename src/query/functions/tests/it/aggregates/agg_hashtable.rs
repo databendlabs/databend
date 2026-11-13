@@ -360,7 +360,6 @@ fn test_agg_hashtable_combine_rows() {
     use databend_common_column::bitmap::Bitmap;
     use databend_common_expression::Column;
     use databend_common_expression::types::ArrayColumn;
-    use databend_common_expression::types::NullableColumn;
 
     // More keys per chunk than the partial index holds, so that it restarts.
     let keys = AggregateHashTable::capacity_for_groups(0);
@@ -369,10 +368,9 @@ fn test_agg_hashtable_combine_rows() {
     let key = |i: usize| i % keys;
     let columns = |rows: std::ops::Range<usize>| -> Vec<BlockEntry> {
         let strings = rows.clone().map(|i| format!("s{}", key(i) % 300));
-        let nullable = NullableColumn::new_column(
-            StringType::from_data(strings.collect_vec()),
+        let nullable = StringType::from_data(strings.collect_vec()).wrap_nullable(Some(
             Bitmap::from_iter(rows.clone().map(|i| key(i) % 5 != 0)),
-        );
+        ));
         // 0.0 and -0.0 are equal, but serialize differently.
         let sign = |i: usize| {
             if (i / chunk).is_multiple_of(2) {

@@ -26,7 +26,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_pipeline::core::check_interrupt;
 
@@ -317,10 +316,7 @@ impl<'a> JoinStream for LeftSemiFilterHashJoinStream<'a> {
 
                             match col.is_null() || col.is_nullable() {
                                 true => entry.clone(),
-                                false => BlockEntry::from(NullableColumn::new_column(
-                                    col,
-                                    Bitmap::new_constant(true, result_block.num_rows()),
-                                )),
+                                false => BlockEntry::from(col.wrap_nullable(None)),
                             }
                         }
                     };

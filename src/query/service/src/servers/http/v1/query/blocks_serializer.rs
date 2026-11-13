@@ -65,7 +65,7 @@ use serde::ser::SerializeSeq;
 fn data_is_null(column: &Column, row_index: usize) -> bool {
     match column {
         Column::Null { .. } => true,
-        Column::Nullable(deref!(inner)) => !inner.validity.get_bit(row_index),
+        Column::Nullable(deref!(inner)) => !inner.validity().get_bit(row_index),
         _ => false,
     }
 }
@@ -320,17 +320,17 @@ fn format_nullable_arrow_ipc_array(
     target_field: &ArrowField,
     format: Option<&OutputFormatSettings>,
 ) -> Result<Arc<dyn Array>> {
-    if let Column::Variant(inner) = &column.column
+    if let Column::Variant(inner) = column.column()
         && is_variant_json_string_field(target_field, format)
     {
         return Ok(Arc::new(format_nullable_variant_string_array(
             inner,
-            &column.validity,
+            column.validity(),
         )) as _);
     }
 
-    let array = format_arrow_ipc_array(&column.column, target_field, format)?;
-    apply_arrow_ipc_validity(array, &column.validity)
+    let array = format_arrow_ipc_array(column.column(), target_field, format)?;
+    apply_arrow_ipc_validity(array, column.validity())
 }
 
 fn format_arrow_ipc_leaf_array(
