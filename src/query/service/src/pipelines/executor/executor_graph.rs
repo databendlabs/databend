@@ -39,7 +39,6 @@ use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -859,13 +858,15 @@ impl RunningGraph {
         &self.0.perf_event_groups
     }
 
+    /// Per-processor snapshots whose `statistics` hold lifetime totals, regardless of
+    /// how many times `fetch_profiling` has drained the live counters.
     pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
         self.0
             .graph
             .node_weights()
             .map(|x| {
-                let new_profile = x.tracking_payload.profile.as_deref().cloned();
-                Arc::new(new_profile.unwrap())
+                let profile = x.tracking_payload.profile.as_deref().unwrap();
+                Arc::new(profile.snapshot_total())
             })
             .collect::<Vec<_>>()
     }
@@ -880,17 +881,15 @@ impl RunningGraph {
                 match plans_profile.entry(*plan_id) {
                     Entry::Occupied(mut v) => {
                         let plan_profile = v.get_mut();
-                        for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
-                            plan_profile.statistics[index] +=
-                                profile.statistics[index].fetch_min(0, Ordering::SeqCst);
+                        for (index, stat) in plan_profile.statistics.iter_mut().enumerate() {
+                            *stat += profile.drain_statistic(index);
                         }
                     }
                     Entry::Vacant(v) => {
                         let plan_profile = v.insert(PlanProfile::create(profile));
 
-                        for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
-                            plan_profile.statistics[index] +=
-                                profile.statistics[index].fetch_min(0, Ordering::SeqCst);
+                        for (index, stat) in plan_profile.statistics.iter_mut().enumerate() {
+                            *stat += profile.drain_statistic(index);
                         }
 
                         let node_id = node_id.as_ref();

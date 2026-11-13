@@ -30,6 +30,7 @@ use databend_common_base::runtime::ThreadJoinHandle;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::error_info::NodeErrorType;
+use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -525,6 +526,13 @@ impl QueryPipelineExecutor {
                 .fetch_profiling(Some(self.settings.executor_node_id.clone())),
             false => self.graph.fetch_profiling(None),
         }
+    }
+
+    /// Per-processor lifetime profiles. Unlike [`Self::fetch_plans_profile`] this is
+    /// non-destructive and not aggregated by plan node; see
+    /// [`RunningGraph::get_proc_profiles`].
+    pub fn get_proc_profiles(&self) -> Vec<Arc<Profile>> {
+        self.graph.get_proc_profiles()
     }
 
     pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {

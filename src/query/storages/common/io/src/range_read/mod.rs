@@ -17,6 +17,7 @@
 //! the chain, `read` is the on-demand path that carries the correctness
 //! contract.
 
+mod blocking_stats;
 mod chunk_grid;
 mod chunked;
 mod merge;
@@ -27,6 +28,7 @@ use std::ops::Range;
 use databend_common_exception::Result;
 use opendal::Buffer;
 
+pub use self::blocking_stats::blocked_nanos;
 pub use self::chunk_grid::ChunkGrid;
 pub use self::chunked::ChunkedRangeReader;
 pub use self::merge::MergeRangeReader;

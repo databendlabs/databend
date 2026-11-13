@@ -24,6 +24,7 @@ use databend_common_expression::DataBlockVec;
 
 use super::Rows;
 use super::algorithm::*;
+use super::batch::batch_size_le;
 
 pub trait SortedStream {
     /// Returns the next block with the order column and if it is pending.
@@ -239,22 +240,17 @@ where A: SortAlgorithm
             return p.row_index - start;
         }
 
+        // Rows in `[start, row_index_limit)` that are `<= next_cursor.current()` can be
+        // taken at once. `batch_size_le` mirrors ClickHouse's
+        // `SortingQueueBatch::updateBatchSize`: linear detection for small batches, a
+        // last-row check for non-intersecting blocks, then galloping + binary search.
         let next_cursor = &self.sorted_cursors.peek_top2().0;
-        if cursor.last() <= next_cursor.current() {
-            // Short Path:
-            // If the last row of current block is smaller than the next cursor,
-            // we can drain the whole block.
-            return row_index_limit - start;
-        }
-
-        let mut p = cursor.cursor_mut();
-        p.advance();
-        let item = &next_cursor.current();
-        while p.row_index < row_index_limit && p.current() <= *item {
-            // If the cursor is equals or smaller than the next cursor, continue advance.
-            p.advance();
-        }
-        p.row_index - start
+        batch_size_le(
+            cursor.rows(),
+            start,
+            row_index_limit,
+            &next_cursor.current(),
+        )
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {

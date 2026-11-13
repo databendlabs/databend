@@ -146,3 +146,92 @@ fn create_sink_pipe(size: usize) -> Result<(Vec<Receiver<Result<DataBlock>>>, Pi
 
     Ok((rxs, Pipe::create(size, 0, items)))
 }
+
+/// `execute()` drains every processor's live statistics into plan-level profiles for
+/// `system.query_profile` (`RunningGraph::fetch_profiling`). Per-processor summaries read
+/// after that must still see lifetime totals, otherwise they report zeros.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_proc_profiles_survive_fetch_profiling_drain() -> anyhow::Result<()> {
+    use databend_common_base::runtime::profile::ProfileStatisticsName;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let settings = ExecutorSettings {
+        query_id: Arc::new("".to_string()),
+        max_execute_time_in_seconds: Default::default(),
+        enable_queries_executor: false,
+        max_threads: 8,
+        executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
+    };
+
+    let mut pipeline = Pipeline::create();
+    let (mut rxs, sink_pipe) = create_sink_pipe(1)?;
+    let (txs, source_pipe) = create_source_pipe(ctx, 1)?;
+    pipeline.add_pipe(source_pipe);
+    pipeline.add_pipe(sink_pipe);
+    pipeline.set_max_threads(1);
+
+    let executor = QueryPipelineExecutor::create(pipeline, settings)?;
+
+    // Both channels have capacity 1 and we move exactly one block, so neither side can
+    // block: pre-load the source before execute(), drain the sink after. No spawned
+    // tasks — `execute()` blocks the current thread, and with one worker thread any
+    // tokio task we spawned here could never run while it does.
+    let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]);
+    let tx = txs.into_iter().next().unwrap();
+    tx.try_send(Ok(block))
+        .map_err(|e| anyhow::anyhow!("pre-load source: {e}"))?;
+    drop(tx); // EOF
+
+    executor.execute()?;
+
+    let mut rx = rxs.pop().unwrap();
+    let mut rows = 0;
+    while let Ok(b) = rx.try_recv() {
+        rows += b?.num_rows();
+    }
+    assert_eq!(rows, 3);
+
+    // After execute(), the live counters have been drained by fetch_profiling(true).
+    // The snapshot must still carry the lifetime totals.
+    //
+    // Assert on CpuTime: the executor records it around every process() call regardless
+    // of plan scope. (OutputRows is only recorded on ports that cross a PlanScope
+    // boundary, and this pipeline has none.)
+    let profiles = executor.get_proc_profiles();
+    assert_eq!(profiles.len(), 2, "source + sink");
+
+    let total_cpu: usize = profiles
+        .iter()
+        .map(|p| p.load_profile(ProfileStatisticsName::CpuTime))
+        .sum();
+    assert!(
+        total_cpu > 0,
+        "CpuTime must survive the fetch_profiling drain, got 0 across {} processors",
+        profiles.len()
+    );
+    for p in &profiles {
+        // Snapshot is detached: drained_total has been folded into statistics and zeroed.
+        assert_eq!(
+            p.drained_total[ProfileStatisticsName::CpuTime as usize]
+                .load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "{}: snapshot must fold drained_total into statistics",
+            p.p_name
+        );
+    }
+
+    // Snapshotting is non-destructive: a second snapshot sees the same totals.
+    let total_cpu_again: usize = executor
+        .get_proc_profiles()
+        .iter()
+        .map(|p| p.load_profile(ProfileStatisticsName::CpuTime))
+        .sum();
+    assert_eq!(total_cpu_again, total_cpu);
+
+    Ok(())
+}
