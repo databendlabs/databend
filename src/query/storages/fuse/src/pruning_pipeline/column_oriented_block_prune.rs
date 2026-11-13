@@ -259,22 +259,26 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
-                    let (matched_rows, matched_scores) = if let Some(inverted_index_pruner) =
-                        inverted_index_pruner
-                    {
-                        match inverted_index_pruner
-                            .should_keep(&location_path, inverted_index_metas.as_deref(), row_count)
-                            .await
-                        {
-                            Ok(Some((rows, scores))) => (Some(rows), scores),
-                            Ok(None) => return Ok(()),
-                            Err(error) => {
-                                return Err(error);
+                    let (selected_rows, matched_rows, matched_scores) =
+                        if let Some(inverted_index_pruner) = inverted_index_pruner {
+                            match inverted_index_pruner
+                                .should_keep(
+                                    &location_path,
+                                    inverted_index_metas.as_deref(),
+                                    row_count,
+                                )
+                                .await?
+                            {
+                                Some((rows, scores)) => (
+                                    inverted_index_pruner.selected_rows(&rows),
+                                    Some(rows),
+                                    scores,
+                                ),
+                                None => return Ok(()),
                             }
-                        }
-                    } else {
-                        (None, None)
-                    };
+                        } else {
+                            (None, None, None)
+                        };
 
                     // Get create_on value
                     let create_on = create_on_col.index(block_idx).unwrap();
@@ -287,7 +291,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         _ => unreachable!(),
                     };
 
-                    let block_meta_index = BlockMetaIndex {
+                    let mut block_meta_index = BlockMetaIndex {
                         segment_idx: segment_location.segment_idx,
                         block_idx,
                         range: None,
@@ -295,11 +299,15 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         block_location: location_path.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
+                        selected_rows: None,
                         matched_rows,
                         matched_scores,
                         vector_scores: None,
                         virtual_block_meta: None,
                     };
+                    if let Some(rows) = selected_rows {
+                        block_meta_index.select_rows(rows);
+                    }
 
                     // Collect column metadata
                     for column_id in &column_ids {

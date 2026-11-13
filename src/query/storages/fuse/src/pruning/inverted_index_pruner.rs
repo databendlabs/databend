@@ -65,6 +65,9 @@ pub struct InvertedIndexPruner {
     index_version: String,
     reader: InvertedIndexReader,
     query: Box<dyn Query>,
+    /// The filter of the query is the index match alone: the rows the index did
+    /// not match fail it, so the scan need not output them.
+    select_matched_rows: bool,
 }
 
 impl InvertedIndexPruner {
@@ -96,11 +99,16 @@ impl InvertedIndexPruner {
                     .and_then(PushDownInfo::inverted_index_top_k),
             );
 
+            let select_matched_rows = push_down
+                .as_ref()
+                .is_some_and(PushDownInfo::filter_only_use_index);
+
             return Ok(Some(Arc::new(InvertedIndexPruner {
                 index_name,
                 index_version,
                 reader,
                 query: prepared.query,
+                select_matched_rows,
             })));
         }
         Ok(None)
@@ -139,6 +147,19 @@ impl InvertedIndexPruner {
                 row_count,
             )
             .await
+    }
+
+    /// The rows the scan outputs for a block with `matched_rows`, to pass to
+    /// `BlockMetaIndex::select_rows`: the matched rows when the filter drops the
+    /// others, `None` (every row) when another filter still has to see them.
+    pub fn selected_rows(&self, matched_rows: &[usize]) -> Option<Vec<u32>> {
+        if !self.select_matched_rows {
+            return None;
+        }
+        matched_rows
+            .iter()
+            .map(|row| u32::try_from(*row).ok())
+            .collect()
     }
 }
 

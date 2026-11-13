@@ -459,6 +459,7 @@ mod tests {
             block_location: format!("block_{block_id}"),
             segment_location: "segment".to_string(),
             snapshot_location: None,
+            selected_rows: None,
             matched_rows: matched,
             matched_scores: None,
             vector_scores: None,

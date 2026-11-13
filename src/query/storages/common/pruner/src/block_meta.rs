@@ -30,11 +30,11 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 /// Vector scores of a block, attached by vector pruning.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum VectorScores {
-    /// The rows of a vector TopN and their scores, as (row, score): the scan
-    /// outputs only these rows.
+    /// The rows of a vector TopN and their scores, as (row, score). The scan
+    /// outputs only these rows, see `BlockMetaIndex::selected_rows`.
     TopN(Vec<(u32, F32)>),
-    /// The score of every row, in row order: the scan outputs every row. Rows
-    /// without a score, such as NULL vectors, hold the placeholder `f32::MAX`.
+    /// The score of every row, in row order. Rows without a score, such as NULL
+    /// vectors, hold the placeholder `f32::MAX`.
     All(Vec<F32>),
 }
 
@@ -50,6 +50,10 @@ pub struct BlockMetaIndex {
     pub block_location: String,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
+    /// The rows of the block the scan outputs, as sorted distinct row numbers;
+    /// `None` outputs every row. A pruner may leave out only rows that the
+    /// filters of the query drop anyway. Set through [`BlockMetaIndex::select_rows`].
+    pub selected_rows: Option<Vec<u32>>,
     // The search matched rows in the block (aligned with `matched_scores` when present).
     pub matched_rows: Option<Vec<usize>>,
     // Optional scores for the matched rows.
@@ -58,6 +62,22 @@ pub struct BlockMetaIndex {
     pub vector_scores: Option<VectorScores>,
     // The optional meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMetaIndex>,
+}
+
+impl BlockMetaIndex {
+    /// Narrows the rows the scan outputs to `rows`, row numbers of the block in
+    /// any order. Pruners compose: a row is output only if every pruner selects it.
+    pub fn select_rows(&mut self, mut rows: Vec<u32>) {
+        rows.sort_unstable();
+        rows.dedup();
+        self.selected_rows = Some(match self.selected_rows.take() {
+            Some(selected) => selected
+                .into_iter()
+                .filter(|row| rows.binary_search(row).is_ok())
+                .collect(),
+            None => rows,
+        });
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -147,5 +167,28 @@ impl BlockMetaIndex {
         BlockMetaIndex::downcast_ref_from(info).ok_or_else(|| {
             ErrorCode::Internal("Cannot downcast from BlockMetaInfo to BlockMetaIndex.")
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_select_rows() {
+        let mut index = BlockMetaIndex::default();
+        assert_eq!(index.selected_rows, None);
+
+        // Rows arrive in any order, as a score TopK returns them.
+        index.select_rows(vec![7, 2, 5, 2]);
+        assert_eq!(index.selected_rows, Some(vec![2, 5, 7]));
+
+        // A second pruner narrows the selection.
+        index.select_rows(vec![9, 7, 2]);
+        assert_eq!(index.selected_rows, Some(vec![2, 7]));
+
+        // No common row: the scan outputs none, not every row.
+        index.select_rows(vec![3]);
+        assert_eq!(index.selected_rows, Some(vec![]));
     }
 }

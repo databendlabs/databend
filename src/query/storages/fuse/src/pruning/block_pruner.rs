@@ -287,22 +287,24 @@ impl BlockPruner {
 
                 debug_assert_eq!(prune_result.block_location, block.location.0);
 
-                result.push((
-                    BlockMetaIndex {
-                        segment_idx: segment_location.segment_idx,
-                        block_idx: prune_result.block_idx,
-                        range: prune_result.range,
-                        block_id: block_id_in_segment(block_num, prune_result.block_idx),
-                        block_location: prune_result.block_location.clone(),
-                        segment_location: segment_location.location.0.clone(),
-                        snapshot_location: segment_location.snapshot_loc.clone(),
-                        matched_rows: prune_result.matched_rows.clone(),
-                        matched_scores: prune_result.matched_scores.clone(),
-                        vector_scores: None,
-                        virtual_block_meta: prune_result.virtual_block_meta.clone(),
-                    },
-                    block,
-                ))
+                let mut block_meta_index = BlockMetaIndex {
+                    segment_idx: segment_location.segment_idx,
+                    block_idx: prune_result.block_idx,
+                    range: prune_result.range,
+                    block_id: block_id_in_segment(block_num, prune_result.block_idx),
+                    block_location: prune_result.block_location.clone(),
+                    segment_location: segment_location.location.0.clone(),
+                    snapshot_location: segment_location.snapshot_loc.clone(),
+                    selected_rows: None,
+                    matched_rows: prune_result.matched_rows.clone(),
+                    matched_scores: prune_result.matched_scores.clone(),
+                    vector_scores: None,
+                    virtual_block_meta: prune_result.virtual_block_meta.clone(),
+                };
+                if let Some(rows) = prune_result.selected_rows {
+                    block_meta_index.select_rows(rows);
+                }
+                result.push((block_meta_index, block))
             }
         }
 
@@ -394,6 +396,7 @@ impl BlockPruner {
                     .await?;
 
                 if let Some((rows, scores)) = matched_rows {
+                    prune_result.selected_rows = inverted_index_pruner.selected_rows(&rows);
                     prune_result.matched_rows = Some(rows);
                     prune_result.matched_scores = scores;
                 } else {
@@ -514,6 +517,7 @@ impl BlockPruner {
                         block_location: block_meta.as_ref().location.0.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
+                        selected_rows: None,
                         matched_rows: None,
                         matched_scores: None,
                         vector_scores: None,
@@ -545,6 +549,8 @@ struct BlockPruneResult {
     keep: bool,
     // the page ranges should be kept in the block
     range: Option<Range<usize>>,
+    // the rows this pruning selects for output, see `BlockMetaIndex::selected_rows`
+    selected_rows: Option<Vec<u32>>,
     // the matched rows in the block (aligned with `matched_scores` when present)
     // only used by inverted index search
     matched_rows: Option<Vec<usize>>,
@@ -561,6 +567,7 @@ impl BlockPruneResult {
             block_location,
             keep: false,
             range: None,
+            selected_rows: None,
             matched_rows: None,
             matched_scores: None,
             virtual_block_meta: None,
@@ -573,6 +580,7 @@ impl BlockPruneResult {
             block_location: block_meta_index.block_location.clone(),
             keep: true,
             range: block_meta_index.range.clone(),
+            selected_rows: None,
             matched_rows: block_meta_index.matched_rows.clone(),
             matched_scores: block_meta_index.matched_scores.clone(),
             virtual_block_meta: block_meta_index.virtual_block_meta.clone(),
@@ -581,6 +589,9 @@ impl BlockPruneResult {
 
     fn apply_to_block_meta_index(self, mut block_meta_index: BlockMetaIndex) -> BlockMetaIndex {
         block_meta_index.range = self.range;
+        if let Some(rows) = self.selected_rows {
+            block_meta_index.select_rows(rows);
+        }
         block_meta_index.matched_rows = self.matched_rows;
         block_meta_index.matched_scores = self.matched_scores;
         block_meta_index.virtual_block_meta = self.virtual_block_meta;

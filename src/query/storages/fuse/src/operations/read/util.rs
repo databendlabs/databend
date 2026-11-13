@@ -149,7 +149,8 @@ pub(crate) fn add_data_block_meta(
 
 /// The vector scores of the rows the scan outputs, in order. The output rows are
 /// `offsets` (the rows left by filters) or, without them, every row of the block;
-/// with `VectorScores::TopN`, `ReadState` keeps only its rows.
+/// the rows of `VectorScores::TopN` are the `selected_rows` of the block, which
+/// `ReadState` keeps.
 fn vector_output_scores(
     block_meta: &PrunedBlockMetaIndex,
     offsets: Option<&RoaringTreemap>,
