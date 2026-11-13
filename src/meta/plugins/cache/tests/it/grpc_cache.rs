@@ -92,6 +92,14 @@ async fn test_cache_basic() -> anyhow::Result<()> {
         Some(SeqV::new(3, b("c")))
     );
     assert!(c.try_get_ready("pp/missing").is_none());
+    assert_eq!(
+        c.try_list_dir_ready("pp")
+            .map(|kvs| kvs.without_proposed_at()),
+        Some(vec![
+            (s("pp/a"), SeqV::new(2, b("a"))),
+            (s("pp/c"), SeqV::new(3, b("c"))),
+        ])
+    );
 
     // Receive update
 
@@ -197,6 +205,7 @@ async fn test_ready_cache_read_during_reconnect() -> anyhow::Result<()> {
     assert_eq!(writer.get_kv("ready/a").await?.unwrap().data, b("new"));
     // The old blocking try_get would wait for this watch to reconnect forever.
     assert!(cache.try_get_ready("ready/a").is_none());
+    assert!(cache.try_list_dir_ready("ready").is_none());
     Ok(())
 }
 

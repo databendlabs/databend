@@ -59,8 +59,6 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
-use log::info;
-use log::warn;
 use tokio::sync::Mutex;
 
 use crate::role::role_api::RoleApi;
@@ -97,22 +95,8 @@ impl RoleMgr {
         let prefix = TenantOwnershipObjectIdent::key_space_prefix();
         let name = TenantOwnershipObjectIdent::type_name();
 
-        let mut cache = Cache::new(client, prefix, name).await;
-
-        // The meta-service may not support `WatchRequest::initial_flush` parameter,
-        // Peek the cache state to check if the cache is supported.
-        let peek_res = cache.try_get("dummy").await;
-
-        match peek_res {
-            Ok(_) => {
-                info!("Successfully created cache for ({})", prefix);
-            }
-            Err(err) => {
-                warn!("Failed to create cache for ({}) {:?}", prefix, err);
-            }
-        }
-
-        cache
+        // Do not wait for the initial sync: reads fall back to meta-service until it completes.
+        Cache::new(client, prefix, name).await
     }
 
     #[async_backtrace::framed]
@@ -233,33 +217,24 @@ impl RoleApi for RoleMgr {
     async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, MetaError> {
         let object_owner_prefix = self.ownership_object_prefix();
 
-        let cached = {
-            if let Some(ownership_cache) = &self.ownership_cache {
-                let mut cache = ownership_cache.lock().await;
-                let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
-
-                match &kvs {
-                    Ok(kvs) => {
-                        info!(
-                            "RoleMgr::list_ownerships() returned from cache: {} keys; first key: {:?}; last key: {:?}",
-                            kvs.len(),
-                            kvs.first().map(|(k, _)| k),
-                            kvs.last().map(|(k, _)| k),
-                        );
-                    }
-                    Err(err) => {
-                        warn!(
-                            "list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records",
-                            err
-                        );
-                    }
-                }
-
-                kvs.ok()
-            } else {
-                None
-            }
+        // Do not wait for the cache's watcher, which holds the cache data lock during the initial
+        // sync and while re-syncing after a lost watch stream; read meta-service instead.
+        // Waiting for the outer lock is bounded: holders only run the non-blocking read below.
+        let cached = match &self.ownership_cache {
+            Some(cache) => cache
+                .lock()
+                .await
+                .try_list_dir_ready(object_owner_prefix.as_str()),
+            None => None,
         };
+
+        match &cached {
+            Some(kvs) => debug!(
+                "RoleMgr::list_ownerships() returned {} keys from cache",
+                kvs.len()
+            ),
+            None => debug!("RoleMgr::list_ownerships() cache not ready, read meta-service"),
+        }
 
         let values = if let Some(kvs) = cached {
             kvs
