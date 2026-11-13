@@ -32,7 +32,11 @@ use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseco
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_settings::ReclusterMethod;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::ClusterKeys;
+use databend_common_sql::parse_cluster_keys;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::debug;
 use log::info;
@@ -42,6 +46,7 @@ use tokio::sync::Semaphore;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
+use crate::io::SegmentsIO;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterCandidateWindow;
@@ -49,6 +54,8 @@ use crate::operations::recluster::ReclusterFinalCarry;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
 use crate::operations::recluster::ReclusterSelectionStats;
+use crate::operations::recluster::VECTOR_LEVEL_MIXED;
+use crate::operations::recluster::VECTOR_LEVEL_NEW;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 
@@ -129,7 +136,109 @@ fn select_task_candidates(
     selected_task_indices
 }
 
+/// Rows not mixed yet (below `VECTOR_LEVEL_MIXED`), in percent of all rows, from
+/// which a vector RECLUSTER FINAL rewrites the whole table once to mix them in.
+const VECTOR_FULL_PASS_NEW_DATA_PERCENT: u64 = 10;
+
+/// A block of a table with a vector cluster key, as a vector RECLUSTER FINAL sees it
+/// when it starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VectorReclusterBlock {
+    pub location: String,
+    /// Recluster level (see `VECTOR_LEVEL_NEW`). Blocks whose cluster statistics are
+    /// missing or belong to another cluster key have level 0: recluster normalizes
+    /// their statistics to level 0 and rewrites them as new data.
+    pub level: i32,
+    pub rows: u64,
+}
+
+/// What a vector RECLUSTER FINAL does, decided from its blocks when it starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VectorFinalPlan {
+    /// Recluster the level-0 blocks round by round, as a recluster without FINAL
+    /// does: for a FINAL that may only rewrite part of the table (`WHERE`, `LIMIT`).
+    Rounds,
+    /// Rewrite every block once, together, so that the rows not mixed yet mix with
+    /// the others. This is also the first clustering of a table.
+    FullPass,
+    /// Rewrite nothing: the rows not mixed yet are fewer than
+    /// `VECTOR_FULL_PASS_NEW_DATA_PERCENT` of all rows. They keep their level, so they
+    /// add up across statements until they reach the threshold.
+    Skip,
+}
+
+/// The plan of a vector RECLUSTER FINAL over `blocks`. Rows below
+/// `VECTOR_LEVEL_MIXED` are not mixed yet: new data, and data that the recluster after
+/// writes clustered on its own. Only the full pass mixes them in; it runs when they
+/// are all the data, or at least `VECTOR_FULL_PASS_NEW_DATA_PERCENT` of it. Blocks
+/// excluded from recluster (level < 0) count as neither.
+pub fn vector_final_plan(blocks: &[VectorReclusterBlock]) -> VectorFinalPlan {
+    let rows = |mixed: bool| -> u64 {
+        blocks
+            .iter()
+            .filter(|block| block.level >= VECTOR_LEVEL_NEW)
+            .filter(|block| (block.level >= VECTOR_LEVEL_MIXED) == mixed)
+            .map(|block| block.rows)
+            .sum()
+    };
+    let (unmixed_rows, mixed_rows) = (rows(false), rows(true));
+    if unmixed_rows > 0
+        && unmixed_rows.saturating_mul(100)
+            >= unmixed_rows
+                .saturating_add(mixed_rows)
+                .saturating_mul(VECTOR_FULL_PASS_NEW_DATA_PERCENT)
+    {
+        VectorFinalPlan::FullPass
+    } else {
+        VectorFinalPlan::Skip
+    }
+}
+
 impl FuseTable {
+    /// The blocks in the latest snapshot of a table with a vector cluster key, or
+    /// `None` for other tables.
+    #[async_backtrace::framed]
+    pub async fn vector_recluster_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<Vec<VectorReclusterBlock>>> {
+        let (Some(cluster_key_id), Some(cluster_keys)) =
+            (self.cluster_key_id(), self.resolve_cluster_keys())
+        else {
+            return Ok(None);
+        };
+        let parsed = parse_cluster_keys(ctx.clone(), Arc::new(self.clone()), cluster_keys)?;
+        if !matches!(parsed, ClusterKeys::Vector { .. }) {
+            return Ok(None);
+        }
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(Some(Vec::new()));
+        };
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
+        let segments_io = SegmentsIO::create(ctx, self.get_operator(), self.schema());
+        let mut blocks = Vec::new();
+        for chunk in snapshot.segments.chunks(chunk_size.max(1)) {
+            for segment in segments_io
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
+                .await?
+            {
+                for block in segment?.blocks {
+                    let level = block
+                        .cluster_stats
+                        .as_ref()
+                        .filter(|stats| stats.cluster_key_id == cluster_key_id)
+                        .map_or(0, |stats| stats.level);
+                    blocks.push(VectorReclusterBlock {
+                        location: block.location.0.clone(),
+                        level,
+                        rows: block.row_count,
+                    });
+                }
+            }
+        }
+        Ok(Some(blocks))
+    }
+
     #[async_backtrace::framed]
     pub async fn do_recluster(
         &self,
@@ -170,14 +279,17 @@ impl FuseTable {
                 vertical_kind_override.or(Some(VerticalReclusterKind::MergeBlocks))
             }
         };
-        let mutator = Arc::new(ReclusterMutator::try_create(
-            self,
-            ctx.clone(),
-            snapshot.as_ref(),
-            mode,
-            vertical_kind,
-            max_tasks_override,
-        )?);
+        let mutator = Arc::new(
+            ReclusterMutator::try_create(
+                self,
+                ctx.clone(),
+                snapshot.as_ref(),
+                mode,
+                vertical_kind,
+                max_tasks_override,
+            )?
+            .with_vector_full_pass(carry.vector_full_pass.clone()),
+        );
 
         // Carry is tied to the current cluster key because cached block metas
         // may be normalized during candidate probing.
@@ -588,7 +700,8 @@ impl FuseTable {
         };
 
         if mode != ReclusterMode::Aggressive {
-            *carry = ReclusterFinalCarry::default();
+            // Keeps a started vector full pass.
+            carry.reset();
         }
 
         let recluster_seg_num = parts.removed_segment_indexes.len() as u64;
@@ -704,6 +817,41 @@ mod tests {
 
     use super::*;
     use crate::operations::recluster::ReclusterTaskCandidate;
+
+    #[test]
+    fn test_vector_final_plan() {
+        // (level, rows) of each block.
+        let plan = |blocks: &[(i32, u64)]| {
+            let blocks: Vec<_> = blocks
+                .iter()
+                .enumerate()
+                .map(|(i, (level, rows))| VectorReclusterBlock {
+                    location: format!("b{i}"),
+                    level: *level,
+                    rows: *rows,
+                })
+                .collect();
+            vector_final_plan(&blocks)
+        };
+        use VectorFinalPlan::*;
+        // First clustering, also of data the recluster after writes clustered on its
+        // own, which only the full pass mixes.
+        assert_eq!(plan(&[(0, 100), (0, 100)]), FullPass);
+        assert_eq!(plan(&[(1, 100), (1, 100), (0, 10)]), FullPass);
+        // Nothing to mix.
+        assert_eq!(plan(&[]), Skip);
+        assert_eq!(plan(&[(2, 100), (3, 100)]), Skip);
+        // Rows not mixed yet from 10% of all rows, new or clustered on their own, also
+        // in a single block.
+        assert_eq!(plan(&[(2, 900), (0, 100)]), FullPass);
+        assert_eq!(plan(&[(2, 500), (3, 400), (1, 60), (0, 40)]), FullPass);
+        // Below 10%: they stay as they are to add up.
+        assert_eq!(plan(&[(2, 901), (0, 99)]), Skip);
+        assert_eq!(plan(&[(2, 901), (1, 50), (0, 49)]), Skip);
+        // Blocks excluded from recluster (level < 0) count as neither.
+        assert_eq!(plan(&[(-1, 1000), (2, 900), (0, 100)]), FullPass);
+        assert_eq!(plan(&[(-1, 100)]), Skip);
+    }
 
     fn score(priority: usize) -> CandidateScore {
         CandidateScore {

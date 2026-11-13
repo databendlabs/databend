@@ -62,12 +62,53 @@ use crate::io::write::block_index::WrittenVectorIndex;
 const DEFAULT_M: usize = 16;
 const DEFAULT_EF_CONSTRUCT: usize = 100;
 
-/// Whether the index stores FP16 vectors for refinement (`refine = true`).
-fn vector_index_refine(options: &BTreeMap<String, String>) -> Result<bool> {
-    match options.get(VECTOR_INDEX_OPT_REFINE) {
-        None => Ok(false),
-        Some(value) => parse_vector_index_refine(value)
-            .ok_or_else(|| ErrorCode::IndexOptionInvalid("`refine` must be `true` or `false`")),
+/// The options of a vector index (`TableIndex::options`), as vector index writes,
+/// searches and the block size limit use them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct VectorIndexOptions {
+    pub m: usize,
+    pub ef_construct: usize,
+    /// The known distance types, in their configured order. Without any, no index
+    /// is built.
+    pub distances: Vec<DistanceType>,
+    /// Whether the index stores FP16 vectors for refinement (`refine = true`).
+    pub refine: bool,
+}
+
+impl VectorIndexOptions {
+    /// An `m` or `ef_construct` that is not a number takes the default, and unknown
+    /// distance types are skipped. `refine` is validated at bind time too, and an
+    /// invalid persisted value is an error: it must not silently omit FP16 data.
+    pub(crate) fn parse(options: &BTreeMap<String, String>) -> Result<Self> {
+        let number = |key: &str, default: usize| {
+            options
+                .get(key)
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(default)
+        };
+        let distances = options
+            .get(VECTOR_INDEX_OPT_DISTANCE)
+            .into_iter()
+            .flat_map(|value| value.split(','))
+            .filter_map(|distance| match distance {
+                "cosine" => Some(DistanceType::Dot),
+                "l1" => Some(DistanceType::L1),
+                "l2" => Some(DistanceType::L2),
+                _ => None,
+            })
+            .collect();
+        let refine = match options.get(VECTOR_INDEX_OPT_REFINE) {
+            None => false,
+            Some(value) => parse_vector_index_refine(value).ok_or_else(|| {
+                ErrorCode::IndexOptionInvalid("`refine` must be `true` or `false`")
+            })?,
+        };
+        Ok(Self {
+            m: number(VECTOR_INDEX_OPT_M, DEFAULT_M),
+            ef_construct: number(VECTOR_INDEX_OPT_EF_CONSTRUCT, DEFAULT_EF_CONSTRUCT),
+            distances,
+            refine,
+        })
     }
 }
 
@@ -86,7 +127,7 @@ impl VectorIndexSearchOptions {
         refine_factor: u64,
         search_ef: u64,
     ) -> Result<Self> {
-        let refine = refine_factor > 0 && vector_index_refine(index_options)?;
+        let refine = refine_factor > 0 && VectorIndexOptions::parse(index_options)?.refine;
         Ok(Self {
             refine_factor: refine.then_some(refine_factor as usize),
             search_ef: (search_ef > 0).then_some(search_ef as usize),
@@ -277,35 +318,12 @@ impl VectorIndexBuilder {
                 continue;
             }
 
-            // Validated at bind time too; invalid persisted metadata must return an
-            // error, not silently omit the index.
-            let refine = vector_index_refine(&index.options)?;
-            let m = match index.options.get(VECTOR_INDEX_OPT_M) {
-                Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_M),
-                None => DEFAULT_M,
-            };
-
-            let ef_construct = match index.options.get(VECTOR_INDEX_OPT_EF_CONSTRUCT) {
-                Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_EF_CONSTRUCT),
-                None => DEFAULT_EF_CONSTRUCT,
-            };
-
-            let mut distances = Vec::new();
-            match index.options.get(VECTOR_INDEX_OPT_DISTANCE) {
-                Some(value) => {
-                    let distance_types: Vec<&str> = value.split(',').collect();
-                    for distance_type in distance_types {
-                        let distance = match distance_type {
-                            "cosine" => DistanceType::Dot,
-                            "l1" => DistanceType::L1,
-                            "l2" => DistanceType::L2,
-                            _ => continue,
-                        };
-                        distances.push(distance);
-                    }
-                }
-                None => continue,
-            };
+            let VectorIndexOptions {
+                m,
+                ef_construct,
+                distances,
+                refine,
+            } = VectorIndexOptions::parse(&index.options)?;
             if distances.is_empty() {
                 debug!(
                     "Ignoring vector index: {}, no valid distance types",

@@ -271,7 +271,7 @@ impl DeserializeDataTransform {
             .read_state
             .as_mut()
             .unwrap()
-            .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
+            .deserialize_and_filter_rows(columns_chunks, part, start_row, num_rows)?;
 
         // Virtual columns are read in addition to the columns `ReadState`
         // accounted for, so add them to the scan statistics.

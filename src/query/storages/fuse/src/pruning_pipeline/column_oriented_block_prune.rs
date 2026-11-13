@@ -259,21 +259,21 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
-                    let (matched_rows, matched_scores) = if let Some(inverted_index_pruner) =
-                        inverted_index_pruner
-                    {
-                        match inverted_index_pruner
-                            .should_keep(&location_path, inverted_index_metas.as_deref(), row_count)
-                            .await
-                        {
-                            Ok(Some((rows, scores))) => (Some(rows), scores),
-                            Ok(None) => return Ok(()),
-                            Err(error) => {
-                                return Err(error);
+                    let inverted_index_matches = match inverted_index_pruner {
+                        Some(inverted_index_pruner) => {
+                            let matches = inverted_index_pruner
+                                .should_keep(
+                                    &location_path,
+                                    inverted_index_metas.as_deref(),
+                                    row_count,
+                                )
+                                .await?;
+                            if matches.is_none() {
+                                return Ok(());
                             }
+                            matches
                         }
-                    } else {
-                        (None, None)
+                        None => None,
                     };
 
                     // Get create_on value
@@ -297,9 +297,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         block_location: location_path.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
-                        matched_rows,
-                        matched_scores,
-                        vector_scores: None,
+                        inverted_index_matches,
+                        vector_index_matches: None,
                         virtual_block_meta: None,
                     };
 

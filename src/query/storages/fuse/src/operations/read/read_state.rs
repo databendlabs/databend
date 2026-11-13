@@ -41,7 +41,6 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_pruner::VectorScores;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -313,18 +312,20 @@ impl ReadState {
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<ReadStateOutput> {
-        self.deserialize_and_filter_with_num_rows(columns_chunks, part, part.nums_rows)
+        self.deserialize_and_filter_rows(columns_chunks, part, 0, part.nums_rows)
     }
 
-    /// Like [`deserialize_and_filter`], but with an explicit row count for sparse-granule-index
-    /// narrowed reads, where the fetched partial chunks cover fewer rows than `part.nums_rows`.
+    /// Like [`deserialize_and_filter`], but for the `num_rows` rows from `start_row` of the
+    /// block: sparse-granule-index narrowed reads fetch partial chunks that cover fewer rows
+    /// than `part.nums_rows`.
     ///
     /// The returned scan statistics describe the `num_rows` rows that were actually read and
     /// decoded for this range, not the whole block.
-    pub fn deserialize_and_filter_with_num_rows(
+    pub fn deserialize_and_filter_rows(
         &mut self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
+        start_row: usize,
         num_rows: usize,
     ) -> Result<ReadStateOutput> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
@@ -365,7 +366,7 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
-        let bitmap_selection = match (bitmap_selection, vector_topn_rows(part)) {
+        let bitmap_selection = match (bitmap_selection, selected_rows(part, start_row, num_rows)) {
             (Some(selection), Some(rows)) => Some(&selection & &rows),
             (selection, rows) => selection.or(rows),
         };
@@ -454,23 +455,20 @@ fn runtime_filter_column_is_projectable(
     Projection::from_column_names(schema, &[name]).is_ok()
 }
 
-/// The rows of a vector TopN in a block (see `VectorScores::TopN`): the scan
-/// outputs only them. `None` when every row is output.
-fn vector_topn_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
-    let Some(VectorScores::TopN(scores)) = part.block_meta_index()?.vector_scores.as_ref() else {
-        return None;
+/// The rows of the block that index pruning selected for output (see
+/// `BlockMetaIndex::selected_rows`) among the `num_rows` rows read from `start_row`. `None`
+/// when every row of the range is output.
+fn selected_rows(part: &FuseBlockPartInfo, start_row: usize, num_rows: usize) -> Option<Bitmap> {
+    let rows = part.block_meta_index()?.selected_rows(part.nums_rows)?;
+    let rows = if start_row == 0 && num_rows == part.nums_rows {
+        rows
+    } else {
+        rows.sliced(start_row, num_rows)
     };
-    if scores.len() >= part.nums_rows {
+    if rows.null_count() == 0 {
         return None;
     }
-    let mut rows = MutableBitmap::from_len_zeroed(part.nums_rows);
-    for &(row, _) in scores {
-        let row = row as usize;
-        if row < part.nums_rows {
-            rows.set(row, true);
-        }
-    }
-    Some(rows.into())
+    Some(rows)
 }
 
 fn expand_runtime_filter_bitmap(

@@ -249,6 +249,12 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'py
 3 1.3515654 大模型应用开发极简入门
 7 1.2369337 Apache Pulsar实战
 
+# the scan outputs only the matched rows, also when it reads no column
+query I
+SELECT count(*) FROM books WHERE match('title^5, description^1.2', 'python')
+----
+9
+
 query IRT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'ChatGPT') ORDER BY score() DESC
 ----
@@ -405,6 +411,14 @@ SELECT id, score(), title FROM books WHERE query('title:"Rust Atomics"') ORDER B
 onlyif mysql
 statement error 1105
 SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 description:(学习 +神经网络)^1.1') ORDER BY score() DESC
+
+# search functions are only allowed in the where clause of a query, not of a mutation:
+# a scan that feeds a mutation must not skip the rows the index did not match
+statement error 1065
+UPDATE books SET author = 'unknown' WHERE match(title, 'python')
+
+statement error 1065
+DELETE FROM books WHERE query('title:python')
 
 statement ok
 CREATE TABLE t1 (id int, body json)

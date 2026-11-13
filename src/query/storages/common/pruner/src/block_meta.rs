@@ -23,19 +23,37 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::ColumnId;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
-/// Vector scores of a block, attached by vector pruning.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum VectorScores {
-    /// The rows of a vector TopN and their scores, as (row, score): the scan
-    /// outputs only these rows.
-    TopN(Vec<(u32, F32)>),
-    /// The score of every row, in row order: the scan outputs every row. Rows
-    /// without a score, such as NULL vectors, hold the placeholder `f32::MAX`.
-    All(Vec<F32>),
+/// The rows of a block found by an index, attached by the pruner of that index:
+/// the rows the inverted index matched, or the rows the vector index scored.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct IndexMatches {
+    /// The rows found, as distinct row numbers of the block, in the order the
+    /// index returned them.
+    pub rows: Vec<u32>,
+    /// The score of each row of `rows`. `None` when the query does not read the
+    /// score of the index.
+    pub scores: Option<Vec<F32>>,
+    /// The scan outputs only `rows`, because the query drops the other rows
+    /// anyway. Otherwise it outputs every row: the query still has to see them.
+    pub rows_only: bool,
+}
+
+impl IndexMatches {
+    fn row_bitmap(&self, num_rows: usize) -> Bitmap {
+        let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
+        for row in self.rows.iter().map(|row| *row as usize) {
+            if row < num_rows {
+                bitmap.set(row, true);
+            }
+        }
+        bitmap.into()
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -56,14 +74,36 @@ pub struct BlockMetaIndex {
     pub block_location: String,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
-    // The search matched rows in the block (aligned with `matched_scores` when present).
-    pub matched_rows: Option<Vec<usize>>,
-    // Optional scores for the matched rows.
-    pub matched_scores: Option<Vec<F32>>,
-    /// The vector scores of the rows the scan outputs.
-    pub vector_scores: Option<VectorScores>,
+    /// The rows the inverted index matched, with their scores when the query
+    /// reads `score()`.
+    pub inverted_index_matches: Option<IndexMatches>,
+    /// The rows the vector index scored, with their scores.
+    pub vector_index_matches: Option<IndexMatches>,
     // The optional meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMetaIndex>,
+}
+
+impl BlockMetaIndex {
+    /// The rows of the block the scan outputs, out of `num_rows`; `None` when it
+    /// outputs every row.
+    ///
+    /// An index narrows the output to the rows it found with
+    /// `IndexMatches::rows_only`. A row is output only if every index selects it.
+    pub fn selected_rows(&self, num_rows: usize) -> Option<Bitmap> {
+        let mut selected: Option<Bitmap> = None;
+        let indexes = [&self.inverted_index_matches, &self.vector_index_matches];
+        for matches in indexes.into_iter().flatten() {
+            if !matches.rows_only {
+                continue;
+            }
+            let rows = matches.row_bitmap(num_rows);
+            selected = Some(match selected {
+                Some(selected) => &selected & &rows,
+                None => rows,
+            });
+        }
+        selected.filter(|rows| rows.null_count() > 0)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -153,5 +193,58 @@ impl BlockMetaIndex {
         BlockMetaIndex::downcast_ref_from(info).ok_or_else(|| {
             ErrorCode::Internal("Cannot downcast from BlockMetaInfo to BlockMetaIndex.")
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn selected(index: &BlockMetaIndex, num_rows: usize) -> Option<Vec<bool>> {
+        index
+            .selected_rows(num_rows)
+            .map(|rows| rows.iter().collect())
+    }
+
+    fn matches(rows: &[u32], rows_only: bool) -> Option<IndexMatches> {
+        Some(IndexMatches {
+            rows: rows.to_vec(),
+            scores: None,
+            rows_only,
+        })
+    }
+
+    #[test]
+    fn test_selected_rows() {
+        // Without index pruning the scan outputs every row.
+        assert_eq!(selected(&BlockMetaIndex::default(), 4), None);
+
+        // The rows arrive in any order, as a score TopK returns them.
+        let mut index = BlockMetaIndex {
+            inverted_index_matches: matches(&[3, 1], true),
+            ..Default::default()
+        };
+        assert_eq!(selected(&index, 4), Some(vec![false, true, false, true]));
+        // Every row is found: the scan outputs every row.
+        index.inverted_index_matches = matches(&[1, 0], true);
+        assert_eq!(selected(&index, 2), None);
+
+        // The query still has to see the other rows.
+        index.inverted_index_matches = matches(&[3, 1], false);
+        assert_eq!(selected(&index, 4), None);
+
+        // The vector index selects rows the same way.
+        index.vector_index_matches = matches(&[2, 3], true);
+        assert_eq!(selected(&index, 4), Some(vec![false, false, true, true]));
+        index.vector_index_matches = matches(&[2, 3], false);
+        assert_eq!(selected(&index, 4), None);
+
+        // Both indexes select rows: a row is output only if both select it.
+        index.inverted_index_matches = matches(&[3, 1], true);
+        index.vector_index_matches = matches(&[2, 3], true);
+        assert_eq!(selected(&index, 4), Some(vec![false, false, false, true]));
+        // No common row: the scan outputs none, not every row.
+        index.vector_index_matches = matches(&[0], true);
+        assert_eq!(selected(&index, 4), Some(vec![false; 4]));
     }
 }

@@ -73,6 +73,7 @@ use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::operations::recluster::SelectedReclusterSegment;
+use crate::operations::recluster::VECTOR_LEVEL_MIXED;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::partition_values;
@@ -178,9 +179,28 @@ pub struct ReclusterFinalCarry {
     pub(crate) cluster_key_id: u32,
     // Reuse block-meta decode workers across rounds of one FINAL statement.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
+    // The full pass of a vector RECLUSTER FINAL (see `vector_final_plan`): the blocks
+    // present when it starts, rewritten once together regardless of level, so new
+    // data is mixed with older clustered blocks. Blocks written by this pass are not
+    // in the set, which ends it.
+    pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
 }
 
 impl ReclusterFinalCarry {
+    /// Starts the full pass of a vector RECLUSTER FINAL over `blocks`, scanning the
+    /// table again from the start.
+    pub fn start_vector_full_pass(&mut self, blocks: HashSet<String>) {
+        self.reset();
+        self.vector_full_pass = Some(Arc::new(blocks));
+    }
+
+    /// Forgets the scan state, keeping a started vector full pass.
+    pub fn reset(&mut self) {
+        let vector_full_pass = self.vector_full_pass.take();
+        *self = Self::default();
+        self.vector_full_pass = vector_full_pass;
+    }
+
     /// Lazily create or reuse the block-meta decode runtime for FINAL recluster.
     pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
         if self.decode_runtime.is_none() {
@@ -319,6 +339,13 @@ impl ReclusterMutator {
             strategy,
             virtual_column_layout_policy: table.virtual_column_layout_policy(),
         })
+    }
+
+    /// Restricts selection to the full pass of a vector RECLUSTER FINAL over
+    /// `blocks`; see `ReclusterFinalCarry`.
+    pub fn with_vector_full_pass(mut self, blocks: Option<Arc<HashSet<String>>>) -> Self {
+        self.properties.vector_full_pass = blocks;
+        self
     }
 
     /// Build a recluster mutator directly for tests.
@@ -539,10 +566,22 @@ impl ReclusterMutator {
             if level < 0 {
                 continue;
             }
-            if level >= MAX_RECLUSTER_LEVEL {
+            let group = if let Some(full_pass) = &self.properties.vector_full_pass {
+                // The full pass rewrites the blocks present when it started, in one
+                // group whose output (the group level + 1) is `VECTOR_LEVEL_MIXED`, so
+                // levels stay bounded. A level group, in every mode: the aggressive
+                // low-maturity group would take the output level from the levels of
+                // the blocks.
+                if !full_pass.contains(&block.meta.location.0) {
+                    continue;
+                }
+                ReclusterGroup::Level(VECTOR_LEVEL_MIXED - 1)
+            } else if level >= MAX_RECLUSTER_LEVEL {
                 // Terminal-level blocks are excluded from further rewrite tasks.
                 continue;
-            }
+            } else {
+                ReclusterGroup::assign(level, self.properties.mode)
+            };
             let partition = if self.properties.partition_key_count == 0 {
                 Vec::new()
             } else if let Some(partition) = partition_values(
@@ -556,13 +595,7 @@ impl ReclusterMutator {
                 // together with another partition.
                 continue;
             };
-            blocks_map
-                .entry((
-                    ReclusterGroup::assign(level, self.properties.mode),
-                    partition,
-                ))
-                .or_default()
-                .push(idx);
+            blocks_map.entry((group, partition)).or_default().push(idx);
         }
 
         // Keep the depth task ordering and deferral behavior. When block
@@ -944,11 +977,20 @@ impl ReclusterMutator {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
+        let eligible = self
+            .strategy
+            .eligible_blocks(&self.properties, indices.to_vec(), blocks);
+        let indices = eligible.as_slice();
         let block_count = indices.len();
-        if block_count < 2 && !self.properties.split_sort_tasks {
+        // The full pass of a vector RECLUSTER FINAL rewrites every block it holds
+        // once, whatever their level and also alone, so that new data mixes with all
+        // of them and none stays unmixed (see `VectorReclusterStrategy`).
+        let full_pass = self.properties.vector_full_pass.is_some();
+        if block_count < 2 && !self.properties.split_sort_tasks && !full_pass {
             return Ok(Vec::new());
         }
         if block_count == 2
+            && !full_pass
             && indices
                 .iter()
                 .all(|idx| blocks[*idx].stats().level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS)
@@ -1041,7 +1083,7 @@ impl ReclusterMutator {
             return Ok(candidates);
         }
 
-        if block_count < 2 {
+        if block_count < 2 && !full_pass {
             return Ok(Vec::new());
         }
         self.strategy

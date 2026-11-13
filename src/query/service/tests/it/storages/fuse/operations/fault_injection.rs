@@ -16,8 +16,9 @@
 //! `databend_common_storage::FaultInjection`.
 //!
 //! The rule registry is process-global: rules are scoped to the test table's storage prefix
-//! so that other tests running in the same process are not affected, and these tests still
-//! run one at a time to keep the hit counters unambiguous.
+//! and to the fixture's storage root (another fixture's table can have the same relative
+//! prefix) so that other tests running in the same process are not affected, and these tests
+//! still run one at a time to keep the hit counters unambiguous.
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -86,11 +87,14 @@ async fn test_failed_snapshot_write_fails_the_statement_and_leaves_the_table_int
 
     // Every snapshot write fails: the commit cannot succeed, the statement must report it,
     // and the table must still be exactly what it was before.
-    let fault = FaultInjection::install(FaultRule::new(
-        FaultOp::Write,
-        format!("{prefix}/_ss/"),
-        FaultKind::Permanent,
-    ));
+    let fault = FaultInjection::install(
+        FaultRule::new(
+            FaultOp::Write,
+            format!("{prefix}/_ss/"),
+            FaultKind::Permanent,
+        )
+        .in_root(fixture.storage_root()),
+    );
     let insert = format!(
         "INSERT INTO {}.{} VALUES (3, (3, 3))",
         fixture.default_db_name(),
@@ -122,11 +126,10 @@ async fn test_missing_block_is_reported_as_an_error() -> Result<()> {
     let _serial = SERIAL.lock().await;
     let (fixture, prefix) = setup().await?;
 
-    let fault = FaultInjection::install(FaultRule::new(
-        FaultOp::Read,
-        format!("{prefix}/_b/"),
-        FaultKind::NotFound,
-    ));
+    let fault = FaultInjection::install(
+        FaultRule::new(FaultOp::Read, format!("{prefix}/_b/"), FaultKind::NotFound)
+            .in_root(fixture.storage_root()),
+    );
     let err = count(&fixture).await.unwrap_err();
     assert_ne!(
         err.code(),
@@ -148,7 +151,9 @@ async fn test_temporary_read_failure_is_retried() -> Result<()> {
     // One transient failure on a block read: the retry layer must absorb it and the query
     // must succeed with the right result.
     let fault = FaultInjection::install(
-        FaultRule::new(FaultOp::Read, format!("{prefix}/_b/"), FaultKind::Temporary).times(1),
+        FaultRule::new(FaultOp::Read, format!("{prefix}/_b/"), FaultKind::Temporary)
+            .times(1)
+            .in_root(fixture.storage_root()),
     );
     assert_eq!(count(&fixture).await?, 2);
     assert_eq!(fault.hits(), 1, "the fault was never exercised");
@@ -206,11 +211,14 @@ async fn test_compact_segment_write_failure_cleans_concurrent_output() -> Result
     // Both outputs start together. Fail either PUT and check the successful
     // sibling cannot survive as an unreferenced file.
     for output in ["_sg", "_hs"] {
-        let fault = FaultInjection::install(FaultRule::new(
-            FaultOp::Write,
-            format!("{prefix}/{output}/"),
-            FaultKind::Permanent,
-        ));
+        let fault = FaultInjection::install(
+            FaultRule::new(
+                FaultOp::Write,
+                format!("{prefix}/{output}/"),
+                FaultKind::Permanent,
+            )
+            .in_root(fixture.storage_root()),
+        );
         let err = fixture
             .execute_command("OPTIMIZE TABLE default.t_compact_fault COMPACT SEGMENT")
             .await
@@ -240,11 +248,14 @@ async fn test_failed_segment_write_fails_the_statement_and_leaves_the_table_inta
     let _serial = SERIAL.lock().await;
     let (fixture, prefix) = setup().await?;
 
-    let fault = FaultInjection::install(FaultRule::new(
-        FaultOp::Write,
-        format!("{prefix}/_sg/"),
-        FaultKind::Permanent,
-    ));
+    let fault = FaultInjection::install(
+        FaultRule::new(
+            FaultOp::Write,
+            format!("{prefix}/_sg/"),
+            FaultKind::Permanent,
+        )
+        .in_root(fixture.storage_root()),
+    );
     let insert = format!(
         "INSERT INTO {}.{} VALUES (3, (3, 3))",
         fixture.default_db_name(),
