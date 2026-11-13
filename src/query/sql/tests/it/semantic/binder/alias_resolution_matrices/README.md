@@ -9,7 +9,7 @@ distinct alias-resolution meaning.
 SELECT aliases are output names, but Databend also supports using them as input
 names in several positions of the same query block. That creates a name
 resolution problem: the same spelling can refer to an input column, a SELECT
-alias, a GROUP BY local alias, or nothing visible in the current scope.
+alias, or nothing visible in the current scope.
 
 The matrix answers three questions:
 
@@ -34,7 +34,8 @@ Included features:
   namespaces.
 - GROUP BY-family syntax resolves a name to an input column first and
   otherwise to an explicit SELECT alias, in every grouping set alike; it
-  creates no aliases of its own.
+  creates no aliases of its own. The arguments of `grouping()` resolve names
+  the same way, in whichever clause the call is.
 - GROUPING SETS, ROLLUP, CUBE, and combined GROUP BY forms expand into
   grouping sets.
 - Alias expressions have expression kinds: scalar, aggregate, window, and SRF.
@@ -95,8 +96,8 @@ The producer is the namespace that could provide the referenced name.
 
 Producer describes the SQL namespace, not the code path. If the implementation
 changes from one helper type to another, this dimension stays the same.
-Do not encode conflicts as composite producers. For example, a prior GROUP BY
-alias that conflicts with an input column is still `prior-group-alias`; the
+Do not encode conflicts as composite producers. For example, a SELECT scalar
+alias that conflicts with an input column is still `select-scalar-alias`; the
 input-column conflict belongs outside the producer coordinate.
 
 ### Code Set
@@ -116,6 +117,7 @@ Consumer:
 - `G3`: `cube`
 - `G4`: `combined-group-by`
 - `G5`: `group-by-all`
+- `G6`: `grouping-argument`
 - `P0`: `where`
 - `P1`: `having`
 - `P2`: `qualify`
@@ -141,7 +143,6 @@ Producer:
 - `S2`: `select-aggregate-alias`
 - `S3`: `select-window-alias`
 - `S4`: `select-srf-alias`
-- `G0`: `prior-group-alias`
 - `N0`: `none`
 
 ## Coordinate Encoding
@@ -215,9 +216,8 @@ named matrix, and only that matrix defines the local context meaning.
 The family is defined by semantic ownership, not implementation modules.
 
 The owning matrix is derived from the main coordinate.
-For example, a GROUP BY-family consumer with `select-scalar-alias` or
-`prior-group-alias` routes to `group_by_alias`, while the same consumer with an
-aggregate, window, or SRF SELECT alias routes to `group_by_alias_kind`.
+For example, a GROUP BY-family consumer routes to `group_by_alias` whatever the
+producer, while a predicate consumer routes to `predicate_alias`.
 Coordinates that cannot be routed by `consumer + name_shape + producer` indicate
 that the matrix family needs another named matrix or a sharper
 producer/name-shape boundary.
@@ -235,79 +235,45 @@ This matrix owns conflicts between input columns and earlier SELECT aliases,
 and it owns the difference between bare-name reuse and reuse inside a complex
 expression.
 
-Local context axes:
-
-```text
-relation x select_list_scope x setting
-```
+Local context axes: `relation` (input-conflict, no-input).
 
 ### `group_by_alias`
 
-This matrix owns GROUP BY-family consumers:
+This matrix owns the GROUP BY-family consumers: `group-by`, `grouping-sets`,
+`rollup`, `cube`, `combined-group-by`, `group-by-all`, and
+`grouping-argument`, the arguments of `grouping()`.
 
-- `group-by`
-- `grouping-sets`
-- `rollup`
-- `cube`
-- `combined-group-by`
+The rule is one: a name is an input column first, and otherwise the explicit
+alias of a SELECT item, which stands for the pre-aggregate form of that item.
+A bare name that is such an alias is that item, as a position is. The rule is
+the same in every grouping set, and in the arguments of `grouping()` in
+whichever clause the call is. The cases show where it applies:
 
-It owns name resolution between input columns and SELECT scalar aliases in
-GROUP BY. A name is an input column first, and otherwise an explicit SELECT
-alias; a bare name that is an alias is that SELECT item. The `prior-group-alias`
-producer marks a name that an earlier GROUP BY item also uses as an alias; it
-binds as any other name, so the cases document that no scope or reuse rule
-applies.
+- input conflicts, absent inputs and ambiguous inputs, for bare and complex
+  names;
+- one case each for GROUPING SETS and CUBE, whose sets resolve names alike;
+- several SELECT items sharing an alias, and implicit item names, which are
+  not aliases here;
+- aggregate and SRF aliases, which are not legal keys;
+- ordinals and GROUP BY ALL, which consume positions rather than names;
+- `grouping()` arguments, which must be keys.
 
-This matrix also covers grouping constructs. `GROUPING SETS`, `ROLLUP`, and
-`CUBE` expand into item lists and sets, and the same rule holds in each of
-them: same-list, same-set, separate-set, and generated-single-expression sets
-resolve names alike.
-
-Local context axes:
-
-```text
-relation x group_scope x expansion x setting
-```
-
-Local context bit layout:
+Local context axes, in key order:
 
 ```text
-0001  relation.input-conflict
-0002  relation.no-input
-0004  relation.alias-name-conflict
-0010  scope.same-list-exact
-0020  scope.same-list-case-insensitive
-0040  scope.same-list
-0080  scope.same-set
-0100  scope.separate-set
-0200  scope.no-prior-group-alias
-0400  expansion.generated-single-expression-set
-0800  expansion.normal-plus-set
-1000  setting.alias-first
-2000  setting.column-first
+relation     input-conflict, no-input, input-ambiguous
+alias_items  duplicate-same-form, duplicate-same-unmatched-form,
+             duplicate-different-form
+alias_form   explicit, implicit
+key_side     input-column, alias-item
+clause       select-list, having, order-by
+position     in-range, after-star, zero, past-end
 ```
 
-The relation and setting groups are exclusive. Scope and expansion bits are
-chosen according to the grouping construct being modeled.
-
-### `group_by_alias_kind`
-
-This matrix owns GROUP BY-family references to SELECT aliases whose expressions
-are not plain scalar expressions:
-
-- aggregate SELECT aliases
-- window SELECT aliases
-- SRF SELECT aliases
-
-It is separate from `group_by_alias` because the distinguishing question is
-whether the producer is a legal grouping expression producer at all, not alias
-precedence or grouping-set scope.
-
-Local context axes:
-
-```text
-relation x ambiguity x function_kind
-```
+`alias_items` describes the SELECT items that share a bare alias; an
+unmatched form is one that is not matched to keys, such as a lambda. `key_side`
+says which side of an input conflict is the key, and `clause` where a
+`grouping()` call is.
 
 ### `predicate_alias`
 
@@ -323,11 +289,7 @@ not allow the same producer kinds. Scalar, aggregate, window, and SRF aliases
 have different legality in WHERE, HAVING, and QUALIFY. Keeping them together is
 sound because the consumer dimension still exposes clause-specific legality.
 
-Local context axes:
-
-```text
-relation x legality x setting
-```
+Local context axes: `relation` (input-conflict, no-input).
 
 ### `order_by_alias`
 
@@ -338,42 +300,7 @@ expression, not a boolean predicate, and it has special alias behavior:
 duplicate SELECT aliases can make an ORDER BY name ambiguous, and ORDER BY can
 be a source of aliases later reused inside window specifications.
 
-Local context axes:
-
-```text
-relation x ambiguity x setting
-```
-
-### `group_by_name_bypass`
-
-This matrix owns GROUP BY-family syntax that does not resolve a user-written
-alias name:
-
-- ordinal references, such as `GROUP BY 1`
-- implicit item collection, such as `GROUP BY ALL`
-
-It is separate from `group_by_alias` because these forms are boundaries of the
-alias-resolution surface, not ordinary alias lookup cases. Keeping them separate
-prevents non-name facts from consuming bits in the normal GROUP BY local context
-layout.
-
-Local context axes:
-
-```text
-non_name x setting
-```
-
-Local context bit layout:
-
-```text
-0001  non-name.select-item-position
-0002  non-name.non-aggregate-select-items
-1000  setting.alias-first
-2000  setting.column-first
-```
-
-The setting group is exclusive. The non-name group is exclusive because one
-syntax item is either an ordinal reference or an implicit item collection.
+Local context axes: `relation` (input-conflict, no-input).
 
 ### `aggregate_argument_alias`
 
@@ -384,11 +311,9 @@ name being resolved may conflict with an earlier SELECT alias. The important
 boundary is that aggregate arguments have their own legality and grouping rules;
 they are not just another SELECT-list expression and not a predicate consumer.
 
-Local context axes:
-
-```text
-relation x legality x setting
-```
+Local context axes: `relation` (input-conflict, no-input), `ambiguity`
+(unique-select-alias, duplicate-select-alias), and `function_kind`
+(builtin-aggregate, udaf).
 
 ### `window_spec_alias`
 
@@ -397,14 +322,10 @@ BY and ORDER BY inside `OVER (...)`.
 
 It is separate because a window specification can reuse some aliases produced
 by surrounding clauses, but must not recursively expand a window alias into
-another window specification. It also interacts with grouped queries, where a
-group item alias can be the visible name inside the window spec.
+another window specification. It also interacts with grouped queries, where the
+alias of a key item can be the visible name inside the window spec.
 
-Local context axes:
-
-```text
-relation x legality x window_boundary x setting
-```
+It has no local context axes.
 
 ### `query_block_boundary_alias`
 
@@ -418,11 +339,8 @@ It is separate because the main question is not precedence inside one consumer.
 The question is whether alias metadata belongs to the right query block and
 does not leak into an inner or outer scope.
 
-Local context axes:
-
-```text
-relation x query_block_boundary x setting
-```
+Local context axes: `query_block_boundary` (subquery-output-alias,
+cte-output-alias, named-window-subquery).
 
 ## Expressive Power
 
@@ -438,11 +356,11 @@ The first three facts are the global dimensions. The last fact is interpreted by
 the owning matrix. The matrices are split at these semantic discontinuities:
 
 - ordered alias production in the SELECT list
-- GROUP BY's column-first resolution with SELECT alias fallback
-- expression-kind legality for scalar, aggregate, window, and SRF aliases
-- predicate consumers with clause-specific legality
+- GROUP BY's column-first resolution with SELECT alias fallback, including
+  its non-name syntax and the arguments of `grouping()`
+- predicate consumers with clause-specific legality for scalar, aggregate,
+  window, and SRF aliases
 - ORDER BY ambiguity and ordering-name reuse
-- GROUP BY non-name syntax
 - aggregate-argument name binding
 - window specification binding and recursive window-alias boundaries
 - query-block boundaries
@@ -456,23 +374,25 @@ weaken the matrix by making `producer` mean too many unrelated things.
 ## Key Examples
 
 ```text
-G0N0S1_1001
+G0N0S1_0_0
 ```
 
-GROUP BY resolves a bare name that can be produced by a SELECT scalar alias.
-The alias conflicts with an input column, and alias-first mode is active.
+GROUP BY resolves a bare name that a SELECT scalar alias can produce, in region
+0 of `group_by_alias`. The alias conflicts with an input column, local value 0
+of `relation`, so the name is the input column.
 
 ```text
-G1N2G0_2102
+G6N0S1_12_010
 ```
 
-GROUPING SETS resolves a complex expression that would need a prior group alias.
-There is no input column for the name, the prior alias came from a separate set,
-and column-first mode is active.
+A `grouping()` argument in the SELECT list is a bare name that a SELECT scalar
+alias can produce, in region 12. The digits are `relation` input-conflict (0),
+`key_side` alias-item (1) and `clause` select-list (0): the name is the input
+column, which is not a key, so the argument is rejected.
 
 ```text
-G0N4N0_0001
+G0N4N0_9_1
 ```
 
-GROUP BY uses an ordinal. This is a SELECT-item position rule, not alias name
-resolution.
+GROUP BY uses an ordinal after a star, `position` after-star (1). This is a
+SELECT-item position rule, not alias name resolution.

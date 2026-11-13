@@ -1653,7 +1653,80 @@ impl AstVisitorMut for SqlUdfParameterSubstitution<'_> {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::types::NumberDataType;
+
     use super::*;
+
+    fn lambda_udf(name: &str, parameters: &[&str], body: &str) -> UserDefinedFunction {
+        UserDefinedFunction::create_lambda_udf(
+            name,
+            parameters.iter().map(|p| p.to_string()).collect(),
+            body,
+            "",
+        )
+    }
+
+    fn aggregates(body: &str, udfs: &[UserDefinedFunction]) -> Result<bool> {
+        let body = parse_expr(&tokenize_sql(body)?, Dialect::PostgreSQL)?;
+        let mut load = |name: &str| Ok(udfs.iter().find(|udf| udf.name == name).cloned());
+        sql_udf_aggregates(
+            &body,
+            &NameResolutionContext::default(),
+            Dialect::PostgreSQL,
+            &mut load,
+            0,
+        )
+    }
+
+    #[test]
+    fn test_sql_udf_aggregates_in_its_body() -> Result<()> {
+        assert!(aggregates("sum(x) + 1", &[])?);
+        assert!(!aggregates("x + 1", &[])?);
+        // An aggregate of a subquery is the subquery's.
+        assert!(!aggregates("(SELECT sum(n) FROM u) + x", &[])?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_sql_udf_aggregates_through_called_udfs() -> Result<()> {
+        let mut typed = lambda_udf("agg_typed", &[], "");
+        typed.definition = UDFDefinition::ScalarUDF(ScalarUDF {
+            arg_types: vec![(
+                "x".to_string(),
+                TableDataType::Number(NumberDataType::Int32),
+            )],
+            return_type: TableDataType::Number(NumberDataType::Int64),
+            definition: "sum(x)".to_string(),
+        });
+        let udfs = [
+            lambda_udf("agg_udf", &["x"], "sum(x)"),
+            lambda_udf("agg_nested", &["x"], "agg_udf(x) + 1"),
+            lambda_udf("plus_one", &["x"], "x + 1"),
+            typed,
+        ];
+        assert!(aggregates("agg_udf(x)", &udfs)?);
+        assert!(aggregates("agg_nested(x) * 2", &udfs)?);
+        assert!(aggregates("agg_typed(x)", &udfs)?);
+        assert!(!aggregates("plus_one(x)", &udfs)?);
+        // A function that is not a UDF, or is unknown, does not aggregate.
+        assert!(!aggregates("abs(x) + unknown_udf(x)", &udfs)?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_sql_udf_aggregates_rejects_recursive_udfs() {
+        let udfs = [
+            lambda_udf("rec_a", &["x"], "rec_b(x) + 1"),
+            lambda_udf("rec_b", &["x"], "rec_a(x) + 1"),
+        ];
+        let err = aggregates("rec_a(x)", &udfs).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
+        assert!(
+            err.message().contains("maximum depth of 16"),
+            "{}",
+            err.message()
+        );
+    }
 
     #[test]
     fn test_extract_script_metadata_deps_returns_error_for_malformed_toml() {

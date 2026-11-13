@@ -1,8 +1,10 @@
 # Values of GROUPING SETS queries: keys absent from a set are NULL in its rows,
 # expressions over them see those NULLs, and aggregates read the input. Run
-# with native expansion and both UNION rewrites.
-# run-with-settings: grouping_sets_to_union=1
-# run-with-settings: grouping_sets_to_union=1,enable_cascading_grouping_sets=1
+# with the default cascading UNION rewrite, the plain UNION rewrite, the
+# cascading rewrite without the hierarchical rule, and native expansion.
+# run-with-settings: enable_cascading_grouping_sets=0
+# run-with-settings: optimizer_skip_list=HierarchicalGroupingSetsToUnion
+# run-with-settings: grouping_sets_to_union=0
 
 statement ok
 CREATE OR REPLACE DATABASE grouping_sets_null_injection
@@ -105,6 +107,28 @@ SELECT array_transform([1], x -> x + (1 + 1)) FROM t GROUP BY ROLLUP(1 + 1)
 ----
 [3]
 [NULL]
+
+## Keys nested in other keys
+
+# Each nested node matches its outermost key, so every key gets its own NULLs.
+query III rowsort
+SELECT coalesce(CAST(a + 1 AS BIGINT), 100), coalesce(a + 1, 100), coalesce(a, 100)
+FROM t GROUP BY GROUPING SETS ((a), (a + 1), (CAST(a + 1 AS BIGINT)))
+----
+100 100 1
+100 100 2
+100 2 100
+100 3 100
+2 100 100
+3 100 100
+
+# The pre-aggregate form of a key keeps its non-null predicate, even though
+# ordinary bind-time folding could decide it from the input type.
+query I rowsort
+SELECT coalesce(CAST(a IS NULL AS INT), 100) FROM t GROUP BY ROLLUP(a IS NULL)
+----
+0
+100
 
 ## Aggregates read the input
 

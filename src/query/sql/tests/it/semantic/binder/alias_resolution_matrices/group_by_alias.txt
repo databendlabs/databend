@@ -33,66 +33,9 @@ status: error
 code: 1065
 message: column x reference or alias is ambiguous, please use another alias name
 
-=== group_by_alias__group_by_expression_uses_prior_group_alias ===
-matrix: group_by_alias
-key: G0N2G0_1_0
-sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)
-status: ok
-EvalScalar
-├── scalars: [t.i (#0) AS (#0), COUNT(*) (#2) AS (#2), abs(t.i (#0)) AS (#3)]
-└── Aggregate(Initial)
-    ├── group items: [t.i (#0) AS (#0)]
-    ├── aggregate functions: [count() AS (#2)]
-    └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#0)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
-=== group_by_alias__rollup_same_list_uses_prior_group_alias ===
-matrix: group_by_alias
-key: G2N2G0_1_0
-sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))
-status: ok
-EvalScalar
-├── scalars: [k (#1) AS (#1), abs(k) (#2) AS (#2), COUNT(*) (#4) AS (#4)]
-└── Aggregate(Initial)
-    ├── group items: [k (#1) AS (#1), abs(k) (#2) AS (#2), _grouping_id (#3) AS (#3)]
-    ├── aggregate functions: [count() AS (#4)]
-    └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#1), abs(t.i (#0)) AS (#2)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
-=== group_by_alias__grouping_sets_same_set_uses_prior_group_alias ===
-matrix: group_by_alias
-key: G1N2G0_2_1
-sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k, abs(k)))
-status: ok
-EvalScalar
-├── scalars: [k (#1) AS (#1), abs(k) (#2) AS (#2), COUNT(*) (#4) AS (#4)]
-└── Aggregate(Initial)
-    ├── group items: [k (#1) AS (#1), abs(k) (#2) AS (#2), _grouping_id (#3) AS (#3)]
-    ├── aggregate functions: [count() AS (#4)]
-    └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#1), abs(t.i (#0)) AS (#2)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
 === group_by_alias__grouping_sets_separate_set_falls_back_to_select_alias ===
 matrix: group_by_alias
-key: G1N2G0_2_2
+key: G1N2S1_1_
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k), (abs(k)))
 status: ok
 EvalScalar
@@ -111,27 +54,8 @@ EvalScalar
 
 === group_by_alias__cube_generated_set_falls_back_to_select_alias ===
 matrix: group_by_alias
-key: G3N2G0_3_
+key: G3N2S1_1_
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY CUBE(k, abs(k))
-status: ok
-EvalScalar
-├── scalars: [k (#1) AS (#1), abs(k) (#2) AS (#2), COUNT(*) (#4) AS (#4)]
-└── Aggregate(Initial)
-    ├── group items: [k (#1) AS (#1), abs(k) (#2) AS (#2), _grouping_id (#3) AS (#3)]
-    ├── aggregate functions: [count() AS (#4)]
-    └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#1), abs(t.i (#0)) AS (#2)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
-=== group_by_alias__combined_grouping_sets_uses_prior_group_alias ===
-matrix: group_by_alias
-key: G4N2G0_4_
-sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, GROUPING SETS ((abs(k)))
 status: ok
 EvalScalar
 ├── scalars: [k (#1) AS (#1), abs(k) (#2) AS (#2), COUNT(*) (#4) AS (#4)]
@@ -149,7 +73,7 @@ EvalScalar
 
 === group_by_alias__group_by_complex_select_alias_conflict_uses_input ===
 matrix: group_by_alias
-key: G0N2S1_5_0
+key: G0N2S1_2_0
 sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1
 status: ok
 EvalScalar
@@ -168,7 +92,7 @@ EvalScalar
 
 === group_by_alias__group_by_complex_select_alias_no_input_fallback ===
 matrix: group_by_alias
-key: G0N2S1_5_1
+key: G0N2S1_2_1
 sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1
 status: ok
 EvalScalar
@@ -187,15 +111,69 @@ EvalScalar
 
 === group_by_alias__group_by_complex_select_alias_ambiguous_input_rejected ===
 matrix: group_by_alias
-key: G0N2S1_5_2
+key: G0N2S1_2_2
 sql: SELECT 1 AS k, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY k + 1
 status: error
 code: 1065
 message: column k reference or alias is ambiguous, please use another alias name
 
+=== group_by_alias__group_by_alias_of_duplicate_items_is_those_items ===
+matrix: group_by_alias
+key: G0N0S1_3_10
+sql: SELECT a + 1 AS x, a + 1 AS x, count(*) FROM t GROUP BY x
+status: ok
+EvalScalar
+├── scalars: [x (#2) AS (#2), COUNT(*) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [plus(t.a (#0), 1) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [plus(t.a (#0), 1) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__group_by_alias_of_duplicate_unmatched_items_is_those_items ===
+matrix: group_by_alias
+key: G0N0S1_3_11
+sql: SELECT array_transform([a], v -> v + 1) AS x, array_transform([a], v -> v + 1) AS x, count(*) FROM t GROUP BY x
+status: ok
+EvalScalar
+├── scalars: [x (#2) AS (#2), COUNT(*) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [array_transform(array(t.a (#0)), ["v"] -> v (#2) + 1) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [array_transform(array(t.a (#0)), ["v"] -> v (#2) + 1) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__group_by_alias_of_different_items_is_ambiguous ===
+matrix: group_by_alias
+key: G0N0S1_3_12
+sql: SELECT a AS x, b AS x, count(*) FROM t GROUP BY x
+status: error
+code: 1065
+message: column x reference or alias is ambiguous, please use another alias name
+
+=== group_by_alias__group_by_implicit_item_name_is_not_an_alias ===
+matrix: group_by_alias
+key: G0N0S1_4_1
+sql: SELECT a + 1, count(*) FROM t GROUP BY "a + 1"
+status: error
+code: 1065
+message: column a + 1 doesn't exist, do you mean 'a + 1'?
+
 === group_by_alias__group_by_aggregate_alias_conflict_uses_input ===
 matrix: group_by_alias
-key: G0N0S2_7_0
+key: G0N0S2_5_0
 sql: SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x
 status: ok
 EvalScalar
@@ -221,7 +199,7 @@ EvalScalar
 
 === group_by_alias__group_by_aggregate_alias_no_input_rejected ===
 matrix: group_by_alias
-key: G0N0S2_7_1
+key: G0N0S2_5_1
 sql: SELECT count(*) AS c FROM t GROUP BY c
 status: error
 code: 1065
@@ -229,7 +207,7 @@ message: GROUP BY items can't contain aggregate functions or window functions: C
 
 === group_by_alias__group_by_srf_alias_conflict_uses_input ===
 matrix: group_by_alias
-key: G0N0S4_8_0
+key: G0N0S4_6_0
 sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2
 status: ok
 Sort
@@ -252,7 +230,7 @@ Sort
 
 === group_by_alias__group_by_srf_alias_no_input ===
 matrix: group_by_alias
-key: G0N0S4_8_1
+key: G0N0S4_6_1
 sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3
 status: ok
 Sort
@@ -275,7 +253,7 @@ Sort
 
 === group_by_alias__group_by_ordinal_uses_select_item_position ===
 matrix: group_by_alias
-key: G0N4N0_10_
+key: G0N4N0_9_0
 sql: SELECT i AS k, count(*) FROM t GROUP BY 1
 status: ok
 EvalScalar
@@ -292,9 +270,44 @@ EvalScalar
             └── limit: NONE
 
 
+=== group_by_alias__group_by_ordinal_counts_star_columns ===
+matrix: group_by_alias
+key: G0N4N0_9_1
+sql: SELECT a, *, count(*) FROM t GROUP BY 1, 3
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1), COUNT(*) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__group_by_ordinal_zero_rejected ===
+matrix: group_by_alias
+key: G0N4N0_9_2
+sql: SELECT a, count(*) FROM t GROUP BY 0
+status: error
+code: 1065
+message: GROUP BY position 0 is illegal
+
+=== group_by_alias__group_by_ordinal_past_select_list_rejected ===
+matrix: group_by_alias
+key: G0N4N0_9_3
+sql: SELECT *, count(*) FROM t GROUP BY 1, 2, 4
+status: error
+code: 1065
+message: GROUP BY position 4 is not in select list
+
 === group_by_alias__group_by_all_expands_non_aggregate_select_items ===
 matrix: group_by_alias
-key: G5N5N0_11_
+key: G5N5N0_10_
 sql: SELECT i AS k, count(*) FROM t GROUP BY ALL
 status: ok
 EvalScalar
@@ -311,17 +324,208 @@ EvalScalar
             └── limit: NONE
 
 
-=== group_by_alias__group_by_qualified_name_does_not_consume_prior_group_alias ===
+=== group_by_alias__grouping_argument_in_select_list_uses_key_alias ===
 matrix: group_by_alias
-key: G0N1G0_12_
-sql: SELECT i AS k, count(*) FROM t GROUP BY k, t.k
+key: G6N0S1_11_10
+sql: SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k
+status: ok
+Sort
+├── sort keys: [g (#5) ASC NULLS LAST, k (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [k (#2) AS (#2), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+    └── Aggregate(Initial)
+        ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== group_by_alias__grouping_argument_in_having_uses_key_alias ===
+matrix: group_by_alias
+key: G6N0S1_11_11
+sql: SELECT i + 1 AS k, count(*) FROM t GROUP BY GROUPING SETS ((k), ()) HAVING grouping(k) = 0
+status: ok
+EvalScalar
+├── scalars: [k (#2) AS (#2), COUNT(*) (#4) AS (#4)]
+└── Filter
+    ├── filters: [eq(grouping(0)(_grouping_id (#3)), 0)]
+    └── Aggregate(Initial)
+        ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── EvalScalar
+            ├── scalars: [plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== group_by_alias__grouping_argument_in_order_by_uses_key_alias ===
+matrix: group_by_alias
+key: G6N0S1_11_12
+sql: SELECT i + 1 AS k, count(*) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY grouping(k)
+status: ok
+Sort
+├── sort keys: [grouping(k) (#5) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [k (#2) AS (#2), COUNT(*) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+    └── Aggregate(Initial)
+        ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── EvalScalar
+            ├── scalars: [plus(t.i (#0), 1) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== group_by_alias__grouping_argument_in_select_list_prefers_key_column_over_alias ===
+matrix: group_by_alias
+key: G6N0S1_12_000
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d))
+status: ok
+EvalScalar
+├── scalars: [d (#3) AS (#3), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, k (#4)) AS (#7)]
+└── Aggregate(Initial)
+    ├── group items: [d (#3) AS (#3), k (#4) AS (#4), _grouping_id (#5) AS (#5)]
+    ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+    └── EvalScalar
+        ├── scalars: [t.v (#2) AS (#2), t.d (#1) AS (#3), t.k (#0) AS (#4)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__grouping_argument_in_having_prefers_key_column_over_alias ===
+matrix: group_by_alias
+key: G6N0S1_12_001
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING grouping(k) = 0
+status: ok
+EvalScalar
+├── scalars: [d (#3) AS (#3), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, k (#4)) AS (#7)]
+└── Filter
+    ├── filters: [eq(grouping(1)(_grouping_id (#5)), 0)]
+    └── Aggregate(Initial)
+        ├── group items: [d (#3) AS (#3), k (#4) AS (#4), _grouping_id (#5) AS (#5)]
+        ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+        └── EvalScalar
+            ├── scalars: [t.v (#2) AS (#2), t.d (#1) AS (#3), t.k (#0) AS (#4)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== group_by_alias__grouping_argument_in_order_by_prefers_key_column_over_alias ===
+matrix: group_by_alias
+key: G6N0S1_12_002
+sql: SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) ORDER BY grouping(k), d
+status: ok
+Sort
+├── sort keys: [grouping(k) (#8) ASC NULLS LAST, d (#3) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [d (#3) AS (#3), sum(v) (#6) AS (#6), if(eq(grouping(1)(_grouping_id (#5)), 1), 0, k (#4)) AS (#7), grouping(1)(_grouping_id (#5)) AS (#8)]
+    └── Aggregate(Initial)
+        ├── group items: [d (#3) AS (#3), k (#4) AS (#4), _grouping_id (#5) AS (#5)]
+        ├── aggregate functions: [sum(t.v (#2)) AS (#6)]
+        └── EvalScalar
+            ├── scalars: [t.v (#2) AS (#2), t.d (#1) AS (#3), t.k (#0) AS (#4)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== group_by_alias__grouping_argument_in_select_list_rejects_column_over_key_alias ===
+matrix: group_by_alias
+key: G6N0S1_12_010
+sql: SELECT i + 1 AS i, grouping(i), sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ())
+status: error
+code: 1006
+message: Arguments of grouping should be group by expressions
+
+=== group_by_alias__grouping_argument_in_having_rejects_column_over_key_alias ===
+matrix: group_by_alias
+key: G6N0S1_12_011
+sql: SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) HAVING grouping(i) = 0
+status: error
+code: 1006
+message: Arguments of grouping should be group by expressions
+
+=== group_by_alias__grouping_argument_in_order_by_rejects_column_over_key_alias ===
+matrix: group_by_alias
+key: G6N0S1_12_012
+sql: SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i
+status: error
+code: 1006
+message: Arguments of grouping should be group by expressions
+
+=== group_by_alias__grouping_argument_in_select_list_rejects_implicit_item_name ===
+matrix: group_by_alias
+key: G6N0S1_13_10
+sql: SELECT a + 1, grouping("a + 1") FROM t GROUP BY GROUPING SETS ((a + 1), ())
 status: error
 code: 1065
-message: column k doesn't exist
+message: column a + 1 doesn't exist, do you mean 'a + 1'?
+
+=== group_by_alias__grouping_argument_in_having_rejects_implicit_item_name ===
+matrix: group_by_alias
+key: G6N0S1_13_11
+sql: SELECT a + 1, count(*) FROM t GROUP BY GROUPING SETS ((a + 1), ()) HAVING grouping("a + 1") = 0
+status: error
+code: 1065
+message: column a + 1 doesn't exist, do you mean 'a + 1'?
+
+=== group_by_alias__grouping_argument_in_order_by_rejects_implicit_item_name ===
+matrix: group_by_alias
+key: G6N0S1_13_12
+sql: SELECT a + 1, count(*) FROM t GROUP BY GROUPING SETS ((a + 1), ()) ORDER BY grouping("a + 1")
+status: error
+code: 1065
+message: column a + 1 doesn't exist, do you mean 'a + 1'?
+
+=== group_by_alias__grouping_argument_in_select_list_rejects_aggregate_alias ===
+matrix: group_by_alias
+key: G6N0S2_14_0
+sql: SELECT sum(a) AS s, grouping(s) FROM t GROUP BY GROUPING SETS ((b), ())
+status: error
+code: 1006
+message: Arguments of grouping should be group by expressions
+
+=== group_by_alias__grouping_argument_in_having_rejects_aggregate_alias ===
+matrix: group_by_alias
+key: G6N0S2_14_1
+sql: SELECT sum(a) AS s, count(*) FROM t GROUP BY GROUPING SETS ((b), ()) HAVING grouping(s) = 0
+status: error
+code: 1006
+message: Arguments of grouping should be group by expressions
+
+=== group_by_alias__grouping_argument_in_order_by_rejects_aggregate_alias ===
+matrix: group_by_alias
+key: G6N0S2_14_2
+sql: SELECT sum(a) AS s, count(*) FROM t GROUP BY GROUPING SETS ((b), ()) ORDER BY grouping(s)
+status: error
+code: 1006
+message: Arguments of grouping should be group by expressions
 
 === group_by_alias__group_by_qualified_complex_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G0N3S1_12_
+key: G0N3S1_15_
 sql: SELECT i AS k, count(*) FROM t GROUP BY t.k + 1
 status: error
 code: 1065
@@ -329,52 +533,9 @@ message: column k doesn't exist
 
 === group_by_alias__grouping_sets_qualified_name_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G1N1S1_12_
+key: G1N1S1_15_
 sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))
 status: error
 code: 1065
 message: column k doesn't exist
-
-=== group_by_alias__grouping_sets_complex_select_alias_falls_back ===
-matrix: group_by_alias
-key: G1N2S1_12_
-sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((abs(k)))
-status: error
-code: 1065
-message: column "i" must appear in the GROUP BY clause or be used in an aggregate function
-
-=== group_by_alias__rollup_complex_select_alias_falls_back ===
-matrix: group_by_alias
-key: G2N2S1_12_
-sql: SELECT i AS k, count(*) FROM t GROUP BY ROLLUP(abs(k))
-status: error
-code: 1065
-message: column "i" must appear in the GROUP BY clause or be used in an aggregate function
-
-=== group_by_alias__cube_complex_select_alias_falls_back ===
-matrix: group_by_alias
-key: G3N2S1_12_
-sql: SELECT i AS k, count(*) FROM t GROUP BY CUBE(abs(k))
-status: error
-code: 1065
-message: column "i" must appear in the GROUP BY clause or be used in an aggregate function
-
-=== group_by_alias__combined_normal_complex_select_alias_fallback ===
-matrix: group_by_alias
-key: G4N2S1_12_
-sql: SELECT 1 AS k, count(*) FROM t GROUP BY k + 1, GROUPING SETS (())
-status: ok
-EvalScalar
-├── scalars: [COUNT(*) (#3) AS (#3), 1 AS (#4)]
-└── Aggregate(Initial)
-    ├── group items: [k + 1 (#1) AS (#1), _grouping_id (#2) AS (#2)]
-    ├── aggregate functions: [count() AS (#3)]
-    └── EvalScalar
-        ├── scalars: [CAST(plus(1, 1) AS UInt16 NULL) AS (#1)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
 

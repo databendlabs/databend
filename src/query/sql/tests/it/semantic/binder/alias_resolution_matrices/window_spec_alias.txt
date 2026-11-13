@@ -29,9 +29,9 @@ EvalScalar
                             └── limit: NONE
 
 
-=== window_spec_alias__window_spec_reuses_group_item_alias ===
+=== window_spec_alias__window_spec_reuses_key_item_alias ===
 matrix: window_spec_alias
-key: W0N2G0_0_
+key: W0N2S1_0_
 sql: SELECT number % 3 AS a, number % 4 AS b, row_number() OVER (PARTITION BY b % 2 ORDER BY a) FROM t GROUP BY a, b
 status: ok
 EvalScalar
@@ -68,9 +68,9 @@ status: error
 code: 1065
 message: Window function cannot contain another window function
 
-=== window_spec_alias__window_spec_qualified_name_does_not_consume_group_alias ===
+=== window_spec_alias__window_spec_qualified_name_does_not_consume_key_item_alias ===
 matrix: window_spec_alias
-key: W0N1G0_3_
+key: W0N1S1_3_
 sql: SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k
 status: error
 code: 1065

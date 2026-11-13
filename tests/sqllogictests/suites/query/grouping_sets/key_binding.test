@@ -103,25 +103,9 @@ SELECT a, a + 1 AS b, coalesce(b, 100) FROM t GROUP BY a, ROLLUP(a + 1)
 2 NULL 100
 
 # Bottom-up folding recurses through calls and casts directly. Each nested
-# node still matches its outermost key before binding children to other keys.
-query III rowsort
-SELECT coalesce(CAST(a + 1 AS BIGINT), 100), coalesce(a + 1, 100), coalesce(a, 100)
-FROM t GROUP BY GROUPING SETS ((a), (a + 1), (CAST(a + 1 AS BIGINT)))
-----
-100 100 1
-100 100 2
-100 2 100
-100 3 100
-2 100 100
-3 100 100
-
-# The pre-aggregate form of a key must retain its non-null predicate, even
-# though ordinary bind-time folding could decide it from the input type.
-query I rowsort
-SELECT coalesce(CAST(a IS NULL AS INT), 100) FROM t GROUP BY ROLLUP(a IS NULL)
-----
-0
-100
+# node still matches its outermost key before binding children to other keys,
+# and the pre-aggregate form of a key keeps its non-null predicate; the cases
+# are in null_injection.test, under every execution strategy.
 
 # Keys are compared as written, so `1 + a` is the key `a` plus one.
 query II rowsort
@@ -454,6 +438,16 @@ NULL 1.0 42
 # grouping() is evaluated after the aggregate and takes keys only.
 statement error (?s)1065.*Aggregate function arguments can't contain grouping functions
 SELECT sum(grouping(a)) FROM t GROUP BY CUBE(a)
+
+statement error (?s)1065.*grouping can only be called in GROUP BY GROUPING SETS clauses
+SELECT a, grouping(a) FROM t GROUP BY a
+
+# QUALIFY filters after the window, which sees every row.
+query III rowsort
+SELECT a, grouping(a), count(*) OVER () FROM t GROUP BY ROLLUP(a) QUALIFY grouping(a) = 0
+----
+1 0 3
+2 0 3
 
 statement error (?s)1006.*Arguments of grouping should be group by expressions
 SELECT grouping(a + 1) FROM t GROUP BY ROLLUP(a)

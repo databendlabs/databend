@@ -73,7 +73,7 @@ regions:
     main:
       consumers: [O0]
       name_shapes: [N0, N1, N2, N3, N4, N5]
-      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+      producers: [I0, S0, S1, S2, S3, S4, N0]
     cases:
       - key: O0N1I0_5_
         name: order_by_qualified_name_binds_input_column
