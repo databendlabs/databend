@@ -83,6 +83,74 @@ mod add {
     }
 }
 
+mod ownership_cache {
+    use std::time::Duration;
+
+    use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
+    use databend_common_meta_app::principal::OwnershipObject;
+    use databend_common_meta_app::principal::RoleInfo;
+
+    use super::*;
+
+    fn udf(name: &str) -> OwnershipObject {
+        OwnershipObject::UDF {
+            name: name.to_string(),
+        }
+    }
+
+    /// The cache holds only its own tenant's records; tenant `t10` shares the string prefix `t1`.
+    /// DROP ROLE's ownership transfer reads meta-service, so it covers a grant made just before it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_ownership_cache_is_tenant_scoped() -> anyhow::Result<()> {
+        let meta = Arc::new(MetaStore::new_local_testing::<DatabendRuntime>().await);
+        let client = meta.inner().clone();
+
+        let t1 = Tenant::new_literal("t1");
+        let t10 = Tenant::new_literal("t10");
+        let cache = Arc::new(Mutex::new(RoleMgr::new_cache(client, &t1).await));
+        let t1_api = RoleMgr::create(meta.clone(), &t1, false, Some(cache.clone()));
+        let t10_api = RoleMgr::create(meta.clone(), &t10, false, None);
+
+        for api in [&t1_api, &t10_api] {
+            api.create_role(RoleInfo::new("r1", None), false).await?;
+        }
+        t1_api.grant_ownership(&udf("f1"), "r1").await?;
+        t10_api.grant_ownership(&udf("f10"), "r1").await?;
+
+        // Wait until the cache has received t1's record.
+        let mut cached = vec![];
+        for _ in 0..500 {
+            cached = cache
+                .lock()
+                .await
+                .try_list_dir("__fd_object_owners")
+                .await?;
+            if !cached.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            1,
+            cached.len(),
+            "t10's record must not be cached: {cached:?}"
+        );
+
+        let listed = t1_api.list_ownerships().await?;
+        assert_eq!(1, listed.len());
+        assert_eq!(udf("f1"), listed[0].data.object);
+
+        t1_api.grant_ownership(&udf("f2"), "r1").await?;
+        t1_api.transfer_ownership_to_admin("r1").await?;
+        for name in ["f1", "f2"] {
+            let owner = t1_api.get_ownership(&udf(name)).await?.unwrap();
+            assert_eq!(BUILTIN_ROLE_ACCOUNT_ADMIN, owner.role, "owner of {name}");
+        }
+
+        Ok(())
+    }
+}
+
 async fn new_role_api(
     enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 ) -> Result<(Arc<MetaStore>, RoleMgr)> {
@@ -91,9 +159,8 @@ async fn new_role_api(
 
     let test_api = Arc::new(test_api);
 
-    let cache = RoleMgr::new_cache(client.clone()).await;
-
     let tenant = Tenant::new_literal("admin");
+    let cache = RoleMgr::new_cache(client.clone(), &tenant).await;
     let mgr = RoleMgr::create(
         test_api.clone(),
         &tenant,

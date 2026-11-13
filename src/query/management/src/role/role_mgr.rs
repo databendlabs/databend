@@ -59,8 +59,6 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
-use log::info;
-use log::warn;
 use tokio::sync::Mutex;
 
 use crate::role::role_api::RoleApi;
@@ -92,27 +90,15 @@ impl RoleMgr {
         }
     }
 
-    /// Create a [`Cache`] for the data [`RoleMgr`] manages.
-    pub async fn new_cache(client: Arc<ClientHandle<DatabendRuntime>>) -> Cache {
-        let prefix = TenantOwnershipObjectIdent::key_space_prefix();
+    /// Create a [`Cache`] of the ownership records of `tenant`.
+    ///
+    /// It does not wait for the initial sync: reads fall back to meta-service until the cache is
+    /// ready, and while meta-service does not support watch with initial flush.
+    pub async fn new_cache(client: Arc<ClientHandle<DatabendRuntime>>, tenant: &Tenant) -> Cache {
+        let prefix = Self::ownership_object_prefix_of(tenant);
         let name = TenantOwnershipObjectIdent::type_name();
 
-        let mut cache = Cache::new(client, prefix, name).await;
-
-        // The meta-service may not support `WatchRequest::initial_flush` parameter,
-        // Peek the cache state to check if the cache is supported.
-        let peek_res = cache.try_get("dummy").await;
-
-        match peek_res {
-            Ok(_) => {
-                info!("Successfully created cache for ({})", prefix);
-            }
-            Err(err) => {
-                warn!("Failed to create cache for ({}) {:?}", prefix, err);
-            }
-        }
-
-        cache
+        Cache::new(client, prefix, name).await
     }
 
     #[async_backtrace::framed]
@@ -151,11 +137,54 @@ impl RoleMgr {
     ///
     /// In form of `__fd_object_owners/<tenant>/`.
     fn ownership_object_prefix(&self) -> String {
+        Self::ownership_object_prefix_of(&self.tenant)
+    }
+
+    fn ownership_object_prefix_of(tenant: &Tenant) -> String {
         let dummy = OwnershipObject::UDF {
             name: "dummy".to_string(),
         };
-        let grantee = TenantOwnershipObjectIdent::new(self.tenant.clone(), dummy);
+        let grantee = TenantOwnershipObjectIdent::new(tenant.clone(), dummy);
         grantee.tenant_prefix()
+    }
+
+    async fn list_ownership_kvs_from_meta(&self) -> Result<ListKVReply, MetaError> {
+        let prefix = self.ownership_object_prefix();
+        self.kv_api
+            .list_kv_collect(ListOptions::unlimited(prefix.as_str()))
+            .await
+    }
+
+    /// List ownerships from meta-service, bypassing the cache.
+    ///
+    /// The cache may lag behind recent writes; callers that write based on the result must use this.
+    async fn list_ownerships_from_meta(&self) -> Result<Vec<SeqV<OwnershipInfo>>, MetaError> {
+        let values = self.list_ownership_kvs_from_meta().await?;
+        self.decode_ownerships(values).await
+    }
+
+    async fn decode_ownerships(
+        &self,
+        values: ListKVReply,
+    ) -> Result<Vec<SeqV<OwnershipInfo>>, MetaError> {
+        let mut r = vec![];
+
+        let mut quota = quota(func_name!(), self.upgrade_to_pb);
+
+        for (key, val) in values {
+            match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
+                Ok(u) => r.push(u),
+                // If we add a new item in OwnershipObject, and generate a new kv about this new item,
+                // After rollback the old version, deserialize will return Err Ownership can not be none.
+                // But get ownerships should try to ensure success because in this version.
+                Err(err) => error!(
+                    "deserialize key {} Got err {} while (list_ownerships)",
+                    key, err
+                ),
+            }
+        }
+
+        Ok(r)
     }
 
     fn role_ident(&self, role: &str) -> RoleIdent {
@@ -231,62 +260,27 @@ impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn list_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, MetaError> {
-        let object_owner_prefix = self.ownership_object_prefix();
+        let prefix = self.ownership_object_prefix();
 
-        let cached = {
-            if let Some(ownership_cache) = &self.ownership_cache {
-                let mut cache = ownership_cache.lock().await;
-                let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
-
-                match &kvs {
-                    Ok(kvs) => {
-                        info!(
-                            "RoleMgr::list_ownerships() returned from cache: {} keys; first key: {:?}; last key: {:?}",
-                            kvs.len(),
-                            kvs.first().map(|(k, _)| k),
-                            kvs.last().map(|(k, _)| k),
-                        );
-                    }
-                    Err(err) => {
-                        warn!(
-                            "list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records",
-                            err
-                        );
-                    }
-                }
-
-                kvs.ok()
-            } else {
-                None
-            }
+        // Waiting for the outer lock is bounded: its holders never wait on the network.
+        // `try_list_dir_ready()` returns `None` instead of waiting for initial sync or reconnect.
+        let cached = match &self.ownership_cache {
+            Some(cache) => cache.lock().await.try_list_dir_ready(&prefix),
+            None => None,
         };
 
-        let values = if let Some(kvs) = cached {
-            kvs
-        } else {
-            self.kv_api
-                .list_kv_collect(ListOptions::unlimited(object_owner_prefix.as_str()))
-                .await?
+        let values = match cached {
+            Some(kvs) => {
+                debug!(
+                    "RoleMgr::list_ownerships() returned {} keys from cache",
+                    kvs.len()
+                );
+                kvs
+            }
+            None => self.list_ownership_kvs_from_meta().await?,
         };
 
-        let mut r = vec![];
-
-        let mut quota = quota(func_name!(), self.upgrade_to_pb);
-
-        for (key, val) in values {
-            match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
-                Ok(u) => r.push(u),
-                // If we add a new item in OwnershipObject, and generate a new kv about this new item,
-                // After rollback the old version, deserialize will return Err Ownership can not be none.
-                // But get ownerships should try to ensure success because in this version.
-                Err(err) => error!(
-                    "deserialize key {} Got err {} while (list_ownerships)",
-                    key, err
-                ),
-            }
-        }
-
-        Ok(r)
+        self.decode_ownerships(values).await
     }
 
     #[async_backtrace::framed]
@@ -347,7 +341,7 @@ impl RoleApi for RoleMgr {
             trials.next().unwrap()?.await;
             let mut if_then = vec![];
             let mut condition = vec![];
-            let seq_owns = self.list_ownerships().await?;
+            let seq_owns = self.list_ownerships_from_meta().await?;
             let mut need_transfer = false;
             for own in seq_owns {
                 if own.data.role == *role {

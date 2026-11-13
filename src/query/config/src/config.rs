@@ -3170,11 +3170,6 @@ impl Default for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
-    /// The data in meta-service using key `TenantOwnershipObjectIdent`
-    #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
-    #[serde(default = "bool_false")]
-    pub meta_service_ownership_cache: bool,
-
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
     #[serde(default = "bool_true")]
@@ -3604,7 +3599,6 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            meta_service_ownership_cache: false,
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,

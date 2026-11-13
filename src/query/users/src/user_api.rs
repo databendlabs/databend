@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -71,17 +70,15 @@ pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
 
-    /// Optional cache for ownership information for all keys [`TenantOwnershipObjectIdent`] in meta-service.
+    /// Cache of the ownership records of `cache_tenant`, i.e., keys under
+    /// `__fd_object_owners/<cache_tenant>/` in meta-service.
     ///
-    /// All the key-values under "__fd_object_owners/" will be cached.
-    /// This instance is shared between all `role_api()` return values.
-    ///
-    /// When UserApiProvider is created, the cache will be created and initialized.
-    /// The `Cache` instance internally stores the status about if databend-meta service supports cache.
-    /// If not, every access returns [`Unsupported`] error.
-    ownership_cache: Option<Arc<Mutex<Cache>>>,
+    /// It is shared by the `role_api()` return values of `cache_tenant`; other tenants read
+    /// meta-service directly. Reads fall back to meta-service while the cache is not ready.
+    ownership_cache: Arc<Mutex<Cache>>,
 
-    external_access_cache_tenant: Tenant,
+    /// The tenant the caches in this struct hold data for.
+    cache_tenant: Tenant,
     pub(crate) network_rule_cache: Option<Mutex<Cache>>,
     pub(crate) external_access_integration_cache: Option<Mutex<Cache>>,
 
@@ -92,12 +89,11 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn init(
         conf: RpcClientConf,
-        cache_config: &CacheConfig,
         builtin: BuiltIn,
         tenant: &Tenant,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, cache_config, builtin, tenant).await?);
+        GlobalInstance::set(Self::try_create(conf, builtin, tenant).await?);
         let user_mgr = UserApiProvider::instance();
 
         if let Some(q) = quota {
@@ -111,7 +107,6 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn try_create(
         conf: RpcClientConf,
-        cache_config: &CacheConfig,
         builtin: BuiltIn,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
@@ -125,13 +120,8 @@ impl UserApiProvider {
 
         let client = meta_store.inner().clone();
 
-        let cache = if cache_config.meta_service_ownership_cache {
-            let cache = RoleMgr::new_cache(client.clone()).await;
-            let cache = Arc::new(Mutex::new(cache));
-            Some(cache)
-        } else {
-            None
-        };
+        let ownership_cache =
+            Arc::new(Mutex::new(RoleMgr::new_cache(client.clone(), tenant).await));
 
         let (network_rule_cache, external_access_integration_cache) =
             if GlobalConfig::instance().query.common.enable_udf_server {
@@ -155,8 +145,8 @@ impl UserApiProvider {
         let user_mgr = UserApiProvider {
             meta: meta_store.clone(),
             client: meta_store.arc(),
-            ownership_cache: cache,
-            external_access_cache_tenant: tenant.clone(),
+            ownership_cache,
+            cache_tenant: tenant.clone(),
             network_rule_cache,
             external_access_integration_cache,
             builtin,
@@ -187,7 +177,7 @@ impl UserApiProvider {
         conf: RpcClientConf,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(conf, &CacheConfig::default(), BuiltIn::default(), tenant).await
+        Self::try_create(conf, BuiltIn::default(), tenant).await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
@@ -208,7 +198,7 @@ impl UserApiProvider {
         {
             let mut cache = cache
                 .as_ref()
-                .filter(|_| tenant == &self.external_access_cache_tenant)
+                .filter(|_| tenant == &self.cache_tenant)
                 .and_then(|cache| cache.try_lock().ok());
             for key in keys {
                 let value = cache.as_mut().and_then(|cache| cache.try_get_ready(&key));
@@ -253,7 +243,7 @@ impl UserApiProvider {
             self.client.clone(),
             tenant,
             GlobalConfig::instance().query.upgrade_to_pb,
-            self.ownership_cache.clone(),
+            (tenant == &self.cache_tenant).then(|| self.ownership_cache.clone()),
         );
         debug!("RoleMgr created");
         role_mgr
