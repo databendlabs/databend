@@ -87,7 +87,7 @@ statement error 1006
 select to_string(from_hex('C4'), 'gbk')
 
 query T
-select try_to_string(b, 'gbk') from (values (from_hex('C4E3')), (from_hex('C4')), (to_binary('ok'))) as t(b)
+select try_to_string(b, 'gbk') from (values (1, from_hex('C4E3')), (2, from_hex('C4')), (3, to_binary('ok'))) as t(id, b) order by id
 ----
 你
 NULL
@@ -103,7 +103,7 @@ statement error 1006
 select to_binary('😀', 'gbk')
 
 query T
-select to_hex(try_to_binary(s, 'gbk')) from (values ('你好'), ('😀'), ('ok')) as t(s)
+select to_hex(try_to_binary(s, 'gbk')) from (values (1, '你好'), (2, '😀'), (3, 'ok')) as t(id, s) order by id
 ----
 c4e3bac3
 NULL
