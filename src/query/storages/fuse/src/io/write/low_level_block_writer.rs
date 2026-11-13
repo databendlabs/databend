@@ -666,6 +666,7 @@ impl FuseLowLevelBlockWriter {
             vector_stats: data.vector_stats,
             virtual_block_meta: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             compression: Compression::from(self.options.write_settings.table_compression),
             create_on: Some(Utc::now()),
         };

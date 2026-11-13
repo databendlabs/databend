@@ -1019,6 +1019,7 @@ mod tests {
             vector_stats: None,
             virtual_block_meta: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             compression: Compression::None,
             create_on: None,
         })

@@ -438,6 +438,7 @@ impl FuseBlockWriter {
             ngram_filter_index_size,
             virtual_block_meta: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
         };
         let serialized = BlockSerialization::Pending(PendingBlockSerialization {
             block_raw_data,

@@ -38,6 +38,7 @@ use serde::Serializer;
 use crate::meta::BlockHLLState;
 use crate::meta::BlockTopN;
 use crate::meta::ClusterStatistics;
+use crate::meta::ColumnGroupFileMeta;
 use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
 use crate::meta::FormatVersion;
@@ -445,6 +446,16 @@ pub struct BlockMeta {
     /// Block-local JSON path statistics keyed by source Variant column id.
     #[serde(default)]
     pub virtual_path_statistics: Option<HashMap<ColumnId, VirtualColumnPathStatistics>>,
+    /// Group files of a split block. Empty for a legacy block, whose columns all live in the
+    /// file at `location`.
+    ///
+    /// Each leaf column id appears in exactly one group. The order does not affect which group
+    /// serves a column; `location` only mirrors the last group. Mutate only through
+    /// `append_column_group` and `compact_column_groups`. A segment holding a split block must
+    /// be written with a format version older binaries reject, because they would read
+    /// `location` and `col_metas` as a legacy block.
+    #[serde(default)]
+    pub column_groups: Vec<ColumnGroupFileMeta>,
     pub compression: Compression,
 
     // block create_on
@@ -531,6 +542,7 @@ impl BlockMeta {
 
             vector_stats: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta,
             compression,
             create_on,
@@ -705,6 +717,7 @@ impl BlockMeta {
 
             vector_stats: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,
@@ -744,6 +757,7 @@ impl BlockMeta {
 
             vector_stats: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta: None,
             create_on: None,
             ngram_filter_index_size: None,

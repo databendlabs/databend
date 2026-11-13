@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod column_group;
 mod segment;
 mod segment_statistics;
 mod snapshot;
 pub mod statistics;
 mod table_snapshot_statistics;
 
+pub use column_group::ColumnGroupBloomMeta;
+pub use column_group::ColumnGroupFileMeta;
 pub use segment::BlockIndexMeta;
 pub use segment::BlockMeta;
 pub use segment::BytesRange;
