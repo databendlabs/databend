@@ -35,6 +35,7 @@ impl Backend {
         let room = memory / 8;
         match self {
             Backend::Legacy => CacheConfig {
+                shared_memory_enabled: false,
                 segment_block_metas_count: 64,
                 table_data_deserialized_data_bytes: room,
                 ..CacheConfig::default()

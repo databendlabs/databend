@@ -48,7 +48,12 @@ pub(crate) mod test_utils {
         INIT.get_or_init(|| {
             GlobalInstance::init_production();
             GlobalIORuntime::init(1)?;
-            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)?;
+            // The legacy backend: its default capacities do not depend on the memory limit.
+            let config = CacheConfig {
+                shared_memory_enabled: false,
+                ..CacheConfig::default()
+            };
+            CacheManager::init(&config, &(1024 * 1024), "test", false)?;
             crate::io::FuseCaches::init(&CacheManager::instance());
             Ok(())
         })

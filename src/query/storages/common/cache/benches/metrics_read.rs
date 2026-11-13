@@ -83,6 +83,7 @@ fn filled(shared: bool) -> Filled {
         }
     } else {
         CacheConfig {
+            shared_memory_enabled: false,
             table_data_deserialized_data_bytes: CAP,
             ..CacheConfig::default()
         }
