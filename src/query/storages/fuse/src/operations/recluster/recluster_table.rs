@@ -119,6 +119,7 @@ impl FuseTable {
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
         carry.scan_incomplete = false;
+        carry.background_scope_invalidated = false;
         if carry.yield_after_scan
             && claimed_segments
                 .iter()
@@ -192,6 +193,16 @@ impl FuseTable {
             .filter(|(_, location)| carry.scope_contains(&location.0))
             .collect::<Vec<_>>();
         let number_segments = scan_segments.len();
+        if carry
+            .background_scope
+            .as_ref()
+            .is_some_and(|scope| scope.len() != number_segments)
+        {
+            // A foreign replacement can both hide unfinished layout work and shift the
+            // positional cursor past still-live segments. Do not report this as NoParts.
+            carry.background_scope_invalidated = true;
+            return Ok(None);
+        }
         let mut repack_count = 0;
         let mut recluster_segment_pruner = None;
         let mut decode_semaphore = None;

@@ -51,6 +51,7 @@ pub(super) struct ReclusterProgress {
 pub(super) enum ReclusterUnitOutcome {
     Committed,
     ScanProgress,
+    ScopeInvalidated,
     Converged,
     Deferred(Duration),
 }
@@ -122,6 +123,7 @@ impl TableHookTask {
         match outcome {
             ReclusterRoundOutcome::Committed => Ok(ReclusterUnitOutcome::Committed),
             ReclusterRoundOutcome::ScanProgress => Ok(ReclusterUnitOutcome::ScanProgress),
+            ReclusterRoundOutcome::ScopeInvalidated => Ok(ReclusterUnitOutcome::ScopeInvalidated),
             ReclusterRoundOutcome::NoParts => {
                 state.job.finish(ctx).await;
                 Ok(ReclusterUnitOutcome::Converged)

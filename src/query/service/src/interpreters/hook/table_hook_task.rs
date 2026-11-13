@@ -495,6 +495,14 @@ impl TableHookRequest {
                             ReclusterUnitOutcome::ScanProgress => {
                                 Ok(MaintenanceOutcome::ScanProgress)
                             }
+                            ReclusterUnitOutcome::ScopeInvalidated => {
+                                // Foreign metadata-only replacements do not prove that the
+                                // frozen data was reclustered. Discard the invalid scope and
+                                // replan as a bounded retry, not a successful generation or a
+                                // new write. The dirty accumulation window was already served.
+                                self.recluster_progress = None;
+                                Ok(MaintenanceOutcome::Deferred(Duration::from_secs(5)))
+                            }
                             ReclusterUnitOutcome::Converged => Ok(MaintenanceOutcome::Completed),
                             ReclusterUnitOutcome::Deferred(delay) => {
                                 Ok(MaintenanceOutcome::Deferred(delay))

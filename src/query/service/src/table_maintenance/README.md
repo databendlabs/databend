@@ -37,6 +37,11 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
   one generation do not repeat this wait. Zero makes a generation immediately eligible;
   it does not disable maintenance.
   Retry backoff and the short round/time-slice cooldowns are independent of this window.
+  A foreign replacement of a frozen segment invalidates the physical scope and positional
+  cursor, even if only Refresh changed its metadata. Recluster yields and replans after a
+  short cooldown instead of reporting convergence. Such retries preserve failure/no-progress
+  budgets and do not repeat the already-served dirty accumulation window. Plain appends
+  outside the frozen scope do not invalidate it.
 - Background Recluster builds both SYNC and ASYNC indexes for newly rewritten blocks:
   Bloom/Ngram, Spatial and Vector are rebuilt; compatible inverted indexes are merged
   only when all source metadata and row lineage permit it, otherwise they are rebuilt.

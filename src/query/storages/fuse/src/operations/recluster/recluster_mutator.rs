@@ -147,6 +147,7 @@ pub struct ReclusterFinalCarry {
     pub(crate) yield_after_scan: bool,
     pub(crate) scan_incomplete: bool,
     pub(crate) background_scope: Option<HashSet<String>>,
+    pub(crate) background_scope_invalidated: bool,
     pub(crate) skipped_claimed_ranges: bool,
 }
 
@@ -161,6 +162,12 @@ impl ReclusterFinalCarry {
         self.background_scope
             .as_ref()
             .is_none_or(|scope| scope.contains(segment))
+    }
+
+    /// A foreign replacement invalidates both the frozen physical population and the
+    /// positional scan cursor. Appends outside the scope do not invalidate either.
+    pub fn background_scope_invalidated(&self) -> bool {
+        self.background_scope_invalidated
     }
 
     pub fn commit_background_scope(&mut self, removed: &[String], outputs: Vec<Location>) {

@@ -88,6 +88,9 @@ const ZONE_MAP_REFRESH_ROUNDS: usize = 10;
 pub(crate) enum ReclusterRoundOutcome {
     Committed,
     ScanProgress,
+    /// A foreign rewrite replaced a frozen segment. Start a later bounded generation;
+    /// disappearance of a physical path is not proof of layout convergence.
+    ScopeInvalidated,
     NoParts,
     ClaimRetriesExhausted,
     /// The round lost a retryable race with a concurrent change. The job keeps its
@@ -99,6 +102,7 @@ impl ReclusterRoundOutcome {
     fn stop_reason(&self) -> Option<&'static str> {
         match self {
             Self::Committed | Self::ScanProgress | Self::Conflict(_) => None,
+            Self::ScopeInvalidated => Some("scope_invalidated"),
             Self::NoParts => Some("no_recluster_parts"),
             Self::ClaimRetriesExhausted => Some("claim_retries_exhausted"),
         }
@@ -475,6 +479,9 @@ impl ReclusterJob {
                 )
                 .await?;
             let Some((parts, snapshot, segments)) = candidate else {
+                if self.background && linear_final_carry.background_scope_invalidated() {
+                    return Ok(ReclusterRoundOutcome::ScopeInvalidated);
+                }
                 if self.background && linear_final_carry.scan_incomplete() {
                     return Ok(ReclusterRoundOutcome::ScanProgress);
                 }
