@@ -54,6 +54,7 @@ pub struct BloomRuntimeFilterRef {
     pub probe_expr: Expr<FieldIndex>,
     pub filter: RuntimeBloomFilter,
     pub stats: Arc<RuntimeFilterStats>,
+    pub sample_rows: u64,
 }
 
 /// Build a selector executor for a prewhere predicate, or `None` to keep the evaluator.
@@ -205,6 +206,7 @@ impl ReadState {
                     probe_expr,
                     filter: bloom.filter,
                     stats: entry.stats,
+                    sample_rows: RuntimeFilterStats::bloom_sample_rows(entry.build_rows),
                 })
             })
             .collect();
@@ -279,6 +281,11 @@ impl ReadState {
         let mut bitmaps = vec![];
         let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for runtime_filter in &self.runtime_filters {
+            // The shared state is per target entry, not per RF id. Disabling
+            // only skips this Bloom optimization; other filters still apply.
+            if runtime_filter.stats.bloom_disabled() {
+                continue;
+            }
             let filter_start = Instant::now();
             // The bloom filter hashes encoded columns without decoding them.
             let probe_expr = &runtime_filter.probe_expr;
@@ -290,6 +297,8 @@ impl ReadState {
             runtime_filter.stats.record_bloom(
                 filter_start.elapsed().as_nanos() as u64,
                 bitmap.null_count() as u64,
+                bitmap.len() as u64,
+                runtime_filter.sample_rows,
             );
             bitmaps.push(bitmap);
         }

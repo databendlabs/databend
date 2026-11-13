@@ -28,10 +28,15 @@ use databend_common_expression::conversion::common_super_type_with_conversion;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnBindingBuilder;
+use databend_common_sql::ColumnEntry;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
+use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::plans::AggregateMode;
+use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
@@ -42,6 +47,7 @@ use databend_common_sql::plans::ScalarExpr;
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
 use super::types::RuntimeFilterProbeKey;
+use super::types::RuntimeFilterProbeKeys;
 use super::types::canonical_equivalence_connector;
 use super::types::resolve_runtime_filter_probe_expr;
 use crate::sessions::TableContext;
@@ -76,28 +82,390 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
     )
 }
 
-/// Build runtime filters for a join operation
-///
-/// Creates one runtime filter per eligible probe key and propagates it to
-/// equality-safe connector columns and their attached expression leaves.
-///
-/// # Arguments
-/// * `ctx` - Table context
-/// * `metadata` - Metadata reference
-/// * `join` - Join plan
-/// * `s_expr` - PExpr for the join
-/// * `build_keys` - Build side keys
-/// * `probe_keys` - Probe keys with their scan, source column, connector, and null-equality metadata
-///
-/// # Returns
-/// Collection of runtime filters to be applied
+/// Resolve statistics for the bloom selectivity estimate, not permission to push
+/// a probe predicate through an operator. Keep the existing single-base-column
+/// expression behavior; derived keys must be direct MIN/MAX results.
+pub(in crate::physical_plans) fn resolve_runtime_filter_build_table_index(
+    metadata: &MetadataRef,
+    build_side: &PExpr,
+    build_key: &ScalarExpr,
+) -> Option<IndexType> {
+    let columns = build_key.used_columns();
+    if columns.len() != 1 {
+        return None;
+    }
+    let column = *columns.iter().next()?;
+    if let ColumnEntry::BaseTableColumn(base) = metadata.read().column(column) {
+        return Some(base.table_index);
+    }
+    let ScalarExpr::BoundColumnRef(_) = build_key else {
+        return None;
+    };
+    min_max_output_table_index(metadata, build_side, column)
+}
+
+#[recursive::recursive]
+fn min_max_output_table_index(
+    metadata: &MetadataRef,
+    expr: &PExpr,
+    column: Symbol,
+) -> Option<IndexType> {
+    match expr.plan() {
+        PhysicalRelOperator::Aggregate(physical) => {
+            // A Partial output is an aggregate state, not a MIN/MAX value. Main
+            // clones the same logical arguments into Final and Partial; Final
+            // arguments still name pre-Partial columns, not state columns.
+            if physical.mode != AggregateMode::Final || physical.aggregate.grouping_sets.is_some() {
+                return None;
+            }
+            let item = physical
+                .aggregate
+                .aggregate_functions
+                .iter()
+                .find(|item| item.index == column)?;
+            let ScalarExpr::AggregateFunction(function) = &item.scalar else {
+                return None;
+            };
+            if !matches!(function.func_name.as_str(), "min" | "max")
+                || function.distinct
+                || !function.params.is_empty()
+                || !function.sort_descs.is_empty()
+                || function.args.len() != 1
+            {
+                return None;
+            }
+            let ScalarExpr::BoundColumnRef(source) = &function.args[0] else {
+                return None;
+            };
+            // MIN/MAX may add nullability (empty/all-NULL groups), but do not
+            // change the underlying value type. Do not mistake state types for
+            // value types or require nullable and non-nullable types to match.
+            if function.return_type.remove_nullable() != source.column.data_type.remove_nullable() {
+                return None;
+            }
+            let input = expr.unary_child();
+            let partial = match input.plan() {
+                PhysicalRelOperator::Exchange(_) => input.unary_child(),
+                _ => input,
+            };
+            let PhysicalRelOperator::Aggregate(partial_agg) = partial.plan() else {
+                return None;
+            };
+            if partial_agg.mode != AggregateMode::Partial
+                || partial_agg.aggregate.grouping_sets.is_some()
+                || !partial_agg
+                    .aggregate
+                    .aggregate_functions
+                    .iter()
+                    .any(|partial_item| partial_item == item)
+            {
+                return None;
+            }
+            direct_scan_table_index(metadata, partial.unary_child(), source.column.index)
+        }
+        PhysicalRelOperator::EvalScalar(eval) => {
+            let column = match eval.items.iter().find(|item| item.index == column) {
+                Some(item) => match &item.scalar {
+                    ScalarExpr::BoundColumnRef(source) => source.column.index,
+                    _ => return None,
+                },
+                None => column,
+            };
+            min_max_output_table_index(metadata, expr.unary_child(), column)
+        }
+        PhysicalRelOperator::Filter(_)
+        | PhysicalRelOperator::Sort(_)
+        | PhysicalRelOperator::Limit(_)
+        | PhysicalRelOperator::Exchange(_) => {
+            min_max_output_table_index(metadata, expr.unary_child(), column)
+        }
+        _ => None,
+    }
+}
+
+/// Require one actual scan and an unchanged column path to it. Metadata alone
+/// is insufficient: a derived/CTE output is not a base column, and even a base
+/// symbol must belong to this scan's table and output columns. Joins (including
+/// self joins), shared CTEs, nested aggregates and unknown operators are barriers.
+#[recursive::recursive]
+fn direct_scan_table_index(
+    metadata: &MetadataRef,
+    expr: &PExpr,
+    column: Symbol,
+) -> Option<IndexType> {
+    match expr.plan() {
+        PhysicalRelOperator::Scan(scan) => match metadata.read().column(column) {
+            ColumnEntry::BaseTableColumn(base)
+                if base.table_index == scan.table_index && scan.columns.contains(&column) =>
+            {
+                Some(scan.table_index)
+            }
+            _ => None,
+        },
+        PhysicalRelOperator::EvalScalar(eval) => {
+            let column = match eval.items.iter().find(|item| item.index == column) {
+                Some(item) => match &item.scalar {
+                    ScalarExpr::BoundColumnRef(source) => source.column.index,
+                    _ => return None,
+                },
+                None => column,
+            };
+            direct_scan_table_index(metadata, expr.unary_child(), column)
+        }
+        PhysicalRelOperator::Filter(_)
+        | PhysicalRelOperator::Sort(_)
+        | PhysicalRelOperator::Limit(_)
+        | PhysicalRelOperator::Exchange(_) => {
+            direct_scan_table_index(metadata, expr.unary_child(), column)
+        }
+        _ => None,
+    }
+}
+
+// Count all occurrences, including those below barriers. A branch-local proof
+// cannot authorize filtering a scan shared with another consumer. CTE sharing
+// is intentionally outside this narrow derived-key extension.
+fn derived_probe_scan_counts(expr: &PExpr) -> Option<HashMap<usize, usize>> {
+    fn visit(expr: &PExpr, counts: &mut HashMap<usize, usize>) -> Option<()> {
+        match expr.plan() {
+            PhysicalRelOperator::MaterializedCTE(_)
+            | PhysicalRelOperator::MaterializedCTERef(_)
+            | PhysicalRelOperator::RecursiveCteScan(_) => return None,
+            PhysicalRelOperator::UnionAll(union)
+                if !union.cte_scan_names.is_empty() || union.logical_recursive_cte_id.is_some() =>
+            {
+                return None;
+            }
+            PhysicalRelOperator::Scan(scan) => *counts.entry(scan.scan_id).or_default() += 1,
+            _ => {}
+        }
+        for child in expr.children() {
+            visit(child, counts)?;
+        }
+        Some(())
+    }
+    let mut counts = HashMap::new();
+    visit(expr, &mut counts)?;
+    Some(counts)
+}
+
+fn nullability_only(source: &DataType, target: &DataType) -> bool {
+    source == target
+        || (!source.is_nullable() && target.is_nullable() && target.remove_nullable() == *source)
+}
+
+fn identity_probe_source(scalar: &ScalarExpr) -> Option<Symbol> {
+    match scalar {
+        ScalarExpr::BoundColumnRef(reference) => Some(reference.column.index),
+        ScalarExpr::CastExpr(cast)
+            if !cast.is_try
+                && nullability_only(cast.argument.data_type().as_ref(), &cast.target_type) =>
+        {
+            identity_probe_source(&cast.argument)
+        }
+        _ => None,
+    }
+}
+
+fn unchanged_probe_eval_key(plan: &PhysicalRelOperator, column: Symbol) -> bool {
+    match plan {
+        PhysicalRelOperator::EvalScalar(eval) => eval.items.iter().all(|item| {
+            item.index != column
+                || matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
+                if reference.column.index == column)
+        }),
+        _ => true,
+    }
+}
+
+fn unchanged_probe_group_key(plan: &PhysicalRelOperator, column: Symbol) -> bool {
+    match plan {
+        PhysicalRelOperator::Aggregate(aggregate) => {
+            aggregate.aggregate.group_items.iter().any(|item| {
+                item.index == column
+                    && matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
+                if reference.column.index == column)
+            })
+        }
+        _ => true,
+    }
+}
+
+/// Resolve a root UNION ALL (or its value-preserving wrappers) before the
+/// metadata-only resolver discards its derived output. Origins are alternatives,
+/// never edges in the join equality graph. Ordinary base keys retain their
+/// existing connector/leaf and conversion rules.
+pub(in crate::physical_plans) fn resolve_runtime_filter_probe_origins(
+    metadata: &MetadataRef,
+    probe_side: &PExpr,
+    scalar: &ScalarExpr,
+) -> Result<Option<RuntimeFilterProbeKeys<Expr<String>>>> {
+    fn key(
+        probe: super::types::ResolvedRuntimeFilterProbeExpr,
+    ) -> RuntimeFilterProbeKey<Expr<String>> {
+        let is_connector =
+            canonical_equivalence_connector(probe.probe_key.as_remote_expr()).is_ok();
+        RuntimeFilterProbeKey {
+            probe_key: probe.probe_key,
+            scan_id: probe.scan_id,
+            column_idx: probe.column_idx,
+            is_connector,
+            is_null_equal: false,
+        }
+    }
+    if let Some(probe) = resolve_runtime_filter_probe_expr(metadata, scalar)? {
+        return Ok(Some(RuntimeFilterProbeKeys {
+            keys: vec![key(probe)],
+            derived: false,
+        }));
+    }
+    let Some(counts) = derived_probe_scan_counts(probe_side) else {
+        return Ok(None);
+    };
+
+    fn rewrite(
+        metadata: &MetadataRef,
+        root: &ScalarExpr,
+        column: Symbol,
+        value: &ScalarExpr,
+    ) -> Result<Option<ScalarExpr>> {
+        if identity_probe_source(value).is_none() {
+            return Ok(None);
+        }
+        let target_type = metadata.read().column(column).data_type();
+        if !nullability_only(value.data_type().as_ref(), &target_type) {
+            return Ok(None);
+        }
+        let value = if value.data_type().as_ref() == &target_type {
+            value.clone()
+        } else {
+            value.clone().unify_to_data_type(&target_type)
+        };
+        let mut rewritten = root.clone();
+        rewritten.replace_column_with_scalar(column, &value)?;
+        Ok(Some(rewritten))
+    }
+    fn visit(
+        metadata: &MetadataRef,
+        expr: &PExpr,
+        scalar: &ScalarExpr,
+        counts: &HashMap<usize, usize>,
+        origins: &mut Vec<RuntimeFilterProbeKey<Expr<String>>>,
+    ) -> Result<()> {
+        let columns = scalar.used_columns();
+        if columns.len() != 1 {
+            return Ok(());
+        }
+        let column = *columns.iter().next().unwrap();
+        match expr.plan() {
+            PhysicalRelOperator::Scan(scan) => {
+                if counts.get(&scan.scan_id) == Some(&1)
+                    && probe_path_is_safe(expr, scan.scan_id, column)
+                {
+                    if let Some(probe) = resolve_runtime_filter_probe_expr(metadata, scalar)? {
+                        if probe.scan_id == scan.scan_id {
+                            origins.push(key(probe));
+                        }
+                    }
+                }
+            }
+            PhysicalRelOperator::UnionAll(union) => {
+                let Some(position) = union
+                    .output_indexes
+                    .iter()
+                    .position(|output| *output == column)
+                else {
+                    return Ok(());
+                };
+                for (child_index, outputs) in [&union.left_outputs, &union.right_outputs]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let Some((source, coercion)) = outputs.get(position) else {
+                        continue;
+                    };
+                    let value = match coercion {
+                        Some(value) if identity_probe_source(value) == Some(*source) => {
+                            value.clone()
+                        }
+                        Some(_) => continue,
+                        None => {
+                            let metadata = metadata.read();
+                            let entry = metadata.column(*source);
+                            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                span: None,
+                                column: ColumnBindingBuilder::new(
+                                    entry.name(),
+                                    *source,
+                                    Box::new(entry.data_type()),
+                                    Visibility::Visible,
+                                )
+                                .build(),
+                            })
+                        }
+                    };
+                    if let Some(rewritten) = rewrite(metadata, scalar, column, &value)? {
+                        visit(
+                            metadata,
+                            expr.child(child_index)?,
+                            &rewritten,
+                            counts,
+                            origins,
+                        )?;
+                    }
+                }
+            }
+            // No new traversal across joins: in particular, never invoke the
+            // global equality collector on an isolated union branch.
+            PhysicalRelOperator::Join(_) => {}
+            plan => {
+                if !unchanged_probe_group_key(plan, column) {
+                    return Ok(());
+                }
+                let mut rewritten = scalar.clone();
+                if let PhysicalRelOperator::EvalScalar(eval) = plan {
+                    if let Some(item) = eval.items.iter().find(|item| item.index == column) {
+                        let Some(value) = rewrite(metadata, scalar, column, &item.scalar)? else {
+                            return Ok(());
+                        };
+                        rewritten = value;
+                    }
+                }
+                // The source must really be available from the child, not
+                // another computed item in this same EvalScalar scope.
+                if !rewritten
+                    .used_columns()
+                    .iter()
+                    .all(|source| unchanged_probe_eval_key(plan, *source))
+                {
+                    return Ok(());
+                }
+                for (child_index, child) in expr.children().enumerate() {
+                    if probe_child_is_safe(plan, child_index) {
+                        visit(metadata, child, &rewritten, counts, origins)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    let mut keys = Vec::new();
+    visit(metadata, probe_side, scalar, &counts, &mut keys)?;
+    Ok((!keys.is_empty()).then_some(RuntimeFilterProbeKeys {
+        keys,
+        derived: true,
+    }))
+}
+
+/// Build one filter per join key. Direct keys retain equality propagation;
+/// derived union origins share that filter without connecting equality classes.
 pub async fn build_runtime_filter(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
     join: &Join,
     s_expr: &PExpr,
     build_keys: &[RemoteExpr],
-    probe_keys: Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
+    probe_keys: Vec<Option<RuntimeFilterProbeKeys<RemoteExpr<String>>>>,
     build_table_indexes: Vec<Option<IndexType>>,
 ) -> Result<PhysicalRuntimeFilters> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
@@ -136,26 +504,38 @@ pub async fn build_runtime_filter(
             probe.map(|probe| (build_key, probe, table_index))
         })
     {
-        let RuntimeFilterProbeKey {
-            probe_key,
-            scan_id,
-            column_idx,
-            is_connector,
-            is_null_equal,
-        } = probe;
-        if !supported_probe_key_for_runtime_filter(&probe_key, &func_ctx) {
+        let derived = probe.derived;
+        let mut keys = probe.keys.into_iter();
+        let Some(root) = keys.next() else {
             continue;
-        }
-
-        let probe_targets = find_probe_targets(
-            metadata,
-            probe_side,
-            probe_key,
-            scan_id,
-            column_idx,
-            is_connector,
-            &func_ctx,
-        )?;
+        };
+        let is_null_equal = root.is_null_equal;
+        let probe_table_source =
+            (!derived).then(|| (root.probe_key.clone(), root.scan_id, root.column_idx));
+        let probe_targets = if derived {
+            // Revalidate every rewritten expression after common-key casting
+            // and folding. A rejected branch must not disable a safe sibling.
+            let mut targets = Vec::new();
+            for key in std::iter::once(root).chain(keys) {
+                if supported_probe_key_for_runtime_filter(&key.probe_key, &func_ctx) {
+                    push_unique_target(&mut targets, key.probe_key, key.scan_id);
+                }
+            }
+            targets
+        } else {
+            if !supported_probe_key_for_runtime_filter(&root.probe_key, &func_ctx) {
+                continue;
+            }
+            find_probe_targets(
+                metadata,
+                probe_side,
+                root.probe_key,
+                root.scan_id,
+                root.column_idx,
+                root.is_connector,
+                &func_ctx,
+            )?
+        };
 
         // A valid probe expression may have no safe scan target (e.g. a window
         // output). Skip filter creation and ID allocation when no targets remain.
@@ -165,6 +545,11 @@ pub async fn build_runtime_filter(
 
         let build_table_rows =
             get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
+        let probe_table_index = probe_table_source.and_then(|(key, scan_id, column)| {
+            resolve_probe_table_index(metadata, probe_side, &probe_targets, &key, scan_id, column)
+        });
+        let probe_table_rows =
+            get_build_table_rows(ctx.clone(), metadata, probe_table_index).await?;
 
         let data_type = build_key
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -186,6 +571,7 @@ pub async fn build_runtime_filter(
             build_key: build_key.clone(),
             probe_targets,
             build_table_rows,
+            probe_table_rows,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
@@ -194,6 +580,43 @@ pub async fn build_runtime_filter(
     }
 
     Ok(PhysicalRuntimeFilters { filters })
+}
+
+// Only the original, single target may supply the new probe denominator.
+// Do not reuse the root table's statistics for propagated targets, and do not
+// impose any new restriction on the existing build-statistics path.
+fn resolve_probe_table_index(
+    metadata: &MetadataRef,
+    probe_side: &PExpr,
+    targets: &[(RemoteExpr<String>, usize)],
+    source_key: &RemoteExpr<String>,
+    source_scan_id: usize,
+    source_column: Symbol,
+) -> Option<IndexType> {
+    let [(target_key, target_scan_id)] = targets else {
+        return None;
+    };
+    if *target_scan_id != source_scan_id || target_key != source_key {
+        return None;
+    }
+    let metadata = metadata.read();
+    if metadata.base_column_scan_id(source_column) != Some(source_scan_id) {
+        return None;
+    }
+    let ColumnEntry::BaseTableColumn(column) = metadata.column(source_column) else {
+        return None;
+    };
+    fn find_scan(expr: &PExpr, scan_id: usize) -> Option<&databend_common_sql::plans::Scan> {
+        if let PhysicalRelOperator::Scan(scan) = expr.plan() {
+            if scan.scan_id == scan_id {
+                return Some(scan);
+            }
+        }
+        expr.children().find_map(|child| find_scan(child, scan_id))
+    }
+    let scan = find_scan(probe_side, source_scan_id)?;
+    (scan.table_index == column.table_index && scan.columns.contains(&source_column))
+        .then_some(scan.table_index)
 }
 
 async fn get_build_table_rows(
@@ -207,6 +630,12 @@ async fn get_build_table_rows(
             metadata_read.table(table_index).table().clone()
         };
 
+        // A change scan needs its ChangeType to define the row set. This
+        // denominator is optional: do not request whole-table statistics for
+        // CHANGES/stream sources or turn their absence into a planning error.
+        if table.has_changes_source() {
+            return Ok(None);
+        }
         let table_stats = table.table_statistics(ctx, false, None).await?;
         return Ok(table_stats.and_then(|s| s.num_rows));
     }
@@ -415,22 +844,10 @@ fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
     fn visit(s_expr: &PExpr, scan_id: usize, column: Symbol, safe: bool) -> Option<bool> {
         let plan = s_expr.plan();
         let mut safe = safe;
-        if let PhysicalRelOperator::Aggregate(aggregate) = plan {
-            safe &= aggregate.aggregate.group_items.iter().any(|item| {
-                item.index == column
-                    && matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
-                        if reference.column.index == column)
-            });
-        }
-        if let PhysicalRelOperator::EvalScalar(eval) = plan {
-            // EvalScalar normally introduces fresh symbols. Do not assume a
-            // redefinition preserves the base column used by the filter.
-            safe &= eval.items.iter().all(|item| {
-                item.index != column
-                    || matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
-                        if reference.column.index == column)
-            });
-        }
+        safe &= unchanged_probe_group_key(plan, column);
+        // EvalScalar normally introduces fresh symbols. Do not assume a
+        // redefinition preserves the base column used by the filter.
+        safe &= unchanged_probe_eval_key(plan, column);
         if let PhysicalRelOperator::Scan(scan) = plan {
             return (scan.scan_id == scan_id).then_some(
                 safe && scan.columns.contains(&column)
@@ -1506,6 +1923,59 @@ mod tests {
                 assert!(super::collect_equi_conditions(&limited).unwrap().is_empty());
             }
         }
+    }
+
+    #[test]
+    fn test_probe_statistics_only_for_the_confirmed_target_scan() {
+        use databend_common_expression::TableDataType;
+        use databend_common_sql::Metadata;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::Join;
+        use databend_common_sql::plans::Scan;
+        use parking_lot::RwLock;
+
+        let mut metadata = Metadata::default();
+        let source = metadata.add_base_table_column(
+            "a".into(),
+            TableDataType::Number(NumberDataType::Int32),
+            3,
+            None,
+            0,
+            None,
+            None,
+        );
+        metadata.add_base_column_scan_id(std::collections::HashMap::from([(source, 7)]));
+        let metadata = std::sync::Arc::new(RwLock::new(metadata));
+        let scan = |scan_id, table_index| {
+            PExpr::create_leaf(Scan {
+                scan_id,
+                table_index,
+                columns: [source].into_iter().collect(),
+                ..Default::default()
+            })
+        };
+        let key = column("a", DataType::Number(NumberDataType::Int32)).as_remote_expr();
+        let targets = vec![(key.clone(), 7)];
+        let resolve = |plan: &PExpr, targets: &[(RemoteExpr<String>, usize)]| {
+            super::resolve_probe_table_index(&metadata, plan, targets, &key, 7, source)
+        };
+        assert_eq!(resolve(&scan(7, 3), &targets), Some(3));
+        assert_eq!(resolve(&scan(8, 3), &targets), None);
+        assert_eq!(resolve(&scan(7, 4), &targets), None);
+        assert_eq!(resolve(&scan(7, 3), &[(key.clone(), 8)]), None);
+        assert_eq!(
+            resolve(&scan(7, 3), &[(key.clone(), 7), (key.clone(), 8)]),
+            None
+        );
+        let joined = PExpr::create_binary(Join::default(), scan(7, 3), scan(8, 4));
+        assert_eq!(resolve(&joined, &targets), Some(3)); // No whole-side single-scan guard.
+        let derived = metadata
+            .write()
+            .add_derived_column("d".into(), DataType::Boolean);
+        assert_eq!(
+            super::resolve_probe_table_index(&metadata, &scan(7, 3), &targets, &key, 7, derived,),
+            None
+        );
     }
 
     #[test]
