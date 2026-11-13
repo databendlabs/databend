@@ -40,6 +40,7 @@ use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
+use crate::parser::mask::mask_url;
 
 /// CopyIntoTableStmt is the parsed statement of `COPY into <table> from <location>`.
 ///
@@ -489,6 +490,37 @@ impl Connection {
         }
     }
 
+    /// Mask credentials only, keeping options such as `endpoint_url` and
+    /// `region` readable. Only options known to be safe are kept, so an option
+    /// added later is masked until it is listed here.
+    pub fn mask_secrets(&self) -> Self {
+        let conns = self
+            .conns
+            .iter()
+            .map(|(k, v)| {
+                let v = match k.to_lowercase().as_str() {
+                    // URLs may embed userinfo or query credentials.
+                    "endpoint_url" | "name_node" => mask_endpoint(v),
+                    "region"
+                    | "role_arn"
+                    | "aws_role_arn"
+                    | "enable_virtual_host_style"
+                    | "disable_list_batch"
+                    | "https"
+                    | "user_name"
+                    | "repo_type"
+                    | "revision" => v.clone(),
+                    _ => mask_string(v),
+                };
+                (k.clone(), v)
+            })
+            .collect();
+        Self {
+            visited_keys: self.visited_keys.clone(),
+            conns,
+        }
+    }
+
     pub fn get(&mut self, key: &str) -> Option<&String> {
         self.visited_keys.insert(key.to_string());
         self.conns.get(key)
@@ -540,6 +572,30 @@ fn mask_string(s: &str) -> String {
         let head: String = chars[..2].iter().collect();
         let tail: String = chars[chars.len() - 2..].iter().collect();
         format!("{}***{}", head, tail)
+    }
+}
+
+/// Mask the credentials of an endpoint, which may omit its scheme: binders
+/// accept `host?token=...` by prepending `https://`. Endpoints that still do
+/// not parse as URLs are masked as a whole.
+fn mask_endpoint(s: &str) -> String {
+    const SCHEME: &str = "https://";
+    let prefixed = !s.contains("://");
+    let url = if prefixed {
+        format!("{SCHEME}{s}")
+    } else {
+        s.to_string()
+    };
+    if Url::parse(&url).is_err() {
+        return mask_string(s);
+    }
+    let masked = mask_url(&url, false);
+    if !prefixed {
+        masked
+    } else if masked == url {
+        s.to_string()
+    } else {
+        masked.strip_prefix(SCHEME).unwrap_or(&masked).to_string()
     }
 }
 

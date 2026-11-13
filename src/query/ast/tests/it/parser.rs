@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::io::Write;
 
 use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Statement;
@@ -426,6 +427,48 @@ fn test_masking_where_unmasked_value_option() {
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
+#[test]
+fn test_connection_mask_secrets() {
+    let conns = [
+        ("access_key_id", "AKIAEXAMPLE"),
+        ("secret_access_key", "wJalrXUtnFEMI"),
+        ("session_token", "token-value"),
+        ("account_key", "azure-account-key"),
+        ("unknown_option", "some-value"),
+        ("endpoint_url", "https://user:pass@s3.example.com/"),
+        ("region", "us-east-1"),
+        ("role_arn", "arn:aws:iam::123456789012:role/r"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    let masked = Connection::new(conns).mask_secrets().conns;
+    assert_eq!(masked["access_key_id"], "AK***LE");
+    assert_eq!(masked["secret_access_key"], "wJ***MI");
+    assert_eq!(masked["session_token"], "to***ue");
+    assert_eq!(masked["account_key"], "az***ey");
+    assert_eq!(masked["unknown_option"], "so***ue");
+    assert_eq!(masked["endpoint_url"], "https://***:***@s3.example.com/");
+    assert_eq!(masked["region"], "us-east-1");
+    assert_eq!(masked["role_arn"], "arn:aws:iam::123456789012:role/r");
+
+    // Binders accept endpoints without a scheme by prepending `https://`.
+    for (endpoint, expected) in [
+        (
+            "s3.amazonaws.com?token=secret",
+            "s3.amazonaws.com/?token=***",
+        ),
+        ("user:pass@s3.example.com", "***:***@s3.example.com/"),
+        ("s3.amazonaws.com", "s3.amazonaws.com"),
+        ("http://127.0.0.1:9900/", "http://127.0.0.1:9900/"),
+        ("http://[bad?token=secret", "ht***et"),
+    ] {
+        let conns = [("endpoint_url".to_string(), endpoint.to_string())].into();
+        let masked = Connection::new(conns).mask_secrets().conns;
+        assert_eq!(masked["endpoint_url"], expected, "{endpoint}");
     }
 }
 
@@ -1351,6 +1394,7 @@ SELECT * from s;"#,
         r#"CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
         r#"DROP CONNECTION IF EXISTS my_conn;"#,
         r#"DESC CONNECTION my_conn;"#,
+        r#"SHOW CREATE CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
         r#"SHOW LOCKS IN ACCOUNT"#,
         r#"SHOW STATISTICS FROM TABLE test_db.test"#,

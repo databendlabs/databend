@@ -58,6 +58,7 @@ use crate::interpreters::interpreter_connection_create::CreateConnectionInterpre
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
 use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
 use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
+use crate::interpreters::interpreter_connection_show_create::ShowCreateConnectionInterpreter;
 #[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
 #[cfg(feature = "storage-stage")]
@@ -896,6 +897,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::ShowCreateConnection(p) => Ok(Arc::new(
+                ShowCreateConnectionInterpreter::try_create(ctx, *p.clone())?,
+            )),
             Plan::ShowConnections(_) => Ok(Arc::new(ShowConnectionsInterpreter::try_create(ctx)?)),
             Plan::Begin => Ok(Arc::new(BeginInterpreter::try_create(ctx)?)),
             Plan::Commit => Ok(Arc::new(CommitInterpreter::try_create(ctx)?)),

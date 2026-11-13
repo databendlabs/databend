@@ -71,6 +71,7 @@ use crate::plans::DropUserPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
+use crate::plans::ShowCreateConnectionPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowPublicKeysPlan;
 use crate::plans::UseCatalogPlan;
@@ -637,6 +638,11 @@ impl Binder {
             })),
             Statement::DescribeConnection(stmt) => {
                 Plan::DescConnection(Box::new(DescConnectionPlan {
+                    name: stmt.name.to_string(),
+                }))
+            }
+            Statement::ShowCreateConnection(stmt) => {
+                Plan::ShowCreateConnection(Box::new(ShowCreateConnectionPlan {
                     name: stmt.name.to_string(),
                 }))
             }

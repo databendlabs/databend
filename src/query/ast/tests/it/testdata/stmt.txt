@@ -32107,6 +32107,25 @@ DescribeConnection(
 
 
 ---------- Input ----------
+SHOW CREATE CONNECTION my_conn;
+---------- Output ---------
+SHOW CREATE CONNECTION my_conn
+---------- AST ------------
+ShowCreateConnection(
+    ShowCreateConnectionStmt {
+        name: Identifier {
+            span: Some(
+                23..30,
+            ),
+            name: "my_conn",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 SHOW CONNECTIONS;
 ---------- Output ---------
 SHOW CONNECTIONS

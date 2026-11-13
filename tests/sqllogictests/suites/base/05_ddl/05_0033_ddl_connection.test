@@ -28,12 +28,17 @@ CREATE CONNECTION test_conn STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazon
 query TTT
 DESC CONNECTION test_conn
 ----
-test_conn azblob endpoint_url=ht***om
+test_conn azblob endpoint_url=http://s3.amazonaws.com
 
 query TTT
 SHOW CONNECTIONS
 ----
-test_conn azblob endpoint_url=ht***om
+test_conn azblob endpoint_url=http://s3.amazonaws.com
+
+query TT
+SHOW CREATE CONNECTION test_conn
+----
+test_conn CREATE CONNECTION test_conn STORAGE_TYPE = 'azblob' endpoint_url = 'http://s3.amazonaws.com'
 
 statement ok
 DROP CONNECTION test_conn
@@ -43,6 +48,9 @@ DROP CONNECTION IF EXISTS test_conn
 
 statement error 2510.*Connection 'test_conn' does not exist.
 DESC CONNECTION test_conn
+
+statement error 2510.*Connection 'test_conn' does not exist.
+SHOW CREATE CONNECTION test_conn
 
 query TTT
 SHOW CONNECTIONS
@@ -62,3 +70,22 @@ CREATE OR REPLACE CONNECTION test_replace_conn STORAGE_TYPE='S3';
 
 statement ok
 DROP CONNECTION IF EXISTS test_replace_conn
+
+statement ok
+DROP CONNECTION IF EXISTS test_s3_conn
+
+statement ok
+CREATE CONNECTION test_s3_conn STORAGE_TYPE='s3' ACCESS_KEY_ID='minioadmin' SECRET_ACCESS_KEY='minioadmin' ENDPOINT_URL='http://127.0.0.1:9900/' REGION='us-east-1' ROLE_ARN='arn:aws:iam::123456789012:role/test'
+
+query TTT
+DESC CONNECTION test_s3_conn
+----
+test_s3_conn s3 access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=us-east-1 role_arn=arn:aws:iam::123456789012:role/test secret_access_key=mi***in
+
+query TT
+SHOW CREATE CONNECTION test_s3_conn
+----
+test_s3_conn CREATE CONNECTION test_s3_conn STORAGE_TYPE = 's3' access_key_id = 'mi***in' endpoint_url = 'http://127.0.0.1:9900/' region = 'us-east-1' role_arn = 'arn:aws:iam::123456789012:role/test' secret_access_key = 'mi***in'
+
+statement ok
+DROP CONNECTION test_s3_conn

@@ -350,6 +350,7 @@ pub enum Statement {
     CreateConnection(CreateConnectionStmt),
     DropConnection(DropConnectionStmt),
     DescribeConnection(DescribeConnectionStmt),
+    ShowCreateConnection(ShowCreateConnectionStmt),
     ShowConnections(ShowConnectionsStmt),
 
     // UserDefinedFileFormat
@@ -887,6 +888,7 @@ impl Statement {
             | Statement::RemoveStage { .. }
             | Statement::ListStage { .. }
             | Statement::DescribeConnection(..)
+            | Statement::ShowCreateConnection(..)
             | Statement::ShowConnections(..)
             | Statement::ShowFileFormats
             | Statement::Presign(..)
@@ -1456,6 +1458,7 @@ impl Display for Statement {
             Statement::CreateConnection(stmt) => write!(f, "{stmt}")?,
             Statement::DropConnection(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeConnection(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowCreateConnection(stmt) => write!(f, "{stmt}")?,
             Statement::ShowConnections(stmt) => write!(f, "{stmt}")?,
             Statement::Begin => write!(f, "BEGIN")?,
             Statement::Commit => write!(f, "COMMIT")?,
