@@ -438,7 +438,7 @@ impl<'a> Evaluator<'a> {
             return None;
         };
         let (column, validity) = match column {
-            Column::Nullable(column) => (&column.column, Some(&column.validity)),
+            Column::Nullable(column) => (column.column(), Some(column.validity())),
             column => (column, None),
         };
         let Column::Encoded(encoded) = column else {
@@ -816,22 +816,23 @@ impl<'a> Evaluator<'a> {
                     options,
                 ),
                 Value::Column(Column::Nullable(col)) => {
+                    let (inner_column, column_validity) = col.destructure();
                     let validity = validity
-                        .map(|validity| (&validity) & (&col.validity))
-                        .unwrap_or_else(|| col.validity.clone());
+                        .map(|validity| &validity & &column_validity)
+                        .unwrap_or(column_validity);
                     let column = self
                         .run_cast(
                             span,
                             inner_src_ty,
                             inner_dest_ty,
-                            Value::Column(col.column),
+                            Value::Column(inner_column),
                             Some(validity.clone()),
                             expr_display,
                             options,
                         )?
                         .into_column()
                         .unwrap();
-                    Ok(Value::Column(NullableColumn::new_column(column, validity)))
+                    Ok(Value::Column(column.wrap_nullable(Some(validity))))
                 }
                 other => unreachable!("source: {}", other),
             },
@@ -859,12 +860,13 @@ impl<'a> Evaluator<'a> {
                     options,
                 ),
                 Value::Column(Column::Nullable(col)) => {
+                    let (inner_column, column_validity) = col.destructure();
                     let has_valid_nulls = validity
                         .as_ref()
                         .map(|validity| {
-                            (validity & (&col.validity)).null_count() > validity.null_count()
+                            (validity & &column_validity).null_count() > validity.null_count()
                         })
-                        .unwrap_or_else(|| col.validity.null_count() > 0);
+                        .unwrap_or_else(|| column_validity.null_count() > 0);
                     if has_valid_nulls {
                         return Err(ErrorCode::Internal(format!(
                             "unable to cast `NULL` to type `{dest_type}`"
@@ -876,7 +878,7 @@ impl<'a> Evaluator<'a> {
                             span,
                             inner_src_ty,
                             dest_type,
-                            Value::Column(col.column),
+                            Value::Column(inner_column),
                             validity,
                             expr_display,
                             options,
@@ -911,8 +913,7 @@ impl<'a> Evaluator<'a> {
                         .into_column()
                         .unwrap();
 
-                    let validity = Bitmap::new_constant(true, column.len());
-                    Ok(Value::Column(NullableColumn::new_column(column, validity)))
+                    Ok(Value::Column(column.wrap_nullable(None)))
                 }
             },
             (DataType::AggregateState(state), _) => self.run_cast(
@@ -1453,27 +1454,19 @@ impl<'a> Evaluator<'a> {
                     self.run_try_cast(span, inner_src_ty, inner_dest_type, value, expr_display)
                 }
                 Value::Column(Column::Nullable(col)) => {
-                    let value = Value::Column(col.column);
-                    let new_col = *self
+                    let (column, validity) = col.destructure();
+                    let value = Value::Column(column);
+                    let new_col = self
                         .run_try_cast(span, inner_src_ty, dest_type, value, expr_display)?
                         .into_column()
-                        .unwrap()
-                        .into_nullable()
                         .unwrap();
-                    let validity = boolean::and(&col.validity, &new_col.validity);
-                    Ok(Value::Column(NullableColumn::new_column(
-                        new_col.column,
-                        validity,
-                    )))
+                    Ok(Value::Column(new_col.wrap_nullable(Some(validity))))
                 }
                 other => unreachable!("source: {}", other),
             },
             (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => match value {
                 Value::Scalar(_) => Ok(value),
-                Value::Column(column) => {
-                    let validity = Bitmap::new_constant(true, column.len());
-                    Ok(Value::Column(NullableColumn::new_column(column, validity)))
-                }
+                Value::Column(column) => Ok(Value::Column(column.wrap_nullable(None))),
             },
 
             (DataType::EmptyArray, DataType::Array(inner_dest_ty)) => match value {
@@ -1509,9 +1502,7 @@ impl<'a> Evaluator<'a> {
                         new_values,
                         col.underlying_offsets(),
                     )));
-                    let validity = Bitmap::new_constant(true, new_col.len());
-
-                    Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
+                    Ok(Value::Column(new_col.wrap_nullable(None)))
                 }
                 _ => unreachable!(),
             },
@@ -1548,9 +1539,7 @@ impl<'a> Evaluator<'a> {
                         new_values,
                         col.underlying_offsets(),
                     )));
-                    let validity = Bitmap::new_constant(true, new_col.len());
-
-                    Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
+                    Ok(Value::Column(new_col.wrap_nullable(None)))
                 }
                 _ => unreachable!(),
             },
@@ -1587,8 +1576,7 @@ impl<'a> Evaluator<'a> {
                             })
                             .collect::<Result<_>>()?;
                         let new_col = Column::Tuple(new_fields);
-                        let validity = Bitmap::new_constant(true, new_col.len());
-                        Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
+                        Ok(Value::Column(new_col.wrap_nullable(None)))
                     }
                     other => unreachable!("source: {}", other),
                 }
@@ -1708,13 +1696,13 @@ impl<'a> Evaluator<'a> {
 
         let col = match col {
             Column::Nullable(inner) => {
-                if inner.validity.null_count() > 0 {
+                if inner.validity().null_count() > 0 {
                     return Err(ErrorCode::BadArguments(
                         "Array value cast to a vector has invalid value".to_string(),
                     )
                     .set_span(span));
                 }
-                inner.column
+                inner.destructure().0
             }
             other => other,
         };
@@ -1911,7 +1899,7 @@ impl<'a> Evaluator<'a> {
                     break;
                 }
                 Value::Column(cond) => {
-                    let flag = (&cond.column) & (&cond.validity);
+                    let flag = cond.column() & cond.validity();
                     let branch_validity = (&validity) & (&flag);
                     if branch_validity.true_count() == 0 {
                         results.push(None);
@@ -2246,7 +2234,7 @@ impl<'a> Evaluator<'a> {
 
     fn wrap_lambda_column(column: Column, validity: Option<Bitmap>) -> Value<AnyType> {
         match validity {
-            Some(validity) => Value::Column(NullableColumn::new_column(column, validity)),
+            Some(validity) => Value::Column(column.wrap_nullable(Some(validity))),
             None => Value::Column(column),
         }
     }
@@ -2316,17 +2304,16 @@ impl<'a> Evaluator<'a> {
                     map_col.underlying_offsets(),
                     None,
                 ),
-                Value::Column(Column::Nullable(deref!(nullable_col))) => match &nullable_col.column
-                {
+                Value::Column(Column::Nullable(nullable_col)) => match nullable_col.column() {
                     Column::Array(deref!(array_col)) => (
                         array_col.underlying_column(),
                         array_col.underlying_offsets(),
-                        keep_outer_validity.then(|| nullable_col.validity.clone()),
+                        keep_outer_validity.then(|| nullable_col.validity().clone()),
                     ),
                     Column::Map(deref!(map_col)) => (
                         map_col.underlying_column(),
                         map_col.underlying_offsets(),
-                        keep_outer_validity.then(|| nullable_col.validity.clone()),
+                        keep_outer_validity.then(|| nullable_col.validity().clone()),
                     ),
                     _ => unreachable!(),
                 },
@@ -2532,10 +2519,7 @@ impl<'a> Evaluator<'a> {
                 return Ok(match json {
                     Value::Column(col) if col.data_type() != *return_type => {
                         debug_assert!(return_type.is_nullable());
-                        Value::Column(NullableColumn::new_column(
-                            col,
-                            Bitmap::new_constant(true, num_rows),
-                        ))
+                        Value::Column(col.wrap_nullable(Some(Bitmap::new_constant(true, num_rows))))
                     }
                     json => json,
                 });
@@ -2648,10 +2632,7 @@ impl<'a> Evaluator<'a> {
                 };
                 entries.push(entry);
             }
-            let elem_col = NullableColumn::new_column(
-                Column::Variant(matched_values.build()),
-                Bitmap::new_constant(true, total_matches),
-            );
+            let elem_col = Column::Variant(matched_values.build()).wrap_nullable(None);
             entries.push(elem_col.into());
             let block = DataBlock::new(entries, total_matches);
             Some(self.eval_lambda_block(&block, expr)?)
@@ -2960,7 +2941,7 @@ impl ValueVisitor for CheckStrictValue {
         &mut self,
         column: Box<NullableColumn<AnyType>>,
     ) -> std::result::Result<(), ()> {
-        self.visit_column(column.column)
+        self.visit_column(column.destructure().0)
     }
 
     fn visit_typed_column<T: ValueType>(

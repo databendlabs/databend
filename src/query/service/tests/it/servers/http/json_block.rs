@@ -47,7 +47,6 @@ use databend_common_expression::types::geography::GeographyColumn;
 use databend_common_expression::types::geography::GeographyRef;
 use databend_common_expression::types::geography::GeographyType;
 use databend_common_expression::types::geometry::extract_geo_and_srid;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::timestamp::timestamp_to_string;
@@ -76,7 +75,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     if is_nullable {
         columns = columns
             .iter()
-            .map(|c| NullableColumn::new_column(c.clone(), Bitmap::new_constant(true, c.len())))
+            .map(|c| c.clone().wrap_nullable(None))
             .collect();
     }
 
@@ -417,10 +416,7 @@ fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
                 ]),
                 vec![0_u64, 1].into(),
             ))),
-            NullableColumn::new_column(
-                VariantType::from_data(vec![value5.clone()]),
-                Bitmap::new_constant(true, 1),
-            ),
+            VariantType::from_data(vec![value5.clone()]).wrap_nullable(None),
         ],
         1,
     );
@@ -488,7 +484,7 @@ fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
     }
 
     match Column::from_arrow_rs(batch.column(3).clone(), schema.field(3).data_type())? {
-        Column::Nullable(column) => match &column.column {
+        Column::Nullable(column) => match column.column() {
             Column::Variant(column) => {
                 assert_eq!(column.index(0).unwrap(), variant_to_json_string(&value5))
             }
@@ -510,10 +506,10 @@ fn test_arrow_ipc_nullable_variant_distinguishes_sql_null_and_json_null() -> any
     )]);
     let mut collector = BlocksCollector::new();
     collector.append_columns(
-        vec![NullableColumn::new_column(
-            VariantType::from_data(vec![Vec::new(), json_null.clone()]),
-            Bitmap::from([false, true]),
-        )],
+        vec![
+            VariantType::from_data(vec![Vec::new(), json_null.clone()])
+                .wrap_nullable(Some(Bitmap::from([false, true]))),
+        ],
         2,
     );
 
@@ -523,10 +519,10 @@ fn test_arrow_ipc_nullable_variant_distinguishes_sql_null_and_json_null() -> any
     let (_, batch) = read_first_arrow_batch(buf)?;
 
     match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
-        Column::Nullable(column) => match &column.column {
+        Column::Nullable(column) => match column.column() {
             Column::Variant(values) => {
-                assert!(!column.validity.get_bit(0));
-                assert!(column.validity.get_bit(1));
+                assert!(!column.validity().get_bit(0));
+                assert!(column.validity().get_bit(1));
                 assert!(values.index(0).unwrap().is_empty());
                 assert_eq!(values.index(1).unwrap(), b"null");
             }
@@ -553,10 +549,8 @@ fn test_arrow_ipc_nested_nullable_variant_distinguishes_sql_null_and_json_null()
     let mut collector = BlocksCollector::new();
     collector.append_columns(
         vec![Column::Tuple(vec![
-            NullableColumn::new_column(
-                VariantType::from_data(vec![Vec::new(), json_null.clone()]),
-                Bitmap::from([false, true]),
-            ),
+            VariantType::from_data(vec![Vec::new(), json_null.clone()])
+                .wrap_nullable(Some(Bitmap::from([false, true]))),
             StringType::from_data(vec!["a", "b"]),
         ])],
         2,
@@ -569,10 +563,10 @@ fn test_arrow_ipc_nested_nullable_variant_distinguishes_sql_null_and_json_null()
 
     match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
         Column::Tuple(fields) => match &fields[0] {
-            Column::Nullable(column) => match &column.column {
+            Column::Nullable(column) => match column.column() {
                 Column::Variant(values) => {
-                    assert!(!column.validity.get_bit(0));
-                    assert!(column.validity.get_bit(1));
+                    assert!(!column.validity().get_bit(0));
+                    assert!(column.validity().get_bit(1));
                     assert!(values.index(0).unwrap().is_empty());
                     assert_eq!(values.index(1).unwrap(), b"null");
                 }
@@ -665,10 +659,7 @@ fn test_arrow_ipc_nested_variant_jsonb_payloads_for_legacy_bendsql_python() -> a
                 ]),
                 vec![0_u64, 1].into(),
             ))),
-            NullableColumn::new_column(
-                VariantType::from_data(vec![value5.clone()]),
-                Bitmap::new_constant(true, 1),
-            ),
+            VariantType::from_data(vec![value5.clone()]).wrap_nullable(None),
         ],
         1,
     );
@@ -712,7 +703,7 @@ fn test_arrow_ipc_nested_variant_jsonb_payloads_for_legacy_bendsql_python() -> a
     }
 
     match Column::from_arrow_rs(batch.column(3).clone(), schema.field(3).data_type())? {
-        Column::Nullable(column) => match &column.column {
+        Column::Nullable(column) => match column.column() {
             Column::Variant(column) => assert_eq!(column.index(0).unwrap(), value5),
             other => panic!("expected nullable variant inner column, got {other:?}"),
         },
@@ -814,10 +805,7 @@ fn test_arrow_ipc_nested_geo_binary_payloads() -> anyhow::Result<()> {
                 ]),
                 vec![0_u64, 1].into(),
             ))),
-            NullableColumn::new_column(
-                GeometryType::from_data(vec![geom4.clone()]),
-                Bitmap::new_constant(true, 1),
-            ),
+            GeometryType::from_data(vec![geom4.clone()]).wrap_nullable(None),
         ],
         1,
     );
@@ -870,7 +858,7 @@ fn test_arrow_ipc_nested_geo_binary_payloads() -> anyhow::Result<()> {
     }
 
     match Column::from_arrow_rs(batch.column(3).clone(), schema.field(3).data_type())? {
-        Column::Nullable(column) => match &column.column {
+        Column::Nullable(column) => match column.column() {
             Column::Geometry(column) => {
                 assert_eq!(column.index(0).unwrap(), geometry_to_wkb(&geom4)?)
             }

@@ -20,6 +20,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
 use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalPruningRuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::CatalogManager;
@@ -234,6 +235,8 @@ impl GlobalServices {
 
         if config.query.common.enable_queries_executor {
             GlobalQueriesExecutor::init()?;
+            // The queries of the global executor prune on a global runtime too.
+            GlobalPruningRuntime::init(num_cpus::get())?;
         }
 
         Self::init_workload_mgr(config).await?;

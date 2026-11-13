@@ -68,6 +68,7 @@ use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::types::variant::JSONB_NULL;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
 use databend_common_expression::utils::auto_detect_datetime::parse_date_with_auto;
@@ -125,10 +126,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             // Legacy behavior: variant value may be an invalid JSONB, convert it to string and
             // then parse.
             let val = RawJsonb::new(s).to_string();
-            if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data)
-                && !ctx.func_ctx.disable_variant_check
-            {
-                ctx.set_error(output.len(), err.to_string());
+            if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data) {
+                if ctx.func_ctx.disable_variant_check {
+                    // Store an unparsable value as JSON null: empty bytes are not valid JSONB.
+                    output.put_slice(JSONB_NULL);
+                } else {
+                    ctx.set_error(output.len(), err.to_string());
+                }
             }
             output.commit_row();
         }),
@@ -144,10 +148,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.commit_row();
                 return;
             }
-            if let Err(err) = parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.data)
-                && !ctx.func_ctx.disable_variant_check
-            {
-                ctx.set_error(output.len(), err.to_string());
+            if let Err(err) = parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.data) {
+                if ctx.func_ctx.disable_variant_check {
+                    // Store an unparsable value as JSON null: empty bytes are not valid JSONB.
+                    output.put_slice(JSONB_NULL);
+                } else {
+                    ctx.set_error(output.len(), err.to_string());
+                }
             }
             output.commit_row();
         }),
@@ -1230,16 +1237,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                         let validity = match col {
                             Column::Null { len } => Some(Bitmap::new_constant(false, *len)),
                             Column::Nullable(deref!(nullable_column)) => {
-                                Some(nullable_column.validity.clone())
+                                Some(nullable_column.validity().clone())
                             }
                             _ => None,
                         };
                         let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
                         if let Some(validity) = validity {
-                            Value::Column(NullableColumn::new_column(
-                                Column::Variant(new_col),
-                                validity,
-                            ))
+                            Value::Column(Column::Variant(new_col).wrap_nullable(Some(validity)))
                         } else {
                             Value::Column(Column::Variant(new_col))
                         }
@@ -1276,12 +1280,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let validity = match col {
                     Column::Null { len } => Bitmap::new_constant(false, len),
                     Column::Nullable(deref!(ref nullable_column)) => {
-                        nullable_column.validity.clone()
+                        nullable_column.validity().clone()
                     }
                     _ => Bitmap::new_constant(true, col.len()),
                 };
                 let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
-                Value::Column(NullableColumn::new_unchecked(new_col, validity))
+                Value::Column(NullableColumn::new(new_col, validity))
             }
         },
     );

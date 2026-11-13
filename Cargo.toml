@@ -285,6 +285,7 @@ gimli = "0.31.0"
 glob = "0.3.0"
 globiter = "0.1"
 goldenfile = "1.4"
+h2 = "0.4"
 h3o = "0.9.4"
 half = "2.7.1"
 hashbrown = { version = "0.15.2", default-features = false }
@@ -412,6 +413,7 @@ rayon = "1.9.0"
 recursive = "0.1.1"
 redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
 regex = "1.8.1"
+regex-syntax = "0.8"
 replace_with = "0.1.7"
 reqsign = { version = "0.16.5", default-features = false, features = ["services-aws"] }
 reqwest = { version = "0.12", default-features = false, features = [

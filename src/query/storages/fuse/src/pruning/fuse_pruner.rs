@@ -14,8 +14,12 @@
 
 use std::cmp::max;
 use std::collections::HashSet;
+use std::future::Future;
+use std::pin::pin;
 use std::sync::Arc;
 
+use databend_common_base::base::WatchNotify;
+use databend_common_base::runtime::GlobalPruningRuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
@@ -24,6 +28,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_expression::ColumnId;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::TableSchemaRef;
@@ -59,6 +64,7 @@ use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
+use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
 use crate::io::BloomIndexRebuilder;
@@ -84,18 +90,60 @@ const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 use databend_common_catalog::plan::VirtualPredicateRef;
 use databend_storages_common_cache::CachePolicy;
 
+/// Where the batch pruning paths (`FusePruner::pruning`, bloom / inverted /
+/// vector index block pruning, recluster) of a query run. It follows the
+/// pipeline executor of the query, see `ExecutorSettings`.
+enum PruningRuntime {
+    /// The query runs on the global queries executor, and prunes on the global
+    /// pruning runtime.
+    Global(Arc<Runtime>),
+    /// The query has an executor of its own, and a pruning runtime of its own,
+    /// both of `max_threads` threads. The runtime is created on first use: the
+    /// pipeline based pruning without index pruners never touches it.
+    Query {
+        threads: usize,
+        runtime: Mutex<Option<Arc<Runtime>>>,
+    },
+}
+
+impl PruningRuntime {
+    fn create(ctx: &Arc<dyn TableContext>) -> Result<Self> {
+        let settings = ctx.get_settings();
+        // The global pruning runtime exists where the global queries executor does.
+        if !settings.get_use_legacy_query_executor()?
+            && let Some(runtime) = GlobalPruningRuntime::try_instance()
+        {
+            return Ok(PruningRuntime::Global(runtime));
+        }
+        Ok(PruningRuntime::Query {
+            threads: settings.get_max_threads()? as usize,
+            runtime: Mutex::new(None),
+        })
+    }
+
+    fn get(&self) -> Result<Arc<Runtime>> {
+        match self {
+            PruningRuntime::Global(runtime) => Ok(runtime.clone()),
+            PruningRuntime::Query { threads, runtime } => {
+                let mut runtime = runtime.lock();
+                if let Some(runtime) = runtime.as_ref() {
+                    return Ok(runtime.clone());
+                }
+                let created = Arc::new(Runtime::with_worker_threads(
+                    *threads,
+                    Some("pruning-worker".to_owned()),
+                )?);
+                *runtime = Some(created.clone());
+                Ok(created)
+            }
+        }
+    }
+}
+
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
     pub dal: Operator,
-    /// Dedicated runtime for the batch pruning paths (`FusePruner::pruning`,
-    /// bloom / inverted / vector index block pruning, recluster).
-    ///
-    /// It is created on first use: the pipeline based pruning without index
-    /// pruners never touches it, and spawning (and later joining) a
-    /// `max_threads` worker runtime for every table scan is a measurable cost
-    /// on the query critical path.
-    pruning_runtime: Mutex<Option<Arc<Runtime>>>,
-    pruning_runtime_threads: usize,
+    pruning_runtime: PruningRuntime,
     pub pruning_semaphore: Arc<Semaphore>,
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
@@ -280,15 +328,11 @@ impl PruningContext {
         let internal_column_pruner =
             InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
-        // Constraint the degree of parallelism
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
-            pruning_runtime: Mutex::new(None),
-            pruning_runtime_threads: max_threads,
+            pruning_runtime: PruningRuntime::create(ctx)?,
             pruning_semaphore,
             limit_pruner,
             range_pruner,
@@ -306,18 +350,70 @@ impl PruningContext {
         Ok(pruning_ctx)
     }
 
-    /// The pruning runtime, created on first use.
+    /// The runtime of the batch pruning paths, see [`PruningRuntime`].
     pub fn pruning_runtime(&self) -> Result<Arc<Runtime>> {
-        let mut guard = self.pruning_runtime.lock();
-        if let Some(runtime) = guard.as_ref() {
-            return Ok(runtime.clone());
+        self.pruning_runtime.get()
+    }
+
+    /// Fails once the query is aborted. The pruning tasks check it before their
+    /// I/O and CPU bound steps: nothing else stops them, and on the runtime
+    /// shared by the queries they would keep its threads from the other queries.
+    pub fn check_aborting(&self) -> Result<()> {
+        self.ctx.check_aborting().with_context(|| "query aborted")?;
+        // A query that is stopped while it is planned is only notified.
+        if self.ctx.get_abort_notify().has_notified() {
+            return Err(ErrorCode::aborting());
         }
-        let runtime = Arc::new(Runtime::with_worker_threads(
-            self.pruning_runtime_threads,
-            Some("pruning-worker".to_owned()),
-        )?);
-        *guard = Some(runtime.clone());
-        Ok(runtime)
+        Ok(())
+    }
+
+    /// Runs the block pruning `tasks` on the pruning runtime, one permit of
+    /// `semaphore` each, and returns their results in order. The query being
+    /// aborted fails it at once, and aborts the tasks that are not finished.
+    pub async fn run_tasks<F, Fut, T>(
+        &self,
+        semaphore: Arc<Semaphore>,
+        tasks: impl IntoIterator<Item = F>,
+    ) -> Result<Vec<T>>
+    where
+        F: FnOnce(OwnedSemaphorePermit) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<T>> + Send + 'static,
+        T: Send + 'static,
+    {
+        let runtime = self.pruning_runtime()?;
+        let results = run_tasks(&runtime, semaphore, self.ctx.get_abort_notify(), tasks).await?;
+        // An aborted query has not pruned all its blocks.
+        self.check_aborting()?;
+        Ok(results)
+    }
+}
+
+/// A query that is stopped while it is planned is only notified: nothing drops
+/// the future that joins its tasks. Waiting for the notification does, and the
+/// tasks are aborted with it.
+async fn run_tasks<F, Fut, T>(
+    runtime: &Runtime,
+    semaphore: Arc<Semaphore>,
+    abort_notify: Arc<WatchNotify>,
+    tasks: impl IntoIterator<Item = F>,
+) -> Result<Vec<T>>
+where
+    F: FnOnce(OwnedSemaphorePermit) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<T>> + Send + 'static,
+    T: Send + 'static,
+{
+    let notified = pin!(abort_notify.notified());
+    let join = pin!(async {
+        let handles = runtime
+            .try_spawn_batch_with_owned_semaphore(semaphore, tasks)
+            .await?;
+        Runtime::try_join_all(handles)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {e}")))
+    });
+    match futures::future::select(notified, join).await {
+        futures::future::Either::Left(((), _)) => Err(ErrorCode::aborting()),
+        futures::future::Either::Right((res, _)) => res?.into_iter().collect(),
     }
 }
 
@@ -478,6 +574,7 @@ impl FusePruner {
 
                     if delete_pruning {
                         for (segment_location, compact_segment_info) in &pruned_segments {
+                            pruning_ctx.check_aborting()?;
                             if let Some(range_index) = &inverse_range_index {
                                 let range_input = RangeIndexInput::new(
                                     &compact_segment_info.summary.col_stats,
@@ -517,6 +614,7 @@ impl FusePruner {
                     } else {
                         let sample_probability = table_sample(&push_down)?;
                         for (location, info) in pruned_segments {
+                            pruning_ctx.check_aborting()?;
                             let mut block_metas = ExtractSegmentTransform::extract_block_metas(
                                 &location.location.0,
                                 &info,
@@ -578,7 +676,7 @@ impl FusePruner {
             }));
         }
 
-        let workers = futures::future::try_join_all(works).await?;
+        let workers = Runtime::try_join_all(works).await?;
 
         let mut metas = vec![];
         for worker in workers {
@@ -618,6 +716,7 @@ impl FusePruner {
             works.push(pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 async move {
+                    block_pruner.pruning_ctx.check_aborting()?;
                     // Build pruning tasks.
                     let res = block_pruner
                         .pruning(
@@ -642,7 +741,7 @@ impl FusePruner {
             segment_idx += 1;
         }
 
-        let workers = futures::future::try_join_all(works).await?;
+        let workers = Runtime::try_join_all(works).await?;
 
         let mut metas = vec![];
         for worker in workers {
@@ -851,4 +950,75 @@ pub fn table_sample(push_down_info: &Option<PushDownInfo>) -> Result<Option<f64>
         }
     }
     Ok(sample_probability)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering::SeqCst;
+    use std::time::Duration;
+
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_run_tasks_caps_concurrency_and_aborts_on_notify() -> Result<()> {
+        let runtime = Arc::new(Runtime::with_worker_threads(
+            4,
+            Some("pruning-test".to_owned()),
+        )?);
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let tasks = (0..4).map(|i| {
+            let active = active.clone();
+            let peak = peak.clone();
+            move |permit| async move {
+                let _permit = permit;
+                let cur = active.fetch_add(1, SeqCst) + 1;
+                peak.fetch_max(cur, SeqCst);
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                active.fetch_sub(1, SeqCst);
+                Ok(i)
+            }
+        });
+        let res = run_tasks(
+            &runtime,
+            Arc::new(Semaphore::new(1)),
+            Arc::new(WatchNotify::new()),
+            tasks,
+        )
+        .await?;
+        assert_eq!(res, vec![0, 1, 2, 3]);
+        assert_eq!(peak.load(SeqCst), 1);
+
+        // Stopping an HTTP query in Starting state notifies `abort_notify`
+        // without dropping the outer future; in-flight tasks must still abort.
+        let abort_notify = Arc::new(WatchNotify::new());
+        let task_alive = Arc::new(());
+        let held = task_alive.clone();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let tasks = std::iter::once(move |permit| async move {
+            let _permit = permit;
+            let _held = held;
+            let _ = started_tx.send(());
+            std::future::pending::<Result<usize>>().await
+        });
+        let join = runtime.spawn({
+            let runtime = runtime.clone();
+            let abort_notify = abort_notify.clone();
+            let semaphore = Arc::new(Semaphore::new(2));
+            async move { run_tasks(&runtime, semaphore, abort_notify, tasks).await }
+        });
+        started_rx.await.unwrap();
+        abort_notify.notify_waiters();
+        let err = join.await.unwrap().unwrap_err();
+        assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
+        for _ in 0..100 {
+            if Arc::strong_count(&task_alive) == 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(Arc::strong_count(&task_alive), 1);
+        Ok(())
+    }
 }

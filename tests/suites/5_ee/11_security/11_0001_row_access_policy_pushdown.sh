@@ -66,7 +66,7 @@ fi
 comment "test 11: RAP on VARIANT column enters prewhere, limit is pushed"
 stmt "DROP TABLE IF EXISTS rap_vcol_test"
 stmt "DROP ROW ACCESS POLICY IF EXISTS rap_vcol_policy"
-stmt "CREATE TABLE rap_vcol_test(id INT, val VARIANT)"
+stmt "CREATE TABLE rap_vcol_test(id INT, val VARIANT) enable_virtual_column = false"
 stmt "INSERT INTO rap_vcol_test VALUES (1, '{\"region\":\"EMEA\"}'), (2, '{\"region\":\"APAC\"}'), (3, '{\"region\":\"APAC\"}')"
 stmt "CREATE ROW ACCESS POLICY rap_vcol_policy AS (val VARIANT) RETURNS boolean -> val['region'] = 'APAC'"
 stmt "ALTER TABLE rap_vcol_test ADD ROW ACCESS POLICY rap_vcol_policy ON (val)"

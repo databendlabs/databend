@@ -54,9 +54,9 @@ use databend_storages_common_pruner::VectorScores;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::IndexFileLocation;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
-use futures_util::future;
 use log::info;
 use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 
 use crate::io::VectorIndexSearchOptions;
 use crate::io::read::VectorIndexIdentity;
@@ -491,12 +491,17 @@ impl VectorIndexPruner {
     {
         let mut metas = metas.into_iter().enumerate();
         let tasks = std::iter::from_fn(|| {
+            if self.pruning_ctx.check_aborting().is_err() {
+                return None;
+            }
             let (block_idx, (block_meta_index, block_meta)) = metas.next()?;
             let reader = self.vector_reader.clone();
             let location = self.index_file(&block_meta);
             let op = op.clone();
+            let pruning_ctx = self.pruning_ctx.clone();
             Some(move |permit: OwnedSemaphorePermit| async move {
                 let _permit = permit;
+                pruning_ctx.check_aborting()?;
                 let row_count = block_meta.row_count as usize;
                 let scores = op(reader, row_count, location?)
                     .await?
@@ -516,16 +521,21 @@ impl VectorIndexPruner {
             })
         });
 
-        let handles = self
+        let mut semaphore = self.pruning_ctx.pruning_semaphore.clone();
+        // The index search is CPU bound. The runtime of a query has `max_threads`
+        // threads; the global one may have more, and must not run more of them.
+        // The tasks read the index too: never allow more than the I/O limit.
+        let max_threads = self.pruning_ctx.ctx.get_settings().get_max_threads()? as usize;
+        let workers = self
             .pruning_ctx
             .pruning_runtime()?
-            .try_spawn_batch_with_owned_semaphore(self.pruning_ctx.pruning_semaphore.clone(), tasks)
-            .await?;
-        future::try_join_all(handles)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("vector pruning failure: {e}")))?
-            .into_iter()
-            .collect()
+            .inner()
+            .metrics()
+            .num_workers();
+        if max_threads < workers.min(semaphore.available_permits()) {
+            semaphore = Arc::new(Semaphore::new(max_threads.max(1)));
+        }
+        self.pruning_ctx.run_tasks(semaphore, tasks).await
     }
 
     fn vector_prune_candidates(
