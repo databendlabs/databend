@@ -702,6 +702,36 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT unnest([1, 2, 3]), unnest([1, 2, 3])",
         },
         SqlTestCase {
+            name: "duplicate_srf_over_aggregate_reuses_project_set_binding",
+            description: "Repeated SRFs over the same aggregate share its output symbol, so they are one ProjectSet function.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT unnest([sum(a)]), unnest([sum(a)]) + 1 FROM t",
+        },
+        SqlTestCase {
+            name: "order_by_srf_of_select_list_is_its_output",
+            description: "An ORDER BY set-returning function that is in the SELECT list sorts by the output of the same ProjectSet function.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT unnest([a, b]) AS u FROM t ORDER BY unnest([a, b])",
+        },
+        SqlTestCase {
+            name: "order_by_srf_over_aggregate_is_its_output",
+            description: "An ORDER BY set-returning function over an aggregate is the lazy ProjectSet function of the SELECT list.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT unnest([sum(a)]) FROM t ORDER BY unnest([sum(a)])",
+        },
+        SqlTestCase {
+            name: "order_by_only_srf_is_evaluated_below_where",
+            description: "A set-returning function only in ORDER BY joins the ProjectSet of the SELECT list, below the WHERE that refers to an SRF alias.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT unnest([a]) AS u FROM t WHERE u > 1 ORDER BY unnest([b])",
+        },
+        SqlTestCase {
+            name: "order_by_only_srf_in_grouped_select_is_lazy",
+            description: "A set-returning function only in the ORDER BY of a grouped SELECT is evaluated after the aggregate.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT b FROM t GROUP BY b ORDER BY unnest([b, 1])",
+        },
+        SqlTestCase {
             name: "group_by_all_collects_non_aggregate_select_items",
             description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
@@ -730,6 +760,24 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             description: "GROUP BY ALL should also skip UDAF select items when inferring grouping keys.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
             sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY ALL",
+        },
+        SqlTestCase {
+            name: "group_by_position_counts_star_columns",
+            description: "A GROUP BY position counts the columns a star expands to, so position 3 is the star column b.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a, *, count(*) FROM t GROUP BY 1, 3",
+        },
+        SqlTestCase {
+            name: "group_by_rejects_position_zero",
+            description: "GROUP BY positions are one-based.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a, count(*) FROM t GROUP BY 0",
+        },
+        SqlTestCase {
+            name: "group_by_rejects_position_past_select_list",
+            description: "A GROUP BY position must name a SELECT item, counting the columns a star expands to.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT *, count(*) FROM t GROUP BY 1, 2, 4",
         },
         SqlTestCase {
             name: "group_by_rejects_udaf_item",
@@ -853,6 +901,18 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             description: "HAVING alias prebinding must resolve grouping() arguments to input group columns.",
             setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
             sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING k IS NOT NULL",
+        },
+        SqlTestCase {
+            name: "grouping_argument_in_having_shadowed_by_alias",
+            description: "A grouping() argument in HAVING named like a SELECT alias that is not a key binds to the input column that is.",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING grouping(k) = 0",
+        },
+        SqlTestCase {
+            name: "grouping_argument_in_order_by_shadowed_by_alias",
+            description: "A grouping() argument in ORDER BY named like a SELECT alias that is not a key binds to the input column that is.",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) ORDER BY grouping(k), d",
         },
         SqlTestCase {
             name: "grouping_in_order_by_falls_back_to_group_alias",

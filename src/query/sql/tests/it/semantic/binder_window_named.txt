@@ -38,7 +38,7 @@ EvalScalar
         ├── sort keys: [sum_part_0 (#3) ASC NULLS LAST, sum(salary) (#2) ASC NULLS LAST]
         ├── limit: [NONE]
         ├── window top: NONE
-        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
+        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(20..31), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
         └── EvalScalar
             ├── scalars: [sum(salary) (#2) AS (#2), 1 AS (#3)]
             └── Aggregate(Initial)
@@ -68,7 +68,7 @@ EvalScalar
         ├── sort keys: [sum_part_0 (#3) ASC NULLS LAST, sum(salary) (#2) ASC NULLS LAST]
         ├── limit: [NONE]
         ├── window top: NONE
-        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
+        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(20..31), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
         └── EvalScalar
             ├── scalars: [sum(salary) (#2) AS (#2), 1 AS (#3)]
             └── Aggregate(Initial)

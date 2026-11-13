@@ -45,14 +45,17 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::GroupingKeyScope;
 use crate::binder::GroupingScopeState;
 use crate::binder::ScalarFoldingPolicy;
-use crate::binder::SelectItemExprs;
+use crate::binder::SelectClauseExprs;
 use crate::binder::SelectItems;
 use crate::binder::Visibility;
 use crate::binder::project_set::SetReturningAnalyzer;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::ClauseAliasBindings;
 use crate::binder::select::SelectList;
+use crate::binder::select::simple_unqualified_column_name;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::CoreExprArena;
+use crate::planner::semantic::CoreExprId;
 use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::Aggregate;
@@ -132,33 +135,110 @@ pub struct GroupingSetsInfo {
     pub sets: Vec<Vec<Symbol>>,
 }
 
+/// A GROUP BY item, lowered with the other clauses of its SELECT, see
+/// `select_clauses.rs`.
 #[derive(Clone)]
 pub(crate) struct GroupItem {
-    expr: Expr,
+    key: GroupKey,
     disable_select_alias_fallback: bool,
 }
 
+#[derive(Clone)]
+enum GroupKey {
+    /// The SELECT item at a zero-based position, written as a one-based
+    /// position or standing for one in GROUP BY ALL.
+    Position(usize),
+    Expr {
+        root: CoreExprId,
+        /// The name of the key output: the expression as written.
+        name: String,
+        /// The name if the expression is an unqualified column reference,
+        /// as written, which may be a SELECT alias.
+        simple_name: Option<String>,
+    },
+}
+
 impl GroupItem {
-    fn normal(expr: Expr) -> Self {
+    fn position(position: usize) -> Self {
         Self {
-            expr,
+            key: GroupKey::Position(position),
             disable_select_alias_fallback: false,
         }
     }
 
-    fn grouping_construct(expr: Expr) -> Self {
+    /// Lower a GROUP BY item of a SELECT with `select_len` items. An integer
+    /// literal is a one-based position in the SELECT list.
+    fn lower<'a>(arena: &mut CoreExprArena<'a>, expr: &'a Expr, select_len: usize) -> Result<Self> {
+        let key = match expr {
+            Expr::Literal {
+                span,
+                value: Literal::UInt64(position),
+            } => {
+                if *position < 1 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "GROUP BY position {position} is illegal"
+                    ))
+                    .set_span(*span));
+                }
+                if *position > select_len as u64 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "GROUP BY position {position} is not in select list"
+                    ))
+                    .set_span(*span));
+                }
+                GroupKey::Position(*position as usize - 1)
+            }
+            expr => GroupKey::Expr {
+                root: arena.lower_ast_expr(expr)?,
+                name: format!("{:#}", expr),
+                simple_name: simple_unqualified_column_name(expr).map(str::to_string),
+            },
+        };
+        Ok(Self {
+            key,
+            disable_select_alias_fallback: false,
+        })
+    }
+
+    fn in_grouping_construct(self) -> Self {
         Self {
-            expr,
             disable_select_alias_fallback: true,
+            ..self
         }
     }
 }
 
 /// A GROUP BY with ALL replaced by positions, and ROLLUP, CUBE and
 /// combinations of them expanded into grouping sets.
+#[derive(Clone)]
 pub(crate) enum ExpandedGroup {
     Normal(Vec<GroupItem>),
     GroupingSets(Vec<Vec<GroupItem>>),
+}
+
+/// A lowered GROUP BY. ALL is expanded once the aggregates of the SELECT
+/// items are known, see [`Binder::expand_group_by`].
+pub(crate) enum LoweredGroupBy {
+    All,
+    Expanded(ExpandedGroup),
+}
+
+impl LoweredGroupBy {
+    /// Lower the items of `group_by` of a SELECT with `select_len` items, and
+    /// expand it but for a top-level ALL. An item in several grouping sets is
+    /// lowered once.
+    pub(crate) fn lower<'a>(
+        arena: &mut CoreExprArena<'a>,
+        group_by: &'a GroupBy,
+        select_len: usize,
+    ) -> Result<Self> {
+        match group_by {
+            GroupBy::All => Ok(Self::All),
+            group_by => Ok(Self::Expanded(Binder::expand_group(
+                arena, group_by, select_len,
+            )?)),
+        }
+    }
 }
 
 impl ExpandedGroup {
@@ -233,10 +313,6 @@ impl AggregateInfo {
 
     pub fn grouping_sets(&self) -> Option<&GroupingSetsInfo> {
         self.grouping_sets.as_ref()
-    }
-
-    pub fn is_grouping_sets_item(&self, expr: &ScalarExpr) -> bool {
-        self.grouping_sets.is_some() && self.group_items_map.contains_key(expr)
     }
 
     pub fn lookup_group_item(&self, expr: &ScalarExpr) -> Option<&ScalarItem> {
@@ -809,8 +885,7 @@ impl AggregateInfo {
 
         let mut replaced_params = Vec::with_capacity(function.arguments.len());
         for arg in &function.arguments {
-            // An argument is a key either already bound to its output symbol or,
-            // for a name retargeted from a shadowing alias, as its input expression.
+            // An argument that is a key is bound to its output symbol.
             let position = match arg {
                 ScalarExpr::BoundColumnRef(column_ref)
                     if self.is_grouping_key_output(column_ref.column.index) =>
@@ -819,7 +894,7 @@ impl AggregateInfo {
                         .iter()
                         .position(|item| item.index == column_ref.column.index)
                 }
-                _ => self.group_items_map.get(arg).copied(),
+                _ => None,
             };
             let Some(index) = position else {
                 return Err(self.grouping_argument_error());
@@ -950,17 +1025,19 @@ impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         match expr {
             ScalarExpr::AggregateFunction(aggregate) => {
+                let span = aggregate.span;
                 let column = self
                     .aggregate_info
                     .intern_aggregate_function_column(&self.metadata, aggregate)?;
-                *expr = BoundColumnRef { span: None, column }.into();
+                *expr = BoundColumnRef { span, column }.into();
                 Ok(())
             }
             ScalarExpr::UDAFCall(udaf) => {
+                let span = udaf.span;
                 let column = self
                     .aggregate_info
                     .intern_udaf_call_column(&self.metadata, udaf)?;
-                *expr = BoundColumnRef { span: None, column }.into();
+                *expr = BoundColumnRef { span, column }.into();
                 Ok(())
             }
             _ => walk_expr_mut(self, expr),
@@ -1004,24 +1081,24 @@ impl Binder {
         Ok(())
     }
 
-    /// Expand GROUP BY. ALL stands for the positions of the SELECT items that
-    /// contain no aggregate function, see [`SelectItemExprs::group_by_all`].
+    /// Expand the GROUP BY of a SELECT. ALL stands for the positions of the
+    /// SELECT items that contain no aggregate function, see
+    /// [`SelectClauseExprs::group_by_all`].
     pub(crate) fn expand_group_by(
         &self,
-        group_by: &GroupBy,
-        select_items: &SelectItemExprs<'_>,
+        clauses: &SelectClauseExprs<'_>,
         udaf_names: &HashSet<String>,
         input_context: &BindContext,
-    ) -> Result<ExpandedGroup> {
-        match group_by {
-            GroupBy::All => Ok(ExpandedGroup::Normal(
-                select_items
+    ) -> Option<ExpandedGroup> {
+        match clauses.group_by()? {
+            LoweredGroupBy::All => Some(ExpandedGroup::Normal(
+                clauses
                     .group_by_all(&self.name_resolution_ctx, udaf_names, input_context)
                     .into_iter()
-                    .map(GroupItem::normal)
+                    .map(GroupItem::position)
                     .collect(),
             )),
-            group_by => Self::expand_group(group_by.clone()),
+            LoweredGroupBy::Expanded(group) => Some(group.clone()),
         }
     }
 
@@ -1065,13 +1142,17 @@ impl Binder {
         result
     }
 
-    /// Expand a GROUP BY other than a top-level ALL, which only
+    /// Lower and expand a GROUP BY other than a top-level ALL, which only
     /// [`Self::expand_group_by`] can expand.
-    fn expand_group(group_by: GroupBy) -> Result<ExpandedGroup> {
+    fn expand_group<'a>(
+        arena: &mut CoreExprArena<'a>,
+        group_by: &'a GroupBy,
+        select_len: usize,
+    ) -> Result<ExpandedGroup> {
         match group_by {
-            GroupBy::Normal(exprs) => Ok(ExpandedGroup::Normal(
-                exprs.into_iter().map(GroupItem::normal).collect(),
-            )),
+            GroupBy::Normal(exprs) => Ok(ExpandedGroup::Normal(Self::lower_group_items(
+                arena, exprs, select_len,
+            )?)),
             // A top-level ALL is expanded by the caller, so ALL is only
             // reached in a combined GROUP BY.
             GroupBy::All => Err(ErrorCode::SyntaxException(format!(
@@ -1079,31 +1160,31 @@ impl Binder {
                 GroupBy::All
             ))),
             GroupBy::GroupingSets(sets) => Ok(ExpandedGroup::GroupingSets(
-                Self::grouping_construct_sets(sets),
+                sets.iter()
+                    .map(|set| {
+                        Ok(Self::in_grouping_construct(Self::lower_group_items(
+                            arena, set, select_len,
+                        )?))
+                    })
+                    .collect::<Result<_>>()?,
             )),
             GroupBy::Cube(exprs) => {
                 // Expand CUBE to GroupingSets
-                Ok(ExpandedGroup::GroupingSets(
-                    Self::generate_cube_sets(exprs)
-                        .into_iter()
-                        .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
-                        .collect(),
-                ))
+                Ok(ExpandedGroup::GroupingSets(Self::generate_cube_sets(
+                    Self::in_grouping_construct(Self::lower_group_items(arena, exprs, select_len)?),
+                )))
             }
             GroupBy::Rollup(exprs) => {
                 // Expand ROLLUP to GroupingSets
-                Ok(ExpandedGroup::GroupingSets(
-                    Self::generate_rollup_sets(exprs)
-                        .into_iter()
-                        .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
-                        .collect(),
-                ))
+                Ok(ExpandedGroup::GroupingSets(Self::generate_rollup_sets(
+                    Self::in_grouping_construct(Self::lower_group_items(arena, exprs, select_len)?),
+                )))
             }
             GroupBy::Combined(groups) => {
                 // Flatten and expand all nested GroupBy variants
                 let mut combined_sets = Vec::new();
                 for group in groups {
-                    match Self::expand_group(group)? {
+                    match Self::expand_group(arena, group, select_len)? {
                         ExpandedGroup::Normal(items) => {
                             combined_sets = Self::cartesian_product(combined_sets, vec![items]);
                         }
@@ -1117,26 +1198,38 @@ impl Binder {
         }
     }
 
+    fn lower_group_items<'a>(
+        arena: &mut CoreExprArena<'a>,
+        exprs: &'a [Expr],
+        select_len: usize,
+    ) -> Result<Vec<GroupItem>> {
+        exprs
+            .iter()
+            .map(|expr| GroupItem::lower(arena, expr, select_len))
+            .collect()
+    }
+
+    fn in_grouping_construct(items: Vec<GroupItem>) -> Vec<GroupItem> {
+        items
+            .into_iter()
+            .map(GroupItem::in_grouping_construct)
+            .collect()
+    }
+
     /// Generate GroupingSets from CUBE (expr1, expr2, ...)
-    fn generate_cube_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
-        (0..=exprs.len())
-            .flat_map(|count| exprs.clone().into_iter().combinations(count))
+    fn generate_cube_sets(items: Vec<GroupItem>) -> Vec<Vec<GroupItem>> {
+        (0..=items.len())
+            .flat_map(|count| items.clone().into_iter().combinations(count))
             .collect::<Vec<_>>()
     }
 
     /// Generate GroupingSets from ROLLUP (expr1, expr2, ...)
-    fn generate_rollup_sets(exprs: Vec<Expr>) -> Vec<Vec<Expr>> {
+    fn generate_rollup_sets(items: Vec<GroupItem>) -> Vec<Vec<GroupItem>> {
         let mut result = Vec::new();
-        for i in (0..=exprs.len()).rev() {
-            result.push(exprs[..i].to_vec());
+        for i in (0..=items.len()).rev() {
+            result.push(items[..i].to_vec());
         }
         result
-    }
-
-    fn grouping_construct_sets(sets: Vec<Vec<Expr>>) -> Vec<Vec<GroupItem>> {
-        sets.into_iter()
-            .map(|set| set.into_iter().map(GroupItem::grouping_construct).collect())
-            .collect()
     }
 
     /// Perform Cartesian product of two sets of grouping sets
@@ -1359,57 +1452,66 @@ impl Binder {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
         let mut group_by_aliases = group_by_aliases.group_item_state();
+        let arena = select_items.exprs().arena();
         for item in group_by.iter() {
-            let expr = &item.expr;
             // An item that refers to a SELECT item, by position or by alias,
             // is that item, which is a key itself.
-            let (scalar, name, select_item) = if let Expr::Literal {
-                value: Literal::UInt64(index),
-                ..
-            } = expr
-            {
-                let (scalar, alias) =
-                    self.resolve_index_item(bind_context, select_items.reborrow(), expr, *index)?;
-                (scalar, alias, Some(*index as usize - 1))
-            } else {
-                let (preferred_aliases, fallback_aliases) =
-                    group_by_aliases.group_item_aliases(expr, item.disable_select_alias_fallback);
-
-                let (mut scalar, _) = {
-                    let mut type_checker = TypeChecker::try_create_with_alias_fallback(
+            let (scalar, name, select_item) = match &item.key {
+                GroupKey::Position(position) => {
+                    let scalar = self.resolve_pre_aggregate_form(
                         bind_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        preferred_aliases,
-                        fallback_aliases,
-                        false,
+                        select_items.reborrow(),
+                        *position,
                     )?;
-                    type_checker.set_folding_policy(select_items.folding_policy());
-                    type_checker.set_select_items(select_items.reborrow());
-                    *type_checker.resolve(expr)?
-                };
-
-                // If a simple GROUP BY item matched a SELECT alias, remember that
-                // alias as a group item column for later GROUP BY items.
-                //
-                // `SELECT i AS k FROM t GROUP BY k, abs(k)` should let `abs(k)`
-                // use the preceding group item alias `k`.
-                // Without a preceding group item alias, complex GROUP BY items
-                // still bind input columns before falling back to SELECT aliases.
-                let group_alias = self.matched_group_item_alias(
-                    bind_context,
-                    select_items.reborrow(),
-                    group_by_aliases.same_name_aliases(expr),
-                    &scalar,
-                )?;
-                if let Some(alias_index) = group_alias {
-                    group_by_aliases.register_group_item_alias(alias_index);
+                    let alias = select_items.exprs().alias(*position).to_string();
+                    (scalar, alias, Some(*position))
                 }
+                GroupKey::Expr {
+                    root,
+                    name,
+                    simple_name,
+                } => {
+                    let simple_name = simple_name.as_deref();
+                    let (preferred_aliases, fallback_aliases) = group_by_aliases
+                        .group_item_aliases(simple_name, item.disable_select_alias_fallback);
 
-                let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
-                analyzer.visit(&mut scalar)?;
-                (scalar, format!("{:#}", expr), group_alias)
+                    let (mut scalar, _) = {
+                        let mut type_checker = TypeChecker::try_create_with_alias_fallback(
+                            bind_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            preferred_aliases,
+                            fallback_aliases,
+                            false,
+                        )?;
+                        type_checker.set_folding_policy(select_items.folding_policy());
+                        type_checker.set_select_items(select_items.reborrow());
+                        *type_checker.resolve_checked_core(arena, *root)?
+                    };
+
+                    // If a simple GROUP BY item matched a SELECT alias, remember that
+                    // alias as a group item column for later GROUP BY items.
+                    //
+                    // `SELECT i AS k FROM t GROUP BY k, abs(k)` should let `abs(k)`
+                    // use the preceding group item alias `k`.
+                    // Without a preceding group item alias, complex GROUP BY items
+                    // still bind input columns before falling back to SELECT aliases.
+                    let group_alias = self.matched_group_item_alias(
+                        bind_context,
+                        select_items.reborrow(),
+                        group_by_aliases.same_name_aliases(simple_name),
+                        &scalar,
+                    )?;
+                    if let Some(alias_index) = group_alias {
+                        group_by_aliases.register_group_item_alias(alias_index);
+                    }
+
+                    let mut analyzer =
+                        SetReturningAnalyzer::new(bind_context, self.metadata.clone());
+                    analyzer.visit(&mut scalar)?;
+                    (scalar, name.clone(), group_alias)
+                }
             };
 
             let agg_info = &mut bind_context.aggregate_info;
@@ -1491,34 +1593,6 @@ impl Binder {
         Ok(())
     }
 
-    fn resolve_index_item(
-        &self,
-        bind_context: &mut BindContext,
-        select_items: SelectItems<'_>,
-        expr: &Expr,
-        index: u64,
-    ) -> Result<(ScalarExpr, String)> {
-        // Convert to zero-based index
-        if index < 1 {
-            return Err(ErrorCode::SemanticError(format!(
-                "GROUP BY position {} is illegal",
-                index
-            ))
-            .set_span(expr.span()));
-        }
-        let index = index as usize - 1;
-        if index >= select_items.exprs().len() {
-            return Err(ErrorCode::SemanticError(format!(
-                "GROUP BY position {} is not in select list",
-                index + 1
-            ))
-            .set_span(expr.span()));
-        }
-        let mut items = select_items;
-        let scalar = self.resolve_pre_aggregate_form(bind_context, items.reborrow(), index)?;
-        Ok((scalar, items.exprs().alias(index).to_string()))
-    }
-
     /// The alias among `candidates` whose item a GROUP BY item that is a
     /// simple name binds to. A pre-aggregate item that is not yet bound is
     /// only bound if it may be that column, so that nothing else is bound for
@@ -1578,7 +1652,8 @@ impl Binder {
         aliases: &[(String, ScalarExpr)],
         select_items: Option<SelectItems<'_>>,
         expr_context: ExprContext,
-        expr: &Expr,
+        arena: &CoreExprArena<'_>,
+        root: CoreExprId,
     ) -> Result<ScalarExpr> {
         let original_context = bind_context.replace_expr_context(expr_context);
         let result = (|| {
@@ -1589,7 +1664,7 @@ impl Binder {
                 self.metadata.clone(),
                 aliases,
             );
-            let (mut result, _) = scalar_binder.bind_with_select_items(expr, select_items)?;
+            let (mut result, _) = scalar_binder.bind_lowered(arena, root, select_items)?;
             check_post_aggregate_expr(&bind_context.aggregate_info, &mut result)?;
             Ok(result)
         })();

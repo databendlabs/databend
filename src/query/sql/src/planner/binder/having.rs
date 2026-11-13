@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -26,6 +25,8 @@ use crate::binder::SelectItems;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::into_conjunctions;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::CoreExprArena;
+use crate::planner::semantic::CoreExprId;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor as _;
@@ -39,13 +40,15 @@ impl Binder {
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
         select_items: Option<SelectItems<'_>>,
-        having: &Expr,
+        arena: &CoreExprArena<'_>,
+        having: CoreExprId,
     ) -> Result<ScalarExpr> {
         self.bind_post_aggregate_expr(
             bind_context,
             aliases,
             select_items,
             ExprContext::HavingClause,
+            arena,
             having,
         )
     }

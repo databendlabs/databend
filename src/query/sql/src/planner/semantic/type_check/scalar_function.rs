@@ -218,13 +218,13 @@ where A: TypeCheckAdapter
         }
     }
 
-    /// GROUPING arguments must match grouping-sets items exactly (see
-    /// `AggregateInfo::replace_grouping`), but alias-preferring clauses such as
-    /// HAVING and ORDER BY can resolve a bare name to a same-name SELECT alias
-    /// like `if(grouping(x) = 1, 0, x) AS x`, shadowing the group column `x`.
-    /// Retarget such an argument to the input column when that column is a
-    /// grouping-sets item. This only fires on arguments that would otherwise
-    /// be rejected, so it never changes a previously working query.
+    /// GROUPING arguments must be keys of grouping sets, bound to their
+    /// outputs (see `AggregateInfo::replace_grouping`), but alias-preferring
+    /// clauses such as HAVING and ORDER BY can resolve a bare name to a
+    /// same-name SELECT alias like `if(grouping(x) = 1, 0, x) AS x`, which
+    /// shadows the key `x`. Such an argument binds to the output of the key
+    /// that the input column of the name is. This only fires on arguments
+    /// that would otherwise be rejected.
     pub(super) fn grouping_argument_group_item(
         &self,
         arena: &CoreExprArena<'_>,
@@ -233,7 +233,8 @@ where A: TypeCheckAdapter
     ) -> Option<ScalarExpr> {
         let aggregate_info = &self.bind_context.aggregate_info;
         if aggregate_info.grouping_sets().is_none()
-            || aggregate_info.is_grouping_sets_item(resolved)
+            || matches!(resolved, ScalarExpr::BoundColumnRef(column)
+                if aggregate_info.is_grouping_key_output(column.column.index))
         {
             return None;
         }
@@ -264,14 +265,19 @@ where A: TypeCheckAdapter
             _ => return None,
         };
 
-        let candidate: ScalarExpr = BoundColumnRef {
+        let input: ScalarExpr = BoundColumnRef {
             span: *span,
             column,
         }
         .into();
-        aggregate_info
-            .is_grouping_sets_item(&candidate)
-            .then_some(candidate)
+        let output = aggregate_info.lookup_grouping_key_output(&input)?;
+        Some(
+            BoundColumnRef {
+                span: *span,
+                column: output,
+            }
+            .into(),
+        )
     }
 
     /// Rewrites that must run before generic child traversal. A recognized

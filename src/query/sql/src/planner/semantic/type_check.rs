@@ -543,7 +543,7 @@ pub struct TypeChecker<'a, A> {
     apply_masking_policy: bool,
     /// Only the ScalarBinder for a SELECT WHERE enables this. New binders used by
     /// subqueries, JOIN, HAVING, and policy expressions do not inherit it.
-    masking_where_aliases: Option<&'a [(String, Expr)]>,
+    masking_where_aliases: Option<(&'a CoreExprArena<'a>, &'a [(String, CoreExprId)])>,
     resolving_masking_where_aliases: Vec<String>,
     forbid_virtual_computed_column: bool,
 

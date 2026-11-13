@@ -273,11 +273,11 @@ where A: TypeCheckAdapter
         if self.in_masking_policy {
             return None;
         }
-        let original = self
-            .masking_where_aliases
-            .as_ref()
-            .and_then(|aliases| aliases.iter().find(|(name, _)| name == alias))
-            .map(|(_, expr)| expr.clone())?;
+        let (arena, aliases) = self.masking_where_aliases?;
+        let root = aliases
+            .iter()
+            .find(|(name, _)| name == alias)
+            .map(|(_, root)| *root)?;
         if self
             .resolving_masking_where_aliases
             .iter()
@@ -288,7 +288,7 @@ where A: TypeCheckAdapter
             ));
         }
         self.resolving_masking_where_aliases.push(alias.to_string());
-        let result = self.resolve(&original);
+        let result = self.resolve_checked_core(arena, root);
         self.resolving_masking_where_aliases.pop();
         Some(result)
     }

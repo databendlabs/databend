@@ -99,8 +99,14 @@ where A: TypeCheckAdapter
         self.apply_masking_policy = apply;
     }
 
-    pub(crate) fn set_masking_where_aliases(&mut self, aliases: &'a [(String, Expr)]) {
-        self.masking_where_aliases = Some(aliases);
+    /// Let an alias in a SELECT WHERE that uses unmasked values stand for
+    /// the expression at its node in `arena`, bound in place.
+    pub(crate) fn set_masking_where_aliases(
+        &mut self,
+        arena: &'a CoreExprArena<'a>,
+        aliases: &'a [(String, CoreExprId)],
+    ) {
+        self.masking_where_aliases = Some((arena, aliases));
     }
 
     pub(crate) fn set_forbid_virtual_computed_column(&mut self, forbid: bool) {
@@ -114,7 +120,9 @@ where A: TypeCheckAdapter
         )
     }
 
-    pub(super) fn resolve_checked_core(
+    /// Resolve the node `root` of `arena`, which the caller lowered, maybe
+    /// with the other clauses of its query.
+    pub(crate) fn resolve_checked_core(
         &mut self,
         arena: &CoreExprArena<'_>,
         root: CoreExprId,

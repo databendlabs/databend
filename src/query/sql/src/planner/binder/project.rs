@@ -46,8 +46,10 @@ use databend_enterprise_data_mask_feature::get_datamask_handler;
 use itertools::Itertools;
 
 use super::AggregateInfo;
-use super::grouped_select::SelectItemSource;
+use super::grouped_select::SelectItemForms;
 use super::grouped_select::SelectItems;
+use super::select_clauses::SelectClauses;
+use super::select_clauses::SelectItemSource;
 use crate::ColumnEntry;
 use crate::NameResolutionContext;
 use crate::Symbol;
@@ -56,6 +58,7 @@ use crate::WindowChecker;
 use crate::binder::AliasLookup;
 use crate::binder::AliasTable;
 use crate::binder::ExprContext;
+use crate::binder::ScalarFoldingPolicy;
 use crate::binder::Visibility;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
@@ -65,6 +68,7 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ColumnBinding;
+use crate::planner::binder::SelectClauseExprs;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::semantic::compare_table_name;
 use crate::planner::semantic::normalize_identifier;
@@ -235,10 +239,10 @@ impl Binder {
         window_info: &WindowInfo,
         item: &SelectItem<'_>,
     ) -> Result<ColumnBinding> {
-        // This item is a grouping sets item, its data type should be nullable.
-        let is_grouping_sets_item = agg_info.is_grouping_sets_item(&item.scalar);
-
-        let mut column_binding = match &item.scalar {
+        // A key of grouping sets is bound to its nullable output; an item that
+        // equals the input of a key without being bound to it, e.g. a
+        // constant, is evaluated after the aggregate and keeps its type.
+        let column_binding = match &item.scalar {
             ScalarExpr::BoundColumnRef(column_ref) => {
                 let mut column_binding = column_ref.column.clone();
                 // A virtual column explicitly projected by the SELECT list must be visible.
@@ -253,14 +257,10 @@ impl Binder {
                 }
                 column_binding
             }
-            ScalarExpr::AggregateFunction(agg) => {
-                debug_assert!(!is_grouping_sets_item);
-                agg_info
-                    .lookup_aggregate_function_column(agg, &item.alias)
-                    .unwrap()
-            }
+            ScalarExpr::AggregateFunction(agg) => agg_info
+                .lookup_aggregate_function_column(agg, &item.alias)
+                .unwrap(),
             ScalarExpr::UDAFCall(udaf) => {
-                debug_assert!(!is_grouping_sets_item);
                 agg_info.lookup_udaf_call_column(udaf, &item.alias).unwrap()
             }
             ScalarExpr::WindowFunction(win) => {
@@ -271,10 +271,6 @@ impl Binder {
                 item.scalar.data_type().into_owned(),
             ),
         };
-
-        if is_grouping_sets_item {
-            column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
-        }
 
         Ok(column_binding)
     }
@@ -337,114 +333,58 @@ impl Binder {
         bind_context.columns = plan.output_columns;
         Ok(new_expr)
     }
-    /// Normalize select list into a BindContext.
-    /// There are three kinds of select target:
-    ///
-    ///   * Qualified name, e.g. `SELECT t.a FROM t`
-    ///   * Qualified name with wildcard, e.g. `SELECT t.* FROM t, t1`
-    ///   * Qualified name with exclude, e.g. `SELECT t.* EXCLUDE (c1, c2) FROM t, t1`
-    ///   * Scalar expression or aggregate expression, e.g. `SELECT COUNT(*)+1 AS count FROM t`
-    ///
-    /// For qualified names, we just resolve it with the input `BindContext`. If successful, we
-    /// will get a `ColumnBinding` and the `expr` field is left `None`.
-    ///
-    /// The qualified names with wildcard will be expanded into qualified names for resolution.
-    /// For example, `SELECT * FROM t` may be expanded into `SELECT t.a, t.b FROM t`.
-    ///
-    /// For scalar expressions and aggregate expressions, we will register new columns for
-    /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
-    /// in this function.
+
+    /// Bind a SELECT list that is not part of a SELECT statement, e.g. the
+    /// select list of a COPY transform. It is lowered and bound like the
+    /// SELECT list of a query without aggregates, see
+    /// [`Self::bind_select_list`].
     pub fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
-        input_context.expr_context = ExprContext::SelectClause;
-
-        let mut output = SelectList::default();
-        let mut prev_aliases = Vec::new();
-
-        for select_target in select_list {
-            match select_target {
-                SelectTarget::StarColumns {
-                    qualified: names,
-                    column_filter,
-                } => {
-                    if names.len() > 3 || names.is_empty() {
-                        return Err(ErrorCode::SemanticError("Unsupported indirection type"));
-                    }
-
-                    let span = match names.last() {
-                        Some(Indirection::Star(span)) => *span,
-                        _ => None,
-                    };
-
-                    self.resolve_star_columns(
-                        span,
-                        input_context,
-                        select_target,
-                        names.as_slice(),
-                        column_filter,
-                        &mut output,
-                    )?;
-                }
-                SelectTarget::AliasedExpr { expr, alias } => {
-                    let mut scalar_binder = ScalarBinder::new(
-                        input_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        &prev_aliases,
-                    );
-                    let bound_expr = scalar_binder.bind(expr)?.0;
-
-                    // If alias is not specified, we will generate a name for the scalar expression.
-                    let expr_name =
-                        select_item_name(expr.as_ref(), alias, &self.name_resolution_ctx);
-
-                    prev_aliases.push((expr_name.clone(), bound_expr.clone()));
-
-                    output.items.push(SelectItem {
-                        select_target,
-                        scalar: bound_expr,
-                        alias: expr_name,
-                    });
-                }
-            }
-        }
-        Ok(output)
+        let clauses = self.lower_select_clauses(input_context, SelectClauses {
+            select_list,
+            ..Default::default()
+        })?;
+        let mut forms = SelectItemForms::new(&clauses, ScalarFoldingPolicy::Normal);
+        self.bind_select_list(input_context, &clauses, &mut forms)
     }
 
-    /// Bind the SELECT list of a grouped query after its keys are known,
-    /// so that every expression over a key binds to the key output.
-    /// `pre_group` holds the items, expanded and lowered by
-    /// `lower_grouped_select_list`, with the pre-aggregate forms that GROUP BY
-    /// and WHERE refer to, see `grouped_select.rs`.
-    pub(crate) fn normalize_grouped_select_list<'a>(
+    /// Bind the SELECT items collected in `clauses` by `lower_select_clauses`.
+    ///
+    /// In a grouped query the list is bound after the keys are known, within
+    /// the grouping scope, so that every expression over a key binds to the
+    /// key output; `forms` holds the pre-aggregate forms that GROUP BY and
+    /// WHERE refer to, see `grouped_select.rs`. Without a grouping scope the
+    /// items are bound as they are, and no item has a pre-aggregate form.
+    pub(crate) fn bind_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
-        select_list: &'a [SelectTarget],
-        mut pre_group: SelectItems<'_>,
+        clauses: &SelectClauseExprs<'a>,
+        forms: &mut SelectItemForms,
     ) -> Result<SelectList<'a>> {
         input_context.expr_context = ExprContext::SelectClause;
 
-        let exprs = pre_group.exprs();
+        let grouped = input_context.grouping_key_scope.is_some();
+        let mut pre_group = SelectItems::new(clauses, forms);
         let select_item_keys = input_context.aggregate_info.select_item_keys().to_vec();
         let mut output = SelectList::default();
         // The bound items before the current one by position, and the
         // positions of those whose aliases later items see, so that an alias
         // resolves to the pre-aggregate form of its item where needed.
-        let mut prev_items = Vec::with_capacity(exprs.len());
+        let mut prev_items = Vec::with_capacity(clauses.len());
         let mut prev_expr_positions = Vec::new();
 
-        for position in 0..exprs.len() {
-            let item = exprs.item(position);
+        for position in 0..clauses.len() {
+            let item = clauses.item(position);
             // An item that GROUP BY refers to by position or alias is the key.
             let is_key = select_item_keys.contains(&position);
             let scalar = match &item.source {
-                SelectItemSource::Star(scalar) => {
+                SelectItemSource::Star(scalar) if grouped => {
                     bind_grouped_star_item(input_context, scalar, is_key)?
                 }
+                SelectItemSource::Star(scalar) => scalar.clone(),
                 SelectItemSource::Expr { expr, .. } => {
                     let key = is_key
                         .then(|| pre_group.bound_form(position))
@@ -484,7 +424,7 @@ impl Binder {
                 prev_expr_positions.push(position);
             }
             output.items.push(SelectItem {
-                select_target: &select_list[item.target],
+                select_target: clauses.target(position),
                 scalar,
                 alias: item.alias.clone(),
             });

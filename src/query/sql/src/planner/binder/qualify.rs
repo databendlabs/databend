@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -29,6 +28,8 @@ use crate::binder::window::WindowInputColumns;
 use crate::binder::window::WindowRewriter;
 use crate::binder::window::find_replaced_window_function;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::CoreExprArena;
+use crate::planner::semantic::CoreExprId;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
@@ -44,7 +45,8 @@ impl Binder {
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
         select_items: Option<SelectItems<'_>>,
-        qualify: &Expr,
+        arena: &CoreExprArena<'_>,
+        qualify: CoreExprId,
     ) -> Result<ScalarExpr> {
         bind_context.expr_context = ExprContext::QualifyClause;
         let mut scalar_binder = ScalarBinder::new(
@@ -54,7 +56,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
-        let (mut scalar, _) = scalar_binder.bind_with_select_items(qualify, select_items)?;
+        let (mut scalar, _) = scalar_binder.bind_lowered(arena, qualify, select_items)?;
         AggregateRewriter::rewrite_existing_expr(
             &bind_context.aggregate_info,
             &mut scalar,

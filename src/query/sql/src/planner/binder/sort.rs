@@ -25,11 +25,13 @@ use crate::BindContext;
 use crate::Symbol;
 use crate::binder::Binder;
 use crate::binder::SelectItems;
+use crate::binder::SetReturningAnalyzer;
 use crate::binder::aggregate::check_post_aggregate_expr;
 use crate::binder::project::SelectInfo;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::SExpr;
+use crate::planner::binder::SelectClauseExprs;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
@@ -60,6 +62,7 @@ impl Binder {
         aliases: &[(String, ScalarExpr)],
         mut select_items: Option<SelectItems<'_>>,
         order_by: &[OrderByExpr],
+        clauses: &SelectClauseExprs<'_>,
         distinct: bool,
     ) -> Result<OrderItems> {
         bind_context.expr_context = ExprContext::OrderByClause;
@@ -68,7 +71,8 @@ impl Binder {
 
         let order_items = order_by
             .iter()
-            .filter_map(|order| match &order.expr {
+            .enumerate()
+            .filter_map(|(position, order)| match &order.expr {
                 Expr::Literal {
                     value: Literal::UInt64(index),
                     ..
@@ -102,13 +106,22 @@ impl Binder {
                         self.metadata.clone(),
                         aliases,
                     );
-                    let (bound_expr, _) = match scalar_binder.bind_with_select_items(
-                        &order.expr,
+                    let (mut bound_expr, _) = match scalar_binder.bind_lowered(
+                        clauses.arena(),
+                        clauses.order_by(position),
                         select_items.as_mut().map(SelectItems::reborrow),
                     ) {
                         Ok(bound_expr) => bound_expr,
                         Err(err) => return Some(Err(err)),
                     };
+                    // A set-returning function is evaluated in the ProjectSet
+                    // of the SELECT list, as the same function if it is one
+                    // of the SELECT list.
+                    if let Err(err) = SetReturningAnalyzer::new(bind_context, self.metadata.clone())
+                        .visit(&mut bound_expr)
+                    {
+                        return Some(Err(err));
+                    }
 
                     if let Some((idx, _)) = aliases
                         .iter()

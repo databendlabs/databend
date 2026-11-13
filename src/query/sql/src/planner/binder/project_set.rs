@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::mem;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::types::DataType;
@@ -64,11 +62,12 @@ pub struct SrfItem {
 pub struct SetReturningInfo {
     /// Set-returning functions.
     pub srfs: Vec<SrfItem>,
-    /// Mapping: (display name, phase) -> index in `srfs`, to find a
-    /// set-returning function in the current context. A function bound in
-    /// both phases, e.g. `unnest([1, 2])` as a key and in the SELECT list, is
-    /// evaluated twice.
-    srfs_map: HashMap<(String, SrfPhase), usize>,
+    /// Mapping: (function, phase) -> index in `srfs`, to find a
+    /// set-returning function in the current context. The aggregate
+    /// functions in the arguments are already their outputs, whose symbols
+    /// are stable. A function bound in both phases, e.g. `unnest([1, 2])` as
+    /// a key and in the SELECT list, is evaluated twice.
+    srfs_map: HashMap<(ScalarExpr, SrfPhase), usize>,
 }
 
 impl SetReturningInfo {
@@ -82,10 +81,6 @@ impl SetReturningInfo {
 pub(crate) struct SetReturningAnalyzer<'a> {
     bind_context: &'a mut BindContext,
     metadata: MetadataRef,
-}
-
-struct DeferredAggregateRewriter<'a> {
-    bind_context: &'a BindContext,
 }
 
 // Keep SRF output type as tuple in metadata even if a single field was extracted.
@@ -104,61 +99,6 @@ impl<'a> SetReturningAnalyzer<'a> {
             metadata,
         }
     }
-
-    fn rewrite_aggregate_expr(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        let mut rewriter = DeferredAggregateRewriter {
-            bind_context: self.bind_context,
-        };
-        rewriter.visit(expr)
-    }
-}
-
-impl DeferredAggregateRewriter<'_> {
-    fn find_registered_aggregate_scalar(&self, index: crate::Symbol) -> Option<ScalarExpr> {
-        self.bind_context
-            .aggregate_info
-            .aggregate_calls()
-            .find(|item| item.index == index)
-            .map(|item| item.scalar.clone())
-    }
-}
-
-impl<'a> VisitorMut<'a> for DeferredAggregateRewriter<'a> {
-    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        match expr {
-            ScalarExpr::BoundColumnRef(column) => {
-                if let Some(aggregate) = self.find_registered_aggregate_scalar(column.column.index)
-                {
-                    *expr = aggregate;
-                }
-                Ok(())
-            }
-            ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_) => {
-                // An aggregate function bound after the aggregate is already
-                // registered, see `TypeChecker::rewrite_grouped_output`; one
-                // that is not is evaluated before the aggregate.
-                let mut rewritten = expr.clone();
-                AggregateRewriter::rewrite_existing_expr(
-                    &self.bind_context.aggregate_info,
-                    &mut rewritten,
-                    "set-returning functions evaluated before the aggregate can't contain aggregate functions",
-                )?;
-
-                if let ScalarExpr::BoundColumnRef(column_ref) = &rewritten {
-                    if let Some(scalar) =
-                        self.find_registered_aggregate_scalar(column_ref.column.index)
-                    {
-                        *expr = scalar;
-                        return Ok(());
-                    }
-                }
-
-                *expr = rewritten;
-                Ok(())
-            }
-            _ => walk_expr_mut(self, expr),
-        }
-    }
 }
 
 impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
@@ -169,10 +109,17 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 .map(|property| property.kind == FunctionKind::SRF)
                 .unwrap_or(false)
             {
+                // An aggregate function bound after the aggregate is already
+                // its output, see `TypeChecker::rewrite_grouped_output`; one
+                // that is not is evaluated before the aggregate.
                 let mut replaced_args = Vec::with_capacity(func.arguments.len());
                 for arg in func.arguments.iter() {
                     let mut arg = arg.clone();
-                    self.rewrite_aggregate_expr(&mut arg)?;
+                    AggregateRewriter::rewrite_existing_expr(
+                        &self.bind_context.aggregate_info,
+                        &mut arg,
+                        "set-returning functions evaluated before the aggregate can't contain aggregate functions",
+                    )?;
                     replaced_args.push(arg);
                 }
 
@@ -195,7 +142,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 };
                 let srf_info = &mut self.bind_context.srf_info;
                 if let Some(column_binding) =
-                    find_replaced_set_returning_function(srf_info, &srf_display_name, phase)
+                    find_replaced_set_returning_function(srf_info, &replaced_expr, phase)
                 {
                     *expr = BoundColumnRef {
                         span: None,
@@ -215,7 +162,7 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                 let srf_info = &mut self.bind_context.srf_info;
                 srf_info
                     .srfs_map
-                    .insert((srf_display_name.clone(), phase), srf_info.srfs.len());
+                    .insert((replaced_expr.clone(), phase), srf_info.srfs.len());
                 srf_info.srfs.push(SrfItem {
                     item: ScalarItem {
                         index,
@@ -246,34 +193,6 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
     }
 }
 
-/// Rewrite the aggregate functions in the arguments of set-returning
-/// functions as references to their outputs.
-struct SetReturningRewriter<'a> {
-    bind_context: &'a mut BindContext,
-}
-
-impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
-    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if expr.is_aggregate() {
-            let span = expr.span();
-            AggregateRewriter::rewrite_existing_expr(
-                &self.bind_context.aggregate_info,
-                expr,
-                "ProjectSet rewrite expected aggregate functions to be pre-registered",
-            )
-            .map_err(|err| ErrorCode::Internal(err.message()))?;
-
-            if let ScalarExpr::BoundColumnRef(column_ref) = expr {
-                column_ref.span = span;
-                column_ref.column.visibility = Visibility::InVisible;
-            }
-            return Ok(());
-        }
-
-        walk_expr_mut(self, expr)
-    }
-}
-
 impl Binder {
     /// Analyze project sets in select clause.
     /// See [`SetReturningAnalyzer`] for more details.
@@ -286,22 +205,6 @@ impl Binder {
         for item in select_list.items.iter_mut() {
             analyzer.visit(&mut item.scalar)?;
         }
-
-        Ok(())
-    }
-
-    /// Rewrite the arguments of project sets, see [`SetReturningRewriter`].
-    /// Whether one is lazy is its phase, known when it is registered.
-    pub(crate) fn rewrite_project_set_select(
-        &mut self,
-        bind_context: &mut BindContext,
-    ) -> Result<()> {
-        let mut srf_info = mem::take(&mut bind_context.srf_info);
-        let mut rewriter = SetReturningRewriter { bind_context };
-        for srf in srf_info.srfs.iter_mut() {
-            rewriter.visit(&mut srf.item.scalar)?;
-        }
-        bind_context.srf_info = srf_info;
 
         Ok(())
     }
@@ -340,22 +243,19 @@ impl Binder {
 /// Replace [`SetReturningFunction`] with a [`ColumnBinding`] if the function is already replaced.
 pub fn find_replaced_set_returning_function(
     srf_info: &SetReturningInfo,
-    srf_display_name: &str,
+    srf: &ScalarExpr,
     phase: SrfPhase,
 ) -> Option<ColumnBinding> {
-    srf_info
-        .srfs_map
-        .get(&(srf_display_name.to_string(), phase))
-        .map(|i| {
-            // This expression is already replaced.
-            let scalar_item = &srf_info.srfs[*i].item;
-            let data_type = normalize_srf_return_type(scalar_item.scalar.data_type().into_owned());
-            ColumnBindingBuilder::new(
-                srf_display_name.to_string(),
-                scalar_item.index,
-                Box::new(data_type),
-                Visibility::Visible,
-            )
-            .build()
-        })
+    srf_info.srfs_map.get(&(srf.clone(), phase)).map(|i| {
+        // This expression is already replaced.
+        let scalar_item = &srf_info.srfs[*i].item;
+        let data_type = normalize_srf_return_type(scalar_item.scalar.data_type().into_owned());
+        ColumnBindingBuilder::new(
+            format_scalar(&scalar_item.scalar),
+            scalar_item.index,
+            Box::new(data_type),
+            Visibility::Visible,
+        )
+        .build()
+    })
 }

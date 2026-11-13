@@ -19,9 +19,11 @@
 //! [`GroupingKeyScope`] of a SELECT is active, every node is checked top-down,
 //! before its children are resolved. A node binds to the output of key `K` iff
 //!
-//! - it is structurally eligible: it references a column and contains no
-//!   subquery, lambda, async, search, window or aggregate function, nor
-//!   `grouping()`;
+//! - it is structurally eligible: it contains no subquery, lambda, search,
+//!   window or aggregate function, nor `grouping()`, and it references a
+//!   column or calls a function;
+//! - its pre-aggregate form is not a deterministic expression without
+//!   columns, unless the node references a column;
 //! - its pre-aggregate form equals the pre-aggregate expression of `K`,
 //!   compared with `ScalarExpr::eq` without any normalization. The
 //!   pre-aggregate form is the node bound again with matching suspended and
@@ -29,8 +31,14 @@
 //!   for grouping sets), resolving SELECT aliases to the
 //!   pre-aggregate forms of their items, see `pre_aggregate.rs`.
 //!
-//! As with GROUP BY, whether the key is deterministic does not matter, so a
-//! key over `now()` or a script UDF is matched like any other.
+//! A deterministic node without columns, such as `1 + 1`, is not matched: it
+//! evaluates to the same value after the aggregate, and once folded, any
+//! equal literal would match it, so `2` in `SELECT 2 FROM t GROUP BY 1 + 1`
+//! would become the key. A node that is not deterministic, such as `rand()`,
+//! `now()`, `nextval(s)` or a script UDF, is matched like any other, since
+//! evaluating it again after the aggregate gives another value than the key.
+//! Literals and constant tuples call no function, so they are never bound to
+//! be tried.
 //!
 //! The outermost matching node wins, as with GROUP BY, so `a + 1` in
 //! `GROUPING SETS ((a), (a + 1))` binds to the key `a + 1` rather than to the
@@ -151,13 +159,23 @@ pub(super) struct GroupingKeyMemo {
 struct Eligibility {
     eligible: bool,
     has_column: bool,
+    /// Whether the subtree calls a function, which may not be deterministic.
+    has_call: bool,
 }
 
 impl Eligibility {
     const INELIGIBLE: Self = Self {
         eligible: false,
         has_column: false,
+        has_call: false,
     };
+
+    /// Whether the subtree is a grouping key candidate. One without columns
+    /// is only matched if its form is not deterministic, see the module
+    /// documentation, so one that calls no function is not tried.
+    fn is_candidate(self) -> bool {
+        self.eligible && (self.has_column || self.has_call)
+    }
 }
 
 /// Counts of what binding registers, which speculative binding must leave
@@ -218,13 +236,13 @@ fn grouping_key_children(expr: &CoreExpr<'_>) -> Option<SmallVec<[CoreExprId; 4]
             std::iter::once(*expr).chain(list.iter().copied()).collect()
         }
         CoreExpr::SpecialFunction { function, .. } => function.args().into_iter().collect(),
+        CoreExpr::AsyncFunction { function, .. } => function.args().into_iter().collect(),
         CoreExpr::UdfCall {
             args, filter: None, ..
         } => args.iter().map(|(_, arg)| *arg).collect(),
         CoreExpr::UdfCall { .. }
         | CoreExpr::LambdaFunction { .. }
         | CoreExpr::SearchFunction { .. }
-        | CoreExpr::AsyncFunction { .. }
         | CoreExpr::SetReturningFunction { .. }
         | CoreExpr::Subquery { .. }
         | CoreExpr::AggregateFunction { .. }
@@ -261,8 +279,7 @@ where A: TypeCheckAdapter
 
     /// Whether the subtree is structurally eligible as a grouping key.
     fn is_grouping_key_candidate(&mut self, arena: &CoreExprArena<'_>, id: CoreExprId) -> bool {
-        let eligibility = self.grouping_key_eligibility(arena, id);
-        eligibility.eligible && eligibility.has_column
+        self.grouping_key_eligibility(arena, id).is_candidate()
     }
 
     /// Whether the subtree is structurally eligible as a part of a grouping
@@ -290,16 +307,19 @@ where A: TypeCheckAdapter
         ids: impl Iterator<Item = CoreExprId>,
     ) -> Eligibility {
         let mut has_column = false;
+        let mut has_call = false;
         for id in ids {
             let eligibility = self.grouping_key_eligibility(arena, id);
             if !eligibility.eligible {
                 return Eligibility::INELIGIBLE;
             }
             has_column |= eligibility.has_column;
+            has_call |= eligibility.has_call;
         }
         Eligibility {
             eligible: true,
             has_column,
+            has_call,
         }
     }
 
@@ -320,6 +340,16 @@ where A: TypeCheckAdapter
                 Eligibility {
                     has_column: eligibility.has_column
                         || (eligibility.eligible && matches!(expr, CoreExpr::ColumnRef { .. })),
+                    has_call: eligibility.has_call
+                        || (eligibility.eligible
+                            && matches!(
+                                expr,
+                                CoreExpr::Call { .. }
+                                    | CoreExpr::ScalarFunction { .. }
+                                    | CoreExpr::SpecialFunction { .. }
+                                    | CoreExpr::AsyncFunction { .. }
+                                    | CoreExpr::UdfCall { .. }
+                            )),
                     ..eligibility
                 }
             }
@@ -484,7 +514,8 @@ where A: TypeCheckAdapter
         if scopes.is_empty() {
             return Ok(None);
         }
-        let is_srf = if self.is_grouping_key_candidate(arena, id) {
+        let eligibility = self.grouping_key_eligibility(arena, id);
+        let is_srf = if eligibility.is_candidate() {
             false
         } else if self.is_grouping_key_srf_candidate(arena, id) {
             true
@@ -500,10 +531,18 @@ where A: TypeCheckAdapter
             let Some(input) = self.resolve_grouping_key_input(arena, id, position)? else {
                 continue;
             };
+            // A deterministic form without columns evaluates to the same
+            // value after the aggregate, see the module documentation.
+            let constant = input.facts.column_free && input.facts.deterministic;
+            if constant && !eligibility.has_column {
+                return Ok(None);
+            }
+            let input = input.scalar;
             let context = context_chain(self.bind_context).nth(position).unwrap();
             let column = if is_srf {
                 lookup_grouping_key_srf(context, &input)?
             } else if context.aggregate_info.grouping_sets().is_none()
+                || !constant
                 || !input.used_columns().is_empty()
             {
                 context.aggregate_info.lookup_grouping_key_output(&input)
@@ -529,7 +568,7 @@ where A: TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
         position: usize,
-    ) -> Result<Option<ScalarExpr>> {
+    ) -> Result<Option<BoundScalar>> {
         #[cfg(debug_assertions)]
         let effects = self.phase_effects();
         let (result, input) =
@@ -543,7 +582,7 @@ where A: TypeCheckAdapter
         );
         // A form with a deferred error refers to an ungrouped input column of
         // an enclosing scope, which no key of this scope does.
-        Ok((!input.input_unavailable && input.deferred_error.is_none()).then_some(bound.scalar))
+        Ok((!input.input_unavailable && input.deferred_error.is_none()).then_some(bound))
     }
 
     /// Bind the pre-aggregate form of the node for the current scope, as the

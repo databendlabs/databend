@@ -19,7 +19,6 @@ use std::sync::Arc;
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
@@ -44,6 +43,7 @@ use crate::binder::AliasTable;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
+use crate::binder::SelectClauseExprs;
 use crate::binder::SelectItems;
 use crate::binder::bind_table_reference::JoinConditions;
 use crate::binder::project::SelectInfo;
@@ -52,6 +52,7 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::scalar::ScalarBinder;
+use crate::planner::semantic::CoreExprId;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -99,9 +100,11 @@ impl GroupItemAliasState<'_> {
         AliasLookup::new(self.table, Some(indices))
     }
 
+    /// The aliases a GROUP BY item sees, given its name if it is an
+    /// unqualified column reference.
     pub(crate) fn group_item_aliases(
         &self,
-        expr: &Expr,
+        simple_name: Option<&str>,
         disable_select_alias_fallback: bool,
     ) -> ClauseAliasLookup<'_> {
         // Complex GROUP BY items bind input columns first, then fall back to
@@ -112,7 +115,7 @@ impl GroupItemAliasState<'_> {
         // list if there is no input column named `k`.
         // Once `k` falls back to a SELECT alias, `GROUP BY k, abs(k)` should
         // reuse that earlier GROUP BY item alias inside the later expression.
-        if Self::simple_unqualified_column_name(expr).is_none() {
+        if simple_name.is_none() {
             // GROUPING SETS keep prior alias reuse scoped to the current
             // generated set. A complex item in a later set must not bypass that
             // boundary by falling back to SELECT aliases directly.
@@ -137,10 +140,11 @@ impl GroupItemAliasState<'_> {
         )
     }
 
-    /// The available aliases named like `expr` if it is a simple name: a
-    /// GROUP BY item that matches one of them uses that alias.
-    pub(crate) fn same_name_aliases(&self, expr: &Expr) -> Vec<usize> {
-        let Some(column_name) = Self::simple_unqualified_column_name(expr) else {
+    /// The available aliases named `simple_name`, the name of a GROUP BY
+    /// item that is an unqualified column reference: the item uses the one
+    /// it matches.
+    pub(crate) fn same_name_aliases(&self, simple_name: Option<&str>) -> Vec<usize> {
+        let Some(column_name) = simple_name else {
             return Vec::new();
         };
         self.available
@@ -155,23 +159,24 @@ impl GroupItemAliasState<'_> {
             self.prior_group_aliases.push(alias_index);
         }
     }
+}
 
-    fn simple_unqualified_column_name(expr: &Expr) -> Option<&str> {
-        let Expr::ColumnRef {
-            column:
-                ColumnRef {
-                    database: None,
-                    table: None,
-                    column,
-                },
-            ..
-        } = expr
-        else {
-            return None;
-        };
+/// The name of `expr`, as written, if it is an unqualified column reference.
+pub(crate) fn simple_unqualified_column_name(expr: &Expr) -> Option<&str> {
+    let Expr::ColumnRef {
+        column:
+            ColumnRef {
+                database: None,
+                table: None,
+                column,
+            },
+        ..
+    } = expr
+    else {
+        return None;
+    };
 
-        Some(column.name())
-    }
+    Some(column.name())
 }
 
 /// The aliases of the SELECT items as bound, which later clauses resolve.
@@ -213,46 +218,6 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
-        self.bind_where_impl(bind_context, aliases, None, expr, child)
-    }
-
-    pub(crate) fn bind_select_where(
-        &mut self,
-        bind_context: &mut BindContext,
-        aliases: &[(String, ScalarExpr)],
-        alias_exprs: impl Iterator<Item = (String, Expr)>,
-        expr: &Expr,
-        child: SExpr,
-    ) -> Result<(SExpr, ScalarExpr)> {
-        let alias_exprs = self.masking_where_alias_exprs(alias_exprs);
-        self.bind_where_impl(bind_context, aliases, alias_exprs, expr, child)
-    }
-
-    /// The SELECT aliases that WHERE resolves to their expressions, bound
-    /// unmasked, if a table lets WHERE use unmasked values.
-    fn masking_where_alias_exprs(
-        &self,
-        alias_exprs: impl Iterator<Item = (String, Expr)>,
-    ) -> Option<Vec<(String, Expr)>> {
-        let has_original_where = self.metadata.read().tables().iter().any(|table| {
-            !table
-                .table()
-                .get_table_info()
-                .meta
-                .masking_where_use_unmasked_value
-                .is_empty()
-        });
-        has_original_where.then(|| alias_exprs.collect())
-    }
-
-    fn bind_where_impl(
-        &mut self,
-        bind_context: &mut BindContext,
-        aliases: &[(String, ScalarExpr)],
-        alias_exprs: Option<Vec<(String, Expr)>>,
-        expr: &Expr,
-        child: SExpr,
-    ) -> Result<(SExpr, ScalarExpr)> {
         let scalar = bind_context.with_expr_context(
             ExprContext::WhereClause,
             |bind_context| -> Result<ScalarExpr> {
@@ -263,14 +228,57 @@ impl Binder {
                     self.metadata.clone(),
                     aliases,
                 );
-                if let Some(alias_exprs) = alias_exprs {
-                    scalar_binder.set_masking_where_aliases(alias_exprs);
-                }
                 Ok(scalar_binder.bind(expr)?.0)
             },
         )?;
         Self::check_where_predicate(&scalar)?;
         Ok((Self::where_filter(&scalar, child), scalar))
+    }
+
+    /// Bind the WHERE of an ungrouped SELECT, lowered in `clauses`.
+    pub(crate) fn bind_select_where(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        clauses: &SelectClauseExprs<'_>,
+        root: CoreExprId,
+    ) -> Result<ScalarExpr> {
+        let masking_aliases = self.masking_where_aliases(clauses);
+        let scalar = bind_context.with_expr_context(
+            ExprContext::WhereClause,
+            |bind_context| -> Result<ScalarExpr> {
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    aliases,
+                );
+                if let Some(masking_aliases) = &masking_aliases {
+                    scalar_binder.set_masking_where_aliases(clauses.arena(), masking_aliases);
+                }
+                Ok(scalar_binder.bind_lowered(clauses.arena(), root, None)?.0)
+            },
+        )?;
+        Self::check_where_predicate(&scalar)?;
+        Ok(scalar)
+    }
+
+    /// The SELECT aliases that WHERE resolves to their expressions, bound
+    /// unmasked, if a table lets WHERE use unmasked values.
+    fn masking_where_aliases(
+        &self,
+        clauses: &SelectClauseExprs<'_>,
+    ) -> Option<Vec<(String, CoreExprId)>> {
+        let has_original_where = self.metadata.read().tables().iter().any(|table| {
+            !table
+                .table()
+                .get_table_info()
+                .meta
+                .masking_where_use_unmasked_value
+                .is_empty()
+        });
+        has_original_where.then(|| clauses.alias_roots().collect())
     }
 
     /// Bind the WHERE of a grouped query, whose aliases resolve to the
@@ -279,10 +287,10 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         mut items: SelectItems<'_>,
-        expr: &Expr,
+        root: CoreExprId,
     ) -> Result<ScalarExpr> {
         let exprs = items.exprs();
-        let alias_exprs = self.masking_where_alias_exprs(exprs.alias_exprs());
+        let masking_aliases = self.masking_where_aliases(exprs);
         let scalar = bind_context.with_expr_context(
             ExprContext::WhereClause,
             |bind_context| -> Result<ScalarExpr> {
@@ -295,11 +303,11 @@ impl Binder {
                     None,
                     false,
                 )?;
-                if let Some(alias_exprs) = &alias_exprs {
-                    type_checker.set_masking_where_aliases(alias_exprs);
+                if let Some(masking_aliases) = &masking_aliases {
+                    type_checker.set_masking_where_aliases(exprs.arena(), masking_aliases);
                 }
                 type_checker.set_select_items(items.reborrow());
-                Ok(type_checker.resolve(expr)?.0)
+                Ok(type_checker.resolve_checked_core(exprs.arena(), root)?.0)
             },
         )?;
         Self::check_where_predicate(&scalar)?;
@@ -704,7 +712,8 @@ impl Binder {
     pub(crate) fn analyze_lazy_materialization(
         &self,
         bind_context: &BindContext,
-        stmt: &SelectStmt,
+        clauses: &SelectClauseExprs<'_>,
+        distinct: bool,
         select_info: &SelectInfo,
         select_list: &SelectList,
         where_scalar: &Option<ScalarExpr>,
@@ -715,10 +724,10 @@ impl Binder {
         // e.g.
         // SELECT ... FROM t WHERE ... LIMIT ...
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
-        if stmt.group_by.is_some()
-            || stmt.having.is_some()
-            || stmt.distinct
-            || stmt.qualify.is_some()
+        if clauses.group_by().is_some()
+            || clauses.having().is_some()
+            || distinct
+            || clauses.qualify().is_some()
             || bind_context.aggregate_info.has_group_items()
             || bind_context.aggregate_info.has_aggregate_calls()
             || bind_context.has_srf_recursive()

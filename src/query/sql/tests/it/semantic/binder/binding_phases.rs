@@ -214,6 +214,30 @@ const CASES: &[PhaseCase] = &[
         "SELECT add_one(a), count(*) FROM t GROUP BY ROLLUP(add_one(a))",
     ),
     case(
+        "speculative_nondeterministic_key",
+        "SELECT rand(), count(*) FROM t GROUP BY rand()",
+    ),
+    case(
+        "speculative_nondeterministic_key_in_grouping_sets",
+        "SELECT rand(), count(*) FROM t GROUP BY ROLLUP(rand())",
+    ),
+    case(
+        "speculative_column_free_script_udf_key",
+        "SELECT add_one(1), count(*) FROM t GROUP BY add_one(1)",
+    ),
+    case(
+        "speculative_deterministic_constant_key",
+        "SELECT 2, 1 + 1, count(*) FROM t GROUP BY 1 + 1",
+    ),
+    case(
+        "speculative_deterministic_constant_key_in_grouping_sets",
+        "SELECT 2, 1 + 1, count(*) FROM t GROUP BY ROLLUP(1 + 1)",
+    ),
+    case(
+        "speculative_async_function_key",
+        "SELECT sleep(a), count(*) FROM t GROUP BY ROLLUP(sleep(a))",
+    ),
+    case(
         "speculative_internal_column_key",
         "SELECT _row_id, count(*) FROM t GROUP BY ROLLUP(_row_id)",
     ),
