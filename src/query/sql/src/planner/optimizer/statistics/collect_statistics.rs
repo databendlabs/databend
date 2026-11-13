@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -49,6 +48,7 @@ use crate::TableEntry;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::statistics::trace::ColumnStatisticsTrace;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -457,7 +457,7 @@ struct ScanStatisticsMapping {
 struct ColumnStatisticsMap(BTreeMap<(usize, String), ColumnStatisticsEntry>);
 
 struct ColumnStatisticsEntry {
-    statistics: Option<BasicColumnStatistics>,
+    statistics: Option<ColumnStatisticsTrace>,
     histogram: Option<LegacyHistogram>,
 }
 
@@ -502,7 +502,7 @@ impl Serialize for ColumnStatisticsMap {
         struct ColumnStatisticsMapEntry<'a> {
             table_index: usize,
             column_name: &'a str,
-            statistics: &'a Option<BasicColumnStatistics>,
+            statistics: &'a Option<ColumnStatisticsTrace>,
             histogram: &'a Option<LegacyHistogram>,
         }
 
@@ -589,7 +589,7 @@ impl TraceCollector {
                     histogram: None,
                 });
             if entry.statistics.is_none() {
-                entry.statistics = column_stat.cloned();
+                entry.statistics = column_stat.map(ColumnStatisticsTrace::from);
             }
             if entry.histogram.is_none() {
                 entry.histogram = histogram.map(LegacyHistogram::from);

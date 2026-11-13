@@ -284,7 +284,7 @@ where
         not_eq,
     );
 
-    Ok(Some(input.boolean_stat(true_count)))
+    Ok(true_count.map(|true_count| input.boolean_stat(true_count)))
 }
 
 fn derive_comparison_stat<T, Op: StatComparisonOp>(
@@ -332,7 +332,7 @@ where
 
     if T::USE_INTEGER_RANGE_COMPARISON {
         let range = IntegerRangeComparison::from_input(input)?;
-        return Ok(Some(range.true_count::<Op>()));
+        return Ok(range.true_count::<Op>());
     }
 
     let Some((cmp_min, cmp_max)) =
@@ -764,7 +764,7 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
         })
     }
 
-    fn true_count<Op: StatComparisonOp>(&self) -> StatEstimate {
+    fn true_count<Op: StatComparisonOp>(&self) -> Option<StatEstimate> {
         use std::cmp::Ordering::*;
 
         let Self::Bounded {
@@ -775,7 +775,7 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
             non_null_cardinality,
         } = self
         else {
-            return StatEstimate::exact(0.0);
+            return Some(StatEstimate::exact(0.0));
         };
 
         let min_value = min.0;
@@ -784,15 +784,25 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
         let cmp_min = literal.total_cmp(min);
         let cmp_max = literal.total_cmp(max);
 
+        // TODO: the range estimates below spread the rows uniformly over the
+        // integer domain and ignore the NDV. A range is expected to overlap
+        // `ndv * width / domain` distinct values, but it either hits none of
+        // them or holds about `rows / ndv` rows per value it hits, so the
+        // smaller the overlap, the less reliable the uniform share and the
+        // more it undercounts the rows when the range does hit a value. Low
+        // confidence should be compensated. Meanwhile the bound cases defer to
+        // the NDV, so with an upper-only NDV `k <= min` takes the default
+        // selectivity while `k <= min + 1` takes the domain share, and the two
+        // disagree.
         if Op::SELECT_LESS {
             if cmp_min == Less || !Op::INCLUDE_EQUAL && cmp_min == Equal {
-                return StatEstimate::exact(0.0);
+                return Some(StatEstimate::exact(0.0));
             }
             if cmp_min == Equal {
                 return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
             }
             if cmp_max == Greater {
-                return StatEstimate::exact(*non_null_cardinality);
+                return Some(StatEstimate::exact(*non_null_cardinality));
             }
             if !Op::INCLUDE_EQUAL && cmp_max == Equal {
                 return estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality);
@@ -802,35 +812,35 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
             } else {
                 numeric_literal - min_value
             };
-            return StatEstimate::exact(
+            return Some(StatEstimate::exact(
                 (selected_values / (max_value - min_value + 1.0)) * *non_null_cardinality,
-            );
+            ));
         }
 
         if Op::INCLUDE_EQUAL {
             if cmp_max == Greater {
-                return StatEstimate::exact(0.0);
+                return Some(StatEstimate::exact(0.0));
             }
             if cmp_min == Less || cmp_min == Equal {
-                return StatEstimate::exact(*non_null_cardinality);
+                return Some(StatEstimate::exact(*non_null_cardinality));
             }
             if cmp_max == Equal {
                 return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
             }
-            return StatEstimate::exact(
+            return Some(StatEstimate::exact(
                 ((max_value - numeric_literal + 1.0) / (max_value - min_value + 1.0))
                     * *non_null_cardinality,
-            );
+            ));
         }
 
         match (cmp_min, cmp_max) {
-            (_, Greater | Equal) => StatEstimate::exact(0.0),
-            (Less, _) => StatEstimate::exact(*non_null_cardinality),
+            (_, Greater | Equal) => Some(StatEstimate::exact(0.0)),
+            (Less, _) => Some(StatEstimate::exact(*non_null_cardinality)),
             (Equal, _) => estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality),
-            _ => StatEstimate::exact(
+            _ => Some(StatEstimate::exact(
                 ((max_value - numeric_literal) / (max_value - min_value + 1.0))
                     * *non_null_cardinality,
-            ),
+            )),
         }
     }
 }

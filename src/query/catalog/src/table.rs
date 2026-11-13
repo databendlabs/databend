@@ -648,7 +648,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ParquetTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
     num_rows: u64,
@@ -682,7 +682,7 @@ impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
     fn average_size(&self, column_id: ColumnId) -> Option<u64> {
         self.column_stats.get(&column_id).and_then(|v| {
             v.as_ref()
-                .and_then(|s| s.in_memory_size.checked_div(self.num_rows))
+                .and_then(|s| s.in_memory_size().checked_div(self.num_rows))
         })
     }
 }

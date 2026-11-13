@@ -503,7 +503,7 @@ fn build_input_domains(
                 return Ok((binding, Domain::full(&data_type)));
             }
 
-            match column_stat.to_arg_stat(&data_type) {
+            match ArgStat::from_column_stat(column_stat, &data_type) {
                 Ok(arg_stat) => Ok((binding, arg_stat.domain)),
                 Err(msg) => {
                     log::warn!(
@@ -691,6 +691,10 @@ struct ValueConstraintState {
 struct MaterializedColumnStats {
     column_stats: ColumnStatSet,
     cardinality: f64,
+    /// A referenced column carries a constraint whose share of rows is
+    /// unknown; that column keeps its input statistics and `cardinality` does
+    /// not account for it.
+    unquantified: bool,
 }
 
 impl ValueConstraintState {
@@ -787,6 +791,9 @@ fn constrained_column_cardinality(
     if let Some(histogram) = constrained_stat.histogram() {
         return Some(histogram.num_values() + constrained_stat.null_count().expected());
     }
+    // An upper-only NDV says nothing about how many rows each value holds;
+    // the constraint stays unquantified and the caller evaluates the predicate
+    // against the unconstrained input instead.
     let input_ndv = input_stat.ndv().expected?;
     let constrained_ndv = constrained_stat.ndv().expected?;
     if input_ndv <= 0.0 {
@@ -868,6 +875,7 @@ impl SelectivityVisitor<'_> {
 
         let mut column_stats = ColumnStatSet::new();
         let mut cardinality = self.cardinality.value();
+        let mut unquantified = false;
         for (binding, _) in column_refs {
             if column_stats.contains_key(&binding.index) {
                 continue;
@@ -880,19 +888,31 @@ impl SelectivityVisitor<'_> {
             let constrained_stat = self
                 .constraints
                 .apply_to_column_stat(binding.index, &input_stat)?;
-            if let Some(constrained_cardinality) = constrained_column_cardinality(
+            match constrained_column_cardinality(
                 &input_stat,
                 &constrained_stat,
                 self.cardinality.value(),
             ) {
-                cardinality = cardinality.min(constrained_cardinality);
+                Some(constrained_cardinality) => {
+                    cardinality = cardinality.min(constrained_cardinality);
+                    column_stats.insert(binding.index, constrained_stat);
+                }
+                // The constraint's share of rows is unknown. Keep the input
+                // statistics so the predicate is evaluated against the real
+                // bounds (a range still gets its uniform estimate; an equality
+                // on an upper-only NDV stays unknown) rather than against
+                // statistics that already satisfy it.
+                None => {
+                    unquantified = true;
+                    column_stats.insert(binding.index, input_stat);
+                }
             }
-            column_stats.insert(binding.index, constrained_stat);
         }
 
         Ok(Some(MaterializedColumnStats {
             column_stats,
             cardinality,
+            unquantified,
         }))
     }
 
@@ -923,7 +943,7 @@ impl SelectivityVisitor<'_> {
                 _ => return Ok(None),
             }
 
-            match column_stat.to_arg_stat(&data_type) {
+            match ArgStat::from_column_stat(column_stat, &data_type) {
                 Ok(arg_stat) => {
                     input_stats.insert(binding, arg_stat);
                 }
@@ -951,6 +971,11 @@ impl SelectivityVisitor<'_> {
         let Some(materialized) = self.materialize_column_stats(expr)? else {
             return Ok(Selectivity::Unknown);
         };
+        if materialized.unquantified {
+            // The constraint narrowed the column but not by a known share of
+            // rows; reporting the untouched cardinality would claim 1.0.
+            return Ok(Selectivity::Unknown);
+        }
         Selectivity::checked_estimate(materialized.cardinality / self.cardinality.value())
     }
 
@@ -1183,6 +1208,7 @@ impl SelectivityVisitor<'_> {
         let MaterializedColumnStats {
             mut column_stats,
             cardinality: materialized_cardinality,
+            ..
         } = materialized;
         let stat_cardinality_value = column_stats
             .values()

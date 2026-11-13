@@ -48,7 +48,7 @@ pub(super) struct TableStats {
 
 impl TableStats {
     fn column_stat(self) -> Result<BasicColumnStatistics> {
-        column_stat(self.column_json)
+        column_stat(self.column_json, self.rows)
     }
 
     fn histogram(self) -> Result<Option<Histogram>> {
@@ -146,14 +146,12 @@ fn write_stats_case_header(file: &mut impl Write, case: &JoinTestCase) -> Result
 fn write_input_stats(file: &mut impl Write, side: &str, stats: TableStats) -> Result<()> {
     let column_stat = stats.column_stat()?;
     let min = column_stat
-        .min
+        .min()
         .ok_or_else(|| ErrorCode::Internal(format!("{side} column statistics require min")))?;
     let max = column_stat
-        .max
+        .max()
         .ok_or_else(|| ErrorCode::Internal(format!("{side} column statistics require max")))?;
-    let ndv = column_stat
-        .ndv
-        .ok_or_else(|| ErrorCode::Internal(format!("{side} column statistics require ndv")))?;
+    let ndv = column_stat.ndv();
     let label = format!("{side} stats");
     writeln!(
         file,
@@ -161,7 +159,7 @@ fn write_input_stats(file: &mut impl Write, side: &str, stats: TableStats) -> Re
         stats.rows,
         min,
         max,
-        ndv,
+        ndv.expected.unwrap_or(ndv.upper),
         if stats.histogram_json.is_some() {
             "present"
         } else {

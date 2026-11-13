@@ -30,16 +30,18 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::Number;
+use databend_common_statistics::NdvEstimate;
 use iceberg::spec::DataContentType;
 use iceberg::spec::Datum;
 use iceberg::spec::ManifestStatus;
 use iceberg::spec::PrimitiveLiteral;
 use iceberg::spec::PrimitiveType;
+use log::warn;
 use uuid::Uuid;
 
 use crate::IcebergTable;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct IcebergStatistics {
     /// Number of records in this table
     pub record_count: u64,
@@ -52,6 +54,74 @@ pub struct IcebergStatistics {
 
     /// Computed statistics for each column
     pub computed_statistics: HashMap<ColumnId, statistics::BasicColumnStatistics>,
+}
+
+// Only engine-options transport needs serde. Transport the base statistics,
+// ignoring runtime NDV estimates; the reader reconstructs NDV from these facts.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct IcebergStatisticsWire {
+    record_count: u64,
+    file_size_in_bytes: u64,
+    number_of_manifest_files: u64,
+    number_of_data_files: u64,
+    computed_statistics: HashMap<ColumnId, IcebergColumnStatisticsWire>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IcebergColumnStatisticsWire {
+    min: Option<databend_common_statistics::Datum>,
+    max: Option<databend_common_statistics::Datum>,
+    null_count: u64,
+    in_memory_size: u64,
+}
+
+impl From<&IcebergStatistics> for IcebergStatisticsWire {
+    fn from(stats: &IcebergStatistics) -> Self {
+        Self {
+            record_count: stats.record_count,
+            file_size_in_bytes: stats.file_size_in_bytes,
+            number_of_manifest_files: stats.number_of_manifest_files,
+            number_of_data_files: stats.number_of_data_files,
+            computed_statistics: stats
+                .computed_statistics
+                .iter()
+                .map(|(id, column)| {
+                    (*id, IcebergColumnStatisticsWire {
+                        min: column.min().cloned(),
+                        max: column.max().cloned(),
+                        null_count: column.null_count(),
+                        in_memory_size: column.in_memory_size(),
+                    })
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<IcebergStatisticsWire> for IcebergStatistics {
+    fn from(stats: IcebergStatisticsWire) -> Self {
+        Self {
+            record_count: stats.record_count,
+            file_size_in_bytes: stats.file_size_in_bytes,
+            number_of_manifest_files: stats.number_of_manifest_files,
+            number_of_data_files: stats.number_of_data_files,
+            computed_statistics: stats
+                .computed_statistics
+                .into_iter()
+                .filter_map(|(id, column)| {
+                    column_statistics(
+                        id,
+                        column.min,
+                        column.max,
+                        column.null_count,
+                        column.in_memory_size,
+                        stats.record_count,
+                    )
+                    .map(|column| (id, column))
+                })
+                .collect(),
+        }
+    }
 }
 
 impl IcebergStatistics {
@@ -167,14 +237,16 @@ impl IcebergStatistics {
 
         let mut computed_statistics = HashMap::new();
         for field in IcebergTable::get_schema(table)?.fields() {
-            let column_stats = get_column_stats(
+            if let Some(column_stats) = get_column_stats(
                 field,
                 &column_sizes,
                 &lower_bounds,
                 &upper_bounds,
                 &null_value_counts,
-            );
-            computed_statistics.insert(field.column_id, column_stats);
+                statistics.record_count,
+            ) {
+                computed_statistics.insert(field.column_id, column_stats);
+            }
         }
 
         statistics.computed_statistics = computed_statistics;
@@ -198,7 +270,7 @@ impl ColumnStatisticsProvider for IcebergStatistics {
     fn average_size(&self, column_id: ColumnId) -> Option<u64> {
         self.computed_statistics
             .get(&column_id)
-            .and_then(|v| v.in_memory_size.checked_div(self.record_count))
+            .and_then(|v| v.in_memory_size().checked_div(self.record_count))
     }
 }
 
@@ -209,27 +281,61 @@ fn get_column_stats(
     lower: &HashMap<i32, Datum>,
     upper: &HashMap<i32, Datum>,
     null_counts: &HashMap<i32, u64>,
-) -> BasicColumnStatistics {
+    num_rows: u64,
+) -> Option<BasicColumnStatistics> {
     let iceberg_col_id = field.column_id as i32;
-    BasicColumnStatistics {
-        min: lower
+    column_statistics(
+        field.column_id,
+        lower
             .get(&iceberg_col_id)
             .and_then(parse_datum)
             .and_then(Scalar::to_datum),
-        max: upper
+        upper
             .get(&iceberg_col_id)
             .and_then(parse_datum)
             .and_then(Scalar::to_datum),
-        ndv: None,
-        null_count: null_counts
+        null_counts
             .get(&iceberg_col_id)
             .copied()
             .unwrap_or_default(),
-        in_memory_size: column_size
+        column_size
             .get(&iceberg_col_id)
             .copied()
             .unwrap_or_default(),
-    }
+        num_rows,
+    )
+}
+
+/// Iceberg supplies no NDV: only the row count and bounds constrain it.
+/// One-sided bounds are dropped; invalid statistics drop the column.
+fn column_statistics(
+    column_id: ColumnId,
+    min: Option<databend_common_statistics::Datum>,
+    max: Option<databend_common_statistics::Datum>,
+    null_count: u64,
+    in_memory_size: u64,
+    num_rows: u64,
+) -> Option<BasicColumnStatistics> {
+    let (min, max) = match (min, max) {
+        (Some(min), Some(max)) => (Some(min), Some(max)),
+        _ => (None, None),
+    };
+    let upper = BasicColumnStatistics::ndv_upper_bound(
+        min.as_ref(),
+        max.as_ref(),
+        null_count,
+        Some(num_rows),
+    );
+    BasicColumnStatistics::new(
+        min,
+        max,
+        null_count,
+        in_memory_size,
+        NdvEstimate::upper_bound(upper).bound(upper),
+        Some(num_rows),
+    )
+    .inspect_err(|err| warn!("drop invalid iceberg statistics of column {column_id}: {err}"))
+    .ok()
 }
 
 /// Try to parse iceberg [`Datum`] to databend [`Scalar`].
@@ -263,5 +369,102 @@ pub fn parse_datum(data: &Datum) -> Option<Scalar> {
         }
         PrimitiveLiteral::AboveMax => None,
         PrimitiveLiteral::BelowMin => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_statistics_engine_options_round_trip() -> Result<()> {
+        let column = column_statistics(
+            7,
+            Some(databend_common_statistics::Datum::Int(1)),
+            Some(databend_common_statistics::Datum::Int(50)),
+            20,
+            800,
+            100,
+        )
+        .unwrap();
+        // Without an Iceberg NDV, the row and domain bounds give the upper.
+        assert_eq!(column.ndv(), NdvEstimate::upper_bound(50.0));
+        let stats = IcebergStatistics {
+            record_count: 100,
+            file_size_in_bytes: 800,
+            number_of_manifest_files: 2,
+            number_of_data_files: 3,
+            computed_statistics: HashMap::from([(7, column.clone())]),
+        };
+        let json = serde_json::to_string(&IcebergStatisticsWire::from(&stats))?;
+        let wire: IcebergStatisticsWire = serde_json::from_str(&json)?;
+        let replay = IcebergStatistics::from(wire);
+        assert_eq!(replay.record_count, stats.record_count);
+        assert_eq!(replay.file_size_in_bytes, stats.file_size_in_bytes);
+        assert_eq!(
+            replay.number_of_manifest_files,
+            stats.number_of_manifest_files
+        );
+        assert_eq!(replay.number_of_data_files, stats.number_of_data_files);
+        assert_eq!(replay.column_statistics(7), Some(&column));
+
+        // Runtime NDV points are ignored; the reader reconstructs the upper.
+        let mut with_ndv = stats;
+        with_ndv.computed_statistics.insert(
+            7,
+            BasicColumnStatistics::new(
+                column.min().cloned(),
+                column.max().cloned(),
+                20,
+                800,
+                NdvEstimate::new(10.0, 50.0),
+                Some(100),
+            )
+            .unwrap(),
+        );
+        let json = serde_json::to_string(&IcebergStatisticsWire::from(&with_ndv))?;
+        let wire: IcebergStatisticsWire = serde_json::from_str(&json)?;
+        let replay = IcebergStatistics::from(wire);
+        assert_eq!(replay.column_statistics(7), Some(&column));
+        Ok(())
+    }
+
+    #[test]
+    fn test_zero_ndv_engine_options_round_trip() -> Result<()> {
+        // An all-NULL column and a column in a zero-row snapshot both have
+        // exact zero NDV, reconstructible from the transported row/NULL counts.
+        for num_rows in [100, 0] {
+            let column = column_statistics(7, None, None, num_rows, 0, num_rows).unwrap();
+            assert_eq!(column.ndv(), NdvEstimate::exact(0.0));
+            let stats = IcebergStatistics {
+                record_count: num_rows,
+                computed_statistics: HashMap::from([(7, column.clone())]),
+                ..Default::default()
+            };
+            let json = serde_json::to_string(&IcebergStatisticsWire::from(&stats))?;
+            let wire: IcebergStatisticsWire = serde_json::from_str(&json)?;
+            let replay = IcebergStatistics::from(wire);
+            assert_eq!(replay.record_count, num_rows);
+            assert_eq!(replay.column_statistics(7), Some(&column));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_or_one_sided_statistics() {
+        // One-sided bounds keep the column's facts without bounds.
+        let column = column_statistics(
+            7,
+            Some(databend_common_statistics::Datum::Int(1)),
+            None,
+            20,
+            800,
+            100,
+        )
+        .unwrap();
+        assert_eq!(column.min(), None);
+        assert_eq!(column.ndv(), NdvEstimate::upper_bound(80.0));
+        // Invalid statistics drop the column.
+        assert!(column_statistics(7, None, None, 101, 0, 100).is_none());
     }
 }

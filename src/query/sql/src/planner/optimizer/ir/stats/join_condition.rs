@@ -31,6 +31,7 @@ use databend_common_statistics::NumericHistogramType;
 use databend_common_statistics::StatBounds;
 
 use super::ColumnStat;
+use super::DEFAULT_SELECTIVITY;
 use super::FilterAndStrategy;
 use super::Selectivity;
 use super::SelectivityVisitor;
@@ -419,13 +420,15 @@ impl JoinEstimate {
             (Some(left), Some(right)) => left.max(right),
             (Some(left), None) => left,
             (None, Some(right)) => right,
-            (None, None) => {
-                if left_ndv.upper == 0.0 && right_ndv.upper == 0.0 {
-                    0.0
-                } else {
-                    left_cardinality * right_cardinality
-                }
-            }
+            // Neither side has a point, and an upper is not a divisor (see
+            // `NdvEstimate`); dividing by one would be a cross product. Use the
+            // default equality selectivity, as an equality filter does, with
+            // the uppers capping the divisor: the key cannot hold more
+            // distinct values than that.
+            (None, None) => left_ndv
+                .upper
+                .max(right_ndv.upper)
+                .min(1.0 / DEFAULT_SELECTIVITY),
         };
 
         let card = if max_ndv == 0.0 {
