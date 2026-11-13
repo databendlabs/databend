@@ -6960,9 +6960,9 @@ checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "fast-float2"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8eb564c5c7423d25c886fb561d1e4ee69f72354d16918afa32c08811f6b6a55"
+checksum = "c6e8948ce679d00a02a94739ea185595dca7118ed04feb991127e443bd3d761f"
 
 [[package]]
 name = "fastant"
@@ -8936,9 +8936,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.15"
+version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
+checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "ittapi"
@@ -9105,7 +9105,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.6"
-source = "git+https://github.com/b41sh/jsonb.git?rev=b74a5a1a1e285c1cce031456a087b4bdf16beb1d#b74a5a1a1e285c1cce031456a087b4bdf16beb1d"
+source = "git+https://github.com/b41sh/jsonb.git?rev=5d48bb62995dd36c26cb8b07ffb24b9c3642e98a#5d48bb62995dd36c26cb8b07ffb24b9c3642e98a"
 dependencies = [
  "byteorder",
  "ethnum",
@@ -9119,6 +9119,7 @@ dependencies = [
  "rand 0.9.2",
  "serde",
  "serde_json",
+ "simdutf8",
  "zmij",
 ]
 
@@ -17628,9 +17629,9 @@ checksum = "34b31d188d9d685a4f9c7b46d6e36631b07058d2cfe190267adce54dc230bf12"
 
 [[package]]
 name = "zmij"
-version = "1.0.12"
+version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fc5a66a20078bf1251bde995aa2fdcc4b800c70b5d92dd2c62abc5c60f679f8"
+checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 
 [[package]]
 name = "zopfli"
