@@ -112,6 +112,7 @@ use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::HILBERT_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -1029,6 +1030,10 @@ impl FuseTable {
         match snapshot_hint {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
+                table_info.meta.field_stats_truncate_len.clear();
+                table_info
+                    .options_mut()
+                    .remove(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN);
             }
             Some((hint, base_table_schema)) => {
                 let full_location = &hint.snapshot_full_path;
@@ -1080,6 +1085,10 @@ impl FuseTable {
                 } else {
                     table_info.meta.schema = Arc::new(base_table_schema);
                 }
+
+                // Refresh settings together with the snapshot/schema, including clearing
+                // stale settings when an older writer publishes a hint without them.
+                hint.apply_stats_truncate_len(&mut table_info.meta);
 
                 // tweak table/field comments
                 let comments = hint.entity_comments;
@@ -1483,9 +1492,13 @@ impl Table for FuseTable {
         }
 
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
-        // ATTACH does not preserve the source column's STATS_TRUNCATE_LEN option.
-        // Its string bounds may have been truncated at any number of characters.
-        let unknown_string_truncation = self.table_type == FuseTableType::Attached;
+        // Historical hints do not carry STATS_TRUNCATE_LEN. Do not infer defaults
+        // from their empty map: bounds may have been truncated below that threshold.
+        let unknown_string_truncation = self.table_type == FuseTableType::Attached
+            && !self
+                .table_info
+                .options()
+                .contains_key(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN);
         let r = reduced
             .into_iter()
             .map(|(k, v)| {

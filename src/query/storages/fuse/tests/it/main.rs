@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod selected_row_offsets;
+mod snapshot_hint;
 mod vector_index_bundle_loader;

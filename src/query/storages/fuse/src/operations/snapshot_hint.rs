@@ -20,8 +20,10 @@ use std::time::Instant;
 use bytes::Buf;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableMeta;
+use databend_storages_common_table_meta::table::OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN;
 use log::info;
 use log::warn;
 use opendal::ErrorKind;
@@ -50,9 +52,40 @@ pub struct SnapshotHint {
     pub entity_comments: EntityComments,
     #[serde(default)]
     pub indexes: BTreeMap<String, TableIndex>,
+    /// None for historical hints; Some(empty) explicitly means default settings.
+    #[serde(default)]
+    pub field_stats_truncate_len: Option<BTreeMap<ColumnId, u64>>,
 }
 
 impl SnapshotHint {
+    /// Install settings for the same snapshot/schema as this hint. Keep the
+    /// known/unknown distinction in TableMeta so distributed planning preserves it.
+    pub fn apply_stats_truncate_len(&self, meta: &mut TableMeta) {
+        meta.field_stats_truncate_len = self
+            .field_stats_truncate_len
+            .as_ref()
+            .map(|settings| {
+                let column_ids = meta.schema.to_column_ids();
+                settings
+                    .iter()
+                    .filter(|(id, _)| column_ids.contains(id))
+                    .map(|(&id, &len)| (id, len))
+                    .collect()
+            })
+            .unwrap_or_default();
+        match self.field_stats_truncate_len {
+            Some(_) => {
+                meta.options.insert(
+                    OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN.to_string(),
+                    "true".to_string(),
+                );
+            }
+            None => {
+                meta.options.remove(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN);
+            }
+        }
+    }
+
     fn marshall<W: Write>(&self, writer: W) -> Result<()> {
         serde_json::to_writer(writer, self)?;
         Ok(())
@@ -127,6 +160,7 @@ async fn try_read_legacy_hint(
                     field_comments: vec![],
                 },
                 indexes: Default::default(),
+                field_stats_truncate_len: None,
             }))
         }
         Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(None),
@@ -179,6 +213,7 @@ impl SnapshotHintWriter<'_> {
             snapshot_full_path: last_snapshot_path,
             entity_comments: EntityComments::from(table_meta),
             indexes: table_meta.indexes.clone(),
+            field_stats_truncate_len: Some(table_meta.field_stats_truncate_len.clone()),
         };
 
         let mut bytes = vec![];

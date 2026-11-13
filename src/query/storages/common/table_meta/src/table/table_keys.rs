@@ -83,6 +83,9 @@ pub const MAX_ANALYZE_TOP_N_SIZE: usize = 10_000;
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
+/// The attached snapshot's hint explicitly supplied its string statistics settings.
+/// Absence means unknown settings, not defaults (including for historical hints).
+pub const OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN: &str = "attach_stats_truncate_len_known";
 
 // the following are used for the iceberg engine
 pub const OPT_KEY_LOCATION: &str = "location";
@@ -170,6 +173,7 @@ pub fn is_retired_engine(engine: &str) -> bool {
 pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
+    r.insert(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN);
     r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
@@ -195,6 +199,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
+    r.insert(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_QUERY_CATALOG);
     r.insert(OPT_KEY_QUERY_DATABASE);
