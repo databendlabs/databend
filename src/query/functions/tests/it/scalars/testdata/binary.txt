@@ -248,6 +248,49 @@ evaluation (internal):
 +--------+--------------------------------------------------------+
 
 
+ast            : to_hex(to_binary(char(0, 65, 127, 128, 255), 'latin1'))
+raw expr       : to_hex(to_binary(char(0, 65, 127, 128, 255), 'latin1'))
+checked expr   : to_hex<Binary>(to_binary<String, String>(char<Int64, Int64, Int64, Int64, Int64>(CAST<UInt8>(0_u8 AS Int64), CAST<UInt8>(65_u8 AS Int64), CAST<UInt8>(127_u8 AS Int64), CAST<UInt8>(128_u8 AS Int64), CAST<UInt8>(255_u8 AS Int64)), "latin1"))
+optimized expr : "00417f80ff"
+output type    : String
+output domain  : {"00417f80ff"..="00417f80ff"}
+output         : '00417f80ff'
+
+
+ast            : to_hex(to_binary(char(128, 255), 'latin-1'))
+raw expr       : to_hex(to_binary(char(128, 255), 'latin-1'))
+checked expr   : to_hex<Binary>(to_binary<String, String>(char<Int64, Int64>(CAST<UInt8>(128_u8 AS Int64), CAST<UInt8>(255_u8 AS Int64)), "latin-1"))
+optimized expr : "80ff"
+output type    : String
+output domain  : {"80ff"..="80ff"}
+output         : '80ff'
+
+
+ast            : to_hex(to_binary(char(128, 255), 'iso-8859-1'))
+raw expr       : to_hex(to_binary(char(128, 255), 'iso-8859-1'))
+checked expr   : to_hex<Binary>(to_binary<String, String>(char<Int64, Int64>(CAST<UInt8>(128_u8 AS Int64), CAST<UInt8>(255_u8 AS Int64)), "iso-8859-1"))
+optimized expr : "80ff"
+output type    : String
+output domain  : {"80ff"..="80ff"}
+output         : '80ff'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_binary(char(256), 'latin1')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ character U+0100 cannot be encoded as latin1 while evaluating function `to_binary('Ā', 'latin1')` in expr `to_binary(char(CAST(256 AS Int64)), 'latin1')`
+
+
+
+error: 
+  --> SQL:1:8
+  |
+1 | to_hex(to_binary(s, 'latin1'))
+  |        ^^^^^^^^^^^^^^^^^^^^^^ character U+0100 cannot be encoded as latin1 while evaluating function `to_binary('Ā', 'latin1')` in expr `to_binary(s, 'latin1')`, during run expr: `to_hex(to_binary(s, 'latin1'))`
+
+
+
 ast            : to_binary(to_bitmap('1,2,3'))
 raw expr       : to_binary(to_bitmap('1,2,3'))
 checked expr   : CAST<Bitmap>(CAST<String>("1,2,3" AS Bitmap) AS Binary)
@@ -379,6 +422,64 @@ evaluation (internal):
 | s      | Column(StringColumn[616263, 646566, 6461746162656e64]) |
 | Output | StringColumn[abc, def, databend]                       |
 +--------+--------------------------------------------------------+
+
+
+ast            : to_hex(TRY_to_binary(char(0, 65, 127, 128, 255), 'latin1'))
+raw expr       : to_hex(TRY_to_binary(char(0, 65, 127, 128, 255), 'latin1'))
+checked expr   : to_hex<Binary NULL>(try_to_binary<String, String>(char<Int64, Int64, Int64, Int64, Int64>(CAST<UInt8>(0_u8 AS Int64), CAST<UInt8>(65_u8 AS Int64), CAST<UInt8>(127_u8 AS Int64), CAST<UInt8>(128_u8 AS Int64), CAST<UInt8>(255_u8 AS Int64)), "latin1"))
+optimized expr : "00417f80ff"
+output type    : String NULL
+output domain  : {"00417f80ff"..="00417f80ff"}
+output         : '00417f80ff'
+
+
+ast            : to_hex(TRY_to_binary(char(128, 255), 'latin-1'))
+raw expr       : to_hex(TRY_to_binary(char(128, 255), 'latin-1'))
+checked expr   : to_hex<Binary NULL>(try_to_binary<String, String>(char<Int64, Int64>(CAST<UInt8>(128_u8 AS Int64), CAST<UInt8>(255_u8 AS Int64)), "latin-1"))
+optimized expr : "80ff"
+output type    : String NULL
+output domain  : {"80ff"..="80ff"}
+output         : '80ff'
+
+
+ast            : to_hex(TRY_to_binary(char(128, 255), 'iso-8859-1'))
+raw expr       : to_hex(TRY_to_binary(char(128, 255), 'iso-8859-1'))
+checked expr   : to_hex<Binary NULL>(try_to_binary<String, String>(char<Int64, Int64>(CAST<UInt8>(128_u8 AS Int64), CAST<UInt8>(255_u8 AS Int64)), "iso-8859-1"))
+optimized expr : "80ff"
+output type    : String NULL
+output domain  : {"80ff"..="80ff"}
+output         : '80ff'
+
+
+ast            : TRY_to_binary(char(256), 'latin1')
+raw expr       : TRY_to_binary(char(256), 'latin1')
+checked expr   : try_to_binary<String, String>(char<Int64>(CAST<UInt16>(256_u16 AS Int64)), "latin1")
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : to_hex(TRY_to_binary(s, 'latin1'))
+raw expr       : to_hex(TRY_to_binary(s::String, 'latin1'))
+checked expr   : to_hex<Binary NULL>(try_to_binary<String, String>(s, "latin1"))
+evaluation:
++--------+-----------------+-----------------+
+|        | s               | Output          |
++--------+-----------------+-----------------+
+| Type   | String          | String NULL     |
+| Domain | {"plain"..="Ā"} | {""..} ∪ {NULL} |
+| Row 0  | 'ÿ'            | '80ff'          |
+| Row 1  | 'Ā'             | NULL            |
+| Row 2  | 'plain'         | '706c61696e'    |
++--------+-----------------+-----------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[ÿ, Ā, plain])                                                  |
+| Output | NullableColumn { column: StringColumn[80ff, , 706c61696e], validity: [0b_____101] } |
++--------+-------------------------------------------------------------------------------------+
 
 
 ast            : TRY_to_binary(to_bitmap('1,2,3'))
