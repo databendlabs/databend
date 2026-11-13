@@ -1,0 +1,40 @@
+# Integration smoke coverage for scalar/materialized bitmap shuffle inputs,
+# single/composite keys and NULLs. to_bitmap canonicalizes member order, so
+# these are not cross-encoding regressions; those require the Rust fixtures.
+# Cross-encoding JOIN key serialization remains outside this hash-only fix.
+
+statement ok
+set prefer_broadcast_join = 0
+
+statement ok
+create or replace table shuffle_value_left(tag int not null, bits bitmap null)
+
+statement ok
+create or replace table shuffle_value_right(tag int not null, bits bitmap null)
+
+statement ok
+insert into shuffle_value_left values (1, to_bitmap('2,9')), (2, to_bitmap('4')), (3, null)
+
+statement ok
+insert into shuffle_value_right values (1, to_bitmap('9,2')), (2, to_bitmap('4')), (3, null)
+
+query I
+select count(*) from shuffle_value_left l join shuffle_value_right r on l.bits = r.bits and l.tag = r.tag
+----
+2
+
+query I
+select count(*) from (select tag, to_bitmap('2,9') as bits from shuffle_value_left) l join shuffle_value_right r on l.bits = r.bits and l.tag = r.tag
+----
+1
+
+query I
+select count(*) from shuffle_value_left l join shuffle_value_right r on l.bits = r.bits
+----
+2
+
+statement ok
+drop table shuffle_value_left
+
+statement ok
+drop table shuffle_value_right

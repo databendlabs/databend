@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::io;
 
 use databend_common_column::binary::BinaryColumn;
 use databend_common_column::binary::BinaryColumnBuilder;
@@ -20,7 +23,43 @@ use databend_common_io::HYBRID_KIND_LARGE;
 use databend_common_io::HYBRID_KIND_SMALL;
 use databend_common_io::HYBRID_MAGIC;
 use databend_common_io::HYBRID_VERSION;
+use databend_common_io::HybridBitmap;
 use databend_common_io::deserialize_bitmap;
+
+/// Hash a canonical compressed representation, not every decoded member.
+/// Small hybrid sets are bounded by their one-byte serialized length; large
+/// bitmaps stay in Roaring's array/bitset containers throughout hashing.
+pub fn hash_bitmap<H: Hasher>(bytes: &[u8], state: &mut H) {
+    let mut tree = match deserialize_bitmap(bytes) {
+        Ok(HybridBitmap::Small(values)) => values.into_iter().collect(),
+        Ok(HybridBitmap::Large(tree)) => tree,
+        Err(_) => {
+            bytes.hash(state);
+            return;
+        }
+    };
+    // Self-intersection preserves members while normalizing container stores by
+    // cardinality and removing empty containers. In particular, decoding a run
+    // can otherwise leave an array store at the array/bitset threshold.
+    // This works on compressed containers, without enumerating the large set.
+    tree &= tree.clone();
+    // The writer only feeds a Hasher, so serialization cannot fail with I/O.
+    tree.serialize_into(BitmapHashWriter(state)).unwrap();
+}
+
+struct BitmapHashWriter<'a, H>(&'a mut H);
+
+impl<H: Hasher> io::Write for BitmapHashWriter<'_, H> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.write(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 #[inline]
 pub fn is_hybrid_encoding(bytes: &[u8]) -> bool {
     if bytes.is_empty() {

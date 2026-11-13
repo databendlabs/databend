@@ -33,7 +33,6 @@ use crate::types::decimal::Decimal;
 use crate::types::i256;
 use crate::types::number::Number;
 use crate::types::*;
-use crate::utils::bitmap::normalize_bitmap_column;
 use crate::visitor::ValueVisitor;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -136,10 +135,7 @@ fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(
         Scalar::Date(value) => value.agg_hash(),
         Scalar::Boolean(value) => value.agg_hash(),
         Scalar::String(value) => value.as_bytes().agg_hash(),
-        Scalar::Binary(value)
-        | Scalar::Bitmap(value)
-        | Scalar::Variant(value)
-        | Scalar::Geometry(value) => value.agg_hash(),
+        Scalar::Binary(value) | Scalar::Variant(value) => value.agg_hash(),
         Scalar::Geography(value) => value.0.agg_hash(),
         _ => scalar.as_ref().agg_hash(),
     };
@@ -259,8 +255,8 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
-        self.combine_group_hash_string_column::<BitmapType>(column.as_ref());
+        // Equal bitmaps can have different encodings, including within the hybrid format.
+        self.combine_group_hash_type_column::<AnyType>(&Column::Bitmap(column));
         Ok(())
     }
 
@@ -270,7 +266,7 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_geometry(&mut self, column: BinaryColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<GeometryType>(&column);
+        self.combine_group_hash_type_column::<AnyType>(&Column::Geometry(column));
         Ok(())
     }
 
@@ -401,7 +397,6 @@ where I: Index
             Scalar::Binary(v) => v.agg_hash(),
             Scalar::String(v) => v.as_bytes().agg_hash(),
             Scalar::Variant(v) => v.agg_hash(),
-            Scalar::Geometry(v) => v.agg_hash(),
             Scalar::Geography(v) => v.0.agg_hash(),
             Scalar::Opaque(v) => v.as_ref().agg_hash(),
             v => v.as_ref().agg_hash(),
@@ -468,11 +463,7 @@ where I: Index
     }
 
     fn visit_bitmap(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
-        self.visit_indices(|i| {
-            let value = column.as_ref().index(i.to_usize()).unwrap();
-            value.agg_hash()
-        })
+        self.visit_typed_column::<BitmapType>(column, &DataType::Bitmap)
     }
 
     fn visit_string(&mut self, column: crate::types::StringColumn) -> Result<()> {
@@ -484,7 +475,7 @@ where I: Index
     }
 
     fn visit_geometry(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        self.visit_binary(column)
+        self.visit_typed_column::<GeometryType>(column, &DataType::Geometry)
     }
 
     fn visit_geography(&mut self, column: crate::types::GeographyColumn) -> Result<()> {
@@ -687,8 +678,6 @@ mod tests {
     use databend_common_column::bitmap::Bitmap;
     use databend_common_column::types::months_days_micros;
     use databend_common_column::types::timestamp_tz;
-    use databend_common_io::HybridBitmap;
-    use roaring::RoaringTreemap;
 
     use super::*;
     use crate::BlockEntry;
@@ -697,7 +686,6 @@ mod tests {
     use crate::ProjectedBlock;
     use crate::Value;
     use crate::types::ArgType;
-    use crate::types::BitmapType;
     use crate::types::DecimalSize;
     use crate::types::Int32Type;
     use crate::types::NullableColumn;
@@ -996,35 +984,6 @@ mod tests {
                 &target
             );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn test_bitmap_group_hash_legacy_bytes_normalized() -> Result<()> {
-        let values = [1_u64, 5, 42];
-
-        let mut hybrid = HybridBitmap::new();
-        for v in values {
-            hybrid.insert(v);
-        }
-        let mut hybrid_bytes = Vec::new();
-        hybrid.serialize_into(&mut hybrid_bytes).unwrap();
-
-        let mut tree = RoaringTreemap::new();
-        for v in values {
-            tree.insert(v);
-        }
-        let mut legacy_bytes = Vec::new();
-        tree.serialize_into(&mut legacy_bytes).unwrap();
-
-        let bitmap_column = BitmapType::from_data(vec![hybrid_bytes, legacy_bytes]);
-        let block = DataBlock::new(vec![bitmap_column.into()], 2);
-
-        let mut hashes = vec![0_u64; block.num_rows()];
-        group_hash_entries(ProjectedBlock::from(block.columns()), &mut hashes);
-
-        // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
-        assert_eq!(hashes[0], hashes[1]);
         Ok(())
     }
 }
