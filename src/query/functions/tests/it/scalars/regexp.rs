@@ -602,13 +602,38 @@ fn test_regexp_replace_anchored_prefix(file: &mut impl Write) {
         ]),
     )];
     let pat = r"'^https?://(?:www\.)?([^/]+)/.*$'";
-    for repl in ["'$1'", "'[$1]'", "'$0'", "'X'"] {
+    for repl in [
+        "'$1'",
+        "'[$1]'",
+        "'$0'",
+        "'$00'",
+        "'${0}'",
+        "'${000}'",
+        "'${+0}'",
+        "'[${+000}]'",
+        "'${+1}'",
+        "'$${+0}'",
+        "'X'",
+    ] {
         run_ast(
             file,
             format!("regexp_replace(source, {pat}, {repl})"),
             source,
         );
     }
+    // A prefix may match the empty string, but capture zero still names the whole input.
+    run_ast(file, "regexp_replace('abc', '^.*$', '${+0}')", &[]);
+    run_ast(
+        file,
+        "regexp_replace('https://example.com/path', '^https?://([^/]+)/.*$', '[${+000}]')",
+        &[],
+    );
+    // A specific occurrence uses the replacement literally, without expanding captures.
+    run_ast(
+        file,
+        format!("regexp_replace(source, {pat}, '${{+0}}', 1, 1)"),
+        source,
+    );
     for (pos, occur) in [(1, 1), (1, 2), (2, 0)] {
         run_ast(
             file,

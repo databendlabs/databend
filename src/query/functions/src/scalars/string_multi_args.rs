@@ -1470,6 +1470,19 @@ pub mod regexp {
         0
     }
 
+    /// Conservatively detect references to the whole match before expanding on a prefix.
+    fn replacement_uses_capture_zero(repl: &str) -> bool {
+        // Unbraced numeric references to zero start with `$0`. Braced references accept
+        // anything up to `}`, parsed as usize, including a leading `+` and leading zeros.
+        // Escaped references may also disable the fast path, which is safe.
+        repl.contains("$0")
+            || repl.split("${").skip(1).any(|reference| {
+                reference
+                    .split_once('}')
+                    .is_some_and(|(name, _)| name.parse::<usize>() == Ok(0))
+            })
+    }
+
     #[inline]
     pub fn regexp_replace(
         s: &str,
@@ -1497,7 +1510,7 @@ pub mod regexp {
         // An anchored pattern matches at most once, so `occur` 0 and 1 replace the same match:
         // all of `trimmed`. `$0` would name the match of the prefix, not of the pattern.
         if let Some(prefix) = &re.anchored_prefix
-            && (occur == 1 || (occur == 0 && !repl.contains("$0") && !repl.contains("${0")))
+            && (occur == 1 || (occur == 0 && !replacement_uses_capture_zero(repl)))
             && !trimmed.contains('\n')
         {
             match prefix.captures(trimmed) {
