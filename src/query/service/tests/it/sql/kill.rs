@@ -127,6 +127,90 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.max_running_queries = 1;
+    config.query.common.global_statement_queue = false;
+    config.query.common.internal_enable_sandbox_tenant = true;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let queue = QueriesQueueManager::instance();
+    let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
+    requester
+        .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+        .await?;
+
+    for (foreign_tenant, kind, by_query_id) in [
+        (true, "QUERY", true),
+        (true, "QUERY", false),
+        (true, "CONNECTION", false),
+        (false, "QUERY", false),
+        (false, "CONNECTION", false),
+    ] {
+        let holder_ctx = fixture.new_query_ctx().await?;
+        let holder = queue
+            .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
+            .await?;
+        // Streaming loads accept client query IDs without HttpQueryManager deduplication.
+        let id = uuid::Uuid::new_v4().to_string();
+        let own = fixture
+            .new_session_with_type(SessionType::HTTPStreamingLoad)
+            .await?;
+        own.set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        let own_ctx = own.create_query_context(&BUILD_INFO).await?;
+        own_ctx.update_init_query_id(id.clone());
+        let mut own_acquire = Box::pin(queue.acquire(QueryEntry::create_entry(&own_ctx, true)?));
+        assert!(futures::poll!(own_acquire.as_mut()).is_pending());
+
+        let other = fixture
+            .new_session_with_type(SessionType::HTTPStreamingLoad)
+            .await?;
+        if foreign_tenant {
+            other
+                .get_settings()
+                .set_setting("sandbox_tenant".to_string(), "other_tenant".to_string())?;
+        }
+        other
+            .set_authed_user(UserInfo::new_no_auth("u2", "%"), None)
+            .await?;
+        let other_ctx = other.create_query_context(&BUILD_INFO).await?;
+        other_ctx.update_init_query_id(id.clone());
+        let mut other_acquire =
+            Box::pin(queue.acquire(QueryEntry::create_entry(&other_ctx, true)?));
+        assert!(futures::poll!(other_acquire.as_mut()).is_pending());
+        assert_eq!(
+            queue.length(),
+            2,
+            "duplicate query IDs must not replace entries"
+        );
+
+        let target = if by_query_id { id } else { own.get_id() };
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        execute_command(ctx, &format!("KILL {} '{}'", kind, target)).await?;
+        assert_eq!(queue.length(), 1);
+        assert_eq!(own.is_aborting(), kind == "CONNECTION");
+        let error = own_acquire.await.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
+        assert_eq!(error.message(), "Query canceled by KILL");
+        assert!(futures::poll!(other_acquire.as_mut()).is_pending());
+        assert!(!other.is_aborting());
+        assert!(
+            other_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_ok()
+        );
+
+        drop(holder);
+        let _survivor = other_acquire.await?;
+        assert_eq!(queue.length(), 0);
+        assert!(other_ctx.get_abort_checker().try_check_aborting().is_ok());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_kill_with_super_from_role() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.execute_command("CREATE ROLE kill_admin").await?;
@@ -537,7 +621,10 @@ async fn test_kill_cross_tenant_ids_are_hidden() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_conditional_kill_does_not_cancel_next_query() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.max_running_queries = 1;
+    config.query.common.global_statement_queue = false;
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let session = fixture.new_session_with_type(SessionType::MySQL).await?;
     let old = session.create_query_context(&BUILD_INFO).await?;
     let old_id = old.get_id();
@@ -570,5 +657,34 @@ async fn test_conditional_kill_does_not_cancel_next_query() -> anyhow::Result<()
         kill.join().unwrap();
         assert!(next.get_abort_checker().try_check_aborting().is_ok());
     }
+
+    // Delayed cleanup of the old acquire must not remove the next statement,
+    // even if the client reuses its query ID on the very same session.
+    let queue = QueriesQueueManager::instance();
+    let holder_ctx = fixture.new_query_ctx().await?;
+    let _holder = queue
+        .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
+        .await?;
+    let reused_id = uuid::Uuid::new_v4().to_string();
+    let old = session.create_query_context(&BUILD_INFO).await?;
+    old.update_init_query_id(reused_id.clone());
+    let mut old_acquire = Box::pin(queue.acquire(QueryEntry::create_entry(&old, true)?));
+    assert!(futures::poll!(old_acquire.as_mut()).is_pending());
+    let next = session.create_query_context(&BUILD_INFO).await?;
+    next.update_init_query_id(reused_id.clone());
+    let mut next_acquire = Box::pin(queue.acquire(QueryEntry::create_entry(&next, true)?));
+    assert!(futures::poll!(next_acquire.as_mut()).is_pending());
+    assert_eq!(queue.length(), 2);
+    drop(old_acquire);
+    assert_eq!(queue.length(), 1);
+    assert!(futures::poll!(next_acquire.as_mut()).is_pending());
+    assert!(session.force_kill_query_if_id(&reused_id, ErrorCode::aborting()));
+    assert_eq!(queue.length(), 0);
+    assert_eq!(
+        next_acquire.await.unwrap_err().code(),
+        ErrorCode::ABORTED_QUERY
+    );
+    assert!(next.get_abort_checker().try_check_aborting().is_err());
+    assert!(old.get_abort_checker().try_check_aborting().is_ok());
     Ok(())
 }

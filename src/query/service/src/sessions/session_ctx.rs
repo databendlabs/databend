@@ -313,11 +313,11 @@ impl SessionContext {
             if *shared.init_query_id.read() != query_id {
                 return false;
             }
-            // Remove the matching queue entry before a subsequent statement can attach,
-            // including when a client reuses the same query id on the connection.
-            crate::sessions::QueriesQueueManager::instance().remove(query_id.to_string());
             shared
         };
+        // The immutable context key cannot remove another tenant's entry or a
+        // subsequent statement, even when a client reuses the same query ID.
+        crate::sessions::QueriesQueueManager::instance().remove(shared.queue_entry_key);
         shared.kill(cause);
         true
     }

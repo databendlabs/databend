@@ -66,6 +66,7 @@ use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::error::Elapsed;
+use uuid::Uuid;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
@@ -713,10 +714,10 @@ impl QueryEntry {
 }
 
 impl QueueData for QueryEntry {
-    type Key = String;
+    type Key = Uuid;
 
     fn get_key(&self) -> Self::Key {
-        self.query_id.clone()
+        self.ctx.get_queue_entry_key()
     }
 
     fn get_lock_key(&self) -> String {

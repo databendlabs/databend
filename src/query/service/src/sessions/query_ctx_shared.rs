@@ -120,6 +120,8 @@ pub struct QueryContextShared {
     pub(super) session: Arc<Session>,
     runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(super) init_query_id: Arc<RwLock<String>>,
+    /// Immutable queue identity, independent of client-supplied/reused query IDs.
+    pub(super) queue_entry_key: Uuid,
     cluster_cache: Arc<RwLock<Arc<Cluster>>>,
     warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     running_query: Arc<RwLock<Option<String>>>,
@@ -241,13 +243,15 @@ impl QueryContextShared {
     ) -> Result<Arc<QueryContextShared>> {
         let created_time = SystemTime::now();
         let query_created_time = query_created_time.unwrap_or(created_time);
+        let queue_entry_key = Uuid::new_v4();
         Ok(Arc::new(QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache: Arc::new(RwLock::new(cluster_cache)),
             data_operator: DataOperator::instance(),
-            init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+            init_query_id: Arc::new(RwLock::new(queue_entry_key.to_string())),
+            queue_entry_key,
             total_scan_values: Arc::new(Progress::create()),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),

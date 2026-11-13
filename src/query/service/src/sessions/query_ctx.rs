@@ -163,6 +163,7 @@ use log::warn;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::sync::Semaphore;
+use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
@@ -477,6 +478,10 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
+    }
+
+    pub(crate) fn get_queue_entry_key(&self) -> Uuid {
+        self.shared.queue_entry_key
     }
 
     // Get the current session.

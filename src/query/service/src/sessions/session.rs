@@ -44,6 +44,7 @@ use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
+use uuid::Uuid;
 
 use crate::clusters::ClusterDiscovery;
 use crate::sessions::BuildInfoRef;
@@ -265,6 +266,12 @@ impl Session {
 
     pub fn get_current_query_id(&self) -> Option<String> {
         self.session_ctx.get_current_query_id()
+    }
+
+    pub(crate) fn get_current_query_queue_key(&self) -> Option<Uuid> {
+        self.session_ctx
+            .get_query_context_shared()
+            .map(|shared| shared.queue_entry_key)
     }
 
     pub fn attach<F>(&self, host: Option<SocketAddr>, io_shutdown: F)

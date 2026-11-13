@@ -54,7 +54,9 @@
 //! are restricted to management/sandbox modes and internal Local sessions.
 //!
 //! Query-id cancellation checks and pins the matching context under the session's
-//! context-slot lock, and removes its queue entry before releasing the lock.
+//! context-slot lock. Queue entries and semaphore acquirers use an immutable UUID
+//! from that shared context, not the client query ID. Removal after releasing the
+//! lock cannot touch another request reusing that ID, even on the same session.
 //! Only that pinned context is canceled, never the connection's next statement.
 //!
 //! # Flight and rolling upgrades
@@ -313,8 +315,8 @@ impl KillInterpreter {
             };
         }
 
-        if let Some(query_id) = kill_session.get_current_query_id() {
-            if QueriesQueueManager::instance().remove(query_id) {
+        if let Some(key) = kill_session.get_current_query_queue_key() {
+            if QueriesQueueManager::instance().remove(key) {
                 if self.plan.kill_connection {
                     // Close queued connections too. Use the removal cause for the
                     // context so either the queue or its abort watcher reports it.
