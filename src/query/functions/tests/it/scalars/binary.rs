@@ -173,6 +173,13 @@ fn test_charset(file: &mut impl Write, is_try: bool) {
         }
     }
     for function in ["to_string", "convert_from"] {
+        // A column is invalid even when every charset label in it is supported.
+        run_ast(file, format!("{prefix}{function}(unhex('C4E3'), a)"), &[(
+            "a",
+            StringType::from_data(vec!["gbk", "gb18030"]),
+        )]);
+        run_ast(file, format!("{prefix}{function}(unhex('C4E3'), NULL)"), &[
+        ]);
         run_ast(file, format!("{prefix}{function}(a, 'not-a-charset')"), &[
             (
                 "a",
@@ -185,6 +192,11 @@ fn test_charset(file: &mut impl Write, is_try: bool) {
         )]);
     }
     for function in ["to_binary", "convert_to"] {
+        run_ast(file, format!("{prefix}{function}('abc', a)"), &[(
+            "a",
+            StringType::from_data(vec!["gbk", "gb18030"]),
+        )]);
+        run_ast(file, format!("{prefix}{function}('abc', NULL)"), &[]);
         run_ast(file, format!("{prefix}{function}('abc', a)"), &[(
             "a",
             StringType::from_opt_data(vec![None, Some("gbk"), None]),

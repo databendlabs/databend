@@ -173,6 +173,38 @@ select to_binary('abc', s) from t_charset_null_first
 statement error 1006
 select convert_to('abc', s) from t_charset_null_first
 
+# TRY catches data conversion failures, not nonconstant-parameter misuse.
+statement error 1006
+select try_to_string(from_hex('616263'), s) from t_charset_null_first
+
+statement error 1006
+select try_convert_from(from_hex('616263'), s) from t_charset_null_first
+
+statement error 1006
+select try_to_binary('abc', s) from t_charset_null_first
+
+statement error 1006
+select try_convert_to('abc', s) from t_charset_null_first
+
+# Non-NULL columns with valid charset labels are also rejected.
+statement error 1006
+select try_to_string(from_hex('C4E3'), charset) from (values ('gbk'), ('gb18030')) as t(charset)
+
+statement error 1006
+select try_convert_from(from_hex('C4E3'), charset) from (values ('gbk'), ('gb18030')) as t(charset)
+
+statement error 1006
+select try_to_binary('你好', charset) from (values ('gbk'), ('gb18030')) as t(charset)
+
+statement error 1006
+select try_convert_to('你好', charset) from (values ('gbk'), ('gb18030')) as t(charset)
+
+# A NULL scalar format still propagates NULL.
+query TTTT
+select try_to_string(from_hex('616263'), NULL), try_convert_from(from_hex('616263'), NULL), to_hex(try_to_binary('abc', NULL)), to_hex(try_convert_to('abc', NULL))
+----
+NULL NULL NULL NULL
+
 statement ok
 drop table t_charset_null_first
 

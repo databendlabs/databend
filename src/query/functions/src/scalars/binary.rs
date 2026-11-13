@@ -83,10 +83,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<BinaryType, StringType, StringType, _, _>(
         "try_to_string",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         |val, format, ctx| {
             let Some(format) = format.as_scalar() else {
-                return Value::Scalar(None);
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`format` parameter must be a scalar constant, not a column or expression",
+                );
             };
             error_to_null(|val, ctx| eval_binary_to_string_with_format(val, format, ctx))(val, ctx)
         },
@@ -109,10 +113,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<BinaryType, StringType, StringType, _, _>(
         "try_convert_from",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         |val, charset, ctx| {
             let Some(charset) = charset.as_scalar() else {
-                return Value::Scalar(None);
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`charset` parameter must be a scalar constant, not a column or expression",
+                );
             };
             error_to_null(|val, ctx| eval_decode_charset(val, charset, ctx))(val, ctx)
         },
@@ -263,10 +271,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
         "try_to_binary",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         |val, format, ctx| {
             let Some(format) = format.as_scalar() else {
-                return Value::Scalar(None);
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`format` parameter must be a scalar constant, not a column or expression",
+                );
             };
             error_to_null(|val, ctx| eval_string_to_binary_with_format(val, format, ctx))(val, ctx)
         },
@@ -274,10 +286,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
         "try_convert_to",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         |val, charset, ctx| {
             let Some(charset) = charset.as_scalar() else {
-                return Value::Scalar(None);
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`charset` parameter must be a scalar constant, not a column or expression",
+                );
             };
             error_to_null(|val, ctx| eval_encode_charset(val, charset, ctx))(val, ctx)
         },

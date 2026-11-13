@@ -581,6 +581,23 @@ error:
 error: 
   --> SQL:1:1
   |
+1 | to_string(unhex('C4E3'), a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `to_string(C4E3, 'gbk')` in expr `to_string(from_hex('C4E3'), a)`
+
+
+
+ast            : to_string(unhex('C4E3'), NULL)
+raw expr       : to_string(unhex('C4E3'), NULL)
+checked expr   : to_string<Binary NULL, String NULL>(CAST<Binary>(from_hex<String>("C4E3") AS Binary NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
 1 | to_string(a, 'not-a-charset')
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported charset 'not-a-charset' while evaluating function `to_string(616263, 'not-a-charset')` in expr `to_string(a, CAST('not-a-charset' AS String NULL))`
 
@@ -592,6 +609,23 @@ error:
 1 | to_string(unhex('C4E3'), a)
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `to_string(C4E3, 'gbk')` in expr `to_string(CAST(from_hex('C4E3') AS Binary NULL), a)`
 
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | convert_from(unhex('C4E3'), a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `charset` parameter must be a scalar constant, not a column or expression while evaluating function `convert_from(C4E3, 'gbk')` in expr `convert_from(from_hex('C4E3'), a)`
+
+
+
+ast            : convert_from(unhex('C4E3'), NULL)
+raw expr       : convert_from(unhex('C4E3'), NULL)
+checked expr   : convert_from<Binary NULL, String NULL>(CAST<Binary>(from_hex<String>("C4E3") AS Binary NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
 
 
 error: 
@@ -614,8 +648,42 @@ error:
   --> SQL:1:1
   |
 1 | to_binary('abc', a)
+  | ^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `to_binary('abc', 'gbk')` in expr `to_binary('abc', a)`
+
+
+
+ast            : to_binary('abc', NULL)
+raw expr       : to_binary('abc', NULL)
+checked expr   : to_binary<String NULL, String NULL>(CAST<String>("abc" AS String NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_binary('abc', a)
   | ^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `to_binary('abc', 'gbk')` in expr `to_binary(CAST('abc' AS String NULL), a)`
 
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | convert_to('abc', a)
+  | ^^^^^^^^^^^^^^^^^^^^ `charset` parameter must be a scalar constant, not a column or expression while evaluating function `convert_to('abc', 'gbk')` in expr `convert_to('abc', a)`
+
+
+
+ast            : convert_to('abc', NULL)
+raw expr       : convert_to('abc', NULL)
+checked expr   : convert_to<String NULL, String NULL>(CAST<String>("abc" AS String NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : Binary NULL
+output domain  : {NULL}
+output         : NULL
 
 
 error: 
@@ -824,15 +892,15 @@ ast            : TRY_to_string(a, 'gbk')
 raw expr       : TRY_to_string(a::Binary, 'gbk')
 checked expr   : try_to_string<Binary, String>(a, "gbk")
 evaluation:
-+--------+------------+-----------------+
-|        | a          | Output          |
-+--------+------------+-----------------+
-| Type   | Binary     | String NULL     |
-| Domain | Undefined  | {""..} ∪ {NULL} |
-| Row 0  | C4E3BAC3   | '你好'          |
-| Row 1  | D6D0CEC4   | '中文'          |
-| Row 2  | 6173636969 | 'ascii'         |
-+--------+------------+-----------------+
++--------+------------+-------------+
+|        | a          | Output      |
++--------+------------+-------------+
+| Type   | Binary     | String NULL |
+| Domain | Undefined  | Unknown     |
+| Row 0  | C4E3BAC3   | '你好'      |
+| Row 1  | D6D0CEC4   | '中文'      |
+| Row 2  | 6173636969 | 'ascii'     |
++--------+------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------+
 | Column | Data                                                                               |
@@ -846,15 +914,15 @@ ast            : TRY_convert_from(a, 'gbk')
 raw expr       : TRY_convert_from(a::Binary, 'gbk')
 checked expr   : try_convert_from<Binary, String>(a, "gbk")
 evaluation:
-+--------+------------+-----------------+
-|        | a          | Output          |
-+--------+------------+-----------------+
-| Type   | Binary     | String NULL     |
-| Domain | Undefined  | {""..} ∪ {NULL} |
-| Row 0  | C4E3BAC3   | '你好'          |
-| Row 1  | D6D0CEC4   | '中文'          |
-| Row 2  | 6173636969 | 'ascii'         |
-+--------+------------+-----------------+
++--------+------------+-------------+
+|        | a          | Output      |
++--------+------------+-------------+
+| Type   | Binary     | String NULL |
+| Domain | Undefined  | Unknown     |
+| Row 0  | C4E3BAC3   | '你好'      |
+| Row 1  | D6D0CEC4   | '中文'      |
+| Row 2  | 6173636969 | 'ascii'     |
++--------+------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------+
 | Column | Data                                                                               |
@@ -922,15 +990,15 @@ ast            : TRY_to_string(a, 'gbk')
 raw expr       : TRY_to_string(a::Binary, 'gbk')
 checked expr   : try_to_string<Binary, String>(a, "gbk")
 evaluation:
-+--------+-----------+-----------------+
-|        | a         | Output          |
-+--------+-----------+-----------------+
-| Type   | Binary    | String NULL     |
-| Domain | Undefined | {""..} ∪ {NULL} |
-| Row 0  | C4E3      | '你'            |
-| Row 1  | C4        | NULL            |
-| Row 2  | 6F6B      | 'ok'            |
-+--------+-----------+-----------------+
++--------+-----------+-------------+
+|        | a         | Output      |
++--------+-----------+-------------+
+| Type   | Binary    | String NULL |
+| Domain | Undefined | Unknown     |
+| Row 0  | C4E3      | '你'        |
+| Row 1  | C4        | NULL        |
+| Row 2  | 6F6B      | 'ok'        |
++--------+-----------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------+
 | Column | Data                                                                      |
@@ -949,13 +1017,12 @@ output domain  : {NULL}
 output         : NULL
 
 
-ast            : TRY_to_string(unhex('C4E3'), a)
-raw expr       : TRY_to_string(unhex('C4E3'), a::String)
-checked expr   : try_to_string<Binary, String>(from_hex<String>("C4E3"), a)
-optimized expr : "你"
-output type    : String NULL
-output domain  : {"你"..="你"}
-output         : NULL
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_to_string(unhex('C4E3'), a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `try_to_string(C4E3, 'gbk')` in expr `try_to_string(from_hex('C4E3'), a)`
+
 
 
 ast            : to_hex(TRY_to_binary('你好', 'gbk'))
@@ -989,15 +1056,15 @@ ast            : to_hex(TRY_to_binary(a, 'gbk'))
 raw expr       : to_hex(TRY_to_binary(a::String, 'gbk'))
 checked expr   : to_hex<Binary NULL>(try_to_binary<String, String>(a, "gbk"))
 evaluation:
-+--------+--------------------+-----------------+
-|        | a                  | Output          |
-+--------+--------------------+-----------------+
-| Type   | String             | String NULL     |
-| Domain | {"ascii"..="你好"} | {""..} ∪ {NULL} |
-| Row 0  | '你好'             | 'c4e3bac3'      |
-| Row 1  | '中文'             | 'd6d0cec4'      |
-| Row 2  | 'ascii'            | '6173636969'    |
-+--------+--------------------+-----------------+
++--------+--------------------+--------------+
+|        | a                  | Output       |
++--------+--------------------+--------------+
+| Type   | String             | String NULL  |
+| Domain | {"ascii"..="你好"} | Unknown      |
+| Row 0  | '你好'             | 'c4e3bac3'   |
+| Row 1  | '中文'             | 'd6d0cec4'   |
+| Row 2  | 'ascii'            | '6173636969' |
++--------+--------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                            |
@@ -1012,15 +1079,15 @@ raw expr       : TRY_to_string(TRY_to_binary(a::String, 'gbk'), 'gbk')
 checked expr   : try_to_string<Binary NULL, String NULL>(try_to_binary<String, String>(a, "gbk"), CAST<String>("gbk" AS String NULL))
 optimized expr : try_to_string<Binary NULL, String NULL>(try_to_binary<String, String>(a, "gbk"), "gbk")
 evaluation:
-+--------+--------------------+-----------------+
-|        | a                  | Output          |
-+--------+--------------------+-----------------+
-| Type   | String             | String NULL     |
-| Domain | {"ascii"..="你好"} | {""..} ∪ {NULL} |
-| Row 0  | '你好'             | '你好'          |
-| Row 1  | '中文'             | '中文'          |
-| Row 2  | 'ascii'            | 'ascii'         |
-+--------+--------------------+-----------------+
++--------+--------------------+-------------+
+|        | a                  | Output      |
++--------+--------------------+-------------+
+| Type   | String             | String NULL |
+| Domain | {"ascii"..="你好"} | Unknown     |
+| Row 0  | '你好'             | '你好'      |
+| Row 1  | '中文'             | '中文'      |
+| Row 2  | 'ascii'            | 'ascii'     |
++--------+--------------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------+
 | Column | Data                                                                               |
@@ -1043,15 +1110,15 @@ ast            : to_hex(TRY_to_binary(a, 'gbk'))
 raw expr       : to_hex(TRY_to_binary(a::String, 'gbk'))
 checked expr   : to_hex<Binary NULL>(try_to_binary<String, String>(a, "gbk"))
 evaluation:
-+--------+---------------+-----------------+
-|        | a             | Output          |
-+--------+---------------+-----------------+
-| Type   | String        | String NULL     |
-| Domain | {"ok"..="😀"} | {""..} ∪ {NULL} |
-| Row 0  | '你好'        | 'c4e3bac3'      |
-| Row 1  | '😀'          | NULL            |
-| Row 2  | 'ok'          | '6f6b'          |
-+--------+---------------+-----------------+
++--------+---------------+-------------+
+|        | a             | Output      |
++--------+---------------+-------------+
+| Type   | String        | String NULL |
+| Domain | {"ok"..="😀"} | Unknown     |
+| Row 0  | '你好'        | 'c4e3bac3'  |
+| Row 1  | '😀'          | NULL        |
+| Row 2  | 'ok'          | '6f6b'      |
++--------+---------------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                |
@@ -1066,15 +1133,15 @@ raw expr       : to_hex(TRY_to_binary(a::String NULL, 'not-a-charset'))
 checked expr   : to_hex<Binary NULL>(try_to_binary<String NULL, String NULL>(a, CAST<String>("not-a-charset" AS String NULL)))
 optimized expr : to_hex<Binary NULL>(try_to_binary<String NULL, String NULL>(a, "not-a-charset"))
 evaluation:
-+--------+--------------------------+-----------------+
-|        | a                        | Output          |
-+--------+--------------------------+-----------------+
-| Type   | String NULL              | String NULL     |
-| Domain | {"abc"..="abc"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | NULL                     | NULL            |
-| Row 1  | 'abc'                    | NULL            |
-| Row 2  | NULL                     | NULL            |
-+--------+--------------------------+-----------------+
++--------+--------------------------+-------------+
+|        | a                        | Output      |
++--------+--------------------------+-------------+
+| Type   | String NULL              | String NULL |
+| Domain | {"abc"..="abc"} ∪ {NULL} | Unknown     |
+| Row 0  | NULL                     | NULL        |
+| Row 1  | 'abc'                    | NULL        |
+| Row 2  | NULL                     | NULL        |
++--------+--------------------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------+
 | Column | Data                                                                             |
@@ -1089,15 +1156,15 @@ raw expr       : to_hex(TRY_convert_to(a::String NULL, 'not-a-charset'))
 checked expr   : to_hex<Binary NULL>(try_convert_to<String NULL, String NULL>(a, CAST<String>("not-a-charset" AS String NULL)))
 optimized expr : to_hex<Binary NULL>(try_convert_to<String NULL, String NULL>(a, "not-a-charset"))
 evaluation:
-+--------+--------------------------+-----------------+
-|        | a                        | Output          |
-+--------+--------------------------+-----------------+
-| Type   | String NULL              | String NULL     |
-| Domain | {"abc"..="abc"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | NULL                     | NULL            |
-| Row 1  | 'abc'                    | NULL            |
-| Row 2  | NULL                     | NULL            |
-+--------+--------------------------+-----------------+
++--------+--------------------------+-------------+
+|        | a                        | Output      |
++--------+--------------------------+-------------+
+| Type   | String NULL              | String NULL |
+| Domain | {"abc"..="abc"} ∪ {NULL} | Unknown     |
+| Row 0  | NULL                     | NULL        |
+| Row 1  | 'abc'                    | NULL        |
+| Row 2  | NULL                     | NULL        |
++--------+--------------------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------+
 | Column | Data                                                                             |
@@ -1112,15 +1179,15 @@ raw expr       : to_hex(TRY_to_binary(a::String NULL, 'utf-16le'))
 checked expr   : to_hex<Binary NULL>(try_to_binary<String NULL, String NULL>(a, CAST<String>("utf-16le" AS String NULL)))
 optimized expr : to_hex<Binary NULL>(try_to_binary<String NULL, String NULL>(a, "utf-16le"))
 evaluation:
-+--------+--------------------------+-----------------+
-|        | a                        | Output          |
-+--------+--------------------------+-----------------+
-| Type   | String NULL              | String NULL     |
-| Domain | {"abc"..="abc"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | NULL                     | NULL            |
-| Row 1  | 'abc'                    | NULL            |
-| Row 2  | NULL                     | NULL            |
-+--------+--------------------------+-----------------+
++--------+--------------------------+-------------+
+|        | a                        | Output      |
++--------+--------------------------+-------------+
+| Type   | String NULL              | String NULL |
+| Domain | {"abc"..="abc"} ∪ {NULL} | Unknown     |
+| Row 0  | NULL                     | NULL        |
+| Row 1  | 'abc'                    | NULL        |
+| Row 2  | NULL                     | NULL        |
++--------+--------------------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------+
 | Column | Data                                                                             |
@@ -1135,15 +1202,15 @@ raw expr       : to_hex(TRY_convert_to(a::String NULL, 'utf-16le'))
 checked expr   : to_hex<Binary NULL>(try_convert_to<String NULL, String NULL>(a, CAST<String>("utf-16le" AS String NULL)))
 optimized expr : to_hex<Binary NULL>(try_convert_to<String NULL, String NULL>(a, "utf-16le"))
 evaluation:
-+--------+--------------------------+-----------------+
-|        | a                        | Output          |
-+--------+--------------------------+-----------------+
-| Type   | String NULL              | String NULL     |
-| Domain | {"abc"..="abc"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | NULL                     | NULL            |
-| Row 1  | 'abc'                    | NULL            |
-| Row 2  | NULL                     | NULL            |
-+--------+--------------------------+-----------------+
++--------+--------------------------+-------------+
+|        | a                        | Output      |
++--------+--------------------------+-------------+
+| Type   | String NULL              | String NULL |
+| Domain | {"abc"..="abc"} ∪ {NULL} | Unknown     |
+| Row 0  | NULL                     | NULL        |
+| Row 1  | 'abc'                    | NULL        |
+| Row 2  | NULL                     | NULL        |
++--------+--------------------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------+
 | Column | Data                                                                             |
@@ -1153,20 +1220,37 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------------+
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_to_string(unhex('C4E3'), a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `try_to_string(C4E3, 'gbk')` in expr `try_to_string(from_hex('C4E3'), a)`
+
+
+
+ast            : TRY_to_string(unhex('C4E3'), NULL)
+raw expr       : TRY_to_string(unhex('C4E3'), NULL)
+checked expr   : try_to_string<Binary NULL, String NULL>(CAST<Binary>(from_hex<String>("C4E3") AS Binary NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : TRY_to_string(a, 'not-a-charset')
 raw expr       : TRY_to_string(a::Binary NULL, 'not-a-charset')
 checked expr   : try_to_string<Binary NULL, String NULL>(a, CAST<String>("not-a-charset" AS String NULL))
 optimized expr : try_to_string<Binary NULL, String NULL>(a, "not-a-charset")
 evaluation:
-+--------+--------------------+-----------------+
-|        | a                  | Output          |
-+--------+--------------------+-----------------+
-| Type   | Binary NULL        | String NULL     |
-| Domain | Undefined ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | NULL               | NULL            |
-| Row 1  | 616263             | NULL            |
-| Row 2  | NULL               | NULL            |
-+--------+--------------------+-----------------+
++--------+--------------------+-------------+
+|        | a                  | Output      |
++--------+--------------------+-------------+
+| Type   | Binary NULL        | String NULL |
+| Domain | Undefined ∪ {NULL} | Unknown     |
+| Row 0  | NULL               | NULL        |
+| Row 1  | 616263             | NULL        |
+| Row 2  | NULL               | NULL        |
++--------+--------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 | Column | Data                                                                                  |
@@ -1176,12 +1260,28 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 
 
-ast            : TRY_to_string(unhex('C4E3'), a)
-raw expr       : TRY_to_string(unhex('C4E3'), a::String NULL)
-checked expr   : try_to_string<Binary NULL, String NULL>(CAST<Binary>(from_hex<String>("C4E3") AS Binary NULL), a)
-optimized expr : try_to_string<Binary NULL, String NULL>(C4E3, a)
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_to_string(unhex('C4E3'), a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `try_to_string(C4E3, 'gbk')` in expr `try_to_string(CAST(from_hex('C4E3') AS Binary NULL), a)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_convert_from(unhex('C4E3'), a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `charset` parameter must be a scalar constant, not a column or expression while evaluating function `try_convert_from(C4E3, 'gbk')` in expr `try_convert_from(from_hex('C4E3'), a)`
+
+
+
+ast            : TRY_convert_from(unhex('C4E3'), NULL)
+raw expr       : TRY_convert_from(unhex('C4E3'), NULL)
+checked expr   : try_convert_from<Binary NULL, String NULL>(CAST<Binary>(from_hex<String>("C4E3") AS Binary NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
 output type    : String NULL
-output domain  : {""..} ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
@@ -1190,15 +1290,15 @@ raw expr       : TRY_convert_from(a::Binary NULL, 'not-a-charset')
 checked expr   : try_convert_from<Binary NULL, String NULL>(a, CAST<String>("not-a-charset" AS String NULL))
 optimized expr : try_convert_from<Binary NULL, String NULL>(a, "not-a-charset")
 evaluation:
-+--------+--------------------+-----------------+
-|        | a                  | Output          |
-+--------+--------------------+-----------------+
-| Type   | Binary NULL        | String NULL     |
-| Domain | Undefined ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | NULL               | NULL            |
-| Row 1  | 616263             | NULL            |
-| Row 2  | NULL               | NULL            |
-+--------+--------------------+-----------------+
++--------+--------------------+-------------+
+|        | a                  | Output      |
++--------+--------------------+-------------+
+| Type   | Binary NULL        | String NULL |
+| Domain | Undefined ∪ {NULL} | Unknown     |
+| Row 0  | NULL               | NULL        |
+| Row 1  | 616263             | NULL        |
+| Row 2  | NULL               | NULL        |
++--------+--------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 | Column | Data                                                                                  |
@@ -1208,31 +1308,62 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
 
 
-ast            : TRY_convert_from(unhex('C4E3'), a)
-raw expr       : TRY_convert_from(unhex('C4E3'), a::String NULL)
-checked expr   : try_convert_from<Binary NULL, String NULL>(CAST<Binary>(from_hex<String>("C4E3") AS Binary NULL), a)
-optimized expr : try_convert_from<Binary NULL, String NULL>(C4E3, a)
-output type    : String NULL
-output domain  : {""..} ∪ {NULL}
-output         : NULL
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_convert_from(unhex('C4E3'), a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `charset` parameter must be a scalar constant, not a column or expression while evaluating function `try_convert_from(C4E3, 'gbk')` in expr `try_convert_from(CAST(from_hex('C4E3') AS Binary NULL), a)`
 
 
-ast            : TRY_to_binary('abc', a)
-raw expr       : TRY_to_binary('abc', a::String NULL)
-checked expr   : try_to_binary<String NULL, String NULL>(CAST<String>("abc" AS String NULL), a)
-optimized expr : try_to_binary<String NULL, String NULL>("abc", a)
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_to_binary('abc', a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `try_to_binary('abc', 'gbk')` in expr `try_to_binary('abc', a)`
+
+
+
+ast            : TRY_to_binary('abc', NULL)
+raw expr       : TRY_to_binary('abc', NULL)
+checked expr   : try_to_binary<String NULL, String NULL>(CAST<String>("abc" AS String NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
 output type    : Binary NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
 
 
-ast            : TRY_convert_to('abc', a)
-raw expr       : TRY_convert_to('abc', a::String NULL)
-checked expr   : try_convert_to<String NULL, String NULL>(CAST<String>("abc" AS String NULL), a)
-optimized expr : try_convert_to<String NULL, String NULL>("abc", a)
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_to_binary('abc', a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^ `format` parameter must be a scalar constant, not a column or expression while evaluating function `try_to_binary('abc', 'gbk')` in expr `try_to_binary(CAST('abc' AS String NULL), a)`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_convert_to('abc', a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ `charset` parameter must be a scalar constant, not a column or expression while evaluating function `try_convert_to('abc', 'gbk')` in expr `try_convert_to('abc', a)`
+
+
+
+ast            : TRY_convert_to('abc', NULL)
+raw expr       : TRY_convert_to('abc', NULL)
+checked expr   : try_convert_to<String NULL, String NULL>(CAST<String>("abc" AS String NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
 output type    : Binary NULL
-output domain  : Undefined ∪ {NULL}
+output domain  : {NULL}
 output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_convert_to('abc', a)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ `charset` parameter must be a scalar constant, not a column or expression while evaluating function `try_convert_to('abc', 'gbk')` in expr `try_convert_to(CAST('abc' AS String NULL), a)`
+
 
 
 ast            : to_hex(TRY_to_binary('a', 'utf-16le'))
