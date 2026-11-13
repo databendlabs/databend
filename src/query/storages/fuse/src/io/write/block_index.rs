@@ -14,12 +14,13 @@
 
 //! Block-index specs provide full-block, column-oriented and optional merge writers.
 
+use std::any::Any;
 use std::collections::HashMap;
-use std::io;
-use std::ops::Range;
+use std::fmt;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -28,6 +29,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RowMapping;
+use databend_storages_common_index::SourceRows;
 use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::create_blocking_write;
@@ -242,29 +245,81 @@ pub struct BlockIndexMergeSource<'a> {
     pub indexes: &'a [BlockIndexMeta],
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockIndexSourceRows {
-    pub source: u32,
-    pub rows: Range<u32>,
-}
+/// Consecutive rows of one source, in the order they appear in an output.
+pub type BlockIndexSourceRows = SourceRows;
 
-pub type BlockIndexMergeCheck = Box<dyn Fn() -> io::Result<()> + Send + Sync>;
+/// Default size of a merge partition, in bytes of index data read for it.
+pub const BLOCK_INDEX_MERGE_PARTITION_BYTES: u64 = 1 << 20;
 
-/// The caller verifies complete lineage; each output batch preserves source row order.
+/// What a merge needs from the table and the query.
+#[derive(Clone)]
 pub struct BlockIndexMergeContext {
     pub operator: Operator,
     pub locations: TableMetaLocationGenerator,
-    pub outputs: Vec<Vec<BlockIndexSourceRows>>,
-    pub check_interrupt: BlockIndexMergeCheck,
+    pub abort_checker: AbortChecker,
+    /// Work per partition; see [`BLOCK_INDEX_MERGE_PARTITION_BYTES`].
+    pub partition_bytes: u64,
 }
 
-/// Prepared merge capability of a block-index spec.
-pub trait BlockIndexMerge: Send + Sync {
-    fn index_name(&self) -> &str;
+/// The part of one partition that belongs to `output`. What it holds is the index kind's
+/// business; the pipeline only routes it.
+pub struct BlockIndexSlice {
+    pub output: u32,
+    data: Box<dyn Any + Send + Sync>,
+}
 
-    fn merge(&self, context: BlockIndexMergeContext) -> Result<Vec<WrittenBlockIndexOutput>>;
+impl BlockIndexSlice {
+    pub fn new<T: Any + Send + Sync>(output: u32, data: T) -> Self {
+        Self {
+            output,
+            data: Box::new(data),
+        }
+    }
 
-    fn apply_output(&self, block: &mut BlockMeta, output: WrittenBlockIndexOutput) -> Result<()>;
+    pub fn downcast<T: Any>(self) -> Result<T> {
+        match self.data.downcast::<T>() {
+            Ok(data) => Ok(*data),
+            Err(_) => Err(ErrorCode::Internal(format!(
+                "block index slice is not a {}",
+                std::any::type_name::<T>()
+            ))),
+        }
+    }
+}
+
+impl fmt::Debug for BlockIndexSlice {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BlockIndexSlice")
+            .field("output", &self.output)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A merge of one index across the sources of a recluster task, with its sources open and its
+/// work cut into ordered partitions. Partitions are read on several threads at once; each
+/// output then replays its slices in partition order into one writer.
+pub trait BlockIndexMerger: Send + Sync {
+    fn num_partitions(&self) -> usize;
+
+    /// Partition `partition` across every source, its rows mapped to their outputs: one slice
+    /// per output, in output order.
+    fn partition(&self, mapping: &RowMapping, partition: usize) -> Result<Vec<BlockIndexSlice>>;
+
+    /// The writer merging `output`; it receives the output's slices in partition order.
+    fn merge_writer(
+        &self,
+        mapping: Arc<RowMapping>,
+        output: usize,
+    ) -> Result<Box<dyn BlockIndexMergeWriter>>;
+}
+
+/// Writes one output of one index from its slices, appended in partition order.
+pub trait BlockIndexMergeWriter: Send {
+    fn append(&mut self, slice: BlockIndexSlice) -> Result<()>;
+
+    /// Writes the index and records it in the output's block metadata.
+    fn finish(self: Box<Self>, block: &mut BlockMeta) -> Result<()>;
 }
 
 pub fn create_block_index_specs(
@@ -295,12 +350,20 @@ pub trait BlockIndexSpec: Send + Sync {
         None
     }
 
-    /// None means rebuild; errors from a selected merge must not fall back to rebuilding.
-    fn prepare_merge(
+    /// Whether this index can be merged from `sources` instead of rebuilt. Metadata only;
+    /// called while the pipeline is built.
+    fn can_merge(&self, _sources: &[BlockIndexMergeSource<'_>]) -> Result<bool> {
+        Ok(false)
+    }
+
+    /// Opens `sources` and cuts the merge into partitions. Called while the pipeline runs, for
+    /// indexes `can_merge` accepted; an error here must not fall back to rebuilding.
+    fn new_merger(
         &self,
         _sources: &[BlockIndexMergeSource<'_>],
-    ) -> Result<Option<Arc<dyn BlockIndexMerge>>> {
-        Ok(None)
+        _context: &BlockIndexMergeContext,
+    ) -> Result<Arc<dyn BlockIndexMerger>> {
+        Err(ErrorCode::Internal("this block index kind does not merge"))
     }
 
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>>;
@@ -347,7 +410,7 @@ mod tests {
             num_rows: 10,
             indexes: &[],
         }];
-        assert!(spec.prepare_merge(&sources).unwrap().is_none());
+        assert!(!spec.can_merge(&sources).unwrap());
     }
 
     #[test]

@@ -1525,43 +1525,91 @@ mod tests {
         };
         use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
         assert!(ReclusterIndexMergeInputs::try_create(fuse, &task)?.is_some());
-        // Interleaved source rows, with output serialization completing in reverse order.
+        // Interleaved source rows, with output serialization completing in reverse order; the
+        // real stages run with two threads so partitions reach the scatter out of order.
+        use databend_common_pipeline::sources::BlocksSource;
+        use databend_common_storages_fuse::io::block_index::BlockIndexMergeContext;
         use databend_common_storages_fuse::operations::MutationLogs;
+        use databend_common_storages_fuse::operations::ReclusterIndexMergeState;
         use databend_common_storages_fuse::operations::ReclusterIndexOutput;
         use databend_common_storages_fuse::operations::ReclusterIndexRowRange;
-        use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
+        use databend_common_storages_fuse::operations::build_recluster_index_merge_pipeline_with_state;
+
+        use crate::pipelines::PipelineBuildResult;
+        use crate::pipelines::executor::ExecutorSettings;
+        use crate::pipelines::executor::PipelinePullingExecutor;
         let inputs = ReclusterIndexMergeInputs::try_create(fuse, &task)?.unwrap();
-        let mut collector =
-            TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), inputs);
-        for source_row in (0..2).rev() {
-            let mut meta = blocks[0].1.as_ref().clone();
-            meta.row_count = 2;
-            meta.inverted_index_metas = Some(vec![]);
-            meta.inverted_index_size = None;
-            let output = ExtendedBlockMeta {
-                block_meta: meta,
-                draft_virtual_block_meta: None,
-                column_hlls: None,
-                column_top_n: None,
+        // Block metadata does not clone; build the written outputs for every run.
+        let written = || {
+            let mut written = VecDeque::new();
+            for source_row in (0..2).rev() {
+                let mut meta = blocks[0].1.as_ref().clone();
+                meta.row_count = 2;
+                meta.inverted_index_metas = Some(vec![]);
+                meta.inverted_index_size = None;
+                let output = ExtendedBlockMeta {
+                    block_meta: meta,
+                    draft_virtual_block_meta: None,
+                    column_hlls: None,
+                    column_top_n: None,
+                };
+                let rows = (0..2)
+                    .map(|source| ReclusterIndexRowRange {
+                        source,
+                        rows: source_row..source_row + 1,
+                    })
+                    .collect();
+                written.push_back(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
+                    meta: output,
+                    rows,
+                    output_row: u64::from(source_row) * 2,
+                })));
+            }
+            written
+        };
+        let run_merge = async |ctx: Arc<QueryContext>,
+                               written: VecDeque<DataBlock>|
+               -> Result<(Vec<DataBlock>, Arc<ReclusterIndexMergeState>)> {
+            let mut data_pipeline = Pipeline::create();
+            let written = Arc::new(std::sync::Mutex::new(written));
+            data_pipeline.add_source(
+                |output| BlocksSource::create(ctx.get_scan_progress(), output, written.clone()),
+                1,
+            )?;
+            // One-byte partitions: every term travels alone, so partitions far outnumber the
+            // readers and the scatter has to reorder them.
+            let context = BlockIndexMergeContext {
+                operator: fuse.get_operator(),
+                locations: fuse.meta_location_generator().clone(),
+                abort_checker: ctx.clone().get_abort_checker(),
+                partition_bytes: 1,
             };
-            let rows = (0..2)
-                .map(|source| ReclusterIndexRowRange {
-                    source,
-                    rows: source_row..source_row + 1,
-                })
-                .collect();
-            assert!(
-                collector
-                    .transform(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
-                        meta: output,
-                        rows,
-                        output_row: u64::from(source_row) * 2,
-                    })))?
-                    .is_empty()
-            );
-        }
-        let outputs = collector.on_finish(true)?;
+            let state = Arc::new(ReclusterIndexMergeState::new(inputs.clone(), context, 2));
+            let mut pipeline = Pipeline::create();
+            build_recluster_index_merge_pipeline_with_state(
+                &mut data_pipeline,
+                &mut pipeline,
+                state.clone(),
+            )?;
+            data_pipeline.set_max_threads(2);
+            pipeline.set_max_threads(2);
+            let mut result = PipelineBuildResult::create();
+            result.sources_pipelines.push(data_pipeline);
+            result.main_pipeline = pipeline;
+            let mut executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+            executor_settings.max_threads = 2;
+            let mut executor = PipelinePullingExecutor::from_pipelines(result, executor_settings)?;
+            executor.start();
+            let mut outputs = Vec::new();
+            while let Some(block) = executor.pull_data().await? {
+                outputs.push(block);
+            }
+            Ok((outputs, state))
+        };
+        let (outputs, state) = run_merge(admission_ctx.clone(), written()).await?;
         assert_eq!(outputs.len(), 2);
+        // Many more partitions than readers, replayed in order by every output.
+        assert!(state.partitions_total().unwrap() > 2 * state.threads as u32);
         for mut output in outputs {
             let logs = MutationLogs::downcast_from(output.take_meta().unwrap()).unwrap();
             let MutationLogEntry::AppendBlock { block_meta, .. } = &logs.entries[0] else {
@@ -1581,15 +1629,9 @@ mod tests {
             assert_eq!(searcher.num_docs(), 2);
             assert!(block_meta.block_meta.inverted_index_size.unwrap() >= meta.size);
         }
-        let inputs = ReclusterIndexMergeInputs::try_create(fuse, &task)?.unwrap();
-        let mut cancelled =
-            TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), inputs.clone());
-        assert!(cancelled.on_finish(false)?.is_empty());
         let cancelled_ctx = fixture.new_query_ctx().await?;
-        let mut cancelled =
-            TransformReclusterIndexMerge::new(cancelled_ctx.clone(), fuse.clone(), inputs);
         cancelled_ctx.kill(ErrorCode::aborting());
-        assert!(cancelled.on_finish(true).is_err());
+        assert!(run_merge(cancelled_ctx, written()).await.is_err());
         let source_metas = task.inverted_index_sources.clone();
         task.inverted_index_sources[0].clear();
         assert!(ReclusterIndexMergeInputs::try_create(fuse, &task)?.is_none());

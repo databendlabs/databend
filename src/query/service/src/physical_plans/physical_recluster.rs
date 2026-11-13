@@ -62,11 +62,11 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
 use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
-use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_common_storages_fuse::operations::VerticalReclusterSource;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
+use databend_common_storages_fuse::operations::build_recluster_index_merge_pipeline;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -421,14 +421,19 @@ impl IPhysicalPlan for Recluster {
                     },
                 )?;
                 if let Some(index_merge) = index_merge {
-                    builder.main_pipeline.try_resize(1)?;
-                    builder.main_pipeline.add_accumulating_transformer(|| {
-                        TransformReclusterIndexMerge::new(
-                            builder.ctx.clone(),
-                            index_merge_table.clone(),
-                            index_merge.clone(),
-                        )
-                    });
+                    // The written blocks end in a sink; the index merge, which the commit
+                    // sink follows, becomes the main pipeline.
+                    let mut data_pipeline =
+                        std::mem::replace(&mut builder.main_pipeline, Pipeline::create());
+                    build_recluster_index_merge_pipeline(
+                        &mut data_pipeline,
+                        &mut builder.main_pipeline,
+                        builder.ctx.clone(),
+                        &index_merge_table,
+                        index_merge,
+                        max_threads,
+                    )?;
+                    builder.pipelines.push(data_pipeline);
                 }
                 Ok(())
             }

@@ -83,15 +83,17 @@ use crate::io::inverted_index_user_dictionary::JAPANESE_DICTIONARY;
 use crate::io::resolve_inverted_index_user_dictionary_blocking;
 use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
 use crate::io::write::block_index::BlockIndexLowLevelWriter;
-use crate::io::write::block_index::BlockIndexMerge;
+use crate::io::write::block_index::BlockIndexMergeContext;
 use crate::io::write::block_index::BlockIndexMergeSource;
+use crate::io::write::block_index::BlockIndexMerger;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::WrittenBlockIndexOutput;
 use crate::io::write::block_index::WrittenInvertedIndex;
-use crate::io::write::inverted_index_merge::InvertedIndexMerge;
+use crate::io::write::inverted_index_merge::InvertedIndexMerger;
+use crate::io::write::inverted_index_merge::merge_sources;
 
 #[derive(Clone)]
 pub struct InvertedIndexBuilder {
@@ -124,11 +126,16 @@ impl BlockIndexSpec for InvertedIndexWriteSpec {
         Some(&self.builder.name)
     }
 
-    fn prepare_merge(
+    fn can_merge(&self, sources: &[BlockIndexMergeSource<'_>]) -> Result<bool> {
+        Ok(merge_sources(&self.builder, sources).is_some())
+    }
+
+    fn new_merger(
         &self,
         sources: &[BlockIndexMergeSource<'_>],
-    ) -> Result<Option<Arc<dyn BlockIndexMerge>>> {
-        InvertedIndexMerge::try_create(&self.builder, sources)
+        context: &BlockIndexMergeContext,
+    ) -> Result<Arc<dyn BlockIndexMerger>> {
+        InvertedIndexMerger::try_create(&self.builder, sources, context)
     }
 
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
@@ -1018,10 +1025,11 @@ mod merge_tests {
     use databend_common_expression::types::VariantType;
     use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_index::BundleSizes;
-    use databend_storages_common_index::InvertedIndexMerger;
+    use databend_storages_common_index::MergeOptions;
     use databend_storages_common_index::MergeOutput;
     use databend_storages_common_index::MergeSource;
     use databend_storages_common_index::SourceRows;
+    use databend_storages_common_index::merge_in_process;
     use opendal::services::Memory;
     use tantivy::query::QueryParser;
     use tantivy::query_grammar::parse_query;
@@ -1173,14 +1181,23 @@ mod merge_tests {
                 ],
             },
         ];
-        let sizes: Vec<BundleSizes> = InvertedIndexMerger::try_create_with_stream_threshold(
+        let (schema, _) = schemas();
+        let (index_schema, _) = create_index_schema(schema, &index_options()).unwrap();
+        let sizes: Vec<BundleSizes> = merge_in_process(
             operator.clone(),
-            sources,
+            &sources,
             outputs,
-            4096,
+            &index_schema,
+            IndexSettings {
+                docstore_compress_dedicated_thread: false,
+                ..Default::default()
+            },
+            MergeOptions {
+                window_bytes: 4096,
+                stream_threshold: 4096,
+            },
+            Arc::new(|| Ok(())),
         )
-        .unwrap()
-        .finish()
         .unwrap();
 
         // Output rows in order, as data set ids.

@@ -40,9 +40,9 @@ use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
-use super::recluster_inverted_index_merge::ReclusterIndexInput;
-use super::recluster_inverted_index_merge::ReclusterIndexOutput;
-use super::recluster_inverted_index_merge::ReclusterIndexRowRange;
+use super::recluster_index_merge::ReclusterIndexInput;
+use super::recluster_index_merge::ReclusterIndexOutput;
+use super::recluster_index_merge::ReclusterIndexRowRange;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
