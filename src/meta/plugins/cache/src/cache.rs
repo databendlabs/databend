@@ -53,14 +53,6 @@ impl Cache {
             .flatten()
     }
 
-    /// List a directory only if the cache can answer immediately; see [`Self::try_get_ready`].
-    pub fn try_list_dir_ready(&mut self, prefix: &str) -> Option<Vec<(String, SeqV)>> {
-        self.inner
-            .try_list_dir(prefix)
-            .now_or_never()
-            .and_then(Result::ok)
-    }
-
     /// Create a new cache with the given prefix and meta client.
     ///
     /// The cache will start watching for changes immediately.
