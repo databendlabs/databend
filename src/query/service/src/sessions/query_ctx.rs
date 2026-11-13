@@ -215,6 +215,10 @@ impl QueryContext {
         Ok(())
     }
 
+    pub(crate) fn force_maintenance_cancellation(&self, cause: ErrorCode) {
+        self.shared.force_maintenance_cancellation(cause);
+    }
+
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details

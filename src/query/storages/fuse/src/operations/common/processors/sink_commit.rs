@@ -742,6 +742,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     None
                 };
 
+                // Protect the metadata RPC and successful-publication bookkeeping from
+                // cooperative maintenance cancellation. The caller may still force an
+                // unknown outcome after its bounded cleanup grace; never delete on that
+                // assumption. Foreground/temporary-table behavior is unchanged.
+                let mut publication_guard = self.ctx.begin_maintenance_publication()?;
                 let commit_result = async {
                     if self.acquire_commit_lock {
                         self.table = self.table.refresh(self.ctx.as_ref()).await?;
@@ -781,6 +786,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 .await;
                 // Do not hold the commit gate during vacuum, retry backoff, or snapshot rebase.
                 drop(commit_guard);
+                if commit_result.is_err() {
+                    // No retry/backoff is part of the publication critical section.
+                    drop(publication_guard.take());
+                    if self.ctx.is_automatic_maintenance() {
+                        self.ctx
+                            .check_aborting()
+                            .map_err(|cause| cause.with_context("after maintenance publication"))?;
+                    }
+                }
 
                 match commit_result {
                     Ok(_) => {

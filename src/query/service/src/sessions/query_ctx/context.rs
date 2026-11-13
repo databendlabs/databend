@@ -48,6 +48,14 @@ impl TableContext for QueryContext {
         QueryContext::is_automatic_maintenance(self)
     }
 
+    fn begin_maintenance_publication(&self) -> Result<Option<Box<dyn Send>>> {
+        if self.is_automatic_maintenance() {
+            self.shared.begin_maintenance_publication().map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

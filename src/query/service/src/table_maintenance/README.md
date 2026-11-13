@@ -24,9 +24,14 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
   FullCheck instead of interpreting the missing old segment as completed coverage. Replanning
   does not reset the action's failure/no-progress budgets.
 - An action's context creation is limited to 60 seconds and each execution unit to 5 minutes.
-  Cancellation interrupts its context, allows up to 3 seconds for normal pipeline cleanup,
-  and tears down any remaining local exchange environment. These limits require async work
-  to yield; they cannot preempt an arbitrary synchronous CPU operation.
+  Cancellation interrupts planning/building immediately. In CommitSink and direct snapshot
+  publication (including Analyze), a shared-context guard defers cooperative context kills
+  across the metadata RPC and publication bookkeeping. The unit allows up to 3 seconds to
+  drain before forcing cancellation and tearing down its exchange environment. An exhausted
+  grace, executor failure, lost response or process exit can still leave the commit result
+  unknown; cancellation is never proof of rollback. This deliberately bounds the original
+  design's I12 rather than promising an uninterruptible commit or unbounded shutdown. These
+  limits require async work to yield; they cannot preempt arbitrary synchronous CPU work.
 - Recluster is triggered by successful automatic Compact on a clustered table, not by every
   write. It remains distributed and yields between rounds. Refresh and Analyze do not wait
   for convergence.

@@ -194,6 +194,9 @@ impl FuseTable {
         let table_statistics_location = snapshot.table_statistics_location();
         let lvt_check = Self::build_table_lvt_check(table_info, snapshot.timestamp)?;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
+        // ANALYZE and other direct snapshot publishers bypass CommitSink. Use the
+        // same bounded cooperative-cancellation protection around their publication.
+        let _publication_guard = ctx.begin_maintenance_publication()?;
         // 2. update table meta
         let res = self
             .update_table_meta(

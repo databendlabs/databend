@@ -218,6 +218,13 @@ pub trait TableContext:
         false
     }
 
+    /// Defer cooperative automatic-maintenance cancellation across metadata publication.
+    /// Foreground statements keep their existing cancellation semantics. The service may
+    /// still force cancellation after its bounded shutdown/cleanup grace expires.
+    fn begin_maintenance_publication(&self) -> Result<Option<Box<dyn Send>>> {
+        Ok(None)
+    }
+
     fn as_any(&self) -> &dyn Any;
 }
 

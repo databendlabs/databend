@@ -163,6 +163,10 @@ async fn run_maintenance_unit_with_timeout<T>(
         .await
         .is_err()
     {
+        // Publication is protected only within this grace, never indefinitely. A
+        // forced stop can lose a successful meta response, so callers must recheck
+        // coverage rather than infer rollback or delete generated objects.
+        ctx.force_maintenance_cancellation(cause.clone());
         log::warn!(query_id = ctx.get_id().as_str();
             "Maintenance cancellation cleanup exceeded its grace period");
     }

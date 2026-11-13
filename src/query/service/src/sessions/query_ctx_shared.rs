@@ -87,6 +87,36 @@ use crate::sessions::runtime_filter_state::RuntimeFilterState;
 use crate::spillers;
 use crate::storages::Table;
 
+#[derive(Default)]
+struct MaintenancePublication {
+    active: usize,
+    cancellation: Option<ErrorCode>,
+    forced: bool,
+}
+
+struct MaintenancePublicationGuard {
+    shared: Arc<QueryContextShared>,
+    armed: bool,
+}
+
+impl Drop for MaintenancePublicationGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let cancellation = {
+            let mut publication = self.shared.maintenance_publication.lock();
+            publication.active -= 1;
+            (publication.active == 0)
+                .then(|| publication.cancellation.clone())
+                .flatten()
+        };
+        if let Some(cause) = cancellation {
+            self.shared.kill(cause);
+        }
+    }
+}
+
 pub struct MemoryUpdater {
     pub memory_usage: AtomicUsize,
     pub peek_memory_usage: AtomicUsize,
@@ -159,6 +189,7 @@ pub struct QueryContextShared {
     pub(super) enable_auto_analyze: Arc<AtomicBool>,
     pub(super) maintenance_reservation:
         RwLock<Option<Arc<crate::table_maintenance::MaintenanceReservation>>>,
+    maintenance_publication: Mutex<MaintenancePublication>,
     // Status info.
     pub(super) status: Arc<RwLock<String>>,
 
@@ -284,6 +315,7 @@ impl QueryContextShared {
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
             enable_auto_analyze: Arc::new(AtomicBool::new(false)),
             maintenance_reservation: RwLock::new(None),
+            maintenance_publication: Mutex::new(MaintenancePublication::default()),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             join_spill_progress: Arc::new(Progress::create()),
@@ -359,7 +391,60 @@ impl QueryContextShared {
         warnings
     }
 
+    pub(crate) fn begin_maintenance_publication(self: &Arc<Self>) -> Result<Box<dyn Send>> {
+        // Allocate before registering the critical section: allocation failure must
+        // not leave an active count with no guard to release it.
+        let mut guard = Box::new(MaintenancePublicationGuard {
+            shared: self.clone(),
+            armed: false,
+        });
+        let mut publication = self.maintenance_publication.lock();
+        if let Some(cause) = &publication.cancellation {
+            return Err(cause.clone());
+        }
+        self.check_aborting()
+            .map_err(|cause| cause.with_context("before maintenance publication"))?;
+        publication.active += 1;
+        guard.armed = true;
+        Ok(guard)
+    }
+
+    pub(crate) fn force_maintenance_cancellation(&self, cause: ErrorCode) {
+        let publishing = {
+            let mut publication = self.maintenance_publication.lock();
+            publication.forced = true;
+            publication
+                .cancellation
+                .get_or_insert_with(|| cause.clone());
+            publication.active != 0
+        };
+        if publishing {
+            log::warn!(query_id = self.init_query_id.read().as_str();
+                "Maintenance publication exceeded cancellation grace; commit outcome may be unknown");
+        }
+        self.kill(cause);
+    }
+
     pub fn kill<C>(&self, cause: ErrorCode<C>) {
+        if self.maintenance_reservation.read().is_some() {
+            let mut publication = self.maintenance_publication.lock();
+            let cancellation = cause
+                .clone()
+                .with_context("automatic maintenance cancellation");
+            if cause.code() == ErrorCode::ABORTED_QUERY {
+                publication.cancellation.get_or_insert(cancellation);
+            } else {
+                publication.cancellation = Some(cancellation);
+            }
+            // Lease loss, OOM and other execution failures must not be hidden by a
+            // publication guard. Only cooperative query cancellation is deferred.
+            if cause.code() == ErrorCode::ABORTED_QUERY
+                && publication.active != 0
+                && !publication.forced
+            {
+                return;
+            }
+        }
         #[cfg(feature = "python-udf")]
         if let Some(workers) = self.python_udf_workers.lock().as_ref() {
             workers.finish();
