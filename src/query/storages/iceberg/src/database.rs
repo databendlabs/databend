@@ -197,17 +197,29 @@ impl Database for IcebergDatabase {
         match req.create_option {
             CreateOption::Create => {}
             CreateOption::CreateIfNotExists => {
-                if let Ok(exists) = self.ctl.iceberg_catalog().table_exists(&table_name).await {
-                    if exists {
-                        return Ok(CreateTableReply {
-                            table_id: 0,
-                            table_id_seq: Some(0),
-                            db_id: 0,
-                            new_table: true,
-                            prev_table_id: None,
-                            orphan_table_name: None,
-                        });
-                    }
+                // `Catalog::table_exists` asks the REST catalog with a HEAD request, which older
+                // REST servers (iceberg-rest 0.10 answers 400 to any HEAD) reject, so the table
+                // is looked up instead: a GET works everywhere, and a failed lookup means there
+                // is nothing to do.
+                if self
+                    .ctl
+                    .iceberg_catalog()
+                    .load_table(&table_name)
+                    .await
+                    .is_ok()
+                {
+                    return Ok(CreateTableReply {
+                        table_id: 0,
+                        table_id_seq: Some(0),
+                        db_id: 0,
+                        // The table is already there, so `CREATE TABLE IF NOT EXISTS` has
+                        // nothing to do. Callers such as CTAS only skip their write when the
+                        // reply says the table is not new; reporting a new table here made them
+                        // append to the existing one.
+                        new_table: false,
+                        prev_table_id: None,
+                        orphan_table_name: None,
+                    });
                 }
             }
             CreateOption::CreateOrReplace => {

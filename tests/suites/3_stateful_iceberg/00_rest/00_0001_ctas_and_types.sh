@@ -32,6 +32,11 @@ CREATE TABLE ${db}.ctas AS SELECT number::bigint AS a, 'v' || number::string AS 
 SELECT * FROM ${db}.ctas ORDER BY a;
 SELECT count(*) FROM ${db}.ctas;
 
+-- On an existing table the statement is a no-op, the way Fuse behaves: it must not append
+-- the rows of the select to the table that is already there.
+CREATE TABLE IF NOT EXISTS ${db}.ctas AS SELECT 9::bigint AS a, 'z' AS b FROM numbers(1);
+SELECT count(*) FROM ${db}.ctas;
+
 -- The schema of a CTAS is converted like the schema of a CREATE TABLE.
 CREATE TABLE ${db}.ctas_types AS
     SELECT number::bigint AS a, (number::decimal(10, 2)) AS d, [number, number + 1] AS li FROM numbers(2);

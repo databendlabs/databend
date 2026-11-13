@@ -374,7 +374,18 @@ fn block_to_record_batch(
         let array = if array.data_type() == field.data_type() {
             array
         } else {
-            let casted = arrow_cast::cast(&array, field.data_type()).map_err(|err| {
+            // A safe cast would turn a value that does not fit the target type into NULL, so a
+            // write that cannot represent its input would silently store NULLs instead of
+            // failing.
+            let casted = arrow_cast::cast_with_options(
+                &array,
+                field.data_type(),
+                &arrow_cast::CastOptions {
+                    safe: false,
+                    ..Default::default()
+                },
+            )
+            .map_err(|err| {
                 ErrorCode::TableSchemaMismatch(format!(
                     "Cannot cast column '{}' from {:?} to {:?} for the iceberg table: {err}",
                     field.name(),
@@ -754,6 +765,72 @@ mod tests {
         assert_eq!(decimals.value(0), 1234_i128);
         assert_eq!(decimals.value(1), -5_i128);
         assert_eq!(batch.column(1).as_list::<i32>().value(0).len(), 2);
+    }
+
+    #[test]
+    fn test_value_that_does_not_fit_the_iceberg_type_is_an_error() {
+        use arrow_array::BinaryArray;
+        use arrow_array::RecordBatch;
+        use arrow_schema::DataType as ArrowDataType;
+        use arrow_schema::Field;
+        use arrow_schema::Fields;
+        use arrow_schema::Schema;
+        use databend_common_expression::DataSchema;
+
+        let source_schema = Schema::new(Fields::from(vec![Field::new(
+            "b",
+            ArrowDataType::Binary,
+            true,
+        )]));
+        let batch = RecordBatch::try_new(Arc::new(source_schema.clone()), vec![Arc::new(
+            BinaryArray::from(vec![Some(&[1u8, 2, 3][..])]),
+        )])
+        .unwrap();
+        let data_schema = DataSchema::try_from(&source_schema).unwrap();
+        let block = DataBlock::from_record_batch(&data_schema, &batch).unwrap();
+
+        // Three bytes do not fit fixed(16). A safe cast would write the value as NULL.
+        let iceberg_schema = Schema::new(Fields::from(vec![Field::new(
+            "b",
+            ArrowDataType::FixedSizeBinary(16),
+            true,
+        )]));
+        let err = block_to_record_batch(block, Arc::new(iceberg_schema)).unwrap_err();
+        assert!(err.message().contains("Cannot cast column 'b'"), "{err}");
+    }
+
+    #[test]
+    fn test_timestamp_outside_the_nanosecond_range_is_an_error() {
+        use arrow_array::RecordBatch;
+        use arrow_array::TimestampMicrosecondArray;
+        use arrow_schema::DataType as ArrowDataType;
+        use arrow_schema::Field;
+        use arrow_schema::Fields;
+        use arrow_schema::Schema;
+        use arrow_schema::TimeUnit;
+        use databend_common_expression::DataSchema;
+
+        // Year 3000 in microseconds, which is outside what timestamp[ns] can represent.
+        let year_3000 = 32_503_680_000_000_000_i64;
+        let source_schema = Schema::new(Fields::from(vec![Field::new(
+            "ts",
+            ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+            true,
+        )]));
+        let batch = RecordBatch::try_new(Arc::new(source_schema.clone()), vec![Arc::new(
+            TimestampMicrosecondArray::from(vec![year_3000]),
+        )])
+        .unwrap();
+        let data_schema = DataSchema::try_from(&source_schema).unwrap();
+        let block = DataBlock::from_record_batch(&data_schema, &batch).unwrap();
+
+        let iceberg_schema = Schema::new(Fields::from(vec![Field::new(
+            "ts",
+            ArrowDataType::Timestamp(TimeUnit::Nanosecond, None),
+            true,
+        )]));
+        let err = block_to_record_batch(block, Arc::new(iceberg_schema)).unwrap_err();
+        assert!(err.message().contains("Cannot cast column 'ts'"), "{err}");
     }
 
     #[test]
