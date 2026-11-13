@@ -211,17 +211,20 @@ impl SessionManager {
         sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
     }
 
-    /// Find a coordinator/client query within the requester's tenant. Client query ids
-    /// may be reused across tenants; FlightRPC fragments are not in active_sessions.
-    pub fn get_session_by_query_id(&self, tenant: &str, query_id: &str) -> Option<Arc<Session>> {
-        if tenant.is_empty() {
-            return None;
-        }
+    /// Find coordinator/client queries within the requester's tenant. Client query
+    /// IDs may be reused even within a tenant; callers must authorize candidates.
+    /// FlightRPC fragments are not in active_sessions.
+    pub fn get_sessions_by_query_id<'a>(
+        &'a self,
+        tenant: &'a str,
+        query_id: &'a str,
+    ) -> impl Iterator<Item = Arc<Session>> + 'a {
         self.active_sessions_snapshot()
             .into_iter()
             .filter_map(|session| session.upgrade())
-            .find(|session| {
-                session.get_current_tenant().tenant_name() == tenant
+            .filter(move |session| {
+                !tenant.is_empty()
+                    && session.get_current_tenant().tenant_name() == tenant
                     && session.get_current_query_id().as_deref() == Some(query_id)
             })
     }

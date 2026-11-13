@@ -178,14 +178,20 @@ async fn test_kill_query_id_ignores_fragment_sessions() -> anyhow::Result<()> {
     let manager = SessionManager::instance();
     assert_eq!(
         manager
-            .get_session_by_query_id("test", &id)
+            .get_sessions_by_query_id("test", &id)
+            .next()
             .unwrap()
             .get_id(),
         coordinator.get_id()
     );
     drop(coordinator_ctx);
     drop(coordinator);
-    assert!(manager.get_session_by_query_id("test", &id).is_none());
+    assert!(
+        manager
+            .get_sessions_by_query_id("test", &id)
+            .next()
+            .is_none()
+    );
     Ok(())
 }
 

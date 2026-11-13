@@ -46,6 +46,9 @@
 //! Requester identity requires a nonempty matching tenant, even for SUPER.
 //! Within that tenant, ownership compares username and hostname; other targets,
 //! including userless sessions, require global SUPER (including role grants).
+//! Duplicate query IDs are resolved among in-tenant candidates by choosing an
+//! authorized session. If none is authorized, the query match still denies KILL;
+//! it does not fall back to a sid or a peer.
 //! Authorization precedes queue removal and cancellation. Same-tenant denial
 //! returns `PermissionDenied` (1063); missing and cross-tenant targets both return
 //! `UnknownSession` (1053). This exposes existence only within the same tenant,
@@ -260,6 +263,18 @@ impl KillInterpreter {
                 .get_session_by_id(id)
                 .filter(|session| session.get_current_tenant().tenant_name() == access.tenant)
         };
+        let query_in_tenant = |id: &str| {
+            let mut denied = None;
+            for session in manager.get_sessions_by_query_id(&access.tenant, id) {
+                let user = session.get_current_user().ok().map(|user| user.identity());
+                if access.can_kill(session.get_current_tenant().tenant_name(), user.as_ref()) {
+                    return Some(session);
+                }
+                // Keep a denied match so it cannot turn into sid/peer fallback.
+                denied.get_or_insert(session);
+            }
+            denied
+        };
         let (target, by_query_id) = match KillTarget::parse(&self.plan.id) {
             KillTarget::MySqlConnection(id) => {
                 // MySQL connection ids are node-local. Do not broadcast them to peers.
@@ -279,19 +294,17 @@ impl KillInterpreter {
                 // to return a clear error; it must never disconnect that session.
                 match session_in_tenant(id) {
                     Some(session) => (Some(session), false),
-                    None => (manager.get_session_by_query_id(&access.tenant, id), true),
+                    None => (query_in_tenant(id), true),
                 }
             }
             KillTarget::SessionOrQuery(id) => match session_in_tenant(id) {
                 Some(session) => (Some(session), false),
-                None => (manager.get_session_by_query_id(&access.tenant, id), true),
+                None => (query_in_tenant(id), true),
             },
-            KillTarget::QueryOrSession(id) => {
-                match manager.get_session_by_query_id(&access.tenant, id) {
-                    Some(session) => (Some(session), true),
-                    None => (session_in_tenant(id), false),
-                }
-            }
+            KillTarget::QueryOrSession(id) => match query_in_tenant(id) {
+                Some(session) => (Some(session), true),
+                None => (session_in_tenant(id), false),
+            },
         };
 
         let Some(kill_session) = target else {

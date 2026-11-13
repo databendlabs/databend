@@ -135,17 +135,18 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
     let fixture = TestFixture::setup_with_config(&config).await?;
     let queue = QueriesQueueManager::instance();
     let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
-    requester
-        .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-        .await?;
-
-    for (foreign_tenant, kind, by_query_id) in [
-        (true, "QUERY", true),
-        (true, "QUERY", false),
-        (true, "CONNECTION", false),
-        (false, "QUERY", false),
-        (false, "CONNECTION", false),
+    for (foreign_tenant, kind, by_query_id, other_host) in [
+        (true, "QUERY", true, false),
+        (true, "QUERY", false, false),
+        (true, "CONNECTION", false, false),
+        (false, "QUERY", false, false),
+        (false, "CONNECTION", false, false),
+        (false, "QUERY", true, false),
+        (false, "QUERY", true, true),
     ] {
+        requester
+            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
         let holder_ctx = fixture.new_query_ctx().await?;
         let holder = queue
             .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
@@ -170,9 +171,12 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
                 .get_settings()
                 .set_setting("sandbox_tenant".to_string(), "other_tenant".to_string())?;
         }
-        other
-            .set_authed_user(UserInfo::new_no_auth("u2", "%"), None)
-            .await?;
+        let other_user = if other_host {
+            UserInfo::new_no_auth("u1", "other-host")
+        } else {
+            UserInfo::new_no_auth("u2", "%")
+        };
+        other.set_authed_user(other_user.clone(), None).await?;
         let other_ctx = other.create_query_context(&BUILD_INFO).await?;
         other_ctx.update_init_query_id(id.clone());
         let mut other_acquire =
@@ -184,11 +188,24 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
             "duplicate query IDs must not replace entries"
         );
 
-        let target = if by_query_id { id } else { own.get_id() };
+        let target = if by_query_id {
+            id.clone()
+        } else {
+            own.get_id()
+        };
         let ctx = requester.create_query_context(&BUILD_INFO).await?;
         execute_command(ctx, &format!("KILL {} '{}'", kind, target)).await?;
         assert_eq!(queue.length(), 1);
         assert_eq!(own.is_aborting(), kind == "CONNECTION");
+        if by_query_id {
+            assert!(
+                own_ctx
+                    .clone()
+                    .get_abort_checker()
+                    .try_check_aborting()
+                    .is_err()
+            );
+        }
         let error = own_acquire.await.unwrap_err();
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         assert_eq!(error.message(), "Query canceled by KILL");
@@ -201,6 +218,28 @@ async fn test_kill_queued_duplicate_query_ids_are_isolated() -> anyhow::Result<(
                 .try_check_aborting()
                 .is_ok()
         );
+
+        if !foreign_tenant && by_query_id {
+            // Keep both contexts alive: whichever HashMap match comes first,
+            // the second caller must still find its own full username/hostname.
+            requester.set_authed_user(other_user, None).await?;
+            let ctx = requester.create_query_context(&BUILD_INFO).await?;
+            let error = execute_command(ctx, &format!("KILL CONNECTION '{}'", id))
+                .await
+                .unwrap_err();
+            assert_eq!(error.code(), ErrorCode::BAD_ARGUMENTS);
+            assert_eq!(queue.length(), 1);
+            assert!(futures::poll!(other_acquire.as_mut()).is_pending());
+            let ctx = requester.create_query_context(&BUILD_INFO).await?;
+            execute_command(ctx, &format!("KILL QUERY '{}'", id)).await?;
+            assert_eq!(queue.length(), 0);
+            assert_eq!(
+                other_acquire.await.unwrap_err().code(),
+                ErrorCode::ABORTED_QUERY
+            );
+            assert!(other_ctx.get_abort_checker().try_check_aborting().is_err());
+            continue;
+        }
 
         drop(holder);
         let _survivor = other_acquire.await?;
@@ -614,7 +653,12 @@ async fn test_kill_cross_tenant_ids_are_hidden() -> anyhow::Result<()> {
         assert!(foreign_ctx.get_abort_checker().try_check_aborting().is_ok());
         drop(own_ctx);
         drop(own);
-        assert!(manager.get_session_by_query_id("test", &id).is_none());
+        assert!(
+            manager
+                .get_sessions_by_query_id("test", &id)
+                .next()
+                .is_none()
+        );
     }
     Ok(())
 }
