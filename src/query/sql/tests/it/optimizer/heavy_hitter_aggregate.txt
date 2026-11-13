@@ -29,11 +29,11 @@ TopN
 └── Aggregate(Final)
     ├── group items: [events.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#4)]
-    ├── adaptive Top-K COUNT: 10
+    ├── adaptive Top-K COUNT: 10, candidate hint: false
     └── Aggregate(Partial)
         ├── group items: [events.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#4)]
-        ├── adaptive Top-K COUNT: 10
+        ├── adaptive Top-K COUNT: 10, candidate hint: false
         └── Scan
             ├── table: default.events (#0)
             ├── filters: []
@@ -74,11 +74,11 @@ TopN
 └── Aggregate(Final)
     ├── group items: [events.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#4)]
-    ├── adaptive Top-K COUNT: 15
+    ├── adaptive Top-K COUNT: 15, candidate hint: false
     └── Aggregate(Partial)
         ├── group items: [events.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#4)]
-        ├── adaptive Top-K COUNT: 15
+        ├── adaptive Top-K COUNT: 15, candidate hint: false
         └── EvalScalar
             ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#5)]
             └── Scan
@@ -181,11 +181,11 @@ TopN
     └── Aggregate(Final)
         ├── group items: [plus(events.item (#0), 1) AS (#4)]
         ├── aggregate functions: [count() AS (#5)]
-        ├── adaptive Top-K COUNT: 5
+        ├── adaptive Top-K COUNT: 5, candidate hint: false
         └── Aggregate(Partial)
             ├── group items: [plus(events.item (#0), 1) AS (#4)]
             ├── aggregate functions: [count() AS (#5)]
-            ├── adaptive Top-K COUNT: 5
+            ├── adaptive Top-K COUNT: 5, candidate hint: false
             └── EvalScalar
                 ├── scalars: [plus(events.item (#0), 1) AS (#4)]
                 └── Scan
@@ -228,11 +228,11 @@ Limit
     └── Aggregate(Final)
         ├── group items: [events.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#4)]
-        ├── adaptive Top-K COUNT: 10
+        ├── adaptive Top-K COUNT: 10, candidate hint: false
         └── Aggregate(Partial)
             ├── group items: [events.item (#0) AS (#0)]
             ├── aggregate functions: [count() AS (#4)]
-            ├── adaptive Top-K COUNT: 10
+            ├── adaptive Top-K COUNT: 10, candidate hint: false
             └── Scan
                 ├── table: default.events (#0)
                 ├── filters: []
@@ -746,11 +746,11 @@ TopN
 └── Aggregate(Final)
     ├── group items: [uniq.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#1)]
-    ├── adaptive Top-K COUNT: 10
+    ├── adaptive Top-K COUNT: 10, candidate hint: false
     └── Aggregate(Partial)
         ├── group items: [uniq.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#1)]
-        ├── adaptive Top-K COUNT: 10
+        ├── adaptive Top-K COUNT: 10, candidate hint: false
         └── Scan
             ├── table: default.uniq (#0)
             ├── filters: []
@@ -789,11 +789,11 @@ TopN
 └── Aggregate(Final)
     ├── group items: [hot.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#1)]
-    ├── adaptive Top-K COUNT: 3
+    ├── adaptive Top-K COUNT: 3, candidate hint: true
     └── Aggregate(Partial)
         ├── group items: [hot.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#1)]
-        ├── adaptive Top-K COUNT: 3
+        ├── adaptive Top-K COUNT: 3, candidate hint: true
         └── Scan
             ├── table: default.hot (#0)
             ├── filters: []

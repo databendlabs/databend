@@ -301,9 +301,10 @@ fn aggregate_to_format_tree<I: IdHumanizer>(
         FormatTreeNode::new(format!("group items: [{}]", group_items)),
         FormatTreeNode::new(format!("aggregate functions: [{}]", agg_funcs)),
     ];
-    if let Some(limit) = op.adaptive_topk_count {
+    if let Some(info) = op.adaptive_topk_count {
         children.push(FormatTreeNode::new(format!(
-            "adaptive Top-K COUNT: {limit}"
+            "adaptive Top-K COUNT: {}, candidate hint: {}",
+            info.limit, info.likely_candidates
         )));
     }
     FormatTreeNode::with_children(label, children)

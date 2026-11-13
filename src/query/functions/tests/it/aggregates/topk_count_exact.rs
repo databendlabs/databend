@@ -36,6 +36,27 @@ fn check(rows: &[Option<u64>], state: &ExactTopKCountSummary<u64>, limit: usize)
     for &key in rows {
         *frequencies.entry(key).or_default() += 1;
     }
+    // The candidate path is a different proof: it may succeed even when
+    // exact counts cannot be recovered. Check completeness, including ties,
+    // against the full frequency map rather than another sketch.
+    if let Some(candidates) = state.candidates(limit) {
+        let candidates = candidates
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>();
+        let mut counts = frequencies.values().copied().collect::<Vec<_>>();
+        counts.sort_unstable_by(|a, b| b.cmp(a));
+        let bound = counts.get(limit.saturating_sub(1)).copied().unwrap_or(0);
+        for (key, count) in &frequencies {
+            if *count >= bound
+                && let Some(key) = key
+            {
+                assert!(
+                    candidates.contains(key),
+                    "candidate proof must retain all Top-K ties"
+                );
+            }
+        }
+    }
     let Some(result) = state.exact_counts(limit) else {
         return false;
     };
@@ -77,6 +98,7 @@ fn late_winner_and_unknown_ties_require_fallback() {
     let state = summary(&rows, 4);
     assert!(state.exact_counts(1).is_none());
     assert!(!state.can_still_prove(1, false));
+    assert_eq!(state.candidates(1), Some(vec![0]));
     assert!(
         state.can_still_prove(1, true),
         "a NULL winner could still appear"
@@ -103,6 +125,11 @@ fn absent_in_a_reduced_partition_is_not_zero() {
     let mut lhs = summary(&lhs_rows, 4);
     lhs.merge_owned(summary(&rhs_rows, 4));
     assert!(lhs.exact_counts(1).is_none());
+    assert_eq!(
+        lhs.candidates(1),
+        Some(vec![0]),
+        "missing partition counts need validation, not full aggregation"
+    );
     let mut rhs = summary(&rhs_rows, 4);
     rhs.merge_owned(summary(&lhs_rows, 4));
     assert!(rhs.exact_counts(1).is_none());
@@ -173,4 +200,22 @@ fn randomized_partitioned_proof_is_always_exact() {
     }
     assert!(successes > 0);
     assert!(fallbacks > 0);
+}
+
+#[test]
+fn a_prefix_candidate_proof_must_not_filter_the_complete_input() {
+    let mut rows = vec![Some(1); 100];
+    let mut state = summary(&rows, 4);
+    assert_eq!(state.candidates(1), Some(vec![1]));
+    for key in 100..600 {
+        rows.push(Some(key));
+        add(&mut state, Some(key));
+    }
+    for _ in 0..300 {
+        rows.push(Some(2));
+        add(&mut state, Some(2));
+    }
+    assert!(state.exact_counts(1).is_none());
+    assert_eq!(state.candidates(1), Some(vec![2]));
+    check(&rows, &state, 1);
 }

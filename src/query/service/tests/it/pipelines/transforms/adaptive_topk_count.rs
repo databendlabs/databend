@@ -107,3 +107,111 @@ async fn test_adaptive_topk_count_scans_once_or_falls_back() -> Result<()> {
     }
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_adaptive_topk_count_validates_inexact_candidates() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!(
+            "create table {db}.late_hot(k bigint null) row_per_block = 1000000"
+        ))
+        .await?;
+    // One stored block with a long unique prefix loses exact-count knowledge
+    // before the winner first appears. NULL remains exactly known and avoids
+    // a prefix-only cost rejection. The winner must be validated by a rescan.
+    let writer = fixture.new_query_ctx().await?;
+    writer.get_settings().set_max_threads(1)?;
+    writer.get_settings().set_max_block_size(1000000)?;
+    TestFixture::execute_query_with_ctx(
+        writer,
+        &format!(
+            "insert into {db}.late_hot select if(number % 5 = 0, null, \
+         if(number < 300000, number, 999999999)) from numbers(500000)"
+        ),
+    )
+    .await?
+    .try_collect::<Vec<DataBlock>>()
+    .await?;
+    for threads in [1, 4] {
+        for suffix in ["limit 1", "limit 2", "limit 1 offset 1"] {
+            let sql = format!(
+                "select k,count(*) c from {db}.late_hot group by k order by c desc,k {suffix}"
+            );
+            let baseline = run(&fixture, &sql, "0", threads).await?;
+            let adaptive = run(&fixture, &sql, "2", threads).await?;
+            assert_eq!(
+                adaptive.0, baseline.0,
+                "inexact candidate counts must be validated"
+            );
+            assert_eq!(
+                adaptive.1, 1000000,
+                "candidate validation must reuse the complete first pass: {threads} workers, {suffix}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_adaptive_topk_count_stale_frequency_hint_is_cost_only() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let table = format!("{}.stale_frequency", fixture.default_db_name());
+    fixture
+        .execute_command(&format!(
+            "create table {table}(k bigint not null) row_per_block = 10000 \
+         analyze_frequency_columns = 'k' analyze_top_n_size = 10"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {table} select if(number % 5 = 0, number, 0) from numbers(100000)"
+        ))
+        .await?;
+    let analyzer = fixture.new_query_ctx().await?;
+    analyzer.get_settings().set_enable_table_snapshot_stats(1)?;
+    TestFixture::execute_query_with_ctx(analyzer, &format!("analyze table {table}"))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    // The only hot key is absent in every appended block, so prefixes may
+    // reject direct exact counts. Stale frequencies allow a complete summary,
+    // but do not authorize excluding any key or reusing the old count.
+    fixture
+        .execute_command(&format!(
+            "insert into {table} select number + 100000 from numbers(100000)"
+        ))
+        .await?;
+    for threads in [1, 4] {
+        let sql = format!("select k,count(*) c from {table} group by k order by c desc,k limit 1");
+        let baseline = run(&fixture, &sql, "0", threads).await?;
+        let adaptive = run(&fixture, &sql, "2", threads).await?;
+        assert_eq!(adaptive.0, baseline.0);
+        assert!(
+            matches!(adaptive.1, 200000 | 400000),
+            "a positive cost hint should complete the summary, read {}",
+            adaptive.1
+        );
+    }
+    // Now a new key wins. ANALYZE still identifies the old hot key; using
+    // statistics or a prefix as the candidate proof would lose this winner.
+    fixture
+        .execute_command(&format!(
+            "insert into {table} select 999999999 from numbers(200000)"
+        ))
+        .await?;
+    for threads in [1, 4] {
+        for limit in [1, 2] {
+            let sql = format!(
+                "select k,count(*) c from {table} group by k order by c desc,k limit {limit}"
+            );
+            assert_eq!(
+                run(&fixture, &sql, "2", threads).await?.0,
+                run(&fixture, &sql, "0", threads).await?.0
+            );
+        }
+    }
+    Ok(())
+}

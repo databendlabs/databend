@@ -41,6 +41,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberType;
 
 use super::TopKCountKey;
+use super::encode_candidates;
 use super::with_topk_count_key_type;
 
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -147,6 +148,39 @@ impl<K: Hash + Eq + Clone> ExactTopKCountSummary<K> {
                 >= limit
     }
 
+    /// Proves a complete candidate set using residual lower/upper bounds,
+    /// even if some candidates do not have an exact count. The caller must
+    /// validate their counts in a second scan; residuals are never results.
+    /// NULL is counted separately and always passes the candidate filter.
+    pub fn candidates(&self, limit: usize) -> Option<Vec<K>> {
+        if limit == 0 {
+            return Some(vec![]);
+        }
+        let mut lower = self.counters.values().map(|c| c.lower).collect::<Vec<_>>();
+        if self.nulls > 0 {
+            lower.push(self.nulls);
+        }
+        let bound = if lower.len() < limit {
+            if self.error > 0 {
+                return None;
+            }
+            0
+        } else {
+            let (_, bound, _) = lower.select_nth_unstable_by(limit - 1, |a, b| b.cmp(a));
+            if *bound <= self.error {
+                return None;
+            }
+            *bound
+        };
+        Some(
+            self.counters
+                .iter()
+                .filter(|(_, counter)| counter.lower + self.error >= bound)
+                .map(|(key, _)| key.clone())
+                .collect(),
+        )
+    }
+
     /// Returns exact counts sufficient for the outer Top-N, or requests a
     /// fallback. All qualifying ties are returned, not just `limit` rows.
     pub fn exact_counts(&self, limit: usize) -> Option<Vec<(Option<K>, u64)>> {
@@ -201,6 +235,8 @@ pub trait ExactTopKCountState: Send {
     fn can_still_prove(&self, limit: usize, nullable: bool) -> bool;
     fn serialize(&self) -> Result<Vec<u8>>;
     fn merge_serialized(&mut self, data: &[u8]) -> Result<()>;
+    /// Encodes a proven complete candidate set for is_topk_count_candidate.
+    fn candidates(&self, limit: usize) -> Result<Option<Vec<u8>>>;
     /// Output columns are COUNT followed by the grouping key.
     fn result(&self, limit: usize, key_type: &DataType) -> Option<DataBlock>;
 }
@@ -255,6 +291,15 @@ impl<K: TopKCountKey> ExactTopKCountState for TypedState<K> {
     fn merge_serialized(&mut self, data: &[u8]) -> Result<()> {
         self.0.merge_owned(ExactTopKCountSummary::decode(data)?);
         Ok(())
+    }
+
+    fn candidates(&self, limit: usize) -> Result<Option<Vec<u8>>> {
+        let Some(keys) = self.0.candidates(limit) else {
+            return Ok(None);
+        };
+        let mut data = vec![];
+        encode_candidates(&Some(keys), &mut data)?;
+        Ok(Some(data))
     }
 
     fn result(&self, limit: usize, key_type: &DataType) -> Option<DataBlock> {

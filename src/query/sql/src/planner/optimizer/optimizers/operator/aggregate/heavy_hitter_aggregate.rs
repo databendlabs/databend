@@ -69,6 +69,7 @@ use crate::Visibility;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
+use crate::plans::AdaptiveTopKCountInfo;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -193,7 +194,11 @@ impl HeavyHitterAggregateOptimizer {
             // The executor may return exact counts directly from its bounded
             // state; unlike the candidate path this does not require a rescan.
             let mut adaptive = aggregate.clone();
-            adaptive.adaptive_topk_count = Some(limit);
+            adaptive.adaptive_topk_count = Some(AdaptiveTopKCountInfo {
+                limit,
+                likely_candidates: has_frequency_evidence(input, group_item.index, limit, capacity)
+                    .unwrap_or(false),
+            });
             let agg_expr = agg_expr.replace_plan(Arc::new(adaptive.into()));
             let rewritten = match eval_scalar {
                 None => s_expr.replace_children([Arc::new(agg_expr)]),
@@ -327,18 +332,8 @@ impl HeavyHitterAggregateOptimizer {
             }
         }
 
-        if let Some((top_n, stats_rows)) = scan.statistics.approx_top_n.get(&key)
-            && *stats_rows > 0
-        {
-            // Assume the filter keeps the same share of every key.
-            let scale = rows / *stats_rows as f64;
-            let threshold = 2.0 * rows / (capacity as f64 + 1.0);
-            let frequent = top_n
-                .values
-                .iter()
-                .filter(|entry| entry.count.saturating_sub(entry.error) as f64 * scale > threshold)
-                .count();
-            return Ok(frequent >= limit);
+        if let Some(likely) = has_frequency_evidence(input, key, limit, capacity) {
+            return Ok(likely);
         }
         Ok(groups.is_none_or(|groups| groups / rows <= MAX_GROUPS_PER_ROW))
     }
@@ -353,6 +348,30 @@ impl Optimizer for HeavyHitterAggregateOptimizer {
     async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
         self.optimize_sync(s_expr)
     }
+}
+
+/// Cost evidence only, including stale ANALYZE. Assuming filters retain the
+/// same fraction of each key, scaling frequencies and rows cancels out. None
+/// means the column has no usable frequency hint, not that it has no hot keys.
+fn has_frequency_evidence(
+    input: &SExpr,
+    key: Symbol,
+    limit: usize,
+    capacity: usize,
+) -> Option<bool> {
+    let (top_n, rows) = find_scan(input)?.statistics.approx_top_n.get(&key)?;
+    if *rows == 0 {
+        return None;
+    }
+    let threshold = 2.0 * *rows as f64 / (capacity as f64 + 1.0);
+    Some(
+        top_n
+            .values
+            .iter()
+            .filter(|entry| entry.count.saturating_sub(entry.error) as f64 > threshold)
+            .count()
+            >= limit,
+    )
 }
 
 /// Whether the first sort key is `COUNT(*) DESC` of `aggregate`.

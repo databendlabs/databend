@@ -155,5 +155,56 @@ query TI
 select k, count(*) c from empty_input group by k order by c desc limit 10
 ----
 
+# A hot key is admitted only after enough unique keys to force reduction.
+# NULL is exact, but non-NULL counts require the candidate-validation path.
+statement ok
+create table candidate_validation(k bigint null) row_per_block = 32768
+
+statement ok
+insert into candidate_validation select if(number % 5 = 0, null, if(number % 32768 < 20000, number, 999999999)) from numbers(500000)
+
+query II
+select k,count(*) c from candidate_validation group by k order by c desc,k nulls first limit 2
+----
+999999999 153216
+NULL 100000
+
+query II
+select k,count(*) c from candidate_validation group by k order by c desc,k nulls first limit 1 offset 1
+----
+NULL 100000
+
+# The same validation must preserve typed String keys (including UTF-8) and NULL.
+statement ok
+create table candidate_validation_string(k string null)
+
+statement ok
+insert into candidate_validation_string select if(k = 999999999, '热点', k::string) from candidate_validation
+
+query TI
+select k,count(*) c from candidate_validation_string group by k order by c desc,k nulls first limit 2
+----
+热点 153216
+NULL 100000
+
+# The first sample may favor one key, but only the COMPLETE summary can
+# authorize filtering. A later hot key must not be pruned by a prefix proof.
+statement ok
+create table misleading_prefix(k bigint not null)
+
+statement ok
+insert into misleading_prefix select 1 from numbers(20000)
+
+statement ok
+insert into misleading_prefix select number + 100 from numbers(50000)
+
+statement ok
+insert into misleading_prefix select 999999999 from numbers(100000)
+
+query II
+select k,count(*) c from misleading_prefix group by k order by c desc,k limit 1
+----
+999999999 100000
+
 statement ok
 drop database heavy_hitter_aggregate

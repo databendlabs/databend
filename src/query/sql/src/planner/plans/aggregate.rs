@@ -53,6 +53,15 @@ pub struct GroupingSets {
     pub dup_group_items: Vec<(Symbol, DataType)>,
 }
 
+/// Adaptive COUNT execution hints. Neither field is a correctness bound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AdaptiveTopKCountInfo {
+    pub limit: usize,
+    /// Frequency statistics suggest that a complete candidate summary may
+    /// succeed even if some workers cannot retain exact counts.
+    pub likely_candidates: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Aggregate {
     // group by scalar expressions, such as: group by col1, col2;
@@ -66,7 +75,7 @@ pub struct Aggregate {
     pub grouping_sets: Option<GroupingSets>,
     /// Try bounded exact counting before building the full hash aggregation.
     /// Set only for a local, deterministic, single-key COUNT(*) Top-N.
-    pub adaptive_topk_count: Option<usize>,
+    pub adaptive_topk_count: Option<AdaptiveTopKCountInfo>,
 }
 
 impl Aggregate {
