@@ -50,6 +50,9 @@ pub(super) struct RefreshProgress {
     definition: String,
     offset: usize,
     replacement: Option<Location>,
+    // Set before execution and cleared only after replacement bookkeeping. An error may
+    // hide a published partial refresh; its old source disappearing is not completion.
+    publication_pending: bool,
     // Remains Some only while the scope's snapshot evolves exclusively by our own
     // refresh commits. Concurrent writes do not block coverage, but prohibit publishing
     // their unverified segments as part of a covered snapshot baseline.
@@ -117,9 +120,17 @@ impl TableHookTask {
             &table.get_table_info().meta.schema,
             &table.get_table_info().meta.indexes,
         ))?;
-        if progress
+        let retry_publication = progress
             .as_ref()
-            .is_some_and(|progress| progress.definition != definition)
+            .is_some_and(|progress| progress.publication_pending);
+        if retry_publication {
+            info!(event = "refresh.publication_unknown", table_id = desc.table_id;
+                "Recheck current index coverage after incomplete publication bookkeeping");
+        }
+        if retry_publication
+            || progress
+                .as_ref()
+                .is_some_and(|progress| progress.definition != definition)
         {
             *progress = None;
             *base = None;
@@ -128,8 +139,10 @@ impl TableHookTask {
             let Some(snapshot) = fuse.snapshot_loc() else {
                 return Ok(true);
             };
-            *base = TableHookScheduler::try_instance()
-                .and_then(|scheduler| scheduler.refresh_base(&key, &definition));
+            if !retry_publication {
+                *base = TableHookScheduler::try_instance()
+                    .and_then(|scheduler| scheduler.refresh_base(&key, &definition));
+            }
             info!(event = "refresh.scope_started", table_id = desc.table_id,
                 snapshot = snapshot.as_str(), incremental = base.is_some();
                 "Start frozen index coverage scope");
@@ -139,6 +152,7 @@ impl TableHookTask {
                 definition,
                 offset: 0,
                 replacement: None,
+                publication_pending: false,
             });
         }
         let state = progress.as_mut().expect("refresh progress initialized");
@@ -218,7 +232,15 @@ impl TableHookTask {
                 ExecutorSettings::try_create(ctx.clone())?,
             )?;
             ctx.set_executor(executor.get_inner())?;
+            state.publication_pending = true;
             executor.execute().await?;
+            let outputs = ctx.written_segment_locations().list();
+            if outputs.len() != 1 {
+                return Err(ErrorCode::Internal(
+                    "A one-segment refresh must publish exactly one replacement",
+                ));
+            }
+            state.replacement = outputs.into_iter().next();
             if state.covered_head.is_some() {
                 let previous = fuse
                     .read_table_snapshot()
@@ -239,13 +261,7 @@ impl TableHookTask {
                     })
                     .and_then(|_| current.snapshot_loc());
             }
-            let outputs = ctx.written_segment_locations().list();
-            if outputs.len() != 1 {
-                return Err(ErrorCode::Internal(
-                    "A one-segment refresh must publish exactly one replacement",
-                ));
-            }
-            state.replacement = outputs.into_iter().next();
+            state.publication_pending = false;
             info!(table_id = desc.table_id, segment_offset = state.offset, refreshed_blocks = count;
                 "Refresh batch committed; coverage remains pending");
             return Ok(false);

@@ -19,6 +19,10 @@ The mailbox is **best-effort**, not an event-delivery or eventual-convergence gu
   metadata-only scan steps do not reset its budget. A later notification can start another
   attempt. Successful committed progress or completion resets the failure/deferral budget.
   The no-commit timer begins at the first scan/deferral, not while waiting in the queue.
+- Refresh retains a publication-pending marker until execution and replacement bookkeeping
+  both succeed. If an error may hide a partial commit, the next unit starts a current-snapshot
+  FullCheck instead of interpreting the missing old segment as completed coverage. Replanning
+  does not reset the action's failure/no-progress budgets.
 - An action's context creation is limited to 60 seconds and each execution unit to 5 minutes.
   Cancellation interrupts its context, allows up to 3 seconds for normal pipeline cleanup,
   and tears down any remaining local exchange environment. These limits require async work
