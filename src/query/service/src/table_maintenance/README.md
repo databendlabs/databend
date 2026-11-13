@@ -96,6 +96,18 @@ service dependencies. Registered shared contexts are interrupted, including deri
 contexts. The scheduler's final wait uses at most the remaining shutdown grace, capped at
 3 seconds; shutdown never waits for all pending maintenance to complete.
 
+## Metadata planning
+
+Refresh compares immutable source/baseline locations once per generation. Equal prefix and
+suffix ranges are already covered; only the unmatched middle needs exact membership checks.
+A sorted baseline-position index is retained under maintenance memory accounting, limited to
+1/64 of the unit's query-memory allowance. Above that allowance the middle is conservatively
+checked instead. History expiry discards the membership index and cannot certify coverage.
+The shared refresh planner stops scanning locations once all requested targets are found.
+This removes repeated baseline hashing and needless trailing target scans, not all O(N)
+snapshot work: scattered targets, snapshot publication and Recluster's live/scope indexes
+still need large-table measurements.
+
 ## Observability
 
 Metric labels contain only bounded action/outcome/reason values, never table, user or query

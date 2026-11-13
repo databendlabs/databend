@@ -15,7 +15,6 @@
 // Logs from this module will show up as "[REFRESH-HOOK] ...".
 databend_common_tracing::register_module_tag!("[REFRESH-HOOK]");
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::cache_policy::CachePolicy;
@@ -43,12 +42,15 @@ use crate::sessions::TableContextCachePolicy;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
-/// Frozen coverage boundary. Only snapshot references and a cursor survive between batches;
-/// no unbounded written-segment list, block plan, query context or executor is queued.
+/// Frozen coverage boundary. Snapshot references, a cursor and sorted baseline positions
+/// survive between batches, never block plans, query contexts or executors. The position
+/// index is limited to the unmatched baseline range and charged to maintenance memory.
 pub(super) struct RefreshProgress {
     snapshot: String,
     definition: String,
     offset: usize,
+    range_end: Option<usize>,
+    baseline_order: Vec<usize>,
     replacement: Option<Location>,
     // Set before execution and cleared only after replacement bookkeeping. An error may
     // hide a published partial refresh; its old source disappearing is not completion.
@@ -60,6 +62,42 @@ pub(super) struct RefreshProgress {
 }
 
 impl RefreshProgress {
+    fn initialize_range(
+        &mut self,
+        source: &[Location],
+        baseline: Option<&[Location]>,
+        index_budget: u64,
+    ) {
+        let mut range_end = source.len();
+        if let Some(baseline) = baseline {
+            let prefix = source
+                .iter()
+                .zip(baseline)
+                .take_while(|(source, baseline)| source == baseline)
+                .count();
+            let suffix = source[prefix..]
+                .iter()
+                .rev()
+                .zip(baseline[prefix..].iter().rev())
+                .take_while(|(source, baseline)| source == baseline)
+                .count();
+            self.offset = prefix;
+            range_end -= suffix;
+            // Snapshots have unique segments. Entries in the common edges cannot
+            // occur again in the middle, so only index unmatched baseline positions.
+            let unmatched = prefix..baseline.len() - suffix;
+            let index_bytes = unmatched.len().saturating_mul(size_of::<usize>());
+            if index_bytes as u64 <= index_budget {
+                self.baseline_order = unmatched.collect();
+                self.baseline_order
+                    .sort_unstable_by(|a, b| baseline[*a].cmp(&baseline[*b]));
+            }
+            // Above the explicit index allowance, conservatively check the middle
+            // instead of retaining a full-table index or using unbudgeted spill.
+        }
+        self.range_end = Some(range_end);
+    }
+
     fn complete(&self, key: TableHookTaskKey) -> bool {
         if let (Some(scheduler), Some(location)) = (
             TableHookScheduler::try_instance(),
@@ -151,6 +189,8 @@ impl TableHookTask {
                 snapshot,
                 definition,
                 offset: 0,
+                range_end: None,
+                baseline_order: Vec::new(),
                 replacement: None,
                 publication_pending: false,
             });
@@ -175,7 +215,10 @@ impl TableHookTask {
             }
             Err(error) => return Err(error),
         };
-        let baseline = if let Some(location) = base.as_ref() {
+        let baseline = if let Some(location) = base
+            .as_ref()
+            .filter(|_| state.range_end.is_none() || !state.baseline_order.is_empty())
+        {
             match fuse
                 .read_table_snapshot_with_location(Some(location.clone()))
                 .await
@@ -183,6 +226,7 @@ impl TableHookTask {
                 Ok(snapshot) => snapshot,
                 Err(error) if error.code() == ErrorCode::STORAGE_NOT_FOUND => {
                     *base = None;
+                    state.baseline_order = Vec::new();
                     None
                 }
                 Err(error) => return Err(error),
@@ -190,15 +234,28 @@ impl TableHookTask {
         } else {
             None
         };
-        let old = baseline
-            .as_ref()
-            .map(|snapshot| snapshot.segments.iter().collect::<HashSet<_>>());
-        // Metadata-only diff: do not decode unchanged segments. Scan a bounded number of
-        // source entries per unit even if there is no index work in this part of the scope.
-        let end = source.segments.len().min(state.offset.saturating_add(64));
+        if state.range_end.is_none() {
+            state.initialize_range(
+                &source.segments,
+                baseline
+                    .as_ref()
+                    .map(|snapshot| snapshot.segments.as_slice()),
+                ctx.get_settings().get_max_query_memory_usage()? / 64,
+            );
+        }
+        let scope_end = state.range_end.expect("refresh range initialized");
+        // Compare the frozen boundaries once, then reuse a compact exact membership
+        // index. Appends need no baseline index or units to revisit the covered suffix.
+        let end = scope_end.min(state.offset.saturating_add(64));
         while state.offset < end {
             let original = &source.segments[state.offset];
-            if state.replacement.is_none() && old.as_ref().is_some_and(|old| old.contains(original))
+            if state.replacement.is_none()
+                && baseline.as_ref().is_some_and(|baseline| {
+                    state
+                        .baseline_order
+                        .binary_search_by(|&index| baseline.segments[index].cmp(original))
+                        .is_ok()
+                })
             {
                 state.offset += 1;
                 continue;
@@ -217,7 +274,7 @@ impl TableHookTask {
             if pipeline.is_empty() {
                 state.offset += 1;
                 state.replacement = None;
-                return Ok(state.offset >= source.segments.len() && state.complete(key));
+                return Ok(state.offset >= scope_end && state.complete(key));
             }
             pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
             let query_ctx = ctx.clone();
@@ -266,7 +323,7 @@ impl TableHookTask {
                 "Refresh batch committed; coverage remains pending");
             return Ok(false);
         }
-        Ok(state.offset >= source.segments.len() && state.complete(key))
+        Ok(state.offset >= scope_end && state.complete(key))
     }
 
     async fn do_refresh(&self, ctx: Arc<QueryContext>) -> Result<()> {

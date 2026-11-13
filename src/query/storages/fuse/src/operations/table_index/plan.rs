@@ -100,7 +100,7 @@ pub async fn collect_refresh_plan(
     let check_spatial = specs
         .iter()
         .any(|spec| spec.index.index_type == TableIndexType::Spatial);
-    let targets = segment_locs.map(|locations| locations.into_iter().collect::<HashSet<_>>());
+    let mut targets = segment_locs.map(|locations| locations.into_iter().collect::<HashSet<_>>());
     let segment_reader = SegmentInfoReader::new(operator.clone(), schema.clone());
     let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
     let cache = FuseCaches::instance().segments.with_policy(policy);
@@ -111,8 +111,8 @@ pub async fn collect_refresh_plan(
     let mut selected_bytes = 0u64;
     'segments: for (segment_idx, location) in snapshot.segments.iter().enumerate() {
         if targets
-            .as_ref()
-            .is_some_and(|targets| !targets.contains(location))
+            .as_mut()
+            .is_some_and(|targets| !targets.remove(location))
         {
             continue;
         }
@@ -215,6 +215,9 @@ pub async fn collect_refresh_plan(
             {
                 break 'segments;
             }
+        }
+        if targets.as_ref().is_some_and(HashSet::is_empty) {
+            break;
         }
     }
     if blocks.is_empty() {
