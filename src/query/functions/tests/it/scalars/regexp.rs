@@ -41,6 +41,7 @@ fn test_string() {
     test_regexp_instr(regexp_file);
     test_regexp_like(regexp_file);
     test_regexp_replace(regexp_file);
+    test_regexp_replace_anchored_prefix(regexp_file);
     test_regexp_substr(regexp_file);
     test_glob(regexp_file);
     test_regexp_extract(regexp_file);
@@ -585,6 +586,76 @@ fn test_regexp_replace(file: &mut impl Write) {
         "regexp_replace(source, pat, repl, pos, occur, mt)",
         match_type_error_six_columns,
     );
+}
+
+fn test_regexp_replace_anchored_prefix(file: &mut impl Write) {
+    // Patterns `^P.*$` resolve their captures on `^P` when the input has no newline.
+    let source = &[(
+        "source",
+        StringType::from_data(vec![
+            "https://www.google.com/search?q=1",
+            "HTTP://WWW.Example.COM/a",
+            "https://no-slash.com",
+            "http://a.com/x\ny",
+            "ftp://a.com/b",
+            "",
+        ]),
+    )];
+    let pat = r"'^https?://(?:www\.)?([^/]+)/.*$'";
+    for repl in [
+        "'$1'",
+        "'[$1]'",
+        "'$0'",
+        "'$00'",
+        "'${0}'",
+        "'${000}'",
+        "'${+0}'",
+        "'[${+000}]'",
+        "'${+1}'",
+        "'$${+0}'",
+        "'X'",
+    ] {
+        run_ast(
+            file,
+            format!("regexp_replace(source, {pat}, {repl})"),
+            source,
+        );
+    }
+    // A prefix may match the empty string, but capture zero still names the whole input.
+    run_ast(file, "regexp_replace('abc', '^.*$', '${+0}')", &[]);
+    run_ast(
+        file,
+        "regexp_replace('https://example.com/path', '^https?://([^/]+)/.*$', '[${+000}]')",
+        &[],
+    );
+    // A specific occurrence uses the replacement literally, without expanding captures.
+    run_ast(
+        file,
+        format!("regexp_replace(source, {pat}, '${{+0}}', 1, 1)"),
+        source,
+    );
+    for (pos, occur) in [(1, 1), (1, 2), (2, 0)] {
+        run_ast(
+            file,
+            format!("regexp_replace(source, {pat}, '$1', {pos}, {occur})"),
+            source,
+        );
+    }
+    // Case sensitive, multi line and dot-matches-newline match types.
+    for mt in ["'c'", "'m'", "'n'"] {
+        run_ast(
+            file,
+            format!("regexp_replace(source, {pat}, '$1', 1, 0, {mt})"),
+            source,
+        );
+    }
+    // Not of the form `^P.*$`: an escaped dot, a lazy `.*?`, an alternation.
+    for pat in [r"'^a\.*$'", "'^(a).*?$'", "'^h.*$|^a.*$'"] {
+        run_ast(file, format!("regexp_replace(source, {pat}, 'X')"), &[(
+            "source",
+            StringType::from_data(vec!["a", "a...", "ab", "h\nb"]),
+        )]);
+    }
 }
 
 fn test_regexp_substr(file: &mut impl Write) {

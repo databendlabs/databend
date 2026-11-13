@@ -56,6 +56,7 @@ fn test_datetime() {
     test_timestamp_arith(file);
     test_date_domain_overflow(file);
     test_to_number(file);
+    test_clock_fields_in_timezones(file);
     test_rounder_functions(file);
     test_date_date_diff(file);
     test_current_time(file);
@@ -920,6 +921,54 @@ fn test_to_number(file: &mut impl Write) {
         "a",
         TimestampType::from_data(vec![-1_000_001, -1, 0, 1, 1_000_001]),
     )]);
+}
+
+/// `to_hour`, `to_minute` and `to_second` of columns with one UTC offset, computed from the
+/// offset, and of columns whose offset changes, resolved per row.
+fn test_clock_fields_in_timezones(file: &mut impl Write) {
+    const S: i64 = 1_000_000;
+    let columns = [
+        // Asia/Kathmandu: +05:45 throughout, and +05:30 before 1986.
+        ("Asia/Kathmandu", vec![
+            1_630_812_366 * S,
+            1_630_812_366 * S + 59_999_999,
+        ]),
+        ("Asia/Kathmandu", vec![504_900_000 * S, 504_920_000 * S]),
+        // America/St_Johns fell back at 2009-11-01T02:31Z: one segment, then across it.
+        ("America/St_Johns", vec![
+            1_257_044_400 * S,
+            1_257_047_999 * S,
+        ]),
+        ("America/St_Johns", vec![
+            1_257_040_800 * S,
+            1_257_044_400 * S,
+        ]),
+        ("UTC", vec![-100, 0, 100, -86_400 * S - 1]),
+    ];
+    for (tz, values) in columns {
+        let ctx = FunctionContext {
+            tz: tz.parse::<Tz>().unwrap(),
+            ..FunctionContext::default()
+        };
+        let mut validity = vec![true; values.len()];
+        validity[0] = false;
+        let entries = [
+            ("a", TimestampType::from_data(values.clone()).into()),
+            (
+                "n",
+                TimestampType::from_data_with_validity(values, validity).into(),
+            ),
+        ];
+        for func in ["to_hour", "to_minute", "to_second"] {
+            for arg in ["a", "n"] {
+                run_ast_with_context(file, format!("{func}({arg})"), TestContext {
+                    entries: &entries,
+                    func_ctx: ctx.clone(),
+                    ..TestContext::default()
+                });
+            }
+        }
+    }
 }
 
 fn test_rounder_functions(file: &mut impl Write) {

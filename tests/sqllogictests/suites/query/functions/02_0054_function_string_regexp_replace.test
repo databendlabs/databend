@@ -68,6 +68,24 @@ select REGEXP_REPLACE('http://databend.com/reg', '^https?://(?:www\.)?([^/]+)/.*
 ----
 databend.com
 
+# Braced numeric references may have a leading plus and leading zeros.
+# Capture zero must expand to the full match, not just the anchored prefix.
+query T
+SELECT REGEXP_REPLACE('abc', '^.*$', '${+0}')
+----
+abc
+
+query T
+SELECT REGEXP_REPLACE('https://example.com/path', '^https?://([^/]+)/.*$', '[${+000}]')
+----
+[https://example.com/path]
+
+# A specific occurrence still uses the replacement literally.
+query T
+SELECT REGEXP_REPLACE('abc', '^.*$', '${+0}', 1, 1)
+----
+${+0}
+
 query T
 select REGEXP_REPLACE('ID-123-ABC', '^(?<M>ID-)\d+(?<N>-.+)$', '${M}XXX$N');
 ----

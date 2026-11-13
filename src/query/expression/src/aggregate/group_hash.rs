@@ -23,6 +23,7 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::BATCH_SIZE;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;
@@ -72,6 +73,112 @@ pub fn group_hash_entry(entry: &BlockEntry, values: &mut [u64], is_first: bool) 
         combine_group_hash_entry::<true>(entry, values);
     } else {
         combine_group_hash_entry::<false>(entry, values);
+    }
+}
+
+/// The hashes of the dictionary values of the group columns that are dictionaries of strings,
+/// to hash the batches of a block by their keys.
+///
+/// The batches of a block carry its whole dictionary, so hashing the batches one by one hashes
+/// the dictionary again for each, or decodes the batch when the dictionary has more values
+/// than the batch has rows. These hashes are computed once per block and looked up by the keys
+/// of each batch. A fixed size value hashes per row as cheaply as its hash is looked up.
+pub struct DictValueHashes {
+    /// For each group column, the hashes of its dictionary values if it is a dictionary of
+    /// strings.
+    columns: Vec<Option<Vec<u64>>>,
+}
+
+impl DictValueHashes {
+    /// `None` when the block fits in one batch or has no dictionary of strings to hash.
+    pub fn new(entries: ProjectedBlock, row_count: usize) -> Option<Self> {
+        if row_count <= BATCH_SIZE {
+            return None;
+        }
+        let columns = entries
+            .iter()
+            .map(|entry| {
+                let dict = string_dict(entry)?.0;
+                // Hashing more values than the block has rows does not pay.
+                (dict.values.len() <= row_count).then(|| {
+                    let mut hashes = vec![0; dict.values.len()];
+                    group_hash_entry(&BlockEntry::from(dict.values.clone()), &mut hashes, true);
+                    hashes
+                })
+            })
+            .collect::<Vec<_>>();
+        columns
+            .iter()
+            .any(Option::is_some)
+            .then_some(DictValueHashes { columns })
+    }
+
+    /// Hash the rows of `entries`, a slice of the block `self` was built from, into `values`,
+    /// as `group_hash_entries` does.
+    pub fn group_hash_entries(&self, entries: ProjectedBlock, values: &mut [u64]) {
+        debug_assert_eq!(entries.len(), self.columns.len());
+        for (i, (entry, hashes)) in entries.iter().zip(&self.columns).enumerate() {
+            match (hashes, string_dict(entry)) {
+                // A slice keeps the dictionary of its block.
+                (Some(hashes), Some((dict, validity))) if dict.values.len() == hashes.len() => {
+                    combine_dict_hashes(dict, validity, hashes, values, i == 0)
+                }
+                _ => group_hash_entry(entry, values, i == 0),
+            }
+        }
+    }
+}
+
+/// The dictionary of `entry` and its validity, if `entry` is a dictionary of strings.
+fn string_dict(entry: &BlockEntry) -> Option<(&DictColumn, Option<&Bitmap>)> {
+    let BlockEntry::Column(column) = entry else {
+        return None;
+    };
+    let (column, validity) = match column {
+        Column::Nullable(nullable) => (nullable.column(), Some(nullable.validity())),
+        column => (column, None),
+    };
+    let Column::Encoded(encoded) = column else {
+        return None;
+    };
+    let dict = encoded.as_dict()?;
+    matches!(dict.values, Column::String(_)).then_some((dict, validity))
+}
+
+/// Hash the rows of a dictionary column by the `hashes` of its values, as `HashVisitor` does
+/// for the dictionary and the `Nullable` around it.
+fn combine_dict_hashes(
+    dict: &DictColumn,
+    validity: Option<&Bitmap>,
+    hashes: &[u64],
+    values: &mut [u64],
+    is_first: bool,
+) {
+    let key_hash = |key: u64| hashes[key as usize];
+    match (is_first, validity) {
+        (true, None) => {
+            for (val, key) in values.iter_mut().zip(dict.keys.iter()) {
+                *val = key_hash(key);
+            }
+        }
+        (false, None) => {
+            for (val, key) in values.iter_mut().zip(dict.keys.iter()) {
+                *val = merge_hash(*val, key_hash(key));
+            }
+        }
+        (true, Some(validity)) => {
+            for ((val, key), valid) in values.iter_mut().zip(dict.keys.iter()).zip(validity.iter())
+            {
+                *val = if valid { key_hash(key) } else { NULL_HASH_VAL };
+            }
+        }
+        (false, Some(validity)) => {
+            for ((val, key), valid) in values.iter_mut().zip(dict.keys.iter()).zip(validity.iter())
+            {
+                let hash = if valid { key_hash(key) } else { NULL_HASH_VAL };
+                *val = merge_hash(*val, hash);
+            }
+        }
     }
 }
 
@@ -1026,5 +1133,54 @@ mod tests {
         // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
         assert_eq!(hashes[0], hashes[1]);
         Ok(())
+    }
+
+    #[test]
+    fn test_dict_value_hashes_match_group_hash_entries() {
+        const ROWS: usize = 5000;
+        let dict = |ndv: usize| {
+            let values =
+                StringType::from_data((0..ndv).map(|i| format!("v{i}")).collect::<Vec<_>>());
+            let keys =
+                NarrowBuffer::pack((0..ROWS).map(|i| ((i * 7) % ndv) as u64), ndv as u64 - 1);
+            Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(keys, values))))
+        };
+        let validity = (0..ROWS).map(|i| i % 5 != 0).collect::<Bitmap>();
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::from(Int32Type::from_data(
+                    (0..ROWS as i32).map(|i| i % 13).collect(),
+                )),
+                BlockEntry::from(dict(300)),
+                BlockEntry::from(dict(4000).wrap_nullable(Some(validity))),
+                BlockEntry::from(dict(ROWS + 1)),
+            ],
+            ROWS,
+        );
+        for projection in [vec![0, 1, 2, 3], vec![2, 0], vec![1], vec![3, 1]] {
+            let entries = ProjectedBlock::project(&projection, &block);
+            let dict_hashes = DictValueHashes::new(entries, ROWS).unwrap();
+            for range in [0..2048, 2048..4096, 4096..ROWS, 100..3000] {
+                let slice = entries
+                    .iter()
+                    .map(|e| e.slice(range.clone()))
+                    .collect::<Vec<_>>();
+                let decoded = slice
+                    .iter()
+                    .map(|e| BlockEntry::from(e.to_column().decode_owned()))
+                    .collect::<Vec<_>>();
+                let mut expected = vec![0; range.len()];
+                group_hash_entries((&decoded).into(), &mut expected);
+                let mut actual = vec![u64::MAX; range.len()];
+                dict_hashes.group_hash_entries((&slice).into(), &mut actual);
+                assert_eq!(
+                    actual, expected,
+                    "projection {projection:?}, rows {range:?}"
+                );
+            }
+        }
+        // One batch, or no dictionary of strings: nothing to hash ahead.
+        assert!(DictValueHashes::new(ProjectedBlock::project(&[1], &block), BATCH_SIZE).is_none());
+        assert!(DictValueHashes::new(ProjectedBlock::project(&[0, 3], &block), ROWS).is_none());
     }
 }
