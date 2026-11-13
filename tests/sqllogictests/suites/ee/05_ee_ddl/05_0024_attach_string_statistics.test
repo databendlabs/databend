@@ -1,8 +1,5 @@
-## ATTACH preserves source string-statistics settings and rewrites aggregates
-## only when their bounds are provably exact.
-## The safety marker is internal metadata, not a user-settable table option.
-statement error table option attach_stats_truncate_len_known reserved
-CREATE TABLE attach_stats_invalid(s STRING) attach_stats_truncate_len_known='true';
+## ATTACH preserves explicit string-statistics settings and rewrites aggregates
+## only when their bounds are provably exact. Missing settings stay conservative.
 
 statement ok
 DROP TABLE IF EXISTS attach_stats_target;
@@ -61,7 +58,7 @@ statement ok
 DROP TABLE attach_stats_source;
 
 ## Bounds shorter than an explicit limit (including limits above the default
-## 16) and short bounds using default settings can safely answer aggregates.
+## 16) can safely answer aggregates. Other columns still use the scan path.
 statement ok
 CREATE TABLE attach_stats_source(s STRING STATS_TRUNCATE_LEN 4,
     unused STRING STATS_TRUNCATE_LEN 8, wide STRING STATS_TRUNCATE_LEN 40, plain STRING)
@@ -83,14 +80,30 @@ statement ok
 EXECUTE IMMEDIATE $attach_stats_sql;
 
 query T
-EXPLAIN SELECT MIN(wide), MAX(wide), MIN(s), MAX(s), MIN(plain), MAX(plain)
+EXPLAIN SELECT MIN(wide), MAX(wide), MIN(s), MAX(s)
 FROM attach_stats_target;
 ----
 EvalScalar
-├── output columns: [MIN(wide) (#3), MAX(wide) (#4), MIN(s) (#5), MAX(s) (#6), MIN(plain) (#7), MAX(plain) (#8)]
-├── expressions: ['abcdefghijklmnopqrst', 'abcdefghijklmnopqrst', 'ab', 'ab', 'abc', 'abc']
+├── output columns: [MIN(wide) (#3), MAX(wide) (#4), MIN(s) (#5), MAX(s) (#6)]
+├── expressions: ['abcdefghijklmnopqrst', 'abcdefghijklmnopqrst', 'ab', 'ab']
 ├── estimated rows: 1.00
 └── DummyTableScan
+
+## A configured sibling must not make an unconfigured column eligible.
+query T
+EXPLAIN (LOGICAL, OPTIMIZED) SELECT MIN(plain), MAX(plain) FROM attach_stats_target;
+----
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [min(attach_stats_target.plain (#2)) AS (#3), max(attach_stats_target.plain (#2)) AS (#4)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [min(attach_stats_target.plain (#2)) AS (#3), max(attach_stats_target.plain (#2)) AS (#4)]
+    └── Scan
+        ├── table: default.attach_stats_target (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
 
 ## The existing attached table must follow a newly published snapshot without
 ## treating its truncated bounds as exact.
@@ -108,8 +121,8 @@ DROP TABLE attach_stats_target;
 statement ok
 DROP TABLE attach_stats_source;
 
-## An explicitly empty settings map means defaults, not unknown historical
-## metadata: short string statistics should still be eligible for rewriting.
+## Default-configured columns remain conservative even in new hints. Without
+## an explicit per-column setting, no statistics-based string rewrite is enabled.
 statement ok
 CREATE TABLE attach_stats_source(s STRING)
 'fs:///tmp/attach_string_statistics/' row_per_block=100;
@@ -128,21 +141,24 @@ statement ok
 EXECUTE IMMEDIATE $attach_stats_sql;
 
 query T
-EXPLAIN SELECT MIN(s), MAX(s) FROM attach_stats_target;
+EXPLAIN (LOGICAL, OPTIMIZED) SELECT MIN(s), MAX(s) FROM attach_stats_target;
 ----
-EvalScalar
-├── output columns: [MIN(s) (#1), MAX(s) (#2)]
-├── expressions: ['ab', 'ab']
-├── estimated rows: 1.00
-└── DummyTableScan
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [min(attach_stats_target.s (#0)) AS (#1), max(attach_stats_target.s (#0)) AS (#2)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [min(attach_stats_target.s (#0)) AS (#1), max(attach_stats_target.s (#0)) AS (#2)]
+    └── Scan
+        ├── table: default.attach_stats_target (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
 
-## Internal provenance must not leak into user-visible table options.
-query I
-SELECT count(*) FROM system.tables
-WHERE database = 'default' AND name = 'attach_stats_target'
-  AND upper(table_option) NOT LIKE '%ATTACH_STATS_TRUNCATE_LEN_KNOWN%';
+query TT
+SELECT MIN(s), MAX(s) FROM attach_stats_target;
 ----
-1
+ab ab
 
 statement ok
 DROP TABLE attach_stats_target;

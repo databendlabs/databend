@@ -60,7 +60,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             })?;
 
         // TODO duplicated code
-        let snapshot_full_path = &snapshot_hint.snapshot_full_path;
+        let snapshot_full_path = snapshot_hint.snapshot_full_path;
         let info = operator.info();
         let root = info.root();
         let snapshot_loc = snapshot_full_path[root.len()..].to_string();
@@ -88,19 +88,19 @@ impl AttachTableHandler for RealAttachTableHandler {
 
         let attach_table_schema = Self::gen_schema(&plan, &snapshot)?;
 
-        let mut table_meta = TableMeta {
+        let table_meta = TableMeta {
             schema: Arc::new(attach_table_schema),
             engine: plan.engine.to_string(),
             storage_params: plan.storage_params.clone(),
             options,
+            comment: snapshot_hint.entity_comments.table_comment,
+            field_comments: snapshot_hint.entity_comments.field_comments,
+            field_stats_truncate_len: snapshot_hint.field_stats_truncate_len,
             drop_on: None,
             statistics: stat,
+            indexes: snapshot_hint.indexes,
             ..Default::default()
         };
-        snapshot_hint.apply_stats_truncate_len(&mut table_meta);
-        table_meta.comment = snapshot_hint.entity_comments.table_comment;
-        table_meta.field_comments = snapshot_hint.entity_comments.field_comments;
-        table_meta.indexes = snapshot_hint.indexes;
         let req = CreateTableReq {
             create_option: plan.create_option,
             catalog_name: if plan.create_option.is_overriding() {
