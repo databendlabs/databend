@@ -636,11 +636,11 @@ impl HorizontalReclusterSource {
         task: &ReclusterTask,
         stats: &ClusterStatsGenerator,
         lineage: bool,
+        max_groups: usize,
     ) -> Result<()> {
         let merge_factory = ReclusterMergeFactory::prepare(ctx, table, task, stats, lineage)?;
         let settings = merge_factory.merge_config.ctx.get_settings();
         let fixed = settings.get_enable_fixed_rows_sort()?;
-        let max_groups = settings.get_max_threads()? as usize;
         let groups = max_groups.min(merge_factory.input_blocks.len()).max(1);
         let merge_keys = merge_factory.merge_config.keys.clone();
         let output_rows = merge_factory.merge_config.output_batch_rows;

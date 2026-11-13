@@ -72,6 +72,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
@@ -571,14 +572,19 @@ impl ReclusterTableInterpreter {
         let table_info = tbl.get_table_info().clone();
         let ReclusterParts {
             tasks,
+            task_batches,
             remained_blocks,
             virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
         } = parts;
-        let is_distributed = tasks.len() > 1;
+        // V2 placements are dispatched as batches, including a single batch in
+        // a multi-node cluster. Legacy plans retain their one-task-per-node routing.
+        let is_distributed =
+            !self.ctx.get_cluster().is_empty() && (task_batches.is_some() || tasks.len() > 1);
         let mut input = PhysicalPlan::new(Recluster {
             tasks,
+            task_batches,
             table_meta_timestamps,
             table_info: table_info.clone(),
             meta: PhysicalPlanMeta::new("Recluster"),

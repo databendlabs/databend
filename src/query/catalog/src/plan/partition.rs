@@ -515,6 +515,9 @@ pub struct RetainedBlockMeta {
 #[derive(Clone, Default)]
 pub struct ReclusterParts {
     pub tasks: Vec<ReclusterTask>,
+    /// V2 placement witness: indices into `tasks`, grouped by executor. Scheduling
+    /// must preserve these batches rather than reshuffling individual tasks.
+    pub task_batches: Option<Vec<Vec<usize>>>,
     pub remained_blocks: Vec<RetainedBlockMeta>,
     pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<usize>,

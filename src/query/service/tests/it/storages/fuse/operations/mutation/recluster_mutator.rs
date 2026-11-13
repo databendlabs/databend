@@ -626,6 +626,53 @@ async fn materialize_candidate_window(
         .await?)
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_task_selection_v2_opt_in_and_rollback() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+    assert!(
+        !ctx.get_settings()
+            .get_enable_recluster_task_selection_v2()?
+    );
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let thresholds = BlockThresholds::default();
+    // Identical ranges, original-order sizes 600,600,400,400 and budget 1000:
+    // v1's contiguous packing produces one pair, v2 skip-fill produces two.
+    let blocks = [600, 600, 400, 400]
+        .into_iter()
+        .map(|size| make_recluster_block(0, 1, 100, 0, 1000, size, size / 2))
+        .collect();
+    let location =
+        write_recluster_segment(&data_accessor, &location_generator, blocks, thresholds, 0).await?;
+    for (enabled, mode, expected_tasks) in [
+        (false, ReclusterMode::Aggressive, 1),
+        (true, ReclusterMode::Aggressive, 2),
+        (true, ReclusterMode::Conservative, 1),
+        (false, ReclusterMode::Aggressive, 1),
+    ] {
+        ctx.get_settings().set_setting(
+            "enable_recluster_task_selection_v2".to_string(),
+            u8::from(enabled).to_string(),
+        )?;
+        let (_, block_count, parts) = materialize_segment_locations_with_mode(
+            ctx.clone(),
+            data_accessor.clone(),
+            vec![location.clone()],
+            thresholds,
+            0,
+            2,
+            8,
+            mode,
+        )
+        .await?;
+        assert_eq!(task_part_counts(&parts), vec![2; expected_tasks]);
+        assert_eq!(block_count, (2 * expected_tasks) as u64);
+    }
+    Ok(())
+}
+
 fn task_part_counts(parts: &ReclusterParts) -> Vec<usize> {
     parts
         .tasks
@@ -1602,11 +1649,50 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
     // Cover both the vector overlap strategy and the shared small-block shortcut,
     // with current and obsolete cluster-key statistics. Vector inputs must never
     // be split into scalar singleton sort tasks.
-    for (current_key_id, thresholds) in [
-        (cluster_key_id, thresholds),
-        (cluster_key_id + 1, thresholds),
-        (cluster_key_id, BlockThresholds::new(10000, 10000, 10000, 1)),
+    for (current_key_id, thresholds, disjoint) in [
+        (cluster_key_id, thresholds, false),
+        (cluster_key_id + 1, thresholds, false),
+        (
+            cluster_key_id,
+            BlockThresholds::new(10000, 10000, 10000, 1),
+            false,
+        ),
+        (cluster_key_id, thresholds, true),
     ] {
+        ctx.get_settings().set_setting(
+            "enable_recluster_task_selection_v2".to_string(),
+            u8::from(disjoint).to_string(),
+        )?;
+        let case_segments = if disjoint {
+            // Same scalar range, disjoint vector spheres in ONE segment:
+            // enabled v2 must not bypass the vector strategy.
+            let locations = gen_recluster_segments_by_vector_stats(
+                &data_accessor,
+                &location_generator,
+                &[vec![
+                    (1, 1, [0.0, 0.0], 1.0),
+                    (1, 1, [10.0, 0.0], 1.0),
+                    (1, 1, [20.0, 0.0], 1.0),
+                ]],
+                None,
+                true,
+                1000,
+                100,
+                100,
+                thresholds,
+                cluster_key_id,
+            )
+            .await?;
+            segment_pruning(
+                &ctx,
+                schema.clone(),
+                data_accessor.clone(),
+                create_segment_location_vector(locations, None),
+            )
+            .await?
+        } else {
+            compact_segments.clone()
+        };
         let vector_cluster_info = VectorClusterInfo {
             key_index: 1,
             column_id: 1,
@@ -1624,26 +1710,39 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
             ClusterKeyInfo::new((current_key_id, "(c0)".to_string()), ClusterType::Linear),
             0,
             1,
-            ReclusterMode::Conservative,
+            if disjoint {
+                ReclusterMode::Aggressive
+            } else {
+                ReclusterMode::Conservative
+            },
             Some(vector_cluster_info),
         );
 
-        let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+        let segment_windows = mutator.select_segments(&case_segments, 8)?;
         let vector_window = segment_windows
             .into_iter()
             .find(|window| {
-                window
-                    .iter()
-                    .map(|segment| segment.loc.segment_idx)
-                    .collect::<HashSet<_>>()
-                    == HashSet::from([0, 1])
+                if disjoint {
+                    window.len() == 1
+                } else {
+                    window
+                        .iter()
+                        .map(|segment| segment.loc.segment_idx)
+                        .collect::<HashSet<_>>()
+                        == HashSet::from([0, 1])
+                }
             })
             .unwrap();
         let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
-        assert_eq!(block_num, 2);
-        assert_eq!(parts.tasks.len(), 1);
-        assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
-        assert_eq!(task_part_counts(&parts), vec![2]);
+        if disjoint {
+            assert_eq!(block_num, 0);
+            assert!(parts.is_empty());
+        } else {
+            assert_eq!(block_num, 2);
+            assert_eq!(parts.tasks.len(), 1);
+            assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
+            assert_eq!(task_part_counts(&parts), vec![2]);
+        }
     }
 
     Ok(())
