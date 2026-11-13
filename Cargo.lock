@@ -3507,6 +3507,7 @@ dependencies = [
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
  "divan",
+ "encoding_rs",
  "geo",
  "geozero",
  "glob",
