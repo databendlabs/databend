@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod fixed_keys;
+mod probe_chain;
 
 pub mod basic;
 mod serialize_keys;
