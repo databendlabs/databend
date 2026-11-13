@@ -110,7 +110,7 @@ impl<K: TopKCountKey> CandidateFilter<K> {
     /// Filters a whole key column by one candidate set.
     fn filter_column(set: &KeySet<K>, keys: &Column) -> Column {
         let (keys, validity) = match keys {
-            Column::Nullable(nullable) => (&nullable.column, Some(&nullable.validity)),
+            Column::Nullable(nullable) => (nullable.column(), Some(nullable.validity())),
             keys => (keys, None),
         };
         let keys = K::try_downcast_column(keys).unwrap();
