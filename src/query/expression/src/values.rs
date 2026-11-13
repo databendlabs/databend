@@ -1801,7 +1801,7 @@ impl Column {
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
                     let val = jsonb::Value::rand_value();
-                    data.push(val.to_vec());
+                    data.push(val.to_vec().expect("random jsonb values are small"));
                 }
                 VariantType::from_data(data)
             }

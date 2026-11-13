@@ -890,7 +890,12 @@ mod merge_tests {
         for id in ids {
             bodies.push(format!("row {id} mentions {}", WORDS[id as usize % 4]));
             let json = format!(r#"{{"n":{id},"tag":"t{}"}}"#, id % 3);
-            metas.push(jsonb::parse_value(json.as_bytes()).unwrap().to_vec());
+            metas.push(
+                jsonb::parse_value(json.as_bytes())
+                    .unwrap()
+                    .to_vec()
+                    .unwrap(),
+            );
         }
         DataBlock::new_from_columns(vec![
             StringType::from_data(bodies),

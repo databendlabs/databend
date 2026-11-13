@@ -448,7 +448,7 @@ serde_yaml = { version = "0.9.34" }
 serfig = { git = "https://github.com/datafuse-extras/serfig", rev = "610ac6d" }
 sha1 = "0.10.5"
 sha2 = "0.10.8"
-simdutf8 = "0.1.4"
+simdutf8 = "0.1.5"
 similar = "2.7.0"
 simple_hll = { version = "0.0.4", features = ["serde_borsh"] }
 simsearch = "0.2"
@@ -518,7 +518,7 @@ zstd = "0.13.3"
 
 # AST needed
 cargo_metadata = "0.19"
-fast-float2 = "0.2.3"
+fast-float2 = "0.2.4"
 indent = "0.1.1"
 inventory = "0.3.15"
 logos = "0.12.1"
@@ -652,7 +652,10 @@ databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "
 databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.5" }
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
-jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
+#jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
+#jsonb = { git = "https://github.com/b41sh/jsonb.git", rev = "aeaa5c640fe6ddc7857001944547d277760bc905" }
+#jsonb = { git = "https://github.com/b41sh/jsonb.git", rev = "b74a5a1a1e285c1cce031456a087b4bdf16beb1d" }
+jsonb = { git = "https://github.com/b41sh/jsonb.git", rev = "5d48bb62995dd36c26cb8b07ffb24b9c3642e98a" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # dev: v0.2.0 plus the reqwest rustls fix (datafuse-extras/paimon-rust#1).
 paimon = { git = "https://github.com/datafuse-extras/paimon-rust", branch = "dev" }
