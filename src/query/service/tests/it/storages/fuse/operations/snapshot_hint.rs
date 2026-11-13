@@ -16,10 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table::Table;
-use databend_common_config::GlobalConfig;
-use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
-use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_version::BUILD_INFO;
@@ -28,13 +24,10 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::OSSSetup;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_table_meta::table::OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use futures::TryStreamExt;
 
-// Single-session transaction behavior is covered by txn_snapshot_hint.test.
-// These tests also exercise concurrent commits and attached metadata refresh.
+// Single-session behavior is covered by txn_snapshot_hint.test. These tests
+// control concurrent writers to exercise successful and failed commit retries.
 async fn execute(session: &Arc<Session>, sql: &str) -> anyhow::Result<()> {
     let ctx = session.create_query_context(&BUILD_INFO).await?;
     TestFixture::execute_query_with_ctx(ctx, sql)
@@ -109,156 +102,6 @@ async fn setup() -> anyhow::Result<TestFixture> {
         .await?;
     fixture.execute_command("SET enable_auto_analyze=0").await?;
     Ok(fixture)
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_attached_snapshot_hint_truncation_settings() -> anyhow::Result<()> {
-    let fixture = setup().await?;
-    let db = fixture.default_db_name();
-    // Test both explicit settings and an explicitly empty map (defaults).
-    for (name, column_option, exact_option, exact_value) in [
-        (
-            "hint_explicit",
-            "STATS_TRUNCATE_LEN 4",
-            "STATS_TRUNCATE_LEN 40",
-            "abcdefghijklmnopqrst",
-        ),
-        ("hint_defaults", "", "", "abc"),
-    ] {
-        fixture
-            .execute_command(&format!(
-                "CREATE TABLE {db}.{name}(id INT, s STRING {column_option}, exact STRING {exact_option}, plain STRING)"
-            ))
-            .await?;
-        fixture
-            .execute_command(&format!(
-                "INSERT INTO {db}.{name} VALUES (1, 'abcdefghijklmnop', '{exact_value}', 'abc')"
-            ))
-            .await?;
-        let source = table(&fixture, name).await?;
-        let operator = source.get_operator();
-        let prefix = source.get_storage_prefix();
-        let v2_path = format!("{prefix}/{FUSE_TBL_LAST_SNAPSHOT_HINT_V2}");
-        let legacy_path = format!("{prefix}/{FUSE_TBL_LAST_SNAPSHOT_HINT}");
-        let bytes = operator.read(&v2_path).await?.to_vec();
-        let published = load_last_snapshot_hint(prefix, &operator).await?.unwrap();
-        assert_eq!(
-            published.field_stats_truncate_len.as_ref(),
-            Some(&source.get_table_info().meta.field_stats_truncate_len)
-        );
-
-        // Simulate an already-existing attached table with no source settings.
-        let mut info = source.get_table_info().clone();
-        info.meta.storage_params = Some(GlobalConfig::instance().storage.params.clone());
-        info.meta.options.insert(
-            OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
-            "attached".to_string(),
-        );
-        info.meta.field_stats_truncate_len.clear();
-        // Reorder and project by stable ID: exact is column 2, s is column 1.
-        let mut schema = info.meta.schema.as_ref().clone();
-        schema.metadata.insert(
-            FUSE_OPT_KEY_ATTACH_COLUMN_IDS.to_string(),
-            "2,1".to_string(),
-        );
-        info.meta.schema = Arc::new(schema);
-        let attached = FuseTable::try_create(info, None, false)?;
-        let meta = &attached.get_table_info().meta;
-        assert!(
-            meta.options
-                .contains_key(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN)
-        );
-        assert_eq!(meta.schema.fields()[0].column_id(), 2);
-        assert_eq!(meta.schema.fields()[1].column_id(), 1);
-        assert_eq!(
-            meta.field_stats_truncate_len.get(&2),
-            (!exact_option.is_empty()).then_some(&40)
-        );
-        assert_eq!(
-            meta.field_stats_truncate_len.get(&1),
-            column_option.starts_with("STATS").then_some(&4)
-        );
-        let ctx = fixture.new_query_ctx().await?;
-        let ranges = attached
-            .accurate_columns_ranges(ctx.clone(), &[1, 2])
-            .await?
-            .unwrap();
-        assert!(!ranges[&2].min.may_be_truncated);
-        assert!(!ranges[&2].max.may_be_truncated);
-        assert!(ranges[&1].min.may_be_truncated);
-        assert!(ranges[&1].max.may_be_truncated);
-
-        // A distributed worker must see the same settings without rereading hints.
-        let fixed = attached.get_table_info().clone();
-        let worker = FuseTable::try_create(
-            serde_json::from_slice(&serde_json::to_vec(&fixed)?)?,
-            None,
-            false,
-        )?;
-        assert_eq!(worker.get_table_info().meta, fixed.meta);
-
-        // Downgrade to an old v2 hint, then to the legacy plain-text format.
-        let mut old_v2: serde_json::Value = serde_json::from_slice(&bytes)?;
-        old_v2
-            .as_object_mut()
-            .unwrap()
-            .remove("field_stats_truncate_len");
-        operator
-            .write(&v2_path, serde_json::to_vec(&old_v2)?)
-            .await?;
-        for legacy in [false, true] {
-            if legacy {
-                operator.delete(&v2_path).await?;
-                operator
-                    .write(&legacy_path, published.snapshot_full_path.clone())
-                    .await?;
-            }
-            let mut stale = fixed.clone();
-            stale
-                .meta
-                .options
-                .remove(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG);
-            let refreshed = FuseTable::try_create(stale, None, false)?;
-            let meta = &refreshed.get_table_info().meta;
-            assert!(meta.field_stats_truncate_len.is_empty());
-            assert!(
-                !meta
-                    .options
-                    .contains_key(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN)
-            );
-            let ranges = refreshed
-                .accurate_columns_ranges(ctx.clone(), &[1, 2])
-                .await?
-                .unwrap();
-            // Even bounds shorter than the default 16 must stay conservative.
-            for range in ranges.values() {
-                assert!(range.min.may_be_truncated);
-                assert!(range.max.may_be_truncated);
-            }
-        }
-        operator.delete(&legacy_path).await?;
-        let mut stale = fixed;
-        stale
-            .meta
-            .options
-            .remove(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG);
-        let empty = FuseTable::try_create(stale, None, false)?;
-        assert!(empty.snapshot_loc().is_none());
-        assert!(
-            empty
-                .get_table_info()
-                .meta
-                .field_stats_truncate_len
-                .is_empty()
-        );
-        assert!(
-            !empty
-                .get_table_info()
-                .options()
-                .contains_key(OPT_KEY_ATTACH_STATS_TRUNCATE_LEN_KNOWN)
-        );
-    }
-    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

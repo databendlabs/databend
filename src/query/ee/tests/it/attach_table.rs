@@ -20,6 +20,7 @@ use databend_enterprise_query::attach_table::RealAttachTableHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
 use futures::TryStreamExt;
 
 async fn query_text(fixture: &TestFixture, sql: &str) -> anyhow::Result<String> {
@@ -40,10 +41,28 @@ async fn query_text(fixture: &TestFixture, sql: &str) -> anyhow::Result<String> 
     Ok(text)
 }
 
+async fn assert_attached_statistics(
+    fixture: &TestFixture,
+    target: &str,
+    can_rewrite: bool,
+    expected_max: &str,
+) -> anyhow::Result<()> {
+    let plan = query_text(
+        fixture,
+        &format!("EXPLAIN SELECT MIN(wide), MAX(wide) FROM {target}"),
+    )
+    .await?;
+    assert_eq!(plan.contains("DummyTableScan"), can_rewrite, "{plan}");
+    let result = query_text(fixture, &format!("SELECT MIN(s), MAX(s) FROM {target}")).await?;
+    assert_eq!(result, format!("'abcdefghijklmnop'\n'{expected_max}'\n"));
+    Ok(())
+}
+
+// Normal ATTACH, projection, defaults and snapshot refresh are covered by
+// 05_0024_attach_string_statistics.test. Only raw historical hint files need Rust.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_attach_string_statistics_with_historical_hints() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-    // EESetup initializes only the handlers its existing tests require.
     RealAttachTableHandler::init()?;
     fixture.create_default_database().await?;
     fixture
@@ -67,22 +86,21 @@ async fn test_attach_string_statistics_with_historical_hints() -> anyhow::Result
     let operator = source.get_operator();
     let prefix = source.get_storage_prefix();
     let v2_path = format!("{prefix}/{FUSE_TBL_LAST_SNAPSHOT_HINT_V2}");
-    let bytes = operator.read(&v2_path).await?.to_vec();
-    let mut old_hint: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let mut old_hint: serde_json::Value =
+        serde_json::from_slice(&operator.read(&v2_path).await?.to_vec())?;
     old_hint
         .as_object_mut()
         .unwrap()
         .remove("field_stats_truncate_len");
+    operator
+        .write(&v2_path, serde_json::to_vec(&old_hint)?)
+        .await?;
     let uri = format!(
         "fs://{}/{prefix}",
         operator.info().root().trim_end_matches('/')
     );
-    for format in ["new", "old_v2", "legacy"] {
-        if format == "old_v2" {
-            operator
-                .write(&v2_path, serde_json::to_vec(&old_hint)?)
-                .await?;
-        } else if format == "legacy" {
+    for format in ["old_v2", "legacy"] {
+        if format == "legacy" {
             operator.delete(&v2_path).await?;
             operator
                 .write(
@@ -93,59 +111,72 @@ async fn test_attach_string_statistics_with_historical_hints() -> anyhow::Result
         }
         let target = format!("{db}.attached_{format}");
         fixture
-            .execute_command(&format!("ATTACH TABLE {target}(wide, s) '{uri}'"))
+            .execute_command(&format!("ATTACH TABLE {target} '{uri}'"))
             .await?;
-        // SHOW CREATE for an attached table intentionally renders ATTACH syntax,
-        // not column definitions. Inspect its actual metadata instead.
-        let ctx = fixture.new_query_ctx().await?;
-        let attached = ctx
-            .get_table("default", &db, &format!("attached_{format}"))
-            .await?;
-        let settings = &attached.get_table_info().meta.field_stats_truncate_len;
-        if format == "new" {
-            assert_eq!(
-                settings,
-                &source.get_table_info().meta.field_stats_truncate_len
-            );
-        } else {
-            assert!(settings.is_empty());
-        }
-        let plan = query_text(
-            &fixture,
-            &format!("EXPLAIN SELECT MIN(wide), MAX(wide) FROM {target}"),
-        )
-        .await?;
-        assert_eq!(plan.contains("DummyTableScan"), format == "new", "{plan}");
-        let result = query_text(&fixture, &format!("SELECT MIN(s), MAX(s) FROM {target}")).await?;
-        assert_eq!(result.matches("abcdefghijklmnop").count(), 2, "{result}");
+        assert_attached_statistics(&fixture, &target, false, "abcdefghijklmnop").await?;
     }
 
-    // A new writer publishes the missing settings without rewriting old blocks.
-    // Existing attachments, including those created from old hints, upgrade on refresh.
+    // A normal commit publishes settings without rewriting historical blocks.
     fixture
         .execute_command(&format!(
             "INSERT INTO {db}.source VALUES ('zzzzzzzzzzzzzzzz', 'abcdefghijklmnopqrst')"
         ))
         .await?;
-    for format in ["new", "old_v2", "legacy"] {
-        let target = format!("{db}.attached_{format}");
-        let ctx = fixture.new_query_ctx().await?;
-        let attached = ctx
-            .get_table("default", &db, &format!("attached_{format}"))
-            .await?;
-        assert_eq!(
-            attached.get_table_info().meta.field_stats_truncate_len,
-            source.get_table_info().meta.field_stats_truncate_len
-        );
-        let plan = query_text(
+    for format in ["old_v2", "legacy"] {
+        assert_attached_statistics(
             &fixture,
-            &format!("EXPLAIN SELECT MIN(wide), MAX(wide) FROM {target}"),
+            &format!("{db}.attached_{format}"),
+            true,
+            "zzzzzzzzzzzzzzzz",
         )
         .await?;
-        assert!(plan.contains("DummyTableScan"), "{plan}");
-        let result = query_text(&fixture, &format!("SELECT MIN(s), MAX(s) FROM {target}")).await?;
-        assert!(result.contains("abcdefghijklmnop"), "{result}");
-        assert!(result.contains("zzzzzzzzzzzzzzzz"), "{result}");
     }
+    let ctx = fixture.new_query_ctx().await?;
+    let attached = ctx.get_table("default", &db, "attached_old_v2").await?;
+    let mut known_info = attached.get_table_info().clone();
+
+    // An older writer can publish a hint after an upgrade. Existing attachments
+    // must forget the previously known settings and return to the safe fallback.
+    let mut downgraded_hint: serde_json::Value =
+        serde_json::from_slice(&operator.read(&v2_path).await?.to_vec())?;
+    downgraded_hint
+        .as_object_mut()
+        .unwrap()
+        .remove("field_stats_truncate_len");
+    operator
+        .write(&v2_path, serde_json::to_vec(&downgraded_hint)?)
+        .await?;
+    for format in ["old_v2", "legacy"] {
+        assert_attached_statistics(
+            &fixture,
+            &format!("{db}.attached_{format}"),
+            false,
+            "zzzzzzzzzzzzzzzz",
+        )
+        .await?;
+    }
+    // Refresh must clear known settings carried by a cached TableInfo too,
+    // not just handle the empty metadata of attachments created from old hints.
+    known_info
+        .meta
+        .options
+        .remove(OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG);
+    let refreshed = FuseTable::try_create(known_info, None, false)?;
+    assert!(
+        refreshed
+            .get_table_info()
+            .meta
+            .field_stats_truncate_len
+            .is_empty()
+    );
+    let ranges = refreshed
+        .accurate_columns_ranges(fixture.new_query_ctx().await?, &[0, 1])
+        .await?
+        .unwrap();
+    assert!(
+        ranges
+            .values()
+            .all(|range| range.min.may_be_truncated && range.max.may_be_truncated)
+    );
     Ok(())
 }

@@ -1,5 +1,9 @@
 ## ATTACH preserves source string-statistics settings and rewrites aggregates
 ## only when their bounds are provably exact.
+## The safety marker is internal metadata, not a user-settable table option.
+statement error table option attach_stats_truncate_len_known reserved
+CREATE TABLE attach_stats_invalid(s STRING) attach_stats_truncate_len_known='true';
+
 statement ok
 DROP TABLE IF EXISTS attach_stats_target;
 
@@ -60,13 +64,14 @@ DROP TABLE attach_stats_source;
 ## 16) and short bounds using default settings can safely answer aggregates.
 statement ok
 CREATE TABLE attach_stats_source(s STRING STATS_TRUNCATE_LEN 4,
-    wide STRING STATS_TRUNCATE_LEN 40, plain STRING)
+    unused STRING STATS_TRUNCATE_LEN 8, wide STRING STATS_TRUNCATE_LEN 40, plain STRING)
 'fs:///tmp/attach_string_statistics/' row_per_block=100;
 
 statement ok
-INSERT INTO attach_stats_source VALUES ('ab', 'abcdefghijklmnopqrst', 'abc');
+INSERT INTO attach_stats_source VALUES ('ab', 'unused', 'abcdefghijklmnopqrst', 'abc');
 
-## Reorder columns to ensure settings follow stable column IDs, not positions.
+## Omit one configured column and reorder the others: settings must follow
+## stable column IDs, not positions in the attached schema.
 statement ok
 SET VARIABLE attach_stats_sql = (
     SELECT 'ATTACH TABLE attach_stats_target(wide, s, plain) ''fs:///tmp/attach_string_statistics/'
@@ -90,7 +95,7 @@ EvalScalar
 ## The existing attached table must follow a newly published snapshot without
 ## treating its truncated bounds as exact.
 statement ok
-INSERT INTO attach_stats_source VALUES (repeat('z', 20), 'abcdefghijklmnopqrst', 'abc');
+INSERT INTO attach_stats_source VALUES (repeat('z', 20), 'unused', 'abcdefghijklmnopqrst', 'abc');
 
 query BB
 SELECT MIN(s) = 'ab', MAX(s) = repeat('z', 20) FROM attach_stats_target;
@@ -130,6 +135,14 @@ EvalScalar
 ├── expressions: ['ab', 'ab']
 ├── estimated rows: 1.00
 └── DummyTableScan
+
+## Internal provenance must not leak into user-visible table options.
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'default' AND name = 'attach_stats_target'
+  AND upper(table_option) NOT LIKE '%ATTACH_STATS_TRUNCATE_LEN_KNOWN%';
+----
+1
 
 statement ok
 DROP TABLE attach_stats_target;
