@@ -29,7 +29,7 @@ use crate::BlockMetaIndex;
 ///
 /// Only applies when the filter is fully answered by the inverted index
 /// (`PushDownInfo::filter_only_use_index`), so the exact number of matched
-/// rows per block (`InvertedIndexMatches::rows`) is known before reading:
+/// rows per block (`IndexMatches::rows`) is known before reading:
 /// - `LIMIT N`: keep blocks until N matched rows are covered.
 /// - `ORDER BY score() LIMIT N`: prune by the exact matched score range.
 /// - `ORDER BY col LIMIT N`: prune by column min/max and matched row counts.
@@ -307,7 +307,7 @@ mod tests {
     use databend_storages_common_table_meta::meta::Compression;
 
     use super::*;
-    use crate::InvertedIndexMatches;
+    use crate::IndexMatches;
 
     #[test]
     fn test_filter_only_use_index_keeps_overlapping_ranges() {
@@ -450,8 +450,8 @@ mod tests {
             None,
         );
 
-        let inverted_index_matches = (matched_rows > 0).then(|| InvertedIndexMatches {
-            rows: (0..matched_rows).collect(),
+        let inverted_index_matches = (matched_rows > 0).then(|| IndexMatches {
+            rows: (0..matched_rows as u32).collect(),
             ..Default::default()
         });
 
@@ -464,7 +464,7 @@ mod tests {
             segment_location: "segment".to_string(),
             snapshot_location: None,
             inverted_index_matches,
-            vector_scores: None,
+            vector_index_matches: None,
             virtual_block_meta: None,
         };
 
@@ -479,8 +479,8 @@ mod tests {
         scores: &[f32],
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
         let (mut index, meta) = build_block(column_id, block_id, min, max, scores.len());
-        index.inverted_index_matches = Some(InvertedIndexMatches {
-            rows: (0..scores.len()).collect(),
+        index.inverted_index_matches = Some(IndexMatches {
+            rows: (0..scores.len() as u32).collect(),
             scores: Some(scores.iter().map(|v| (*v).into()).collect()),
             rows_only: false,
         });

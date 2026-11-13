@@ -67,7 +67,8 @@ fn expected_data_block(
             offsets: None,
             base_block_ids: None,
             inner: None,
-            matched_rows: matches.map(|matches| matches.rows.clone()),
+            matched_rows: matches
+                .map(|matches| matches.rows.iter().map(|row| *row as usize).collect()),
             matched_scores: matches.and_then(|matches| matches.scores.clone()),
             // The table has no vector index.
             vector_scores: None,

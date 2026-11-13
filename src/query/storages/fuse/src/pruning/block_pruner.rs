@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::InvertedIndexMatches;
+use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
@@ -297,7 +297,7 @@ impl BlockPruner {
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                         inverted_index_matches: prune_result.inverted_index_matches,
-                        vector_scores: None,
+                        vector_index_matches: None,
                         virtual_block_meta: prune_result.virtual_block_meta.clone(),
                     },
                     block,
@@ -509,7 +509,7 @@ impl BlockPruner {
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                         inverted_index_matches: None,
-                        vector_scores: None,
+                        vector_index_matches: None,
                         virtual_block_meta: None,
                     },
                     block_meta.clone(),
@@ -539,7 +539,7 @@ struct BlockPruneResult {
     // the page ranges should be kept in the block
     range: Option<Range<usize>>,
     // the rows matched by the inverted index
-    inverted_index_matches: Option<InvertedIndexMatches>,
+    inverted_index_matches: Option<IndexMatches>,
     // the optional block meta of virtual columns
     virtual_block_meta: Option<VirtualBlockMetaIndex>,
 }

@@ -23,8 +23,7 @@ mod topn_pruner;
 mod virtual_segment_schema;
 
 pub use block_meta::BlockMetaIndex;
-pub use block_meta::InvertedIndexMatches;
-pub use block_meta::VectorScores;
+pub use block_meta::IndexMatches;
 pub use block_meta::VirtualBlockMetaIndex;
 pub use block_meta::VirtualFieldReadPlan;
 pub use block_meta::VirtualReadSlot;

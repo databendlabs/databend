@@ -20,7 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
-use databend_storages_common_pruner::InvertedIndexMatches;
+use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use lindera::dictionary::UserDictionary;
 use opendal::Operator;
@@ -65,8 +65,8 @@ pub struct InvertedIndexPruner {
     index_version: String,
     reader: InvertedIndexReader,
     query: Box<dyn Query>,
-    /// The filter of the query is the index match alone, see
-    /// `InvertedIndexMatches::rows_only`.
+    /// The filter of the query is the index match alone: the rows the index did
+    /// not match fail it, so the scan outputs only the matched rows.
     rows_only: bool,
 }
 
@@ -120,7 +120,7 @@ impl InvertedIndexPruner {
         block_location: &str,
         inverted_index_metas: Option<&[BlockIndexMeta]>,
         row_count: u64,
-    ) -> Result<Option<InvertedIndexMatches>> {
+    ) -> Result<Option<IndexMatches>> {
         let index_meta = inverted_index_metas.and_then(|index_metas| {
             index_metas
                 .binary_search_by(|meta| meta.index_name.as_str().cmp(&self.index_name))
@@ -148,7 +148,15 @@ impl InvertedIndexPruner {
                 row_count,
             )
             .await?;
-        Ok(matches.map(|(rows, scores)| InvertedIndexMatches {
+        let Some((rows, scores)) = matches else {
+            return Ok(None);
+        };
+        let rows = rows
+            .into_iter()
+            .map(u32::try_from)
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|_| ErrorCode::StorageOther("inverted-index row number exceeds u32"))?;
+        Ok(Some(IndexMatches {
             rows,
             scores,
             rows_only: self.rows_only,
