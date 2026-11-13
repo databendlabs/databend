@@ -243,6 +243,10 @@ impl CopyIntoTableInterpreter {
     )> {
         let mut new_schema = None;
         let mut update_stream_meta_reqs = vec![];
+        // Partition planning of the source reads it to keep each FILE_SORTED_BY file in one part.
+        self.ctx
+            .copy_state()
+            .set_file_sort_keys(plan.stage_table_info.file_sort_keys.clone());
         let (source, project_columns) = if let Some(ref query) = plan.query {
             let query = if plan.enable_distributed {
                 query.remove_exchange_for_select()

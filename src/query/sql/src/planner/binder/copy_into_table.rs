@@ -24,6 +24,7 @@ use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::FileSortedBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::LiteralStringOrVariable;
 use databend_common_ast::ast::SelectTarget;
@@ -34,6 +35,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::visit::Walk;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -42,6 +44,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -58,6 +61,7 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use parking_lot::RwLock;
 
 use crate::BindContext;
@@ -70,6 +74,8 @@ use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::parse_file_format;
 use crate::binder::validate_stage_files_path_traversal;
+use crate::planner::expression::ClusterKeys;
+use crate::planner::expression::parse_cluster_keys;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -120,6 +126,64 @@ impl Binder {
                     .await
             }
         }
+    }
+
+    /// Bind `FILE_SORTED_BY = CLUSTER_KEY` to the cluster key of the target table, and check
+    /// that preserving the file order keeps the blocks written from one file non-overlapping.
+    fn resolve_file_sort_keys(
+        &self,
+        table: &Arc<dyn Table>,
+        file_sorted_by: Option<&FileSortedBy>,
+        source_schema: &TableSchema,
+        is_transform: bool,
+    ) -> Result<Option<Vec<RemoteExpr<String>>>> {
+        let Some(FileSortedBy::ClusterKey) = file_sorted_by else {
+            return Ok(None);
+        };
+        if is_transform {
+            return Err(ErrorCode::BadArguments(
+                "FILE_SORTED_BY is not supported for COPY with a transform query",
+            ));
+        }
+        if table.engine() != "FUSE" {
+            return Err(ErrorCode::BadArguments(
+                "FILE_SORTED_BY requires a FUSE target table",
+            ));
+        }
+        if table.options().contains_key(OPT_KEY_PARTITION_BY) {
+            return Err(ErrorCode::BadArguments(
+                "FILE_SORTED_BY is not supported for tables with PARTITION BY",
+            ));
+        }
+        let cluster_keys = match table.resolve_cluster_keys() {
+            Some(ast_exprs) => parse_cluster_keys(self.ctx.clone(), table.clone(), ast_exprs)?,
+            None => {
+                return Err(ErrorCode::BadArguments(
+                    "FILE_SORTED_BY requires the target table to have a linear cluster key",
+                ));
+            }
+        };
+        let ClusterKeys::Linear(cluster_keys) = cluster_keys else {
+            return Err(ErrorCode::BadArguments(
+                "FILE_SORTED_BY requires the target table to have a linear cluster key",
+            ));
+        };
+
+        let table_schema = table.schema();
+        let mut remote_keys = Vec::with_capacity(cluster_keys.len());
+        for key in cluster_keys {
+            let key = key.project_column_ref(|index| {
+                let name = table_schema.field(*index).name();
+                if source_schema.field_with_name(name).is_err() {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "FILE_SORTED_BY references column `{name}`, which is not loaded from the files"
+                    )));
+                }
+                Ok(name.to_string())
+            })?;
+            remote_keys.push(key.as_remote_expr());
+        }
+        Ok(Some(remote_keys))
     }
 
     pub(crate) fn resolve_copy_pattern(
@@ -218,6 +282,22 @@ impl Binder {
         let required_values_schema: DataSchemaRef =
             Arc::new(required_values_table_schema.clone().into());
 
+        let file_sort_keys = self.resolve_file_sort_keys(
+            &table,
+            stmt.options.file_sorted_by.as_ref(),
+            &required_values_table_schema,
+            is_transform,
+        )?;
+        if file_sort_keys.is_some()
+            && matches!(&stage_info.file_format_params,
+                FileFormatParams::Parquet(fmt)
+                    if enable_schema_evolution || fmt.missing_field_as != NullAs::Error)
+        {
+            return Err(ErrorCode::BadArguments(
+                "FILE_SORTED_BY does not support Parquet files with MISSING_FIELD_AS other than ERROR, or with schema evolution, for now",
+            ));
+        }
+
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(
                 DefaultExprBinder::try_new(self.ctx.clone())?
@@ -246,6 +326,7 @@ impl Binder {
                 default_exprs: default_values,
                 copy_into_table_options: stmt.options.clone(),
                 is_variant: false,
+                file_sort_keys,
                 ..Default::default()
             },
             values_consts: vec![],

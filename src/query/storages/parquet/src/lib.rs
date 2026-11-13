@@ -34,6 +34,7 @@ mod read_settings;
 mod utils;
 
 mod copy_into_table;
+mod file_order;
 pub mod parquet_reader;
 mod parquet_table;
 mod partition;

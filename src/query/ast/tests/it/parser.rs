@@ -983,6 +983,12 @@ SELECT * from s;"#,
         r#"
             COPY INTO mytable
                 FROM @my_stage
+                FILE_FORMAT = (type = CSV)
+                FILE_SORTED_BY = CLUSTER_KEY;
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @my_stage
                 FILE_FORMAT = (
                     type = CSV,
                     field_delimiter = ',',
@@ -1638,6 +1644,7 @@ fn test_statement_error() {
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
         r#"COPY INTO mytable FROM 's3://bucket' CONECTION= ();"#, // typos:disable-line
         r#"COPY INTO mytable FROM @mystage CONNECTION = ();"#,
+        r#"COPY INTO mytable FROM @mystage FILE_SORTED_BY = (k);"#,
         r#"COPY INTO @stage/path FROM mytable PARTITION BY concat('p=', id);"#,
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,

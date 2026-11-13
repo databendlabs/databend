@@ -24,11 +24,14 @@ use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::BytesBatch;
 use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::SeparatorState;
+use crate::read::row_based::processors::ordered::FileEnd;
 
 pub struct Separator {
     pub ctx: Arc<LoadContext>,
     pub state: Option<Box<dyn SeparatorState>>,
     pub format: Arc<dyn RowBasedFileFormat>,
+    /// Emit a [`FileEnd`] marker after the last batch of each file.
+    pub emit_file_end: bool,
 }
 
 impl Separator {
@@ -38,7 +41,13 @@ impl Separator {
             ctx,
             format,
             state: None,
+            emit_file_end: false,
         })
+    }
+
+    pub fn with_file_end_marker(mut self) -> Self {
+        self.emit_file_end = true;
+        self
     }
 }
 
@@ -76,8 +85,13 @@ impl AccumulatingTransform for Separator {
         if batch_meta.is_eof {
             self.state = None;
         }
+        let file_end = (batch_meta.is_eof && self.emit_file_end).then(|| {
+            DataBlock::empty_with_meta(Box::new(FileEnd {
+                path: batch_meta.path.clone(),
+            }))
+        });
         if row_batches.is_empty() {
-            Ok(vec![])
+            Ok(file_end.into_iter().collect())
         } else {
             for b in row_batches.iter() {
                 process_values.rows += b.data.rows();
@@ -90,6 +104,7 @@ impl AccumulatingTransform for Separator {
             let blocks = row_batches
                 .into_iter()
                 .map(|b| DataBlock::empty_with_meta(Box::new(b)))
+                .chain(file_end)
                 .collect::<Vec<_>>();
             Ok(blocks)
         }

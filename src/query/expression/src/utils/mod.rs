@@ -23,6 +23,7 @@ pub mod display;
 pub mod filter_helper;
 pub(crate) mod json_path_transform;
 pub mod serialize;
+pub mod sort_key_order;
 pub mod udf_client;
 pub mod variant_transform;
 pub mod visitor;

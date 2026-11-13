@@ -507,6 +507,26 @@ error:
 
 
 ---------- Input ----------
+COPY INTO mytable FROM @mystage FILE_SORTED_BY = (k);
+---------- Output ---------
+error: 
+  --> SQL:1:50
+  |
+1 | COPY INTO mytable FROM @mystage FILE_SORTED_BY = (k);
+  | ----                                             ^ unexpected `(`, expecting `CLUSTER_KEY`
+  | |                                                 
+  | while parsing `COPY
+                INTO { [<database_name>.]<table_name> { ( <columns> ) } }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ copyOptions ]`
+
+
+---------- Input ----------
 COPY INTO @stage/path FROM mytable PARTITION BY concat('p=', id);
 ---------- Output ---------
 error: 

@@ -270,6 +270,35 @@ fn collect_file_parts(
     }
 }
 
+/// One `ParquetPart::File` per non-empty file, read row group by row group in file order.
+fn collect_whole_file_parts(
+    files: Vec<CollectFile>,
+    compression_ratio: f64,
+) -> (PartStatistics, Partitions) {
+    let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
+    let mut stats = PartStatistics::default();
+    for (file, size, dedup_key, meta) in files.into_iter() {
+        if size == 0 {
+            continue;
+        }
+        stats.read_bytes += size as usize;
+        stats.partitions_scanned += 1;
+        stats.partitions_total += 1;
+        partitions
+            .partitions
+            .push(Arc::new(Box::new(ParquetPart::File(ParquetFilePart {
+                file,
+                compressed_size: size,
+                estimated_uncompressed_size: (size as f64 * compression_ratio) as u64,
+                dedup_key,
+                bucket_option: None,
+                meta,
+            })) as Box<dyn PartInfo>));
+    }
+    stats.is_exact = false;
+    (stats, partitions)
+}
+
 pub(crate) fn collect_parts(
     ctx: Arc<dyn TableContext>,
     files: Vec<CollectFile>,
@@ -282,6 +311,11 @@ pub(crate) fn collect_parts(
 
     let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
     let rowgroup_hint_bytes = ctx.get_settings().get_parquet_rowgroup_hint_bytes()?;
+    if ctx.copy_state().get_file_sort_keys().is_some() {
+        // COPY with FILE_SORTED_BY: one part per file, so that one source reads the whole
+        // file in order and its blocks are contiguous ranges of the file.
+        return Ok(collect_whole_file_parts(files, compression_ratio));
+    }
 
     let mut large_files = vec![];
     let mut small_files = vec![];

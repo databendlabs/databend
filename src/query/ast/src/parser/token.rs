@@ -508,6 +508,8 @@ pub enum TokenKind {
     CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
+    #[token("CLUSTER_KEY", ignore(ascii_case))]
+    CLUSTER_KEY,
     #[token("CLONE", ignore(ascii_case))]
     CLONE,
     #[token("COMMENT", ignore(ascii_case))]
@@ -727,6 +729,8 @@ pub enum TokenKind {
     NULL_IF,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
+    #[token("FILE_SORTED_BY", ignore(ascii_case))]
+    FILE_SORTED_BY,
     #[token("FILE", ignore(ascii_case))]
     FILE,
     #[token("FILES", ignore(ascii_case))]
