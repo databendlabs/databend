@@ -15,3 +15,4 @@
 mod cache_policy;
 mod control_channel;
 mod flight_service;
+mod kill_query;

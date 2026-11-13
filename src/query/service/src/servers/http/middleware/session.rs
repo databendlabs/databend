@@ -635,6 +635,18 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         let headers = req.headers().clone();
 
+        // Validate header encoding before forwarding; query ids may use any prefix.
+        let (query_id, is_query_id_from_client) = if let Some(v) = headers.get(HEADER_QUERY_ID) {
+            let id = v.to_str().map_err(|_| {
+                HttpErrorCode::bad_request(ErrorCode::BadArguments(
+                    "X-DATABEND-QUERY-ID must be valid UTF-8",
+                ))
+            })?;
+            (id.to_string(), true)
+        } else {
+            (Uuid::now_v7().simple().to_string(), false)
+        };
+
         let mut is_sticky_node = false;
 
         if self.endpoint_kind.may_need_sticky() {
@@ -725,13 +737,6 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
         let method = req.method().clone();
         let uri = req.uri().clone();
-
-        let (query_id, is_query_id_from_client) =
-            if let Some(v) = req.headers().get(HEADER_QUERY_ID) {
-                (v.to_str().unwrap().to_string(), true)
-            } else {
-                (Uuid::now_v7().simple().to_string(), false)
-            };
 
         let mut login_history = LoginHistory::new();
         login_history.handler = LoginHandler::HTTP;

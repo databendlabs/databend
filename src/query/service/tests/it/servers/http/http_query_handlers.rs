@@ -576,16 +576,147 @@ async fn test_return_when_finish() -> anyhow::Result<()> {
 async fn test_client_query_id() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let wait_time_secs = 5;
-    let sql = "select * from numbers(1)";
     let ep = create_endpoint()?;
-    let mut headers = HeaderMap::new();
-    headers.insert("x-databend-query-id", "testqueryid".parse().unwrap());
-    let (status, result) =
-        post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, headers).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(result.id, "testqueryid");
+    for id in [
+        "testqueryid",
+        "p-",
+        "p-55b05b74-80a6-49fd-b813-3ef25bf0f110",
+    ] {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-databend-query-id", id.parse()?);
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, "SELECT 1", 5, headers).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{result:?}");
+        assert_eq!(result.id, id);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded);
+        get_uri_checked(&ep, result.final_uri.as_ref().unwrap()).await?;
+    }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
+    use databend_query::sessions::QueriesQueueManager;
+    use databend_query::sessions::QueryEntry;
+
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.max_running_queries = 1;
+    config.query.common.global_statement_queue = false;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let ep = create_endpoint()?;
+    let queue = QueriesQueueManager::instance();
+    let (_, created) = post_sql_to_endpoint(
+        &ep,
+        "CREATE TABLE kill_http_queue ENGINE = MEMORY AS SELECT 1 AS n",
+        5,
+    )
+    .await?;
+    assert!(created.error.is_none(), "{created:?}");
+
+    for (queued, prefixed) in [(false, false), (true, false), (false, true), (true, true)] {
+        let holder_ctx = fixture.new_query_ctx().await?;
+        let _holder = if queued {
+            Some(
+                queue
+                    .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
+                    .await?,
+            )
+        } else {
+            None
+        };
+        let id = if prefixed {
+            format!("p-{}", uuid::Uuid::new_v4())
+        } else {
+            uuid::Uuid::new_v4().simple().to_string()
+        };
+        let mut headers = HeaderMap::new();
+        headers.insert("x-databend-query-id", id.parse()?);
+        let (_, started) = post_json_to_endpoint(
+            &ep,
+            &serde_json::json!({
+                // numbers() alone is a light system-table query and bypasses the queue.
+                "sql": "SELECT sleep(0.5), number FROM numbers(15000000000) CROSS JOIN kill_http_queue",
+                "session": {"settings": {"http_handler_result_timeout_secs": "5"}},
+                "pagination": {"wait_time_secs": 0, "max_rows_in_buffer": 2, "max_rows_per_page": 2},
+            }),
+            headers,
+        ).await?;
+        let state_uri = started.stats_uri.unwrap();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if queued {
+                    if queue.length() == 1 {
+                        break;
+                    }
+                } else {
+                    let state: serde_json::Value = serde_json::from_str(
+                        &get_uri(&ep, &state_uri)
+                            .await
+                            .into_body()
+                            .into_string()
+                            .await?,
+                    )?;
+                    assert_ne!(state["state"], "Failed", "{state}");
+                    if state["state"] == "Running" {
+                        break;
+                    }
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+            anyhow::Ok(())
+        })
+        .await??;
+        let (_, killed) = post_sql_to_endpoint(&ep, &format!("KILL QUERY '{}'", id), 5).await?;
+        assert!(killed.error.is_none(), "{killed:?}");
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let state: serde_json::Value = serde_json::from_str(
+                    &get_uri(&ep, &state_uri)
+                        .await
+                        .into_body()
+                        .into_string()
+                        .await?,
+                )?;
+                if state["state"] == "Failed" {
+                    assert_eq!(state["error"]["code"], ErrorCode::ABORTED_QUERY);
+                    break;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+            anyhow::Ok(())
+        })
+        .await??;
+        assert_eq!(queue.length(), 0);
+
+        // SQL KILL leaves the HTTP result lifecycle intact: page/final return a
+        // normal HTTP 200 envelope with Failed/AbortedQuery, not HTTP /kill's 400.
+        let (status, page) = get_uri_checked(&ep, started.next_uri.as_ref().unwrap()).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(page.state, ExecuteStateKind::Failed);
+        let error = page.error.unwrap();
+        assert_eq!(error.code, ErrorCode::ABORTED_QUERY);
+        assert!(
+            error.message.contains("Query canceled by KILL"),
+            "{error:?}"
+        );
+        let (status, finalized) = get_uri_checked(&ep, started.final_uri.as_ref().unwrap()).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(finalized.state, ExecuteStateKind::Failed);
+        assert_eq!(finalized.error.unwrap().code, ErrorCode::ABORTED_QUERY);
+
+        // Finalized records are retained briefly, then HttpQueryManager removes them.
+        tokio::time::timeout(Duration::from_secs(15), async {
+            loop {
+                if get_uri(&ep, &state_uri).await.status() == StatusCode::NOT_FOUND {
+                    break;
+                }
+                sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await?;
+    }
     Ok(())
 }
 

@@ -66,6 +66,7 @@ use tokio::sync::Mutex as TokioMutex;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::error::Elapsed;
+use uuid::Uuid;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
@@ -97,6 +98,10 @@ pub trait QueueData: Send + Sync + 'static {
     fn exit_wait_pending(&self, _wait_time: Duration) {}
 
     fn get_abort_notify(&self) -> Arc<WatchNotify>;
+
+    fn get_abort_error(&self) -> Option<ErrorCode> {
+        None
+    }
 
     fn get_retry_timeout(&self) -> Option<Duration>;
 }
@@ -187,18 +192,23 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
+        let data = Arc::new(data);
         let abort_notify = data.get_abort_notify();
 
         let watch_abort_notify = Box::pin(async move { abort_notify.notified().await });
 
-        let acquire = Box::pin(self.acquire_inner(data));
+        let acquire = Box::pin(self.acquire_inner(data.clone()));
         match futures::future::select(acquire, watch_abort_notify).await {
             Either::Left((left, _)) => left,
-            Either::Right((_, _)) => Err(ErrorCode::AbortedQuery("recv query abort notify.")),
+            // KILL can arrive before a blocked acquire registers its queue entry.
+            // Read the stored cause after notification, not before waiting.
+            Either::Right((_, _)) => Err(data
+                .get_abort_error()
+                .unwrap_or_else(|| ErrorCode::AbortedQuery("recv query abort notify."))),
         }
     }
 
-    async fn acquire_inner(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
+    async fn acquire_inner(self: &Arc<Self>, data: Arc<Data>) -> Result<AcquireQueueGuard> {
         if !data.need_acquire_to_queue() {
             info!("Non-heavy queries skip the query queue and execute directly.");
             return Ok(AcquireQueueGuard::create(vec![]));
@@ -214,7 +224,6 @@ impl<Data: QueueData> QueueManager<Data> {
         let mut timeout = data.timeout();
         let mut guards = vec![];
 
-        let data = Arc::new(data);
         if let Some(workload_group) = ThreadTracker::workload_group() {
             if let Some(QuotaValue::Number(permits)) =
                 workload_group.meta.get_quota(MAX_CONCURRENCY_QUOTA_KEY)
@@ -705,10 +714,10 @@ impl QueryEntry {
 }
 
 impl QueueData for QueryEntry {
-    type Key = String;
+    type Key = Uuid;
 
     fn get_key(&self) -> Self::Key {
-        self.query_id.clone()
+        self.ctx.get_queue_entry_key()
     }
 
     fn get_lock_key(&self) -> String {
@@ -727,13 +736,10 @@ impl QueueData for QueryEntry {
         lock_key
     }
 
-    fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
-        match key {
-            None => ErrorCode::AbortedQuery("Query was killed while in queue"),
-            Some(key) => {
-                ErrorCode::AbortedQuery(format!("Query {} was killed while in queue", key))
-            }
-        }
+    fn remove_error_message(_key: Option<Self::Key>) -> ErrorCode {
+        // Explicit removal of a queued QueryEntry is the SQL KILL path. Keep its
+        // cancellation message consistent with running queries, not shutdown errors.
+        ErrorCode::AbortedQuery("Query canceled by KILL")
     }
 
     fn lock_ttl(&self) -> Duration {
@@ -765,6 +771,12 @@ impl QueueData for QueryEntry {
 
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.abort_watch_notify.clone()
+    }
+
+    fn get_abort_error(&self) -> Option<ErrorCode> {
+        self.ctx
+            .get_error()
+            .map(|cause| cause.with_context("query queue aborted"))
     }
 
     fn get_retry_timeout(&self) -> Option<Duration> {

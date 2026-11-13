@@ -157,7 +157,11 @@ impl SessionManager {
         user: Option<UserInfo>,
         mysql_conn_id: Option<u32>,
     ) -> Result<Session> {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = format!(
+            "{}{}",
+            super::INTERNAL_SESSION_ID_PREFIX,
+            uuid::Uuid::new_v4()
+        );
         let mysql_conn_id = match typ {
             SessionType::MySQL => Some(
                 mysql_conn_id
@@ -205,6 +209,24 @@ impl SessionManager {
     pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
         let sessions = self.active_sessions.read();
         sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
+    }
+
+    /// Find coordinator/client queries within the requester's tenant. Client query
+    /// IDs may be reused even within a tenant; callers must authorize candidates.
+    /// FlightRPC fragments are not in active_sessions.
+    pub fn get_sessions_by_query_id<'a>(
+        &'a self,
+        tenant: &'a str,
+        query_id: &'a str,
+    ) -> impl Iterator<Item = Arc<Session>> + 'a {
+        self.active_sessions_snapshot()
+            .into_iter()
+            .filter_map(|session| session.upgrade())
+            .filter(move |session| {
+                !tenant.is_empty()
+                    && session.get_current_tenant().tenant_name() == tenant
+                    && session.get_current_query_id().as_deref() == Some(query_id)
+            })
     }
 
     pub fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {
