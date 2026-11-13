@@ -1189,7 +1189,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("enable_encoded_columns", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Experimental. Fuse scans keep columns in compact encoded forms (frame of reference for integers, Date, Timestamp and Decimal; dictionary, reusing the Parquet dictionary for String) in memory and in the column array cache. Intended for use with the deserialized column cache (config `cache.table_data_deserialized_data_bytes` or `cache.table_data_deserialized_memory_ratio`): without it, every scan encodes the columns again and may be slower.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
