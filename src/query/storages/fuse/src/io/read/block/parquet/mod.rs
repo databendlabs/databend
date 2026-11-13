@@ -56,13 +56,27 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_chunks(
-            part.nums_rows,
+        self.deserialize_part_with_num_rows(part, part.nums_rows, column_chunks, selection)
+    }
+
+    /// Like [`deserialize_part`], but with an explicit row count. Used by sparse-granule-index
+    /// narrowed reads, where the reconstructed partial column chunks contain fewer rows than the
+    /// block's `nums_rows`.
+    pub fn deserialize_part_with_num_rows(
+        &self,
+        part: &FuseBlockPartInfo,
+        num_rows: usize,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_inner(
+            num_rows,
             &part.columns_meta,
             column_chunks,
             &part.compression,
             &part.location,
             selection,
+            num_rows == part.nums_rows,
         )
     }
 
@@ -74,6 +88,31 @@ impl BlockReader {
         compression: &Compression,
         block_path: &str,
         selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_chunks_inner(
+            num_rows,
+            column_metas,
+            column_chunks,
+            compression,
+            block_path,
+            selection,
+            true,
+        )
+    }
+
+    /// `complete_column_chunks`: whether the raw chunks are whole column chunks. A narrowed
+    /// granule read carries its own byte range in `DataItem::GranuleData` and is cached under
+    /// it; a partial chunk without one is not cached.
+    #[allow(clippy::too_many_arguments)]
+    fn deserialize_parquet_chunks_inner(
+        &self,
+        num_rows: usize,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        compression: &Compression,
+        block_path: &str,
+        selection: Option<&RowSelection>,
+        complete_column_chunks: bool,
     ) -> databend_common_exception::Result<DataBlock> {
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
@@ -102,14 +141,9 @@ impl BlockReader {
         let array_cache = Some(&caches.column_arrays)
             .filter(|cache| self.policy.memory.writes() && !has_selection && cache.is_enabled());
 
-        for ((i, field), column_node) in self
-            .projected_schema
-            .fields
-            .iter()
-            .enumerate()
-            .zip(self.project_column_nodes.iter())
-        {
+        for (i, field) in self.projected_schema.fields.iter().enumerate() {
             let data_type: DataType = field.data_type().into();
+            let is_nested = field.is_nested();
             let encoding = self.column_encodings.get(&field.column_id).copied();
 
             // NOTE, there is something tricky here:
@@ -127,19 +161,29 @@ impl BlockReader {
             //  Yes, it is too obscure, we need to polish it later.
 
             let value = match column_chunks.get(&field.column_id) {
-                Some(DataItem::RawData(_)) => {
+                Some(item @ (DataItem::RawData(_) | DataItem::GranuleData(..))) => {
                     // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
-                    // Nested columns are neither cached nor encoded.
-                    let cache = array_cache.filter(|_| !column_node.is_nested);
+                    // Nested columns are neither cached nor encoded. A raw chunk is cached
+                    // under its column meta only when it is the whole chunk.
+                    let byte_range = match item {
+                        DataItem::GranuleData(_, range) => Some(range.clone()),
+                        _ if complete_column_chunks => {
+                            column_metas.get(&field.column_id).map(|meta| {
+                                let (offset, len) = meta.offset_length();
+                                offset..offset + len
+                            })
+                        }
+                        _ => None,
+                    };
+                    let cache = array_cache.filter(|_| !is_nested && byte_range.is_some());
                     let cache_key = || {
-                        let meta = column_metas.get(&field.column_id).unwrap();
-                        let (offset, len) = meta.offset_length();
+                        let range = byte_range.clone().unwrap();
                         TableDataCacheKey::new(
                             block_path,
                             field.column_id,
-                            offset,
-                            len,
+                            range.start,
+                            range.end - range.start,
                             &ColumnEncoding::cache_type_key(encoding, &data_type),
                         )
                     };
@@ -172,7 +216,7 @@ impl BlockReader {
                     }
                 }
                 Some(DataItem::ColumnArray(cached)) => {
-                    if column_node.is_nested {
+                    if is_nested {
                         // a defensive check, should never happen
                         return Err(ErrorCode::StorageOther(
                             "unexpected nested field: nested leaf field hits cached",

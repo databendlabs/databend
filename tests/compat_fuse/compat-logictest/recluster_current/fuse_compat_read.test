@@ -1,0 +1,81 @@
+statement ok
+USE compat_recluster_current
+
+query IIT
+SELECT id,value,source FROM horizontal_t ORDER BY id
+----
+1 10 initial
+2 120 update
+3 333 merge-update
+5 50 initial
+6 60 initial
+7 70 insert
+8 180 update
+9 90 insert
+10 100 insert
+11 110 merge-insert
+
+query IIT
+SELECT id,value,source FROM vertical_t ORDER BY id
+----
+1 10 initial
+2 120 update
+3 333 merge-update
+5 50 initial
+6 60 initial
+7 70 insert
+8 180 update
+9 90 insert
+10 100 insert
+11 110 merge-insert
+
+statement ok
+CREATE TABLE horizontal_audit(id int, value int, source string, action string, is_update bool)
+
+statement ok
+CREATE TABLE vertical_audit(id int, value int, source string, action string, is_update bool)
+
+statement ok
+INSERT INTO horizontal_audit SELECT id,value,source,change$action,change$is_update FROM horizontal_s
+
+statement ok
+INSERT INTO vertical_audit SELECT id,value,source,change$action,change$is_update FROM vertical_s
+
+query TBI rowsort
+SELECT action,is_update,count() FROM horizontal_audit GROUP BY action,is_update
+----
+DELETE 0 1
+DELETE 1 2
+INSERT 0 5
+INSERT 1 2
+
+query TBI rowsort
+SELECT action,is_update,count() FROM vertical_audit GROUP BY action,is_update
+----
+DELETE 0 1
+DELETE 1 2
+INSERT 0 5
+INSERT 1 2
+
+query I
+SELECT count() FROM horizontal_s
+----
+0
+
+query I
+SELECT count() FROM vertical_s
+----
+0
+
+query II
+SELECT count(),sum(value) FROM horizontal_t
+----
+10 1123
+
+query II
+SELECT count(),sum(value) FROM vertical_t
+----
+10 1123
+
+statement ok
+DROP DATABASE compat_recluster_current

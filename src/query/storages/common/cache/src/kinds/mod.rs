@@ -18,6 +18,7 @@
 
 pub mod bloom;
 pub mod column;
+pub mod granule;
 pub mod iceberg;
 mod index_file;
 pub mod inverted;

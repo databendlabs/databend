@@ -26,30 +26,128 @@ use databend_storages_common_io::RangeReader;
 use opendal::Operator;
 use tantivy::Directory;
 use tantivy::Index;
+use tantivy::SegmentReader;
 use tantivy::directory::FileHandle;
 use tantivy::directory::OwnedBytes;
 use tantivy::directory::error::OpenReadError;
+use tantivy::schema::FieldType;
 use tantivy::schema::IndexRecordOption;
+use tantivy::schema::Schema;
 use tantivy::schema::Type;
 use tantivy_common::json_path_writer::JSON_END_OF_PATH;
 
-use super::sequential_file::SEQUENTIAL_WINDOW_SIZE;
-use super::sequential_file::SequentialFileHandle;
-use super::sequential_file::SequentialReadStats;
-use crate::inverted_index::bundle::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
+use super::invalid;
+use super::streaming_file::STREAMING_CHUNK_SIZE;
+use super::streaming_file::StreamingFileHandle;
+use super::streaming_file::StreamingReadStats;
 use crate::inverted_index::bundle::InvertedIndexBundleFooter;
 use crate::inverted_index::bundle::MANAGED_JSON_PATH;
 use crate::inverted_index::bundle::META_JSON_PATH;
 use crate::inverted_index::directory::FooterDirectory;
 use crate::inverted_index::read_only_directory;
 
-/// Components a merge walks front to back; everything else is read whole.
-const SEQUENTIAL_EXTENSIONS: [&str; 3] = ["term", "idx", "pos"];
+/// Components the window mergers stream front to back; everything else, including the term
+/// dictionary every window and the partitioner consult, is read whole.
+const STREAMED_EXTENSIONS: [&str; 2] = ["idx", "pos"];
+
+/// Initial tail read when opening a source: large enough that the footer, the small components
+/// and the term dictionary of a typical block bundle arrive in one request.
+pub const SOURCE_OPEN_TAIL_READ_SIZE: u64 = 4 * 1024 * 1024;
+
+/// One source of a merge, as the block metadata describes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergeSource {
+    pub location: String,
+    pub bundle_size: u64,
+    pub num_rows: u32,
+}
+
+/// One opened source: its directory, index and single segment.
+#[derive(Clone)]
+pub struct MergeSourceReader {
+    pub directory: MergeSourceDirectory,
+    pub index: Index,
+    pub reader: SegmentReader,
+}
+
+/// Opens `source` and checks it is what the merge expects: one segment without deletes holding
+/// `num_rows` docs, with the schema of the current index definition.
+pub fn open_merge_source(
+    operator: Operator,
+    source: &MergeSource,
+    expected_schema: Option<&Schema>,
+) -> tantivy::Result<MergeSourceReader> {
+    let directory =
+        MergeSourceDirectory::open(operator, source.location.clone(), source.bundle_size)?;
+    let index = directory.open_index()?;
+    let searcher = index.reader()?.searcher();
+    if searcher.segment_readers().len() != 1 {
+        return Err(invalid(format!(
+            "{} has {} segments, expected one",
+            source.location,
+            searcher.segment_readers().len()
+        ))
+        .into());
+    }
+    let reader = searcher.segment_reader(0).clone();
+    if reader.has_deletes() {
+        return Err(invalid("source index has deleted docs").into());
+    }
+    if reader.max_doc() != source.num_rows {
+        return Err(invalid(format!(
+            "{} has {} rows, expected {}",
+            source.location,
+            reader.max_doc(),
+            source.num_rows
+        ))
+        .into());
+    }
+    let schema = index.schema();
+    check_schema(&schema)?;
+    if expected_schema.is_some_and(|expected| *expected != schema) {
+        return Err(invalid(format!(
+            "{} has a schema that differs from the current index definition",
+            source.location
+        ))
+        .into());
+    }
+    Ok(MergeSourceReader {
+        directory,
+        index,
+        reader,
+    })
+}
+
+/// The merge reproduces what Databend's index writer produces: indexed text and JSON fields,
+/// fast fields only on JSON, nothing stored.
+pub fn check_schema(schema: &Schema) -> io::Result<()> {
+    for (_, entry) in schema.fields() {
+        if entry.is_stored() {
+            return Err(invalid(format!("field {} is stored", entry.name())));
+        }
+        if entry.is_fast() && !matches!(entry.field_type(), FieldType::JsonObject(_)) {
+            return Err(invalid(format!(
+                "field {} is a non-JSON fast field",
+                entry.name()
+            )));
+        }
+        if !matches!(
+            entry.field_type(),
+            FieldType::Str(_) | FieldType::JsonObject(_)
+        ) {
+            return Err(invalid(format!(
+                "field {} is neither text nor JSON",
+                entry.name()
+            )));
+        }
+    }
+    Ok(())
+}
 
 /// One source bundle of a merge: its footer plus read handles over the bundle object and its
-/// sibling objects. Term dictionaries, postings and positions are served through
-/// [`SequentialFileHandle`]s; small or randomly accessed components (`.fieldnorm`, `.fast`)
-/// are read whole on first use.
+/// sibling objects. Postings and positions are served through shared [`StreamingFileHandle`]s;
+/// the term dictionary and the small components (`.fieldnorm`, `.fast`, `.store`) are read
+/// whole when the source is opened.
 #[derive(Clone)]
 pub struct MergeSourceDirectory {
     inner: Arc<MergeSourceInner>,
@@ -59,9 +157,9 @@ struct MergeSourceInner {
     operator: Operator,
     location: String,
     footer: InvertedIndexBundleFooter,
-    window_size: u64,
+    chunk_size: u64,
     handles: Mutex<HashMap<PathBuf, Arc<dyn FileHandle>>>,
-    sequential_stats: Mutex<HashMap<PathBuf, Arc<SequentialReadStats>>>,
+    streams: Mutex<HashMap<PathBuf, Arc<StreamingFileHandle>>>,
 }
 
 impl fmt::Debug for MergeSourceDirectory {
@@ -77,21 +175,21 @@ impl MergeSourceDirectory {
     /// Reads the footer of the bundle at `location` (bounded tail reads, as the query path does)
     /// and returns a read-only directory over it.
     pub fn open(operator: Operator, location: String, bundle_size: u64) -> tantivy::Result<Self> {
-        Self::open_with_window_size(operator, location, bundle_size, SEQUENTIAL_WINDOW_SIZE)
+        Self::open_with_chunk_size(operator, location, bundle_size, STREAMING_CHUNK_SIZE)
     }
 
-    pub fn open_with_window_size(
+    pub fn open_with_chunk_size(
         operator: Operator,
         location: String,
         bundle_size: u64,
-        window_size: u64,
+        chunk_size: u64,
     ) -> tantivy::Result<Self> {
         Self::open_with(
             operator,
             location,
             bundle_size,
-            window_size,
-            INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE as u64,
+            chunk_size,
+            SOURCE_OPEN_TAIL_READ_SIZE,
         )
     }
 
@@ -99,7 +197,7 @@ impl MergeSourceDirectory {
         operator: Operator,
         location: String,
         bundle_size: u64,
-        window_size: u64,
+        chunk_size: u64,
         initial_tail: u64,
     ) -> tantivy::Result<Self> {
         let (footer, tail) = read_footer(&operator, &location, bundle_size, initial_tail)
@@ -111,9 +209,9 @@ impl MergeSourceDirectory {
                 operator,
                 location,
                 footer,
-                window_size,
+                chunk_size,
                 handles: Mutex::new(handles),
-                sequential_stats: Mutex::new(HashMap::new()),
+                streams: Mutex::new(HashMap::new()),
             }),
         })
     }
@@ -131,10 +229,10 @@ impl MergeSourceDirectory {
         &self.inner.footer
     }
 
-    /// Read counters of a sequentially served component, once it has been opened.
-    pub fn sequential_stats(&self, path: &Path) -> Option<Arc<SequentialReadStats>> {
-        let stats = self.inner.sequential_stats.lock().unwrap();
-        stats.get(path).cloned()
+    /// Read counters of a streamed component, once it has been opened.
+    pub fn streaming_stats(&self, path: &Path) -> Option<Arc<StreamingReadStats>> {
+        let streams = self.inner.streams.lock().unwrap();
+        streams.get(path).map(|stream| stream.stats())
     }
 
     /// Object and byte range holding a segment file: inline in the bundle or a sibling object.
@@ -148,9 +246,9 @@ impl MergeSourceDirectory {
         Some((object, 0..external.len))
     }
 
-    fn is_sequential(path: &Path) -> bool {
+    fn is_streamed(path: &Path) -> bool {
         match path.extension().and_then(|extension| extension.to_str()) {
-            Some(extension) => SEQUENTIAL_EXTENSIONS.contains(&extension),
+            Some(extension) => STREAMED_EXTENSIONS.contains(&extension),
             None => false,
         }
     }
@@ -165,25 +263,25 @@ impl MergeSourceDirectory {
         None
     }
 
-    /// Inline whole-read files are all in `handles` since `open`; only sequential files and
+    /// Inline whole-read files are all in `handles` since `open`; only streamed files and
     /// (unexpected) external whole-read files are opened here.
     fn open_handle(&self, path: &Path) -> Result<Arc<dyn FileHandle>, OpenReadError> {
         let (object, range) = self
             .locate(path)
             .ok_or_else(|| OpenReadError::FileDoesNotExist(path.to_path_buf()))?;
         let len = range.end - range.start;
-        if Self::is_sequential(path) {
-            let handle = SequentialFileHandle::new(
+        if Self::is_streamed(path) {
+            let handle = Arc::new(StreamingFileHandle::new(
                 self.inner.operator.clone(),
                 object,
                 path.to_path_buf(),
                 range.start,
                 len,
-                self.inner.window_size,
-            );
-            let mut stats = self.inner.sequential_stats.lock().unwrap();
-            stats.insert(path.to_path_buf(), handle.stats());
-            return Ok(Arc::new(handle));
+                self.inner.chunk_size,
+            ));
+            let mut streams = self.inner.streams.lock().unwrap();
+            streams.insert(path.to_path_buf(), handle.clone());
+            return Ok(handle);
         }
         let bytes = read_range(&self.inner.operator, &object, range)
             .map_err(|error| OpenReadError::wrap_io_error(error, path.to_path_buf()))?;
@@ -220,7 +318,7 @@ fn read_whole_files(
     let mut missing: Vec<(&PathBuf, Range<u64>)> = Vec::new();
     let mut union: Option<Range<u64>> = None;
     for (path, range) in &footer.file_ranges.files {
-        if MergeSourceDirectory::is_sequential(path) {
+        if MergeSourceDirectory::is_streamed(path) {
             continue;
         }
         if let Some(bytes) = tail.slice(range) {
@@ -454,14 +552,14 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn test_source_reads_every_component_forward() {
-        const WINDOW: u64 = 64 * 1024;
+    fn test_source_streams_postings_and_positions_forward() {
+        const CHUNK: u64 = 64 * 1024;
         let (operator, bundle_size) = write_bundle(4096);
-        let source = MergeSourceDirectory::open_with_window_size(
+        let source = MergeSourceDirectory::open_with_chunk_size(
             operator,
             "t/h1.index".into(),
             bundle_size,
-            WINDOW,
+            CHUNK,
         )
         .unwrap();
         let index = source.open_index().unwrap();
@@ -473,30 +571,21 @@ pub(super) mod tests {
         assert!(walked.len() > 100);
 
         let segment = index.searchable_segment_metas().unwrap().remove(0);
-        for component in [
-            SegmentComponent::Terms,
-            SegmentComponent::Postings,
-            SegmentComponent::Positions,
-        ] {
+        for component in [SegmentComponent::Postings, SegmentComponent::Positions] {
             let path = segment.relative_path(component);
             let len = source.footer().file_len(&path).unwrap();
-            let stats = source.sequential_stats(&path).unwrap();
-            assert_eq!(stats.backward_reads(), 0, "{path:?}");
+            let stats = source.streaming_stats(&path).unwrap();
+            assert_eq!(stats.behind_reads(), 0, "{path:?}");
+            assert_eq!(stats.fetched_bytes(), len, "{path:?}");
+            assert_eq!(stats.fetches(), len.div_ceil(CHUNK), "{path:?}");
+        }
+        for component in [SegmentComponent::Terms, SegmentComponent::FastFields] {
             assert!(
-                stats.fetched_bytes() <= len + stats.fetches() * WINDOW / 4,
-                "{path:?}"
-            );
-            assert!(
-                stats.fetches() <= len / WINDOW + 2,
-                "{path:?} fetches={}",
-                stats.fetches()
+                source
+                    .streaming_stats(&segment.relative_path(component))
+                    .is_none()
             );
         }
-        assert!(
-            source
-                .sequential_stats(&segment.relative_path(SegmentComponent::FastFields))
-                .is_none()
-        );
     }
 
     #[test]
@@ -581,7 +670,7 @@ mod open_request_tests {
     #[test]
     fn test_small_bundle_opens_with_the_tail_read_only() {
         let (operator, bundle_size) = write_bundle_with_rows(usize::MAX, 200);
-        assert!(bundle_size < INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE as u64);
+        assert!(bundle_size < SOURCE_OPEN_TAIL_READ_SIZE);
         let (source, requests) = requests(|| {
             MergeSourceDirectory::open(operator, "t/h1.index".into(), bundle_size).unwrap()
         });
@@ -592,8 +681,8 @@ mod open_request_tests {
         let handles = source.inner.handles.lock().unwrap();
         assert_eq!(
             handles.len(),
-            3,
-            "store, fast and fieldnorm: {:?}",
+            4,
+            "store, fast, fieldnorm and term: {:?}",
             handles.keys()
         );
     }
@@ -609,7 +698,7 @@ mod open_request_tests {
         });
         let footer = source.footer();
         for (path, range) in &footer.file_ranges.files {
-            if !MergeSourceDirectory::is_sequential(path) {
+            if !MergeSourceDirectory::is_streamed(path) {
                 assert!(range.end <= footer.footer_start, "{path:?}");
             }
         }
@@ -624,6 +713,6 @@ mod open_request_tests {
             footer_reads + 1,
             "footer reads plus one for the rest"
         );
-        assert_eq!(source.inner.handles.lock().unwrap().len(), 3);
+        assert_eq!(source.inner.handles.lock().unwrap().len(), 4);
     }
 }

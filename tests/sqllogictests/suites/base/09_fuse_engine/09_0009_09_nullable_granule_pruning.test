@@ -1,0 +1,65 @@
+statement ok
+create or replace database nullable_granule_pruning
+
+statement ok
+use nullable_granule_pruning
+
+statement ok
+create table t(id int,k int null) cluster by(k) index_granularity=2
+
+statement ok
+insert into t values (1,1),(2,2),(3,null)
+
+# A NULL upper boundary must not discard the preceding non-NULL rows.
+query II rowsort
+select id,k from t where k<=2
+----
+1 1
+2 2
+
+query I
+select id from t where k=2
+----
+2
+
+query I rowsort
+select id from t where k is not null
+----
+1
+2
+
+query I
+select id from t where k is null
+----
+3
+
+statement ok
+alter table t set options(index_granularity=7)
+
+statement ok
+insert into t values (4,4),(5,5),(6,null)
+
+query I rowsort
+select id from t where k between 1 and 5
+----
+1
+2
+4
+5
+
+statement ok
+alter table t cluster by(-k)
+
+statement ok
+alter table t recluster final
+
+query I rowsort
+select id from t where k<=5
+----
+1
+2
+4
+5
+
+statement ok
+drop database nullable_granule_pruning

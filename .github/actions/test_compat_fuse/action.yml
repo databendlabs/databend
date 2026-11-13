@@ -1,8 +1,18 @@
 name: "Test fuse-table format compatibility across query versions"
 description: "Run ordered compatibility cases across old and current queries"
+inputs:
+  runner_provider:
+    description: "Self-hosted runner provider, aws or gcp"
+    required: true
+    default: "aws"
 runs:
   using: "composite"
   steps:
+    - uses: ./.github/actions/setup_license
+      with:
+        runner_provider: ${{ inputs.runner_provider }}
+        type: trial
+
     - uses: ./.github/actions/setup_test
       with:
         path: ./bins/current/bin

@@ -14,6 +14,7 @@
 
 //! Low-level, logical-column-oriented FUSE block reader.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io;
 use std::io::Read;
@@ -38,6 +39,9 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
@@ -50,11 +54,9 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_io::ChunkedRangeReader;
-use databend_storages_common_io::MergeRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
-use databend_storages_common_io::RangeReader;
-use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
@@ -80,6 +82,8 @@ use parquet::file::reader::Length;
 use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::schema::types::SchemaDescriptor;
 
+use crate::io::create_file_range_reader;
+
 const DEFAULT_MAX_PREFETCH: usize = 2;
 const ROW_WINDOW_ALIGNMENT: u128 = 1024 * 1024;
 
@@ -89,10 +93,13 @@ pub struct FuseLowLevelBlockReadOptions {
     block_meta: Arc<BlockMeta>,
     default_values: Option<Vec<Scalar>>,
     stream_table_version: Option<u64>,
+    cluster_key_exprs: Vec<Expr<usize>>,
+    cluster_key_fields: BTreeSet<usize>,
+    cluster_key_func_ctx: Option<FunctionContext>,
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    merge_settings: Option<ReadSettings>,
+    merge_settings: Option<databend_storages_common_io::ReadSettings>,
     window_rows: Option<usize>,
 }
 
@@ -104,6 +111,9 @@ impl FuseLowLevelBlockReadOptions {
             block_meta,
             default_values: None,
             stream_table_version: None,
+            cluster_key_exprs: Vec::new(),
+            cluster_key_fields: BTreeSet::new(),
+            cluster_key_func_ctx: None,
             #[cfg(test)]
             window_size: None,
             max_prefetch: DEFAULT_MAX_PREFETCH,
@@ -119,6 +129,16 @@ impl FuseLowLevelBlockReadOptions {
 
     pub fn with_stream_table_version(mut self, table_version: u64) -> Self {
         self.stream_table_version = Some(table_version);
+        self
+    }
+
+    pub fn with_cluster_keys(mut self, exprs: Vec<Expr<usize>>, func_ctx: FunctionContext) -> Self {
+        self.cluster_key_fields = exprs
+            .iter()
+            .flat_map(|expr| expr.column_refs().into_keys())
+            .collect();
+        self.cluster_key_exprs = exprs;
+        self.cluster_key_func_ctx = Some(func_ctx);
         self
     }
 
@@ -140,7 +160,7 @@ impl FuseLowLevelBlockReadOptions {
         self
     }
 
-    pub fn with_merge_io(mut self, settings: ReadSettings) -> Self {
+    pub fn with_merge_io(mut self, settings: databend_storages_common_io::ReadSettings) -> Self {
         self.merge_settings = Some(settings);
         self
     }
@@ -184,7 +204,23 @@ impl FuseLowLevelBlockReadOptions {
                 self.schema.num_fields()
             )));
         }
-
+        if self.cluster_key_func_ctx.is_some() {
+            if self.cluster_key_exprs.is_empty() {
+                return Err(ErrorCode::BadArguments(
+                    "FuseLowLevelBlockReader requires at least one cluster-key expression",
+                ));
+            }
+            if let Some(field) = self
+                .cluster_key_fields
+                .iter()
+                .find(|&&field| field >= self.schema.num_fields())
+            {
+                return Err(ErrorCode::BadArguments(format!(
+                    "cluster-key field {field} is outside the {}-field schema",
+                    self.schema.num_fields()
+                )));
+            }
+        }
         Ok(())
     }
 }
@@ -196,6 +232,9 @@ pub struct FuseLowLevelBlockReader {
     block_meta: Arc<BlockMeta>,
     default_values: Option<Vec<Scalar>>,
     stream_table_version: Option<u64>,
+    cluster_key_exprs: Vec<Expr<usize>>,
+    cluster_key_fields: BTreeSet<usize>,
+    cluster_key_func_ctx: Option<FunctionContext>,
     arrow_schema: Arc<Schema>,
     parquet_schema: Arc<SchemaDescriptor>,
     arrow_fields: Vec<Arc<Field>>,
@@ -206,7 +245,7 @@ pub struct FuseLowLevelBlockReader {
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    merge_settings: Option<ReadSettings>,
+    merge_settings: Option<databend_storages_common_io::ReadSettings>,
     window_rows: Option<usize>,
 }
 
@@ -288,6 +327,9 @@ impl FuseLowLevelBlockReader {
             block_meta: options.block_meta.clone(),
             default_values: options.default_values,
             stream_table_version: options.stream_table_version,
+            cluster_key_exprs: options.cluster_key_exprs,
+            cluster_key_fields: options.cluster_key_fields,
+            cluster_key_func_ctx: options.cluster_key_func_ctx,
             arrow_schema,
             parquet_schema,
             arrow_fields,
@@ -345,6 +387,28 @@ impl FuseLowLevelBlockReader {
             }
         }
         Ok(bytes)
+    }
+
+    pub fn read_cluster_keys(mut self) -> Result<FuseLowLevelClusterKeyReader> {
+        let Some(func_ctx) = self.cluster_key_func_ctx.take() else {
+            return Err(ErrorCode::BadArguments(
+                "FuseLowLevelBlockReader has no cluster-key configuration",
+            ));
+        };
+        let fields = std::mem::take(&mut self.cluster_key_fields);
+        let exprs = std::mem::take(&mut self.cluster_key_exprs);
+        let mut key_readers = Vec::with_capacity(fields.len());
+        for &field_index in &fields {
+            key_readers.push((field_index, self.create_column_batch_reader(field_index)?));
+        }
+        Ok(FuseLowLevelClusterKeyReader {
+            block: self,
+            exprs,
+            fields,
+            func_ctx,
+            key_readers,
+            payload_readers: HashMap::new(),
+        })
     }
 
     pub fn read_data(self) -> FuseLowLevelDataReader {
@@ -1063,6 +1127,86 @@ impl FuseLowLevelFullRowReader {
     }
 }
 
+/// Reads configured cluster-key dependencies and evaluates key expressions by row batch.
+pub struct FuseLowLevelClusterKeyReader {
+    block: FuseLowLevelBlockReader,
+    exprs: Vec<Expr<usize>>,
+    fields: BTreeSet<usize>,
+    func_ctx: FunctionContext,
+    key_readers: Vec<(usize, FuseLowLevelColumnBatchReader)>,
+    payload_readers: HashMap<usize, FuseLowLevelColumnBatchReader>,
+}
+
+impl FuseLowLevelClusterKeyReader {
+    pub fn read_rows(&mut self, rows: usize) -> Result<(Vec<Column>, HashMap<usize, Column>)> {
+        let mut source_columns = HashMap::with_capacity(self.key_readers.len());
+        for (field_index, reader) in &mut self.key_readers {
+            source_columns.insert(*field_index, reader.read_rows(rows)?);
+        }
+        let keys = evaluate_cluster_keys(&source_columns, &self.exprs, &self.func_ctx, rows)?;
+
+        Ok((keys, source_columns))
+    }
+
+    pub fn read_column_rows(&mut self, field_index: usize, rows: usize) -> Result<Column> {
+        if self.fields.contains(&field_index) {
+            return Err(ErrorCode::BadArguments(format!(
+                "cluster-key field {field_index} must be reused from the key batch"
+            )));
+        }
+        if !self.payload_readers.contains_key(&field_index) {
+            let reader = self.block.create_column_batch_reader(field_index)?;
+            self.payload_readers.insert(field_index, reader);
+        }
+        self.payload_readers
+            .get_mut(&field_index)
+            .expect("payload reader inserted")
+            .read_rows(rows)
+    }
+
+    pub fn finish(self) -> Result<()> {
+        for (_, reader) in self.key_readers {
+            reader.finish()?;
+        }
+        for (_, reader) in self.payload_readers {
+            reader.finish()?;
+        }
+        Ok(())
+    }
+}
+
+fn evaluate_cluster_keys(
+    source_columns: &HashMap<usize, Column>,
+    exprs: &[Expr<usize>],
+    func_ctx: &FunctionContext,
+    rows: usize,
+) -> Result<Vec<Column>> {
+    let mut fields = source_columns.keys().copied().collect::<Vec<_>>();
+    fields.sort_unstable();
+
+    let mut positions = HashMap::with_capacity(fields.len());
+    let mut columns = Vec::with_capacity(fields.len());
+    for (position, field) in fields.into_iter().enumerate() {
+        positions.insert(field, position);
+        columns.push(source_columns[&field].clone());
+    }
+
+    let block = DataBlock::new_from_columns(columns);
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+    let mut keys = Vec::with_capacity(exprs.len());
+    for expr in exprs {
+        let projected = expr.project_column_ref(|field| match positions.get(field) {
+            Some(position) => Ok(*position),
+            None => Err(ErrorCode::Internal(format!(
+                "cluster-key dependency field {field} is missing"
+            ))),
+        })?;
+        let value = evaluator.run(&projected)?;
+        keys.push(value.into_full_column(projected.data_type(), rows));
+    }
+    Ok(keys)
+}
+
 fn is_origin_column(column_id: ColumnId) -> bool {
     matches!(
         column_id,
@@ -1401,13 +1545,26 @@ impl ChunkReader for ForwardChunkReader {
     }
 
     fn get_bytes(&self, start: u64, length: usize) -> ParquetResult<bytes::Bytes> {
-        self.check_position(start)?;
-        let mut read = ForwardRead {
-            state: self.state.clone(),
-        };
-        let mut data = vec![0; length];
-        read.read_exact(&mut data)?;
-        Ok(data.into())
+        let mut state = self.state.lock();
+        if start != state.position {
+            return Err(ParquetError::General(format!(
+                "forward Parquet reader requested offset {start}, current offset is {}",
+                state.position
+            )));
+        }
+        let remaining = state.len.saturating_sub(state.position);
+        if u64::try_from(length).is_ok_and(|length| length <= remaining) {
+            // A page payload inside one window is a slice of that window; only a
+            // payload spanning windows is copied, once, into one allocation.
+            let buffer = state.input.read_buffer(length)?;
+            state.position += buffer.len() as u64;
+            if buffer.len() == length {
+                return Ok(buffer.to_bytes());
+            }
+        }
+        Err(ParquetError::EOF(format!(
+            "forward Parquet reader requested {length} bytes at offset {start}, only {remaining} remain"
+        )))
     }
 }
 
@@ -1462,35 +1619,36 @@ impl ParquetLeafRowGroupAdapter {
         )?;
         #[cfg(test)]
         let window_size = reader.window_size.unwrap_or(window_size);
-        let chain: Box<dyn RangeReader> = if let Some(settings) = &reader.merge_settings {
-            // Storage range and consumer windows are independent. Merge bounded
-            // adjacent windows before handing them to a continuous stream tail.
-            let mut windows = Vec::new();
-            let mut start = range.start;
-            while start < range.end {
-                let end = start.saturating_add(window_size as u64).min(range.end);
-                windows.push(start..end);
-                start = end;
-            }
-            let tail = OperatorRangeReader::new_streaming(
-                reader.operator.clone(),
-                reader.path.clone(),
-                range.clone(),
-                reader.max_prefetch.saturating_add(1),
-            )?;
-            Box::new(MergeRangeReader::new(
-                tail,
-                &windows,
-                settings,
-                reader.max_prefetch.saturating_add(1),
-            )?)
-        } else {
-            Box::new(OperatorRangeReader::new(
-                reader.operator.clone(),
-                reader.path.clone(),
-                reader.max_prefetch.saturating_add(1),
-            ))
-        };
+        let chain: Box<dyn databend_storages_common_io::RangeReader> =
+            if let Some(settings) = &reader.merge_settings {
+                // Storage range and consumer windows are independent. Merge bounded
+                // adjacent windows before handing them to a continuous stream tail.
+                let mut windows = Vec::new();
+                let mut start = range.start;
+                while start < range.end {
+                    let end = start.saturating_add(window_size as u64).min(range.end);
+                    windows.push(start..end);
+                    start = end;
+                }
+                let tail = OperatorRangeReader::new_streaming(
+                    reader.operator.clone(),
+                    reader.path.clone(),
+                    range.clone(),
+                    reader.max_prefetch.saturating_add(1),
+                )?;
+                Box::new(databend_storages_common_io::MergeRangeReader::new(
+                    tail,
+                    &windows,
+                    settings,
+                    reader.max_prefetch.saturating_add(1),
+                )?)
+            } else {
+                create_file_range_reader(
+                    reader.operator.clone(),
+                    reader.path.clone(),
+                    reader.max_prefetch,
+                )?
+            };
         let input =
             ChunkedRangeReader::with_range(chain, range, window_size as u64, reader.max_prefetch)?;
         let Ok(num_values) = i64::try_from(num_values) else {
@@ -1572,9 +1730,10 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_base::runtime::GlobalIORuntime;
-    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::ColumnRef;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::AnyType;
@@ -1584,9 +1743,10 @@ mod tests {
     use databend_common_expression::types::number::Int32Type;
     use databend_common_expression::types::number::UInt64Type;
     use databend_common_expression::types::string::StringType;
+    use databend_storages_common_blocks::build_parquet_writer_properties;
     use databend_storages_common_table_meta::meta::BlockMeta;
     use databend_storages_common_table_meta::meta::ColumnMeta;
-    use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::StatisticsOfColumns;
     use databend_storages_common_table_meta::table::TableCompression;
     use opendal::services::Memory;
     use parquet::format::DataPageHeader;
@@ -1596,6 +1756,8 @@ mod tests {
     use parquet::thrift::TSerializable;
 
     use super::*;
+    use crate::io::FuseLowLevelBlockWriteOptions;
+    use crate::io::FuseLowLevelBlockWriter;
     use crate::io::WriteSettings;
 
     fn test_data() -> (TableSchemaRef, Vec<Column>) {
@@ -1634,7 +1796,8 @@ mod tests {
                 })),
             ),
         ]));
-        let offsets: Buffer<u64> = vec![0_u64, 2, 2, 3, 5, 6].into();
+        let offsets: databend_common_column::buffer::Buffer<u64> =
+            vec![0_u64, 2, 2, 3, 5, 6].into();
         let columns = vec![
             Int32Type::from_data(vec![10, 20, 30, 40, 50]),
             StringType::from_opt_data(vec![Some("a"), None, Some("ccc"), Some("d"), None]),
@@ -1670,48 +1833,66 @@ mod tests {
         (schema, columns)
     }
 
+    fn write_options(
+        operator: Operator,
+        schema: TableSchemaRef,
+        path: &str,
+    ) -> FuseLowLevelBlockWriteOptions {
+        let compression = TableCompression::Zstd;
+        let properties = Arc::new(build_parquet_writer_properties(
+            compression,
+            true,
+            None::<&StatisticsOfColumns>,
+            None,
+            5,
+            schema.as_ref(),
+            Some(2),
+            Some(64),
+        ));
+        let mut options = FuseLowLevelBlockWriteOptions::new(
+            FunctionContext::default(),
+            operator,
+            schema.clone(),
+            WriteSettings {
+                table_compression: compression,
+                index_granularity: None,
+                ..Default::default()
+            },
+            properties,
+            (path.to_string(), 0),
+        );
+        options.set_statistics(
+            schema
+                .leaf_fields()
+                .iter()
+                .map(|field| (field.column_id(), DataType::from(field.data_type())))
+                .collect(),
+            Vec::new(),
+            false,
+        );
+        options
+    }
+
     fn write_columns(
         operator: Operator,
         schema: TableSchemaRef,
         path: &str,
         columns: &[Column],
     ) -> BlockMeta {
-        let block = DataBlock::new_from_columns(columns.to_vec());
-        let rows = block.num_rows();
-        let block_size = block.memory_size();
-        let settings = WriteSettings {
-            table_compression: TableCompression::Zstd,
-            enable_parquet_dictionary: true,
-            data_page_rows: Some(2),
-            data_page_bytes: Some(64),
-            ..Default::default()
-        };
-        let (col_metas, bytes) = crate::io::serialize_block(&settings, &schema, block).unwrap();
-        let size = bytes.len();
-        GlobalIORuntime::instance()
-            .block_on(async { operator.write(path, bytes).await.map_err(ErrorCode::from) })
-            .unwrap();
-        BlockMeta::new(
-            rows as _,
-            block_size as _,
-            size as _,
-            Default::default(),
-            col_metas,
-            None,
-            (path.to_string(), 0),
-            None,
-            0,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            TableCompression::Zstd.into(),
-            None,
-        )
+        let writer =
+            FuseLowLevelBlockWriter::create(write_options(operator, schema, path)).unwrap();
+        let mut data = writer.write_data().unwrap();
+        for source in columns {
+            let mut column = data.next_column().unwrap();
+            column.write(&source.slice(0..1)).unwrap();
+            let split = source.len().min(4);
+            column.write(&source.slice(1..split)).unwrap();
+            if split < source.len() {
+                column.write(&source.slice(split..source.len())).unwrap();
+            }
+            data = column.finish().unwrap();
+        }
+        data.finish().unwrap().finish().unwrap().block_meta
     }
 
     fn read_options(
@@ -1809,20 +1990,23 @@ mod tests {
         crate::test_utils::init_test_globals().unwrap();
         let operator = Operator::new(Memory::default()).unwrap().finish();
         let (schema, columns) = test_data();
-        let meta = write_columns(
+        let mut meta = write_columns(
             operator.clone(),
             schema.clone(),
             "minimum-read.parquet",
             &columns,
         );
-        let options = read_options(operator, schema, meta)
-            .with_window_rows(2)
-            .with_merge_io(ReadSettings {
-                max_gap_size: 48,
-                max_range_size: 64,
-                parquet_fast_read_bytes: 0,
-            });
-        let block = FuseLowLevelBlockReader::create(options).unwrap();
+        meta.granule_index = None;
+        let block = FuseLowLevelBlockReader::create(
+            read_options(operator, schema, meta)
+                .with_window_rows(2)
+                .with_merge_io(databend_storages_common_io::ReadSettings {
+                    max_gap_size: 48,
+                    max_range_size: 64,
+                    parquet_fast_read_bytes: 0,
+                }),
+        )
+        .unwrap();
         let mut column = block.read_column(0).unwrap();
         assert!(column.read_min_rows(0).is_err());
         let first = column.read_rows(1).unwrap();
@@ -1844,6 +2028,49 @@ mod tests {
         for (field, expected) in columns.iter().enumerate() {
             assert_eq!(&actual.get_by_offset(field).to_column(), expected);
         }
+    }
+
+    #[test]
+    fn test_cluster_key_reader_batches_keys_and_payload_independently() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let (schema, columns) = test_data();
+        let meta = write_columns(
+            operator.clone(),
+            schema.clone(),
+            "cluster-key-reader.parquet",
+            &columns,
+        );
+        let key_expr = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: "id".to_string(),
+        });
+        let options = read_options(operator, schema, meta)
+            .with_cluster_keys(vec![key_expr], FunctionContext::default());
+        let mut reader = FuseLowLevelBlockReader::create(options)
+            .unwrap()
+            .read_cluster_keys()
+            .unwrap();
+
+        let (first_keys, first_source_columns) = reader.read_rows(2).unwrap();
+        assert_eq!(first_keys, vec![columns[0].slice(0..2)]);
+        assert_eq!(first_source_columns[&0], columns[0].slice(0..2));
+        assert_eq!(
+            reader.read_column_rows(1, 2).unwrap(),
+            columns[1].slice(0..2)
+        );
+
+        let (second_keys, second_source_columns) = reader.read_rows(3).unwrap();
+        assert_eq!(second_keys, vec![columns[0].slice(2..5)]);
+        assert_eq!(second_source_columns[&0], columns[0].slice(2..5));
+        assert_eq!(
+            reader.read_column_rows(1, 3).unwrap(),
+            columns[1].slice(2..5)
+        );
+        assert!(reader.read_column_rows(0, 0).is_err());
+        reader.finish().unwrap();
     }
 
     #[test]
@@ -1924,7 +2151,7 @@ mod tests {
             ]);
         block_meta.location.0 = "split.parquet".to_string();
         block_meta.row_count = 2;
-        block_meta.compression = Compression::None;
+        block_meta.compression = databend_storages_common_table_meta::meta::Compression::None;
         let column_id = schema.to_leaf_column_ids()[0];
         let ColumnMeta::Parquet(mut column_meta) =
             block_meta.col_metas.get(&column_id).unwrap().clone();
@@ -2012,7 +2239,7 @@ mod tests {
             std::slice::from_ref(&expected),
         );
         meta.location.0 = "independent-pages.parquet".to_string();
-        meta.compression = Compression::None;
+        meta.compression = databend_storages_common_table_meta::meta::Compression::None;
         for (index, column_id) in schema.to_leaf_column_ids().into_iter().enumerate() {
             let ColumnMeta::Parquet(mut column_meta) =
                 meta.col_metas.get(&column_id).unwrap().clone();
@@ -2095,7 +2322,8 @@ mod tests {
                 ],
             })),
         )]));
-        let offsets: Buffer<u64> = vec![0_u64, 2, 4, 6, 8, 10].into();
+        let offsets: databend_common_column::buffer::Buffer<u64> =
+            vec![0_u64, 2, 4, 6, 8, 10].into();
         let expected = Column::Array(Box::new(ArrayColumn::<AnyType>::new(
             Column::Tuple(vec![
                 Int32Type::from_data((0..10).collect::<Vec<_>>()),
@@ -2206,7 +2434,7 @@ mod tests {
             std::slice::from_ref(&expected),
         );
         meta.location.0 = "independent-repeated-pages.parquet".to_string();
-        meta.compression = Compression::None;
+        meta.compression = databend_storages_common_table_meta::meta::Compression::None;
         for (index, column_id) in schema.to_leaf_column_ids().into_iter().enumerate() {
             let ColumnMeta::Parquet(mut column_meta) =
                 meta.col_metas.get(&column_id).unwrap().clone();
@@ -2232,6 +2460,103 @@ mod tests {
 
         assert_eq!(boundaries, vec![2, 1, 2]);
         assert_eq!(Column::concat_columns(batches).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_low_level_writer_output_is_readable() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let (schema, expected) = test_data();
+        let meta = write_columns(
+            operator.clone(),
+            schema.clone(),
+            "source.parquet",
+            &expected,
+        );
+
+        let (actual, boundaries) = read_columns(operator, schema, meta);
+        assert_eq!(actual, expected);
+        assert!(boundaries.iter().flatten().all(|rows| *rows > 0));
+        assert!(
+            boundaries
+                .iter()
+                .all(|lengths| lengths.iter().sum::<usize>() == 5)
+        );
+    }
+
+    #[test]
+    fn test_low_level_reader_output_is_writable() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let (schema, expected) = test_data();
+        let source_meta = write_columns(
+            operator.clone(),
+            schema.clone(),
+            "source.parquet",
+            &expected,
+        );
+        let (columns, _) = read_columns(operator.clone(), schema.clone(), source_meta);
+
+        let writer = FuseLowLevelBlockWriter::create(write_options(
+            operator.clone(),
+            schema.clone(),
+            "copy.parquet",
+        ))
+        .unwrap();
+        let mut data = writer.write_data().unwrap();
+        for source in columns {
+            let mut output = data.next_column().unwrap();
+            output.write(&source).unwrap();
+            data = output.finish().unwrap();
+        }
+        let copy_meta = data.finish().unwrap().finish().unwrap().block_meta;
+
+        let (actual, _) = read_columns(operator, schema, copy_meta);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_low_level_reader_take_writer_roundtrip() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let (schema, source_columns) = test_data();
+        let source_meta = write_columns(
+            operator.clone(),
+            schema.clone(),
+            "source.parquet",
+            &source_columns,
+        );
+        let (source_columns, _) = read_columns(operator.clone(), schema.clone(), source_meta);
+        let take_indices = [0_u32, 2, 4];
+        let selected = DataBlock::new_from_columns(source_columns.clone())
+            .take(take_indices.as_slice())
+            .unwrap();
+
+        let writer = FuseLowLevelBlockWriter::create(write_options(
+            operator.clone(),
+            schema.clone(),
+            "selected.parquet",
+        ))
+        .unwrap();
+        let mut data = writer.write_data().unwrap();
+        for entry in selected.columns() {
+            let mut output = data.next_column().unwrap();
+            output.write(&entry.to_column()).unwrap();
+            data = output.finish().unwrap();
+        }
+        let selected_meta = data.finish().unwrap().finish().unwrap().block_meta;
+        assert_eq!(selected_meta.row_count, 3);
+
+        let expected = DataBlock::new_from_columns(source_columns)
+            .take(take_indices.as_slice())
+            .unwrap();
+        let expected = expected
+            .columns()
+            .iter()
+            .map(|entry| entry.to_column())
+            .collect::<Vec<_>>();
+        let (actual, _) = read_columns(operator, schema, selected_meta);
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -2274,11 +2599,12 @@ mod tests {
         .read_data();
         assert!(data.finish().is_err());
 
-        // Standard main writer may encode this small column in a single page.
-        // Consume an exact prefix to test ownership independent of page sizing.
-        let block = FuseLowLevelBlockReader::create(read_options(operator, schema, meta)).unwrap();
-        let mut column = block.read_column(0).unwrap();
-        column.read_rows(1).unwrap();
+        let mut column = FuseLowLevelBlockReader::create(read_options(operator, schema, meta))
+            .unwrap()
+            .read_data()
+            .next_column()
+            .unwrap();
+        assert!(column.read().unwrap().is_some());
         assert!(column.finish().is_err());
     }
 

@@ -38,8 +38,8 @@ use opendal::Operator;
 use crate::FuseTable;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
-use crate::io::StreamBlockBuilder;
-use crate::io::StreamBlockProperties;
+use crate::io::FuseBlockWriteOptions;
+use crate::io::FuseBlockWriter;
 use crate::operations::MutationLogEntry;
 use crate::operations::MutationLogs;
 
@@ -56,9 +56,9 @@ pub struct TransformBlockBuilder {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    properties: Arc<StreamBlockProperties>,
+    properties: Arc<FuseBlockWriteOptions>,
 
-    builder: Option<StreamBlockBuilder>,
+    builder: Option<FuseBlockWriter>,
     need_flush: bool,
     input_data_size: usize,
     input_num_rows: usize,
@@ -71,7 +71,7 @@ impl TransformBlockBuilder {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        properties: Arc<StreamBlockProperties>,
+        properties: Arc<FuseBlockWriteOptions>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformBlockBuilder {
             state: State::Consume,
@@ -87,11 +87,9 @@ impl TransformBlockBuilder {
         })))
     }
 
-    fn get_or_create_builder(&mut self) -> Result<&mut StreamBlockBuilder> {
+    fn get_or_create_builder(&mut self) -> Result<&mut FuseBlockWriter> {
         if self.builder.is_none() {
-            self.builder = Some(StreamBlockBuilder::try_new_with_config(
-                self.properties.clone(),
-            )?);
+            self.builder = Some(FuseBlockWriter::create(self.properties.clone())?);
         }
         Ok(self.builder.as_mut().unwrap())
     }
@@ -257,7 +255,12 @@ impl AsyncAccumulatingTransform for TransformBlockWriter {
 
         if let Some(ptr) = data.get_owned_meta() {
             if let Some(serialized) = BlockSerialization::downcast_from(ptr) {
-                let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
+                let extended_block_meta = match serialized {
+                    BlockSerialization::Pending(pending) => {
+                        BlockWriter::write_down(&self.dal, pending).await?
+                    }
+                    BlockSerialization::Written(meta) => meta,
+                };
 
                 let bytes = if let Some(draft_virtual_block_meta) =
                     &extended_block_meta.draft_virtual_block_meta

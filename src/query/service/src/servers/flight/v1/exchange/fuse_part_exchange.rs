@@ -213,6 +213,7 @@ mod tests {
             location.to_string(),
             Some((format!("{location}.bloom"), 1)),
             32,
+            None,
             10,
             HashMap::from([(1, ColumnMeta::Parquet(SingleColumnMeta::new(11, 22, 10)))]),
             Some(HashMap::from([(

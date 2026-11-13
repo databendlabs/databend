@@ -16,6 +16,7 @@ use databend_common_config::CacheConfig;
 
 use crate::kinds::bloom;
 use crate::kinds::column;
+use crate::kinds::granule;
 use crate::kinds::iceberg;
 use crate::kinds::inverted;
 use crate::kinds::parquet;
@@ -131,6 +132,9 @@ impl LegacyKinds {
                     )
                 },
             ))
+            .register::<granule::Marks>(LegacyKind::bytes("granule_index_marks_bytes", |c, _| {
+                c.granule_index_marks_bytes
+            }))
             // No longer read: readers keep raw column chunks only in the disk cache. Registered so
             // the kind can still be sized at runtime, off until then.
             .register::<column::Data>(LegacyKind::bytes("data_cache_in_memory_bytes", |_, _| 0))

@@ -12,18 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
 
 use super::block_format::FuseParquetBlockFormat;
+use super::granule_group::build_granule_groups;
 use super::parquet_data_source::ParquetDataSource;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::BlockReadContext;
+use crate::io::GranuleDataReader;
+use crate::io::OffsetsIndex;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
 
@@ -33,6 +41,7 @@ pub struct ReadBlockContext {
     block_read_ctx: BlockReadContext,
     block_format: FuseParquetBlockFormat,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+    max_block_size: usize,
 }
 
 impl ReadBlockContext {
@@ -49,6 +58,7 @@ impl ReadBlockContext {
             block_read_ctx,
             block_format,
             virtual_reader,
+            max_block_size: ctx.get_settings().get_max_block_size()? as usize,
         }))
     }
 
@@ -58,7 +68,7 @@ impl ReadBlockContext {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
+    pub(crate) async fn read_full_data(&self, part: PartInfoPtr) -> Result<ParquetDataSource> {
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
         let virtual_source = self.read_virtual_data(fuse_part).await;
@@ -77,10 +87,185 @@ impl ReadBlockContext {
             )
             .await?;
 
-        Ok(ParquetDataSource {
-            data,
-            virtual_data: virtual_source,
-        })
+        Ok(ParquetDataSource::Normal((vec![data], virtual_source)))
+    }
+
+    pub(crate) fn granule_groups_if_subset(
+        &self,
+        part: &PartInfoPtr,
+    ) -> Result<Option<Vec<Vec<std::ops::Range<usize>>>>> {
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let Some(ranges) = fuse_part
+            .block_meta_index()
+            .and_then(|index| index.granule_ranges.as_deref())
+        else {
+            return Ok(None);
+        };
+        let Some(groups) = self.granule_groups(part, Some(ranges))? else {
+            return Ok(None);
+        };
+        let granule_rows = fuse_part
+            .granule_index
+            .as_ref()
+            .expect("granule_groups checked metadata")
+            .granule_rows as usize;
+        let num_granules = crate::io::num_granules_of(fuse_part.nums_rows, granule_rows);
+        let selected = ranges.iter().try_fold(0usize, |selected, range| {
+            selected
+                .checked_add(range.end - range.start)
+                .ok_or_else(|| ErrorCode::Internal("selected granule count overflows"))
+        })?;
+        Ok((selected < num_granules).then_some(groups))
+    }
+
+    pub(crate) fn granule_groups(
+        &self,
+        part: &PartInfoPtr,
+        ranges: Option<&[std::ops::Range<usize>]>,
+    ) -> Result<Option<Vec<Vec<std::ops::Range<usize>>>>> {
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let Some(granule_index) = fuse_part.granule_index.as_ref() else {
+            return Ok(None);
+        };
+        let virtual_meta = fuse_part
+            .block_meta_index()
+            .and_then(|index| index.virtual_block_meta.as_ref());
+        if let (Some(_), Some(meta)) = (self.virtual_reader.as_ref(), virtual_meta) {
+            // Old files and refreshed virtual columns may have no matching marks.
+            // The presence of virtual columns alone must not disable granule reads.
+            for slot in &meta.read_slots {
+                let mark =
+                    crate::io::virtual_offset_mark(&meta.virtual_block_location, slot.offset);
+                if !granule_index.offsets.columns.contains_key(&mark) {
+                    return Ok(None);
+                }
+            }
+        }
+        if fuse_part.nums_rows == 0 {
+            return Ok(None);
+        }
+        Ok(Some(build_granule_groups(
+            ranges,
+            granule_index.granule_rows as usize,
+            fuse_part.nums_rows,
+            self.max_block_size,
+        )?))
+    }
+
+    pub(crate) fn create_granule_data_reader(
+        &self,
+        part: &PartInfoPtr,
+        groups: &[Vec<std::ops::Range<usize>>],
+    ) -> Result<GranuleDataReader> {
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let granule_index = fuse_part
+            .granule_index
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("granule index metadata is missing"))?;
+        // Plan-time `ignorable_source_column_ids` already keeps output and prewhere columns.
+        let ignore_column_ids = self.virtual_reader.as_ref().as_ref().and_then(|_| {
+            fuse_part
+                .block_meta_index()
+                .and_then(|index| index.virtual_block_meta.as_ref())
+                .map(|meta| &meta.ignored_source_column_ids)
+                .filter(|ids| !ids.is_empty())
+        });
+        let offsets = OffsetsIndex::load(
+            self.block_read_ctx.operator(),
+            &granule_index.offsets,
+            granule_index.granule_rows as usize,
+            fuse_part.nums_rows,
+            &fuse_part.columns_meta,
+            self.block_read_ctx
+                .project_indices()
+                .values()
+                .map(|(column_id, ..)| *column_id)
+                .filter(|id| !ignore_column_ids.is_some_and(|ignored| ignored.contains(id))),
+            self.block_read_ctx.policy(),
+        )?;
+        GranuleDataReader::create(
+            &self.block_read_ctx,
+            &self.read_settings,
+            fuse_part,
+            groups,
+            &offsets,
+            ignore_column_ids,
+        )
+    }
+
+    pub(crate) fn create_virtual_granule_reader(
+        &self,
+        part: &PartInfoPtr,
+        groups: &[Vec<std::ops::Range<usize>>],
+    ) -> Result<Option<GranuleDataReader>> {
+        if self.virtual_reader.is_none() {
+            return Ok(None);
+        }
+        let part = FuseBlockPartInfo::from_part(part)?;
+        let Some(meta) = part
+            .block_meta_index()
+            .and_then(|index| index.virtual_block_meta.as_ref())
+        else {
+            return Ok(None);
+        };
+        let layout = part
+            .granule_index
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("missing granule index"))?;
+        // Sidecar read slots are addressed by slot index, which is also the column id of the
+        // corresponding field in `VirtualColumnReader::read_schema`.
+        let columns = meta
+            .read_slots
+            .iter()
+            .enumerate()
+            .map(|(slot_index, slot)| {
+                (
+                    slot_index as ColumnId,
+                    ColumnMeta::Parquet(SingleColumnMeta {
+                        offset: slot.offset,
+                        len: slot.len,
+                        num_values: slot.num_values,
+                    }),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let offsets = OffsetsIndex::load_named(
+            self.block_read_ctx.operator(),
+            &layout.offsets,
+            layout.granule_rows as usize,
+            part.nums_rows,
+            &columns,
+            meta.read_slots
+                .iter()
+                .enumerate()
+                .map(|(slot_index, slot)| {
+                    (
+                        slot_index as ColumnId,
+                        crate::io::virtual_offset_mark(&meta.virtual_block_location, slot.offset),
+                    )
+                }),
+            self.block_read_ctx.policy(),
+        )?;
+        let schema = VirtualColumnReader::read_schema(meta).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "virtual sidecar {} has a read slot without a parquet type",
+                meta.virtual_block_location
+            ))
+        })?;
+        let column_types = schema.leaf_fields().into_iter().map(|field| {
+            let data_type = databend_common_expression::types::DataType::from(field.data_type());
+            (field.column_id, data_type.to_string())
+        });
+        Ok(Some(GranuleDataReader::create_for_file(
+            &self.block_read_ctx,
+            &self.read_settings,
+            &meta.virtual_block_location,
+            part.nums_rows,
+            &columns,
+            column_types,
+            groups,
+            &offsets,
+        )?))
     }
 
     async fn read_virtual_data(

@@ -3446,6 +3446,15 @@ pub struct CacheConfig {
     )]
     pub disk_cache_virtual_column_meta_size: u64,
 
+    /// Max bytes of decoded granule index marks (per-granule column offsets and cluster-key mins)
+    /// cached in memory. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-granule-index-marks-bytes",
+        value_name = "VALUE",
+        default_value = "268435456"
+    )]
+    pub granule_index_marks_bytes: u64,
+
     #[clap(
         long = "cache-table-prune-partitions-count",
         value_name = "VALUE",
@@ -3638,6 +3647,7 @@ impl Default for CacheConfig {
             spatial_index_filter_memory_ratio: 0,
             virtual_column_meta_count: 30000,
             disk_cache_virtual_column_meta_size: 0,
+            granule_index_marks_bytes: 268435456,
             data_cache_storage: CacheStorageTypeConfig::None,
             table_data_cache_population_queue_size: 0,
             data_cache_in_memory_bytes: 0,

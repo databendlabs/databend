@@ -53,6 +53,7 @@ use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_pipeline_transforms::Transform;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::sorts::core::LoserTreeMerger;
 use databend_common_pipeline_transforms::sorts::core::RowConverter;
 use databend_common_pipeline_transforms::sorts::core::Rows;
@@ -60,7 +61,6 @@ use databend_common_pipeline_transforms::sorts::core::RowsTypeVisitor;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
-use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge_with_flush_before_refill;
 use databend_common_pipeline_transforms::traits::SortSpiller;
 use databend_common_pipeline_transforms::traits::SpillReader;
 use databend_common_storages_fuse::FuseBlockPartInfo;
@@ -255,11 +255,16 @@ impl<R: Rows> ReclusterMergeStream<R> {
                 "recluster input is not ordered across batches",
             ));
         }
-        for row in 1..rows.len() {
-            if rows.row(row - 1) > rows.row(row) {
-                return Err(ErrorCode::ParquetFileInvalid(
-                    "recluster input batch is not ordered",
-                ));
+        // Source blocks are planner-verified ordered runs and spill chunks are merger
+        // output, so release builds keep only the batch-boundary check above. The
+        // per-row pass costs one key comparison per input row.
+        if cfg!(debug_assertions) {
+            for row in 1..rows.len() {
+                if rows.row(row - 1) > rows.row(row) {
+                    return Err(ErrorCode::ParquetFileInvalid(
+                        "recluster input batch is not ordered",
+                    ));
+                }
             }
         }
         self.last_key = Some(R::owned_item(rows.last()));
@@ -628,7 +633,7 @@ pub struct HorizontalReclusterSource {
 }
 
 impl HorizontalReclusterSource {
-    /// Build parallel group mergers followed by one nonblocking input-port merger.
+    /// Build parallel group mergers followed by a second-stage merge of their outputs.
     pub fn build_pipeline(
         ctx: Arc<QueryContext>,
         pipeline: &mut Pipeline,
@@ -662,18 +667,40 @@ impl HorizontalReclusterSource {
         }
         pipeline.add_pipe(Pipe::create(0, groups, pipe));
         if groups > 1 {
-            try_add_multi_sort_merge_with_flush_before_refill(
+            add_second_stage_merge(
                 pipeline,
                 merge_keys,
                 output_rows,
-                None,
-                true,
-                true,
+                max_groups,
+                settings.get_enable_loser_tree_merge_sort()?,
                 fixed,
             )?;
         }
         Ok(())
     }
+}
+
+/// Merge the ordered group outputs into one stream with the k-way merge of the
+/// regular sort pipeline.
+///
+/// One partitioner holds a single head block per group, cuts every head at
+/// `upper_bound(key)` for a key no greater than the smallest head tail, and
+/// hands the slices of one key range to one of `workers` mergers; a combiner
+/// replays the finished ranges in order. Row comparison and gather therefore
+/// run on the workers, while each stage still buffers only one block per
+/// input or one task per worker, so the task size does not change the memory
+/// bound.
+fn add_second_stage_merge(
+    pipeline: &mut Pipeline,
+    keys: SortKeyDescription,
+    batch_rows: usize,
+    workers: usize,
+    loser_tree: bool,
+    fixed: bool,
+) -> Result<()> {
+    add_k_way_merge_sort(
+        pipeline, keys, workers, batch_rows, None, true, loser_tree, fixed,
+    )
 }
 
 impl ReclusterMergeFactory {
@@ -1022,7 +1049,12 @@ mod tests {
             Int32Type::from_data(vec![0, 1]),
         ]);
         let keys = probe.converter.convert(&unsorted)?.to_column();
-        assert!(probe.validate_batch(unsorted, keys).is_err());
+        // In-batch order is only verified with debug assertions; release builds accept
+        // the batch and remember its last key (1) for the boundary check below.
+        assert_eq!(
+            probe.validate_batch(unsorted, keys).is_err(),
+            cfg!(debug_assertions)
+        );
         // Check ordering across batches, including restored spill chunks.
         let high = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![2]),
@@ -1133,15 +1165,7 @@ mod tests {
                 ));
             }
             pipeline.add_pipe(Pipe::create(0, groups, items));
-            try_add_multi_sort_merge_with_flush_before_refill(
-                &mut pipeline,
-                keys,
-                3,
-                None,
-                true,
-                true,
-                false,
-            )?;
+            add_second_stage_merge(&mut pipeline, keys, 3, 2, true, false)?;
             pipeline.set_max_threads(1);
             let mut result = PipelineBuildResult::create();
             result.main_pipeline = pipeline;
@@ -1491,6 +1515,8 @@ mod tests {
             level: 0,
             input_level_stats: vec![],
             kind: ReclusterTaskKind::MergeBlocks,
+            vertical_kind: None,
+            memory_budget: 0,
             virtual_column_layout: None,
             inverted_index_sources: blocks
                 .iter()
@@ -1499,43 +1525,91 @@ mod tests {
         };
         use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
         assert!(ReclusterIndexMergeInputs::try_create(fuse, &task)?.is_some());
-        // Interleaved source rows, with output serialization completing in reverse order.
+        // Interleaved source rows, with output serialization completing in reverse order; the
+        // real stages run with two threads so partitions reach the scatter out of order.
+        use databend_common_pipeline::sources::BlocksSource;
+        use databend_common_storages_fuse::io::block_index::BlockIndexMergeContext;
         use databend_common_storages_fuse::operations::MutationLogs;
+        use databend_common_storages_fuse::operations::ReclusterIndexMergeState;
         use databend_common_storages_fuse::operations::ReclusterIndexOutput;
         use databend_common_storages_fuse::operations::ReclusterIndexRowRange;
-        use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
+        use databend_common_storages_fuse::operations::build_recluster_index_merge_pipeline_with_state;
+
+        use crate::pipelines::PipelineBuildResult;
+        use crate::pipelines::executor::ExecutorSettings;
+        use crate::pipelines::executor::PipelinePullingExecutor;
         let inputs = ReclusterIndexMergeInputs::try_create(fuse, &task)?.unwrap();
-        let mut collector =
-            TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), inputs);
-        for source_row in (0..2).rev() {
-            let mut meta = blocks[0].1.as_ref().clone();
-            meta.row_count = 2;
-            meta.inverted_index_metas = Some(vec![]);
-            meta.inverted_index_size = None;
-            let output = ExtendedBlockMeta {
-                block_meta: meta,
-                draft_virtual_block_meta: None,
-                column_hlls: None,
-                column_top_n: None,
+        // Block metadata does not clone; build the written outputs for every run.
+        let written = || {
+            let mut written = VecDeque::new();
+            for source_row in (0..2).rev() {
+                let mut meta = blocks[0].1.as_ref().clone();
+                meta.row_count = 2;
+                meta.inverted_index_metas = Some(vec![]);
+                meta.inverted_index_size = None;
+                let output = ExtendedBlockMeta {
+                    block_meta: meta,
+                    draft_virtual_block_meta: None,
+                    column_hlls: None,
+                    column_top_n: None,
+                };
+                let rows = (0..2)
+                    .map(|source| ReclusterIndexRowRange {
+                        source,
+                        rows: source_row..source_row + 1,
+                    })
+                    .collect();
+                written.push_back(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
+                    meta: output,
+                    rows,
+                    output_row: u64::from(source_row) * 2,
+                })));
+            }
+            written
+        };
+        let run_merge = async |ctx: Arc<QueryContext>,
+                               written: VecDeque<DataBlock>|
+               -> Result<(Vec<DataBlock>, Arc<ReclusterIndexMergeState>)> {
+            let mut data_pipeline = Pipeline::create();
+            let written = Arc::new(std::sync::Mutex::new(written));
+            data_pipeline.add_source(
+                |output| BlocksSource::create(ctx.get_scan_progress(), output, written.clone()),
+                1,
+            )?;
+            // One-byte partitions: every term travels alone, so partitions far outnumber the
+            // readers and the scatter has to reorder them.
+            let context = BlockIndexMergeContext {
+                operator: fuse.get_operator(),
+                locations: fuse.meta_location_generator().clone(),
+                abort_checker: ctx.clone().get_abort_checker(),
+                partition_bytes: 1,
             };
-            let rows = (0..2)
-                .map(|source| ReclusterIndexRowRange {
-                    source,
-                    rows: source_row..source_row + 1,
-                })
-                .collect();
-            assert!(
-                collector
-                    .transform(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
-                        meta: output,
-                        rows,
-                        output_row: u64::from(source_row) * 2,
-                    })))?
-                    .is_empty()
-            );
-        }
-        let outputs = collector.on_finish(true)?;
+            let state = Arc::new(ReclusterIndexMergeState::new(inputs.clone(), context, 2));
+            let mut pipeline = Pipeline::create();
+            build_recluster_index_merge_pipeline_with_state(
+                &mut data_pipeline,
+                &mut pipeline,
+                state.clone(),
+            )?;
+            data_pipeline.set_max_threads(2);
+            pipeline.set_max_threads(2);
+            let mut result = PipelineBuildResult::create();
+            result.sources_pipelines.push(data_pipeline);
+            result.main_pipeline = pipeline;
+            let mut executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+            executor_settings.max_threads = 2;
+            let mut executor = PipelinePullingExecutor::from_pipelines(result, executor_settings)?;
+            executor.start();
+            let mut outputs = Vec::new();
+            while let Some(block) = executor.pull_data().await? {
+                outputs.push(block);
+            }
+            Ok((outputs, state))
+        };
+        let (outputs, state) = run_merge(admission_ctx.clone(), written()).await?;
         assert_eq!(outputs.len(), 2);
+        // Many more partitions than readers, replayed in order by every output.
+        assert!(state.partitions_total().unwrap() > 2 * state.threads as u32);
         for mut output in outputs {
             let logs = MutationLogs::downcast_from(output.take_meta().unwrap()).unwrap();
             let MutationLogEntry::AppendBlock { block_meta, .. } = &logs.entries[0] else {
@@ -1555,15 +1629,9 @@ mod tests {
             assert_eq!(searcher.num_docs(), 2);
             assert!(block_meta.block_meta.inverted_index_size.unwrap() >= meta.size);
         }
-        let inputs = ReclusterIndexMergeInputs::try_create(fuse, &task)?.unwrap();
-        let mut cancelled =
-            TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), inputs.clone());
-        assert!(cancelled.on_finish(false)?.is_empty());
         let cancelled_ctx = fixture.new_query_ctx().await?;
-        let mut cancelled =
-            TransformReclusterIndexMerge::new(cancelled_ctx.clone(), fuse.clone(), inputs);
         cancelled_ctx.kill(ErrorCode::aborting());
-        assert!(cancelled.on_finish(true).is_err());
+        assert!(run_merge(cancelled_ctx, written()).await.is_err());
         let source_metas = task.inverted_index_sources.clone();
         task.inverted_index_sources[0].clear();
         assert!(ReclusterIndexMergeInputs::try_create(fuse, &task)?.is_none());
@@ -1795,7 +1863,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_second_stage_merges_heads_without_local_memory_threshold() -> anyhow::Result<()> {
+    async fn test_second_stage_merge_cuts_heads_in_key_order() -> anyhow::Result<()> {
         use databend_common_pipeline::sources::BlocksSource;
 
         use crate::pipelines::PipelineBuildResult;
@@ -1804,14 +1872,23 @@ mod tests {
 
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
+        let block = |keys: Vec<i32>| DataBlock::new_from_columns(vec![Int32Type::from_data(keys)]);
+        // Group heads overlap so the partitioner must cut inside blocks, skip heads
+        // whose first key exceeds the smallest tail, and refill one input at a time.
+        let first = vec![block(vec![1, 2, 3]), block(vec![7, 8, 9])];
+        let second = vec![block(vec![2, 4, 6]), block(vec![10, 11, 12])];
+        let sources = Arc::new(Mutex::new(vec![
+            VecDeque::from(first),
+            VecDeque::from(second),
+        ]));
         let mut pipeline = Pipeline::create();
-        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]);
         pipeline.add_source(
             |output| {
+                let blocks = sources.lock().unwrap().remove(0);
                 BlocksSource::create(
                     ctx.get_scan_progress(),
                     output,
-                    Arc::new(Mutex::new(VecDeque::from([block.clone()]))),
+                    Arc::new(Mutex::new(blocks)),
                 )
             },
             2,
@@ -1829,15 +1906,7 @@ mod tests {
             )]),
             false,
         )?;
-        try_add_multi_sort_merge_with_flush_before_refill(
-            &mut pipeline,
-            keys,
-            3,
-            None,
-            true,
-            true,
-            false,
-        )?;
+        add_second_stage_merge(&mut pipeline, keys, 3, 2, true, false)?;
         pipeline.set_max_threads(1);
         let mut result = PipelineBuildResult::create();
         result.main_pipeline = pipeline;
@@ -1847,12 +1916,13 @@ mod tests {
         executor.start();
         let mut output = Vec::new();
         while let Some(block) = executor.pull_data().await? {
+            assert!(!block.is_empty());
             output.push(block);
         }
         let actual = DataBlock::concat(&output)?;
         assert_eq!(
             actual.get_by_offset(0).to_column(),
-            Int32Type::from_data(vec![1, 1, 2, 2, 3, 3])
+            Int32Type::from_data(vec![1, 2, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12])
         );
         Ok(())
     }

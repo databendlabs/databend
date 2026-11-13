@@ -175,6 +175,11 @@ impl TryFrom<ParquetMetaData> for IndexMeta {
     }
 }
 
+/// An `InvalidInput` error for malformed index inputs.
+pub(crate) fn invalid_input(message: impl Into<String>) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, message.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

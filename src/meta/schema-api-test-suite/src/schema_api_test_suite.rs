@@ -7482,7 +7482,8 @@ impl SchemaApiTestSuite {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     name: "idx".to_string(),
-                    index_type: 4,
+                    // No `TableIndexType` variant has this value.
+                    index_type: 99,
                     ..Default::default()
                 });
                 let table_key = TableId::new(table_id);
@@ -7709,7 +7710,8 @@ impl SchemaApiTestSuite {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     name: "idx".to_string(),
-                    index_type: 4,
+                    // No `TableIndexType` variant has this value.
+                    index_type: 99,
                     ..Default::default()
                 });
                 upsert_test_data(mt, &TableId::new(table_id), table_pb.encode_to_vec()).await?;

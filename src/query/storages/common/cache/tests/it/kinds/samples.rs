@@ -26,6 +26,7 @@ use ::parquet::arrow::ArrowWriter;
 use ::parquet::file::metadata::ParquetMetaDataReader;
 use arrow::array::ArrayRef;
 use arrow::array::Int32Array;
+use arrow::array::UInt64Array;
 use arrow::record_batch::RecordBatch;
 use bytes::Bytes;
 use databend_common_catalog::plan::PartStatistics;
@@ -45,9 +46,11 @@ use databend_storages_common_cache::CachedColumnArray;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::CachedVectorIndex;
 use databend_storages_common_cache::ColumnData;
+use databend_storages_common_cache::GranuleMarkArray;
 use databend_storages_common_cache::IcebergTableCacheValue;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
+use databend_storages_common_cache::kinds::granule;
 use databend_storages_common_cache::kinds::iceberg;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_cache::kinds::parquet;
@@ -392,6 +395,14 @@ impl Sample for iceberg::Table {
 impl Sample for column::Data {
     fn sample(seed: u32) -> ColumnData {
         ColumnData::from_bytes(bytes(seed, 4096))
+    }
+}
+
+impl Sample for granule::Marks {
+    fn sample(seed: u32) -> GranuleMarkArray {
+        GranuleMarkArray(Arc::new(UInt64Array::from_iter_values(
+            (0..256).map(|granule| u64::from(seed) * 4096 + granule * 16),
+        )))
     }
 }
 

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow_array::ArrayRef;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -21,6 +22,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
+use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
 use parquet::file::properties::EnabledStatistics;
@@ -28,7 +30,9 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
 use parquet::schema::types::ColumnPath;
 
-use crate::parquet_writer::BlockParquetWriter;
+use crate::parquet_writer::BlockingWrite;
+use crate::parquet_writer::BulkParquetFileWriter;
+use crate::parquet_writer::ParquetFileWriter;
 use crate::parquet_writer::SerializedParquet;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
@@ -41,47 +45,12 @@ pub(crate) const PARQUET_PAGE_SIZE_HARD_LIMIT: usize = i32::MAX as usize - (1 <<
 /// margin for estimation inaccuracy when row sizes are not uniform.
 pub(crate) const MAX_BATCH_MEMORY_SIZE: usize = 1 << 26; // 64MB
 
-/// Serialize data blocks to parquet format, returning the serialized bytes and metadata.
 pub fn blocks_to_parquet(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
     compression: TableCompression,
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
-) -> Result<SerializedParquet> {
-    blocks_to_parquet_with_stats(
-        table_schema,
-        blocks,
-        compression,
-        enable_dictionary,
-        metadata,
-        None,
-        None,
-        None,
-    )
-}
-
-/// Serialize blocks while optionally tuning dictionary behavior via NDV statistics.
-///
-/// * `table_schema` - Logical schema used to build Arrow batches.
-/// * `blocks` - In-memory blocks that will be serialized into a single Parquet file.
-/// * `compression` - Compression algorithm specified by table-level settings.
-/// * `enable_dictionary` - Enables dictionary encoding globally before per-column overrides.
-/// * `metadata` - Additional user metadata embedded into the Parquet footer.
-/// * `column_stats` - Optional NDV stats from the first block, used to configure writer properties
-///   before ArrowWriter instantiation disables further changes.
-///
-/// Returns the serialized parquet bytes together with the file metadata; the caller owns the
-/// buffer directly (no intermediate copy into a borrowed buffer).
-pub fn blocks_to_parquet_with_stats(
-    table_schema: &TableSchema,
-    blocks: Vec<DataBlock>,
-    compression: TableCompression,
-    enable_dictionary: bool,
-    metadata: Option<Vec<KeyValue>>,
-    column_stats: Option<&StatisticsOfColumns>,
-    data_page_rows: Option<usize>,
-    data_page_bytes: Option<usize>,
 ) -> Result<SerializedParquet> {
     assert!(!blocks.is_empty());
 
@@ -93,18 +62,50 @@ pub fn blocks_to_parquet_with_stats(
     let props = Arc::new(build_parquet_writer_properties(
         compression,
         enable_dictionary,
-        column_stats,
+        None::<&StatisticsOfColumns>,
         metadata,
         num_rows,
         table_schema,
-        data_page_rows,
-        data_page_bytes,
+        None,
+        None,
     ));
 
-    // `BlockParquetWriter` encodes each block immediately and splits oversized batches into
+    // `ParquetFileWriter` encodes each block immediately and splits oversized batches into
     // page-bounded chunks internally, so no pre-splitting is needed here.
-    let mut writer = BlockParquetWriter::new(arrow_schema, props);
+    let mut writer = ParquetFileWriter::new(arrow_schema, props);
     writer.write_blocks(blocks)?;
+    writer.finish()
+}
+
+pub fn block_to_parquet_with_writer<W: BlockingWrite + 'static>(
+    table_schema: &TableSchema,
+    block: DataBlock,
+    compression: TableCompression,
+    enable_dictionary: bool,
+    metadata: Option<Vec<KeyValue>>,
+    output: W,
+) -> Result<(parquet::file::metadata::ParquetMetaData, W)> {
+    let arrow_schema: Arc<arrow_schema::Schema> = Arc::new(table_schema.into());
+    let props = Arc::new(build_parquet_writer_properties(
+        compression,
+        enable_dictionary,
+        None::<&StatisticsOfColumns>,
+        metadata,
+        block.num_rows(),
+        table_schema,
+        None,
+        None,
+    ));
+    let mut writer = BulkParquetFileWriter::create(output, arrow_schema.clone(), props)?;
+    for (field_index, entry) in block.columns().iter().enumerate() {
+        let column = entry.to_column();
+        let array = ArrayRef::from(&column);
+        for leaf in compute_leaves(&arrow_schema.fields()[field_index], &array)? {
+            let mut leaf_writer = writer.next_leaf()?;
+            leaf_writer.write(&leaf)?;
+            writer = leaf_writer.finish()?;
+        }
+    }
     writer.finish()
 }
 

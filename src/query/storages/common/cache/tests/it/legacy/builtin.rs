@@ -45,6 +45,7 @@ fn configured() -> CacheConfig {
         // No longer read: column chunks are kept only on disk.
         data_cache_in_memory_bytes: 18,
         table_data_deserialized_data_bytes: 19,
+        granule_index_marks_bytes: 20,
         ..CacheConfig::default()
     }
 }
@@ -93,6 +94,7 @@ fn test_each_kind_reads_its_option() {
         ("memory_cache_inverted_index_payload", Bytes(300)),
         ("memory_cache_inverted_index_full_payload", Bytes(100)),
         ("memory_cache_spatial_index_file", Bytes(17)),
+        ("memory_cache_granule_index_marks", Bytes(20)),
         ("memory_cache_column_data", Disabled),
         ("memory_cache_table_data", Bytes(19)),
     ]);
@@ -205,6 +207,7 @@ fn test_ignored_options() {
         "inverted_index_lookup_size",
         "inverted_index_payload_size",
         "spatial_index_filter_size, spatial_index_filter_memory_ratio",
+        "granule_index_marks_bytes",
         "table_data_deserialized_data_bytes, table_data_deserialized_memory_ratio",
     ]);
 }

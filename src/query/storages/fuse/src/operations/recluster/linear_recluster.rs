@@ -26,6 +26,7 @@ use log::debug;
 use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterGroup;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
@@ -205,7 +206,8 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 average_depth,
             };
             candidates.push(task_candidate(
-                self.supports_ordered_merge(),
+                properties,
+                ReclusterCandidateKind::Depth,
                 group,
                 score,
                 &task_indices,

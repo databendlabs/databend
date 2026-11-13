@@ -74,6 +74,7 @@ pub enum MarkedDeletedIndexType {
     NGRAM = 3,
     VECTOR = 4,
     SPATIAL = 5,
+    BLOOM = 6,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

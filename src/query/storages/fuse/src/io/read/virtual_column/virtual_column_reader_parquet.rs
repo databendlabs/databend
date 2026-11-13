@@ -101,6 +101,49 @@ impl VirtualBlockReadResult {
 }
 
 impl VirtualColumnReader {
+    /// Physical read schema of the sidecar: one field per read slot, keyed by slot id.
+    ///
+    /// A shared key slot becomes a `Map<UInt32, T>` whose value slot is folded in as the map
+    /// value, so the value slot itself contributes no top-level field. Returns `None` when a slot
+    /// type has no parquet representation; callers fall back to the source column.
+    pub(crate) fn read_schema(
+        virtual_block_meta: &VirtualBlockMetaIndex,
+    ) -> Option<TableSchemaRef> {
+        let mut schema = TableSchema::empty();
+        let mut shared_slots = HashMap::new();
+        for plan in virtual_block_meta.fields.values() {
+            collect_shared_slots(plan, &mut shared_slots);
+        }
+        let shared_value_slots: HashSet<_> = shared_slots.values().copied().collect();
+
+        for (slot_index, slot) in virtual_block_meta.read_slots.iter().enumerate() {
+            let slot_id = VirtualReadSlotId(slot_index as u32);
+            if shared_value_slots.contains(&slot_id) {
+                continue;
+            }
+            if let Some(value_slot_id) = shared_slots.get(&slot_id) {
+                let value_slot = virtual_block_meta
+                    .read_slots
+                    .get(value_slot_id.as_usize())?;
+                let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
+                    fields_name: vec!["key".to_string(), "value".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::UInt32),
+                        infer_schema_type(&value_slot.data_type.remove_nullable()).ok()?,
+                    ],
+                }));
+                schema.add_internal_field(&slot_id.0.to_string(), data_type, slot_id.0);
+            } else {
+                schema.add_internal_field(
+                    &slot_id.0.to_string(),
+                    infer_schema_type(&slot.data_type).ok()?,
+                    slot_id.0,
+                );
+            }
+        }
+        Some(Arc::new(schema))
+    }
+
     pub async fn read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,
@@ -131,39 +174,13 @@ impl VirtualColumnReader {
             return None;
         }
 
-        let mut schema = TableSchema::empty();
+        let schema = Self::read_schema(virtual_block_meta)?;
         let mut ranges = Vec::with_capacity(virtual_block_meta.read_slots.len());
-        let mut shared_slots = HashMap::new();
-        for plan in virtual_block_meta.fields.values() {
-            collect_shared_slots(plan, &mut shared_slots);
-        }
-        let shared_value_slots: HashSet<_> = shared_slots.values().copied().collect();
-
         for (slot_index, slot) in virtual_block_meta.read_slots.iter().enumerate() {
-            let slot_id = VirtualReadSlotId(slot_index as u32);
-            ranges.push((slot_id.0, slot.offset..(slot.offset + slot.len)));
-            if shared_value_slots.contains(&slot_id) {
-                continue;
-            }
-            if let Some(value_slot_id) = shared_slots.get(&slot_id) {
-                let value_slot = virtual_block_meta
-                    .read_slots
-                    .get(value_slot_id.as_usize())?;
-                let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
-                    fields_name: vec!["key".to_string(), "value".to_string()],
-                    fields_type: vec![
-                        TableDataType::Number(NumberDataType::UInt32),
-                        infer_schema_type(&value_slot.data_type.remove_nullable()).ok()?,
-                    ],
-                }));
-                schema.add_internal_field(&slot_id.0.to_string(), data_type, slot_id.0);
-            } else {
-                schema.add_internal_field(
-                    &slot_id.0.to_string(),
-                    infer_schema_type(&slot.data_type).ok()?,
-                    slot_id.0,
-                );
-            }
+            ranges.push((
+                slot_index as ColumnId,
+                slot.offset..(slot.offset + slot.len),
+            ));
         }
 
         // Sidecar column chunks, from the virtual block meta, are units of the disk cache.
@@ -198,7 +215,7 @@ impl VirtualColumnReader {
             num_rows,
             self.compression.into(),
             block_read_res,
-            Arc::new(schema),
+            schema,
             virtual_block_meta.fields.clone(),
             virtual_block_meta.read_slots.clone(),
             ignore_column_ids,
