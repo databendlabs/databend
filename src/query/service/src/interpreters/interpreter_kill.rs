@@ -30,12 +30,15 @@
 //! preferred match wins. Only absence triggers the alternate identifier lookup:
 //! denial or a failed conditional cancellation never tries the other kind.
 //! Numeric query ids that parse as `u32` retain connection-id semantics.
-//! KILL CONNECTION looks up sessions regardless of prefix, rejecting query-only matches with
-//! `BadArguments` rather than disconnecting their sessions.
+//! KILL CONNECTION looks up sessions regardless of prefix. Authorized query-only
+//! matches return `BadArguments` rather than disconnecting their sessions.
 //!
+//! Lookup is scoped to the requester's tenant, including before identifier
+//! fallback and query-only CONNECTION errors. Other tenants' sessions and queries
+//! count as absent, so their ids cannot hide a match in the requester's tenant.
 //! Lookup includes queued queries but excludes FlightRPC fragment sessions,
-//! which are not registered as active client sessions. A local match stops the
-//! search; otherwise warehouse peers are searched until one target matches.
+//! which are not registered as active client sessions. A local in-tenant match
+//! stops the search; otherwise warehouse peers are searched until one matches.
 //! Numeric MySQL connection ids are never forwarded.
 //!
 //! # Authorization and cancellation
@@ -43,10 +46,12 @@
 //! Requester identity requires a nonempty matching tenant, even for SUPER.
 //! Within that tenant, ownership compares username and hostname; other targets,
 //! including userless sessions, require global SUPER (including role grants).
-//! Authorization precedes queue removal and cancellation. Denial returns
-//! `PermissionDenied` (1063); missing targets return `UnknownSession` (1053).
-//! This intentionally distinguishes target existence, including beyond rows
-//! visible to the caller in `system.processes`.
+//! Authorization precedes queue removal and cancellation. Same-tenant denial
+//! returns `PermissionDenied` (1063); missing and cross-tenant targets both return
+//! `UnknownSession` (1053). This exposes existence only within the same tenant,
+//! including beyond rows visible to the caller in `system.processes`.
+//! Ordinary client sessions use the configured tenant; runtime tenant overrides
+//! are restricted to management/sandbox modes and internal Local sessions.
 //!
 //! Query-id cancellation checks and pins the matching context under the session's
 //! context-slot lock, and removes its queue entry before releasing the lock.
@@ -71,9 +76,10 @@
 //! SQL KILL does not call or change the HTTP query-kill endpoint. After stopping,
 //! `/page` and `/final` return normal HTTP 200 envelopes with `Failed` and
 //! `AbortedQuery` (1043). Query/session/MySQL-id KILL QUERY and explicit queue
-//! removal use `Query canceled by KILL QUERY`; shutdown and connection-kill
-//! errors retain their own semantics. Buffered rows do not make failure succeed;
-//! the query-log event is `Aborted`. Clients still finalize results: finalization
+//! removal use `Query canceled by KILL`. KILL CONNECTION also closes a queued
+//! session after removal; other connection-kill/shutdown errors retain their semantics.
+//! Buffered rows do not make failure succeed; the query-log event is `Aborted`.
+//! Clients still finalize results: finalization
 //! decrements the active count, and HttpQueryManager removes retained records
 //! after its existing timeout. The HTTP `/kill` closed-query response is unchanged.
 
@@ -242,7 +248,16 @@ impl KillInterpreter {
             }
         };
 
+        if access.tenant.is_empty() {
+            return Err(self.unknown_session());
+        }
+
         let manager = SessionManager::instance();
+        let session_in_tenant = |id: &str| {
+            manager
+                .get_session_by_id(id)
+                .filter(|session| session.get_current_tenant().tenant_name() == access.tenant)
+        };
         let (target, by_query_id) = match KillTarget::parse(&self.plan.id) {
             KillTarget::MySqlConnection(id) => {
                 // MySQL connection ids are node-local. Do not broadcast them to peers.
@@ -251,9 +266,8 @@ impl KillInterpreter {
                     .ok_or_else(|| self.unknown_session())?;
                 // The mapping can outlive the session briefly during concurrent
                 // cleanup. A stale numeric id must not fall through to peer lookup.
-                let session = manager
-                    .get_session_by_id(&session_id)
-                    .ok_or_else(|| self.unknown_session())?;
+                let session =
+                    session_in_tenant(&session_id).ok_or_else(|| self.unknown_session())?;
                 (Some(session), false)
             }
             KillTarget::SessionOrQuery(id) | KillTarget::QueryOrSession(id)
@@ -261,19 +275,21 @@ impl KillInterpreter {
             {
                 // CONNECTION accepts sessions only. A query-only match is used just
                 // to return a clear error; it must never disconnect that session.
-                match manager.get_session_by_id(id) {
+                match session_in_tenant(id) {
                     Some(session) => (Some(session), false),
-                    None => (manager.get_session_by_query_id(id), true),
+                    None => (manager.get_session_by_query_id(&access.tenant, id), true),
                 }
             }
-            KillTarget::SessionOrQuery(id) => match manager.get_session_by_id(id) {
+            KillTarget::SessionOrQuery(id) => match session_in_tenant(id) {
                 Some(session) => (Some(session), false),
-                None => (manager.get_session_by_query_id(id), true),
+                None => (manager.get_session_by_query_id(&access.tenant, id), true),
             },
-            KillTarget::QueryOrSession(id) => match manager.get_session_by_query_id(id) {
-                Some(session) => (Some(session), true),
-                None => (manager.get_session_by_id(id), false),
-            },
+            KillTarget::QueryOrSession(id) => {
+                match manager.get_session_by_query_id(&access.tenant, id) {
+                    Some(session) => (Some(session), true),
+                    None => (session_in_tenant(id), false),
+                }
+            }
         };
 
         let Some(kill_session) = target else {
@@ -282,14 +298,14 @@ impl KillInterpreter {
                 false => Err(self.unknown_session()),
             };
         };
+        self.check_access(&access, &kill_session)?;
         if by_query_id && self.plan.kill_connection {
             return Err(ErrorCode::BadArguments(
                 "KILL CONNECTION requires a connection id or session id, not a query id",
             ));
         }
-        self.check_access(&access, &kill_session)?;
 
-        let cause = ErrorCode::AbortedQuery("Query canceled by KILL QUERY");
+        let cause = ErrorCode::AbortedQuery("Query canceled by KILL");
         if by_query_id {
             return match kill_session.force_kill_query_if_id(&self.plan.id, cause) {
                 true => Ok(PipelineBuildResult::create()),
@@ -297,9 +313,14 @@ impl KillInterpreter {
             };
         }
 
-        // Queued queries must pass the same authorization as running queries.
         if let Some(query_id) = kill_session.get_current_query_id() {
             if QueriesQueueManager::instance().remove(query_id) {
+                if self.plan.kill_connection {
+                    // Close queued connections too. Use the removal cause for the
+                    // context so either the queue or its abort watcher reports it.
+                    kill_session.force_kill_query(cause);
+                    kill_session.kill();
+                }
                 return Ok(PipelineBuildResult::create());
             }
         }
@@ -314,11 +335,8 @@ impl KillInterpreter {
 
     fn check_access(&self, access: &KillQueryAccess, kill_session: &Session) -> Result<()> {
         let target_tenant = kill_session.get_current_tenant();
-        if access.tenant != target_tenant.tenant_name() {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied: cannot kill target {} outside the requester's tenant",
-                self.plan.id
-            )));
+        if access.tenant.is_empty() || access.tenant != target_tenant.tenant_name() {
+            return Err(self.unknown_session());
         }
         let target_user = kill_session
             .get_current_user()

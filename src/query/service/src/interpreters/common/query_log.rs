@@ -518,12 +518,12 @@ mod tests {
 
     #[test]
     fn killed_query_is_logged_as_aborted() {
-        let err = ErrorCode::AbortedQuery("Query canceled by KILL QUERY");
+        let err = ErrorCode::AbortedQuery("Query canceled by KILL");
         let (log_type, code, message, _) =
             error_fields(LogType::Finish, Some(err), &SqlSecrets::default());
         assert!(matches!(log_type, LogType::Aborted));
         assert_eq!(code, i32::from(ErrorCode::ABORTED_QUERY));
-        assert!(message.contains("Query canceled by KILL QUERY"));
+        assert!(message.contains("Query canceled by KILL"));
     }
 
     #[test]

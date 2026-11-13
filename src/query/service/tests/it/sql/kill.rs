@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
@@ -42,51 +44,84 @@ async fn test_kill_queued_query_authorization() -> anyhow::Result<()> {
         .acquire(QueryEntry::create_entry(&holder_ctx, true)?)
         .await?;
 
-    for kind in ["QUERY", "CONNECTION"] {
-        for id_type in ["session", "mysql", "query", "query_prefixed"] {
-            if kind == "CONNECTION" && id_type.starts_with("query") {
-                continue;
-            }
-            let target = fixture.new_session_with_type(SessionType::MySQL).await?;
-            target
-                .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-                .await?;
-            let target_ctx = target.create_query_context(&BUILD_INFO).await?;
-            if id_type == "query_prefixed" {
-                target_ctx.update_init_query_id(format!("p-{}", uuid::Uuid::new_v4()));
-            }
-            let mut acquire = Box::pin(queue.acquire(QueryEntry::create_entry(&target_ctx, true)?));
-            assert!(futures::poll!(acquire.as_mut()).is_pending());
-            assert_eq!(queue.length(), 1);
-
-            let id = match id_type {
-                // Leading zeros must still resolve as a local MySQL id.
-                "mysql" => format!("000{}", target.get_mysql_conn_id().unwrap()),
-                "query" | "query_prefixed" => target_ctx.get_id(),
-                _ => target.get_id(),
-            };
-            let sql = format!("KILL {} '{}'", kind, id);
-            let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
-            requester
-                .set_authed_user(UserInfo::new_no_auth("u2", "%"), None)
-                .await?;
-            let ctx = requester.create_query_context(&BUILD_INFO).await?;
-            let error = execute_command(ctx, &sql).await.unwrap_err();
-            assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
-            assert!(error.message().contains("not owner of target"));
-            assert_eq!(queue.length(), 1, "unauthorized KILL removed queued query");
-            assert!(!target.is_aborting());
-
-            requester
-                .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
-                .await?;
-            let ctx = requester.create_query_context(&BUILD_INFO).await?;
-            execute_command(ctx, &sql).await?;
-            assert_eq!(queue.length(), 0);
-            let error = acquire.await.unwrap_err();
-            assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
-            assert_eq!(error.message(), "Query canceled by KILL QUERY");
+    for (kind, id_type, registered) in [
+        ("QUERY", "session", true),
+        ("CONNECTION", "session", true),
+        ("QUERY", "mysql", true),
+        ("CONNECTION", "mysql", true),
+        ("QUERY", "query", true),
+        ("QUERY", "query_prefixed", true),
+        ("QUERY", "query", false),
+        ("QUERY", "query_prefixed", false),
+    ] {
+        let target = fixture.new_session_with_type(SessionType::MySQL).await?;
+        target
+            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        let io_closed = Arc::new(AtomicBool::new(false));
+        let on_shutdown = io_closed.clone();
+        target.attach(None, move || on_shutdown.store(true, Ordering::SeqCst));
+        let target_ctx = target.create_query_context(&BUILD_INFO).await?;
+        if id_type == "query_prefixed" {
+            target_ctx.update_init_query_id(format!("p-{}", uuid::Uuid::new_v4()));
         }
+        let mut acquire = Box::pin(queue.acquire(QueryEntry::create_entry(&target_ctx, true)?));
+        // Model KILL both before queue registration and during a queued wait.
+        if registered {
+            assert!(futures::poll!(acquire.as_mut()).is_pending());
+        }
+        assert_eq!(queue.length(), usize::from(registered));
+
+        let id = match id_type {
+            // Leading zeros must still resolve as a local MySQL id.
+            "mysql" => format!("000{}", target.get_mysql_conn_id().unwrap()),
+            "query" | "query_prefixed" => target_ctx.get_id(),
+            _ => target.get_id(),
+        };
+        let sql = format!("KILL {} '{}'", kind, id);
+        let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
+        requester
+            .set_authed_user(UserInfo::new_no_auth("u2", "%"), None)
+            .await?;
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        let error = execute_command(ctx, &sql).await.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
+        assert!(error.message().contains("not owner of target"));
+        assert_eq!(
+            queue.length(),
+            usize::from(registered),
+            "unauthorized KILL removed queued query"
+        );
+        assert!(!target.is_aborting());
+        assert!(!io_closed.load(Ordering::SeqCst));
+        assert!(
+            target_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_ok()
+        );
+
+        requester
+            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        execute_command(ctx, &sql).await?;
+        assert_eq!(queue.length(), 0);
+        assert_eq!(target.is_aborting(), kind == "CONNECTION");
+        assert_eq!(io_closed.load(Ordering::SeqCst), kind == "CONNECTION");
+        if kind == "CONNECTION" {
+            let error = target_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .unwrap_err();
+            assert_eq!(error.message(), "Query canceled by KILL");
+        }
+        let error = acquire.await.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
+        assert_eq!(error.message(), "Query canceled by KILL");
+        assert_eq!(queue.length(), 0);
     }
     Ok(())
 }
@@ -129,7 +164,7 @@ async fn test_kill_with_super_from_role() -> anyhow::Result<()> {
             .unwrap_err();
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         if kind == "QUERY" {
-            assert_eq!(error.message(), "Query canceled by KILL QUERY");
+            assert_eq!(error.message(), "Query canceled by KILL");
         }
     }
     Ok(())
@@ -187,8 +222,7 @@ async fn test_kill_super_respects_tenant_before_queue_removal() -> anyhow::Resul
                 let error = execute_command(ctx, &format!("KILL {} '{}'", kind, id))
                     .await
                     .unwrap_err();
-                assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
-                assert!(error.message().contains("outside the requester's tenant"));
+                assert_eq!(error.code(), ErrorCode::UNKNOWN_SESSION);
                 assert_eq!(queue.length(), usize::from(queued));
                 assert!(!target.is_aborting());
                 assert!(target_ctx.get_abort_checker().try_check_aborting().is_ok());
@@ -303,7 +337,9 @@ async fn test_kill_connection_rejects_query_id_and_numeric_id_is_connection() ->
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.internal_enable_sandbox_tenant = true;
+    let fixture = TestFixture::setup_with_config(&config).await?;
     let manager = SessionManager::instance();
     for prefixed in [false, true] {
         let id = if prefixed {
@@ -389,6 +425,35 @@ async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow
         assert!(!sid_target.is_aborting());
         assert!(!query_target.is_aborting());
 
+        // A preferred match in another tenant is absence, not a denial: it must
+        // not hide the alternate identifier in the requester's own tenant.
+        let preferred = if prefixed { &sid_target } else { &query_target };
+        preferred
+            .get_settings()
+            .set_setting("sandbox_tenant".to_string(), "other_tenant".to_string())?;
+        let next_sid_ctx = sid_target.create_query_context(&BUILD_INFO).await?;
+        let next_query_ctx = query_target.create_query_context(&BUILD_INFO).await?;
+        next_query_ctx.update_init_query_id(id.clone());
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        execute_command(ctx, &format!("KILL QUERY '{}'", id)).await?;
+        assert_eq!(
+            next_sid_ctx
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_err(),
+            !prefixed
+        );
+        assert_eq!(
+            next_query_ctx
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_err(),
+            prefixed
+        );
+        preferred
+            .get_settings()
+            .set_setting("sandbox_tenant".to_string(), String::new())?;
+
         // CONNECTION always chooses the actual sid, even if an unprefixed query
         // with the same string exists. It never disconnects the query's session.
         let next_query = query_target.create_query_context(&BUILD_INFO).await?;
@@ -398,6 +463,74 @@ async fn test_kill_prefix_lookup_priority_and_no_permission_fallback() -> anyhow
         assert!(sid_target.is_aborting());
         assert!(!query_target.is_aborting());
         assert!(next_query.get_abort_checker().try_check_aborting().is_ok());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_kill_cross_tenant_ids_are_hidden() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.internal_enable_sandbox_tenant = true;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let manager = SessionManager::instance();
+    for prefixed in [false, true] {
+        let foreign = fixture.new_session_with_type(SessionType::MySQL).await?;
+        foreign
+            .get_settings()
+            .set_setting("sandbox_tenant".to_string(), "other_tenant".to_string())?;
+        let foreign_ctx = foreign.create_query_context(&BUILD_INFO).await?;
+        let id = if prefixed {
+            format!("p-{}", uuid::Uuid::new_v4())
+        } else {
+            uuid::Uuid::new_v4().to_string()
+        };
+        foreign_ctx.update_init_query_id(id.clone());
+        let requester = fixture.new_session_with_type(SessionType::MySQL).await?;
+        requester
+            .set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        for kind in ["QUERY", "CONNECTION"] {
+            for target in [
+                foreign.get_id(),
+                id.clone(),
+                foreign.get_mysql_conn_id().unwrap().to_string(),
+            ] {
+                let ctx = requester.create_query_context(&BUILD_INFO).await?;
+                let err = execute_command(ctx, &format!("KILL {} '{}'", kind, target))
+                    .await
+                    .unwrap_err();
+                assert_eq!(err.code(), ErrorCode::UNKNOWN_SESSION);
+            }
+        }
+        assert!(!foreign.is_aborting());
+        assert!(
+            foreign_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_ok()
+        );
+
+        // A client-chosen query id may exist in both tenants. Cancel only the
+        // in-tenant query; another tenant must neither shadow nor receive it.
+        let own = fixture.new_session_with_type(SessionType::MySQL).await?;
+        own.set_authed_user(UserInfo::new_no_auth("u1", "%"), None)
+            .await?;
+        let own_ctx = own.create_query_context(&BUILD_INFO).await?;
+        own_ctx.update_init_query_id(id.clone());
+        let ctx = requester.create_query_context(&BUILD_INFO).await?;
+        execute_command(ctx, &format!("KILL QUERY '{}'", id)).await?;
+        assert!(
+            own_ctx
+                .clone()
+                .get_abort_checker()
+                .try_check_aborting()
+                .is_err()
+        );
+        assert!(foreign_ctx.get_abort_checker().try_check_aborting().is_ok());
+        drop(own_ctx);
+        drop(own);
+        assert!(manager.get_session_by_query_id("test", &id).is_none());
     }
     Ok(())
 }

@@ -580,7 +580,6 @@ async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
     let ctx = session.create_query_context(&BUILD_INFO).await?;
     let weak_ctx = Arc::downgrade(&ctx);
     let entry = QueryEntry::create_entry(&ctx, true)?;
-    let abort_notify = entry.get_abort_notify();
     drop(ctx);
     drop(session);
 
@@ -595,8 +594,15 @@ async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
             .is_err()
     );
 
-    abort_notify.notify_waiters();
-    assert_eq!(acquire.await.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+    // Preserve non-KILL causes too; a hard-coded KILL message would hide a timeout.
+    let cause = ErrorCode::Timeout("queued query deadline reached");
+    weak_session
+        .upgrade()
+        .unwrap()
+        .force_kill_query(cause.clone());
+    let error = acquire.await.unwrap_err();
+    assert_eq!(error.code(), cause.code());
+    assert_eq!(error.message(), cause.message());
     assert_eq!(queue.length(), 0);
     assert!(weak_ctx.upgrade().is_none());
     assert!(weak_session.upgrade().is_none());

@@ -211,13 +211,19 @@ impl SessionManager {
         sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
     }
 
-    /// Only coordinator/client sessions are registered here; FlightRPC fragment sessions
-    /// deliberately stay out of active_sessions even when they share the query id.
-    pub fn get_session_by_query_id(&self, query_id: &str) -> Option<Arc<Session>> {
+    /// Find a coordinator/client query within the requester's tenant. Client query ids
+    /// may be reused across tenants; FlightRPC fragments are not in active_sessions.
+    pub fn get_session_by_query_id(&self, tenant: &str, query_id: &str) -> Option<Arc<Session>> {
+        if tenant.is_empty() {
+            return None;
+        }
         self.active_sessions_snapshot()
             .into_iter()
             .filter_map(|session| session.upgrade())
-            .find(|session| session.get_current_query_id().as_deref() == Some(query_id))
+            .find(|session| {
+                session.get_current_tenant().tenant_name() == tenant
+                    && session.get_current_query_id().as_deref() == Some(query_id)
+            })
     }
 
     pub fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {

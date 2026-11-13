@@ -698,7 +698,7 @@ async fn test_kill_query_id_http_lifecycle() -> anyhow::Result<()> {
         let error = page.error.unwrap();
         assert_eq!(error.code, ErrorCode::ABORTED_QUERY);
         assert!(
-            error.message.contains("Query canceled by KILL QUERY"),
+            error.message.contains("Query canceled by KILL"),
             "{error:?}"
         );
         let (status, finalized) = get_uri_checked(&ep, started.final_uri.as_ref().unwrap()).await?;

@@ -100,14 +100,21 @@ async fn test_legacy_kill_respects_tenant() -> anyhow::Result<()> {
         (true, false, false),
         (false, true, false),
         (false, true, true),
+        (true, true, false),
+        (true, true, true),
     ] {
         for (requester_tenant, is_super, target_tenant, expected) in [
-            (Some("test"), true, "test", true),
-            (Some("other_tenant"), true, "test", false),
-            (Some(""), true, "test", false),
-            (Some("test"), false, "test", false),
-            (None, true, "test", true),
-            (None, true, "other_tenant", false),
+            (Some("test"), true, "test", Ok(true)),
+            (Some("other_tenant"), true, "test", Ok(false)),
+            (Some(""), true, "test", Ok(false)),
+            (
+                Some("test"),
+                false,
+                "test",
+                Err(ErrorCode::PERMISSION_DENIED),
+            ),
+            (None, true, "test", Ok(true)),
+            (None, true, "other_tenant", Ok(false)),
         ] {
             let mut target = manager.create_session(SessionType::Local).await?;
             target.set_current_tenant(Tenant::new_literal(target_tenant))?;
@@ -137,16 +144,21 @@ async fn test_legacy_kill_respects_tenant() -> anyhow::Result<()> {
             let response = actions
                 .do_action(KILL_QUERY, &serde_json::to_vec(&request)?)
                 .await;
-            if expected {
-                assert!(serde_json::from_slice::<bool>(&response?)?);
+            let expected = if expected == Ok(true) && kill_connection && by_query_id {
+                Err(ErrorCode::BAD_ARGUMENTS)
             } else {
-                assert_eq!(response.unwrap_err().code(), ErrorCode::PERMISSION_DENIED);
+                expected
+            };
+            match expected {
+                Ok(found) => assert_eq!(serde_json::from_slice::<bool>(&response?)?, found),
+                Err(code) => assert_eq!(response.unwrap_err().code(), code),
             }
+            let canceled = expected == Ok(true);
             assert_eq!(
                 ctx.get_abort_checker().try_check_aborting().is_err(),
-                expected
+                canceled
             );
-            assert_eq!(target.is_aborting(), expected && kill_connection);
+            assert_eq!(target.is_aborting(), canceled && kill_connection);
         }
     }
     Ok(())
@@ -165,12 +177,15 @@ async fn test_kill_query_id_ignores_fragment_sessions() -> anyhow::Result<()> {
     fragment_ctx.update_init_query_id(id.clone());
     let manager = SessionManager::instance();
     assert_eq!(
-        manager.get_session_by_query_id(&id).unwrap().get_id(),
+        manager
+            .get_session_by_query_id("test", &id)
+            .unwrap()
+            .get_id(),
         coordinator.get_id()
     );
     drop(coordinator_ctx);
     drop(coordinator);
-    assert!(manager.get_session_by_query_id(&id).is_none());
+    assert!(manager.get_session_by_query_id("test", &id).is_none());
     Ok(())
 }
 
@@ -184,14 +199,16 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
         (true, false, false),
         (false, true, false),
         (false, true, true),
+        (true, true, false),
+        (true, true, true),
     ] {
         for (user, tenant, is_super, expected) in [
-            ("u2", "test", false, false),
-            ("u1", "other_tenant", false, false),
-            ("u1", "test", false, true),
-            ("u2", "test", true, true),
-            ("u2", "other_tenant", true, false),
-            ("u1", "", true, false),
+            ("u2", "test", false, Err(ErrorCode::PERMISSION_DENIED)),
+            ("u1", "other_tenant", false, Ok(false)),
+            ("u1", "test", false, Ok(true)),
+            ("u2", "test", true, Ok(true)),
+            ("u2", "other_tenant", true, Ok(false)),
+            ("u1", "", true, Ok(false)),
         ] {
             let target = fixture.new_session_with_type(SessionType::MySQL).await?;
             target
@@ -219,16 +236,21 @@ async fn test_kill_v2_authorizes_target() -> anyhow::Result<()> {
             let response = actions
                 .do_action(KILL_QUERY_V2, &serde_json::to_vec(&request)?)
                 .await;
-            if expected {
-                assert!(serde_json::from_slice::<bool>(&response?)?);
+            let expected = if expected == Ok(true) && kill_connection && by_query_id {
+                Err(ErrorCode::BAD_ARGUMENTS)
             } else {
-                assert_eq!(response.unwrap_err().code(), ErrorCode::PERMISSION_DENIED);
+                expected
+            };
+            match expected {
+                Ok(found) => assert_eq!(serde_json::from_slice::<bool>(&response?)?, found),
+                Err(code) => assert_eq!(response.unwrap_err().code(), code),
             }
+            let canceled = expected == Ok(true);
             assert_eq!(
                 target_ctx.get_abort_checker().try_check_aborting().is_err(),
-                expected
+                canceled
             );
-            assert_eq!(target.is_aborting(), expected && kill_connection);
+            assert_eq!(target.is_aborting(), canceled && kill_connection);
         }
     }
     Ok(())
