@@ -13,7 +13,7 @@ create table t(a int)
 statement ok
 insert into t values(1),(2),(3)
 
-query III
+query III rowsort
 select * from t, (select a, sum(a) over (order by a) from t) t1
 ----
 1 1 1
@@ -25,6 +25,30 @@ select * from t, (select a, sum(a) over (order by a) from t) t1
 3 1 1
 3 2 3
 3 3 6
+
+# Replacing the window's COUNT sort must not fill an unmatched row_number with 0.
+query II rowsort
+SELECT o.k, (SELECT row_number() OVER (ORDER BY count(*)) FROM t i WHERE i.a = o.k GROUP BY i.a LIMIT 1)
+FROM (VALUES (1), (4)) o(k)
+----
+1 1
+4 NULL
+
+# COUNT(DISTINCT) uses the same bookkeeping as COUNT(*).
+query II rowsort
+SELECT o.k, (SELECT row_number() OVER (ORDER BY count(DISTINCT i.a)) FROM t i WHERE i.a = o.k GROUP BY i.a LIMIT 1)
+FROM (VALUES (1), (4)) o(k)
+----
+1 1
+4 NULL
+
+# A scalar COUNT without GROUP BY must still return 0 for an unmatched key.
+query II rowsort
+SELECT o.k, (SELECT count(*) FROM t i WHERE i.a = o.k)
+FROM (VALUES (1), (4)) o(k)
+----
+1 1
+4 0
 
 statement ok
 drop database window_subquery

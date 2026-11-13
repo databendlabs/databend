@@ -75,7 +75,6 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey, const UNIQU
 
 pub enum HashJoinHashTable {
     Null,
-    NestedLoop(Vec<DataBlock>),
     Serializer(SerializerHashJoinHashTable),
     UniqueSerializer(UniqueSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),
@@ -232,6 +231,31 @@ impl HashJoinState {
 
     pub fn join_type(&self) -> JoinType {
         self.hash_join_desc.join_type
+    }
+
+    /// See [`probes_all_pairs`]. Merge into tracks matches per build row, so it
+    /// keeps the hash join probe.
+    ///
+    /// [`probes_all_pairs`]: super::probes_all_pairs
+    pub(crate) fn probes_all_pairs(&self) -> bool {
+        self.hash_join_desc.probes_all_pairs() && self.merge_into_state.is_none()
+    }
+
+    /// The build side of an all-pairs probe without projected columns is only
+    /// a row count.
+    pub(crate) fn is_row_count_build(&self) -> bool {
+        self.probes_all_pairs() && self.hash_join_desc.build_projection.is_empty()
+    }
+
+    /// Whether probing updates build-side state that is read after the probe
+    /// output: the final scan, merge into, or the RightSingle row check.
+    pub(crate) fn probe_mutates_build_side(&self) -> bool {
+        self.need_final_scan()
+            || self.merge_into_state.is_some()
+            || matches!(
+                self.hash_join_desc.single_to_inner,
+                Some(JoinType::RightSingle)
+            )
     }
 
     pub fn need_outer_scan(&self) -> bool {

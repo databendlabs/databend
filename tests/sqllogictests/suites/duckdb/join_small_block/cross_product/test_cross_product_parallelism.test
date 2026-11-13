@@ -4,24 +4,26 @@ set max_block_size = 1;
 statement ok
 drop table if exists integers;
 
+# One-row blocks emit one output block per pair, so keep the product small;
+# duckdb/join/cross_product covers the 5000 x 5000 product.
 statement ok
-CREATE TABLE integers AS SELECT * FROM numbers(5000) tbl(i);
+CREATE TABLE integers AS SELECT * FROM numbers(50) tbl(i);
 
 # test if order remains the same
 query I
 SELECT count(*) FROM integers i1, integers i2
 ----
-25000000
+2500
 
 query II
 SELECT MIN(i1.i), MAX(i2.i) FROM integers i1, integers i2
 ----
-0	4999
+0	49
 
 query II
 SELECT MAX(i1.i), MIN(i2.i) FROM integers i1, integers i2
 ----
-4999	0
+49	0
 
 statement ok
 drop table if exists integers;

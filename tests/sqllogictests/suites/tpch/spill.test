@@ -24,17 +24,22 @@ set join_spilling_buffer_threshold_per_proc_mb = 1;
 include ./queries.test
 
 # CROSS JOIN
+# Check a complete, bounded product: LIMIT on the cross join itself selects an
+# arbitrary subset, so its sum(p_size) depends on the execution order.
 query II
 SELECT    count(*),
-          sum(p_size) -- cross join may have different order
-FROM      (
-          SELECT    *
-          FROM      lineitem,
-                    part
-          LIMIT     10000000
-          );
+          sum(p_size)
+FROM      (SELECT * FROM lineitem LIMIT 50) l,
+          part;
 ----
 10000000 254271050
+
+# Keep the early-stop path without depending on which pairs LIMIT selects.
+query I
+SELECT count(*)
+FROM (SELECT * FROM lineitem, part LIMIT 10000000);
+----
+10000000
 
 
 # INNER JOIN

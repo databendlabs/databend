@@ -23,19 +23,15 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::FieldIndex;
-use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_settings::Settings;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use parking_lot::RwLock;
 
 use crate::physical_plans::HashJoin;
-use crate::physical_plans::NestedLoopFilterInfo;
 use crate::physical_plans::PhysicalRuntimeFilter;
 use crate::physical_plans::PhysicalRuntimeFilters;
 use crate::pipelines::processors::transforms::wrap_true_validity;
@@ -72,7 +68,6 @@ pub struct HashJoinDesc {
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
     pub(crate) build_schema: DataSchemaRef,
     pub(crate) probe_schema: DataSchemaRef,
-    pub(crate) nested_loop_filter: Option<NestedLoopFilterInfo>,
 }
 
 #[derive(Debug, Clone)]
@@ -117,7 +112,31 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
     }
 }
 
+/// Cross joins, and Inner joins without equi keys, have nothing to hash: the
+/// probe streams every build/probe pair through the Cross cursor, filtered by
+/// the non-equi conditions. A rewritten scalar subquery keeps the Inner hash
+/// join for its single-row check.
+pub(crate) fn probes_all_pairs(
+    join_type: JoinType,
+    has_keys: bool,
+    single_to_inner: Option<JoinType>,
+) -> bool {
+    match join_type {
+        JoinType::Cross => true,
+        JoinType::Inner => !has_keys && single_to_inner.is_none(),
+        _ => false,
+    }
+}
+
 impl HashJoinDesc {
+    pub(crate) fn probes_all_pairs(&self) -> bool {
+        probes_all_pairs(
+            self.join_type,
+            !self.build_keys.is_empty(),
+            self.single_to_inner,
+        )
+    }
+
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
         let other_predicate = Self::join_predicate(&join.join_type, &join.non_equi_conditions)?;
 
@@ -150,7 +169,6 @@ impl HashJoinDesc {
             probe_projection: join.probe_projections.clone(),
             build_schema: join.build.output_schema()?,
             probe_schema: join.probe.output_schema()?,
-            nested_loop_filter: join.nested_loop_filter.clone(),
         })
     }
 
@@ -276,72 +294,22 @@ impl HashJoinDesc {
             }
         }
     }
-
-    pub fn create_nested_loop_desc(
-        &self,
-        settings: &Settings,
-        function_ctx: &FunctionContext,
-    ) -> Result<Option<NestedLoopDesc>> {
-        let nested_loop_join_threshold = settings.get_nested_loop_join_threshold()? as usize;
-        let block_size = settings.get_max_block_size()? as usize;
-        if nested_loop_join_threshold == 0 {
-            return Ok(None);
-        }
-
-        let Some(NestedLoopFilterInfo {
-            predicates,
-            projection,
-        }) = &self.nested_loop_filter
-        else {
-            return Ok(None);
-        };
-
-        let predicates = predicates
-            .iter()
-            .map(|x| Ok(x.as_expr(&BUILTIN_FUNCTIONS)))
-            .reduce(|lhs, rhs| {
-                check_function(None, "and_filters", &[], &[lhs?, rhs?], &BUILTIN_FUNCTIONS)
-            })
-            .transpose()?;
-        let Some(predicates) = predicates else {
-            return Ok(None);
-        };
-
-        let projections = projection.iter().copied().collect::<BTreeSet<usize>>();
-        let field_reorder = {
-            let mapper = projections.iter().copied().collect::<Vec<_>>();
-            debug_assert!(mapper.is_sorted());
-            let reorder = projection
-                .iter()
-                .map(|a| mapper.iter().position(|b| a == b).unwrap())
-                .collect::<Vec<_>>();
-
-            if reorder.iter().copied().enumerate().all(|(a, b)| a == b) {
-                None
-            } else {
-                Some(reorder)
-            }
-        };
-
-        Ok(Some(NestedLoopDesc {
-            filter: FilterExecutor::new(
-                predicates,
-                function_ctx.clone(),
-                block_size,
-                None,
-                &BUILTIN_FUNCTIONS,
-                false,
-            ),
-            projections,
-            field_reorder,
-            nested_loop_join_threshold,
-        }))
-    }
 }
 
-pub struct NestedLoopDesc {
-    pub filter: FilterExecutor,
-    pub projections: BTreeSet<usize>,
-    pub field_reorder: Option<Vec<FieldIndex>>,
-    pub nested_loop_join_threshold: usize,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn joins_without_keys_probe_all_pairs() {
+        assert!(probes_all_pairs(JoinType::Cross, false, None));
+        assert!(probes_all_pairs(JoinType::Inner, false, None));
+        assert!(!probes_all_pairs(JoinType::Inner, true, None));
+        assert!(!probes_all_pairs(
+            JoinType::Inner,
+            false,
+            Some(JoinType::LeftSingle)
+        ));
+        assert!(!probes_all_pairs(JoinType::Left, false, None));
+    }
 }

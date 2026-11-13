@@ -61,7 +61,6 @@ impl InnerHashJoin {
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
         state: Arc<BasicHashJoinState>,
-        nested_loop_join_threshold: usize,
     ) -> Result<Self> {
         let block_size = settings.get_max_block_size()? as usize;
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
@@ -76,7 +75,6 @@ impl InnerHashJoin {
             method,
             desc.clone(),
             state.clone(),
-            nested_loop_join_threshold,
         )?;
 
         Ok(InnerHashJoin {
@@ -148,7 +146,6 @@ impl Join for InnerHashJoin {
                     &mut self.performance_context.probe_result,
                 )
             }
-            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the hash table is uninitialized.",

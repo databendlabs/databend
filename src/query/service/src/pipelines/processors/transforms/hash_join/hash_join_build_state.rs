@@ -261,7 +261,7 @@ impl HashJoinBuildState {
                 return Ok(());
             }
 
-            if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
+            if self.hash_join_state.probes_all_pairs() {
                 return Ok(());
             }
             let unique_entry = matches!(
@@ -770,7 +770,6 @@ impl HashJoinBuildState {
                     "Aborted query, because the hash table is uninitialized.",
                 ));
             }
-            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::UniqueSerializer(table) => insert_binary_key! {
               &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
@@ -817,9 +816,7 @@ impl HashJoinBuildState {
         info!("finish build hash table with {} rows", build_num_rows);
 
         let data_blocks = &mut build_state.generation_state.chunks;
-        if !data_blocks.is_empty()
-            && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
-        {
+        if !data_blocks.is_empty() && !self.hash_join_state.probes_all_pairs() {
             let num_columns = data_blocks[0].num_columns();
             let columns_data_type: Vec<DataType> = (0..num_columns)
                 .map(|index| data_blocks[0].data_type(index))
@@ -843,7 +840,7 @@ impl HashJoinBuildState {
         if self.finalize_counter.fetch_sub(1, Ordering::AcqRel) == 1 {
             self.build_generation_state();
             if self.hash_join_state.need_next_round.load(Ordering::Acquire) {
-                let partition_id = if self.join_type() != JoinType::Cross {
+                let partition_id = if !self.hash_join_state.probes_all_pairs() {
                     // If build side has spilled data, we need to wait build side to next round.
                     // Set partition id to `HashJoinState`
                     let mut spill_partitions = self.hash_join_state.spilled_partitions.write();
@@ -913,10 +910,6 @@ impl HashJoinBuildState {
                 .map_err(|_| ErrorCode::TokioError("watcher channel is closed"))?;
         }
         Ok(())
-    }
-
-    pub(crate) fn join_type(&self) -> JoinType {
-        self.hash_join_state.hash_join_desc.join_type
     }
 
     pub fn runtime_filter_desc(&self) -> &[RuntimeFilterDesc] {

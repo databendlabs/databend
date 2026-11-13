@@ -207,6 +207,10 @@ impl TransformHashJoinProbe {
             // Spilled probes must still consume their input and join every round's
             // barrier, even when downstream no longer needs this worker's output.
             self.output_data_blocks.clear();
+            // The rest of a pending probe would only produce discarded output.
+            if !self.probe_mutates_build_side() {
+                self.probe_state.pending = None;
+            }
         } else {
             if !self.output_port.can_push() {
                 self.input_port.set_not_need_data();
@@ -223,6 +227,13 @@ impl TransformHashJoinProbe {
             return self.next_step(Step::Async(AsyncStep::Spill));
         }
 
+        if self.has_queued_probe() {
+            // One input may produce many output batches. Finish queued work
+            // before pulling more input, rather than growing the queue.
+            self.input_port.set_not_need_data();
+            return self.next_step(Step::Sync(SyncStep::Probe));
+        }
+
         if self.input_port.has_data() {
             let data_block = self.input_port.pull_data().unwrap()?;
             self.add_data_block(data_block);
@@ -232,10 +243,7 @@ impl TransformHashJoinProbe {
             return self.next_step(Step::Async(AsyncStep::Spill));
         }
 
-        if self.probe_state.process_state.is_some()
-            || !self.input_data_blocks.is_empty()
-            || !self.unspilled_data_blocks_need_to_probe.is_empty()
-        {
+        if self.has_queued_probe() {
             return self.next_step(Step::Sync(SyncStep::Probe));
         }
 
@@ -247,6 +255,17 @@ impl TransformHashJoinProbe {
         // Input port is finished.
         if !self.restored_data_blocks.is_empty() {
             return self.next_step(Step::Sync(SyncStep::Probe));
+        }
+
+        // Every build round must see every probe file before its chunks can
+        // be released. A closed all-pairs output can skip the remaining replay:
+        // it does not update build-side state, but still joins the round barrier.
+        if self.hash_table_type == HashTableType::Restored
+            && self.join_probe_state.hash_join_state.probes_all_pairs()
+            && !self.output_port.is_finished()
+            && self.spiller.has_next_restore_file()
+        {
+            return self.next_step(Step::Async(AsyncStep::Restore));
         }
 
         // If there are no data blocks to probe, go to the final scan.
@@ -340,7 +359,7 @@ impl Processor for TransformHashJoinProbe {
     fn process(&mut self) -> Result<()> {
         match self.step {
             Step::Sync(SyncStep::Probe) => {
-                if self.probe_state.process_state.is_some() {
+                if self.probe_state.pending.is_some() {
                     return self.next_probe();
                 }
                 match self.hash_table_type {
@@ -473,6 +492,10 @@ impl TransformHashJoinProbe {
     // Probe the hash table.
     pub(crate) fn probe_hash_table(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
+        if self.output_port.is_finished() && !self.probe_mutates_build_side() {
+            // Spilled rounds still consume input, but its output is discarded.
+            return Ok(());
+        }
         let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
@@ -505,6 +528,18 @@ impl TransformHashJoinProbe {
     // Check if probe side needs to probe
     fn is_spill_happened(&self) -> bool {
         self.is_spill_happened
+    }
+
+    fn has_queued_probe(&self) -> bool {
+        self.probe_state.pending.is_some()
+            || !self.input_data_blocks.is_empty()
+            || !self.unspilled_data_blocks_need_to_probe.is_empty()
+    }
+
+    fn probe_mutates_build_side(&self) -> bool {
+        self.join_probe_state
+            .hash_join_state
+            .probe_mutates_build_side()
     }
 
     fn need_final_scan(&self) -> bool {
