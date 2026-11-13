@@ -57,7 +57,6 @@ fn expected_data_block(
         let num_rows = fuse_part.nums_rows;
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         let mut columns = Vec::with_capacity(internal_columns.len());
-        let matches = block_meta.inverted_index_matches.as_ref();
         let internal_column_meta = InternalColumnMeta {
             segment_idx: block_meta.segment_idx,
             block_id: block_meta.block_id,
@@ -67,10 +66,9 @@ fn expected_data_block(
             offsets: None,
             base_block_ids: None,
             inner: None,
-            matched_rows: matches
-                .map(|matches| matches.rows.iter().map(|row| *row as usize).collect()),
-            matched_scores: matches.and_then(|matches| matches.scores.clone()),
-            // The table has no vector index.
+            // The table has no inverted or vector index.
+            matched_rows: None,
+            matched_scores: None,
             vector_scores: None,
         };
         let block = DataBlock::empty_with_rows(num_rows);

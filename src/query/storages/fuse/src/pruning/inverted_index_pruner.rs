@@ -148,15 +148,7 @@ impl InvertedIndexPruner {
                 row_count,
             )
             .await?;
-        let Some((rows, scores)) = matches else {
-            return Ok(None);
-        };
-        let rows = rows
-            .into_iter()
-            .map(u32::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|_| ErrorCode::StorageOther("inverted-index row number exceeds u32"))?;
-        Ok(Some(IndexMatches {
+        Ok(matches.map(|(rows, scores)| IndexMatches {
             rows,
             scores,
             rows_only: self.rows_only,

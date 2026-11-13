@@ -26,7 +26,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::F32;
-use databend_storages_common_pruner::BlockMetaIndex as PrunedBlockMetaIndex;
 use databend_storages_common_pruner::IndexMatches;
 use roaring::RoaringTreemap;
 
@@ -95,7 +94,9 @@ pub(crate) fn add_data_block_meta(
         let vector_scores = block_meta
             .vector_index_matches
             .as_ref()
-            .and_then(|matches| vector_output_scores(matches, offsets.as_ref(), block.num_rows()));
+            .and_then(|matches| {
+                vector_output_scores(matches, offsets.as_ref(), fuse_part.nums_rows)
+            });
 
         let internal_column_meta = InternalColumnMeta {
             segment_idx: block_meta.segment_idx,
@@ -152,22 +153,64 @@ fn output_matches(
     (rows, scores)
 }
 
-/// The vector score of each of the `num_rows` rows the scan outputs, in order.
-/// Rows the vector index did not score, such as NULL vectors, get the
-/// placeholder `f32::MAX`.
+/// The vector score of each row the scan outputs, in order: the rows of
+/// `offsets` or, without them, the `block_rows` rows of the block. Rows the
+/// vector index did not score, such as NULL vectors, get the placeholder
+/// `f32::MAX`.
 fn vector_output_scores(
     matches: &IndexMatches,
     offsets: Option<&RoaringTreemap>,
-    num_rows: usize,
+    block_rows: usize,
 ) -> Option<Vec<F32>> {
-    let (rows, scores) = output_matches(matches, offsets);
-    let mut output = vec![F32::from(f32::MAX); num_rows];
-    for (row, score) in rows.into_iter().zip(scores?) {
-        if let Some(slot) = output.get_mut(row) {
+    let scores = matches.scores.as_ref()?;
+    debug_assert_eq!(scores.len(), matches.rows.len());
+    let placeholder = F32::from(f32::MAX);
+    let scored = matches
+        .rows
+        .iter()
+        .zip(scores)
+        .map(|(row, score)| (*row, *score));
+
+    let Some(offsets) = offsets else {
+        let mut output = vec![placeholder; block_rows];
+        for (row, score) in scored {
+            if let Some(slot) = output.get_mut(row as usize) {
+                *slot = score;
+            }
+        }
+        return Some(output);
+    };
+
+    let output_rows = offsets.len() as usize;
+    if matches.rows.len() <= output_rows {
+        // Few scored rows, as in a TopN: place each one at its rank in the output.
+        let mut output = vec![placeholder; output_rows];
+        for (row, score) in scored {
+            let row = u64::from(row);
+            if offsets.contains(row) {
+                output[(offsets.rank(row) - 1) as usize] = score;
+            }
+        }
+        return Some(output);
+    }
+    // Few output rows out of a block scored in full: look each one up by row.
+    let mut block_scores = vec![placeholder; block_rows];
+    for (row, score) in scored {
+        if let Some(slot) = block_scores.get_mut(row as usize) {
             *slot = score;
         }
     }
-    Some(output)
+    Some(
+        offsets
+            .iter()
+            .map(|row| {
+                block_scores
+                    .get(row as usize)
+                    .copied()
+                    .unwrap_or(placeholder)
+            })
+            .collect(),
+    )
 }
 
 #[cfg(test)]
@@ -214,7 +257,8 @@ mod tests {
 
     #[test]
     fn test_vector_output_scores() {
-        let matches = IndexMatches {
+        // A TopN: a few scored rows of a block of 6.
+        let topn = IndexMatches {
             rows: vec![3, 1],
             scores: Some(scores(&[0.3, 0.1])),
             rows_only: true,
@@ -222,23 +266,46 @@ mod tests {
         // The output rows are the scored rows, in row order, possibly fewer.
         let offsets = RoaringTreemap::from_iter([1u64, 3]);
         assert_eq!(
-            vector_output_scores(&matches, Some(&offsets), 2),
+            vector_output_scores(&topn, Some(&offsets), 6),
             Some(scores(&[0.1, 0.3]))
         );
         let offsets = RoaringTreemap::from_iter([3u64]);
         assert_eq!(
-            vector_output_scores(&matches, Some(&offsets), 1),
+            vector_output_scores(&topn, Some(&offsets), 6),
             Some(scores(&[0.3]))
         );
         // Unscored rows are output too: they get the placeholder score.
         let offsets = RoaringTreemap::from_iter([0u64, 1, 2]);
         assert_eq!(
-            vector_output_scores(&matches, Some(&offsets), 3),
+            vector_output_scores(&topn, Some(&offsets), 6),
             Some(scores(&[f32::MAX, 0.1, f32::MAX]))
         );
         assert_eq!(
-            vector_output_scores(&matches, None, 4),
+            vector_output_scores(&topn, None, 4),
             Some(scores(&[f32::MAX, 0.1, f32::MAX, 0.3]))
         );
+
+        // A block scored in full, except the NULL vector of row 2.
+        let all = IndexMatches {
+            rows: vec![0, 1, 3],
+            scores: Some(scores(&[0.0, 0.1, 0.3])),
+            rows_only: false,
+        };
+        assert_eq!(
+            vector_output_scores(&all, None, 4),
+            Some(scores(&[0.0, 0.1, f32::MAX, 0.3]))
+        );
+        // A filter left fewer rows than the block has scores.
+        let offsets = RoaringTreemap::from_iter([2u64, 3]);
+        assert_eq!(
+            vector_output_scores(&all, Some(&offsets), 4),
+            Some(scores(&[f32::MAX, 0.3]))
+        );
+
+        let unscored = IndexMatches {
+            scores: None,
+            ..all
+        };
+        assert_eq!(vector_output_scores(&unscored, None, 4), None);
     }
 }

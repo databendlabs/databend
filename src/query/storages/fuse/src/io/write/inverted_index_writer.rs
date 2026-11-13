@@ -722,7 +722,8 @@ mod tests {
             )
             .await
             .unwrap();
-        let (mut rows, _) = result.unwrap_or_default();
+        let (rows, _) = result.unwrap_or_default();
+        let mut rows = rows.into_iter().map(|row| row as usize).collect::<Vec<_>>();
         rows.sort_unstable();
         rows
     }
@@ -779,7 +780,7 @@ mod tests {
                 tokenizers.clone(),
                 warmup,
             );
-            let (mut rows, _) = reader
+            let (rows, _) = reader
                 .do_filter(
                     query,
                     location,
@@ -790,6 +791,7 @@ mod tests {
                 .await
                 .unwrap()
                 .unwrap();
+            let mut rows = rows.into_iter().map(|row| row as usize).collect::<Vec<_>>();
             rows.sort_unstable();
             assert_eq!(rows, expected, "{text}");
         }
@@ -956,7 +958,11 @@ mod merge_tests {
             )
             .await
             .unwrap();
-        let (mut matched, _) = result.unwrap_or_default();
+        let (matched, _) = result.unwrap_or_default();
+        let mut matched = matched
+            .into_iter()
+            .map(|row| row as usize)
+            .collect::<Vec<_>>();
         matched.sort_unstable();
         matched
     }

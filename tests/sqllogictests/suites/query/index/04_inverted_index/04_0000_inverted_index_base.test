@@ -249,6 +249,12 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'py
 3 1.3515654 大模型应用开发极简入门
 7 1.2369337 Apache Pulsar实战
 
+# the scan outputs only the matched rows, also when it reads no column
+query I
+SELECT count(*) FROM books WHERE match('title^5, description^1.2', 'python')
+----
+9
+
 query IRT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'ChatGPT') ORDER BY score() DESC
 ----

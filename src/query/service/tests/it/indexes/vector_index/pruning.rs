@@ -1040,11 +1040,13 @@ async fn test_block_pruner() -> anyhow::Result<()> {
                 .vector_index_matches
                 .as_ref()
                 .expect("missing vector scores");
+            let scores = matches.scores.as_ref().expect("missing vector scores");
+            assert_eq!(scores.len(), matches.rows.len());
             let mut vector_scores: Vec<(usize, F32)> = matches
                 .rows
                 .iter()
                 .map(|row| *row as usize)
-                .zip(matches.scores.iter().flatten().copied())
+                .zip(scores.iter().copied())
                 .collect();
             vector_scores.sort_by_key(|(row, _)| *row);
             let mut expected_scores = expected_scores.clone();
