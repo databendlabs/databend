@@ -448,15 +448,10 @@ async fn test_refresh_batch_shared_reads_and_hint_scope() -> anyhow::Result<()> 
                 .iter()
                 .find(|old| old.location == block.location)
                 .unwrap();
-            // Published Ngram replacements are immutable; old snapshots retain their file.
-            assert_ne!(
+            // Ngram refresh retains the existing block-derived file and rewrite protocol.
+            assert_eq!(
                 Some(bloom_location),
                 old.bloom_filter_index_location.as_ref()
-            );
-            assert!(
-                bloom_location
-                    .0
-                    .starts_with(&fuse.meta_location_generator().bloom_refresh_prefix())
             );
             let bloom = load_index_meta(
                 fuse.get_operator(),
@@ -596,12 +591,13 @@ async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Resu
     );
     let (failed, _) = refresh_batch_blocks(&fixture).await?;
     assert_eq!(failed.snapshot_id, before.snapshot_id);
-    // Immutable Ngram artifacts cannot alter files referenced by the failed snapshot.
+    // Preserve Ngram's existing in-place writes. A failed commit must not publish
+    // metadata, but does not roll back index file changes.
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_background_refresh_batch_bounds_work_and_keeps_old_bloom() -> anyhow::Result<()> {
+async fn test_background_refresh_batch_bounds_work_and_keeps_bloom_paths() -> anyhow::Result<()> {
     let fixture = refresh_batch_fixture(RefreshBatchMode::StaleAndValid).await?;
     let (before, blocks) = refresh_batch_blocks(&fixture).await?;
     let table = fixture.latest_default_table().await?;
@@ -636,17 +632,26 @@ async fn test_background_refresh_batch_bounds_work_and_keeps_old_bloom() -> anyh
         .execute()
         .await?;
     let (_, after) = refresh_batch_blocks(&fixture).await?;
-    assert_eq!(
-        after
+    for block in &after {
+        let old = blocks
             .iter()
-            .zip(&blocks)
-            .filter(|(new, old)| new.bloom_filter_index_location != old.bloom_filter_index_location)
-            .count(),
-        1
-    );
-    for (path, bytes) in old_files {
-        assert_eq!(operator.read(&path).await?.to_vec(), bytes);
+            .find(|old| old.location == block.location)
+            .unwrap();
+        assert_eq!(
+            block.bloom_filter_index_location,
+            old.bloom_filter_index_location
+        );
     }
+    let mut rewritten = 0;
+    for (path, bytes) in old_files {
+        if operator.read(&path).await?.to_vec() != bytes {
+            rewritten += 1;
+        }
+    }
+    assert_eq!(
+        rewritten, 1,
+        "the batch must rewrite only one block's Bloom bundle"
+    );
     Ok(())
 }
 

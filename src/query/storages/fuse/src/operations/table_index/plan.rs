@@ -335,15 +335,8 @@ async fn bloom_meta(
     block: &BlockMeta,
     policy: CachePolicy,
 ) -> Result<Option<Arc<BloomIndexMeta>>> {
-    let path = block
-        .bloom_filter_index_location
-        .as_ref()
-        .map(|location| location.0.clone())
-        .unwrap_or_else(|| {
-            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
-                &block.location.0,
-            )
-        });
+    let path =
+        TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&block.location.0);
     // Match the original Ngram check: stat failures are treated as absent.
     let Ok(stat) = operator.stat(&path).await else {
         return Ok(None);

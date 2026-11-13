@@ -49,6 +49,7 @@ use crate::io::BloomIndexState;
 use crate::io::SpatialIndexBuilder;
 use crate::io::SpatialIndexResult;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::read::bloom::BloomColumnFilterReader;
 use crate::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use crate::io::read::load_spatial_index_files;
 use crate::io::read::load_vector_index_meta;
@@ -209,18 +210,12 @@ impl AssembleIndexes {
         results: Vec<BloomIndex>,
         existing: &ExistingIndexes,
     ) -> Result<()> {
-        // Read the old published bundle, then write an immutable replacement. A failed
-        // metadata CAS cannot alter files referenced by an older or concurrent snapshot.
-        let old_path = block
-            .bloom_filter_index_location
-            .as_ref()
-            .map(|location| location.0.clone())
-            .unwrap_or_else(|| {
-                TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
-                    &block.location.0,
-                )
-            });
-        let location = self.locations.gen_bloom_refresh_location();
+        // Preserve Ngram refresh's fixed path and read/modify/write semantics.
+        // Only combine contributions here: ordinary Bloom filters are reused,
+        // never rebuilt or migrated as part of refresh.
+        let path = TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
+            &block.location.0,
+        );
         let mut fields = Vec::new();
         let mut filters = Vec::new();
         let mut replaced_prefixes = HashSet::new();
@@ -234,6 +229,7 @@ impl AssembleIndexes {
                 replaced_prefixes.insert(prefix);
             }
         }
+        let mut old_ngram_names = Vec::new();
         if let Some(meta) = &existing.bloom {
             let names = meta
                 .columns
@@ -243,6 +239,7 @@ impl AssembleIndexes {
                         .iter()
                         .any(|prefix| name.starts_with(prefix))
                     {
+                        old_ngram_names.push(name.clone());
                         None
                     } else {
                         Some(name.clone())
@@ -254,7 +251,7 @@ impl AssembleIndexes {
                     self.operator.clone(),
                     &ReadSettings::from_ctx(&self.ctx)?,
                     &names,
-                    &old_path,
+                    &path,
                     block.bloom_filter_index_size,
                     self.ctx.cache_policy(),
                 )
@@ -280,11 +277,15 @@ impl AssembleIndexes {
             filters,
             BlockFilter::VERSION,
         )?;
-        let state = BloomIndexState::from_bloom_index(&bloom, location.clone())?;
+        let state =
+            BloomIndexState::from_bloom_index(&bloom, (path.clone(), BlockFilter::VERSION))?;
         block.bloom_filter_index_size = state.size();
         block.ngram_filter_index_size = state.ngram_size();
-        BlockWriter::write_down_bloom_index_state(&self.operator, Some(state)).await?;
-        block.bloom_filter_index_location = Some(location);
+        let old_filter_keys = old_ngram_names
+            .iter()
+            .map(|name| BloomColumnFilterReader::cache_key(&path, name))
+            .collect();
+        BlockWriter::rewrite_bloom_index_state(&self.operator, state, old_filter_keys).await?;
         Ok(())
     }
 
