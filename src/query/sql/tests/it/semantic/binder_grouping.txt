@@ -28,7 +28,7 @@ description: GROUP BY ALL should expand to the non-aggregate SELECT items only.
 sql: SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL
 status: ok
 EvalScalar
-├── scalars: [sum(number) (#2) AS (#2), a (#1) AS (#3)]
+├── scalars: [a (#1) AS (#1), sum(number) (#2) AS (#2)]
 └── Aggregate(Initial)
     ├── group items: [modulo(t.number (#0), 2) AS (#1)]
     ├── aggregate functions: [sum(t.number (#0)) AS (#2)]
@@ -64,7 +64,7 @@ description: A grouped SELECT should rewrite UDAF output through the aggregate p
 sql: SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g
 status: ok
 EvalScalar
-├── scalars: [weighted_avg(a, b) (#5) AS (#5), g (#2) AS (#6)]
+├── scalars: [g (#2) AS (#2), weighted_avg(a, b) (#5) AS (#5)]
 └── Aggregate(Initial)
     ├── group items: [modulo(t.a (#0), 2) AS (#2)]
     ├── aggregate functions: [weighted_avg(a, b) AS (#5)]
@@ -100,7 +100,7 @@ description: GROUP BY ALL should also skip UDAF select items when inferring grou
 sql: SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY ALL
 status: ok
 EvalScalar
-├── scalars: [weighted_avg(a, b) (#5) AS (#5), g (#2) AS (#6)]
+├── scalars: [g (#2) AS (#2), weighted_avg(a, b) (#5) AS (#5)]
 └── Aggregate(Initial)
     ├── group items: [modulo(t.a (#0), 2) AS (#2)]
     ├── aggregate functions: [weighted_avg(a, b) AS (#5)]

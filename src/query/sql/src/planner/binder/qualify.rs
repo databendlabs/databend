@@ -29,7 +29,6 @@ use crate::binder::window::WindowInputColumns;
 use crate::binder::window::WindowRewriter;
 use crate::binder::window::find_replaced_window_function;
 use crate::optimizer::ir::SExpr;
-use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
@@ -46,7 +45,6 @@ impl Binder {
         aliases: &[(String, ScalarExpr)],
         select_items: Option<SelectItems<'_>>,
         qualify: &Expr,
-        needs_window_rewrite: bool,
     ) -> Result<ScalarExpr> {
         bind_context.expr_context = ExprContext::QualifyClause;
         let mut scalar_binder = ScalarBinder::new(
@@ -62,10 +60,8 @@ impl Binder {
             &mut scalar,
             "Qualify clause must not contain aggregate functions",
         )?;
-        if needs_window_rewrite {
-            let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
-            rewriter.visit(&mut scalar)?;
-        }
+        let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
+        rewriter.visit(&mut scalar)?;
         Ok(scalar)
     }
 
@@ -80,17 +76,8 @@ impl Binder {
 
         let scalar = {
             let mut qualify = qualify;
-            if bind_context.in_grouping {
-                // If we are in grouping context, we will perform the grouping check
-                let mut grouping_checker = GroupingChecker::new(
-                    bind_context,
-                    Some("Qualify clause must not contain aggregate functions"),
-                );
-                grouping_checker.visit(&mut qualify)?;
-            } else {
-                let mut qualify_checker = QualifyChecker::new(bind_context);
-                qualify_checker.visit(&mut qualify)?;
-            }
+            let mut qualify_checker = QualifyChecker::new(bind_context);
+            qualify_checker.visit(&mut qualify)?;
             window_inputs.visit(&mut qualify)?;
             qualify
         };

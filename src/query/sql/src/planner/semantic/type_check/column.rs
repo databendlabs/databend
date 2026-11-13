@@ -218,7 +218,7 @@ where A: TypeCheckAdapter
                         }
                     }
 
-                    self.check_grouping_key_outer_column(span, &column)?;
+                    self.check_grouping_column(span, &column)?;
                     let data_type = *column.data_type.clone();
                     (BoundColumnRef { span, column }.into(), data_type)
                 }
@@ -231,6 +231,10 @@ where A: TypeCheckAdapter
                     None,
                     true,
                 )?;
+                if let Some(scope) = &mut self.bind_context.grouping_key_scope {
+                    scope.input_columns.insert(column.index);
+                }
+                self.check_grouping_column(span, &column)?;
                 let data_type = *column.data_type.clone();
                 (BoundColumnRef { span, column }.into(), data_type)
             }
@@ -242,7 +246,7 @@ where A: TypeCheckAdapter
                 if let Some(result) = self.resolve_masking_where_alias(span, &alias) {
                     return result;
                 }
-                let scalar = self.resolve_grouping_sets_alias(index, scalar)?;
+                let scalar = self.resolve_grouped_alias(index, scalar)?;
                 let data_type = scalar.data_type().into_owned();
                 (scalar, data_type)
             }

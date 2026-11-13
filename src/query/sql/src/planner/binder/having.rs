@@ -26,16 +26,14 @@ use crate::binder::SelectItems;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::into_conjunctions;
 use crate::optimizer::ir::SExpr;
-use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor as _;
-use crate::plans::VisitorMut as _;
 
 impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.
     /// See `AggregateRewriter` for more details. `select_items` holds the
-    /// SELECT items of a GROUPING SETS query that `aliases` lists.
+    /// SELECT items of a grouped query that `aliases` lists.
     pub(crate) fn analyze_aggregate_having(
         &mut self,
         bind_context: &mut BindContext,
@@ -43,7 +41,7 @@ impl Binder {
         select_items: Option<SelectItems<'_>>,
         having: &Expr,
     ) -> Result<ScalarExpr> {
-        self.bind_and_rewrite_aggregate_expr(
+        self.bind_post_aggregate_expr(
             bind_context,
             aliases,
             select_items,
@@ -76,16 +74,9 @@ impl Binder {
             "Invalid aggregate function in HAVING clause",
         )?;
 
-        let scalar = if bind_context.in_grouping {
-            // If we are in grouping context, we will perform the grouping check
-            let mut grouping_checker = GroupingChecker::new(bind_context, None);
-            grouping_checker.visit(&mut having)?;
-            having
-        } else {
-            // Otherwise we just fallback to a normal selection as `WHERE` clause.
-            // This follows behavior of MySQL and Snowflake.
-            having
-        };
+        // Grouped expressions have already bound to aggregate/key outputs.
+        // Without a grouping scope, HAVING remains a normal filter.
+        let scalar = having;
 
         let predicates = into_conjunctions(scalar).collect();
 

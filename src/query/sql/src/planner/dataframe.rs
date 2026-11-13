@@ -41,7 +41,6 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::GroupBySelectItems;
 use crate::planner::binder::SelectInfo;
 use crate::plans::Limit;
 
@@ -194,12 +193,14 @@ impl Dataframe {
             alias: None,
         }];
 
-        let mut select_list = self
-            .binder
-            .normalize_select_list(&mut self.bind_context, &select_list)?;
-
-        self.binder
-            .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
+        let bound = self.binder.bind_grouped_select_list(
+            &mut self.bind_context,
+            &select_list,
+            None,
+            None,
+            &Default::default(),
+        )?;
+        let select_list = bound.select_list;
 
         let select_info = self
             .binder
@@ -209,6 +210,7 @@ impl Dataframe {
             .binder
             .bind_aggregate(&mut self.bind_context, self.s_expr)?;
 
+        self.bind_context.grouping_key_scope = None;
         self.apply_select_output(select_info)
     }
 
@@ -226,28 +228,25 @@ impl Dataframe {
             })
             .collect();
 
-        let select_list = self
+        let udafs = self
             .binder
-            .normalize_select_list(&mut self.bind_context, &select_list)?;
-
-        let alias_catalog = select_list.alias_catalog();
+            .analyze_select_aggregates(&self.bind_context, &select_list, having.as_ref(), None, &[
+            ])?
+            .udaf_names;
+        let bound = self.binder.bind_grouped_select_list(
+            &mut self.bind_context,
+            &select_list,
+            Some(&groupby),
+            None,
+            &udafs,
+        )?;
+        let select_list = bound.select_list;
+        let alias_catalog = bound.semantic_alias;
         let aliases = alias_catalog.all_aliases();
 
-        let group_by_aliases = alias_catalog.group_by_bindings();
-        self.binder.analyze_group_items(
-            &mut self.bind_context,
-            GroupBySelectItems::Bound(&select_list),
-            &group_by_aliases,
-            &groupby,
-        )?;
-
-        if self.bind_context.aggregate_info.has_aggregate_calls()
-            || self.bind_context.aggregate_info.has_group_items()
-        {
-            self.s_expr = self
-                .binder
-                .bind_aggregate(&mut self.bind_context, self.s_expr)?;
-        }
+        self.s_expr = self
+            .binder
+            .bind_aggregate(&mut self.bind_context, self.s_expr)?;
 
         if let Some(having) = &having {
             let having = self.binder.analyze_aggregate_having(
@@ -265,6 +264,7 @@ impl Dataframe {
             .binder
             .analyze_projection(&self.bind_context, &select_list)?;
 
+        self.bind_context.grouping_key_scope = None;
         self.apply_select_output(select_info)
     }
 
@@ -365,7 +365,6 @@ impl Dataframe {
             &mut self.bind_context,
             &mut select_info,
             &aliases,
-            None,
             None,
             &order,
             distinct,

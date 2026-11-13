@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Binding the pre-aggregate forms of the SELECT items of a GROUPING SETS
-//! query on reference, see `grouping_sets_select.rs`.
+//! query on reference, see `grouped_select.rs`.
 
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
@@ -155,13 +155,27 @@ where A: TypeCheckAdapter
                 exprs.select_item_lookup(position),
                 None,
             )?;
+            // Before the aggregate, the form is bound with the policy of the
+            // keys, also if WHERE refers to the item first; after it, the
+            // scope of the keys has the same policy.
+            type_checker.set_folding_policy(items.folding_policy());
             type_checker.set_select_items(items.reborrow());
             if after_aggregate && !type_checker.binds_nothing(arena, root)? {
                 return Ok(None);
             }
+            #[cfg(debug_assertions)]
+            let effects = after_aggregate.then(|| type_checker.phase_effects());
             let Some(mut scalar) = type_checker.resolve_pre_aggregate_node(arena, root)? else {
                 return Ok(None);
             };
+            #[cfg(debug_assertions)]
+            if let Some(effects) = effects {
+                debug_assert_eq!(
+                    effects,
+                    type_checker.phase_effects(),
+                    "a pre-aggregate form after the aggregate must not have phase-sensitive effects"
+                );
+            }
             SetReturningAnalyzer::new(bind_context, metadata.clone()).visit(&mut scalar)?;
             Ok(Some(scalar))
         })();

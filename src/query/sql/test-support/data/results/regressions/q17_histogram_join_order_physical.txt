@@ -1,10 +1,10 @@
 AggregateFinal
-├── output columns: [sum(o.l_extendedprice) (#6)]
+├── output columns: [sum(o.l_extendedprice) (#12)]
 ├── group by: []
 ├── aggregate functions: [sum(l_extendedprice)]
 ├── estimated rows: 1.00
 └── Exchange
-    ├── output columns: [sum(o.l_extendedprice) (#6)]
+    ├── output columns: [sum(o.l_extendedprice) (#12)]
     ├── exchange type: Merge
     └── AggregatePartial
         ├── group by: []
@@ -13,40 +13,40 @@ AggregateFinal
         └── HashJoin
             ├── output columns: [o.l_extendedprice (#2)]
             ├── join type: INNER
-            ├── build keys: [l_partkey (#7)]
+            ├── build keys: [l_partkey (#6)]
             ├── probe keys: [o.l_partkey (#0)]
             ├── keys is null equal: [false]
-            ├── filters: [CAST(o.l_quantity (#1) AS Float64 NULL) < scalar_subquery_12 (#12)]
+            ├── filters: [CAST(o.l_quantity (#1) AS Float64 NULL) < scalar_subquery_11 (#11)]
             ├── build join filters:
-            │   └── filter id:1, build key:l_partkey (#7), probe targets:[o.l_partkey (#0)@scan0], filter type:bloom,inlist,min_max
+            │   └── filter id:1, build key:l_partkey (#6), probe targets:[o.l_partkey (#0)@scan0], filter type:bloom,inlist,min_max
             ├── estimated rows: 569915954.42
             ├── Exchange(Build)
-            │   ├── output columns: [0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12), s.l_partkey (#7)]
+            │   ├── output columns: [0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#11), s.l_partkey (#6)]
             │   ├── exchange type: Broadcast
             │   └── HashJoin
-            │       ├── output columns: [0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12), s.l_partkey (#7)]
+            │       ├── output columns: [0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#11), s.l_partkey (#6)]
             │       ├── join type: INNER
-            │       ├── build keys: [l_partkey (#7)]
+            │       ├── build keys: [l_partkey (#6)]
             │       ├── probe keys: [p_partkey (#3)]
             │       ├── keys is null equal: [false]
             │       ├── filters: []
             │       ├── build join filters:
-            │       │   └── filter id:0, build key:l_partkey (#7), probe targets:[p_partkey (#3)@scan1], filter type:bloom,inlist,min_max
+            │       │   └── filter id:0, build key:l_partkey (#6), probe targets:[p_partkey (#3)@scan1], filter type:bloom,inlist,min_max
             │       ├── estimated rows: 189.93
             │       ├── Exchange(Build)
-            │       │   ├── output columns: [s.l_partkey (#7), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12)]
+            │       │   ├── output columns: [s.l_partkey (#6), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#11)]
             │       │   ├── exchange type: Broadcast
             │       │   └── EvalScalar
-            │       │       ├── output columns: [s.l_partkey (#7), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12)]
-            │       │       ├── expressions: [0.2 * sum(s.l_quantity) (#10) / CAST(if(CAST(count(s.l_quantity) (#11) = 0 AS Boolean NULL), 1, count(s.l_quantity) (#11)) AS UInt64 NULL)]
+            │       │       ├── output columns: [s.l_partkey (#6), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#11)]
+            │       │       ├── expressions: [0.2 * sum(s.l_quantity) (#9) / CAST(if(CAST(count(s.l_quantity) (#10) = 0 AS Boolean NULL), 1, count(s.l_quantity) (#10)) AS UInt64 NULL)]
             │       │       ├── estimated rows: 1.00
             │       │       └── AggregateFinal
-            │       │           ├── output columns: [sum(s.l_quantity) (#10), count(s.l_quantity) (#11), s.l_partkey (#7)]
+            │       │           ├── output columns: [sum(s.l_quantity) (#9), count(s.l_quantity) (#10), s.l_partkey (#6)]
             │       │           ├── group by: [l_partkey]
             │       │           ├── aggregate functions: [sum(l_quantity), count()]
             │       │           ├── estimated rows: 1.00
             │       │           └── Exchange
-            │       │               ├── output columns: [sum(s.l_quantity) (#10), count(s.l_quantity) (#11), s.l_partkey (#7)]
+            │       │               ├── output columns: [sum(s.l_quantity) (#9), count(s.l_quantity) (#10), s.l_partkey (#6)]
             │       │               ├── exchange type: Hash(0)
             │       │               └── AggregatePartial
             │       │                   ├── group by: [l_partkey]
@@ -55,7 +55,7 @@ AggregateFinal
             │       │                   └── TableScan
             │       │                       ├── table: default.default.lineitem
             │       │                       ├── scan id: 2
-            │       │                       ├── output columns: [l_partkey (#7), l_quantity (#8)]
+            │       │                       ├── output columns: [l_partkey (#6), l_quantity (#7)]
             │       │                       ├── read rows: 0
             │       │                       ├── read size: 0
             │       │                       ├── partitions total: 0

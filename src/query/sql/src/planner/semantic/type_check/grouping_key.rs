@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Binding post-aggregate expressions of a SELECT with GROUPING SETS.
+//! Binding post-aggregate expressions of a grouped SELECT.
 //!
-//! Each grouping key outputs a dedicated nullable symbol. While the
+//! Ordinary keys retain their input types; grouping-sets keys expose dedicated
+//! nullable outputs. A global aggregate has an active scope with no keys. While the
 //! [`GroupingKeyScope`] of a SELECT is active, every node is checked top-down,
 //! before its children are resolved. A node binds to the output of key `K` iff
 //!
@@ -24,7 +25,8 @@
 //! - its pre-aggregate form equals the pre-aggregate expression of `K`,
 //!   compared with `ScalarExpr::eq` without any normalization. The
 //!   pre-aggregate form is the node bound again with matching suspended and
-//!   column-dependent folding off, resolving SELECT aliases to the
+//!   the key's folding policy (normal for ordinary keys, structure-preserving
+//!   for grouping sets), resolving SELECT aliases to the
 //!   pre-aggregate forms of their items, see `pre_aggregate.rs`.
 //!
 //! As with GROUP BY, whether the key is deterministic does not matter, so a
@@ -35,7 +37,7 @@
 //! key `a` plus one. As with GROUP BY, an alias stands for the expression of
 //! its item, so with `SELECT a AS k`, `k + 1` is the key `a + 1`. A node that
 //! refers to an alias whose item has no pre-aggregate form after the
-//! aggregate, see `grouping_sets_select.rs`, is not matched. A set-returning
+//! aggregate, see `grouped_select.rs`, is not matched. A set-returning
 //! function matches a key over the output of the same pre-aggregate
 //! set-returning function. Nested contexts, such as subqueries and lambda
 //! bodies, match the keys of the active scopes of their ancestors; a reference
@@ -66,6 +68,12 @@
 //! the form is used as the binding of the node, e.g. as the pre-aggregate form
 //! of a SELECT item.
 //!
+//! Binding a form must have no other effect that depends on the phase: it
+//! registers no aggregate or set-returning function, binds no subquery and
+//! allocates no symbol, which debug builds check. Structural eligibility
+//! excludes the nodes whose binding has such effects, and an IN list that is
+//! long enough to become a subquery stays a list in keys and their forms.
+//!
 //! [`GroupingKeyScope`]: crate::binder::GroupingKeyScope
 
 use std::collections::HashMap;
@@ -85,13 +93,14 @@ use super::TypeChecker;
 use super::scalar_fold::BoundScalar;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::Symbol;
 use crate::Visibility;
+use crate::binder::AggregateRewriter;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::GroupingScopeState;
-use crate::binder::ScalarFoldingPolicy;
+use crate::binder::SetReturningAnalyzer;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
+use crate::plans::VisitorMut;
 
 /// Which side of a grouping boundary is being bound.
 #[derive(Clone, Copy, Debug, Default)]
@@ -122,6 +131,9 @@ pub(super) struct GroupingKeyState {
     input_unavailable: bool,
     /// The first error deferred while binding a pre-aggregate form.
     deferred_error: Option<ErrorCode>,
+    /// Whether the arguments of `grouping()` are being bound, which must be
+    /// keys of this SELECT.
+    in_grouping_arguments: bool,
 }
 
 /// Grouping-key matching work memoized for the arena that a type checker
@@ -146,6 +158,17 @@ impl Eligibility {
         eligible: false,
         has_column: false,
     };
+}
+
+/// Counts of what binding registers, which speculative binding must leave
+/// unchanged.
+#[cfg(debug_assertions)]
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct PhaseEffects {
+    tables: usize,
+    symbols: usize,
+    aggregate_calls: usize,
+    set_returning_functions: usize,
 }
 
 struct PreAggregateForm {
@@ -323,10 +346,13 @@ where A: TypeCheckAdapter
             phase: GroupingKeyPhase::Input { scope },
             ..Default::default()
         });
-        let policy = std::mem::replace(
-            &mut self.folding_policy,
-            ScalarFoldingPolicy::PreserveColumnStructure,
-        );
+        // Without a scope yet, as for GROUP BY, the forms are bound with the
+        // policy of this type checker.
+        let input_policy = context_chain(self.bind_context)
+            .nth(scope)
+            .and_then(|context| context.grouping_key_scope.as_ref())
+            .map_or(self.folding_policy, |scope| scope.input_folding_policy);
+        let policy = std::mem::replace(&mut self.folding_policy, input_policy);
         let result = bind(self);
         self.folding_policy = policy;
         (result, std::mem::replace(&mut self.grouping_key, state))
@@ -364,6 +390,89 @@ where A: TypeCheckAdapter
             .collect()
     }
 
+    /// Rewrite an aggregate function or `grouping()` bound after the aggregate
+    /// of this SELECT to the output of the aggregate, registering the
+    /// aggregate function. It is rewritten as bound, before its parents can
+    /// fold away the reference (a zero-key aggregate still emits a row), so
+    /// that the aggregate is complete once the expressions after it are
+    /// bound; the binder only checks that no aggregate function is left, see
+    /// `AggregateRewriter::rewrite_existing_expr`.
+    pub(super) fn rewrite_grouped_output(&mut self, scalar: &mut ScalarExpr) -> Result<()> {
+        if self.grouping_key_input_scope().is_some() || !active_scope(self.bind_context) {
+            return Ok(());
+        }
+        match scalar {
+            ScalarExpr::FunctionCall(func) if func.func_name.eq_ignore_ascii_case("grouping") => {
+                *func = self.bind_context.aggregate_info.replace_grouping(func)?;
+            }
+            ScalarExpr::AggregateFunction(_) | ScalarExpr::UDAFCall(_) => {
+                // The set-returning functions in the arguments are evaluated
+                // before the aggregate.
+                let suspended = self.suspend_grouping_key_scope();
+                let srfs = SetReturningAnalyzer::new(self.bind_context, self.metadata.clone())
+                    .visit(scalar);
+                self.resume_grouping_key_scope(suspended);
+                srfs?;
+                AggregateRewriter::rewrite_expr(
+                    &mut self.bind_context.aggregate_info,
+                    self.metadata.clone(),
+                    scalar,
+                )?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Bind the arguments of a `grouping()` call. An ungrouped column of this
+    /// SELECT in them is reported as an argument that is not a key.
+    pub(super) fn resolve_grouping_arguments(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        args: &[CoreExprId],
+    ) -> Result<Vec<BoundScalar>> {
+        let in_grouping_arguments =
+            std::mem::replace(&mut self.grouping_key.in_grouping_arguments, true);
+        let result = args
+            .iter()
+            .map(|arg| {
+                let bound = self.resolve_core_bound(arena, *arg)?;
+                Ok(
+                    match self.grouping_argument_group_item(arena, *arg, &bound.scalar) {
+                        Some(group_item) => {
+                            let data_type = group_item.data_type().into_owned();
+                            self.bind_derived(group_item, data_type)
+                        }
+                        None => bound,
+                    },
+                )
+            })
+            .collect();
+        self.grouping_key.in_grouping_arguments = in_grouping_arguments;
+        result
+    }
+
+    /// The effects that binding a node speculatively must not have, see the
+    /// module documentation. Binding internal and virtual columns is
+    /// idempotent, so the symbols they allocate are not counted.
+    #[cfg(debug_assertions)]
+    pub(super) fn phase_effects(&self) -> PhaseEffects {
+        let metadata = self.metadata.read();
+        PhaseEffects {
+            tables: metadata.tables().len(),
+            symbols: metadata.columns().len()
+                - self.bind_context.bound_internal_columns.len()
+                - self.bind_context.bound_virtual_columns.len(),
+            aggregate_calls: self.bind_context.aggregate_info.aggregate_calls().count(),
+            set_returning_functions: self.bind_context.srf_info.srfs.len(),
+        }
+    }
+
+    /// Whether nodes are matched to the keys of some grouping scope.
+    pub(super) fn matches_grouping_keys(&self) -> bool {
+        !self.matched_scopes().is_empty()
+    }
+
     /// Resolve the node to the output of the grouping key it matches. The
     /// scopes are tried from the innermost.
     pub(super) fn try_resolve_grouping_key(
@@ -394,7 +503,9 @@ where A: TypeCheckAdapter
             let context = context_chain(self.bind_context).nth(position).unwrap();
             let column = if is_srf {
                 lookup_grouping_key_srf(context, &input)?
-            } else if !input.used_columns().is_empty() {
+            } else if context.aggregate_info.grouping_sets().is_none()
+                || !input.used_columns().is_empty()
+            {
                 context.aggregate_info.lookup_grouping_key_output(&input)
             } else {
                 None
@@ -419,9 +530,17 @@ where A: TypeCheckAdapter
         id: CoreExprId,
         position: usize,
     ) -> Result<Option<ScalarExpr>> {
+        #[cfg(debug_assertions)]
+        let effects = self.phase_effects();
         let (result, input) =
             self.with_grouping_key_input(position, |checker| checker.resolve_core_bound(arena, id));
         let bound = result?;
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(
+            effects,
+            self.phase_effects(),
+            "matching a node to grouping keys must not have phase-sensitive effects"
+        );
         // A form with a deferred error refers to an ungrouped input column of
         // an enclosing scope, which no key of this scope does.
         Ok((!input.input_unavailable && input.deferred_error.is_none()).then_some(bound.scalar))
@@ -487,8 +606,8 @@ where A: TypeCheckAdapter
     /// in the arguments of an aggregate function, the alias stands for the
     /// pre-aggregate form of the item instead. A node that refers to an item
     /// without such a form is not matched, and in aggregate arguments the
-    /// alias keeps standing for `scalar`.
-    pub(super) fn resolve_grouping_sets_alias(
+    /// alias cannot consume an aggregate output, which would nest aggregates.
+    pub(super) fn resolve_grouped_alias(
         &mut self,
         position: usize,
         scalar: ScalarExpr,
@@ -507,39 +626,66 @@ where A: TypeCheckAdapter
             Some(form) => Ok(form),
             None => {
                 self.grouping_key.input_unavailable |= matching;
+                if !matching
+                    && scalar.used_columns().iter().any(|index| {
+                        self.bind_context
+                            .aggregate_info
+                            .has_aggregate_call_index(*index)
+                    })
+                {
+                    return Err(ErrorCode::SemanticError(
+                        "aggregate function calls cannot be nested",
+                    ));
+                }
                 Ok(scalar)
             }
         }
     }
 
-    /// Reject a reference from a nested context to an input column of an
-    /// enclosing grouped SELECT that no grouping key covers.
+    /// Reject an input column owned by an active grouped scope. Key outputs
+    /// are allowed, and candidate input forms skip their own grouping scope.
     ///
     /// While binding a pre-aggregate form for a scope, only the scopes
     /// enclosing it are checked, and the error is deferred, see the module
     /// documentation.
-    pub(super) fn check_grouping_key_outer_column(
+    pub(super) fn check_grouping_column(
         &mut self,
         span: Span,
         column: &ColumnBinding,
     ) -> Result<()> {
         let first = self
             .grouping_key_input_scope()
-            .map_or(1, |position| position + 1);
-        let is_input = |context: &BindContext, index: Symbol| {
-            context.columns.iter().any(|column| column.index == index)
+            .map_or(0, |position| position + 1);
+        let Some((position, owner)) =
+            context_chain(self.bind_context)
+                .enumerate()
+                .find(|(_, context)| {
+                    context
+                        .columns
+                        .iter()
+                        .any(|input| input.index == column.index)
+                })
+        else {
+            return Ok(());
         };
-        if is_input(self.bind_context, column.index)
-            || !context_chain(self.bind_context)
-                .skip(first)
-                .any(|context| active_scope(context) && is_input(context, column.index))
+        if position < first
+            || !active_scope(owner)
+            || owner
+                .grouping_key_scope
+                .as_ref()
+                .is_some_and(|scope| !scope.input_columns.contains(&column.index))
+            || owner.aggregate_info.is_grouping_key_output(column.index)
         {
             return Ok(());
         }
-        let err = ErrorCode::SemanticError(format!(
-            "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
-            column.column_name
-        ))
+        let err = if position == 0 && self.grouping_key.in_grouping_arguments {
+            owner.aggregate_info.grouping_argument_error()
+        } else {
+            ErrorCode::SemanticError(format!(
+                "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
+                column.column_name
+            ))
+        }
         .set_span(span);
         if self.grouping_key_input_scope().is_none() {
             return Err(err);
@@ -557,7 +703,7 @@ fn lookup_grouping_key_srf(
 ) -> Result<Option<ColumnBinding>> {
     // Keys refer to registered set-returning functions by their outputs.
     let mut input = input.clone();
-    for srf in &context.srf_info.srfs {
+    for srf in context.srf_info.srfs.iter().map(|srf| &srf.item) {
         // Bound column references compare by symbol and table only.
         let column = BoundColumnRef {
             span: None,
@@ -589,6 +735,10 @@ mod tests {
     use super::*;
     use crate::Metadata;
     use crate::NameResolutionContext;
+    use crate::Symbol;
+    use crate::binder::GroupingKeyScope;
+    use crate::binder::GroupingScopeState;
+    use crate::binder::ScalarFoldingPolicy;
     use crate::planner::semantic::type_check::persisted::PersistedTypeCheckAdapter;
 
     fn with_checker(
@@ -606,6 +756,11 @@ mod tests {
             )
             .build(),
         );
+        context.grouping_key_scope = Some(GroupingKeyScope {
+            state: GroupingScopeState::Suspended,
+            input_folding_policy: ScalarFoldingPolicy::PreserveColumnStructure,
+            input_columns: context.column_set(),
+        });
         let names = NameResolutionContext::default();
         let mut checker = TypeChecker::try_create_with_adapter(
             &mut context,
@@ -698,6 +853,24 @@ mod tests {
     #[test]
     fn input_phase_and_folding_policy_restore_after_nested_errors() -> Result<()> {
         with_checker(|checker| {
+            let ordinary = BindContext {
+                grouping_key_scope: Some(GroupingKeyScope {
+                    state: GroupingScopeState::Active,
+                    input_folding_policy: ScalarFoldingPolicy::Normal,
+                    input_columns: Default::default(),
+                }),
+                ..BindContext::new()
+            };
+            let grouping_sets = BindContext {
+                grouping_key_scope: Some(GroupingKeyScope {
+                    state: GroupingScopeState::Active,
+                    input_folding_policy: ScalarFoldingPolicy::PreserveColumnStructure,
+                    input_columns: Default::default(),
+                }),
+                parent: Some(Box::new(ordinary)),
+                ..BindContext::new()
+            };
+            checker.bind_context.parent = Some(Box::new(grouping_sets));
             let (result, _) = checker.with_grouping_key_input(1, |checker| {
                 assert_eq!(checker.grouping_key_input_scope(), Some(1));
                 assert_eq!(
@@ -706,6 +879,7 @@ mod tests {
                 );
                 let (nested, _) = checker.with_grouping_key_input(2, |checker| {
                     assert_eq!(checker.grouping_key_input_scope(), Some(2));
+                    assert_eq!(checker.scalar_folding_policy(), ScalarFoldingPolicy::Normal);
                     Err::<(), _>(ErrorCode::SemanticError("nested binding failed"))
                 });
                 assert!(nested.is_err());

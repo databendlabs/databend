@@ -59,7 +59,7 @@ use crate::Symbol;
 use crate::VirtualColumn;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::column_binding::ColumnBinding;
-use crate::binder::grouping_sets_select::SelectItemExpr;
+use crate::binder::grouped_select::SelectItemExpr;
 use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::normalize_identifier;
@@ -77,8 +77,8 @@ pub struct AliasLookup<'a> {
 pub(crate) enum AliasTable<'a> {
     /// Items bound up front.
     Bound(&'a [(String, ScalarExpr)]),
-    /// The items of a GROUPING SETS query, whose pre-aggregate forms are bound
-    /// when a name first resolves to them, see `grouping_sets_select.rs`.
+    /// The items of a grouped query, whose pre-aggregate forms are bound
+    /// when a name first resolves to them, see `grouped_select.rs`.
     PreAggregate(&'a [SelectItemExpr<'a>]),
 }
 
@@ -193,7 +193,7 @@ pub enum NameResolutionResult {
         /// The position of the alias in its table.
         index: usize,
     },
-    /// The pre-aggregate SELECT items of a GROUPING SETS query named by the
+    /// The pre-aggregate SELECT items of a grouped query named by the
     /// alias. The name is ambiguous unless their forms are equal, which the
     /// caller checks once it has bound them.
     SelectItems {
@@ -354,19 +354,9 @@ pub struct BindContext {
     /// with `Binder::debug_assert_definition_scope`. Restored on return from a view.
     pub definition_scope: DefinitionScope,
 
-    /// True if there is aggregation in current context, which means
-    /// non-grouping columns cannot be referenced outside aggregation
-    /// functions, otherwise a grouping error will be raised.
-    pub in_grouping: bool,
-
-    /// Post-aggregate binding state of a SELECT with GROUPING SETS. Only the
-    /// context of that SELECT owns it; nested contexts see it via `parent`.
+    /// Post-aggregate binding state of a grouped SELECT. Only the context of
+    /// that SELECT owns it; nested contexts see it via `parent`.
     pub grouping_key_scope: Option<GroupingKeyScope>,
-
-    /// Keep column-dependent expressions unfolded while binding the
-    /// pre-aggregate forms that grouping keys are matched against. Not
-    /// inherited by nested contexts.
-    pub scalar_folding_policy: ScalarFoldingPolicy,
 
     /// Views that are on the current binding path.
     pub binding_views: HashSet<ViewIdent>,
@@ -411,13 +401,16 @@ pub enum GroupingScopeState {
     Suspended,
 }
 
-/// Post-aggregate binding state of a SELECT with GROUPING SETS.
-///
-/// While active, a node whose pre-aggregate form is exactly a grouping key
-/// binds to the nullable output of that key. See `TypeChecker` for the rules.
+/// Post-aggregate binding state of a grouped SELECT, including zero-key
+/// global aggregates. While active, whole-key matches bind to key outputs
+/// before their children are checked. See `TypeChecker` for the rules.
 #[derive(Clone, Debug, Default)]
 pub struct GroupingKeyScope {
     pub state: GroupingScopeState,
+    /// The key and its matching input forms must use the same folding policy.
+    pub input_folding_policy: ScalarFoldingPolicy,
+    /// Input symbols owned by this SELECT, excluding later lambda parameters.
+    pub input_columns: crate::ColumnSet,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -508,9 +501,7 @@ impl BindContext {
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
             definition_scope: DefinitionScope::session(),
-            in_grouping: false,
             grouping_key_scope: None,
-            scalar_folding_policy: ScalarFoldingPolicy::Normal,
             binding_views: HashSet::new(),
             have_async_func: false,
             have_udf_script: false,
@@ -561,9 +552,7 @@ impl BindContext {
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
             definition_scope: parent.definition_scope.clone(),
-            in_grouping: false,
             grouping_key_scope: None,
-            scalar_folding_policy: ScalarFoldingPolicy::Normal,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,

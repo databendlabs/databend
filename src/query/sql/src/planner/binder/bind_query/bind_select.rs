@@ -55,68 +55,22 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
-use crate::planner::binder::ExprContext;
-use crate::planner::binder::GroupBySelectItems;
-use crate::planner::binder::GroupingSetsItems;
+use crate::planner::binder::GroupedSelectItems;
 use crate::planner::binder::ScalarFoldingPolicy;
 use crate::planner::binder::SelectItems;
-use crate::planner::binder::aggregate_prepass::AggregateExprInfo;
-use crate::planner::binder::grouping_sets_select::has_grouping_sets;
+use crate::planner::binder::aggregate::ExpandedGroup;
 use crate::planner::binder::project::SelectInfo;
 use crate::planner::binder::select::SelectAliasCatalog;
-use crate::planner::binder::select::SelectClauseFact;
 use crate::planner::binder::select::SelectList;
+use crate::planner::binder::select_aggregates::SelectAggregates;
 use crate::planner::binder::sort::OrderItems;
 use crate::planner::binder::window::WindowInputColumns;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut as _;
 
-#[derive(Clone, Default)]
-struct SelectClauseFacts {
-    having: Option<SelectClauseFact>,
-    qualify: Option<SelectClauseFact>,
-    order_by: Vec<SelectClauseFact>,
-    aggregate_prepass_inputs: Vec<(Expr, ExprContext)>,
-}
-
-impl SelectClauseFacts {
-    fn merge_expr_info(
-        &mut self,
-        expr_context: ExprContext,
-        aliases: &SelectAliasCatalog,
-        expr_info: AggregateExprInfo,
-    ) {
-        let fact = SelectClauseFact {
-            alias_feature: aliases.aggregate_alias_feature(&expr_info.referenced_aliases),
-            expr_info,
-        };
-
-        match expr_context {
-            ExprContext::QualifyClause => self.qualify = Some(fact),
-            ExprContext::HavingClause => {
-                if fact.contains_or_references_aggregate() {
-                    self.aggregate_prepass_inputs
-                        .push((fact.expr_info.ast.clone(), ExprContext::HavingClause));
-                }
-                self.having = Some(fact)
-            }
-            ExprContext::OrderByClause => {
-                if fact.contains_or_references_aggregate() {
-                    self.aggregate_prepass_inputs
-                        .push((fact.expr_info.ast.clone(), ExprContext::OrderByClause));
-                }
-                self.order_by.push(fact)
-            }
-            _ => unreachable!("aggregate prepass only inspects HAVING/QUALIFY/ORDER BY"),
-        }
-    }
-}
-
 struct SelectGlobalView {
     semantic_alias: SelectAliasCatalog,
     rewritten_alias: SelectAliasCatalog,
-    qualify: Option<SelectClauseFact>,
-    order_by: Vec<SelectClauseFact>,
 }
 
 impl SelectGlobalView {
@@ -145,21 +99,23 @@ struct SelectPreparation<'a> {
     /// The WHERE predicate if it is bound before the SELECT list, as under
     /// GROUPING SETS.
     where_predicate: Option<ScalarExpr>,
-    /// The SELECT items of a GROUPING SETS query.
-    select_items: Option<GroupingSetsItems<'a>>,
+    /// The SELECT items of a grouped query.
+    select_items: Option<GroupedSelectItems<'a>>,
 }
 
-/// The SELECT list, and under GROUPING SETS the WHERE predicate and the
-/// pre-aggregate SELECT items, which are bound with it.
-struct BoundSelectList<'a> {
-    select_list: SelectList<'a>,
-    semantic_alias: SelectAliasCatalog,
+/// The SELECT list, and for grouped queries the WHERE predicate and shared
+/// pre-aggregate item forms bound with it.
+pub(crate) struct BoundSelectList<'a> {
+    pub(crate) select_list: SelectList<'a>,
+    pub(crate) semantic_alias: SelectAliasCatalog,
     where_predicate: Option<ScalarExpr>,
-    select_items: Option<GroupingSetsItems<'a>>,
+    select_items: Option<GroupedSelectItems<'a>>,
 }
 
 struct AnalyzedSelect {
     s_expr: SExpr,
+    /// Whether the SELECT is grouped, i.e. an Aggregate is built.
+    grouped: bool,
     from_context: BindContext,
     select_info: SelectInfo,
     having: Option<ScalarExpr>,
@@ -214,13 +170,33 @@ impl Binder {
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
+        // Whether the SELECT is grouped depends on all of its clauses, which are
+        // bound later, so it is decided from their lowered forms.
+        let SelectAggregates {
+            udaf_names,
+            contains_aggregate,
+        } = self.analyze_select_aggregates(
+            &from_context,
+            &stmt.select_list,
+            stmt.having.as_ref(),
+            stmt.qualify.as_ref(),
+            order_by,
+        )?;
+        let grouped = stmt.group_by.is_some() || contains_aggregate;
+
         let BoundSelectList {
             mut select_list,
-            mut semantic_alias,
+            semantic_alias,
             where_predicate,
             select_items,
-        } = if has_grouping_sets(stmt) {
-            self.bind_grouping_sets_select_list(&mut from_context, stmt)?
+        } = if grouped {
+            self.bind_grouped_select_list(
+                &mut from_context,
+                &stmt.select_list,
+                stmt.group_by.as_ref(),
+                stmt.selection.as_ref(),
+                &udaf_names,
+            )?
         } else {
             // Generate a analyzed select list with from context
             let mut select_list =
@@ -235,16 +211,6 @@ impl Binder {
             // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
             let semantic_alias = select_list.alias_catalog();
 
-            // This will potentially add some alias group items to `from_context` if find some.
-            if let Some(group_by) = stmt.group_by.as_ref() {
-                let group_by_aliases = semantic_alias.group_by_bindings();
-                self.analyze_group_items(
-                    &mut from_context,
-                    GroupBySelectItems::Bound(&select_list),
-                    &group_by_aliases,
-                    group_by,
-                )?;
-            }
             BoundSelectList {
                 select_list,
                 semantic_alias,
@@ -254,41 +220,6 @@ impl Binder {
         };
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
-        let udaf_names = self.find_and_load_udaf(
-            &from_context,
-            &select_list,
-            stmt.having.as_ref(),
-            stmt.qualify.as_ref(),
-            order_by,
-        )?;
-        semantic_alias.analyze_aggregate_prepass_exprs(
-            &select_list,
-            &self.name_resolution_ctx,
-            &udaf_names,
-        );
-        let SelectClauseFacts {
-            having: _,
-            qualify,
-            order_by,
-            aggregate_prepass_inputs,
-        } = self.build_select_clause_facts(
-            &udaf_names,
-            &semantic_alias,
-            stmt.having.as_ref(),
-            stmt.qualify.as_ref(),
-            order_by,
-        );
-
-        let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
-            &udaf_names,
-            &semantic_alias,
-            aggregate_prepass_inputs.into_iter(),
-        );
-        self.bind_aggregate_prepass_facts(
-            &mut from_context,
-            semantic_alias.all_aliases(),
-            &aggregate_prepass_facts,
-        )?;
 
         // `analyze_window` should behind `analyze_aggregate_select`,
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
@@ -305,8 +236,6 @@ impl Binder {
         let global_view = SelectGlobalView {
             semantic_alias,
             rewritten_alias: select_list.alias_catalog(),
-            qualify,
-            order_by,
         };
 
         Ok(SelectPreparation {
@@ -319,57 +248,48 @@ impl Binder {
         })
     }
 
-    /// Bind the GROUP BY, the WHERE and the SELECT list of a GROUPING SETS
-    /// query, in this order. GROUP BY and WHERE are evaluated before the
-    /// aggregate, and refer to the pre-aggregate forms of the SELECT items,
-    /// which are bound on reference; the SELECT list is bound once the keys
-    /// are known, so that expressions over keys bind to their nullable
-    /// outputs.
-    fn bind_grouping_sets_select_list<'a>(
+    /// Bind keys and WHERE against input forms, then bind the SELECT list
+    /// against key outputs. Ordinary keys keep their original types; grouping
+    /// sets expose dedicated nullable outputs. A global aggregate has no keys.
+    pub(crate) fn bind_grouped_select_list<'a>(
         &mut self,
         from_context: &mut BindContext,
-        stmt: &'a SelectStmt,
+        select_targets: &'a [SelectTarget],
+        group_by: Option<&GroupBy>,
+        selection: Option<&Expr>,
+        udaf_names: &HashSet<String>,
     ) -> Result<BoundSelectList<'a>> {
-        let Some(group_by) = stmt.group_by.as_ref() else {
-            return Err(ErrorCode::Internal("GROUPING SETS query has no GROUP BY"));
-        };
-
         // The items are lowered into an arena that every clause shares, see
-        // `grouping_sets_select.rs`.
-        let mut items = GroupingSetsItems::new(
-            self.lower_grouping_sets_select_list(from_context, &stmt.select_list)?,
-        );
-        // Keys are matched against pre-aggregate forms; bind them without
-        // folding column-dependent expressions, e.g. `a IS NULL` on a NOT
-        // NULL column, as pre-aggregate forms are.
-        let folding_policy = std::mem::replace(
-            &mut from_context.scalar_folding_policy,
-            ScalarFoldingPolicy::PreserveColumnStructure,
-        );
-        let group_items = self.analyze_group_items(
-            from_context,
-            GroupBySelectItems::PreAggregate(SelectItems::new(&items.exprs, &mut items.forms)),
-            &items.exprs.group_by_bindings(),
-            group_by,
-        );
-        from_context.scalar_folding_policy = folding_policy;
-        group_items?;
+        // `grouped_select.rs`.
+        let exprs = self.lower_grouped_select_list(from_context, select_targets)?;
+        let group_by = group_by
+            .map(|group_by| self.expand_group_by(group_by, &exprs, udaf_names, from_context))
+            .transpose()?;
+        // The keys, and every pre-aggregate form matched against them, are
+        // bound with this policy.
+        let folding_policy = group_by
+            .as_ref()
+            .map_or(ScalarFoldingPolicy::Normal, ExpandedGroup::folding_policy);
+        let mut items = GroupedSelectItems::new(exprs, folding_policy);
+        if let Some(group_by) = &group_by {
+            self.analyze_group_items(
+                from_context,
+                SelectItems::new(&items.exprs, &mut items.forms),
+                &items.exprs.group_by_bindings(),
+                group_by,
+            )?;
+        }
 
         // WHERE is evaluated before the aggregate. Bind it before the SELECT
         // list, so that whatever its items register, e.g. set-returning
         // functions, is registered before the aggregate.
-        let where_predicate = stmt
-            .selection
-            .as_ref()
-            .map(|expr| self.bind_grouping_sets_where(from_context, items.lend(), expr))
+        let where_predicate = selection
+            .map(|expr| self.bind_grouped_where(from_context, items.lend(), expr))
             .transpose()?;
 
-        self.prepare_grouping_sets_scope(from_context)?;
-        let mut select_list = self.normalize_grouping_sets_select_list(
-            from_context,
-            &stmt.select_list,
-            items.lend(),
-        )?;
+        Self::prepare_grouping_scope(from_context, folding_policy);
+        let mut select_list =
+            self.normalize_grouped_select_list(from_context, select_targets, items.lend())?;
         self.analyze_project_set_select(from_context, &mut select_list)?;
         let semantic_alias = select_list.alias_catalog();
         Ok(BoundSelectList {
@@ -395,6 +315,7 @@ impl Binder {
             where_predicate,
             mut select_items,
         } = preparation;
+        let grouped = select_items.is_some();
 
         // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
         // set as lazy Set-returning functions.
@@ -443,20 +364,19 @@ impl Binder {
             Some(self.analyze_aggregate_having(
                 &mut from_context,
                 global_view.having_aliases(),
-                select_items.as_mut().map(GroupingSetsItems::lend),
+                select_items.as_mut().map(GroupedSelectItems::lend),
                 having,
             )?)
         } else {
             None
         };
 
-        let qualify = if let Some(qualify) = global_view.qualify.as_ref() {
+        let qualify = if let Some(qualify) = &stmt.qualify {
             Some(self.analyze_window_qualify(
                 &mut from_context,
                 global_view.qualify_aliases(),
-                select_items.as_mut().map(GroupingSetsItems::lend),
-                &qualify.expr_info.ast,
-                qualify.contains_or_references_window(),
+                select_items.as_mut().map(GroupedSelectItems::lend),
+                qualify,
             )?)
         } else {
             None
@@ -465,13 +385,10 @@ impl Binder {
         let order_items = self.analyze_order_items(
             &mut from_context,
             &mut select_info,
-            // Keep ORDER BY alias resolution on the same read-only semantic alias
-            // snapshot used by the clause prepass. This avoids binding against
-            // already-rewritten select-item scalars when a later clause only
-            // needs the original alias semantics.
+            // ORDER BY aliases resolve to the SELECT items as bound, before
+            // their aggregates and windows are rewritten to outputs.
             global_view.order_by_aliases(),
-            select_items.as_mut().map(GroupingSetsItems::lend),
-            Some(&global_view.order_by),
+            select_items.as_mut().map(GroupedSelectItems::lend),
             order_by,
             stmt.distinct,
         )?;
@@ -495,49 +412,13 @@ impl Binder {
 
         Ok(AnalyzedSelect {
             s_expr,
+            grouped,
             from_context,
             select_info,
             having,
             qualify,
             order_items,
         })
-    }
-
-    fn build_select_clause_facts(
-        &self,
-        udaf_names: &HashSet<String>,
-        aliases: &SelectAliasCatalog,
-        having: Option<&Expr>,
-        qualify: Option<&Expr>,
-        order_by: &[OrderByExpr],
-    ) -> SelectClauseFacts {
-        let alias_names = aliases.aggregate_prepass_alias_names();
-        std::iter::chain(
-            having
-                .into_iter()
-                .map(|expr| (expr, ExprContext::HavingClause)),
-            qualify
-                .into_iter()
-                .map(|expr| (expr, ExprContext::QualifyClause)),
-        )
-        .chain(
-            order_by
-                .iter()
-                .map(|order| (&order.expr, ExprContext::OrderByClause)),
-        )
-        .fold(
-            SelectClauseFacts::default(),
-            |mut facts, (expr, expr_context)| {
-                let expr_info = AggregateExprInfo::analyze(
-                    &self.name_resolution_ctx,
-                    udaf_names,
-                    &alias_names,
-                    expr,
-                );
-                facts.merge_expr_info(expr_context, aliases, expr_info);
-                facts
-            },
-        )
     }
 
     #[async_backtrace::framed]
@@ -561,6 +442,7 @@ impl Binder {
         let preparation = self.prepare_select_binding(bind_context, stmt, order_by)?;
         let AnalyzedSelect {
             mut s_expr,
+            grouped,
             mut from_context,
             mut select_info,
             having,
@@ -568,9 +450,7 @@ impl Binder {
             order_items,
         } = self.analyze_select_clauses(stmt, order_by, limit, preparation)?;
 
-        if from_context.aggregate_info.has_aggregate_calls()
-            || from_context.aggregate_info.has_group_items()
-        {
+        if grouped {
             s_expr = self.bind_aggregate(&mut from_context, s_expr)?;
         }
 
@@ -590,7 +470,7 @@ impl Binder {
         }
 
         // Bind lazy Set-returning functions after aggregate plan.
-        if !from_context.srf_info.lazy_srf_set.is_empty() {
+        if from_context.srf_info.has_lazy() {
             s_expr = self.bind_project_set(&mut from_context, s_expr, true)?;
             // Preserve the existing reuse boundary: extending QUALIFY reuse
             // across ProjectSet row expansion is outside this refactor's scope.

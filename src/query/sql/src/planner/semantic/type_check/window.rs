@@ -77,6 +77,20 @@ pub(super) struct CoreWindowFrame {
     end_bound: CoreWindowFrameBound,
 }
 
+impl CoreWindowFrame {
+    /// The offset expressions of the bounds.
+    pub(super) fn exprs(&self) -> impl Iterator<Item = CoreExprId> + '_ {
+        [&self.start_bound, &self.end_bound]
+            .into_iter()
+            .filter_map(|bound| match bound {
+                CoreWindowFrameBound::CurrentRow => None,
+                CoreWindowFrameBound::Preceding(expr) | CoreWindowFrameBound::Following(expr) => {
+                    *expr
+                }
+            })
+    }
+}
+
 pub(super) enum CoreWindowFrameBound {
     CurrentRow,
     Preceding(Option<CoreExprId>),

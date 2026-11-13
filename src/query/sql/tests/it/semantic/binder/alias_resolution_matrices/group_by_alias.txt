@@ -234,10 +234,10 @@ key: G0N0S4_8_1
 sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3
 status: ok
 Sort
-├── sort keys: [col3 (#4) ASC NULLS LAST]
+├── sort keys: [col3 (#3) ASC NULLS LAST]
 ├── limit: [NONE]
 └── EvalScalar
-    ├── scalars: [t_str.col1 (#0) AS (#0), col3 (#3) AS (#4)]
+    ├── scalars: [t_str.col1 (#0) AS (#0), col3 (#3) AS (#3)]
     └── Aggregate(Initial)
         ├── group items: [t_str.col1 (#0) AS (#0), get(1)(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
         ├── aggregate functions: []

@@ -140,6 +140,83 @@ async fn test_grouping_sets_nested_bound_children() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_ordinary_grouping_key_binding() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let cases = [
+        (
+            "SELECT a, a + 1 AS k, sum(b) FROM (VALUES (1, 3), (1, 4), (2, 5)) t(a, b) GROUP BY 1, 2",
+            vec!["1 2 7", "2 3 5"],
+        ),
+        (
+            "SELECT a + 1 AS k, sum(k) FROM (VALUES (1), (1), (2)) t(a) WHERE k > 0 GROUP BY k",
+            vec!["2 4", "3 3"],
+        ),
+        (
+            "SELECT a + 1 AS k, k + 1, sum(b) AS s, s + 1 FROM (VALUES (1, 3), (1, 4), (2, 5)) t(a, b) GROUP BY ALL",
+            vec!["2 3 7 8", "3 4 5 6"],
+        ),
+        (
+            "SELECT (count(*) IS NOT NULL)::INT FROM (VALUES (1), (2)) t(a) WHERE false",
+            vec!["1"],
+        ),
+        (
+            "SELECT 1 FROM (VALUES (1), (2)) t(a) HAVING count(*) = 2",
+            vec!["1"],
+        ),
+        (
+            "SELECT 1 FROM (VALUES (1), (2)) t(a) ORDER BY sum(a)",
+            vec!["1"],
+        ),
+        (
+            "SELECT a, unnest([1, 2]) FROM (VALUES (1), (1), (2)) t(a) GROUP BY a",
+            vec!["1 1", "1 2", "2 1", "2 2"],
+        ),
+        (
+            "SELECT unnest(array_agg(a)) FROM (VALUES (1), (2)) t(a)",
+            vec!["1", "2"],
+        ),
+        (
+            "SELECT sum(unnest([a, a + 1])) FROM (VALUES (1), (2)) t(a)",
+            vec!["8"],
+        ),
+        (
+            "SELECT a, sum(unnest([a, a + 1])), unnest([a, a + 1]) FROM (VALUES (1), (1), (2)) t(a) GROUP BY a",
+            vec!["1 6 1", "1 6 2", "2 5 2", "2 5 3"],
+        ),
+        (
+            "SELECT a, unnest([a, a + 1]) AS s, count(*) FROM (VALUES (1), (1), (2)) t(a) GROUP BY a, s",
+            vec!["1 1 2", "1 2 2", "2 2 1", "2 3 1"],
+        ),
+        (
+            "SELECT a % 2 AS k, row_number() OVER (ORDER BY sum(b)) FROM (VALUES (1, 3), (1, 4), (2, 5)) t(a, b) GROUP BY k",
+            vec!["0 1", "1 2"],
+        ),
+    ];
+    for (sql, expected) in cases {
+        let blocks = execute_query(fixture.new_query_ctx().await?, sql)
+            .await?
+            .try_collect::<Vec<DataBlock>>()
+            .await?;
+        let mut rows = Vec::new();
+        for block in blocks {
+            for row in 0..block.num_rows() {
+                rows.push(
+                    block
+                        .columns()
+                        .iter()
+                        .map(|column| column.value().index(row).unwrap().to_string())
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                );
+            }
+        }
+        rows.sort();
+        assert_eq!(rows, expected, "{sql}");
+    }
+    Ok(())
+}
+
 fn collect_producer_schemas(
     plan: &PhysicalPlan,
     schemas: &mut HashMap<String, DataSchemaRef>,

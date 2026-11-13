@@ -109,7 +109,7 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
     }
 
     /// Bind `expr`, letting aliases resolve to the pre-aggregate forms of the
-    /// SELECT items of a GROUPING SETS query, see
+    /// SELECT items of a grouped query, see
     /// `TypeChecker::set_select_items`.
     pub(crate) fn bind_with_select_items(
         &mut self,

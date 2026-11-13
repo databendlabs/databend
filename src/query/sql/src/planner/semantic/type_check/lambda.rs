@@ -178,6 +178,7 @@ where A: super::TypeCheckAdapter
             self.metadata.clone(),
             &[],
         )?;
+        type_checker.set_folding_policy(self.scalar_folding_policy());
         // The new type checker binds the body with grouping-key matching work
         // of its own, as pre-aggregate forms depend on the parameters.
         let resolved = type_checker.resolve_core(arena, lambda_expr)?;

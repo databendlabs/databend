@@ -62,6 +62,23 @@ pub(super) enum CoreAsyncFunction<'a> {
     Sleep(CoreAsyncFunctionArg),
 }
 
+impl CoreAsyncFunction<'_> {
+    /// The argument expressions of the function.
+    pub(super) fn args(&self) -> Vec<CoreExprId> {
+        match self {
+            CoreAsyncFunction::NextVal { .. } => vec![],
+            CoreAsyncFunction::DictGet(function) => vec![function.field.expr, function.key.expr],
+            CoreAsyncFunction::ReadFile(function) => function
+                .stage
+                .iter()
+                .chain(std::iter::once(&function.location))
+                .map(|arg| arg.expr)
+                .collect(),
+            CoreAsyncFunction::Sleep(arg) => vec![arg.expr],
+        }
+    }
+}
+
 impl<'a> CoreExprArena<'a> {
     fn lower_async_function_arg(&mut self, expr: &'a Expr) -> Result<CoreAsyncFunctionArg> {
         Ok(CoreAsyncFunctionArg {

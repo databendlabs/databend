@@ -59,6 +59,10 @@ const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
 mod adapter;
 mod aggregate;
+mod aggregate_facts;
+pub(crate) use aggregate_facts::UdafNames;
+pub(crate) use udf::sql_udf_aggregates;
+pub(crate) use udf::sql_udf_body;
 mod async_functions;
 mod column;
 mod core_expr;
@@ -142,6 +146,12 @@ enum CoreExpr<'a> {
         span: Span,
         name: &'a Identifier,
         args: CoreUdfCallArgs,
+        /// The arguments as written, which a SQL UDF that aggregates is
+        /// expanded with, see `udf.rs`.
+        ast_args: &'a [Expr],
+        /// Whether the call has an OVER clause, which no user-defined function
+        /// supports.
+        has_window: bool,
         // Carried through to UDF resolution, where scalar UDFs and UDAFs are
         // distinguished before a FILTER clause can be handled or rejected.
         filter: Option<&'a Expr>,
@@ -515,7 +525,7 @@ pub struct TypeChecker<'a, A> {
 
     aliases: AliasLookup<'a>,
     fallback_aliases: Option<AliasLookup<'a>>,
-    // The SELECT items of a GROUPING SETS query whose pre-aggregate forms the
+    // The SELECT items of a grouped query whose pre-aggregate forms the
     // aliases may resolve to, see `type_check/pre_aggregate.rs`.
     select_items: Option<SelectItems<'a>>,
 

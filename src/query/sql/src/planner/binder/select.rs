@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -34,12 +33,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::Any;
 use super::Finder;
-use super::aggregate_prepass::AggregateExprInfo;
 use super::reject_grouping_functions;
 use super::sort::OrderItem;
 use crate::ColumnEntry;
 use crate::ColumnSet;
-use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
 use crate::binder::AliasLookup;
@@ -177,102 +174,26 @@ impl GroupItemAliasState<'_> {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct AggregateAliasFeature {
-    pub(crate) ref_aggregate: bool,
-    pub(crate) ref_window: bool,
-}
-
-#[derive(Clone)]
-pub(crate) struct SelectClauseFact {
-    pub(crate) expr_info: AggregateExprInfo,
-    pub(crate) alias_feature: AggregateAliasFeature,
-}
-
-impl SelectClauseFact {
-    pub(crate) fn needs_order_by_select_item_replacement(&self) -> bool {
-        !self.expr_info.referenced_aliases.is_empty()
-    }
-
-    pub(crate) fn contains_or_references_aggregate(&self) -> bool {
-        self.expr_info.contains_aggregate || self.alias_feature.ref_aggregate
-    }
-
-    pub(crate) fn contains_or_references_window(&self) -> bool {
-        self.expr_info.contains_window || self.alias_feature.ref_window
-    }
-}
-
-#[derive(Debug, Clone)]
-struct SelectAliasEntry {
-    alias_index: usize,
-    explicit_expr_alias: bool,
-    aggregate_expr_info: Option<AggregateExprInfo>,
-}
-
-impl SelectAliasEntry {
-    fn new(alias_index: usize, item: &SelectItem<'_>) -> Self {
-        Self {
-            alias_index,
-            explicit_expr_alias: matches!(item.select_target, SelectTarget::AliasedExpr {
-                alias: Some(_),
-                ..
-            }),
-            aggregate_expr_info: None,
-        }
-    }
-}
-
+/// The aliases of the SELECT items as bound, which later clauses resolve.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct SelectAliasCatalog {
     aliases: Vec<(String, ScalarExpr)>,
-    by_name: HashMap<String, Vec<usize>>,
-    items: Vec<SelectAliasEntry>,
 }
 
 impl SelectAliasCatalog {
     pub(crate) fn all_aliases(&self) -> &[(String, ScalarExpr)] {
         &self.aliases
     }
-
-    pub(crate) fn group_by_bindings(&self) -> ClauseAliasBindings<'_> {
-        let available = self
-            .items
-            .iter()
-            .filter(|item| item.explicit_expr_alias)
-            .map(|item| item.alias_index)
-            .collect();
-        ClauseAliasBindings::new(AliasTable::Bound(&self.aliases), available)
-    }
 }
 
 impl SelectList<'_> {
     pub(crate) fn alias_catalog(&self) -> SelectAliasCatalog {
-        let aliases = self
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect();
-
-        let by_name = self.items.iter().enumerate().fold(
-            HashMap::<_, Vec<_>>::new(),
-            |mut by_name, (i, item)| {
-                by_name.entry(item.alias.clone()).or_default().push(i);
-                by_name
-            },
-        );
-
-        let items = self
-            .items
-            .iter()
-            .enumerate()
-            .map(|(i, item)| SelectAliasEntry::new(i, item))
-            .collect();
-
         SelectAliasCatalog {
-            aliases,
-            by_name,
-            items,
+            aliases: self
+                .items
+                .iter()
+                .map(|item| (item.alias.clone(), item.scalar.clone()))
+                .collect(),
         }
     }
 }
@@ -282,118 +203,6 @@ pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget,
     pub scalar: ScalarExpr,
     pub alias: String,
-    pub used_functions: HashSet<String>,
-}
-
-impl SelectAliasCatalog {
-    pub(super) fn analyze_aggregate_prepass_exprs(
-        &mut self,
-        select_list: &SelectList<'_>,
-        name_resolution_ctx: &NameResolutionContext,
-        udaf_names: &HashSet<String>,
-    ) {
-        let alias_names = select_list
-            .items
-            .iter()
-            .filter_map(|item| match item.select_target {
-                SelectTarget::AliasedExpr { .. } => Some(item.alias.as_str()),
-                _ => None,
-            })
-            .collect::<HashSet<_>>();
-
-        for (item, entry) in select_list.items.iter().zip(self.items.iter_mut()) {
-            let SelectTarget::AliasedExpr { expr, .. } = item.select_target else {
-                continue;
-            };
-
-            entry.aggregate_expr_info = Some(AggregateExprInfo::analyze(
-                name_resolution_ctx,
-                udaf_names,
-                &alias_names,
-                expr,
-            ));
-        }
-    }
-
-    pub(super) fn aggregate_prepass_alias_names(&self) -> HashSet<&str> {
-        self.by_name
-            .iter()
-            .filter(|(_, indices)| {
-                indices
-                    .iter()
-                    .any(|index| self.items[*index].aggregate_expr_info.is_some())
-            })
-            .map(|(name, _)| name.as_str())
-            .collect()
-    }
-
-    pub(super) fn aggregate_alias_feature(&self, names: &[String]) -> AggregateAliasFeature {
-        let mut usage = AggregateAliasFeature::default();
-        let mut reachability = AggregateAliasReachability {
-            catalog: self,
-            visiting: BTreeSet::new(),
-        };
-
-        for name in names {
-            if reachability.alias_reaches(name, &mut usage) {
-                return usage;
-            }
-        }
-
-        usage
-    }
-
-    pub(super) fn unique_aggregate_prepass_expr_info(
-        &self,
-        name: &str,
-    ) -> Option<&AggregateExprInfo> {
-        let mut matches = self
-            .by_name
-            .get(name)?
-            .iter()
-            .filter_map(|index| self.items[*index].aggregate_expr_info.as_ref());
-        let info = matches.next()?;
-        if matches.next().is_some() {
-            return None;
-        }
-        Some(info)
-    }
-}
-
-struct AggregateAliasReachability<'a> {
-    catalog: &'a SelectAliasCatalog,
-    visiting: BTreeSet<String>,
-}
-
-impl<'a> AggregateAliasReachability<'a> {
-    fn alias_reaches(&mut self, name: &str, usage: &mut AggregateAliasFeature) -> bool {
-        let Some(alias) = self.catalog.unique_aggregate_prepass_expr_info(name) else {
-            return false;
-        };
-
-        if usage.ref_aggregate && usage.ref_window {
-            return true;
-        }
-
-        if !self.visiting.insert(name.to_string()) {
-            return false;
-        }
-
-        usage.ref_aggregate |= alias.contains_aggregate;
-        usage.ref_window |= alias.contains_window;
-        if usage.ref_aggregate && usage.ref_window {
-            self.visiting.remove(name);
-            return true;
-        }
-
-        for dep in &alias.referenced_aliases {
-            if self.alias_reaches(dep, usage) {
-                break;
-            }
-        }
-        self.visiting.remove(name);
-        usage.ref_aggregate && usage.ref_window
-    }
 }
 
 impl Binder {
@@ -464,9 +273,9 @@ impl Binder {
         Ok((Self::where_filter(&scalar, child), scalar))
     }
 
-    /// Bind the WHERE of a GROUPING SETS query, whose aliases resolve to the
+    /// Bind the WHERE of a grouped query, whose aliases resolve to the
     /// pre-aggregate forms of the SELECT items.
-    pub(crate) fn bind_grouping_sets_where(
+    pub(crate) fn bind_grouped_where(
         &mut self,
         bind_context: &mut BindContext,
         mut items: SelectItems<'_>,

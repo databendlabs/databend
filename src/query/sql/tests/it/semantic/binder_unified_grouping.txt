@@ -1,0 +1,463 @@
+=== ordinary_compound_key ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a + 1, sum(b) FROM t GROUP BY a + 1
+status: ok
+EvalScalar
+├── scalars: [a + 1 (#2) AS (#2), sum(b) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [plus(t.a (#0), 1) AS (#2)]
+    ├── aggregate functions: [sum(t.b (#1)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.b (#1) AS (#1), plus(t.a (#0), 1) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== ordinary_folded_key ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a IS NULL, count(*) FROM t GROUP BY a IS NULL
+status: ok
+EvalScalar
+├── scalars: [a IS NULL (#2) AS (#2), COUNT(*) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [false AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [false AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== pruned_positional_key ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a, a + 1 AS k, sum(b) FROM t GROUP BY 1, 2
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), sum(b) (#3) AS (#3), plus(t.a (#0), 1) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.b (#1)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== input_alias_in_where_and_aggregate ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a + 1 AS k, sum(k) FROM t WHERE k > 0 GROUP BY k
+status: ok
+EvalScalar
+├── scalars: [k (#2) AS (#2), sum(k) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [plus(t.a (#0), 1) AS (#2)]
+    ├── aggregate functions: [sum(k (#2)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [plus(t.a (#0), 1) AS (#2)]
+        └── Filter
+            ├── filters: [gt(plus(t.a (#0), 1), 0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== ordinary_window_inputs ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a % 2 AS k, row_number() OVER (PARTITION BY k ORDER BY sum(b)) FROM t GROUP BY k
+status: ok
+EvalScalar
+├── scalars: [k (#2) AS (#2), row_number() OVER (PARTITION BY k ORDER BY sum(b)) (#4) AS (#4)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [k (#2) AS (#2)]
+    ├── order by items: [sum(b) (#3) AS (#3)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [k (#2) ASC NULLS LAST, sum(b) (#3) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [k (#2) AS (#2), sum(b) (#3) AS (#3)]
+            └── Aggregate(Initial)
+                ├── group items: [modulo(t.a (#0), 2) AS (#2)]
+                ├── aggregate functions: [sum(t.b (#1)) AS (#3)]
+                └── EvalScalar
+                    ├── scalars: [t.b (#1) AS (#1), modulo(t.a (#0), 2) AS (#2)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== ordinary_lambda_capture ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT array_transform([1, 2], x -> x + a), sum(b) FROM t GROUP BY a
+status: ok
+EvalScalar
+├── scalars: [sum(b) (#2) AS (#2), array_transform(t.a (#0), [1, 2], ["x"] -> x (#2) + t.a (#0)) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.b (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== all_alias_chain ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a + 1 AS k, k + 1 AS j, sum(b) AS s, s + 1 FROM t GROUP BY ALL
+status: ok
+EvalScalar
+├── scalars: [k (#2) AS (#2), sum(b) (#4) AS (#4), plus(k (#2), 1) AS (#5), plus(sum(b) (#4), 1) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: [plus(t.a (#0), 1) AS (#2)]
+    ├── aggregate functions: [sum(t.b (#1)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t.b (#1) AS (#1), plus(t.a (#0), 1) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== all_udaf ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a % 2 AS k, weighted_avg(a, b) FROM t GROUP BY ALL
+status: ok
+EvalScalar
+├── scalars: [k (#2) AS (#2), weighted_avg(a, b) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(t.a (#0), 2) AS (#2)]
+    ├── aggregate functions: [weighted_avg(a, b) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [modulo(t.a (#0), 2) AS (#2), CAST(t.a (#0) AS Int32 NULL) AS (#3), CAST(t.b (#1) AS Int32 NULL) AS (#4)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== all_input_shadows_aggregate_alias ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT sum(a) AS b, b FROM t GROUP BY ALL
+status: ok
+EvalScalar
+├── scalars: [t.b (#1) AS (#1), sum(a) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.b (#1) AS (#1)]
+    ├── aggregate functions: [sum(t.a (#0)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== all_star ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT *, count(*) FROM t GROUP BY ALL
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1), COUNT(*) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.b (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== ordinary_input_and_output_srfs ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a, sum(unnest([a, a + 1])), unnest([a, a + 1]) FROM t GROUP BY a
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), sum(unnest([a, a + 1])) (#4) AS (#4), get(1)(unnest(array(t.a (#0), plus(t.a (#0), 1))) (#5)) AS (#6)]
+└── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(35..53), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(42..52), func_name: "array", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "a", column_name_lower: None, index: 0, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } }), FunctionCall(FunctionCall { span: Some(48..49), func_name: "plus", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "a", column_name_lower: None, index: 0, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(50..51), value: Number(1_u8) })] })] })] }), index: 5 }] })
+    └── Aggregate(Initial)
+        ├── group items: [t.a (#0) AS (#0)]
+        ├── aggregate functions: [sum(sum_arg_0 (#3)) AS (#4)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0), get(1)(unnest(array(t.a (#0), plus(t.a (#0), 1))) (#2)) AS (#3)]
+            └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(14..32), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(21..31), func_name: "array", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "a", column_name_lower: None, index: 0, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } }), FunctionCall(FunctionCall { span: Some(27..28), func_name: "plus", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "a", column_name_lower: None, index: 0, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(29..30), value: Number(1_u8) })] })] })] }), index: 2 }] })
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== ordinary_constant_output_srf ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a, unnest([1, 2]) FROM t GROUP BY a
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), get(1)(unnest([1, 2]) (#2)) AS (#3)]
+└── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(10..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(17..23), value: Array(UInt8([1, 2])) })] }), index: 2 }] })
+    └── Aggregate(Initial)
+        ├── group items: [t.a (#0) AS (#0)]
+        ├── aggregate functions: []
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== ordinary_srf_key ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a, unnest([a, a + 1]) AS s, count(*) FROM t GROUP BY a, s
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), s (#3) AS (#3), COUNT(*) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0), get(1)(unnest(array(t.a (#0), plus(t.a (#0), 1))) (#2)) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), get(1)(unnest(array(t.a (#0), plus(t.a (#0), 1))) (#2)) AS (#3)]
+        └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(10..28), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(17..27), func_name: "array", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "a", column_name_lower: None, index: 0, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } }), FunctionCall(FunctionCall { span: Some(23..24), func_name: "plus", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "a", column_name_lower: None, index: 0, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(25..26), value: Number(1_u8) })] })] })] }), index: 2 }] })
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== grouping_sets_qualify_grouping ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a, grouping(a), count(*) OVER () FROM t GROUP BY ROLLUP(a) QUALIFY grouping(a) = 0
+status: ok
+EvalScalar
+├── scalars: [a (#2) AS (#2), COUNT(*) OVER () (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+└── Filter
+    ├── filters: [eq(grouping(0)(_grouping_id (#3)), 0)]
+    └── Window
+        ├── aggregate function: count
+        ├── partition items: []
+        ├── order by items: []
+        ├── frame: [Range: Preceding(None) ~ Following(None)]
+        └── Aggregate(Initial)
+            ├── group items: [a (#2) AS (#2), _grouping_id (#3) AS (#3)]
+            ├── aggregate functions: []
+            └── EvalScalar
+                ├── scalars: [CAST(t.a (#0) AS Int32 NULL) AS (#2)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== global_aggregate_removed_by_folding ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT count(*) IS NOT NULL FROM t
+status: ok
+EvalScalar
+├── scalars: [true AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#2)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== global_aggregate_only_in_having ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT 1 FROM t HAVING count(*) > 0
+status: ok
+EvalScalar
+├── scalars: [1 AS (#2)]
+└── Filter
+    ├── filters: [gt(COUNT(*) (#3), 0)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [count() AS (#3)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== global_aggregate_only_in_order ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT 1 FROM t ORDER BY sum(a)
+status: ok
+Sort
+├── sort keys: [sum(a) (#3) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [1 AS (#2), sum(a) (#3) AS (#3)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [sum(t.a (#0)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== ungrouped_dead_branch ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT if(true, 1, a), count(*) FROM t GROUP BY b
+status: error
+code: 1065
+message: column "a" must appear in the GROUP BY clause or be used in an aggregate function
+
+=== ungrouped_star ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT * FROM t GROUP BY a
+status: error
+code: 1065
+message: column "b" must appear in the GROUP BY clause or be used in an aggregate function
+
+=== global_ungrouped_column ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a, sum(b) FROM t
+status: error
+code: 1065
+message: column "a" must appear in the GROUP BY clause or be used in an aggregate function
+
+=== having_without_aggregation ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT a FROM t HAVING a > 0
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(t.a (#0), 0)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== ordinary_complex_key_by_position ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT (SELECT max(a) FROM t) AS k, count(*) FROM t GROUP BY 1
+status: ok
+EvalScalar
+├── scalars: [k (#5) AS (#5), COUNT(*) (#6) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: [SUBQUERY AS (#4) AS (#5)]
+    ├── aggregate functions: [count() AS (#6)]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: max(a) (#4)
+    │       └── EvalScalar
+    │           ├── scalars: [max(a) (#4) AS (#4)]
+    │           └── Aggregate(Initial)
+    │               ├── group items: []
+    │               ├── aggregate functions: [max(t.a (#2)) AS (#4)]
+    │               └── EvalScalar
+    │                   ├── scalars: [t.a (#2) AS (#2)]
+    │                   └── Scan
+    │                       ├── table: default.t (#1)
+    │                       ├── filters: []
+    │                       ├── order by: []
+    │                       └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [SUBQUERY AS (#4) AS (#5)]
+        ├── subquerys
+        │   └── Subquery (Scalar)
+        │       ├── output_column: max(a) (#4)
+        │       └── EvalScalar
+        │           ├── scalars: [max(a) (#4) AS (#4)]
+        │           └── Aggregate(Initial)
+        │               ├── group items: []
+        │               ├── aggregate functions: [max(t.a (#2)) AS (#4)]
+        │               └── EvalScalar
+        │                   ├── scalars: [t.a (#2) AS (#2)]
+        │                   └── Scan
+        │                       ├── table: default.t (#1)
+        │                       ├── filters: []
+        │                       ├── order by: []
+        │                       └── limit: NONE
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== grouping_sets_where_alias_first ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT coalesce(a, 0) AS k, k + 1, count(*) FROM t WHERE k > 0 GROUP BY ROLLUP(coalesce(a, 0) + 1, coalesce(a, 0))
+status: ok
+EvalScalar
+├── scalars: [coalesce(a, 0) + 1 (#2) AS (#2), coalesce(a, 0) (#3) AS (#3), COUNT(*) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [coalesce(a, 0) + 1 (#2) AS (#2), coalesce(a, 0) (#3) AS (#3), _grouping_id (#4) AS (#4)]
+    ├── aggregate functions: [count() AS (#5)]
+    └── EvalScalar
+        ├── scalars: [plus(if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), true, 0, NULL), 1) AS (#2), if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), true, 0, NULL) AS (#3)]
+        └── Filter
+            ├── filters: [gt(if(is_not_null(t.a (#0)), assume_not_null(t.a (#0)), true, 0, NULL), 0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== cast_over_tuple_access_key ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT s.2::INT, count(*) FROM (SELECT (a, b) AS s FROM t) d GROUP BY s.2
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#4) AS (#4), CAST(s.2 (#3) AS Int32) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [get(2)(s (#2)) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── EvalScalar
+        ├── scalars: [get(2)(s (#2)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [tuple(t.a (#0), t.b (#1)) AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== srf_key_over_aggregate ===
+description: Grouped expressions bind against known key outputs, without a late grouping rewrite.
+sql: SELECT unnest([sum(a)]) AS s FROM t GROUP BY s
+status: error
+code: 1065
+message: set-returning functions evaluated before the aggregate can't contain aggregate functions
+

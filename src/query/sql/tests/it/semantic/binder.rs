@@ -27,6 +27,7 @@ use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_outcome;
 
 mod alias_resolution;
+mod binding_phases;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_window_input_reuse_preserves_nondeterministic_expressions() -> Result<()> {
@@ -967,6 +968,108 @@ async fn test_grouping_sets_binds_select_subqueries_once() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_unified_grouping_binding() -> Result<()> {
+    let cases = [
+        (
+            "ordinary_compound_key",
+            "SELECT a + 1, sum(b) FROM t GROUP BY a + 1",
+        ),
+        (
+            "ordinary_folded_key",
+            "SELECT a IS NULL, count(*) FROM t GROUP BY a IS NULL",
+        ),
+        (
+            "pruned_positional_key",
+            "SELECT a, a + 1 AS k, sum(b) FROM t GROUP BY 1, 2",
+        ),
+        (
+            "input_alias_in_where_and_aggregate",
+            "SELECT a + 1 AS k, sum(k) FROM t WHERE k > 0 GROUP BY k",
+        ),
+        (
+            "ordinary_window_inputs",
+            "SELECT a % 2 AS k, row_number() OVER (PARTITION BY k ORDER BY sum(b)) FROM t GROUP BY k",
+        ),
+        (
+            "ordinary_lambda_capture",
+            "SELECT array_transform([1, 2], x -> x + a), sum(b) FROM t GROUP BY a",
+        ),
+        (
+            "all_alias_chain",
+            "SELECT a + 1 AS k, k + 1 AS j, sum(b) AS s, s + 1 FROM t GROUP BY ALL",
+        ),
+        (
+            "all_udaf",
+            "SELECT a % 2 AS k, weighted_avg(a, b) FROM t GROUP BY ALL",
+        ),
+        (
+            "all_input_shadows_aggregate_alias",
+            "SELECT sum(a) AS b, b FROM t GROUP BY ALL",
+        ),
+        ("all_star", "SELECT *, count(*) FROM t GROUP BY ALL"),
+        (
+            "ordinary_input_and_output_srfs",
+            "SELECT a, sum(unnest([a, a + 1])), unnest([a, a + 1]) FROM t GROUP BY a",
+        ),
+        (
+            "ordinary_constant_output_srf",
+            "SELECT a, unnest([1, 2]) FROM t GROUP BY a",
+        ),
+        (
+            "ordinary_srf_key",
+            "SELECT a, unnest([a, a + 1]) AS s, count(*) FROM t GROUP BY a, s",
+        ),
+        (
+            "grouping_sets_qualify_grouping",
+            "SELECT a, grouping(a), count(*) OVER () FROM t GROUP BY ROLLUP(a) QUALIFY grouping(a) = 0",
+        ),
+        (
+            "global_aggregate_removed_by_folding",
+            "SELECT count(*) IS NOT NULL FROM t",
+        ),
+        (
+            "global_aggregate_only_in_having",
+            "SELECT 1 FROM t HAVING count(*) > 0",
+        ),
+        (
+            "global_aggregate_only_in_order",
+            "SELECT 1 FROM t ORDER BY sum(a)",
+        ),
+        (
+            "ungrouped_dead_branch",
+            "SELECT if(true, 1, a), count(*) FROM t GROUP BY b",
+        ),
+        ("ungrouped_star", "SELECT * FROM t GROUP BY a"),
+        ("global_ungrouped_column", "SELECT a, sum(b) FROM t"),
+        ("having_without_aggregation", "SELECT a FROM t HAVING a > 0"),
+        (
+            "ordinary_complex_key_by_position",
+            "SELECT (SELECT max(a) FROM t) AS k, count(*) FROM t GROUP BY 1",
+        ),
+        // WHERE binds the form of `k` first, with the policy of the keys.
+        (
+            "grouping_sets_where_alias_first",
+            "SELECT coalesce(a, 0) AS k, k + 1, count(*) FROM t WHERE k > 0 GROUP BY ROLLUP(coalesce(a, 0) + 1, coalesce(a, 0))",
+        ),
+        (
+            "cast_over_tuple_access_key",
+            "SELECT s.2::INT, count(*) FROM (SELECT (a, b) AS s FROM t) d GROUP BY s.2",
+        ),
+        (
+            "srf_key_over_aggregate",
+            "SELECT unnest([sum(a)]) AS s FROM t GROUP BY s",
+        ),
+    ];
+    let cases = cases.map(|(name, sql)| SqlTestCase {
+        name,
+        description: "Grouped expressions bind against known key outputs, without a late grouping rewrite.",
+        setup_sqls: &["CREATE TABLE t(a Int32 NOT NULL, b Int32 NOT NULL)", TEST_UDAF_SQL],
+        sql,
+    });
+    run_binder_cases("binder_unified_grouping.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

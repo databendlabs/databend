@@ -14,16 +14,26 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Duration;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::LambdaArgument;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UriLocation;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut as AstVisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
@@ -38,6 +48,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::convert_to_type_name;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
@@ -64,6 +75,7 @@ use super::CoreUdfCallArgs;
 use super::FullTypeCheckAdapter;
 use super::StageLocationParam;
 use super::TypeChecker;
+use super::UdafNames;
 use super::UdfAdapter;
 use super::rewrite_function::rewrite_function_name;
 use crate::BindContext;
@@ -131,6 +143,8 @@ impl<'a> CoreExprArena<'a> {
             span,
             name: &func.name,
             args,
+            ast_args: &func.args,
+            has_window: func.window.is_some(),
             filter: func.filter.as_deref(),
         })))
     }
@@ -712,6 +726,8 @@ where A: super::TypeCheckAdapter
         span: Span,
         name: &Identifier,
         args: &CoreUdfCallArgs,
+        ast_args: &[Expr],
+        has_window: bool,
         filter: Option<&Expr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
@@ -740,6 +756,17 @@ where A: super::TypeCheckAdapter
                 "FILTER clause is only supported for aggregate functions",
             )
             .set_span(span));
+        }
+
+        if has_window {
+            return Err(ErrorCode::SemanticError(
+                "window syntax is not supported for user-defined functions",
+            )
+            .set_span(span));
+        }
+
+        if let Some(body) = self.aggregating_sql_udf_body(&udf)? {
+            return self.resolve_aggregating_sql_udf(span, udf, body, ast_args);
         }
 
         let is_udaf = matches!(&udf.definition, UDFDefinition::UDAFScript(_));
@@ -807,6 +834,115 @@ where A: super::TypeCheckAdapter
         }
     }
 
+    /// The body of `udf` if it is a SQL UDF that aggregates, see
+    /// [`sql_udf_aggregates`].
+    fn aggregating_sql_udf_body(&mut self, udf: &UserDefinedFunction) -> Result<Option<Expr>> {
+        let dialect = self.adapter.sql_dialect()?;
+        let Some(body) = sql_udf_body(udf, dialect)? else {
+            return Ok(None);
+        };
+        let name_resolution_ctx = self.name_resolution_ctx;
+        let aggregates = sql_udf_aggregates(
+            &body,
+            name_resolution_ctx,
+            dialect,
+            &mut |name| self.resolve_udf_from_cache(name),
+            0,
+        )?;
+        Ok(aggregates.then_some(body))
+    }
+
+    /// Resolve a call of a SQL UDF that aggregates by expanding its body, with
+    /// the arguments as written in place of the parameters, where the call
+    /// is. A body bound on its own, with the arguments bound before, could not
+    /// tell an argument of an aggregate function in it, evaluated before the
+    /// aggregate, from one outside, evaluated after it. An argument used more
+    /// than once is bound once for each use.
+    fn resolve_aggregating_sql_udf(
+        &mut self,
+        span: Span,
+        udf: UserDefinedFunction,
+        body: Expr,
+        args: &[Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let (parameters, return_type): (Vec<(String, Option<TypeName>)>, _) = match &udf.definition
+        {
+            UDFDefinition::LambdaUDF(LambdaUDF { parameters, .. }) => (
+                parameters.iter().map(|name| (name.clone(), None)).collect(),
+                None,
+            ),
+            UDFDefinition::ScalarUDF(ScalarUDF {
+                arg_types,
+                return_type,
+                ..
+            }) => (
+                arg_types
+                    .iter()
+                    .map(|(name, data_type)| {
+                        let data_type = table_type_to_data_type(data_type);
+                        (name.clone(), Some(convert_to_type_name(&data_type)))
+                    })
+                    .collect(),
+                Some(convert_to_type_name(&table_type_to_data_type(return_type))),
+            ),
+            _ => unreachable!("only SQL UDFs have a body"),
+        };
+        if parameters.len() != args.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Require {} parameters, but got: {}",
+                parameters.len(),
+                args.len()
+            ))
+            .set_span(span));
+        }
+        let arguments = parameters
+            .into_iter()
+            .zip(args)
+            .map(|((name, target_type), arg)| {
+                let arg = match target_type {
+                    Some(target_type) => Expr::Cast {
+                        span: arg.span(),
+                        expr: Box::new(arg.clone()),
+                        target_type,
+                        pg_style: false,
+                    },
+                    None => arg.clone(),
+                };
+                (name, arg)
+            })
+            .collect::<HashMap<_, _>>();
+        let mut expr = body;
+        expr.walk_mut(&mut SqlUdfParameterSubstitution {
+            arguments: &arguments,
+            name_resolution_ctx: self.name_resolution_ctx,
+            lambda_params: Vec::new(),
+            subquery_depth: 0,
+            lenient: false,
+        })?;
+        if let Some(target_type) = return_type {
+            expr = Expr::Cast {
+                span,
+                expr: Box::new(expr),
+                target_type,
+                pg_style: false,
+            };
+        }
+
+        let mut arena = CoreExprArena::with_aggregate_function_registry(
+            self.func_ctx.week_start as u64,
+            self.adapter.aggregate_function_registry(),
+        );
+        let root = arena.lower_ast_expr(&expr)?;
+        let deref!((scalar, data_type)) = self.resolve_checked_core(&arena, root)?;
+        let scalar = UDFLambdaCall {
+            span,
+            func_name: udf.name,
+            scalar: Box::new(scalar),
+        }
+        .into();
+        Ok(Box::new((scalar, data_type)))
+    }
+
     fn resolve_udf_from_cache(&mut self, udf_name: &str) -> Result<Option<UserDefinedFunction>> {
         // A shared binding cache must not grant a capability the adapter lacks.
         let adapter = self.adapter.udf_adapter()?;
@@ -837,9 +973,6 @@ where A: super::TypeCheckAdapter
         let expr = parse_expr(&sql_tokens, self.adapter.sql_dialect()?)?;
 
         let mut bind_context = BindContext::new();
-        // Pre-aggregate forms matched against grouping keys stay unfolded,
-        // including the bodies of SQL UDFs in them.
-        bind_context.scalar_folding_policy = self.scalar_folding_policy();
         let mut metadata = Metadata::default();
         let mut replacements = HashMap::new();
         for (name, data_type, scalar) in parameters {
@@ -860,14 +993,17 @@ where A: super::TypeCheckAdapter
             deny_column_reference: false,
             ..self.name_resolution_ctx.clone()
         };
-        let deref!((scalar, data_type)) = TypeChecker::try_create_with_adapter(
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             &mut bind_context,
             self.adapter.clone(),
             &name_resolution_ctx,
             RwLock::new(metadata).into(),
             &[],
-        )?
-        .resolve(&expr)?;
+        )?;
+        // Pre-aggregate forms matched against grouping keys stay unfolded,
+        // including the bodies of SQL UDFs in them.
+        type_checker.set_folding_policy(self.scalar_folding_policy());
+        let deref!((scalar, data_type)) = type_checker.resolve(&expr)?;
 
         // The definition body is resolved with its own `BindContext`, so any runtime
         // rewrite requirement discovered there (script/server UDF calls, async
@@ -1347,6 +1483,171 @@ where A: UdfAdapter
             parameters,
             return_type: table_type_to_data_type(&udf_definition.return_type),
         })
+    }
+}
+
+/// The body of `udf` if it is a SQL UDF, i.e. defined by an expression.
+pub(crate) fn sql_udf_body(udf: &UserDefinedFunction, dialect: Dialect) -> Result<Option<Expr>> {
+    let definition = match &udf.definition {
+        UDFDefinition::LambdaUDF(LambdaUDF { definition, .. })
+        | UDFDefinition::ScalarUDF(ScalarUDF { definition, .. }) => definition,
+        _ => return Ok(None),
+    };
+    let tokens = tokenize_sql(definition)?;
+    Ok(Some(parse_expr(&tokens, dialect)?))
+}
+
+/// How deep SQL UDFs may call SQL UDFs. Deeper calls, e.g. of a UDF that
+/// calls itself, are rejected: whether they aggregate is unknown, and
+/// expanding them would overflow first.
+const MAX_SQL_UDF_DEPTH: usize = 16;
+
+/// Whether the body of a SQL UDF calls an aggregate function, as
+/// [`CoreExprArena::contains_grouping_aggregate`] tells, also through the UDFs
+/// it calls. `load` loads a UDF by normalized name. SQL UDFs nested deeper
+/// than [`MAX_SQL_UDF_DEPTH`] are an error.
+pub(crate) fn sql_udf_aggregates(
+    body: &Expr,
+    name_resolution_ctx: &NameResolutionContext,
+    dialect: Dialect,
+    load: &mut dyn FnMut(&str) -> Result<Option<UserDefinedFunction>>,
+    depth: usize,
+) -> Result<bool> {
+    let mut arena = CoreExprArena::new(0);
+    let root = arena.lower_ast_expr(body)?;
+    let mut aggregating = HashSet::new();
+    for name in arena.udf_call_names(root) {
+        let name = normalize_identifier(name, name_resolution_ctx).name;
+        let Some(udf) = load(&name)? else {
+            continue;
+        };
+        let aggregates = match sql_udf_body(&udf, dialect)? {
+            _ if udf.definition.is_aggregate() => true,
+            Some(_) if depth >= MAX_SQL_UDF_DEPTH => {
+                return Err(ErrorCode::SemanticError(format!(
+                    "SQL UDF nesting exceeds the maximum depth of {MAX_SQL_UDF_DEPTH} at `{name}`, the UDFs may call each other recursively"
+                )));
+            }
+            Some(nested) => {
+                sql_udf_aggregates(&nested, name_resolution_ctx, dialect, load, depth + 1)?
+            }
+            None => false,
+        };
+        if aggregates {
+            aggregating.insert(name);
+        }
+    }
+    Ok(arena.contains_grouping_aggregate(root, &UdafNames {
+        names: &aggregating,
+        name_resolution_ctx,
+    }))
+}
+
+/// Put the arguments of a SQL UDF call in place of its parameters. A name
+/// of a lambda parameter in the body is not a parameter, and outside
+/// subqueries, every other name must be one.
+struct SqlUdfParameterSubstitution<'a> {
+    arguments: &'a HashMap<String, Expr>,
+    name_resolution_ctx: &'a NameResolutionContext,
+    lambda_params: Vec<String>,
+    subquery_depth: usize,
+    /// Leave other names, in an expression that may not be the one bound.
+    lenient: bool,
+}
+
+impl SqlUdfParameterSubstitution<'_> {
+    fn unresolved(&self, span: Span, name: impl std::fmt::Display) -> Result<VisitControl> {
+        if self.subquery_depth > 0 || self.lenient {
+            return Ok(VisitControl::Continue);
+        }
+        Err(ErrorCode::SemanticError(format!(
+            "UDF definition references unresolved column {name}"
+        ))
+        .set_span(span))
+    }
+
+    fn walk_lambda_function(&mut self, func: &mut ASTFunctionCall) -> Result<()> {
+        let mut lambda = func.lambda.take();
+        // The last argument is the ordinary reading of an ambiguous lambda,
+        // which only binds if the function takes no lambda.
+        let ordinary = match &lambda {
+            Some(LambdaArgument::Ambiguous(_)) => func.args.pop(),
+            _ => None,
+        };
+        let mut result = func.walk_mut(self).map(|_| ());
+        if let Some(mut ordinary) = ordinary {
+            if result.is_ok() {
+                let lenient = std::mem::replace(&mut self.lenient, true);
+                result = ordinary.walk_mut(self).map(|_| ());
+                self.lenient = lenient;
+            }
+            func.args.push(ordinary);
+        }
+        if result.is_ok()
+            && let Some(LambdaArgument::Lambda(body) | LambdaArgument::Ambiguous(body)) =
+                &mut lambda
+        {
+            let depth = self.lambda_params.len();
+            self.lambda_params.extend(
+                body.params
+                    .iter()
+                    .map(|param| normalize_identifier(param, self.name_resolution_ctx).name),
+            );
+            result = body.expr.walk_mut(self).map(|_| ());
+            self.lambda_params.truncate(depth);
+        }
+        func.lambda = lambda;
+        result
+    }
+}
+
+impl AstVisitorMut for SqlUdfParameterSubstitution<'_> {
+    type Error = ErrorCode;
+
+    fn visit_expr(&mut self, expr: &mut Expr) -> Result<VisitControl> {
+        match expr {
+            Expr::ColumnRef {
+                span,
+                column:
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(ident),
+                    },
+            } => {
+                let name = normalize_identifier(ident, self.name_resolution_ctx).name;
+                if self.lambda_params.contains(&name) {
+                    return Ok(VisitControl::SkipChildren);
+                }
+                if let Some(argument) = self.arguments.get(&name) {
+                    *expr = argument.clone();
+                    return Ok(VisitControl::SkipChildren);
+                }
+                let span = *span;
+                self.unresolved(span, name)
+                    .map(|_| VisitControl::SkipChildren)
+            }
+            Expr::ColumnRef { span, column } => {
+                let (span, name) = (*span, column.to_string());
+                self.unresolved(span, name)
+                    .map(|_| VisitControl::SkipChildren)
+            }
+            Expr::FunctionCall { func, .. } if func.lambda.is_some() => {
+                self.walk_lambda_function(func)?;
+                Ok(VisitControl::SkipChildren)
+            }
+            _ => Ok(VisitControl::Continue),
+        }
+    }
+
+    fn visit_query(&mut self, _query: &mut Query) -> Result<VisitControl> {
+        self.subquery_depth += 1;
+        Ok(VisitControl::Continue)
+    }
+
+    fn leave_query(&mut self, _query: &mut Query) -> Result<()> {
+        self.subquery_depth -= 1;
+        Ok(())
     }
 }
 

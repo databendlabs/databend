@@ -572,19 +572,20 @@ where A: TypeCheckAdapter
                     return result.map(|pair| self.bind_derived_pair(pair));
                 }
                 let is_grouping = func_name.eq_ignore_ascii_case("grouping");
-                let mut bound_args = Vec::with_capacity(args.len());
-                for arg in args {
-                    let mut bound = self.resolve_core_bound(arena, *arg)?;
-                    if is_grouping
-                        && let Some(group_item) =
-                            self.grouping_argument_group_item(arena, *arg, &bound.scalar)
-                    {
-                        let data_type = group_item.data_type().into_owned();
-                        bound = self.bind_derived(group_item, data_type);
-                    }
-                    bound_args.push(bound);
+                let bound_args = if is_grouping {
+                    self.resolve_grouping_arguments(arena, args)?
+                } else {
+                    args.iter()
+                        .map(|arg| self.resolve_core_bound(arena, *arg))
+                        .collect::<Result<Vec<_>>>()?
+                };
+                let result = self.resolve_call(*span, func_name, bound_args)?;
+                if !is_grouping {
+                    return Ok(result);
                 }
-                return self.resolve_call(*span, func_name, bound_args);
+                let mut scalar = result.scalar;
+                self.rewrite_grouped_output(&mut scalar)?;
+                return Ok(self.bind_derived(scalar, result.data_type));
             }
             CoreExpr::ScalarFunction {
                 span,
@@ -605,13 +606,17 @@ where A: TypeCheckAdapter
                 expr,
                 target_type,
             } => {
-                if let Some(result) = self.try_resolve_variant_cast_pushdown(
-                    arena,
-                    *span,
-                    *expr,
-                    target_type,
-                    *is_try,
-                )? {
+                // The pushdown binds the base of the access directly, which
+                // would skip matching the access itself to a grouping key.
+                if !self.matches_grouping_keys()
+                    && let Some(result) = self.try_resolve_variant_cast_pushdown(
+                        arena,
+                        *span,
+                        *expr,
+                        target_type,
+                        *is_try,
+                    )?
+                {
                     return Ok(self.bind_derived_pair(result));
                 }
                 let child = self.resolve_core_bound(arena, *expr)?;
@@ -703,8 +708,10 @@ where A: TypeCheckAdapter
                 span,
                 name,
                 args,
+                ast_args,
+                has_window,
                 filter,
-            } => self.resolve_udf_call(arena, *span, name, args, *filter),
+            } => self.resolve_udf_call(arena, *span, name, args, ast_args, *has_window, *filter),
             CoreExpr::LambdaFunction {
                 span,
                 func_name,
@@ -797,6 +804,7 @@ where A: TypeCheckAdapter
                 DataType::String,
             ))),
         }?;
+        self.rewrite_grouped_output(&mut result.0)?;
         Ok(self.bind_derived_pair(result))
     }
 
