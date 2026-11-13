@@ -125,6 +125,64 @@ Fragment 2:
         └── source fragment: [0]
 (empty)
 
+# A select list whose order differs from the physical column order needs a reorder
+# EvalScalar. It must stay below the Merge exchange, otherwise the write runs only
+# on the coordinator.
+statement ok
+create table mti_reorder(b int, s int, a int, tag string)
+
+query T
+EXPLAIN INSERT ALL
+  WHEN true THEN INTO mti_reorder
+  WHEN b = 0 THEN INTO mti_even(a, tag) VALUES(a, 'mod0')
+SELECT b, a + b AS s, a, 'x' AS tag FROM mti_src
+----
+Commit
+└── Exchange
+    ├── output columns: []
+    ├── exchange type: Merge
+    └── CommitMeta
+        └── WriteData
+            └── EvalScalar
+                ├── branch 0: mti_src.a (#0), 'mod0'
+                ├── branch 1: None
+                └── Filter
+                    ├── branch 0: is_true(mti_src.b (#1) = CAST(0 AS Int32 NULL))
+                    ├── branch 1: true
+                    └── Duplicate
+                        ├── Duplicate data to 2 branch
+                        └── EvalScalar
+                            ├── output columns: [mti_src.b (#1), s (#2), mti_src.a (#0), tag (#3)]
+                            ├── expressions: [1, 2, 0, 3]
+                            └── EvalScalar
+                                ├── output columns: [mti_src.a (#0), mti_src.b (#1), s (#2), tag (#3)]
+                                ├── expressions: [mti_src.a (#0) + mti_src.b (#1), 'x']
+                                ├── estimated rows: 100.00
+                                └── TableScan
+                                    ├── table: default.mti_distributed.mti_src
+                                    ├── scan id: 0
+                                    ├── output columns: [a (#0), b (#1)]
+                                    ├── read rows: 100
+                                    ├── read size: < 1 KiB
+                                    ├── partitions total: <slt:ignore>
+                                    ├── partitions scanned: <slt:ignore>
+                                    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
+                                    ├── push downs: [filters: [], limit: NONE]
+                                    └── estimated rows: 100.00
+
+query II
+INSERT ALL
+  WHEN true THEN INTO mti_reorder
+  WHEN b = 0 THEN INTO mti_even(a, tag) VALUES(a, 'mod0')
+SELECT b, a + b AS s, a, 'x' AS tag FROM mti_src
+----
+34 100
+
+query IIIIT
+select count(*), sum(b), sum(s), sum(a), min(tag) from mti_reorder
+----
+100 99 5049 4950 x
+
 # Each target keeps the original source-once and multi-table commit pipeline,
 # but uses its own partition key for distributed hash routing.
 statement ok
