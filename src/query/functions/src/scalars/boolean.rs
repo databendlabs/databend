@@ -40,7 +40,6 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::boolean;
 use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -288,9 +287,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _| match val {
             Value::Scalar(None) => Value::Scalar(false),
             Value::Scalar(Some(scalar)) => Value::Scalar(scalar),
-            Value::Column(NullableColumn { column, validity }) => {
-                Value::Column((&column) & (&validity))
-            }
+            Value::Column(column) => Value::Column(column.column() & column.validity()),
         },
     );
 

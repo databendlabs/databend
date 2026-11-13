@@ -29,7 +29,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Event;
@@ -146,7 +145,8 @@ impl PartitionByRuntime {
 fn extract_string_column(column: Column) -> Result<(StringColumn, Option<Bitmap>)> {
     match column {
         Column::String(col) => Ok((col, None)),
-        Column::Nullable(deref!(NullableColumn { column, validity })) => {
+        Column::Nullable(column) => {
+            let (column, validity) = column.destructure();
             let inner = column.as_string().cloned().ok_or_else(|| {
                 ErrorCode::Internal("PARTITION BY expression must evaluate to STRING".to_string())
             })?;

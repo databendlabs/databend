@@ -915,7 +915,7 @@ fn eval_index_expr(
             let column = entry.as_column().unwrap();
             let null_count = column
                 .as_nullable()
-                .map(|nullable| nullable.validity.null_count())
+                .map(|nullable| nullable.validity().null_count())
                 .unwrap_or_default() as u64;
             let (min, max) = column.domain().to_minmax();
             Some((field.column_id, ColumnStatistics {

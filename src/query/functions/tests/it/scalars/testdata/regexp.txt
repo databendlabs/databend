@@ -727,6 +727,591 @@ error:
 
 
 
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$1')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$1')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1")
+evaluation:
++--------+--------------------------------------------+------------------------+
+|        | source                                     | Output                 |
++--------+--------------------------------------------+------------------------+
+| Type   | String                                     | String                 |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'google.com'           |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'Example.COM'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com' |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'        |
+| Row 5  | ''                                         | ''                     |
++--------+--------------------------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[google.com, Example.COM, https://no-slash.com, http://a.com/x                                            |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '[$1]')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '[$1]')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "[$1]")
+evaluation:
++--------+--------------------------------------------+------------------------+
+|        | source                                     | Output                 |
++--------+--------------------------------------------+------------------------+
+| Type   | String                                     | String                 |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                |
+| Row 0  | 'https://www.google.com/search?q=1'        | '[google.com]'         |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | '[Example.COM]'        |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com' |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'        |
+| Row 5  | ''                                         | ''                     |
++--------+--------------------------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[[google.com], [Example.COM], https://no-slash.com, http://a.com/x                                        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$0')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$0')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$0")
+evaluation:
++--------+--------------------------------------------+-------------------------------------+
+|        | source                                     | Output                              |
++--------+--------------------------------------------+-------------------------------------+
+| Type   | String                                     | String                              |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                             |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'https://www.google.com/search?q=1' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'              |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                     |
+| Row 5  | ''                                         | ''                                  |
++--------+--------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$00')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$00')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$00")
+evaluation:
++--------+--------------------------------------------+-------------------------------------+
+|        | source                                     | Output                              |
++--------+--------------------------------------------+-------------------------------------+
+| Type   | String                                     | String                              |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                             |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'https://www.google.com/search?q=1' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'              |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                     |
+| Row 5  | ''                                         | ''                                  |
++--------+--------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '${0}')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '${0}')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "${0}")
+evaluation:
++--------+--------------------------------------------+-------------------------------------+
+|        | source                                     | Output                              |
++--------+--------------------------------------------+-------------------------------------+
+| Type   | String                                     | String                              |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                             |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'https://www.google.com/search?q=1' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'              |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                     |
+| Row 5  | ''                                         | ''                                  |
++--------+--------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '${000}')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '${000}')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "${000}")
+evaluation:
++--------+--------------------------------------------+-------------------------------------+
+|        | source                                     | Output                              |
++--------+--------------------------------------------+-------------------------------------+
+| Type   | String                                     | String                              |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                             |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'https://www.google.com/search?q=1' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'              |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                     |
+| Row 5  | ''                                         | ''                                  |
++--------+--------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '${+0}')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '${+0}')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "${+0}")
+evaluation:
++--------+--------------------------------------------+-------------------------------------+
+|        | source                                     | Output                              |
++--------+--------------------------------------------+-------------------------------------+
+| Type   | String                                     | String                              |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                             |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'https://www.google.com/search?q=1' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'              |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                     |
+| Row 5  | ''                                         | ''                                  |
++--------+--------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '[${+000}]')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '[${+000}]')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "[${+000}]")
+evaluation:
++--------+--------------------------------------------+---------------------------------------+
+|        | source                                     | Output                                |
++--------+--------------------------------------------+---------------------------------------+
+| Type   | String                                     | String                                |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                               |
+| Row 0  | 'https://www.google.com/search?q=1'        | '[https://www.google.com/search?q=1]' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | '[HTTP://WWW.Example.COM/a]'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'                |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                   |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                       |
+| Row 5  | ''                                         | ''                                    |
++--------+--------------------------------------------+---------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[[https://www.google.com/search?q=1], [HTTP://WWW.Example.COM/a], https://no-slash.com, http://a.com/x    |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '${+1}')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '${+1}')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "${+1}")
+evaluation:
++--------+--------------------------------------------+------------------------+
+|        | source                                     | Output                 |
++--------+--------------------------------------------+------------------------+
+| Type   | String                                     | String                 |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'google.com'           |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'Example.COM'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com' |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'        |
+| Row 5  | ''                                         | ''                     |
++--------+--------------------------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[google.com, Example.COM, https://no-slash.com, http://a.com/x                                            |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$${+0}')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$${+0}')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$${+0}")
+evaluation:
++--------+--------------------------------------------+------------------------+
+|        | source                                     | Output                 |
++--------+--------------------------------------------+------------------------+
+| Type   | String                                     | String                 |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                |
+| Row 0  | 'https://www.google.com/search?q=1'        | '${+0}'                |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | '${+0}'                |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com' |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'        |
+| Row 5  | ''                                         | ''                     |
++--------+--------------------------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[${+0}, ${+0}, https://no-slash.com, http://a.com/x                                                       |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', 'X')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', 'X')
+checked expr   : regexp_replace<String, String, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "X")
+evaluation:
++--------+--------------------------------------------+------------------------+
+|        | source                                     | Output                 |
++--------+--------------------------------------------+------------------------+
+| Type   | String                                     | String                 |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'X'                    |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'X'                    |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com' |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'        |
+| Row 5  | ''                                         | ''                     |
++--------+--------------------------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[X, X, https://no-slash.com, http://a.com/x                                                               |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace('abc', '^.*$', '${+0}')
+raw expr       : regexp_replace('abc', '^.*$', '${+0}')
+checked expr   : regexp_replace<String, String, String>("abc", "^.*$", "${+0}")
+optimized expr : "abc"
+output type    : String
+output domain  : {"abc"..="abc"}
+output         : 'abc'
+
+
+ast            : regexp_replace('https://example.com/path', '^https?://([^/]+)/.*$', '[${+000}]')
+raw expr       : regexp_replace('https://example.com/path', '^https?://([^/]+)/.*$', '[${+000}]')
+checked expr   : regexp_replace<String, String, String>("https://example.com/path", "^https?://([^/]+)/.*$", "[${+000}]")
+optimized expr : "[https://example.com/path]"
+output type    : String
+output domain  : {"[https://example.com/path]"..="[https://example.com/path]"}
+output         : '[https://example.com/path]'
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '${+0}', 1, 1)
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '${+0}', 1, 1)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "${+0}", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "${+0}", 1_i64, 1_i64)
+evaluation:
++--------+--------------------------------------------+------------------------+
+|        | source                                     | Output                 |
++--------+--------------------------------------------+------------------------+
+| Type   | String                                     | String                 |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                |
+| Row 0  | 'https://www.google.com/search?q=1'        | '${+0}'                |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | '${+0}'                |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com' |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'        |
+| Row 5  | ''                                         | ''                     |
++--------+--------------------------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[${+0}, ${+0}, https://no-slash.com, http://a.com/x                                                       |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$1', 1, 1)
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$1', 1, 1)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", 1_i64, 1_i64)
+evaluation:
++--------+--------------------------------------------+------------------------+
+|        | source                                     | Output                 |
++--------+--------------------------------------------+------------------------+
+| Type   | String                                     | String                 |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                |
+| Row 0  | 'https://www.google.com/search?q=1'        | '$1'                   |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | '$1'                   |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com' |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'        |
+| Row 5  | ''                                         | ''                     |
++--------+--------------------------------------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[$1, $1, https://no-slash.com, http://a.com/x                                                             |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$1', 1, 2)
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$1', 1, 2)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(2_u8 AS Int64))
+optimized expr : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", 1_i64, 2_i64)
+evaluation:
++--------+--------------------------------------------+-------------------------------------+
+|        | source                                     | Output                              |
++--------+--------------------------------------------+-------------------------------------+
+| Type   | String                                     | String                              |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                             |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'https://www.google.com/search?q=1' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'              |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                     |
+| Row 5  | ''                                         | ''                                  |
++--------+--------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$1', 2, 0)
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$1', 2, 0)
+checked expr   : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(0_u8 AS Int64))
+optimized expr : regexp_replace<String, String, String, Int64, Int64>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", 2_i64, 0_i64)
+evaluation:
++--------+--------------------------------------------+-------------------------------------+
+|        | source                                     | Output                              |
++--------+--------------------------------------------+-------------------------------------+
+| Type   | String                                     | String                              |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                             |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'https://www.google.com/search?q=1' |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a'          |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'              |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'                     |
+| Row 5  | ''                                         | ''                                  |
++--------+--------------------------------------------+-------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$1', 1, 0, 'c')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$1', 1, 0, 'c')
+checked expr   : regexp_replace<String, String, String, Int64, Int64, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(0_u8 AS Int64), "c")
+optimized expr : regexp_replace<String, String, String, Int64, Int64, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", 1_i64, 0_i64, "c")
+evaluation:
++--------+--------------------------------------------+----------------------------+
+|        | source                                     | Output                     |
++--------+--------------------------------------------+----------------------------+
+| Type   | String                                     | String                     |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                    |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'google.com'               |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a' |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'     |
+| Row 3  | 'http://a.com/x\ny'                        | 'http://a.com/x\ny'        |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'            |
+| Row 5  | ''                                         | ''                         |
++--------+--------------------------------------------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[google.com, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x                               |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$1', 1, 0, 'm')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$1', 1, 0, 'm')
+checked expr   : regexp_replace<String, String, String, Int64, Int64, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(0_u8 AS Int64), "m")
+optimized expr : regexp_replace<String, String, String, Int64, Int64, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", 1_i64, 0_i64, "m")
+evaluation:
++--------+--------------------------------------------+----------------------------+
+|        | source                                     | Output                     |
++--------+--------------------------------------------+----------------------------+
+| Type   | String                                     | String                     |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                    |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'google.com'               |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a' |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'     |
+| Row 3  | 'http://a.com/x\ny'                        | 'a.com\ny'                 |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'            |
+| Row 5  | ''                                         | ''                         |
++--------+--------------------------------------------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[google.com, HTTP://WWW.Example.COM/a, https://no-slash.com, a.com                                        |
+|        | y, ftp://a.com/b, ]                                                                                                   |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^https?://(?:www\.)?([^/]+)/.*$', '$1', 1, 0, 'n')
+raw expr       : regexp_replace(source::String, '^https?://(?:www\\.)?([^/]+)/.*$', '$1', 1, 0, 'n')
+checked expr   : regexp_replace<String, String, String, Int64, Int64, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(0_u8 AS Int64), "n")
+optimized expr : regexp_replace<String, String, String, Int64, Int64, String>(source, "^https?://(?:www\\.)?([^/]+)/.*$", "$1", 1_i64, 0_i64, "n")
+evaluation:
++--------+--------------------------------------------+----------------------------+
+|        | source                                     | Output                     |
++--------+--------------------------------------------+----------------------------+
+| Type   | String                                     | String                     |
+| Domain | {""..="https://www.google.com/search?q=1"} | Unknown                    |
+| Row 0  | 'https://www.google.com/search?q=1'        | 'google.com'               |
+| Row 1  | 'HTTP://WWW.Example.COM/a'                 | 'HTTP://WWW.Example.COM/a' |
+| Row 2  | 'https://no-slash.com'                     | 'https://no-slash.com'     |
+| Row 3  | 'http://a.com/x\ny'                        | 'a.com'                    |
+| Row 4  | 'ftp://a.com/b'                            | 'ftp://a.com/b'            |
+| Row 5  | ''                                         | ''                         |
++--------+--------------------------------------------+----------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| source | Column(StringColumn[https://www.google.com/search?q=1, HTTP://WWW.Example.COM/a, https://no-slash.com, http://a.com/x |
+|        | y, ftp://a.com/b, ])                                                                                                  |
+| Output | StringColumn[google.com, HTTP://WWW.Example.COM/a, https://no-slash.com, a.com, ftp://a.com/b, ]                      |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : regexp_replace(source, '^a\.*$', 'X')
+raw expr       : regexp_replace(source::String, '^a\\.*$', 'X')
+checked expr   : regexp_replace<String, String, String>(source, "^a\\.*$", "X")
+evaluation:
++--------+----------------+---------+
+|        | source         | Output  |
++--------+----------------+---------+
+| Type   | String         | String  |
+| Domain | {"a"..="h\nb"} | Unknown |
+| Row 0  | 'a'            | 'X'     |
+| Row 1  | 'a...'         | 'X'     |
+| Row 2  | 'ab'           | 'ab'    |
+| Row 3  | 'h\nb'         | 'h\nb'  |
++--------+----------------+---------+
+evaluation (internal):
++--------+------------------------------------+
+| Column | Data                               |
++--------+------------------------------------+
+| source | Column(StringColumn[a, a..., ab, h |
+|        | b])                                |
+| Output | StringColumn[X, X, ab, h           |
+|        | b]                                 |
++--------+------------------------------------+
+
+
+ast            : regexp_replace(source, '^(a).*?$', 'X')
+raw expr       : regexp_replace(source::String, '^(a).*?$', 'X')
+checked expr   : regexp_replace<String, String, String>(source, "^(a).*?$", "X")
+evaluation:
++--------+----------------+---------+
+|        | source         | Output  |
++--------+----------------+---------+
+| Type   | String         | String  |
+| Domain | {"a"..="h\nb"} | Unknown |
+| Row 0  | 'a'            | 'X'     |
+| Row 1  | 'a...'         | 'X'     |
+| Row 2  | 'ab'           | 'X'     |
+| Row 3  | 'h\nb'         | 'h\nb'  |
++--------+----------------+---------+
+evaluation (internal):
++--------+------------------------------------+
+| Column | Data                               |
++--------+------------------------------------+
+| source | Column(StringColumn[a, a..., ab, h |
+|        | b])                                |
+| Output | StringColumn[X, X, X, h            |
+|        | b]                                 |
++--------+------------------------------------+
+
+
+ast            : regexp_replace(source, '^h.*$|^a.*$', 'X')
+raw expr       : regexp_replace(source::String, '^h.*$|^a.*$', 'X')
+checked expr   : regexp_replace<String, String, String>(source, "^h.*$|^a.*$", "X")
+evaluation:
++--------+----------------+---------+
+|        | source         | Output  |
++--------+----------------+---------+
+| Type   | String         | String  |
+| Domain | {"a"..="h\nb"} | Unknown |
+| Row 0  | 'a'            | 'X'     |
+| Row 1  | 'a...'         | 'X'     |
+| Row 2  | 'ab'           | 'X'     |
+| Row 3  | 'h\nb'         | 'h\nb'  |
++--------+----------------+---------+
+evaluation (internal):
++--------+------------------------------------+
+| Column | Data                               |
++--------+------------------------------------+
+| source | Column(StringColumn[a, a..., ab, h |
+|        | b])                                |
+| Output | StringColumn[X, X, X, h            |
+|        | b]                                 |
++--------+------------------------------------+
+
+
 ast            : regexp_substr('abc def ghi', '[a-z]+')
 raw expr       : regexp_substr('abc def ghi', '[a-z]+')
 checked expr   : regexp_substr<String, String>("abc def ghi", "[a-z]+")

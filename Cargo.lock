@@ -3528,6 +3528,7 @@ dependencies = [
  "proptest",
  "rand 0.8.5",
  "regex",
+ "regex-syntax 0.8.11",
  "serde",
  "serde_json",
  "sha1 0.10.6",

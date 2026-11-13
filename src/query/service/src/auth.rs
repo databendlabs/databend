@@ -127,9 +127,11 @@ impl AuthMgr {
             Credential::DatabendToken { token } => {
                 let claim = ClientSessionManager::instance().verify_token(token).await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
+                // PollQuery also needs the authenticated tenant for query ownership
+                // checks, but must not fetch user info from meta.
+                session.set_current_tenant(tenant.clone())?;
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
-                    session.set_current_tenant(tenant.clone())?;
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }

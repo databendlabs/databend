@@ -211,6 +211,13 @@ select * from t2 order by a
 5 {"k":"v"}
 6 null
 
+# The unparsable value is stored as JSON null.
+query TB
+select json_typeof(b), is_null_value(b) from t2 where a >= '5' order by a
+----
+OBJECT 0
+NULL_VALUE 1
+
 query TT
 select * from @data/parquet/binary_view.parquet;
 ----

@@ -16,6 +16,7 @@ use chrono::Datelike;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use databend_common_expression::Domain;
+use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
@@ -42,6 +43,7 @@ use databend_common_timezone::DateTimeComponents;
 use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::wall_clock_is_monotonic;
 
+use crate::fixed_offset::FixedOffset;
 use crate::fixed_offset::local_dates;
 
 /// Projection of a timestamp onto a calendar number, such as `to_year`.
@@ -376,7 +378,7 @@ pub(super) fn register_cast(registry: &mut FunctionRegistry) {
         },
         |val, _| match val {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
-            Value::Column(col) => Value::Column(NullableColumn::new_unchecked(
+            Value::Column(col) => Value::Column(NullableColumn::new(
                 col.iter().map(|val| *val as i64).collect(),
                 Bitmap::new_constant(true, col.len()),
             )),
@@ -395,7 +397,7 @@ pub(super) fn register_cast(registry: &mut FunctionRegistry) {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new_unchecked(col, validity))
+                Value::Column(NullableColumn::new(col, validity))
             }
         },
     );
@@ -597,19 +599,42 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         |val, _| (val as f64 / 1_000_000f64).into(),
     );
 
-    registry.register_1_arg::<TimestampType, UInt8Type, _>(
+    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _>(
         "to_hour",
         |_, _| FunctionDomain::Full,
-        |val, ctx| components_from_timestamp(val, &ctx.func_ctx.tz).hour,
+        |val, ctx| eval_clock_field(val, ctx, 3600 * MICROS_PER_SEC, 24, |c| c.hour),
     );
-    registry.register_1_arg::<TimestampType, UInt8Type, _>(
+    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _>(
         "to_minute",
         |_, _| FunctionDomain::Full,
-        |val, ctx| components_from_timestamp(val, &ctx.func_ctx.tz).minute,
+        |val, ctx| eval_clock_field(val, ctx, 60 * MICROS_PER_SEC, 60, |c| c.minute),
     );
-    registry.register_1_arg::<TimestampType, UInt8Type, _>(
+    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _>(
         "to_second",
         |_, _| FunctionDomain::Full,
-        |val, ctx| components_from_timestamp(val, &ctx.func_ctx.tz).second,
+        |val, ctx| eval_clock_field(val, ctx, MICROS_PER_SEC, 60, |c| c.second),
     );
+}
+
+/// The hour, minute or second of the local time of each timestamp, `ts / unit % modulo` of
+/// the local time. A column of one UTC offset needs no timezone lookup per row.
+fn eval_clock_field(
+    val: Value<TimestampType>,
+    ctx: &mut EvalContext,
+    unit: i64,
+    modulo: i64,
+    field: fn(&DateTimeComponents) -> u8,
+) -> Value<UInt8Type> {
+    if let Value::Column(col) = &val
+        && let Some(offset) = FixedOffset::of(col, ctx.validity.as_ref(), &ctx.func_ctx.tz, 0)
+    {
+        return Value::Column(
+            col.iter()
+                .map(|&ts| offset.clock_field(ts, unit, modulo))
+                .collect(),
+        );
+    }
+    vectorize_1_arg::<TimestampType, UInt8Type>(move |val, ctx| {
+        field(&components_from_timestamp(val, &ctx.func_ctx.tz))
+    })(val, ctx)
 }
