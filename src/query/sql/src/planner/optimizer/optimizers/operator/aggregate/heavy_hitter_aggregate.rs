@@ -14,7 +14,14 @@
 
 //! Heavy hitter aggregation for `GROUP BY key ORDER BY COUNT(*) DESC LIMIT n`.
 //!
-//! The rewrite keeps the aggregation and filters its input by candidate keys:
+//! For a local pure COUNT, annotate the aggregation for an adaptive executor:
+//! each worker keeps bounded residuals and exact counts of never-missed keys.
+//! When the K-th exact count beats every unknown-key upper bound, return those
+//! counts directly. Otherwise start the unchanged exact aggregation lazily.
+//! A failed proof may require two scans, so the same rescan safety checks apply.
+//!
+//! Distributed queries and queries with other aggregates keep the aggregation
+//! and filter its input by candidate keys:
 //!
 //! ```text
 //! TopN or Sort: COUNT(*) DESC, limit n
@@ -177,6 +184,24 @@ impl HeavyHitterAggregateOptimizer {
         let mut metadata = metadata_ref.write();
         if !can_scan_twice(input, &metadata) {
             return Ok(None);
+        }
+
+        if !self.opt_ctx.get_enable_distributed_optimization()
+            && aggregate.aggregate_functions.len() == 1
+        {
+            // Keep the original input and exact aggregation as a lazy fallback.
+            // The executor may return exact counts directly from its bounded
+            // state; unlike the candidate path this does not require a rescan.
+            let mut adaptive = aggregate.clone();
+            adaptive.adaptive_topk_count = Some(limit);
+            let agg_expr = agg_expr.replace_plan(Arc::new(adaptive.into()));
+            let rewritten = match eval_scalar {
+                None => s_expr.replace_children([Arc::new(agg_expr)]),
+                Some(_) => s_expr.replace_children([Arc::new(
+                    s_expr.unary_child().replace_children([Arc::new(agg_expr)]),
+                )]),
+            };
+            return Ok(Some(rewritten));
         }
 
         let mut columns = HashMap::new();

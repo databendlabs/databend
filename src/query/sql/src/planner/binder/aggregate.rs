@@ -1124,6 +1124,7 @@ impl Binder {
         }
 
         let aggregate_plan = Aggregate {
+            adaptive_topk_count: None,
             group_items: agg_info.group_items.clone(),
             aggregate_functions: agg_info.aggregate_calls().cloned().collect(),
             from_distinct: false,

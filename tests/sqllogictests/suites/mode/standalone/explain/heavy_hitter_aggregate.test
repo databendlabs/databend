@@ -9,8 +9,8 @@ insert into t_heavy_hitter_explain select number % 50000, number from numbers(10
 statement ok
 set enable_heavy_hitter_aggregate = 2
 
-# The aggregation only reads the rows of candidate keys. The candidates come from a summary of a
-# second scan with the same filter, cross joined as a one-row build side.
+# A local pure COUNT uses bounded exact counting. Its unchanged full aggregation is a
+# lazy fallback; it is not built or scanned when the runtime proof succeeds.
 query T
 explain select k, count(*) c from t_heavy_hitter_explain where v > 10 group by k order by c desc limit 10
 ----
@@ -26,62 +26,27 @@ TopN(Final)
     ├── limit: 10
     ├── offset: 0
     ├── estimated rows: <slt:ignore>
-    └── AggregateFinal
-        ├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
-        ├── group by: [k]
-        ├── aggregate functions: [count()]
-        ├── estimated rows: <slt:ignore>
-        └── AggregatePartial
+    └── AdaptiveTopKCount
+        └── AggregateFinal
+            ├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
             ├── group by: [k]
             ├── aggregate functions: [count()]
             ├── estimated rows: <slt:ignore>
-            └── Filter
-                ├── output columns: [t_heavy_hitter_explain.k (#0)]
-                ├── filters: [is_topk_count_candidate(topk_count_candidates(10, 4096)(k) (#8), k (#0))]
+            └── AggregatePartial
+                ├── group by: [k]
+                ├── aggregate functions: [count()]
                 ├── estimated rows: <slt:ignore>
-                └── HashJoin
-                    ├── output columns: [t_heavy_hitter_explain.k (#0), topk_count_candidates(10, 4096)(k) (#8)]
-                    ├── join type: CROSS
-                    ├── build keys: []
-                    ├── probe keys: []
-                    ├── keys is null equal: []
-                    ├── filters: []
-                    ├── estimated rows: <slt:ignore>
-                    ├── AggregateFinal(Build)
-                    │   ├── output columns: [topk_count_candidates(10, 4096)(k) (#8)]
-                    │   ├── group by: []
-                    │   ├── aggregate functions: [topk_count_candidates(k)]
-                    │   ├── estimated rows: <slt:ignore>
-                    │   └── AggregatePartial
-                    │       ├── group by: []
-                    │       ├── aggregate functions: [topk_count_candidates(k)]
-                    │       ├── estimated rows: <slt:ignore>
-                    │       └── EvalScalar
-                    │           ├── output columns: [k (#6)]
-                    │           ├── expressions: [t_heavy_hitter_explain.k (#4)]
-                    │           ├── estimated rows: <slt:ignore>
-                    │           └── TableScan
-                    │               ├── table: default.default.t_heavy_hitter_explain
-                    │               ├── scan id: 1
-                    │               ├── output columns: [k (#4)]
-                    │               ├── read rows: <slt:ignore>
-                    │               ├── read size: <slt:ignore>
-                    │               ├── partitions total: <slt:ignore>
-                    │               ├── partitions scanned: <slt:ignore>
-                    │               ├── pruning stats: <slt:ignore>
-                    │               ├── push downs: [filters: [t_heavy_hitter_explain.v (#5) > 10], limit: NONE]
-                    │               └── estimated rows: <slt:ignore>
-                    └── TableScan(Probe)
-                        ├── table: default.default.t_heavy_hitter_explain
-                        ├── scan id: 0
-                        ├── output columns: [k (#0)]
-                        ├── read rows: <slt:ignore>
-                        ├── read size: <slt:ignore>
-                        ├── partitions total: <slt:ignore>
-                        ├── partitions scanned: <slt:ignore>
-                        ├── pruning stats: <slt:ignore>
-                        ├── push downs: [filters: [t_heavy_hitter_explain.v (#1) > 10], limit: NONE]
-                        └── estimated rows: <slt:ignore>
+                └── TableScan
+                    ├── table: default.default.t_heavy_hitter_explain
+                    ├── scan id: 0
+                    ├── output columns: [k (#0)]
+                    ├── read rows: <slt:ignore>
+                    ├── read size: <slt:ignore>
+                    ├── partitions total: <slt:ignore>
+                    ├── partitions scanned: <slt:ignore>
+                    ├── pruning stats: <slt:ignore>
+                    ├── push downs: [filters: [t_heavy_hitter_explain.v (#1) > 10], limit: NONE]
+                    └── estimated rows: <slt:ignore>
 
 # Ascending counts are not rewritten.
 query T

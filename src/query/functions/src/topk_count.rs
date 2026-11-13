@@ -27,6 +27,8 @@
 //! never counted by the summary and always kept, so the NULL group is counted
 //! exactly by the aggregation above the filter.
 
+pub mod exact;
+
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -61,6 +63,11 @@ pub(crate) trait TopKCountKey: AccessType {
     fn lookup<'a>(value: &'a Self::ScalarRef<'_>) -> &'a Self::Lookup;
 
     fn to_key(value: Self::ScalarRef<'_>) -> Self::Key;
+
+    fn into_scalar(
+        key: Self::Key,
+        data_type: &databend_common_expression::types::DataType,
+    ) -> databend_common_expression::Scalar;
 }
 
 impl<T> TopKCountKey for SimpleValueType<T>
@@ -78,6 +85,13 @@ where
     fn to_key(value: T::Scalar) -> T::Scalar {
         value
     }
+
+    fn into_scalar(
+        key: Self::Key,
+        data_type: &databend_common_expression::types::DataType,
+    ) -> databend_common_expression::Scalar {
+        T::upcast_scalar(key, data_type)
+    }
 }
 
 impl TopKCountKey for StringType {
@@ -90,6 +104,13 @@ impl TopKCountKey for StringType {
 
     fn to_key(value: &str) -> String {
         value.to_string()
+    }
+
+    fn into_scalar(
+        key: String,
+        _data_type: &databend_common_expression::types::DataType,
+    ) -> databend_common_expression::Scalar {
+        databend_common_expression::Scalar::String(key)
     }
 }
 

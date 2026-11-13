@@ -872,6 +872,7 @@ impl SubqueryDecorrelatorOptimizer {
         }
         Ok((
             flatten_plan.build_unary(Aggregate {
+                adaptive_topk_count: None,
                 group_items,
                 aggregate_functions: agg_items,
                 from_distinct: aggregate.from_distinct,

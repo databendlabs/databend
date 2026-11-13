@@ -180,13 +180,13 @@ async fn test_heavy_hitter_aggregate_outcomes() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "top_count_single_key",
-            description: "GROUP BY one key ORDER BY COUNT(*) DESC LIMIT n aggregates only the rows of candidate keys, found by a cross-joined summary of the same scan with fresh columns.",
+            description: "Local pure COUNT uses bounded exact counting, with the unchanged aggregation retained as a lazy fallback.",
             setup_sqls: &[],
             sql: "SELECT item, count(*) AS c FROM events GROUP BY item ORDER BY c DESC LIMIT 10",
         },
         SqlTestCase {
             name: "top_count_filter_offset_and_tie_breaker",
-            description: "A filter is cloned into the summary input, the summary keeps limit + offset keys, and later sort keys only break ties.",
+            description: "The bounded pass preserves the filter and proves limit + offset counts; the outer TopN resolves ties and offset.",
             setup_sqls: &[],
             sql: "SELECT item, count(*) AS c FROM events WHERE value > 10 GROUP BY item ORDER BY c DESC, item LIMIT 10 OFFSET 5",
         },
@@ -198,7 +198,7 @@ async fn test_heavy_hitter_aggregate_outcomes() -> Result<()> {
         },
         SqlTestCase {
             name: "top_count_computed_key",
-            description: "A computed group key is computed again by the cloned EvalScalar of the summary input.",
+            description: "The bounded pass evaluates the computed group key; fallback retains the same EvalScalar.",
             setup_sqls: &[],
             sql: "SELECT item + 1 AS k, count(*) AS c FROM events GROUP BY k ORDER BY c DESC LIMIT 5",
         },

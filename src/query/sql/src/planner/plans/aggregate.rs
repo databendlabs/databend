@@ -64,6 +64,9 @@ pub struct Aggregate {
     pub rank_limit: Option<(Vec<SortItem>, usize)>,
 
     pub grouping_sets: Option<GroupingSets>,
+    /// Try bounded exact counting before building the full hash aggregation.
+    /// Set only for a local, deterministic, single-key COUNT(*) Top-N.
+    pub adaptive_topk_count: Option<usize>,
 }
 
 impl Aggregate {

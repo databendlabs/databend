@@ -175,6 +175,7 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         let new_aggregate = Aggregate {
+            adaptive_topk_count: None,
             group_items: aggregate.group_items,
             aggregate_functions: new_aggregate_functions,
             from_distinct: aggregate.from_distinct,
@@ -284,6 +285,7 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         let inner_aggregate = Aggregate {
+            adaptive_topk_count: None,
             group_items: new_group_items,
             aggregate_functions: vec![],
             from_distinct: aggregate.from_distinct,
@@ -298,6 +300,7 @@ impl RuleNormalizeAggregateOptimizer {
         new_function.sort_descs = vec![];
 
         let outer_aggregate = Aggregate {
+            adaptive_topk_count: None,
             group_items: aggregate.group_items.clone(),
             aggregate_functions: vec![ScalarItem {
                 index: agg_item.index,

@@ -306,6 +306,7 @@ impl PhysicalPlanBuilder {
             from_distinct: agg.from_distinct,
             rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
+            adaptive_topk_count: agg.adaptive_topk_count,
         };
 
         // 2. Build physical plan.
@@ -544,6 +545,18 @@ impl PhysicalPlanBuilder {
             }
         };
 
+        if mode == AggregateMode::Final
+            && let Some(limit) = agg.adaptive_topk_count
+            && !result.is_distributed_plan()
+        {
+            return Ok(PhysicalPlan::new(
+                super::physical_adaptive_topk_count::AdaptiveTopKCount {
+                    meta: PhysicalPlanMeta::new("AdaptiveTopKCount"),
+                    fallback: result,
+                    limit,
+                },
+            ));
+        }
         Ok(result)
     }
 }

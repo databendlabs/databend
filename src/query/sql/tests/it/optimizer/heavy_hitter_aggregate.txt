@@ -1,5 +1,5 @@
 === top_count_single_key ===
-description: GROUP BY one key ORDER BY COUNT(*) DESC LIMIT n aggregates only the rows of candidate keys, found by a cross-joined summary of the same scan with fresh columns.
+description: Local pure COUNT uses bounded exact counting, with the unchanged aggregation retained as a lazy fallback.
 sql: SELECT item, count(*) AS c FROM events GROUP BY item ORDER BY c DESC LIMIT 10
 raw_plan:
 Limit
@@ -29,37 +29,20 @@ TopN
 └── Aggregate(Final)
     ├── group items: [events.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#4)]
+    ├── adaptive Top-K COUNT: 10
     └── Aggregate(Partial)
         ├── group items: [events.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#4)]
-        └── Filter
-            ├── filters: [is_topk_count_candidate(topk_count_candidates(10, 4096)(item) (#10), events.item (#0))]
-            └── Join(Cross)
-                ├── build keys: []
-                ├── probe keys: []
-                ├── other filters: []
-                ├── Aggregate(Final)
-                │   ├── group items: []
-                │   ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
-                │   └── Aggregate(Partial)
-                │       ├── group items: []
-                │       ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
-                │       └── EvalScalar
-                │           ├── scalars: [item (#5) AS (#9)]
-                │           └── Scan
-                │               ├── table: default.events (#0)
-                │               ├── filters: []
-                │               ├── order by: []
-                │               └── limit: NONE
-                └── Scan
-                    ├── table: default.events (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+        ├── adaptive Top-K COUNT: 10
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
 === top_count_filter_offset_and_tie_breaker ===
-description: A filter is cloned into the summary input, the summary keeps limit + offset keys, and later sort keys only break ties.
+description: The bounded pass preserves the filter and proves limit + offset counts; the outer TopN resolves ties and offset.
 sql: SELECT item, count(*) AS c FROM events WHERE value > 10 GROUP BY item ORDER BY c DESC, item LIMIT 10 OFFSET 5
 raw_plan:
 Limit
@@ -91,35 +74,18 @@ TopN
 └── Aggregate(Final)
     ├── group items: [events.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#4)]
+    ├── adaptive Top-K COUNT: 15
     └── Aggregate(Partial)
         ├── group items: [events.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#4)]
-        └── Filter
-            ├── filters: [is_topk_count_candidate(topk_count_candidates(15, 4096)(item) (#12), events.item (#0))]
-            └── Join(Cross)
-                ├── build keys: []
-                ├── probe keys: []
-                ├── other filters: []
-                ├── Aggregate(Final)
-                │   ├── group items: []
-                │   ├── aggregate functions: [topk_count_candidates(15, 4096)(item (#10)) AS (#12)]
-                │   └── Aggregate(Partial)
-                │       ├── group items: []
-                │       ├── aggregate functions: [topk_count_candidates(15, 4096)(item (#10)) AS (#12)]
-                │       └── EvalScalar
-                │           ├── scalars: [item (#6) AS (#10), value (#8) AS (#11)]
-                │           └── Scan
-                │               ├── table: default.events (#0)
-                │               ├── filters: [gt(value (#8), 10)]
-                │               ├── order by: []
-                │               └── limit: NONE
-                └── EvalScalar
-                    ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#5)]
-                    └── Scan
-                        ├── table: default.events (#0)
-                        ├── filters: [gt(events.value (#2), 10)]
-                        ├── order by: []
-                        └── limit: NONE
+        ├── adaptive Top-K COUNT: 15
+        └── EvalScalar
+            ├── scalars: [events.item (#0) AS (#0), events.value (#2) AS (#5)]
+            └── Scan
+                ├── table: default.events (#0)
+                ├── filters: [gt(events.value (#2), 10)]
+                ├── order by: []
+                └── limit: NONE
 
 
 === top_count_nullable_string_key_with_other_aggregates ===
@@ -183,7 +149,7 @@ TopN
 
 
 === top_count_computed_key ===
-description: A computed group key is computed again by the cloned EvalScalar of the summary input.
+description: The bounded pass evaluates the computed group key; fallback retains the same EvalScalar.
 sql: SELECT item + 1 AS k, count(*) AS c FROM events GROUP BY k ORDER BY c DESC LIMIT 5
 raw_plan:
 Limit
@@ -215,35 +181,18 @@ TopN
     └── Aggregate(Final)
         ├── group items: [plus(events.item (#0), 1) AS (#4)]
         ├── aggregate functions: [count() AS (#5)]
+        ├── adaptive Top-K COUNT: 5
         └── Aggregate(Partial)
             ├── group items: [plus(events.item (#0), 1) AS (#4)]
             ├── aggregate functions: [count() AS (#5)]
-            └── Filter
-                ├── filters: [is_topk_count_candidate(topk_count_candidates(5, 4096)(k) (#12), k (#4))]
-                └── Join(Cross)
-                    ├── build keys: []
-                    ├── probe keys: []
-                    ├── other filters: []
-                    ├── Aggregate(Final)
-                    │   ├── group items: []
-                    │   ├── aggregate functions: [topk_count_candidates(5, 4096)(k (#11)) AS (#12)]
-                    │   └── Aggregate(Partial)
-                    │       ├── group items: []
-                    │       ├── aggregate functions: [topk_count_candidates(5, 4096)(k (#11)) AS (#12)]
-                    │       └── EvalScalar
-                    │           ├── scalars: [plus(item (#7), 1) AS (#11)]
-                    │           └── Scan
-                    │               ├── table: default.events (#0)
-                    │               ├── filters: []
-                    │               ├── order by: []
-                    │               └── limit: NONE
-                    └── EvalScalar
-                        ├── scalars: [plus(events.item (#0), 1) AS (#4)]
-                        └── Scan
-                            ├── table: default.events (#0)
-                            ├── filters: []
-                            ├── order by: []
-                            └── limit: NONE
+            ├── adaptive Top-K COUNT: 5
+            └── EvalScalar
+                ├── scalars: [plus(events.item (#0), 1) AS (#4)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
 
 
 === top_count_sort_with_limit ===
@@ -279,33 +228,16 @@ Limit
     └── Aggregate(Final)
         ├── group items: [events.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#4)]
+        ├── adaptive Top-K COUNT: 10
         └── Aggregate(Partial)
             ├── group items: [events.item (#0) AS (#0)]
             ├── aggregate functions: [count() AS (#4)]
-            └── Filter
-                ├── filters: [is_topk_count_candidate(topk_count_candidates(10, 4096)(item) (#10), events.item (#0))]
-                └── Join(Cross)
-                    ├── build keys: []
-                    ├── probe keys: []
-                    ├── other filters: []
-                    ├── Aggregate(Final)
-                    │   ├── group items: []
-                    │   ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
-                    │   └── Aggregate(Partial)
-                    │       ├── group items: []
-                    │       ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#9)) AS (#10)]
-                    │       └── EvalScalar
-                    │           ├── scalars: [item (#5) AS (#9)]
-                    │           └── Scan
-                    │               ├── table: default.events (#0)
-                    │               ├── filters: []
-                    │               ├── order by: []
-                    │               └── limit: NONE
-                    └── Scan
-                        ├── table: default.events (#0)
-                        ├── filters: []
-                        ├── order by: []
-                        └── limit: NONE
+            ├── adaptive Top-K COUNT: 10
+            └── Scan
+                ├── table: default.events (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 
 === ascending_count_is_not_rewritten ===
@@ -814,33 +746,16 @@ TopN
 └── Aggregate(Final)
     ├── group items: [uniq.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#1)]
+    ├── adaptive Top-K COUNT: 10
     └── Aggregate(Partial)
         ├── group items: [uniq.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#1)]
-        └── Filter
-            ├── filters: [is_topk_count_candidate(topk_count_candidates(10, 4096)(item) (#4), uniq.item (#0))]
-            └── Join(Cross)
-                ├── build keys: []
-                ├── probe keys: []
-                ├── other filters: []
-                ├── Aggregate(Final)
-                │   ├── group items: []
-                │   ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#3)) AS (#4)]
-                │   └── Aggregate(Partial)
-                │       ├── group items: []
-                │       ├── aggregate functions: [topk_count_candidates(10, 4096)(item (#3)) AS (#4)]
-                │       └── EvalScalar
-                │           ├── scalars: [item (#2) AS (#3)]
-                │           └── Scan
-                │               ├── table: default.uniq (#0)
-                │               ├── filters: []
-                │               ├── order by: []
-                │               └── limit: NONE
-                └── Scan
-                    ├── table: default.uniq (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+        ├── adaptive Top-K COUNT: 10
+        └── Scan
+            ├── table: default.uniq (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
 === top_n_stats_with_enough_frequent_keys ===
@@ -874,33 +789,16 @@ TopN
 └── Aggregate(Final)
     ├── group items: [hot.item (#0) AS (#0)]
     ├── aggregate functions: [count() AS (#1)]
+    ├── adaptive Top-K COUNT: 3
     └── Aggregate(Partial)
         ├── group items: [hot.item (#0) AS (#0)]
         ├── aggregate functions: [count() AS (#1)]
-        └── Filter
-            ├── filters: [is_topk_count_candidate(topk_count_candidates(3, 4096)(item) (#4), hot.item (#0))]
-            └── Join(Cross)
-                ├── build keys: []
-                ├── probe keys: []
-                ├── other filters: []
-                ├── Aggregate(Final)
-                │   ├── group items: []
-                │   ├── aggregate functions: [topk_count_candidates(3, 4096)(item (#3)) AS (#4)]
-                │   └── Aggregate(Partial)
-                │       ├── group items: []
-                │       ├── aggregate functions: [topk_count_candidates(3, 4096)(item (#3)) AS (#4)]
-                │       └── EvalScalar
-                │           ├── scalars: [item (#2) AS (#3)]
-                │           └── Scan
-                │               ├── table: default.hot (#0)
-                │               ├── filters: []
-                │               ├── order by: []
-                │               └── limit: NONE
-                └── Scan
-                    ├── table: default.hot (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+        ├── adaptive Top-K COUNT: 3
+        └── Scan
+            ├── table: default.hot (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
 === top_n_stats_with_too_few_frequent_keys ===

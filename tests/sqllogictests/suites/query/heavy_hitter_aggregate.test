@@ -1,8 +1,8 @@
 # run-with-settings: enable_heavy_hitter_aggregate=2
 
 # GROUP BY key ORDER BY COUNT(*) DESC LIMIT n must return the same rows with and without the
-# heavy hitter aggregation. The settings pass finds candidate keys first and aggregates only their
-# rows, or every row when the candidates cannot be proven to hold the result.
+# heavy hitter aggregation. Local pure COUNT tries bounded exact counting in one pass and falls
+# back to full aggregation when needed. Other aggregates/distributed queries use candidate filtering.
 
 statement ok
 create or replace database heavy_hitter_aggregate
@@ -112,6 +112,48 @@ select k, count(*) c from spread group by k order by c desc, k limit 2
 ----
 abc 300
 a0 101
+
+# A late hot key cannot use a residual as its exact count, even for LIMIT 1.
+query II
+select k, count(*) c from late group by k order by c desc, k limit 1
+----
+999999999 3000
+
+# Nullable strings with tied hot counts. Keep all ties until the outer TopN
+# applies secondary ordering and OFFSET; the NULL group has an exact count too.
+statement ok
+create table tied(k string null)
+
+statement ok
+insert into tied select if(number % 4 = 0, null, if(number % 4 = 1, 'hot', number::string)) from numbers(100000)
+
+query TI
+select k, count(*) c from tied group by k order by c desc, k nulls first limit 1 offset 1
+----
+hot 25000
+
+query TI
+select k, count(*) c from tied where k is not null group by k order by c desc, k limit 1
+----
+hot 25000
+
+statement ok
+create table only_null(k bigint null)
+
+statement ok
+insert into only_null select null from numbers(100)
+
+query II
+select k, count(*) c from only_null group by k order by c desc limit 10
+----
+NULL 100
+
+statement ok
+create table empty_input(k timestamp null)
+
+query TI
+select k, count(*) c from empty_input group by k order by c desc limit 10
+----
 
 statement ok
 drop database heavy_hitter_aggregate
