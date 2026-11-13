@@ -135,7 +135,7 @@ fn string_dict(entry: &BlockEntry) -> Option<(&DictColumn, Option<&Bitmap>)> {
         return None;
     };
     let (column, validity) = match column {
-        Column::Nullable(nullable) => (&nullable.column, Some(&nullable.validity)),
+        Column::Nullable(nullable) => (nullable.column(), Some(nullable.validity())),
         column => (column, None),
     };
     let Column::Encoded(encoded) = column else {
