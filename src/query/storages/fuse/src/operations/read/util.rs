@@ -139,18 +139,52 @@ fn output_matches(
         .scores
         .as_ref()
         .map(|scores| Vec::with_capacity(scores.len()));
-    for (pos, row) in matches.rows.iter().enumerate() {
-        let row = u64::from(*row);
-        if !offsets.contains(row) {
+    for (pos, output_pos) in output_positions(&matches.rows, offsets)
+        .into_iter()
+        .enumerate()
+    {
+        if output_pos == NOT_OUTPUT {
             continue;
         }
-        // `rank` counts the output rows up to and including `row`.
-        rows.push((offsets.rank(row) - 1) as usize);
+        rows.push(output_pos as usize);
         if let (Some(scores), Some(matched_scores)) = (&mut scores, &matches.scores) {
             scores.push(matched_scores[pos]);
         }
     }
     (rows, scores)
+}
+
+/// The position of a row that the scan does not output.
+const NOT_OUTPUT: u32 = u32::MAX;
+
+/// The position of each of `rows` among the output rows `offsets`, or
+/// `NOT_OUTPUT`.
+fn output_positions(rows: &[u32], offsets: &RoaringTreemap) -> Vec<u32> {
+    let span = offsets.max().map_or(0, |max| max as usize + 1);
+    // A `rank` counts the bits of the bitmap up to the row. That is cheaper than
+    // a table of the positions for a few rows, as in a TopK, but far more
+    // expensive for the many rows of a common term.
+    if rows.len() < span / 256 {
+        return rows
+            .iter()
+            .map(|row| {
+                let row = u64::from(*row);
+                if offsets.contains(row) {
+                    // `rank` counts the output rows up to and including `row`.
+                    (offsets.rank(row) - 1) as u32
+                } else {
+                    NOT_OUTPUT
+                }
+            })
+            .collect();
+    }
+    let mut positions = vec![NOT_OUTPUT; span];
+    for (pos, row) in offsets.iter().enumerate() {
+        positions[row as usize] = pos as u32;
+    }
+    rows.iter()
+        .map(|row| positions.get(*row as usize).copied().unwrap_or(NOT_OUTPUT))
+        .collect()
 }
 
 /// The vector score of each row the scan outputs, in order: the rows of
@@ -185,10 +219,12 @@ fn vector_output_scores(
     if matches.rows.len() <= output_rows {
         // Few scored rows, as in a TopN: place each one at its rank in the output.
         let mut output = vec![placeholder; output_rows];
-        for (row, score) in scored {
-            let row = u64::from(row);
-            if offsets.contains(row) {
-                output[(offsets.rank(row) - 1) as usize] = score;
+        for (pos, score) in output_positions(&matches.rows, offsets)
+            .into_iter()
+            .zip(scores)
+        {
+            if pos != NOT_OUTPUT {
+                output[pos as usize] = *score;
             }
         }
         return Some(output);
@@ -253,6 +289,33 @@ mod tests {
             output_matches(&unscored, Some(&offsets)),
             (vec![2, 1], None)
         );
+    }
+
+    #[test]
+    fn test_output_positions() {
+        // Rows 0, 3, 6, .. 2997 are output.
+        let offsets = RoaringTreemap::from_iter((0..1000u64).map(|row| row * 3));
+        // A few rows are ranked, many rows are looked up in a table: both give
+        // the same positions, also for rows that are not output or past the end.
+        let few = [2997u32, 1, 0, 3000];
+        assert_eq!(output_positions(&few, &offsets), vec![
+            999, NOT_OUTPUT, 0, NOT_OUTPUT
+        ]);
+        let many = (0..4000u32).rev().collect::<Vec<_>>();
+        let expected = many
+            .iter()
+            .map(|row| {
+                if *row % 3 == 0 && *row < 3000 {
+                    *row / 3
+                } else {
+                    NOT_OUTPUT
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(output_positions(&many, &offsets), expected);
+        assert_eq!(output_positions(&[0, 5], &RoaringTreemap::new()), vec![
+            NOT_OUTPUT, NOT_OUTPUT
+        ]);
     }
 
     #[test]
