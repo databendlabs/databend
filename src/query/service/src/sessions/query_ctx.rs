@@ -202,6 +202,23 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
+    pub(crate) fn is_automatic_maintenance(&self) -> bool {
+        self.shared.maintenance_reservation.read().is_some()
+    }
+
+    pub(crate) fn set_maintenance_reservation(
+        &self,
+        reservation: Arc<crate::table_maintenance::MaintenanceReservation>,
+    ) -> Result<()> {
+        reservation.register(Arc::downgrade(&self.shared))?;
+        *self.shared.maintenance_reservation.write() = Some(reservation);
+        Ok(())
+    }
+
+    pub(crate) fn force_maintenance_cancellation(&self, cause: ErrorCode) {
+        self.shared.force_maintenance_cancellation(cause);
+    }
+
     // Each table will create a new QueryContext
     // So partition_queue could be independent in each table context
     // see `builder_join.rs` for more details

@@ -43,7 +43,6 @@ use crate::SegmentLocation;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
-use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
@@ -116,11 +115,19 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
-        mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
+        carry.scan_incomplete = false;
+        carry.background_scope_invalidated = false;
+        if carry.yield_after_scan
+            && claimed_segments
+                .iter()
+                .any(|path| carry.scope_contains(path))
+        {
+            carry.skipped_claimed_ranges = true;
+        }
 
         ctx.set_status_info("[FUSE-RECLUSTER] Starting recluster operation");
 
@@ -145,7 +152,6 @@ impl FuseTable {
             self,
             ctx.clone(),
             snapshot.as_ref(),
-            mode,
         )?);
 
         // Carry is tied to the current cluster key because cached block metas
@@ -181,7 +187,23 @@ impl FuseTable {
             .enumerate()
             .map(|(idx, location)| (location, idx))
             .collect::<HashMap<_, _>>();
-        let number_segments = snapshot.segments.len();
+        let scan_segments = snapshot
+            .segments
+            .iter()
+            .enumerate()
+            .filter(|(_, location)| carry.scope_contains(&location.0))
+            .collect::<Vec<_>>();
+        let number_segments = scan_segments.len();
+        if carry
+            .background_scope
+            .as_ref()
+            .is_some_and(|scope| scope.len() != number_segments)
+        {
+            // A foreign replacement can both hide unfinished layout work and shift the
+            // positional cursor past still-live segments. Do not report this as NoParts.
+            carry.background_scope_invalidated = true;
+            return Ok(None);
+        }
         let mut repack_count = 0;
         let mut recluster_segment_pruner = None;
         let mut decode_semaphore = None;
@@ -218,8 +240,7 @@ impl FuseTable {
             let scan_end = scan_start.saturating_add(chunk_size).min(number_segments);
 
             debug!(
-                "recluster: candidate scan mode={:?} carry_in={} carry_valid={} scan_cursor={} scan_start={} scan_end={} chunk_size={}",
-                mode,
+                "recluster: candidate scan carry_in={} carry_valid={} scan_cursor={} scan_start={} scan_end={} chunk_size={}",
                 carry_in,
                 valid_carry.len(),
                 carry.scan_cursor,
@@ -237,7 +258,7 @@ impl FuseTable {
                 .count();
             let scan_locations = if scan_start < scan_end && early_accept_count < mutator.max_tasks
             {
-                let scan_range = &snapshot.segments[scan_start..scan_end];
+                let scan_range = &scan_segments[scan_start..scan_end];
                 let carry_locations = (!valid_carry.is_empty()).then(|| {
                     valid_carry
                         .iter()
@@ -245,7 +266,7 @@ impl FuseTable {
                         .collect::<HashSet<_>>()
                 });
                 let mut scan_locations = Vec::with_capacity(scan_range.len());
-                for (offset, location) in scan_range.iter().enumerate() {
+                for &(segment_idx, location) in scan_range {
                     // Intentional FINAL semantics: claimed segments are treated as work delegated
                     // to concurrent recluster tasks. This statement does not wait for claim owners;
                     // if every remaining candidate is claimed, it may return success even if an
@@ -258,7 +279,7 @@ impl FuseTable {
                         continue;
                     }
                     scan_locations.push(SegmentLocation {
-                        segment_idx: scan_start + offset,
+                        segment_idx,
                         location: location.clone(),
                         snapshot_loc: None,
                     });
@@ -476,6 +497,7 @@ impl FuseTable {
                 // whole range once against the latest snapshot before declaring it stable.
                 carry.pending = pending_windows;
                 carry.scan_cursor = scan_start;
+                carry.scan_incomplete = true;
                 break parts;
             }
 
@@ -495,15 +517,16 @@ impl FuseTable {
                 "recluster: candidate stable range advanced next_scan_start={} number_segments={}",
                 scan_end, number_segments,
             );
-            // LIMIT stops after the first non-pruned scan range.
-            if scan_end >= number_segments || (limit.is_some() && scan_had_compact_segments) {
+            // Manual LIMIT retains its statement semantics. Background jobs use the
+            // same window bound, but yield and continue after stable ranges as well.
+            carry.scan_incomplete = scan_end < number_segments;
+            if scan_end >= number_segments
+                || carry.yield_after_scan
+                || (limit.is_some() && scan_had_compact_segments)
+            {
                 break parts;
             }
         };
-
-        if mode != ReclusterMode::Aggressive {
-            *carry = ReclusterFinalCarry::default();
-        }
 
         let recluster_seg_num = parts.removed_segment_indexes.len() as u64;
         let elapsed_time = start.elapsed();
@@ -511,7 +534,6 @@ impl FuseTable {
             event = "recluster.planned",
             table_id = self.get_id(),
             strategy = format!("{:?}", mutator.properties.cluster_key_info.cluster_type).as_str(),
-            mode = format!("{:?}", mode).as_str(),
             tasks = parts.tasks.len(),
             repack_count,
             segments = recluster_seg_num,
@@ -535,7 +557,9 @@ impl FuseTable {
         push_down: &Option<PushDownInfo>,
     ) -> Result<(Arc<PruningContext>, Arc<SegmentPruner>, usize)> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let max_concurrency = std::cmp::max(max_threads, 10);
+        let max_concurrency = std::cmp::max(max_threads, 10)
+            .min(ctx.get_settings().get_max_storage_io_requests()? as usize)
+            .max(1);
         if max_concurrency > max_threads {
             warn!(
                 "recluster: max_threads setting too low {}, increased to {}",
@@ -720,6 +744,27 @@ mod tests {
         let selected = select_task_candidates(&windows, &ranked, 3);
 
         assert_eq!(selected, vec![vec![0], vec![], vec![0]]);
+    }
+
+    #[test]
+    fn test_background_carry_preserves_frozen_population() {
+        let mut carry = ReclusterFinalCarry::default();
+        carry.set_yield_after_scan(true);
+        carry.set_background_scope(&[("a".into(), 4), ("b".into(), 4)]);
+        carry.scan_cursor = 8;
+        carry.skipped_claimed_ranges = true;
+        carry.commit_background_scope(&["a".into()], vec![("replacement".into(), 4)]);
+        assert_eq!(carry.scan_cursor, 0);
+        assert!(!carry.scope_contains("a"));
+        assert!(!carry.scope_contains("concurrent_append"));
+        assert!(carry.scope_contains("b"));
+        assert!(carry.scope_contains("replacement"));
+        assert!(carry.skipped_claimed_ranges());
+        carry.reset_candidates();
+        assert!(!carry.skipped_claimed_ranges());
+        assert!(carry.yield_after_scan);
+        assert!(carry.scope_contains("replacement"));
+        assert!(!carry.scope_contains("concurrent_append"));
     }
 
     #[test]

@@ -86,6 +86,7 @@ pub use write::VirtualColumnLayoutPlanner;
 pub use write::VirtualColumnLayoutPolicy;
 pub use write::WriteSettings;
 pub(crate) use write::block_index;
+pub use write::block_index::BlockIndexBuildMode;
 pub use write::build_column_hlls;
 pub(crate) use write::build_virtual_segment_schema;
 pub(crate) use write::create_index_schema;

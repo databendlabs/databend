@@ -73,8 +73,7 @@ alter table t5 recluster final;
 query TTI
 select min, max, level from clustering_statistics('db_09_0017', 't5') order by block_name;
 ----
-[1] [8] 2
-[3] [6] 2
+[1] [8] 4
 
 statement ok
 DROP DATABASE db_09_0017

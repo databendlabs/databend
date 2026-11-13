@@ -16,40 +16,58 @@
 databend_common_tracing::register_module_tag!("[TABLE-HOOK-SCHEDULER]");
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Instant;
 
-use async_channel::Receiver;
-use async_channel::Sender;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_metrics::table_maintenance::record_rejected;
+use databend_common_metrics::table_maintenance::set_mailbox;
 use log::warn;
 use parking_lot::Mutex;
+use tokio::sync::Notify;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
+use tokio_util::sync::CancellationToken;
 
 use crate::interpreters::hook::table_hook_task::SchedulerTask;
-use crate::interpreters::hook::table_hook_task::TableHookTask;
+use crate::interpreters::hook::table_hook_task::TableHookRequest;
 use crate::interpreters::hook::table_hook_task::TableHookTaskKey;
 
 type SchedulerFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
-type SchedulerRunner<T> = Arc<dyn Fn(T) -> SchedulerFuture + Send + Sync>;
+type SchedulerRunner<T> = Arc<
+    dyn Fn(T, CancellationToken) -> Pin<Box<dyn Future<Output = Option<T>> + Send>> + Send + Sync,
+>;
 type SchedulerSpawner = Arc<dyn Fn(SchedulerFuture, String) + Send + Sync>;
 
 pub struct TableHookScheduler {
-    core: Arc<SchedulerCore<TableHookTask>>,
+    core: Arc<SchedulerCore<TableHookRequest>>,
+    // Only proven covered snapshots, never a triggering write's unverified head.
+    refresh_coverage: Mutex<HashMap<TableHookTaskKey, (String, String)>>,
 }
 
 struct SchedulerCore<T> {
-    sender: Sender<TableHookTaskKey>,
-    states: Mutex<HashMap<TableHookTaskKey, TableHookState<T>>>,
+    queue: Mutex<MailboxQueue<T>>,
     runner: SchedulerRunner<T>,
     spawner: SchedulerSpawner,
     semaphore: Arc<Semaphore>,
+    wake: Notify,
+    max_tables: usize,
+    stopped: Notify,
+    cancellation: CancellationToken,
+}
+
+struct MailboxQueue<T> {
+    states: HashMap<TableHookTaskKey, TableHookState<T>>,
+    ready: VecDeque<TableHookTaskKey>,
+    closed: bool,
+    dispatch_stopped: bool,
 }
 
 enum TableHookState<T> {
@@ -59,188 +77,290 @@ enum TableHookState<T> {
 
 impl TableHookScheduler {
     pub fn init(max_concurrency: usize) -> Result<()> {
-        let runner: SchedulerRunner<TableHookTask> = Arc::new(|task| Box::pin(task.execute(true)));
+        let runner: SchedulerRunner<TableHookRequest> =
+            Arc::new(|request, cancellation| Box::pin(request.execute(cancellation)));
         let spawner: SchedulerSpawner = Arc::new(|future, name| {
             GlobalIORuntime::instance().spawn_named(future, name);
         });
-        let core = SchedulerCore::create(max_concurrency, runner, spawner);
-        let scheduler = Arc::new(Self { core });
-
-        GlobalInstance::set(scheduler.clone());
+        let core = SchedulerCore::create(
+            max_concurrency,
+            GlobalConfig::instance()
+                .query
+                .common
+                .table_maintenance_max_pending_tables,
+            runner,
+            spawner,
+        );
+        GlobalInstance::set(Arc::new(Self {
+            core,
+            refresh_coverage: Mutex::new(HashMap::new()),
+        }));
         Ok(())
     }
 
-    pub fn try_instance() -> Option<Arc<TableHookScheduler>> {
+    pub fn try_instance() -> Option<Arc<Self>> {
         GlobalInstance::try_get()
     }
 
-    pub fn is_async_enabled() -> bool {
-        GlobalConfig::try_get_instance()
-            .map(|config| config.query.common.table_hook_mode == "async")
-            .unwrap_or(false)
+    pub(super) fn refresh_base(&self, key: &TableHookTaskKey, definition: &str) -> Option<String> {
+        self.refresh_coverage
+            .lock()
+            .get(key)
+            .filter(|(covered_definition, _)| covered_definition == definition)
+            .map(|(_, location)| location.clone())
     }
 
-    pub fn enqueue(&self, task: TableHookTask) {
-        self.core.enqueue(task);
+    pub(super) fn record_refresh_coverage(
+        &self,
+        key: TableHookTaskKey,
+        definition: String,
+        location: String,
+    ) {
+        let mut coverage = self.refresh_coverage.lock();
+        if coverage.len() >= self.core.max_tables && !coverage.contains_key(&key) {
+            if let Some(evict) = coverage.keys().next().cloned() {
+                coverage.remove(&evict);
+            }
+        }
+        coverage.insert(key, (definition, location));
+    }
+
+    /// Close admission and discard pending work before shutting down its dependencies.
+    pub fn close(&self) {
+        self.core.close();
+    }
+
+    /// Cancel running units and wait for their normal pipeline/remote cleanup. Production
+    /// shutdown must bound this wait: best-effort work must not prevent a node from exiting.
+    pub async fn shutdown(&self) {
+        self.core.shutdown().await;
+    }
+
+    /// Best-effort admission must never wait for a maintenance slot on the write path.
+    /// Existing keys still merge at capacity; a rejected new key needs another notification
+    /// or explicit maintenance. Do not spawn an unbounded queue of waiting producers.
+    pub(super) fn enqueue(&self, request: TableHookRequest) {
+        if let Err(request) = self.core.try_enqueue(request) {
+            let reason = if self.core.semaphore.is_closed() {
+                "shutdown"
+            } else {
+                "capacity"
+            };
+            record_rejected(reason);
+            log::debug!(table_id = request.target.table_id, reason;
+                "Discard best-effort maintenance notification");
+        }
     }
 }
 
 impl<T: SchedulerTask> SchedulerCore<T> {
     fn create(
         max_concurrency: usize,
+        max_tables: usize,
         runner: SchedulerRunner<T>,
         spawner: SchedulerSpawner,
     ) -> Arc<Self> {
-        let (sender, receiver) = async_channel::unbounded();
+        set_mailbox(0, 0);
         let scheduler = Arc::new(Self {
-            sender,
-            states: Mutex::new(HashMap::new()),
+            queue: Mutex::new(MailboxQueue {
+                states: HashMap::new(),
+                ready: VecDeque::new(),
+                closed: false,
+                dispatch_stopped: false,
+            }),
             runner,
             spawner: spawner.clone(),
             semaphore: Arc::new(Semaphore::new(max_concurrency)),
+            wake: Notify::new(),
+            max_tables,
+            stopped: Notify::new(),
+            cancellation: CancellationToken::new(),
         });
-
         spawner(
-            Box::pin(Self::dispatch(receiver, scheduler.clone())),
+            Box::pin(Self::dispatch(scheduler.clone())),
             "table-hook-scheduler".to_string(),
         );
-
         scheduler
     }
 
-    fn enqueue(&self, task: T) {
+    fn try_enqueue(&self, task: T) -> std::result::Result<(), T> {
         let key = task.key();
-        let should_schedule = {
-            let mut states = self.states.lock();
-            match states.get_mut(&key) {
-                Some(TableHookState::Queued(pending)) => {
-                    pending.merge(task);
-                    false
-                }
-                Some(TableHookState::Running { pending }) => {
-                    match pending {
-                        Some(pending) => pending.merge(task),
-                        None => *pending = Some(task),
-                    }
-                    false
-                }
-                None => {
-                    states.insert(key.clone(), TableHookState::Queued(task));
-                    true
-                }
-            }
-        };
-
-        if should_schedule {
-            self.try_schedule_key(key);
+        let mut queue = self.queue.lock();
+        if queue.closed {
+            return Err(task);
         }
+        match queue.states.get_mut(&key) {
+            Some(TableHookState::Queued(pending)) => pending.merge(task),
+            Some(TableHookState::Running { pending }) => match pending {
+                Some(pending) => pending.merge(task),
+                None => *pending = Some(task),
+            },
+            None => {
+                if queue.states.len() >= self.max_tables {
+                    return Err(task);
+                }
+                queue
+                    .states
+                    .insert(key.clone(), TableHookState::Queued(task));
+                queue.ready.push_back(key);
+            }
+        }
+        queue.record_metrics();
+        drop(queue);
+        self.wake.notify_one();
+        Ok(())
     }
 
-    async fn dispatch(receiver: Receiver<TableHookTaskKey>, scheduler: Arc<Self>) {
-        while let Ok(key) = receiver.recv().await {
-            let permit = match scheduler.semaphore.clone().acquire_owned().await {
-                Ok(permit) => permit,
-                Err(_) => {
-                    warn!(
-                        "Skip async table hook because scheduler semaphore is closed, table_id={}, catalog={}",
-                        key.table_id, key.catalog,
+    async fn dispatch(scheduler: Arc<Self>) {
+        loop {
+            let notified = scheduler.wake.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if scheduler.semaphore.is_closed() {
+                scheduler.queue.lock().dispatch_stopped = true;
+                scheduler.stopped.notify_waiters();
+                return;
+            }
+            if let Ok(permit) = scheduler.semaphore.clone().try_acquire_owned() {
+                let (task, deadline) = scheduler.take_ready_task();
+                if let Some((key, task)) = task {
+                    (scheduler.spawner)(
+                        Box::pin(Self::run_table_job(scheduler.clone(), key, task, permit)),
+                        "table-hook-job".to_string(),
                     );
                     continue;
                 }
-            };
-
-            (scheduler.spawner)(
-                Box::pin(Self::run_table_job(scheduler.clone(), key, permit)),
-                "table-hook-job".to_string(),
-            );
+                drop(permit);
+                if let Some(deadline) = deadline {
+                    tokio::select! {
+                        _ = &mut notified => {},
+                        _ = tokio::time::sleep_until(deadline.into()) => {},
+                    }
+                    continue;
+                }
+            }
+            notified.await;
         }
+    }
+
+    fn close(&self) {
+        {
+            let mut queue = self.queue.lock();
+            queue.closed = true;
+            queue.ready.clear();
+            queue.states.retain(|_, state| match state {
+                TableHookState::Queued(_) => false,
+                TableHookState::Running { pending } => {
+                    *pending = None;
+                    true
+                }
+            });
+            self.semaphore.close();
+            queue.record_metrics();
+        }
+        self.cancellation.cancel();
+        self.wake.notify_one();
+    }
+
+    async fn shutdown(&self) {
+        self.close();
+        loop {
+            let stopped = self.stopped.notified();
+            tokio::pin!(stopped);
+            stopped.as_mut().enable();
+            {
+                let queue = self.queue.lock();
+                if queue.dispatch_stopped && queue.states.is_empty() {
+                    return;
+                }
+            }
+            stopped.await;
+        }
+    }
+
+    fn take_ready_task(&self) -> (Option<(TableHookTaskKey, T)>, Option<Instant>) {
+        let mut queue = self.queue.lock();
+        if queue.closed {
+            return (None, None);
+        }
+        let now = Instant::now();
+        let mut earliest: Option<Instant> = None;
+        for _ in 0..queue.ready.len() {
+            let key = queue.ready.pop_front().expect("ready queue length checked");
+            let Some(TableHookState::Queued(task)) = queue.states.get(&key) else {
+                continue;
+            };
+            let due = task.ready_at();
+            if due > now {
+                earliest = Some(earliest.map_or(due, |previous| previous.min(due)));
+                queue.ready.push_back(key);
+                continue;
+            }
+            let Some(TableHookState::Queued(task)) = queue
+                .states
+                .insert(key.clone(), TableHookState::Running { pending: None })
+            else {
+                unreachable!()
+            };
+            queue.record_metrics();
+            return (Some((key, task)), earliest);
+        }
+        (None, earliest)
     }
 
     async fn run_table_job(
         scheduler: Arc<Self>,
         key: TableHookTaskKey,
+        task: T,
         permit: OwnedSemaphorePermit,
     ) {
-        let Some(task) = scheduler.take_pending_task(&key) else {
-            drop(permit);
-            return;
-        };
-
-        // Catch both runner invocation and polling so a panic cannot strand this key in Running.
         let result = CatchUnwindFuture::create(async {
-            (scheduler.runner)(task).await;
+            (scheduler.runner)(task, scheduler.cancellation.clone()).await
         })
         .await;
-        if let Err(e) = result {
-            warn!(
-                "Async table hook job panicked, table_id={}, catalog={}: {e}",
-                key.table_id, key.catalog,
-            );
-        }
-        drop(permit);
-
-        scheduler.finish_table_job(key);
-    }
-
-    fn take_pending_task(&self, key: &TableHookTaskKey) -> Option<T> {
-        let mut states = self.states.lock();
-        let state = states.remove(key)?;
-
-        match state {
-            TableHookState::Queued(task) => {
-                states.insert(key.clone(), TableHookState::Running { pending: None });
-                Some(task)
-            }
-            TableHookState::Running { .. } => {
-                states.insert(key.clone(), state);
+        let continuation = match result {
+            Ok(continuation) => continuation,
+            Err(e) => {
+                warn!(table_id = key.table_id, catalog = key.catalog.as_str(); "Async table hook panicked: {e}");
                 None
             }
-        }
-    }
-
-    fn finish_table_job(&self, key: TableHookTaskKey) {
-        let should_reschedule = {
-            let mut states = self.states.lock();
-            let Some(state) = states.get_mut(&key) else {
-                return;
-            };
-
-            match state {
-                TableHookState::Running { pending } => {
-                    if let Some(task) = pending.take() {
-                        *state = TableHookState::Queued(task);
-                        true
-                    } else {
-                        states.remove(&key);
-                        false
-                    }
-                }
-                TableHookState::Queued(_) => false,
-            }
         };
-
-        if should_reschedule {
-            self.try_schedule_key(key);
-        }
+        // A round/batch ends here. Neither retry delays nor the rest of a long logical job
+        // holds a concurrency permit, a query context, a memory reservation or table claims.
+        drop(permit);
+        scheduler.finish_table_job(key, continuation);
+        scheduler.wake.notify_one();
     }
 
-    fn try_schedule_key(&self, key: TableHookTaskKey) {
-        if self.sender.try_send(key.clone()).is_ok() {
+    fn finish_table_job(&self, key: TableHookTaskKey, mut continuation: Option<T>) {
+        let mut queue = self.queue.lock();
+        let Some(TableHookState::Running { pending }) = queue.states.remove(&key) else {
+            return;
+        };
+        if queue.closed {
+            queue.record_metrics();
+            self.stopped.notify_waiters();
             return;
         }
-
-        self.mark_schedule_failed(&key);
-        warn!(
-            "Skip async table hook because scheduler is closed, table_id={}, catalog={}",
-            key.table_id, key.catalog,
-        );
-    }
-
-    fn mark_schedule_failed(&self, key: &TableHookTaskKey) {
-        let mut states = self.states.lock();
-        if matches!(states.get(key), Some(TableHookState::Queued(_))) {
-            states.remove(key);
+        if let Some(pending) = pending {
+            match &mut continuation {
+                Some(task) => task.merge(pending),
+                None => continuation = Some(pending),
+            }
         }
+        if let Some(task) = continuation {
+            queue
+                .states
+                .insert(key.clone(), TableHookState::Queued(task));
+            queue.ready.push_back(key);
+        }
+        queue.record_metrics();
+    }
+}
+
+impl<T> MailboxQueue<T> {
+    fn record_metrics(&self) {
+        set_mailbox(self.states.len(), self.states.len() - self.ready.len());
     }
 }
 
@@ -265,11 +385,17 @@ mod tests {
         database: String,
         table_id: u64,
         payload: Vec<u64>,
+        not_before: Instant,
     }
 
     impl SchedulerTask for TestTask {
+        fn ready_at(&self) -> Instant {
+            self.not_before
+        }
+
         fn key(&self) -> TableHookTaskKey {
             TableHookTaskKey {
+                tenant: "test".to_string(),
                 catalog: self.catalog.clone(),
                 table_id: self.table_id,
             }
@@ -277,6 +403,32 @@ mod tests {
 
         fn merge(&mut self, other: Self) {
             self.payload.extend(other.payload);
+        }
+    }
+
+    type TestRunner = Arc<dyn Fn(TestTask) -> SchedulerFuture + Send + Sync>;
+
+    fn create_test_scheduler(
+        concurrency: usize,
+        runner: TestRunner,
+    ) -> Arc<SchedulerCore<TestTask>> {
+        SchedulerCore::create(
+            concurrency,
+            32,
+            Arc::new(move |task, _cancellation| {
+                let future = runner(task);
+                Box::pin(async move {
+                    future.await;
+                    None
+                })
+            }),
+            tokio_spawner(),
+        )
+    }
+
+    impl SchedulerCore<TestTask> {
+        fn enqueue(&self, task: TestTask) {
+            assert!(self.try_enqueue(task).is_ok());
         }
     }
 
@@ -290,6 +442,7 @@ mod tests {
             database: "default".to_string(),
             table_id,
             payload: vec![payload],
+            not_before: Instant::now(),
         }
     }
 
@@ -316,7 +469,7 @@ mod tests {
         let release_first = Arc::new(Notify::new());
         let completed = Arc::new(AtomicUsize::new(0));
 
-        let runner: SchedulerRunner<TestTask> = {
+        let runner: TestRunner = {
             let first_started = first_started.clone();
             let second_started = second_started.clone();
             let release_first = release_first.clone();
@@ -344,7 +497,7 @@ mod tests {
             })
         };
 
-        let scheduler = SchedulerCore::create(1, runner, tokio_spawner());
+        let scheduler = create_test_scheduler(1, runner);
         scheduler.enqueue(test_task(1));
         scheduler.enqueue(test_task(2));
 
@@ -372,7 +525,7 @@ mod tests {
         let runs = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
         let completed = Arc::new(AtomicUsize::new(0));
 
-        let runner: SchedulerRunner<TestTask> = {
+        let runner: TestRunner = {
             let first_started = first_started.clone();
             let release_first = release_first.clone();
             let runs = runs.clone();
@@ -395,7 +548,7 @@ mod tests {
             })
         };
 
-        let scheduler = SchedulerCore::create(1, runner, tokio_spawner());
+        let scheduler = create_test_scheduler(1, runner);
         scheduler.enqueue(test_task_with_payload(1, 1));
         timeout(Duration::from_secs(1), first_started.notified())
             .await
@@ -426,7 +579,7 @@ mod tests {
         let runs = Arc::new(Mutex::new(Vec::<(String, Vec<u64>)>::new()));
         let completed = Arc::new(AtomicUsize::new(0));
 
-        let runner: SchedulerRunner<TestTask> = {
+        let runner: TestRunner = {
             let first_started = first_started.clone();
             let release_first = release_first.clone();
             let runs = runs.clone();
@@ -449,7 +602,7 @@ mod tests {
             })
         };
 
-        let scheduler = SchedulerCore::create(2, runner, tokio_spawner());
+        let scheduler = create_test_scheduler(2, runner);
         let mut old_db_task = test_task_with_payload(1, 1);
         old_db_task.database = "old_db".to_string();
         scheduler.enqueue(old_db_task);
@@ -490,7 +643,7 @@ mod tests {
         let second_started = Arc::new(Notify::new());
         let runs = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
 
-        let runner: SchedulerRunner<TestTask> = {
+        let runner: TestRunner = {
             let first_started = first_started.clone();
             let release_first = release_first.clone();
             let second_started = second_started.clone();
@@ -519,7 +672,7 @@ mod tests {
             })
         };
 
-        let scheduler = SchedulerCore::create(1, runner, tokio_spawner());
+        let scheduler = create_test_scheduler(1, runner);
         scheduler.enqueue(test_task_with_payload(1, 1));
         timeout(Duration::from_secs(1), first_started.notified())
             .await
@@ -551,7 +704,7 @@ mod tests {
     async fn test_completed_task_allows_same_table_to_enqueue_again() {
         let started = Arc::new(AtomicUsize::new(0));
 
-        let runner: SchedulerRunner<TestTask> = {
+        let runner: TestRunner = {
             let started = started.clone();
 
             Arc::new(move |_task| {
@@ -562,7 +715,7 @@ mod tests {
             })
         };
 
-        let scheduler = SchedulerCore::create(1, runner, tokio_spawner());
+        let scheduler = create_test_scheduler(1, runner);
         scheduler.enqueue(test_task(1));
         wait_until(|| started.load(Ordering::SeqCst) == 1).await;
 
@@ -577,7 +730,7 @@ mod tests {
         let runs = Arc::new(Mutex::new(Vec::<Vec<u64>>::new()));
         let completed = Arc::new(AtomicUsize::new(0));
 
-        let runner: SchedulerRunner<TestTask> = {
+        let runner: TestRunner = {
             let first_started = first_started.clone();
             let release_first = release_first.clone();
             let runs = runs.clone();
@@ -600,7 +753,7 @@ mod tests {
             })
         };
 
-        let scheduler = SchedulerCore::create(1, runner, tokio_spawner());
+        let scheduler = create_test_scheduler(1, runner);
         scheduler.enqueue(test_task_with_payload(1, 1));
         timeout(Duration::from_secs(1), first_started.notified())
             .await
@@ -627,6 +780,115 @@ mod tests {
             (2..=32).collect::<Vec<_>>(),
             "same-table queued payloads should be coalesced into a single follow-up job"
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_delayed_continuation_yields_and_mailboxes_are_bounded() {
+        let first_started = Arc::new(Notify::new());
+        let release_first = Arc::new(Notify::new());
+        let runs = Arc::new(Mutex::new(Vec::new()));
+        let runner: SchedulerRunner<TestTask> = {
+            let first_started = first_started.clone();
+            let release_first = release_first.clone();
+            let runs = runs.clone();
+            Arc::new(move |mut task, _cancellation| {
+                let first_started = first_started.clone();
+                let release_first = release_first.clone();
+                let runs = runs.clone();
+                Box::pin(async move {
+                    runs.lock().push(task.table_id);
+                    if task.table_id == 1 && task.payload == vec![1] {
+                        first_started.notify_one();
+                        release_first.notified().await;
+                        task.payload.push(99);
+                        task.not_before = Instant::now() + Duration::from_millis(150);
+                        Some(task)
+                    } else {
+                        None
+                    }
+                })
+            })
+        };
+        let scheduler = SchedulerCore::create(1, 2, runner, tokio_spawner());
+        assert!(scheduler.try_enqueue(test_task(1)).is_ok());
+        timeout(Duration::from_secs(2), first_started.notified())
+            .await
+            .unwrap();
+        assert!(scheduler.try_enqueue(test_task(2)).is_ok());
+        assert!(
+            scheduler.try_enqueue(test_task(3)).is_err(),
+            "new keys must obey mailbox capacity"
+        );
+        release_first.notify_one();
+        wait_until(|| runs.lock().len() >= 2).await;
+        assert_eq!(
+            &runs.lock()[..2],
+            &[1, 2],
+            "a deferred continuation must release the only execution slot"
+        );
+        wait_until(|| runs.lock().len() == 3).await;
+        assert_eq!(*runs.lock(), vec![1, 2, 1]);
+        wait_until(|| scheduler.queue.lock().states.is_empty()).await;
+        assert!(scheduler.try_enqueue(test_task(3)).is_ok());
+        timeout(Duration::from_secs(1), scheduler.shutdown())
+            .await
+            .expect("shutdown must quiesce the dispatcher and any running unit");
+        assert!(scheduler.queue.lock().states.is_empty());
+        assert!(scheduler.try_enqueue(test_task(4)).is_err());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_shutdown_cancels_running_units_and_discards_followups() {
+        let started = Arc::new(Notify::new());
+        let runs = Arc::new(AtomicUsize::new(0));
+        let runner: SchedulerRunner<TestTask> = {
+            let started = started.clone();
+            let runs = runs.clone();
+            Arc::new(move |task, cancellation| {
+                let started = started.clone();
+                let runs = runs.clone();
+                Box::pin(async move {
+                    runs.fetch_add(1, Ordering::SeqCst);
+                    started.notify_one();
+                    cancellation.cancelled().await;
+                    Some(task)
+                })
+            })
+        };
+        let scheduler = SchedulerCore::create(1, 2, runner, tokio_spawner());
+        scheduler.enqueue(test_task(1));
+        timeout(Duration::from_secs(1), started.notified())
+            .await
+            .unwrap();
+        scheduler.enqueue(test_task(1));
+        scheduler.enqueue(test_task(2));
+        scheduler.close();
+        assert!(scheduler.try_enqueue(test_task(3)).is_err());
+        timeout(Duration::from_secs(1), scheduler.shutdown())
+            .await
+            .unwrap();
+        assert_eq!(runs.load(Ordering::SeqCst), 1);
+        assert!(scheduler.queue.lock().states.is_empty());
+        assert_eq!(scheduler.semaphore.available_permits(), 1);
+        timeout(Duration::from_secs(1), scheduler.shutdown())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_full_mailbox_still_merges_existing_keys() {
+        let runner: SchedulerRunner<TestTask> = Arc::new(|_, _| unreachable!());
+        // Do not dispatch: admission alone must be synchronous even with no capacity release.
+        let scheduler = SchedulerCore::create(1, 1, runner, Arc::new(|_, _| {}));
+        assert!(scheduler.try_enqueue(test_task_with_payload(1, 1)).is_ok());
+        assert!(scheduler.try_enqueue(test_task(2)).is_err());
+        assert!(scheduler.try_enqueue(test_task_with_payload(1, 3)).is_ok());
+        let queue = scheduler.queue.lock();
+        assert_eq!(queue.states.len(), 1);
+        let Some(TableHookState::Queued(task)) = queue.states.get(&test_task(1).key()) else {
+            panic!("existing table should stay queued");
+        };
+        assert_eq!(task.payload, vec![1, 3]);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -104,6 +104,7 @@ pub struct VectorIndexBuilder {
     index_params: Vec<VectorIndexParam>,
     field_offsets_set: HashSet<usize>,
     statistics_params: BTreeMap<usize, (ColumnId, DistanceType)>,
+    parallel_build: bool,
 
     // Collected vector columns
     columns: BTreeMap<usize, Vec<Column>>,
@@ -143,6 +144,11 @@ impl BlockIndexWriter for VectorIndexBlockWriter {
 impl VectorIndexBuilder {
     pub(crate) fn into_write_spec(self) -> VectorIndexWriteSpec {
         VectorIndexWriteSpec { builder: self }
+    }
+
+    pub(crate) fn with_parallel_build(mut self, parallel_build: bool) -> Self {
+        self.parallel_build = parallel_build;
+        self
     }
 
     pub fn try_create(
@@ -253,6 +259,7 @@ impl VectorIndexBuilder {
                 index_params,
                 field_offsets_set,
                 statistics_params,
+                parallel_build: true,
                 columns,
             }))
         } else {
@@ -305,12 +312,13 @@ impl VectorIndexBuilder {
                     bundle.add_validity(column_id, bitmap)?;
                 }
                 for &distance in &param.distances {
-                    let (fields, entries) = HNSWIndex::build(
+                    let (fields, entries) = HNSWIndex::build_with_parallelism(
                         param.m,
                         param.ef_construct,
                         column_id,
                         column.clone(),
                         distance,
+                        self.parallel_build,
                     )?;
                     for (field, entry) in fields.into_iter().zip(entries) {
                         let column = entry.to_column();

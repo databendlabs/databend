@@ -120,6 +120,11 @@ impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         {
+            // Maintenance has independent contexts and may outlive the last foreground
+            // context. Quiesce it before removing the thread-scoped global services.
+            if let Some(scheduler) = crate::interpreters::TableHookScheduler::try_instance() {
+                futures::executor::block_on(scheduler.shutdown());
+            }
             log::set_max_level(log::LevelFilter::Off);
             databend_common_base::runtime::drop_guard(move || {
                 databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);

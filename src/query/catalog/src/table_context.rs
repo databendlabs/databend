@@ -212,6 +212,19 @@ pub trait TableContext:
 
     fn written_segment_locations(&self) -> &SegmentLocationsState;
 
+    /// Node-admitted automatic maintenance, including its remote fragments. This does
+    /// not include synchronous write hooks or explicit user maintenance statements.
+    fn is_automatic_maintenance(&self) -> bool {
+        false
+    }
+
+    /// Defer cooperative automatic-maintenance cancellation across metadata publication.
+    /// Foreground statements keep their existing cancellation semantics. The service may
+    /// still force cancellation after its bounded shutdown/cleanup grace expires.
+    fn begin_maintenance_publication(&self) -> Result<Option<Box<dyn Send>>> {
+        Ok(None)
+    }
+
     fn as_any(&self) -> &dyn Any;
 }
 

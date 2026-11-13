@@ -80,6 +80,7 @@ use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::inverted_index_user_dictionary::JAPANESE_DICTIONARY;
 use crate::io::resolve_inverted_index_user_dictionary_blocking;
+use crate::io::write::block_index::BlockIndexBuildMode;
 use crate::io::write::block_index::BlockIndexMerge;
 use crate::io::write::block_index::BlockIndexMergeSource;
 use crate::io::write::block_index::BlockIndexSpec;
@@ -190,13 +191,20 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
 }
 
 pub fn create_inverted_index_builders(table: &FuseTable) -> Result<Vec<InvertedIndexBuilder>> {
+    create_inverted_index_builders_with_mode(table, BlockIndexBuildMode::Synchronous)
+}
+
+pub(crate) fn create_inverted_index_builders_with_mode(
+    table: &FuseTable,
+    mode: BlockIndexBuildMode,
+) -> Result<Vec<InvertedIndexBuilder>> {
     let table_meta = &table.table_info.meta;
     let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
     for index in table_meta.indexes.values() {
         if !matches!(index.index_type, TableIndexType::Inverted) {
             continue;
         }
-        if !index.sync_creation {
+        if mode.synchronous_only() && !index.sync_creation {
             continue;
         }
         let mut index_fields = Vec::with_capacity(index.column_ids.len());

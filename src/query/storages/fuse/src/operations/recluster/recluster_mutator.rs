@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -66,7 +65,6 @@ use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
 use crate::operations::recluster::ReclusterBlockStats;
 use crate::operations::recluster::ReclusterGroup;
-use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
@@ -75,7 +73,6 @@ use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::partition_values;
 use crate::statistics::reducers::merge_statistics_mut;
-use crate::statistics::sort_by_cluster_stats;
 
 /// Maximum recluster depth allowed when only two blocks remain.
 /// For two-block layouts, repeated reclustering beyond this level
@@ -136,19 +133,80 @@ impl ReclusterCandidateWindow {
 /// Carry-over state reused across rounds of one `RECLUSTER FINAL` statement.
 #[derive(Clone, Default)]
 pub struct ReclusterFinalCarry {
-    // State reused across rounds of one RECLUSTER FINAL statement.
+    // State reused across rounds of one recluster job.
     pub(crate) pending: Vec<ReclusterCandidateWindow>,
     // Next scan-range start in the latest snapshot. A successful task resets this to the current
     // range start so the next round can continue reclustering replacement segments.
     pub(crate) scan_cursor: usize,
     // Cached candidates must match this cluster key.
     pub(crate) cluster_key_id: u32,
-    // Reuse block-meta decode workers across rounds of one FINAL statement.
+    // Reuse block-meta decode workers across rounds of one recluster job.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
+    // Automatic maintenance yields after a stable scan range rather than planning
+    // through the whole table while holding a scheduler execution slot.
+    pub(crate) yield_after_scan: bool,
+    pub(crate) scan_incomplete: bool,
+    pub(crate) background_scope: Option<HashSet<String>>,
+    pub(crate) background_scope_invalidated: bool,
+    pub(crate) skipped_claimed_ranges: bool,
 }
 
 impl ReclusterFinalCarry {
-    /// Lazily create or reuse the block-meta decode runtime for FINAL recluster.
+    /// Freeze the job's input population. Only outputs of its own committed rounds
+    /// may extend this set; unrelated appends belong to the next dirty generation.
+    pub fn set_background_scope(&mut self, segments: &[Location]) {
+        self.background_scope = Some(segments.iter().map(|(path, _)| path.clone()).collect());
+    }
+
+    pub fn scope_contains(&self, segment: &str) -> bool {
+        self.background_scope
+            .as_ref()
+            .is_none_or(|scope| scope.contains(segment))
+    }
+
+    /// A foreign replacement invalidates both the frozen physical population and the
+    /// positional scan cursor. Appends outside the scope do not invalidate either.
+    pub fn background_scope_invalidated(&self) -> bool {
+        self.background_scope_invalidated
+    }
+
+    pub fn commit_background_scope(&mut self, removed: &[String], outputs: Vec<Location>) {
+        if let Some(scope) = &mut self.background_scope {
+            for segment in removed {
+                scope.remove(segment);
+            }
+            scope.extend(outputs.into_iter().map(|(path, _)| path));
+            // Replacement segments can be inserted ahead of the current scan range.
+            self.scan_cursor = 0;
+        }
+    }
+
+    pub fn skipped_claimed_ranges(&self) -> bool {
+        self.skipped_claimed_ranges
+    }
+
+    pub fn reset_candidates(&mut self) {
+        self.skipped_claimed_ranges = false;
+        self.pending.clear();
+        self.scan_cursor = 0;
+        self.scan_incomplete = false;
+        self.release_round_resources();
+    }
+
+    pub fn set_yield_after_scan(&mut self, enabled: bool) {
+        self.yield_after_scan = enabled;
+    }
+
+    pub fn scan_incomplete(&self) -> bool {
+        self.scan_incomplete
+    }
+
+    /// Keep pure candidate/scan progress while releasing round-local decode workers.
+    pub fn release_round_resources(&mut self) {
+        self.decode_runtime = None;
+    }
+
+    /// Lazily create or reuse the block-meta decode runtime of the job.
     pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
         if self.decode_runtime.is_none() {
             self.decode_runtime = Some(Arc::new(Runtime::with_worker_threads(
@@ -215,7 +273,6 @@ impl ReclusterMutator {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         snapshot: &TableSnapshot,
-        mode: ReclusterMode,
     ) -> Result<Self> {
         let schema = table.schema_with_stream();
         let cluster_key_info = table
@@ -246,7 +303,32 @@ impl ReclusterMutator {
             _ => DEFAULT_RECLUSTER_DEPTH,
         } as f64;
 
-        let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
+        let mut memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
+        if ctx.is_automatic_maintenance() {
+            // Input bytes are not the whole working set: serialization and per-block
+            // index writers coexist with sorting. Leave a conservative allowance for
+            // all indexes, including ASYNC ones built by background Recluster.
+            let index_cost =
+                table
+                    .get_table_info()
+                    .meta
+                    .indexes
+                    .values()
+                    .fold(4u64, |cost, index| {
+                        cost.saturating_add(match index.index_type {
+                            databend_common_meta_app::schema::TableIndexType::Vector => 4,
+                            databend_common_meta_app::schema::TableIndexType::Inverted => 2,
+                            _ => 1,
+                        })
+                    });
+            let indexed_budget = ctx.get_settings().get_max_query_memory_usage()? / index_cost;
+            if indexed_budget == 0 {
+                return Err(ErrorCode::MemoryExceedsLimit(
+                    "No memory for indexed Recluster output",
+                ));
+            }
+            memory_threshold = memory_threshold.min(indexed_budget as usize);
+        }
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
         if !cluster.is_empty() {
@@ -264,7 +346,6 @@ impl ReclusterMutator {
             table,
             &schema,
             parsed_cluster_keys,
-            mode,
             depth_threshold,
             block_thresholds,
             cluster_key_info,
@@ -294,7 +375,6 @@ impl ReclusterMutator {
         cluster_key_info: ClusterKeyInfo,
         partition_key_count: usize,
         max_tasks: usize,
-        mode: ReclusterMode,
         vector_cluster_info: Option<VectorClusterInfo>,
     ) -> Self {
         let memory_threshold = ctx
@@ -305,7 +385,6 @@ impl ReclusterMutator {
         let (properties, strategy) = ReclusterProperties::for_test(
             &schema,
             cluster_key_exprs,
-            mode,
             depth_threshold,
             block_thresholds,
             cluster_key_info,
@@ -374,28 +453,13 @@ impl ReclusterMutator {
         candidate_window.tasks = tasks;
 
         if candidate_window.tasks.is_empty() {
-            let all_original_stats = blocks
-                .iter()
-                .all(|block| matches!(block.stats, ReclusterBlockStats::Original));
-            let unordered = || {
-                blocks.windows(2).any(|window| {
-                    sort_by_cluster_stats(
-                        Some(window[0].stats()),
-                        Some(window[1].stats()),
-                        self.properties.cluster_key_info.cluster_key_id(),
-                    ) == cmp::Ordering::Greater
-                })
-            };
             let selected_segment_count = window_segment_infos.len();
             let target_segment_count =
                 total_block_count.div_ceil(self.properties.block_thresholds.block_per_segment);
             let compactable_repack = total_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
-            let unordered_repack = self.properties.mode == ReclusterMode::Conservative
-                && all_original_stats
-                && unordered();
-            if compactable_repack || unordered_repack {
+            if compactable_repack {
                 // Repack-only candidate removes segments without rewrite tasks.
                 selected_window_positions.fill(true);
                 candidate_window.tasks.push(ReclusterTaskCandidate {
@@ -466,10 +530,7 @@ impl ReclusterMutator {
                 continue;
             };
             blocks_map
-                .entry((
-                    ReclusterGroup::assign(level, self.properties.mode),
-                    partition,
-                ))
+                .entry((ReclusterGroup::assign(level), partition))
                 .or_default()
                 .push(idx);
         }

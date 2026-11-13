@@ -56,6 +56,7 @@ use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::BlockIndexBuildMode;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
 use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
@@ -220,7 +221,12 @@ impl IPhysicalPlan for Recluster {
                             matches!(field.data_type(), TableDataType::AggregateState { .. })
                         }) =>
                     {
-                        ReclusterIndexMergeInputs::try_create(table, task)?
+                        let index_mode = if builder.ctx.is_automatic_maintenance() {
+                            BlockIndexBuildMode::All
+                        } else {
+                            BlockIndexBuildMode::Synchronous
+                        };
+                        ReclusterIndexMergeInputs::try_create_with_mode(table, task, index_mode)?
                     }
                     _ => None,
                 };

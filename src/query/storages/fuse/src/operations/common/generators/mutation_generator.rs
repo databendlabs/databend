@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -27,6 +28,8 @@ use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
@@ -42,15 +45,24 @@ pub struct MutationGenerator {
 
     pub(crate) mutation_kind: MutationKind,
     logical_change_delta: (u64, u64),
+    index_definition: Option<TableMeta>,
 }
 
 impl MutationGenerator {
+    /// Pin the definition used to build indexes across OCC rebases. Rewriting data must
+    /// not attach old-version artifacts to a newly changed schema or index definition.
+    pub fn with_index_definition(mut self, meta: TableMeta) -> Self {
+        self.index_definition = Some(meta);
+        self
+    }
+
     pub fn new(base_snapshot: Option<Arc<TableSnapshot>>, mutation_kind: MutationKind) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
             logical_change_delta: (0, 0),
+            index_definition: None,
         }
     }
 }
@@ -84,6 +96,22 @@ impl SnapshotGenerator for MutationGenerator {
         table_meta_timestamps: TableMetaTimestamps,
         table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
+        if self.index_definition.as_ref().is_some_and(|expected| {
+            expected.schema != table_info.meta.schema
+                || expected.indexes != table_info.meta.indexes
+                || [OPT_KEY_BLOOM_INDEX_COLUMNS, OPT_KEY_BLOOM_INDEX_TYPE]
+                    .iter()
+                    .any(|key| expected.options.get(*key) != table_info.meta.options.get(*key))
+                || (matches!(self.mutation_kind, MutationKind::Recluster)
+                    && (expected.cluster_key != table_info.meta.cluster_key
+                        || expected.cluster_key_v2 != table_info.meta.cluster_key_v2
+                        || expected.cluster_key_seq != table_info.meta.cluster_key_seq))
+        }) {
+            return Err(ErrorCode::RefreshIndexError(format!(
+                "Index definitions or schema changed during {} (including Bloom options and Recluster key)",
+                self.mutation_kind.to_string().to_ascii_lowercase()
+            )));
+        }
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
                 if let Some((removed, replaced)) =

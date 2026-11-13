@@ -2044,13 +2044,32 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_queries_executor: bool,
 
-    /// Controls how table hooks after write are executed. Supported values: sync, async.
+    /// Deprecated compatibility option (sync or async). Compact is always synchronous;
+    /// other automatic maintenance is asynchronous, except on session-local temporary tables.
     #[clap(long, value_name = "VALUE", default_value = "sync")]
     pub table_hook_mode: String,
 
     /// Max number of async table hook jobs running concurrently.
     #[clap(long, value_name = "VALUE", default_value = "2")]
     pub table_hook_async_max_concurrency: usize,
+
+    /// Total reserved/tracked memory for automatic maintenance on each execution node.
+    #[clap(long, value_name = "VALUE", default_value = "2147483648")]
+    pub table_maintenance_max_memory_usage: u64,
+
+    /// Maximum pipeline threads per automatic maintenance action, including remote fragments.
+    #[clap(long, value_name = "VALUE", default_value = "2")]
+    pub table_maintenance_max_threads: u64,
+
+    /// Maximum table mailboxes. At capacity, new keys are discarded without delaying writes;
+    /// existing keys still merge. Automatic maintenance notifications are best-effort.
+    #[clap(long, value_name = "VALUE", default_value = "1024")]
+    pub table_maintenance_max_pending_tables: usize,
+
+    /// Accumulation window before starting an automatic Recluster generation, in seconds.
+    /// New notifications do not postpone it. Zero makes a generation immediately eligible.
+    #[clap(long, value_name = "VALUE", default_value = "600")]
+    pub recluster_accumulation_secs: u64,
 }
 
 impl Default for QueryConfig {
@@ -2078,6 +2097,27 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 "table_hook_mode must be sync or async, got {}",
                 self.table_hook_mode
             )));
+        }
+        if std::time::Instant::now()
+            .checked_add(std::time::Duration::from_secs(
+                self.recluster_accumulation_secs,
+            ))
+            .is_none()
+        {
+            return Err(ErrorCode::InvalidConfig(
+                "Recluster accumulation window exceeds the supported deadline range",
+            ));
+        }
+        if self.table_maintenance_max_threads == 0
+            || self.table_maintenance_max_pending_tables == 0
+            || self.table_maintenance_max_memory_usage > i64::MAX as u64
+            || self.table_maintenance_max_memory_usage
+                / (self.table_hook_async_max_concurrency.max(1) as u64)
+                < 256 * 1024 * 1024
+        {
+            return Err(ErrorCode::InvalidConfig(
+                "Maintenance requires positive threads/queue capacity and at least 256 MiB per concurrent action",
+            ));
         }
         if self.table_hook_async_max_concurrency == 0 {
             return Err(ErrorCode::InvalidConfig(

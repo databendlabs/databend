@@ -23,3 +23,4 @@ pub mod mysql;
 pub mod session;
 pub mod storage;
 pub mod system;
+pub mod table_maintenance;

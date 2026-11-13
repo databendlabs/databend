@@ -44,6 +44,18 @@ impl TableContext for QueryContext {
         &self.shared.written_segment_locs
     }
 
+    fn is_automatic_maintenance(&self) -> bool {
+        QueryContext::is_automatic_maintenance(self)
+    }
+
+    fn begin_maintenance_publication(&self) -> Result<Option<Box<dyn Send>>> {
+        if self.is_automatic_maintenance() {
+            self.shared.begin_maintenance_publication().map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

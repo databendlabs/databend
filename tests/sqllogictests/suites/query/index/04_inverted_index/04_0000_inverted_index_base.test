@@ -866,9 +866,21 @@ SELECT count(*) FROM fuse_snapshot('test_inverted_index', 'refresh_type_guard')
 statement ok
 INSERT INTO refresh_type_guard VALUES ('alpha', to_geometry('POINT(1 1)'))
 
-# The write hook publishes both indexes in one refresh snapshot.
+# The asynchronous hook publishes both indexes in one refresh snapshot. Wait for
+# publication rather than assuming that INSERT waits for background maintenance.
 query I
-SELECT count(*) FROM fuse_snapshot('test_inverted_index', 'refresh_type_guard')
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET snapshots := (SELECT count(*) FROM fuse_snapshot('test_inverted_index', 'refresh_type_guard'));
+    WHILE snapshots < 2 AND attempts < 200 DO
+        SELECT sleep(0.1);
+        snapshots := (SELECT count(*) FROM fuse_snapshot('test_inverted_index', 'refresh_type_guard'));
+        attempts := attempts + 1;
+    END WHILE;
+    RETURN snapshots;
+END;
+$$;
 ----
 2
 

@@ -170,6 +170,10 @@ impl GlobalServices {
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         CoordinationManager::init()?;
+        crate::table_maintenance::MaintenanceResources::init(
+            config.query.common.table_maintenance_max_memory_usage,
+            config.query.common.table_hook_async_max_concurrency,
+        );
         TableHookScheduler::init(config.query.common.table_hook_async_max_concurrency)?;
         AuthMgr::init(config, version)?;
 

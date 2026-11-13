@@ -58,6 +58,32 @@ impl FuseTable {
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<u64> {
+        self.build_refresh_pipeline(ctx, index_names, segment_locs, pipeline, None)
+            .await
+    }
+
+    /// Background maintenance bounds selected block data as well as the segment range.
+    /// Unlike manual refresh, append-only snapshot drift can be rebased at publication.
+    pub async fn do_refresh_indexes_batch(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        index_names: &[String],
+        segment_locs: Vec<Location>,
+        pipeline: &mut Pipeline,
+        limits: (usize, u64),
+    ) -> Result<u64> {
+        self.build_refresh_pipeline(ctx, index_names, Some(segment_locs), pipeline, Some(limits))
+            .await
+    }
+
+    async fn build_refresh_pipeline(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        index_names: &[String],
+        segment_locs: Option<Vec<Location>>,
+        pipeline: &mut Pipeline,
+        limits: Option<(usize, u64)>,
+    ) -> Result<u64> {
         self.check_mutable()?;
         if index_names.is_empty() || segment_locs.as_ref().is_some_and(Vec::is_empty) {
             return Ok(0);
@@ -68,8 +94,15 @@ impl FuseTable {
         else {
             return Ok(0);
         };
-        let RefreshPlan { specs, blocks } =
-            collect_refresh_plan(self, ctx.clone(), &snapshot, index_names, segment_locs).await?;
+        let RefreshPlan { specs, blocks } = collect_refresh_plan(
+            self,
+            ctx.clone(),
+            &snapshot,
+            index_names,
+            segment_locs,
+            limits,
+        )
+        .await?;
         if blocks.is_empty() {
             return Ok(0);
         }
@@ -181,7 +214,8 @@ impl FuseTable {
             )
         });
         let previous = snapshot.snapshot_id;
-        let generator = MutationGenerator::new(Some(snapshot), MutationKind::Refresh);
+        let generator = MutationGenerator::new(Some(snapshot), MutationKind::Refresh)
+            .with_index_definition(self.get_table_info().meta.clone());
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,
@@ -191,7 +225,7 @@ impl FuseTable {
                 generator.clone(),
                 input,
                 None,
-                Some(previous),
+                limits.is_none().then_some(previous),
                 None,
                 timestamps,
                 false,

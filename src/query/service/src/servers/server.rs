@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::SignalStream;
@@ -29,10 +30,13 @@ use futures::StreamExt;
 use futures::stream::Abortable;
 use log::error;
 use log::info;
+use log::warn;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::clusters::ClusterDiscovery;
+use crate::interpreters::TableHookScheduler;
 use crate::sessions::SessionManager;
+use crate::table_maintenance::MaintenanceResources;
 
 pub type ListeningStream = Abortable<TcpListenerStream>;
 
@@ -71,12 +75,37 @@ impl ShutdownHandle {
 
     #[async_backtrace::framed]
     pub async fn shutdown(&mut self, mut signal: SignalStream, timeout: Option<Duration>) {
+        let started = Instant::now();
+        let maintenance = TableHookScheduler::try_instance();
+        if let Some(scheduler) = &maintenance {
+            scheduler.close();
+        }
+        // Close local and incoming remote maintenance admission before any dependency
+        // shuts down. This does not cancel foreground queries or wait for pending work.
+        MaintenanceResources::shutdown();
         self.shutdown_services(true).await;
         let config = GlobalConfig::instance();
         ClusterDiscovery::instance()
             .unregister_to_metastore(&mut signal, &config)
             .await;
-        self.sessions.graceful_shutdown(signal, timeout).await;
+        self.sessions
+            .graceful_shutdown(
+                signal,
+                timeout.map(|limit| limit.saturating_sub(started.elapsed())),
+            )
+            .await;
+        if let Some(scheduler) = maintenance {
+            let grace = timeout
+                .map(|limit| limit.saturating_sub(started.elapsed()))
+                .unwrap_or(Duration::from_secs(3))
+                .min(Duration::from_secs(3));
+            if tokio::time::timeout(grace, scheduler.shutdown())
+                .await
+                .is_err()
+            {
+                warn!("Maintenance shutdown exceeded remaining grace; pending work is best-effort");
+            }
+        }
         self.shutdown_services(false).await;
     }
 

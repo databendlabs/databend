@@ -16,22 +16,40 @@
 databend_common_tracing::register_module_tag!("[TABLE-HOOK]");
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::runtime::CatchUnwindFuture;
+use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::table_maintenance::record_stopped;
+use databend_common_metrics::table_maintenance::record_unit;
 use databend_common_pipeline::core::SharedLockGuard;
 use log::info;
 use log::warn;
+use tokio_util::sync::CancellationToken;
 
 use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
+use crate::interpreters::hook::recluster_hook::ReclusterProgress;
+use crate::interpreters::hook::recluster_hook::ReclusterUnitOutcome;
+use crate::interpreters::hook::refresh_hook::RefreshProgress;
 use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::table_maintenance::MaintenanceContext;
+use crate::table_maintenance::MaintenanceIdentity;
+use crate::table_maintenance::run_maintenance_unit;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) struct TableHookTaskKey {
+    pub(super) tenant: String,
     pub(super) catalog: String,
     pub(super) table_id: u64,
 }
@@ -40,8 +58,13 @@ pub(super) trait SchedulerTask: Send + 'static {
     fn key(&self) -> TableHookTaskKey;
 
     fn merge(&mut self, other: Self);
+
+    fn ready_at(&self) -> Instant {
+        Instant::now()
+    }
 }
 
+#[derive(Clone)]
 pub struct TableHookTarget {
     pub catalog: String,
     pub database: String,
@@ -80,7 +103,14 @@ impl TableHookTarget {
 
 pub struct TableHookTask {
     pub ctx: Arc<QueryContext>,
+    pub session_local: bool,
+    pub refresh_base: Option<String>,
+    /// Tracking of a context created for this task. `None` when the task runs on the
+    /// triggering statement's context and is accounted to that statement.
+    pub tracking: Option<Arc<TrackingPayload>>,
     pub target: TableHookTarget,
+    /// The target the compact stage compacted. A recluster round follows it.
+    pub recluster_target: Option<TableHookTarget>,
     pub hook_settings: TableHookTaskSettings,
     pub lock_opt: LockTableOption,
     /// Only synchronous autocommit tasks carry a statement lock. Queued and post-commit
@@ -91,12 +121,44 @@ pub struct TableHookTask {
 }
 
 impl TableHookTask {
-    /// Run the same maintenance chain for autocommit and post-commit hooks, in both modes.
+    /// Compact before the triggering statement returns, in both modes. Records the compacted
+    /// target so that the remaining stages follow it with a recluster round.
+    pub(crate) async fn execute_compact_stage(&mut self) {
+        match self.tracking.clone() {
+            Some(tracking) => tracking.tracking(self.compact_stage()).await,
+            None => self.compact_stage().await,
+        }
+    }
+
+    /// Run the stages after compaction: recluster after a successful compaction, refresh,
+    /// then analyze. Synchronous tasks run them on the caller; asynchronous tasks run them
+    /// in the background scheduler.
+    pub(crate) async fn execute_remaining_stages(self, is_async: bool) {
+        match self.tracking.clone() {
+            Some(tracking) => tracking.tracking(self.remaining_stages(is_async)).await,
+            None => self.remaining_stages(is_async).await,
+        }
+    }
+
+    async fn compact_stage(&mut self) {
+        if !self.hook_settings.compact_after_write {
+            return;
+        }
+        match self.execute_compact().await {
+            Ok(compacted) => self.recluster_target = compacted,
+            Err(e) => warn!(
+                "Table hook compact failed, table_id={}: {e}",
+                self.target.table_id
+            ),
+        }
+    }
+
     /// Release any handed-over statement lock after refresh and before analyze.
     ///
     /// Each stage lives with its own hook module: `execute_compact` in `compact_hook.rs`,
-    /// `execute_refresh` in `refresh_hook.rs`, and `execute_analyze` in `analyze_hook.rs`.
-    pub(crate) async fn execute(mut self, is_async: bool) {
+    /// `execute_recluster` in `recluster_hook.rs`, `execute_refresh` in `refresh_hook.rs`,
+    /// and `execute_analyze` in `analyze_hook.rs`.
+    async fn remaining_stages(mut self, is_async: bool) {
         if is_async {
             info!(
                 "Start async table hook job for operation {}, table_id={}, table={}",
@@ -108,19 +170,25 @@ impl TableHookTask {
                 self.operation_name, self.target.table_id, self.target.table
             );
         }
-        if self.hook_settings.compact_after_write {
-            self.execute_compact().await.unwrap_or_else(|e| {
-                warn!(
-                    "Table hook compact failed, table_id={}: {e}",
-                    self.target.table_id
-                )
-            });
+        if let Some(compacted) = self.recluster_target.take() {
+            self.execute_recluster(&compacted)
+                .await
+                .unwrap_or_else(|e| {
+                    warn!(
+                        "Table hook recluster failed, table_id={}: {e}",
+                        self.target.table_id
+                    )
+                });
         }
-        self.execute_refresh().await;
+        self.execute_refresh()
+            .await
+            .unwrap_or_else(|e| warn!("Table refresh failed: {e}"));
         if let Some(guard) = self.lock_guard.take() {
             drop(guard.try_take());
         }
-        self.execute_analyze().await;
+        self.execute_analyze()
+            .await
+            .unwrap_or_else(|e| warn!("Table analyze failed: {e}"));
         if is_async {
             info!(
                 "Async table hook job completed for operation {}, table_id={}, table={}",
@@ -135,35 +203,398 @@ impl TableHookTask {
     }
 }
 
-impl SchedulerTask for TableHookTask {
+/// Queued maintenance contains values only. In particular, it must not keep a write's
+/// QueryContext, transaction manager, executor, session or handed-over lock alive.
+pub(super) struct TableHookRequest {
+    pub identity: MaintenanceIdentity,
+    pub target: TableHookTarget,
+    pub recluster_target: Option<TableHookTarget>,
+    recluster_progress: Option<ReclusterProgress>,
+    recluster_again: bool,
+    pub refresh_base: Option<String>,
+    refresh_progress: Option<RefreshProgress>,
+    refresh_again: bool,
+    pub refresh_pending: bool,
+    pub enable_auto_analyze: bool,
+    pub source_query_id: String,
+    pub operation_name: String,
+    pub main_operation_start: Instant,
+    ready_at: [Instant; 3],
+    failures: [u32; 3],
+    blocked_since: [Option<Instant>; 3],
+    turn: usize,
+}
+
+const MAX_ACTION_FAILURES: u32 = 8;
+const MAX_ACTION_BLOCKED: Duration = Duration::from_secs(10 * 60);
+const ACTION_NAMES: [&str; 3] = ["refresh", "analyze", "recluster"];
+
+fn recluster_accumulation_window() -> Duration {
+    Duration::from_secs(
+        GlobalConfig::instance()
+            .query
+            .common
+            .recluster_accumulation_secs,
+    )
+}
+
+enum MaintenanceOutcome {
+    Completed,
+    Progress,
+    ScanProgress,
+    Deferred(Duration),
+}
+
+impl TableHookRequest {
+    fn pending(&self, action: usize) -> bool {
+        match action {
+            0 => self.refresh_pending,
+            1 => self.enable_auto_analyze,
+            _ => self.recluster_target.is_some(),
+        }
+    }
+
+    /// Execute only one batch/round, then relinquish all execution resources. Each action
+    /// has its own backoff; a failing heavy action cannot hold up index or statistics work.
+    pub(super) async fn execute(mut self, cancellation: CancellationToken) -> Option<Self> {
+        let now = Instant::now();
+        let action = (0..3)
+            .map(|offset| (self.turn + offset) % 3)
+            .find(|&action| self.pending(action) && self.ready_at[action] <= now)?;
+        self.turn = (action + 1) % 3;
+        let started = Instant::now();
+        let result = match CatchUnwindFuture::create(
+            self.execute_action(action, cancellation.clone()),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(error) => {
+                // Unwinding can drop carry taken out of a job, or hide a committed refresh.
+                // Never resume that partially mutated progress with a missing frozen scope.
+                self.reset_progress(action);
+                Err(ErrorCode::Internal(format!(
+                    "Maintenance action panicked: {error}"
+                )))
+            }
+        };
+        if cancellation.is_cancelled() {
+            record_unit(ACTION_NAMES[action], "cancelled", started.elapsed());
+            return None;
+        }
+        let outcome = match &result {
+            Ok(MaintenanceOutcome::Completed) => "completed",
+            Ok(MaintenanceOutcome::Progress) => "progress",
+            Ok(MaintenanceOutcome::ScanProgress) => "scan",
+            Ok(MaintenanceOutcome::Deferred(_)) => "deferred",
+            Err(_) => "error",
+        };
+        record_unit(ACTION_NAMES[action], outcome, started.elapsed());
+        if result
+            .as_ref()
+            .is_err_and(|error| error.code() == ErrorCode::ABORTED_QUERY)
+        {
+            self.reset_progress(action);
+        }
+        self.apply_outcome(action, result);
+        (0..3).any(|action| self.pending(action)).then_some(self)
+    }
+
+    fn apply_outcome(&mut self, action: usize, result: Result<MaintenanceOutcome>) {
+        match result {
+            Ok(MaintenanceOutcome::Progress) => {
+                self.failures[action] = 0;
+                self.blocked_since[action] = None;
+            }
+            Ok(MaintenanceOutcome::ScanProgress) => {
+                // A bounded scan moves its cursor but is not evidence that a repeatedly
+                // failing/claimed range was repaired. Do not reset failure/cooldown budgets.
+                if self.blocked_too_long(action) {
+                    self.stop_action(action, "no_progress");
+                }
+            }
+            Ok(MaintenanceOutcome::Deferred(delay)) => {
+                if self.blocked_too_long(action) {
+                    self.stop_action(action, "no_progress");
+                } else {
+                    self.ready_at[action] = Instant::now() + delay;
+                }
+            }
+            Ok(MaintenanceOutcome::Completed) => {
+                self.failures[action] = 0;
+                self.blocked_since[action] = None;
+                match action {
+                    0 => {
+                        self.refresh_pending = self.refresh_again;
+                        self.refresh_again = false;
+                        self.refresh_progress = None;
+                        self.refresh_base = None;
+                    }
+                    1 => self.enable_auto_analyze = false,
+                    _ => {
+                        self.recluster_progress = None;
+                        if self.recluster_again {
+                            self.recluster_again = false;
+                            self.ready_at[2] = Instant::now() + recluster_accumulation_window();
+                        } else {
+                            self.recluster_target = None;
+                        }
+                    }
+                }
+            }
+            Err(e)
+                if matches!(
+                    e.code(),
+                    ErrorCode::UNKNOWN_USER
+                        | ErrorCode::UNKNOWN_ROLE
+                        | ErrorCode::PERMISSION_DENIED
+                        | ErrorCode::AUTHENTICATE_FAILURE
+                        | ErrorCode::UNCLUSTERED_TABLE
+                        | ErrorCode::UNKNOWN_TABLE
+                        | ErrorCode::UNKNOWN_DATABASE
+                ) =>
+            {
+                warn!(table_id = self.target.table_id, action, error :? = e;
+                    "Stop maintenance action because its target or execution identity is no longer valid");
+                self.stop_action(action, "invalid_target_or_identity");
+            }
+            Err(e) => {
+                if action == 2 {
+                    // A failed callback may hide a successful commit. A subsequent
+                    // generation must check replacements absent from the old scope.
+                    // Data and all inline indexes share that commit, even if its result
+                    // is unknown. Do not turn this into an unrelated Refresh demand.
+                    self.recluster_again = true;
+                }
+                self.failures[action] = self.failures[action].saturating_add(1);
+                if self.failures[action] >= MAX_ACTION_FAILURES || self.blocked_too_long(action) {
+                    warn!(table_id = self.target.table_id, action, error :? = e;
+                        "Abandon bounded best-effort maintenance attempt; another notification may retry");
+                    self.stop_action(action, "retry_exhausted");
+                    return;
+                }
+                let delay = Duration::from_secs(1u64 << self.failures[action].min(8))
+                    + Duration::from_millis(rand::random::<u64>() % 1000);
+                self.ready_at[action] = Instant::now() + delay;
+                warn!(table_id = self.target.table_id, action, delay_secs = delay.as_secs(), error :? = e;
+                    "Defer maintenance action without holding execution resources");
+            }
+        }
+    }
+
+    fn reset_progress(&mut self, action: usize) {
+        match action {
+            0 => {
+                self.refresh_progress = None;
+                self.refresh_base = None;
+            }
+            2 => self.recluster_progress = None,
+            _ => {}
+        }
+    }
+
+    fn blocked_too_long(&mut self, action: usize) -> bool {
+        self.blocked_since[action]
+            .get_or_insert_with(Instant::now)
+            .elapsed()
+            >= MAX_ACTION_BLOCKED
+    }
+
+    fn stop_action(&mut self, action: usize, reason: &'static str) {
+        record_stopped(ACTION_NAMES[action], reason);
+        warn!(table_id = self.target.table_id, action = ACTION_NAMES[action], reason;
+            "Stop best-effort maintenance action without claiming completion");
+        self.failures[action] = 0;
+        self.blocked_since[action] = None;
+        self.ready_at[action] = Instant::now();
+        match action {
+            0 => {
+                self.refresh_pending = false;
+                self.refresh_again = false;
+                self.refresh_progress = None;
+                self.refresh_base = None;
+            }
+            1 => self.enable_auto_analyze = false,
+            _ => {
+                self.recluster_target = None;
+                self.recluster_progress = None;
+                self.recluster_again = false;
+            }
+        }
+    }
+
+    async fn execute_action(
+        &mut self,
+        action: usize,
+        cancellation: CancellationToken,
+    ) -> Result<MaintenanceOutcome> {
+        let MaintenanceContext { ctx, tracking } = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return Err(ErrorCode::AbortedQuery("Maintenance scheduler closed")),
+            context = tokio::time::timeout(Duration::from_secs(60), MaintenanceContext::from_identity(&self.identity)) => {
+                context.map_err(|_| ErrorCode::AbortedQuery("Maintenance context creation timed out"))??
+            }
+        };
+        let cancellation_ctx = ctx.clone();
+        ctx.set_enable_auto_analyze(self.enable_auto_analyze);
+        info!(source_query_id = self.source_query_id.as_str(), query_id = ctx.get_id().as_str(),
+            table_id = self.target.table_id, action = ACTION_NAMES[action];
+            "Start async table hook job");
+        let task = TableHookTask {
+            ctx,
+            session_local: false,
+            refresh_base: None,
+            tracking: Some(tracking.clone()),
+            target: self.target.clone(),
+            recluster_target: None,
+            hook_settings: TableHookTaskSettings {
+                compact_after_write: false,
+            },
+            lock_opt: LockTableOption::LockWithRetry,
+            lock_guard: None,
+            operation_name: self.operation_name.clone(),
+            main_operation_start: self.main_operation_start,
+        };
+        run_maintenance_unit(
+            &cancellation_ctx,
+            cancellation,
+            tracking.tracking(async {
+                match action {
+                    0 => task
+                        .execute_refresh_batch(&mut self.refresh_base, &mut self.refresh_progress)
+                        .await
+                        .map(|covered| {
+                            if covered {
+                                MaintenanceOutcome::Completed
+                            } else if task.ctx.written_segment_locations().list().is_empty() {
+                                MaintenanceOutcome::ScanProgress
+                            } else {
+                                MaintenanceOutcome::Progress
+                            }
+                        }),
+                    1 => task
+                        .execute_analyze()
+                        .await
+                        .map(|_| MaintenanceOutcome::Completed),
+                    _ => {
+                        let target = self
+                            .recluster_target
+                            .as_ref()
+                            .ok_or_else(|| ErrorCode::Internal("Missing recluster target"))?;
+                        match task
+                            .execute_recluster_round(target, &mut self.recluster_progress)
+                            .await?
+                        {
+                            ReclusterUnitOutcome::Committed => {
+                                // The new blocks already carry their indexes. Existing
+                                // write/DDL Refresh and Analyze demands remain independent;
+                                // neither their scopes nor covered baselines advance here.
+                                self.ready_at[2] = Instant::now() + Duration::from_millis(100);
+                                Ok(MaintenanceOutcome::Progress)
+                            }
+                            ReclusterUnitOutcome::ScanProgress => {
+                                Ok(MaintenanceOutcome::ScanProgress)
+                            }
+                            ReclusterUnitOutcome::ScopeInvalidated => {
+                                // Foreign metadata-only replacements do not prove that the
+                                // frozen data was reclustered. Discard the invalid scope and
+                                // replan as a bounded retry, not a successful generation or a
+                                // new write. The dirty accumulation window was already served.
+                                self.recluster_progress = None;
+                                Ok(MaintenanceOutcome::Deferred(Duration::from_secs(5)))
+                            }
+                            ReclusterUnitOutcome::Converged => Ok(MaintenanceOutcome::Completed),
+                            ReclusterUnitOutcome::Deferred(delay) => {
+                                Ok(MaintenanceOutcome::Deferred(delay))
+                            }
+                        }
+                    }
+                }
+            }),
+        )
+        .await
+    }
+}
+
+impl TableHookTask {
+    pub(super) async fn into_request(self) -> Result<TableHookRequest> {
+        let now = Instant::now();
+        Ok(TableHookRequest {
+            identity: MaintenanceIdentity::capture(&self.ctx).await?,
+            recluster_progress: None,
+            recluster_again: false,
+            refresh_base: self.refresh_base,
+            refresh_progress: None,
+            refresh_again: false,
+            enable_auto_analyze: self.ctx.get_enable_auto_analyze(),
+            source_query_id: self.ctx.get_id(),
+            target: self.target,
+            recluster_target: self.recluster_target,
+            operation_name: self.operation_name,
+            main_operation_start: self.main_operation_start,
+            refresh_pending: true,
+            ready_at: [now, now, now + recluster_accumulation_window()],
+            failures: [0; 3],
+            blocked_since: [None; 3],
+            turn: 0,
+        })
+    }
+}
+
+impl SchedulerTask for TableHookRequest {
+    fn ready_at(&self) -> Instant {
+        (0..3)
+            .filter(|&action| self.pending(action))
+            .map(|action| self.ready_at[action])
+            .min()
+            .unwrap_or_else(Instant::now)
+    }
+
     fn key(&self) -> TableHookTaskKey {
         TableHookTaskKey {
+            tenant: self.identity.tenant.tenant_name().to_string(),
             catalog: self.target.catalog.clone(),
             table_id: self.target.table_id,
         }
     }
 
-    /// Combine pending inputs while keeping the latest task's execution context.
+    /// Combine pending values, never mutate another query's context.
     fn merge(&mut self, mut other: Self) {
-        other.hook_settings.merge(self.hook_settings);
-
-        other
-            .ctx
-            .written_segment_locations()
-            .extend(self.ctx.written_segment_locations().list());
-
-        let compaction_num_block_hint = self
-            .ctx
-            .get_compaction_num_block_hint(&self.target.table)
-            .saturating_add(other.ctx.get_compaction_num_block_hint(&other.target.table));
-        if compaction_num_block_hint > 0 {
-            other
-                .ctx
-                .set_compaction_num_block_hint(&other.target.table, compaction_num_block_hint);
+        // Continue the already-claimed frozen scope. New demand gets a subsequent FullCheck
+        // rather than restarting a large in-flight scan on every write.
+        if self.refresh_progress.is_some() {
+            other.refresh_progress = self.refresh_progress.take();
+            other.refresh_base = self.refresh_base.take();
+            other.refresh_again = true;
+        } else if self.refresh_pending {
+            // Combining different base snapshots cannot be ordered by UUID. Widen safely.
+            other.refresh_base = None;
+        }
+        other.refresh_again |= self.refresh_again;
+        other.enable_auto_analyze |= self.enable_auto_analyze;
+        other.refresh_pending |= self.refresh_pending;
+        other.turn = self.turn;
+        for action in 0..3 {
+            // New notifications do not bypass a failing action's backoff.
+            other.ready_at[action] = other.ready_at[action].max(self.ready_at[action]);
+            other.failures[action] = other.failures[action].max(self.failures[action]);
+            other.blocked_since[action] =
+                self.blocked_since[action].or(other.blocked_since[action]);
         }
 
-        if self.ctx.get_enable_auto_analyze() {
-            other.ctx.set_enable_auto_analyze(true);
+        // Preserve active scope/carry. Compactions arriving during it request one
+        // subsequent generation, never widen or restart the current job.
+        if self.recluster_progress.is_some() {
+            other.recluster_again |= other.recluster_target.is_some();
+            other.recluster_progress = self.recluster_progress.take();
+        }
+        other.recluster_again |= self.recluster_again;
+        if self.recluster_target.is_some() {
+            // Accumulate from the first dirty notification, not the most recent write.
+            other.ready_at[2] = self.ready_at[2];
+        }
+        if other.recluster_target.is_none() {
+            other.recluster_target = self.recluster_target.take();
         }
 
         other.main_operation_start = self.main_operation_start;
@@ -184,22 +615,40 @@ impl TableHookTaskSettings {
             compact_after_write: compact_after_write_enabled(ctx),
         }
     }
+}
 
-    fn merge(&mut self, other: Self) {
-        self.compact_after_write |= other.compact_after_write;
-    }
+/// Run maintenance work without adding its reads and writes to the progress of `ctx`. On an
+/// autocommit task the context still belongs to the triggering statement.
+pub(super) async fn keep_progress<T>(ctx: &Arc<QueryContext>, work: impl Future<Output = T>) -> T {
+    let write_progress = ctx.get_write_progress();
+    let write_progress_value = write_progress.as_ref().get_values();
+    let scan_progress = ctx.get_scan_progress();
+    let scan_progress_value = scan_progress.as_ref().get_values();
+
+    let output = work.await;
+
+    write_progress.set(&write_progress_value);
+    scan_progress.set(&scan_progress_value);
+    output
 }
 
 #[cfg(test)]
 mod tests {
+    use futures::TryStreamExt;
+
     use super::*;
     use crate::sessions::TableContextSettings;
+    use crate::sessions::TableContextTableAccess;
     use crate::test_kits::TestFixture;
 
     fn table_hook_task(ctx: Arc<QueryContext>, table: &str) -> TableHookTask {
         let hook_settings = TableHookTaskSettings::create(&ctx);
         TableHookTask {
             ctx,
+            session_local: false,
+            refresh_base: None,
+            tracking: None,
+            recluster_target: None,
             target: TableHookTarget {
                 catalog: "default".to_string(),
                 database: "default".to_string(),
@@ -215,37 +664,311 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_table_hook_task_merge_accumulates_compaction_hint() -> Result<()> {
+    async fn test_table_hook_request_merge_releases_write_context() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let old_ctx = fixture.new_query_ctx().await?;
         let latest_ctx = fixture.new_query_ctx().await?;
 
-        old_ctx.set_compaction_num_block_hint("t", 7);
-        latest_ctx.set_compaction_num_block_hint("t", 5);
-        let mut task = table_hook_task(old_ctx, "t");
-        task.merge(table_hook_task(latest_ctx, "t"));
+        let old_weak = Arc::downgrade(&old_ctx);
+        let mut old_task = table_hook_task(old_ctx, "t");
+        old_task.refresh_base = Some("old_snapshot".into());
+        old_task.recluster_target = Some(old_task.target.clone());
+        let mut task = old_task.into_request().await?;
+        let dirty_deadline = task.ready_at[2];
+        let mut latest = table_hook_task(latest_ctx, "t");
+        latest.refresh_base = Some("new_snapshot".into());
+        task.merge(latest.into_request().await?);
+        assert!(task.recluster_target.is_some());
+        assert_eq!(
+            task.ready_at[2], dirty_deadline,
+            "new writes must not postpone the first dirty deadline"
+        );
 
-        assert_eq!(task.ctx.get_compaction_num_block_hint("t"), 12);
+        assert!(
+            task.refresh_base.is_none(),
+            "merging incomparable bases must widen to FullCheck"
+        );
+        assert!(
+            old_weak.upgrade().is_none(),
+            "queued values must not retain the write context"
+        );
+        let maintenance = MaintenanceContext::from_identity(&task.identity).await?;
+        assert!(maintenance.ctx.is_automatic_maintenance());
+        assert!(maintenance.ctx.get_settings().get_max_threads()? <= 2);
+        let reservation = crate::table_maintenance::MaintenanceResources::reserve()?;
+        assert!(
+            crate::table_maintenance::MaintenanceResources::reserve().is_err(),
+            "all action memory is reserved"
+        );
+        drop(reservation);
+        assert!(
+            crate::table_maintenance::MaintenanceResources::reserve().is_ok(),
+            "dropping an action releases memory capacity"
+        );
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_table_hook_task_merge_preserves_hook_settings() -> Result<()> {
+    async fn test_bounded_failures_survive_notifications_and_allow_new_attempts() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut task = table_hook_task(ctx.clone(), "t").into_request().await?;
+        task.enable_auto_analyze = true;
+        task.recluster_target = Some(task.target.clone());
+        for attempt in 1..=MAX_ACTION_FAILURES {
+            task.apply_outcome(0, Err(ErrorCode::Internal("persistent index error")));
+            if attempt < MAX_ACTION_FAILURES {
+                assert!(task.refresh_pending);
+                let deadline = task.ready_at[0];
+                task.merge(table_hook_task(ctx.clone(), "t").into_request().await?);
+                assert_eq!(task.failures[0], attempt);
+                assert!(task.ready_at[0] >= deadline);
+            }
+        }
+        assert!(
+            !task.refresh_pending,
+            "fresh writes must not reset the failure limit"
+        );
+        assert!(
+            task.enable_auto_analyze,
+            "a failing index must not stop statistics"
+        );
+        assert!(task.recluster_target.is_some());
+        task.merge(table_hook_task(ctx, "t").into_request().await?);
+        assert!(
+            task.refresh_pending,
+            "a later notification may open a fresh attempt"
+        );
+        assert_eq!(task.failures[0], 0);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_scanning_cannot_reset_a_failing_attempt_budget() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut task = table_hook_task(ctx, "t").into_request().await?;
+        task.failures[0] = MAX_ACTION_FAILURES - 1;
+        task.apply_outcome(0, Ok(MaintenanceOutcome::ScanProgress));
+        assert_eq!(task.failures[0], MAX_ACTION_FAILURES - 1);
+        task.apply_outcome(0, Err(ErrorCode::Internal("unrepairable range")));
+        assert!(
+            !task.refresh_pending,
+            "scan/error cycles must eventually relinquish the mailbox"
+        );
+
+        task.recluster_target = Some(task.target.clone());
+        task.blocked_since[2] = Some(Instant::now() - MAX_ACTION_BLOCKED);
+        task.apply_outcome(2, Ok(MaintenanceOutcome::ScanProgress));
+        assert!(
+            task.recluster_target.is_none(),
+            "repeated scans must not look like committed maintenance"
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_no_progress_is_bounded_but_real_progress_resets_cooldown() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut task = table_hook_task(ctx, "t").into_request().await?;
+        task.recluster_target = Some(task.target.clone());
+        task.blocked_since[2] = Some(Instant::now() - MAX_ACTION_BLOCKED);
+        task.apply_outcome(2, Ok(MaintenanceOutcome::Deferred(Duration::from_secs(1))));
+        assert!(task.recluster_target.is_none());
+        assert!(task.refresh_pending);
+
+        task.failures[0] = MAX_ACTION_FAILURES - 1;
+        task.blocked_since[0] = Some(Instant::now() - MAX_ACTION_BLOCKED);
+        task.apply_outcome(0, Ok(MaintenanceOutcome::Progress));
+        assert_eq!(task.failures[0], 0);
+        assert!(task.blocked_since[0].is_none());
+        task.apply_outcome(0, Err(ErrorCode::Internal("transient error")));
+        assert!(task.refresh_pending);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_refresh_replans_after_history_gc_and_definition_change() -> Result<()> {
+        use databend_common_storages_fuse::FuseTable;
+        use databend_common_storages_fuse::io::FuseCaches;
+
+        let fixture = TestFixture::setup().await?;
+        crate::interpreters::TableHookScheduler::try_instance()
+            .unwrap()
+            .shutdown()
+            .await;
+        fixture.execute_command("CREATE DATABASE hook_gc").await?;
+        fixture
+            .execute_command(
+                "CREATE TABLE hook_gc.t(content STRING) ROW_PER_BLOCK=1 BLOCK_PER_SEGMENT=1000",
+            )
+            .await?;
+        fixture
+            .execute_command(
+                "INSERT INTO hook_gc.t SELECT concat('alpha-', to_string(number)) FROM numbers(40)",
+            )
+            .await?;
+        fixture
+            .execute_command("CREATE ASYNC INVERTED INDEX inv ON hook_gc.t(content)")
+            .await?;
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.set_enable_auto_analyze(false);
+        let table = ctx.get_table("default", "hook_gc", "t").await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let source = fuse.snapshot_loc().unwrap();
+        let mut task = table_hook_task(ctx, "t");
+        task.target.database = "hook_gc".into();
+        task.target.table_id = table.get_id();
+        let request = task.into_request().await?;
+        let request = request.execute(CancellationToken::new()).await.unwrap();
+        assert!(request.refresh_progress.is_some());
+        let current = fixture
+            .new_query_ctx()
+            .await?
+            .get_table("default", "hook_gc", "t")
+            .await?;
+        assert_ne!(
+            FuseTable::try_from_table(current.as_ref())?.snapshot_loc(),
+            Some(source.clone())
+        );
+        // Simulate history GC after a committed partial batch, never deleting the head.
+        fuse.get_operator().delete(&source).await?;
+        FuseCaches::instance().snapshots.evict(&source);
+        let request = request.execute(CancellationToken::new()).await.unwrap();
+        assert!(request.refresh_pending);
+        assert!(
+            request.refresh_progress.is_none(),
+            "missing history must replan, not confirm coverage"
+        );
+
+        let mut request = request.execute(CancellationToken::new()).await;
+        fixture
+            .execute_command("DROP INVERTED INDEX inv ON hook_gc.t")
+            .await?;
+        fixture
+            .execute_command(
+                "CREATE ASYNC INVERTED INDEX inv ON hook_gc.t(content) tokenizer='english'",
+            )
+            .await?;
+        // Model a fresh notification after DDL; it must invalidate any old definition baseline.
+        if request.is_none() {
+            let ctx = fixture.new_query_ctx().await?;
+            ctx.set_enable_auto_analyze(false);
+            let mut task = table_hook_task(ctx, "t");
+            task.target.database = "hook_gc".into();
+            task.target.table_id = table.get_id();
+            request = Some(task.into_request().await?);
+        }
+        for _ in 0..10 {
+            if let Some(unit) = request.take() {
+                request = unit.execute(CancellationToken::new()).await;
+            }
+        }
+        assert!(request.is_none());
+        let blocks = fixture
+            .execute_query("SELECT * FROM hook_gc.t WHERE match(content, 'alpha')")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(
+            blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+            40
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_queued_refresh_follows_rename_but_not_same_name_recreation() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        // Drive the captured request explicitly so the DDL interleaving is deterministic.
+        crate::interpreters::TableHookScheduler::try_instance()
+            .unwrap()
+            .shutdown()
+            .await;
+        fixture
+            .execute_command("CREATE DATABASE hook_lifecycle")
+            .await?;
+        fixture
+            .execute_command("CREATE TABLE hook_lifecycle.t(content STRING)")
+            .await?;
+        fixture
+            .execute_command("INSERT INTO hook_lifecycle.t VALUES ('alpha')")
+            .await?;
+        fixture
+            .execute_command("CREATE ASYNC INVERTED INDEX inv ON hook_lifecycle.t(content)")
+            .await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let table = ctx.get_table("default", "hook_lifecycle", "t").await?;
+        let mut task = table_hook_task(ctx, "t");
+        task.target.database = "hook_lifecycle".into();
+        task.target.table_id = table.get_id();
+        let mut request = Some(task.into_request().await?);
+        fixture
+            .execute_command("ALTER TABLE hook_lifecycle.t RENAME TO renamed")
+            .await?;
+        for _ in 0..8 {
+            if let Some(unit) = request.take() {
+                request = unit.execute(CancellationToken::new()).await;
+            }
+        }
+        assert!(
+            request.is_none(),
+            "one block must finish within the bounded batches"
+        );
+        let blocks = fixture
+            .execute_query("SELECT * FROM hook_lifecycle.renamed WHERE match(content, 'alpha')")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(
+            blocks.iter().map(|block| block.num_rows()).sum::<usize>(),
+            1
+        );
+
+        let ctx = fixture.new_query_ctx().await?;
+        let mut old = table_hook_task(ctx, "renamed");
+        old.target.database = "hook_lifecycle".into();
+        old.target.table_id = table.get_id();
+        let old = old.into_request().await?;
+        fixture
+            .execute_command("DROP TABLE hook_lifecycle.renamed")
+            .await?;
+        fixture
+            .execute_command("CREATE TABLE hook_lifecycle.renamed(content STRING)")
+            .await?;
+        fixture
+            .execute_command("INSERT INTO hook_lifecycle.renamed VALUES ('new-only')")
+            .await?;
+        fixture
+            .execute_command("CREATE ASYNC INVERTED INDEX inv ON hook_lifecycle.renamed(content)")
+            .await?;
+        assert!(old.execute(CancellationToken::new()).await.is_none());
+        let error = fixture
+            .execute_command("SELECT * FROM hook_lifecycle.renamed WHERE match(content, 'new')")
+            .await
+            .expect_err("an old table's notification must not refresh its replacement");
+        assert!(
+            error
+                .to_string()
+                .contains("missing or uses an outdated format"),
+            "{error}"
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_table_hook_request_merge_preserves_analyze_demand() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let old_ctx = fixture.new_query_ctx().await?;
         let latest_ctx = fixture.new_query_ctx().await?;
 
-        old_ctx
-            .get_settings()
-            .set_setting("enable_compact_after_write".to_string(), "1".to_string())?;
-        latest_ctx
-            .get_settings()
-            .set_setting("enable_compact_after_write".to_string(), "0".to_string())?;
+        old_ctx.set_enable_auto_analyze(true);
+        latest_ctx.set_enable_auto_analyze(false);
+        let mut task = table_hook_task(old_ctx, "t").into_request().await?;
+        task.merge(table_hook_task(latest_ctx, "t").into_request().await?);
 
-        let mut task = table_hook_task(old_ctx, "t");
-        task.merge(table_hook_task(latest_ctx, "t"));
-
-        assert!(task.hook_settings.compact_after_write);
+        assert!(task.enable_auto_analyze);
         Ok(())
     }
 }

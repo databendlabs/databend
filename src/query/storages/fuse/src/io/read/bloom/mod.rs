@@ -16,7 +16,6 @@ pub mod block_filter_reader;
 mod column_filter_reader;
 
 pub use block_filter_reader::BloomBlockFilterReader;
-pub(crate) use column_filter_reader::BloomColumnFilterReader;
 
 /// Position of a column inside one bloom index file (`BloomIndexMeta::columns`).
 ///

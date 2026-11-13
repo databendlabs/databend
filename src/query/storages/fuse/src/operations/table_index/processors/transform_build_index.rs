@@ -114,7 +114,8 @@ impl Transform for BuildIndex {
                         VectorIndexBuilder::try_create(&indexes, self.spec.schema.clone(), false)?
                             .ok_or_else(|| {
                                 ErrorCode::RefreshIndexError("No vector index to refresh")
-                            })?;
+                            })?
+                            .with_parallel_build(!self.ctx.is_automatic_maintenance());
                     builder.add_block(&index_block)?;
                     IndexArtifact::PendingVector(builder.finalize_block(&self.locations)?)
                 }
