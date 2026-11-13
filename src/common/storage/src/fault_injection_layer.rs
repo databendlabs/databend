@@ -27,18 +27,19 @@
 //! optionally expires after a number of hits; the [`FaultHandle`] returned on install
 //! reports how often the rule fired, so a test can assert the fault was actually exercised.
 //!
-//! A rule is process-global, so its path must scope it to the fixture that installed it: other
+//! A rule is process-global, so it must be scoped to the fixture that installed it: other
 //! tests in the same binary keep doing storage IO while it is installed, and they must not see
-//! it. The rule is removed when its [`FaultHandle`] is dropped, so a failing test cannot leave
-//! it behind for the rest of the process.
+//! it. The path is matched as a prefix, and [`FaultRule::in_root`] binds the rule to one
+//! storage root, since fixtures with separate roots and metastores can share a relative table
+//! prefix. The rule is removed when its [`FaultHandle`] is dropped, so a failing test cannot
+//! leave it behind for the rest of the process.
 //!
 //! ```ignore
 //! let prefix = table_prefix(&fixture);
-//! let fault = FaultInjection::install(FaultRule::new(
-//!     FaultOp::Write,
-//!     format!("{prefix}/_ss/"),
-//!     FaultKind::Permanent,
-//! ));
+//! let fault = FaultInjection::install(
+//!     FaultRule::new(FaultOp::Write, format!("{prefix}/_ss/"), FaultKind::Permanent)
+//!         .in_root(fixture.storage_root()),
+//! );
 //! assert!(insert(...).await.is_err());
 //! assert_eq!(fault.hits(), 1);
 //! fault.remove();
@@ -69,6 +70,7 @@ use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
+use opendal::raw::normalize_root;
 use opendal::raw::oio;
 
 /// The storage operation a rule applies to.
@@ -109,12 +111,18 @@ impl FaultKind {
 /// `path_contains` is matched as a prefix, so a rule is anchored to the storage prefix of the
 /// fixture that installed it. A pattern like `_ss/` does not match another fixture's
 /// `1/11/_ss/…`, which a substring match would.
+///
+/// The path an operator reports is relative to its root, and fixtures with separate roots and
+/// separate metastores can hand out the same relative table prefix. `root`, when set,
+/// restricts the rule to operators with that storage root; see [`FaultRule::in_root`].
 #[derive(Debug, Clone)]
 pub struct FaultRule {
     pub op: FaultOp,
     pub path_contains: String,
     pub kind: FaultKind,
     pub remaining: Option<usize>,
+    /// Normalized as opendal does (`/a/b/`), compared with the operator's reported root.
+    pub root: Option<String>,
 }
 
 impl FaultRule {
@@ -124,12 +132,20 @@ impl FaultRule {
             path_contains: path_contains.into(),
             kind,
             remaining: None,
+            root: None,
         }
     }
 
     /// Fire at most `times` times, then stop matching.
     pub fn times(mut self, times: usize) -> Self {
         self.remaining = Some(times);
+        self
+    }
+
+    /// Fire only for operators whose storage root is `root` (a fixture's `storage_root()`).
+    /// Without it, a rule reaches every operator in the process whose relative paths match.
+    pub fn in_root(mut self, root: impl AsRef<str>) -> Self {
+        self.root = Some(normalize_root(root.as_ref()));
         self
     }
 }
@@ -142,8 +158,11 @@ struct RuleState {
 
 impl RuleState {
     /// Returns the error to inject if this rule matches and has budget left.
-    fn fire(&self, op: FaultOp, path: &str) -> Option<Error> {
+    fn fire(&self, op: FaultOp, root: &str, path: &str) -> Option<Error> {
         if self.rule.op != op || !path.starts_with(&self.rule.path_contains) {
+            return None;
+        }
+        if self.rule.root.as_deref().is_some_and(|r| r != root) {
             return None;
         }
         if let Some(remaining) = &self.remaining {
@@ -203,13 +222,13 @@ impl FaultInjection {
         ENABLED.store(false, Ordering::Release);
     }
 
-    fn check(op: FaultOp, path: &str) -> Result<()> {
+    fn check(op: FaultOp, root: &str, path: &str) -> Result<()> {
         if !ENABLED.load(Ordering::Relaxed) {
             return Ok(());
         }
         let rules = RULES.lock().unwrap();
         for rule in rules.iter() {
-            if let Some(err) = rule.fire(op, path) {
+            if let Some(err) = rule.fire(op, root, path) {
                 return Err(err);
             }
         }
@@ -254,12 +273,17 @@ impl<A: Access> Layer<A> for FaultInjectionLayer {
     type LayeredAccess = FaultInjectionAccessor<A>;
 
     fn layer(&self, inner: A) -> Self::LayeredAccess {
-        FaultInjectionAccessor { inner }
+        // The storage root of the operator this layer sits in; rules can be restricted to it.
+        // Services differ in whether they report it with a trailing slash, so normalize it
+        // the same way `FaultRule::in_root` does.
+        let root = normalize_root(&inner.info().root()).into();
+        FaultInjectionAccessor { inner, root }
     }
 }
 
 pub struct FaultInjectionAccessor<A> {
     inner: A,
+    root: Arc<str>,
 }
 
 impl<A> Debug for FaultInjectionAccessor<A> {
@@ -280,28 +304,31 @@ impl<A: Access> LayeredAccess for FaultInjectionAccessor<A> {
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        FaultInjection::check(FaultOp::Read, path)?;
+        FaultInjection::check(FaultOp::Read, &self.root, path)?;
         self.inner.read(path, args).await
     }
 
     async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
-        FaultInjection::check(FaultOp::Write, path)?;
+        FaultInjection::check(FaultOp::Write, &self.root, path)?;
         self.inner.write(path, args).await
     }
 
     async fn stat(&self, path: &str, args: OpStat) -> Result<RpStat> {
-        FaultInjection::check(FaultOp::Stat, path)?;
+        FaultInjection::check(FaultOp::Stat, &self.root, path)?;
         self.inner.stat(path, args).await
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
-        FaultInjection::check(FaultOp::List, path)?;
+        FaultInjection::check(FaultOp::List, &self.root, path)?;
         self.inner.list(path, args).await
     }
 
     async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
         let (rp, deleter) = self.inner.delete().await?;
-        Ok((rp, FaultInjectionDeleter { inner: deleter }))
+        Ok((rp, FaultInjectionDeleter {
+            inner: deleter,
+            root: self.root.clone(),
+        }))
     }
 }
 
@@ -309,11 +336,12 @@ impl<A: Access> LayeredAccess for FaultInjectionAccessor<A> {
 /// fault fires.
 pub struct FaultInjectionDeleter<D> {
     inner: D,
+    root: Arc<str>,
 }
 
 impl<D: oio::Delete> oio::Delete for FaultInjectionDeleter<D> {
     fn delete(&mut self, path: &str, args: OpDelete) -> Result<()> {
-        FaultInjection::check(FaultOp::Delete, path)?;
+        FaultInjection::check(FaultOp::Delete, &self.root, path)?;
         self.inner.delete(path, args)
     }
 
@@ -333,7 +361,11 @@ mod tests {
     static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     fn operator() -> Operator {
-        Operator::new(Memory::default())
+        operator_in("/")
+    }
+
+    fn operator_in(root: &str) -> Operator {
+        Operator::new(Memory::default().root(root))
             .unwrap()
             .layer(FaultInjectionLayer)
             .finish()
@@ -444,10 +476,44 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn rule_bound_to_a_root_does_not_fire_for_another_root() -> Result<()> {
+        let _serial = SERIAL.lock().await;
+        FaultInjection::clear();
+        // Two fixtures with their own storage roots and metastores hand out the same relative
+        // table prefix; a rule installed by one must not fail the other's IO.
+        let op_a = operator_in("/fixture-a");
+        let op_b = operator_in("/fixture-b");
+        op_a.write("1/11/_ss/a", "x").await?;
+        op_b.write("1/11/_ss/b", "y").await?;
+
+        let fault = FaultInjection::install(
+            FaultRule::new(FaultOp::Read, "1/11/_ss/", FaultKind::NotFound).in_root("/fixture-a"),
+        );
+        assert!(op_a.read("1/11/_ss/a").await.is_err());
+        assert_eq!(
+            op_b.read("1/11/_ss/b").await?.to_vec(),
+            b"y",
+            "the same relative path under another root stays untouched"
+        );
+        assert_eq!(fault.hits(), 1);
+        drop(fault);
+
+        // The root is compared in its normalized form.
+        let fault = FaultInjection::install(
+            FaultRule::new(FaultOp::Read, "1/11/_ss/", FaultKind::NotFound).in_root("fixture-b/"),
+        );
+        assert!(op_b.read("1/11/_ss/b").await.is_err());
+        assert_eq!(op_a.read("1/11/_ss/a").await?.to_vec(), b"x");
+        assert_eq!(fault.hits(), 1);
+        Ok(())
+    }
+
+    // No `clear()` here: the empty pattern is rejected before the registry is touched, and
+    // clearing it without `SERIAL` would erase rules of the tests running next to this one.
     #[test]
     #[should_panic(expected = "a fault rule must be scoped to a path")]
     fn unscoped_rule_is_rejected() {
-        FaultInjection::clear();
         let _fault =
             FaultInjection::install(FaultRule::new(FaultOp::Write, "", FaultKind::Permanent));
     }
