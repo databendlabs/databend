@@ -215,6 +215,246 @@ with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f 
 2
 4
 
+# Regression for #21003: subqueries must read the active recursive generation.
+# Filter subquery: assert every generated row, not only the bound plan.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT m.n + 1 FROM m WHERE m.n < 3 AND m.n IN (SELECT n FROM m)
+)
+SELECT n FROM m;
+----
+0
+1
+2
+3
+
+# Projection subquery with an aliased recursive reader; exercise both CASE branches.
+query II
+WITH RECURSIVE m(n, v) AS (
+    SELECT 0, v FROM (VALUES (1::BIGINT), (2::BIGINT)) input(v)
+    UNION ALL
+    SELECT m.n + 1,
+           CASE WHEN m.v + 1 NOT IN (SELECT m2.v FROM m m2) THEN m.v + 2 ELSE m.v + 1 END
+    FROM m WHERE m.n < 3
+)
+SELECT n, v FROM m;
+----
+0 1
+0 2
+1 2
+1 4
+2 4
+2 6
+3 6
+3 8
+
+# Every reader sees all rows in the current generation, not accumulated history.
+# Reading earlier generations would make NOT IN stop both sequences too early.
+query II
+WITH RECURSIVE m(n) AS (
+    SELECT n FROM (VALUES (3), (13)) input(n)
+    UNION ALL
+    SELECT m.n - 1 FROM m
+    WHERE m.n % 10 > 0 AND m.n + 1 NOT IN (SELECT m2.n FROM m m2)
+)
+SELECT count(*), sum(n) FROM m;
+----
+8 52
+
+# Derived tables inside the subquery preserve the recursive scope.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT x.n + 1 FROM (SELECT n FROM m) x WHERE x.n < 3 AND x.n IN (
+        SELECT n FROM (SELECT n FROM m) nested
+    )
+)
+SELECT n FROM m;
+----
+0
+1
+2
+3
+
+# Non-recursive CTE expansion inside the subquery preserves the recursive scope.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (
+        WITH q AS (SELECT n FROM m) SELECT n FROM q
+    )
+)
+SELECT n FROM m;
+----
+0
+1
+2
+3
+
+# Independent inner recursion restores the outer recursive scope afterwards.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND (
+        WITH RECURSIVE other(x) AS (
+            SELECT 1 UNION ALL SELECT x + 1 FROM other WHERE x < 2
+        )
+        SELECT max(x) FROM other
+    ) = 2 AND n IN (SELECT n FROM m)
+)
+SELECT n FROM m;
+----
+0
+1
+2
+3
+
+# Correlated EXISTS must read the current generation, just like IN.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT m.n + 1 FROM m
+    WHERE m.n < 3 AND EXISTS (SELECT 1 FROM m m2 WHERE m2.n = m.n)
+)
+SELECT n FROM m;
+----
+0
+1
+2
+3
+
+# Binding a view restores the caller's recursive scope for its sibling subquery.
+statement ok
+CREATE OR REPLACE VIEW r_cte_subquery_scope_view AS SELECT 0 AS n;
+
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND EXISTS (
+        SELECT 1 FROM r_cte_subquery_scope_view v
+        WHERE v.n IN (SELECT n FROM m)
+    )
+)
+SELECT n FROM m;
+----
+0
+1
+
+statement ok
+DROP VIEW r_cte_subquery_scope_view;
+
+# Explicit materialization executes while binding, not once per recursive step.
+statement error AS MATERIALIZED CTEs cannot reference the active recursive CTE
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (
+        WITH q AS MATERIALIZED (SELECT n FROM m) SELECT n FROM q
+    )
+)
+SELECT n FROM m;
+
+# The same restriction applies through scalar subqueries and CTE expansion.
+statement error AS MATERIALIZED CTEs cannot reference the active recursive CTE
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (
+        WITH q AS MATERIALIZED (SELECT (SELECT n FROM m) AS n) SELECT n FROM q
+    )
+)
+SELECT n FROM m;
+
+statement error AS MATERIALIZED CTEs cannot reference the active recursive CTE
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (
+        WITH q AS (SELECT n FROM m), r AS MATERIALIZED (SELECT n FROM q)
+        SELECT n FROM r
+    )
+)
+SELECT n FROM m;
+
+# Auto-materialized pipeline producers must be rebuilt for each generation.
+statement ok
+SET enable_auto_materialize_cte = 1;
+
+# An explicit producer cannot hide its recursive dependency behind an automatic one.
+statement error AS MATERIALIZED CTEs cannot reference the active recursive CTE
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (
+        WITH q AS (SELECT n FROM m),
+             r AS MATERIALIZED (SELECT a.n FROM q a JOIN q b ON a.n = b.n)
+        SELECT n FROM r
+    )
+)
+SELECT n FROM m;
+
+query II
+WITH RECURSIVE m(n) AS (
+    SELECT n FROM (VALUES (0), (10)) input(n)
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n % 10 < 3 AND n IN (
+        WITH q AS (SELECT n FROM m)
+        SELECT a.n FROM q a JOIN q b ON a.n = b.n
+    )
+)
+SELECT count(*), sum(n) FROM m;
+----
+8 52
+
+statement ok
+UNSET enable_auto_materialize_cte;
+
+# A generation-independent materialized CTE in a derived table is still allowed.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT m.n + q.step FROM m JOIN (
+        WITH q AS MATERIALIZED (SELECT 1 AS step) SELECT step FROM q
+    ) q ON true WHERE m.n < 3
+)
+SELECT n FROM m;
+----
+0
+1
+2
+3
+
+# Explicit materialization outside the recursive member still reads the full CTE.
+query I
+WITH RECURSIVE m(n) AS (
+    SELECT 0 UNION ALL SELECT n + 1 FROM m WHERE n < 3
+), q AS MATERIALIZED (SELECT n FROM m)
+SELECT n FROM q;
+----
+0
+1
+2
+3
+
+# Leaving the recursive member restores full-CTE expansion in the main query.
+query II
+WITH RECURSIVE m(n) AS (
+    SELECT 0
+    UNION ALL
+    SELECT n + 1 FROM m WHERE n < 3 AND n IN (SELECT n FROM m)
+)
+SELECT (SELECT count(*) FROM m), count(*) FROM m;
+----
+4 4
+
 # recursive cte with normal cte
 statement ok
 create or replace table t1(a int);

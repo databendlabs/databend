@@ -94,9 +94,6 @@ pub struct Binder {
     /// The `ExpressionScanContext` is used to store the information of
     /// expression scan and hash join build cache.
     pub expression_scan_context: ExpressionScanContext,
-    /// Name of the recursive CTE whose recursive branch is currently being bound.
-    /// Only that CTE should treat self references as `RecursiveCteScan`.
-    pub bind_recursive_cte: Option<String>,
     pub m_cte_table_name: HashMap<String, String>,
     /// Binder-local table instances that take precedence over catalog resolution.
     pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
@@ -135,7 +132,6 @@ impl Binder {
             name_resolution_ctx,
             metadata,
             expression_scan_context: ExpressionScanContext::new(),
-            bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
             pre_resolved_tables: HashMap::new(),
             definition_scope: DefinitionScope::session(),
@@ -948,10 +944,6 @@ impl Binder {
         )?;
         let (scalar, _) = *type_checker.resolve(expr)?;
         Ok(scalar)
-    }
-
-    pub fn set_bind_recursive_cte(&mut self, val: Option<String>) {
-        self.bind_recursive_cte = val;
     }
 
     pub fn recursive_cte_column_type(data_type: &DataType) -> DataType {

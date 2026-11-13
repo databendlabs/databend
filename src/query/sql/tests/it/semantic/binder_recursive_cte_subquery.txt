@@ -1,0 +1,252 @@
+=== recursive_reference_in_filter ===
+description: IN subqueries must scan the active recursive CTE, not expand it again.
+sql: WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL SELECT m.n + 1 FROM m WHERE m.n < 3 AND m.n IN (SELECT n FROM m)) SELECT count(*) FROM m
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#5)]
+    └── UnionAll
+        ├── output: [0 (#4)]
+        ├── left: [CAST(0 (#0) AS UInt64)]
+        ├── right: [n + 1 (#3)]
+        ├── cte_scan_names: ["m"]
+        ├── logical_recursive_cte_id: Some(0)
+        ├── EvalScalar
+        │   ├── scalars: [0 AS (#0)]
+        │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        └── EvalScalar
+            ├── scalars: [plus(n (#1), 1) AS (#3)]
+            └── Filter
+                ├── filters: [lt(n (#1), 3), SUBQUERY AS (#2)]
+                ├── subquerys
+                │   └── Subquery (Any)
+                │       ├── compare_op: Equal
+                │       ├── output_column: n (#2)
+                │       └── EvalScalar
+                │           ├── scalars: [n (#2) AS (#2)]
+                │           └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "2", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+                └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "1", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+
+
+=== recursive_reference_in_projection ===
+description: Aliased recursive references in CASE/NOT IN inherit the recursive scope.
+sql: WITH RECURSIVE m(n, v) AS (SELECT 0, 1::BIGINT UNION ALL SELECT m.n + 1, CASE WHEN m.v + 1 NOT IN (SELECT m2.v FROM m m2) THEN m.v + 2 ELSE m.v + 1 END FROM m WHERE m.n < 3) SELECT count(*), max(v) FROM m
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#10) AS (#10), max(v) (#11) AS (#11)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#10), max(1 (#9)) AS (#11)]
+    └── EvalScalar
+        ├── scalars: [1 (#9) AS (#9)]
+        └── UnionAll
+            ├── output: [0 (#8), 1 (#9)]
+            ├── left: [CAST(0 (#0) AS UInt64), 1 (#1)]
+            ├── right: [n + 1 (#6), CASE WHEN m.v + 1 NOT IN(SELECT m2.v FROM m AS m2) THEN m.v + 2 ELSE m.v + 1 END (#7)]
+            ├── cte_scan_names: ["m"]
+            ├── logical_recursive_cte_id: Some(0)
+            ├── EvalScalar
+            │   ├── scalars: [0 AS (#0), 1 AS (#1)]
+            │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            └── EvalScalar
+                ├── scalars: [plus(n (#2), 1) AS (#6), if(not(SUBQUERY AS (#5)), plus(v (#3), 2), plus(v (#3), 1)) AS (#7)]
+                ├── subquerys
+                │   └── Subquery (Any)
+                │       ├── compare_op: Equal
+                │       ├── output_column: v (#5)
+                │       └── EvalScalar
+                │           ├── scalars: [v (#5) AS (#5)]
+                │           └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "4", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }, DataField { name: "5", default_expr: None, data_type: Number(Int64), computed_expr: None, auto_increment_expr: None }], table_name: "m2", logical_recursive_cte_id: Some(0) })
+                └── Filter
+                    ├── filters: [lt(n (#2), 3)]
+                    └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "2", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }, DataField { name: "3", default_expr: None, data_type: Number(Int64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+
+
+=== recursive_reference_in_derived_table ===
+description: Derived tables inside scalar subqueries preserve the recursive scope.
+sql: WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL SELECT x.n + 1 FROM (SELECT n FROM m) x WHERE x.n < 3 AND x.n IN (SELECT n FROM (SELECT n FROM m) nested)) SELECT count(*) FROM m
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#5)]
+    └── UnionAll
+        ├── output: [0 (#4)]
+        ├── left: [CAST(0 (#0) AS UInt64)]
+        ├── right: [n + 1 (#3)]
+        ├── cte_scan_names: ["m"]
+        ├── logical_recursive_cte_id: Some(0)
+        ├── EvalScalar
+        │   ├── scalars: [0 AS (#0)]
+        │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        └── EvalScalar
+            ├── scalars: [plus(n (#1), 1) AS (#3)]
+            └── Filter
+                ├── filters: [lt(n (#1), 3), SUBQUERY AS (#2)]
+                ├── subquerys
+                │   └── Subquery (Any)
+                │       ├── compare_op: Equal
+                │       ├── output_column: n (#2)
+                │       └── EvalScalar
+                │           ├── scalars: [n (#2) AS (#2)]
+                │           └── EvalScalar
+                │               ├── scalars: [n (#2) AS (#2)]
+                │               └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "2", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+                └── EvalScalar
+                    ├── scalars: [n (#1) AS (#1)]
+                    └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "1", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+
+
+=== recursive_reference_in_cte ===
+description: A non-recursive CTE inside a scalar subquery can scan the recursive step.
+sql: WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM m WHERE n < 3 AND n IN (WITH q AS (SELECT n FROM m) SELECT n FROM q)) SELECT count(*) FROM m
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#5)]
+    └── UnionAll
+        ├── output: [0 (#4)]
+        ├── left: [CAST(0 (#0) AS UInt64)]
+        ├── right: [n + 1 (#3)]
+        ├── cte_scan_names: ["m"]
+        ├── logical_recursive_cte_id: Some(0)
+        ├── EvalScalar
+        │   ├── scalars: [0 AS (#0)]
+        │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        └── EvalScalar
+            ├── scalars: [plus(n (#1), 1) AS (#3)]
+            └── Filter
+                ├── filters: [lt(n (#1), 3), SUBQUERY AS (#2)]
+                ├── subquerys
+                │   └── Subquery (Any)
+                │       ├── compare_op: Equal
+                │       ├── output_column: n (#2)
+                │       └── EvalScalar
+                │           ├── scalars: [n (#2) AS (#2)]
+                │           └── EvalScalar
+                │               ├── scalars: [n (#2) AS (#2)]
+                │               └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "2", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+                └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "1", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+
+
+=== independent_recursive_cte_in_subquery ===
+description: An independent recursive CTE must bind its own definition and restore the outer scope.
+sql: WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM m WHERE n < 3 AND (WITH RECURSIVE other(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM other WHERE x < 2) SELECT max(x) FROM other) = 2 AND n IN (SELECT n FROM m)) SELECT count(*) FROM m
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#10) AS (#10)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#10)]
+    └── UnionAll
+        ├── output: [0 (#9)]
+        ├── left: [CAST(0 (#0) AS UInt64)]
+        ├── right: [n + 1 (#8)]
+        ├── cte_scan_names: ["m"]
+        ├── logical_recursive_cte_id: Some(0)
+        ├── EvalScalar
+        │   ├── scalars: [0 AS (#0)]
+        │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        └── EvalScalar
+            ├── scalars: [plus(n (#1), 1) AS (#8)]
+            └── Filter
+                ├── filters: [lt(n (#1), 3), eq(SUBQUERY AS (#6), 2), SUBQUERY AS (#7)]
+                ├── subquerys
+                │   ├── Subquery (Scalar)
+                │   │   ├── output_column: max(x) (#6)
+                │   │   └── EvalScalar
+                │   │       ├── scalars: [max(x) (#6) AS (#6)]
+                │   │       └── Aggregate(Initial)
+                │   │           ├── group items: []
+                │   │           ├── aggregate functions: [max(1 (#5)) AS (#6)]
+                │   │           └── EvalScalar
+                │   │               ├── scalars: [1 (#5) AS (#5)]
+                │   │               └── UnionAll
+                │   │                   ├── output: [1 (#5)]
+                │   │                   ├── left: [CAST(1 (#2) AS UInt64)]
+                │   │                   ├── right: [x + 1 (#4)]
+                │   │                   ├── cte_scan_names: ["other"]
+                │   │                   ├── logical_recursive_cte_id: Some(1)
+                │   │                   ├── EvalScalar
+                │   │                   │   ├── scalars: [1 AS (#2)]
+                │   │                   │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+                │   │                   └── EvalScalar
+                │   │                       ├── scalars: [plus(x (#3), 1) AS (#4)]
+                │   │                       └── Filter
+                │   │                           ├── filters: [lt(x (#3), 2)]
+                │   │                           └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "3", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "other", logical_recursive_cte_id: Some(1) })
+                │   └── Subquery (Any)
+                │       ├── compare_op: Equal
+                │       ├── output_column: n (#7)
+                │       └── EvalScalar
+                │           ├── scalars: [n (#7) AS (#7)]
+                │           └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "7", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+                └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "1", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+
+
+=== recursive_cte_reused_in_main_query ===
+description: Leaving a recursive member must restore the main query's binding scope.
+sql: WITH RECURSIVE m(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM m WHERE n < 3 AND n IN (SELECT n FROM m)) SELECT (SELECT count(*) FROM m), count(*) FROM m
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#11) AS (#11), SUBQUERY AS (#10) AS (#12)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: COUNT(*) (#10)
+│       └── EvalScalar
+│           ├── scalars: [COUNT(*) (#10) AS (#10)]
+│           └── Aggregate(Initial)
+│               ├── group items: []
+│               ├── aggregate functions: [count() AS (#10)]
+│               └── UnionAll
+│                   ├── output: [0 (#9)]
+│                   ├── left: [CAST(0 (#5) AS UInt64)]
+│                   ├── right: [n + 1 (#8)]
+│                   ├── cte_scan_names: ["m"]
+│                   ├── logical_recursive_cte_id: Some(0)
+│                   ├── EvalScalar
+│                   │   ├── scalars: [0 AS (#5)]
+│                   │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+│                   └── EvalScalar
+│                       ├── scalars: [plus(n (#6), 1) AS (#8)]
+│                       └── Filter
+│                           ├── filters: [lt(n (#6), 3), SUBQUERY AS (#7)]
+│                           ├── subquerys
+│                           │   └── Subquery (Any)
+│                           │       ├── compare_op: Equal
+│                           │       ├── output_column: n (#7)
+│                           │       └── EvalScalar
+│                           │           ├── scalars: [n (#7) AS (#7)]
+│                           │           └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "7", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+│                           └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "6", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#11)]
+    └── UnionAll
+        ├── output: [0 (#4)]
+        ├── left: [CAST(0 (#0) AS UInt64)]
+        ├── right: [n + 1 (#3)]
+        ├── cte_scan_names: ["m"]
+        ├── logical_recursive_cte_id: Some(0)
+        ├── EvalScalar
+        │   ├── scalars: [0 AS (#0)]
+        │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        └── EvalScalar
+            ├── scalars: [plus(n (#1), 1) AS (#3)]
+            └── Filter
+                ├── filters: [lt(n (#1), 3), SUBQUERY AS (#2)]
+                ├── subquerys
+                │   └── Subquery (Any)
+                │       ├── compare_op: Equal
+                │       ├── output_column: n (#2)
+                │       └── EvalScalar
+                │           ├── scalars: [n (#2) AS (#2)]
+                │           └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "2", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+                └── RecursiveCteScan(RecursiveCteScan { fields: [DataField { name: "1", default_expr: None, data_type: Number(UInt64), computed_expr: None, auto_increment_expr: None }], table_name: "m", logical_recursive_cte_id: Some(0) })
+
+
