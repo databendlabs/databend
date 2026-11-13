@@ -27,6 +27,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::F32;
 use databend_storages_common_pruner::BlockMetaIndex as PrunedBlockMetaIndex;
+use databend_storages_common_pruner::InvertedIndexMatches;
 use databend_storages_common_pruner::VectorScores;
 use roaring::RoaringTreemap;
 
@@ -85,48 +86,13 @@ pub(crate) fn add_data_block_meta(
         // Fill `BlockMetaInfoPtr` if query internal columns
         let block_meta = fuse_part.block_meta_index().unwrap();
 
-        // Transform matched_rows indices from block-level to page-level
-        let (matched_rows, matched_scores) = if let Some(offsets) = &offsets {
-            match (
-                block_meta.matched_rows.clone(),
-                block_meta.matched_scores.clone(),
-            ) {
-                (Some(rows), Some(scores)) => {
-                    debug_assert_eq!(rows.len(), scores.len());
-                    let mut filtered_rows = Vec::with_capacity(rows.len());
-                    let mut filtered_scores = Vec::with_capacity(scores.len());
-                    for (idx, score) in rows.into_iter().zip(scores) {
-                        if offsets.contains(idx as u64) {
-                            let rank = offsets.rank(idx as u64);
-                            debug_assert!(rank > 0);
-                            let new_idx = (rank - 1) as usize;
-                            filtered_rows.push(new_idx);
-                            filtered_scores.push(score);
-                        }
-                    }
-                    (Some(filtered_rows), Some(filtered_scores))
-                }
-                (Some(rows), None) => {
-                    let mut filtered_rows = Vec::with_capacity(rows.len());
-                    for idx in rows.into_iter() {
-                        if offsets.contains(idx as u64) {
-                            let rank = offsets.rank(idx as u64);
-                            debug_assert!(rank > 0);
-                            let new_idx = (rank - 1) as usize;
-                            filtered_rows.push(new_idx);
-                        }
-                    }
-                    (Some(filtered_rows), None)
-                }
-                (None, _) => (None, None),
+        let (matched_rows, matched_scores) = match &block_meta.inverted_index_matches {
+            Some(matches) => {
+                let (rows, scores) = inverted_index_output_matches(matches, offsets.as_ref());
+                (Some(rows), scores)
             }
-        } else {
-            (
-                block_meta.matched_rows.clone(),
-                block_meta.matched_scores.clone(),
-            )
+            None => (None, None),
         };
-
         let vector_scores = vector_output_scores(block_meta, offsets.as_ref());
 
         let internal_column_meta = InternalColumnMeta {
@@ -147,10 +113,45 @@ pub(crate) fn add_data_block_meta(
     block.add_meta(meta)
 }
 
+/// The inverted index matches among the rows the scan outputs, as positions in
+/// the output with their scores. The output rows are `offsets` (the rows left by
+/// filters and by `BlockMetaIndex::selected_rows`) or, without them, every row of
+/// the block.
+fn inverted_index_output_matches(
+    matches: &InvertedIndexMatches,
+    offsets: Option<&RoaringTreemap>,
+) -> (Vec<usize>, Option<Vec<F32>>) {
+    let Some(offsets) = offsets else {
+        return (matches.rows.clone(), matches.scores.clone());
+    };
+    debug_assert!(
+        matches
+            .scores
+            .as_ref()
+            .is_none_or(|scores| scores.len() == matches.rows.len())
+    );
+    let mut rows = Vec::with_capacity(matches.rows.len());
+    let mut scores = matches
+        .scores
+        .as_ref()
+        .map(|scores| Vec::with_capacity(scores.len()));
+    for (pos, row) in matches.rows.iter().enumerate() {
+        let row = *row as u64;
+        if !offsets.contains(row) {
+            continue;
+        }
+        // `rank` counts the output rows up to and including `row`.
+        rows.push((offsets.rank(row) - 1) as usize);
+        if let (Some(scores), Some(matched_scores)) = (&mut scores, &matches.scores) {
+            scores.push(matched_scores[pos]);
+        }
+    }
+    (rows, scores)
+}
+
 /// The vector scores of the rows the scan outputs, in order. The output rows are
-/// `offsets` (the rows left by filters) or, without them, every row of the block;
-/// the rows of `VectorScores::TopN` are the `selected_rows` of the block, which
-/// `ReadState` keeps.
+/// `offsets` (the rows left by filters and by `BlockMetaIndex::selected_rows`)
+/// or, without them, every row of the block.
 fn vector_output_scores(
     block_meta: &PrunedBlockMetaIndex,
     offsets: Option<&RoaringTreemap>,
@@ -184,6 +185,41 @@ fn vector_output_scores(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_inverted_index_output_matches() {
+        let f = |values: &[f32]| values.iter().map(|&v| F32::from(v)).collect::<Vec<_>>();
+        let matches = InvertedIndexMatches {
+            rows: vec![5, 1, 3],
+            scores: Some(f(&[0.9, 0.5, 0.1])),
+            rows_only: true,
+        };
+        // Every row of the block is output: the matches keep their row numbers.
+        assert_eq!(
+            inverted_index_output_matches(&matches, None),
+            (vec![5, 1, 3], Some(f(&[0.9, 0.5, 0.1])))
+        );
+        // Only the matched rows are output: each match is at its rank among them.
+        let offsets = RoaringTreemap::from_iter([1u64, 3, 5]);
+        assert_eq!(
+            inverted_index_output_matches(&matches, Some(&offsets)),
+            (vec![2, 0, 1], Some(f(&[0.9, 0.5, 0.1])))
+        );
+        // A filter dropped row 1 and kept the unmatched row 0.
+        let offsets = RoaringTreemap::from_iter([0u64, 3, 5]);
+        assert_eq!(
+            inverted_index_output_matches(&matches, Some(&offsets)),
+            (vec![2, 1], Some(f(&[0.9, 0.1])))
+        );
+        let unscored = InvertedIndexMatches {
+            scores: None,
+            ..matches
+        };
+        assert_eq!(
+            inverted_index_output_matches(&unscored, Some(&offsets)),
+            (vec![2, 1], None)
+        );
+    }
 
     #[test]
     fn test_vector_output_scores() {

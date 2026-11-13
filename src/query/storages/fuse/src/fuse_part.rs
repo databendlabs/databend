@@ -102,9 +102,9 @@ fn block_meta_index(b: &BlockMetaIndex) -> usize {
     b.block_location.capacity()
         + b.segment_location.capacity()
         + option(&b.snapshot_location, |s| s.capacity())
-        + option(&b.selected_rows, |v| vec(v, none))
-        + option(&b.matched_rows, |v| vec(v, none))
-        + option(&b.matched_scores, |v| vec(v, none))
+        + option(&b.inverted_index_matches, |m| {
+            vec(&m.rows, none) + option(&m.scores, |v| vec(v, none))
+        })
         + option(&b.vector_scores, |v| match v {
             VectorScores::TopN(scores) => vec(scores, none),
             VectorScores::All(scores) => vec(scores, none),

@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+use databend_storages_common_pruner::InvertedIndexMatches;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use lindera::dictionary::UserDictionary;
 use opendal::Operator;
@@ -31,7 +32,6 @@ use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::create_index_schema;
 use crate::io::create_tokenizer_manager;
-use crate::io::read::InvertedIndexFilterResult;
 use crate::io::read::InvertedIndexReader;
 use crate::io::read::InvertedIndexWarmupInfo;
 use crate::io::resolve_inverted_index_user_dictionary_blocking;
@@ -65,9 +65,9 @@ pub struct InvertedIndexPruner {
     index_version: String,
     reader: InvertedIndexReader,
     query: Box<dyn Query>,
-    /// The filter of the query is the index match alone: the rows the index did
-    /// not match fail it, so the scan need not output them.
-    select_matched_rows: bool,
+    /// The filter of the query is the index match alone, see
+    /// `InvertedIndexMatches::rows_only`.
+    rows_only: bool,
 }
 
 impl InvertedIndexPruner {
@@ -99,7 +99,7 @@ impl InvertedIndexPruner {
                     .and_then(PushDownInfo::inverted_index_top_k),
             );
 
-            let select_matched_rows = push_down
+            let rows_only = push_down
                 .as_ref()
                 .is_some_and(PushDownInfo::filter_only_use_index);
 
@@ -108,7 +108,7 @@ impl InvertedIndexPruner {
                 index_version,
                 reader,
                 query: prepared.query,
-                select_matched_rows,
+                rows_only,
             })));
         }
         Ok(None)
@@ -120,7 +120,7 @@ impl InvertedIndexPruner {
         block_location: &str,
         inverted_index_metas: Option<&[BlockIndexMeta]>,
         row_count: u64,
-    ) -> Result<InvertedIndexFilterResult> {
+    ) -> Result<Option<InvertedIndexMatches>> {
         let index_meta = inverted_index_metas.and_then(|index_metas| {
             index_metas
                 .binary_search_by(|meta| meta.index_name.as_str().cmp(&self.index_name))
@@ -138,7 +138,8 @@ impl InvertedIndexPruner {
             )));
         };
 
-        self.reader
+        let matches = self
+            .reader
             .do_filter(
                 self.query.box_clone(),
                 &index_meta.location.0,
@@ -146,20 +147,12 @@ impl InvertedIndexPruner {
                 index_meta.size,
                 row_count,
             )
-            .await
-    }
-
-    /// The rows the scan outputs for a block with `matched_rows`, to pass to
-    /// `BlockMetaIndex::select_rows`: the matched rows when the filter drops the
-    /// others, `None` (every row) when another filter still has to see them.
-    pub fn selected_rows(&self, matched_rows: &[usize]) -> Option<Vec<u32>> {
-        if !self.select_matched_rows {
-            return None;
-        }
-        matched_rows
-            .iter()
-            .map(|row| u32::try_from(*row).ok())
-            .collect()
+            .await?;
+        Ok(matches.map(|(rows, scores)| InvertedIndexMatches {
+            rows,
+            scores,
+            rows_only: self.rows_only,
+        }))
     }
 }
 

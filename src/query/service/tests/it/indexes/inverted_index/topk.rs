@@ -109,18 +109,24 @@ async fn test_fts_top_k_pushdown_from_sql() -> anyhow::Result<()> {
                 for part in &source.parts.partitions {
                     let part = FuseBlockPartInfo::from_part(part)?;
                     let index = part.block_meta_index.as_ref().unwrap();
-                    let rows = index.matched_rows.as_ref().unwrap();
+                    let matches = index.inverted_index_matches.as_ref().unwrap();
                     if let Some(k) = expected {
-                        let scores = index.matched_scores.as_ref().unwrap();
-                        assert_eq!(rows.len(), k.min(16), "{sql}");
-                        assert_eq!(scores.len(), rows.len(), "{sql}");
+                        let scores = matches.scores.as_ref().unwrap();
+                        assert_eq!(matches.rows.len(), k.min(16), "{sql}");
+                        assert_eq!(scores.len(), matches.rows.len(), "{sql}");
                     }
-                    let selected_rows = only_index.then(|| {
-                        let mut rows = rows.iter().map(|row| *row as u32).collect::<Vec<_>>();
-                        rows.sort_unstable();
-                        rows
-                    });
-                    assert_eq!(index.selected_rows, selected_rows, "{sql}");
+                    assert_eq!(matches.rows_only, only_index, "{sql}");
+                    // The block has 16 rows: the scan outputs the matched ones
+                    // unless they are all of them.
+                    let selected_rows = (only_index && matches.rows.len() < part.nums_rows)
+                        .then_some(matches.rows.len());
+                    assert_eq!(
+                        index
+                            .selected_rows(part.nums_rows)
+                            .map(|rows| rows.true_count()),
+                        selected_rows,
+                        "{sql}"
+                    );
                 }
             }
         }

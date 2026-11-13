@@ -780,16 +780,14 @@ struct VectorPruneResult {
 }
 
 impl VectorPruneResult {
-    /// Attaches `scores` (row, score). With `rows_only` the scan outputs only
-    /// these rows; otherwise the other rows get the placeholder `f32::MAX`.
+    /// Attaches `scores` (row, score): as `TopN` with `rows_only`, otherwise as
+    /// `All` with `f32::MAX` for the other rows.
     fn into_block_meta(
         self,
         scores: Vec<(u32, F32)>,
         rows_only: bool,
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
-        let mut block_meta_index = self.block_meta_index;
         let vector_scores = if rows_only {
-            block_meta_index.select_rows(scores.iter().map(|(row, _)| *row).collect());
             VectorScores::TopN(scores)
         } else {
             let mut all_scores = vec![F32::from(f32::MAX); self.block_meta.row_count as usize];
@@ -800,6 +798,7 @@ impl VectorPruneResult {
             }
             VectorScores::All(all_scores)
         };
+        let mut block_meta_index = self.block_meta_index;
         block_meta_index.vector_scores = Some(vector_scores);
         (block_meta_index, self.block_meta)
     }
@@ -1001,13 +1000,7 @@ mod tests {
             let results = vec![result(0, 4), result(1, 3), result(2, 2)];
             topn_block_metas(results, top_scores.clone(), rows_only)
                 .into_iter()
-                .map(|(index, meta)| {
-                    (
-                        meta.location.0.clone(),
-                        index.vector_scores.unwrap(),
-                        index.selected_rows,
-                    )
-                })
+                .map(|(index, meta)| (meta.location.0.clone(), index.vector_scores.unwrap()))
                 .collect::<Vec<_>>()
         };
         let f = |value: f32| F32::from(value);
@@ -1015,26 +1008,19 @@ mod tests {
         assert_eq!(blocks(true), vec![
             (
                 "block_0".to_string(),
-                VectorScores::TopN(vec![(2, f(0.1)), (1, f(0.2))]),
-                Some(vec![1, 2])
+                VectorScores::TopN(vec![(2, f(0.1)), (1, f(0.2))])
             ),
-            (
-                "block_1".to_string(),
-                VectorScores::TopN(vec![(0, f(0.2))]),
-                Some(vec![0])
-            ),
+            ("block_1".to_string(), VectorScores::TopN(vec![(0, f(0.2))])),
         ]);
         // Without `rows_only`, the other rows get the placeholder score.
         assert_eq!(blocks(false), vec![
             (
                 "block_0".to_string(),
-                VectorScores::All(vec![max, f(0.2), f(0.1), max]),
-                None
+                VectorScores::All(vec![max, f(0.2), f(0.1), max])
             ),
             (
                 "block_1".to_string(),
-                VectorScores::All(vec![f(0.2), max, max]),
-                None
+                VectorScores::All(vec![f(0.2), max, max])
             ),
         ]);
     }

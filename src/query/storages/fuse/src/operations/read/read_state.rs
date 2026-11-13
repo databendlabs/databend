@@ -435,21 +435,10 @@ fn runtime_filter_column_is_projectable(
     Projection::from_column_names(schema, &[name]).is_ok()
 }
 
-/// The rows of the block that pruning selected for output (see
+/// The rows of the block that index pruning selected for output (see
 /// `BlockMetaIndex::selected_rows`). `None` when every row is output.
 fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
-    let selected = part.block_meta_index()?.selected_rows.as_ref()?;
-    if selected.len() >= part.nums_rows {
-        return None;
-    }
-    let mut rows = MutableBitmap::from_len_zeroed(part.nums_rows);
-    for &row in selected {
-        let row = row as usize;
-        if row < part.nums_rows {
-            rows.set(row, true);
-        }
-    }
-    Some(rows.into())
+    part.block_meta_index()?.selected_rows(part.nums_rows)
 }
 
 fn expand_runtime_filter_bitmap(
@@ -623,40 +612,5 @@ mod tests {
             projected_expr.column_refs().into_keys().collect::<Vec<_>>(),
             vec![0]
         );
-    }
-
-    fn part(nums_rows: usize, selected_rows: Option<Vec<u32>>) -> FuseBlockPartInfo {
-        FuseBlockPartInfo {
-            location: "1/2/_b/block.parquet".to_string(),
-            bloom_filter_index_location: None,
-            bloom_filter_index_size: 0,
-            create_on: None,
-            nums_rows,
-            columns_meta: HashMap::new(),
-            columns_stat: None,
-            compression: databend_storages_common_table_meta::meta::Compression::Lz4Raw,
-            sort_min_max: None,
-            block_meta_index: Some(databend_storages_common_pruner::BlockMetaIndex {
-                selected_rows,
-                ..Default::default()
-            }),
-        }
-    }
-
-    #[test]
-    fn test_selected_rows() {
-        let rows = selected_rows(&part(6, Some(vec![1, 4]))).unwrap();
-        assert_eq!(rows.iter().collect::<Vec<_>>(), vec![
-            false, true, false, false, true, false
-        ]);
-        // No row is selected: the scan outputs none.
-        let rows = selected_rows(&part(2, Some(vec![]))).unwrap();
-        assert_eq!(rows.iter().collect::<Vec<_>>(), vec![false, false]);
-        // Every row is selected, or pruning selected no rows: the scan outputs every row.
-        assert!(selected_rows(&part(3, Some(vec![0, 1, 2]))).is_none());
-        assert!(selected_rows(&part(3, None)).is_none());
-        let mut no_meta = part(3, None);
-        no_meta.block_meta_index = None;
-        assert!(selected_rows(&no_meta).is_none());
     }
 }
