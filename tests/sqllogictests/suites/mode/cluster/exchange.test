@@ -374,7 +374,7 @@ AggregateFinal
             │   ├── keys is null equal: [false]
             │   ├── filters: []
             │   ├── build join filters:
-            │   │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
+            │   │   └── filter id:0, build key:t1.a (#0), probe targets:[numbers.number (#1)@scan1], filter type:bloom,inlist,min_max
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]
@@ -408,7 +408,7 @@ AggregateFinal
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:1, build key:t3.a (#3), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
+                │   └── filter id:1, build key:t3.a (#3), probe targets:[numbers.number (#2)@scan2], filter type:bloom,inlist,min_max
                 ├── estimated rows: 100.00
                 ├── Exchange(Build)
                 │   ├── output columns: [numbers.number (#3)]
@@ -471,7 +471,7 @@ AggregateFinal
         │       ├── keys is null equal: [false]
         │       ├── filters: []
         │       ├── build join filters:
-        │       │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
+        │       │   └── filter id:0, build key:t1.a (#0), probe targets:[numbers.number (#1)@scan1], filter type:bloom,inlist,min_max
         │       ├── estimated rows: 10000.00
         │       ├── Exchange(Build)
         │       │   ├── output columns: [numbers.number (#0)]
@@ -525,7 +525,7 @@ AggregateFinal
                                 ├── keys is null equal: [false]
                                 ├── filters: []
                                 ├── build join filters:
-                                │   └── filter id:1, build key:t3.a (#3), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
+                                │   └── filter id:1, build key:t3.a (#3), probe targets:[numbers.number (#2)@scan2], filter type:bloom,inlist,min_max
                                 ├── estimated rows: 11.11
                                 ├── Exchange(Build)
                                 │   ├── output columns: [count(*) (#19), numbers.number (#3)]
@@ -611,7 +611,7 @@ AggregateFinal
             │   ├── keys is null equal: [false]
             │   ├── filters: []
             │   ├── build join filters:
-            │   │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
+            │   │   └── filter id:0, build key:t1.a (#0), probe targets:[numbers.number (#1)@scan1], filter type:bloom,inlist,min_max
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]

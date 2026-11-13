@@ -94,6 +94,8 @@ impl Rule for RuleCommuteJoinBaseTable {
                         (condition.right.clone(), condition.left.clone());
                 }
                 join.join_type = join.join_type.opposite();
+                // Runtime filters are built from the old build side.
+                join.runtime_filters.clear();
                 join.single_to_inner = join.single_to_inner.map(|join_type| join_type.opposite());
                 let mut result = SExpr::create_binary(
                     Arc::new(join.into()),

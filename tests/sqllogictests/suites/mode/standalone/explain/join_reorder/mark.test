@@ -44,7 +44,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:numbers.number (#0), probe targets:[subquery_1 (#1)@scan1], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:numbers.number (#0), probe targets:[numbers.number (#1)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers

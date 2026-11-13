@@ -43,6 +43,35 @@ select q.k,q.d from (select k,running_difference(v) as d from (select k,v from r
 statement ok
 unset enable_join_runtime_filter;
 
+# With two window functions the binder evaluates running_difference(v) in the
+# window group. Neither RF nor an ordinary filter on the partition key may
+# remove key 0 before running_difference reads it.
+statement ok
+set enable_join_runtime_filter = 0;
+
+query III
+select q.k,q.s,q.n from (select k,sum(running_difference(v)) over (partition by k) as s,count(*) over (partition by k) as n from (select k,v from rf_eval_input order by k) o) q join rf_eval_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10 1
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+# Before the fix RF removes key 0 below the window group, returning 1 0 1.
+query III
+select q.k,q.s,q.n from (select k,sum(running_difference(v)) over (partition by k) as s,count(*) over (partition by k) as n from (select k,v from rf_eval_input order by k) o) q join rf_eval_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10 1
+
+# Before the fix the filter moves below the window group, returning 1 0 1.
+query III
+select q.k,q.s,q.n from (select k,sum(running_difference(v)) over (partition by k) as s,count(*) over (partition by k) as n from (select k,v from rf_eval_input order by k) o) q where q.k = 1;
+----
+1 10 1
+
+statement ok
+unset enable_join_runtime_filter;
+
 statement ok
 unset disable_join_reorder;
 

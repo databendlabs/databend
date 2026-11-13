@@ -46,6 +46,7 @@ Sort
         ├── build keys: [id (#4)]
         ├── probe keys: [id (#2)]
         ├── other filters: []
+        ├── runtime filters: [#0: id (#4) -> id (#2)]
         ├── EvalScalar
         │   ├── scalars: [1 AS (#3), CAST(1 AS UInt8 NULL) AS (#4)]
         │   └── Filter
@@ -169,6 +170,7 @@ EvalScalar
     ├── build keys: [planning_right_rows.id (#1)]
     ├── probe keys: [planning_left_rows.id (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: planning_right_rows.id (#1) -> planning_left_rows.id (#0)]
     ├── Scan
     │   ├── table: default.planning_right_rows (#1)
     │   ├── filters: [gt(planning_right_rows.id (#1), 0)]
@@ -178,7 +180,8 @@ EvalScalar
         ├── table: default.planning_left_rows (#0)
         ├── filters: [gt(planning_left_rows.id (#0), 0)]
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: planning_left_rows.id (#0)]
 
 
 === typed_constant_filter_inference_does_not_panic ===

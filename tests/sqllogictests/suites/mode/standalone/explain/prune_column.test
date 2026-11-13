@@ -85,6 +85,8 @@ HashJoin
 ├── probe keys: [t2.b (#7)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:t1.b (#2), probe targets:[numbers.number (#5) + 1@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.20
 ├── EvalScalar(Build)
 │   ├── output columns: [a (#1), b (#2)]
@@ -117,6 +119,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#0]
         └── estimated rows: 1.00
 
 query T
@@ -129,6 +132,8 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:1, build key:scalar_subquery_12 (#12), probe targets:[numbers.number (#0) + 1@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 2.00
 ├── AggregateFinal(Build)
 │   ├── output columns: [COUNT(*) (#12)]
@@ -146,6 +151,8 @@ HashJoin
 │           ├── probe keys: [t3.b (#10)]
 │           ├── keys is null equal: [false]
 │           ├── filters: []
+│           ├── build join filters:
+│           │   └── filter id:0, build key:t2.b (#5), probe targets:[numbers.number (#8) + 1@scan2], filter type:bloom,inlist,min_max
 │           ├── estimated rows: 0.20
 │           ├── EvalScalar(Build)
 │           │   ├── output columns: [b (#5)]
@@ -178,6 +185,7 @@ HashJoin
 │                   ├── partitions total: 1
 │                   ├── partitions scanned: 1
 │                   ├── push downs: [filters: [], limit: NONE]
+│                   ├── apply join filters: [#0]
 │                   └── estimated rows: 1.00
 └── EvalScalar(Probe)
     ├── output columns: [a (#1)]
@@ -192,6 +200,7 @@ HashJoin
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#1]
         └── estimated rows: 2.00
 
 query T

@@ -21,6 +21,7 @@ TopN
                             ├── build keys: [date_dim.d_date_sk (#0)]
                             ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
                             ├── other filters: []
+                            ├── runtime filters: [#0: date_dim.d_date_sk (#0) -> store_sales.ss_sold_date_sk (#28)]
                             ├── Exchange(Broadcast)
                             │   └── Scan
                             │       ├── table: default.date_dim (#0)
@@ -31,6 +32,7 @@ TopN
                                 ├── build keys: [item.i_item_sk (#51)]
                                 ├── probe keys: [store_sales.ss_item_sk (#30)]
                                 ├── other filters: []
+                                ├── runtime filters: [#1: item.i_item_sk (#51) -> store_sales.ss_item_sk (#30)]
                                 ├── Exchange(Broadcast)
                                 │   └── Scan
                                 │       ├── table: default.item (#2)
@@ -41,5 +43,6 @@ TopN
                                     ├── table: default.store_sales (#1)
                                     ├── filters: []
                                     ├── order by: []
-                                    └── limit: NONE
+                                    ├── limit: NONE
+                                    └── runtime filters: [#0: store_sales.ss_sold_date_sk (#28), #1: store_sales.ss_item_sk (#30)]
 

@@ -178,6 +178,10 @@ impl Rule for RulePushDownFilterScan {
         let child = s_expr.child(0)?;
 
         let mut scan: Scan = child.plan().clone().try_into()?;
+        // New predicates would filter the input of the scan's predicates.
+        if scan.depends_on_other_rows() {
+            return Ok(());
+        }
 
         let add_filters = self.find_push_down_predicates(&filter.predicates, &scan)?;
         match scan.push_down_predicates.as_mut() {

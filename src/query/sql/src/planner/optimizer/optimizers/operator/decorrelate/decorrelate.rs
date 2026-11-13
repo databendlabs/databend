@@ -205,6 +205,7 @@ impl SubqueryDecorrelatorOptimizer {
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: vec![],
         };
 
         // Rewrite plan to semi-join.
@@ -321,6 +322,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -382,6 +384,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -468,6 +471,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 }
                 .into();
                 Ok((

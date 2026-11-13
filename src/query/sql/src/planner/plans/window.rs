@@ -101,6 +101,14 @@ impl WindowGroup {
         Ok(used_columns)
     }
 
+    /// Whether a scalar item may depend on other input rows, see
+    /// [`EvalScalar::depends_on_other_rows`]. The items are evaluated below the windows.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.scalar_items
+            .iter()
+            .any(|item| item.scalar.depends_on_other_rows())
+    }
+
     fn required_distribution(&self, rel_expr: &RelExpr) -> Result<Distribution> {
         let Some(first) = self.windows.first() else {
             return Ok(Distribution::Any);

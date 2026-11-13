@@ -21,7 +21,7 @@ TopN(Final)
             ├── keys is null equal: [false]
             ├── filters: []
             ├── build join filters:
-            │   └── filter id:4, build key:customer.c_customer_sk (#78), probe targets:[ctr1.ctr_customer_sk (#3)@scan0], filter type:bloom,inlist,min_max
+            │   └── filter id:3, build key:customer.c_customer_sk (#78), probe targets:[store_returns.sr_customer_sk (#3)@scan0], filter type:bloom,inlist,min_max
             ├── estimated rows: 13377389355669.31
             ├── Exchange(Build)
             │   ├── output columns: [customer.c_customer_sk (#78), customer.c_customer_id (#79)]
@@ -44,7 +44,7 @@ TopN(Final)
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:3, build key:store.s_store_sk (#49), probe targets:[ctr1.ctr_store_sk (#7)@scan0, sr_store_sk (#103)@scan4], filter type:bloom,inlist,min_max
+                │   └── filter id:2, build key:store.s_store_sk (#49), probe targets:[store_returns.sr_store_sk (#7)@scan0], filter type:bloom,inlist,min_max
                 ├── estimated rows: 6688694.68
                 ├── Exchange(Build)
                 │   ├── output columns: [store.s_store_sk (#49)]
@@ -66,8 +66,6 @@ TopN(Final)
                     ├── probe keys: [sr_store_sk (#7)]
                     ├── keys is null equal: [true]
                     ├── filters: [ctr1.ctr_total_return (#48) > scalar_subquery_147 (#147)]
-                    ├── build join filters:
-                    │   └── filter id:2, build key:sr_store_sk (#103), probe targets:[sr_store_sk (#7)@scan0], filter type:
                     ├── estimated rows: 840288.28
                     ├── Exchange(Build)
                     │   ├── output columns: [store_returns.sr_store_sk (#103), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147)]
@@ -132,7 +130,7 @@ TopN(Final)
                     │                                       ├── partitions total: 0
                     │                                       ├── partitions scanned: 0
                     │                                       ├── push downs: [filters: [is_true(store_returns.sr_store_sk (#103) = store_returns.sr_store_sk (#103))], limit: NONE]
-                    │                                       ├── apply join filters: [#3, #1]
+                    │                                       ├── apply join filters: [#1]
                     │                                       └── estimated rows: 0.00
                     └── AggregateFinal(Probe)
                         ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
@@ -178,6 +176,6 @@ TopN(Final)
                                         ├── partitions total: 0
                                         ├── partitions scanned: 0
                                         ├── push downs: [filters: [], limit: NONE]
-                                        ├── apply join filters: [#4, #3, #2, #0]
+                                        ├── apply join filters: [#3, #2, #0]
                                         └── estimated rows: 28792282.00
 

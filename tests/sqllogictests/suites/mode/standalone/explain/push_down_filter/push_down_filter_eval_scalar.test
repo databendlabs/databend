@@ -80,7 +80,7 @@ AggregateFinal
         │           ├── keys is null equal: [false]
         │           ├── filters: []
         │           ├── build join filters:
-        │           │   └── filter id:0, build key:t.id (#0), probe targets:[tb.sid (#1)@scan1], filter type:bloom,inlist,min_max
+        │           │   └── filter id:0, build key:t.id (#0), probe targets:[t2.sid (#1)@scan1], filter type:bloom,inlist,min_max
         │           ├── estimated rows: 0.00
         │           ├── TableScan(Build)
         │           │   ├── table: default.default.t1

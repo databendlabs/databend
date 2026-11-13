@@ -6,6 +6,7 @@ EvalScalar
         ├── build keys: [f1 (#0)]
         ├── probe keys: [f1 (#6)]
         ├── other filters: []
+        ├── runtime filters: [#0: f1 (#0) -> f1 (#6)]
         ├── Exchange(Merge)
         │   └── ConstantTableScan
         │       ├── columns: [f1 (#0)]

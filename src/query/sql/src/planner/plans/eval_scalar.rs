@@ -81,6 +81,14 @@ impl ScalarItem {
 }
 
 impl EvalScalar {
+    /// Whether an item may depend on other input rows. Removing input rows before this
+    /// operator can then change the values it computes for the remaining rows.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.items
+            .iter()
+            .any(|item| item.scalar.depends_on_other_rows())
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for item in &self.items {

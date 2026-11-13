@@ -19,6 +19,7 @@ Sort
                             ├── build keys: [lineitem.l_orderkey (#17)]
                             ├── probe keys: [orders.o_orderkey (#0)]
                             ├── other filters: []
+                            ├── runtime filters: [#0: lineitem.l_orderkey (#17) -> orders.o_orderkey (#0)]
                             ├── Exchange(Broadcast)
                             │   └── Scan
                             │       ├── table: default.lineitem (#2)
@@ -29,6 +30,7 @@ Sort
                                 ├── build keys: [customer.c_custkey (#9)]
                                 ├── probe keys: [orders.o_custkey (#1)]
                                 ├── other filters: []
+                                ├── runtime filters: [#1: customer.c_custkey (#9) -> orders.o_custkey (#1)]
                                 ├── Exchange(Broadcast)
                                 │   └── Scan
                                 │       ├── table: default.customer (#1)
@@ -39,5 +41,6 @@ Sort
                                     ├── table: default.orders (#0)
                                     ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
                                     ├── order by: []
-                                    └── limit: NONE
+                                    ├── limit: NONE
+                                    └── runtime filters: [#0: orders.o_orderkey (#0), #1: orders.o_custkey (#1)]
 

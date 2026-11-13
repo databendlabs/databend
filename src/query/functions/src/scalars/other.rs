@@ -181,6 +181,28 @@ pub fn register(registry: &mut FunctionRegistry) {
     }));
     registry.register_function_factory("ignore", ignore);
 
+    // Planner-only marker for a join runtime filter on its probe key. The optimizer moves it
+    // with ordinary filter push-down rules and removes it before physical planning. If it is
+    // ever evaluated, keeping every row preserves the query result.
+    let runtime_filter = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
+        if params.len() != 1 || params[0].get_i64().is_none() || args_type.len() != 1 {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "__runtime_filter".to_string(),
+                args_type: vec![DataType::Generic(0)],
+                return_type: DataType::Boolean,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(FunctionDomain::Full),
+                eval: scalar_evaluator(|_, _| Value::Scalar(Scalar::Boolean(true))),
+                derive_stat: None,
+            },
+        }))
+    }));
+    registry.register_function_factory("__runtime_filter", runtime_filter);
+
     registry.register_1_arg_core::<NullableType<GenericType<0>>, GenericType<0>, _, _>(
         "assume_not_null",
         |_, domain| {
@@ -339,10 +361,12 @@ macro_rules! register_simple_domain_type_run_diff {
 
 fn register_run_diff(registry: &mut FunctionRegistry) {
     // Its value depends on preceding rows and block boundaries, not just the
-    // current row's argument. Do not move it across filters or cache its value.
+    // current row's argument. Do not move filters below it or cache its value.
     registry.properties.insert(
         "running_difference".to_string(),
-        FunctionProperty::default().non_deterministic(),
+        FunctionProperty::default()
+            .non_deterministic()
+            .depends_on_other_rows(),
     );
     register_simple_domain_type_run_diff!(registry, NumberType<i64>, NumberType<i64>, i64, 0);
     register_simple_domain_type_run_diff!(registry, DateType, NumberType<i32>, i32, 0);

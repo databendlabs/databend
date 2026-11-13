@@ -405,6 +405,7 @@ EvalScalar
     ├── build keys: [if(not(is_not_null(outer_to_anti_right.k (#3))), 0, outer_to_anti_right.payload (#5))]
     ├── probe keys: [outer_to_anti_left.k (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: if(not(is_not_null(outer_to_anti_right.k (#3))), 0, outer_to_anti_right.payload (#5)) -> outer_to_anti_left.k (#0)]
     ├── Scan
     │   ├── table: default.outer_to_anti_right (#1)
     │   ├── filters: [not(is_not_null(if(not(is_not_null(outer_to_anti_right.k (#3))), 0, outer_to_anti_right.payload (#5))))]
@@ -414,7 +415,8 @@ EvalScalar
         ├── table: default.outer_to_anti_left (#0)
         ├── filters: []
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: outer_to_anti_left.k (#0)]
 
 
 === right_expression_key_is_not_anti_join ===

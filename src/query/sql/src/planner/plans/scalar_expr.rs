@@ -577,6 +577,37 @@ impl ScalarExpr {
         visitor.has_set_returning_function
     }
 
+    /// Whether the result for a row may depend on the other input rows, e.g. through
+    /// `running_difference`. Removing input rows before such an expression is evaluated can
+    /// change its result for the remaining rows, so filters must not be moved below it.
+    pub fn depends_on_other_rows(&self) -> bool {
+        struct DependsOnOtherRowsVisitor {
+            depends_on_other_rows: bool,
+        }
+
+        impl<'a> Visitor<'a> for DependsOnOtherRowsVisitor {
+            fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
+                if BUILTIN_FUNCTIONS
+                    .get_property(&func.func_name)
+                    .is_some_and(|property| property.depends_on_other_rows)
+                {
+                    self.depends_on_other_rows = true;
+                    return Ok(());
+                }
+                for expr in &func.arguments {
+                    self.visit(expr)?;
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = DependsOnOtherRowsVisitor {
+            depends_on_other_rows: false,
+        };
+        visitor.visit(self).unwrap();
+        visitor.depends_on_other_rows
+    }
+
     pub fn collect_subquery(&self, result: &mut Vec<SubqueryExpr>) {
         struct CollectSubQuery<'a> {
             subquerys: &'a mut Vec<SubqueryExpr>,

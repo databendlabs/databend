@@ -105,6 +105,9 @@ impl Rule for RulePushDownFilterEvalScalar {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let eval_scalar: EvalScalar = s_expr.child(0)?.plan().clone().try_into()?;
+        if eval_scalar.depends_on_other_rows() {
+            return Ok(());
+        }
         let scalar_rel_expr = RelExpr::with_s_expr(s_expr);
         let eval_scalar_prop = scalar_rel_expr.derive_relational_prop_child(0)?;
 
