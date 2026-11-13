@@ -31,6 +31,7 @@ databend-functions-scalar-geo = { workspace = true }
 databend-functions-scalar-integer-basic-arithmetic = { workspace = true }
 databend-functions-scalar-math = { workspace = true }
 databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
+encoding_rs = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
 glob = { workspace = true }
