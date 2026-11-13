@@ -91,3 +91,71 @@ EvalScalar
             └── runtime filters: [#0: t.k (#0)]
 
 
+=== filter_stays_above_window_group_running_difference ===
+description: A window group evaluates running_difference in its scalar items, so a filter on the partition key stays above the group.
+sql: SELECT * FROM (SELECT k, sum(running_difference(v)) OVER (PARTITION BY k) AS s, count(*) OVER (PARTITION BY k) AS n FROM t) w WHERE k = 1
+optimized_plan:
+Filter
+├── filters: [eq(t.k (#0), 1)]
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: sum
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    ├── Window
+    │   ├── aggregate function: count
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== filter_stays_out_of_left_any_join_null_supplying_side ===
+description: LEFT ANY JOIN is not converted to an inner join, so filters on its null-supplying side stay above it. The preserved side and the inferred copy are still pushed down.
+sql: SELECT * FROM t LEFT ANY JOIN u ON t.k = u.k WHERE coalesce(u.v, 0) = 0 AND u.v = 1 AND t.k = 1
+optimized_plan:
+Filter
+├── filters: [eq(CAST(assume_not_null(u.v (#3)) AS Int64 NULL), 0), eq(u.v (#3), 1)]
+└── Join(LeftAny)
+    ├── build keys: [u.k (#2)]
+    ├── probe keys: [t.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.u (#1)
+    │   ├── filters: [eq(u.k (#2), 1)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [eq(t.k (#0), 1)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== filter_stays_out_of_right_any_join_null_supplying_side ===
+description: RIGHT ANY JOIN is not converted to an inner join, so filters on its null-supplying side stay above it.
+sql: SELECT * FROM t RIGHT ANY JOIN u ON t.k = u.k WHERE coalesce(t.v, 0) = 0
+optimized_plan:
+Filter
+├── filters: [eq(CAST(assume_not_null(t.v (#1)) AS Int64 NULL), 0)]
+└── Join(RightAny)
+    ├── build keys: [u.k (#2)]
+    ├── probe keys: [t.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.u (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+

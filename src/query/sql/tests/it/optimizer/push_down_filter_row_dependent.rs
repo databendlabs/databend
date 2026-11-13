@@ -71,6 +71,24 @@ async fn test_filter_push_down_row_dependent_barriers() -> Result<()> {
             setup_sqls: &[T_TABLE, U_TABLE],
             sql: "SELECT * FROM (SELECT t.k, (SELECT u.v FROM u WHERE u.k = t.k) AS sv FROM t) s WHERE s.sv IS NOT NULL AND s.k = 1",
         },
+        SqlTestCase {
+            name: "filter_stays_above_window_group_running_difference",
+            description: "A window group evaluates running_difference in its scalar items, so a filter on the partition key stays above the group.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT * FROM (SELECT k, sum(running_difference(v)) OVER (PARTITION BY k) AS s, count(*) OVER (PARTITION BY k) AS n FROM t) w WHERE k = 1",
+        },
+        SqlTestCase {
+            name: "filter_stays_out_of_left_any_join_null_supplying_side",
+            description: "LEFT ANY JOIN is not converted to an inner join, so filters on its null-supplying side stay above it. The preserved side and the inferred copy are still pushed down.",
+            setup_sqls: &[T_TABLE, U_TABLE],
+            sql: "SELECT * FROM t LEFT ANY JOIN u ON t.k = u.k WHERE coalesce(u.v, 0) = 0 AND u.v = 1 AND t.k = 1",
+        },
+        SqlTestCase {
+            name: "filter_stays_out_of_right_any_join_null_supplying_side",
+            description: "RIGHT ANY JOIN is not converted to an inner join, so filters on its null-supplying side stay above it.",
+            setup_sqls: &[T_TABLE, U_TABLE],
+            sql: "SELECT * FROM t RIGHT ANY JOIN u ON t.k = u.k WHERE coalesce(t.v, 0) = 0",
+        },
     ];
 
     for case in &cases {

@@ -158,6 +158,11 @@ JOIN rf_dim d ON f.k = d.k",
             sql: "SELECT m.j FROM rf_mid m LEFT JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON coalesce(f.k, 0) = d.k",
         },
         RuntimeFilterCase {
+            name: "null_supplying_side_of_left_any_join_is_not_pushed",
+            description: "LEFT ANY JOIN is not converted to an inner join, so the filter stays out of its null-supplying side and is removed.",
+            sql: "SELECT m.j FROM rf_mid m LEFT ANY JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON coalesce(f.k, 0) = d.k",
+        },
+        RuntimeFilterCase {
             name: "null_safe_equality_has_no_runtime_filter",
             description: "A null-safe equality matches NULL keys, which a runtime filter would remove.",
             sql: "SELECT f.v FROM rf_fact f JOIN rf_dim d ON f.k IS NOT DISTINCT FROM d.k",
@@ -166,6 +171,12 @@ JOIN rf_dim d ON f.k = d.k",
             name: "stateful_projection_is_not_pushed",
             description: "running_difference depends on the preceding rows, so the filter is removed above its projection.",
             sql: "SELECT f.d FROM (SELECT k, running_difference(v) AS d FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k",
+        },
+        RuntimeFilterCase {
+            name: "window_group_stateful_argument_is_not_pushed",
+            description: "A window group evaluates running_difference in its scalar items, so the filter on the partition key is removed above the group.",
+            sql: "SELECT f.s, f.n FROM (SELECT k, sum(running_difference(v)) OVER (PARTITION BY k) AS s, count(*) OVER (PARTITION BY k) AS n FROM rf_fact) f
 JOIN rf_dim d ON f.k = d.k",
         },
         RuntimeFilterCase {

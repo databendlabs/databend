@@ -218,6 +218,15 @@ fn try_push_down_filter_join(
             }
             JoinPredicate::Left(_) if single_side_is_left => original_predicates.push(predicate),
             JoinPredicate::Right(_) if single_side_is_right => original_predicates.push(predicate),
+            // An ANY outer join is never converted to an inner join. Filtering its
+            // null-supplying input could turn a matched row into a NULL-extended row that the
+            // predicate accepts, such as `coalesce(r.v, 0) = 0`.
+            JoinPredicate::Left(_) if join.join_type == JoinType::RightAny => {
+                original_predicates.push(predicate)
+            }
+            JoinPredicate::Right(_) if join.join_type == JoinType::LeftAny => {
+                original_predicates.push(predicate)
+            }
             JoinPredicate::Left(_) => {
                 if matches!(
                     join.join_type,
