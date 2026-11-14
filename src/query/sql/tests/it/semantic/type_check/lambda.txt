@@ -39,3 +39,10 @@ sql: array_transform([number], (x, y) -> x)
 status: error
 code: 1065
 message: incorrect number of parameters in lambda function, array_transform expects 1 parameter(s), but got 2
+
+=== lambda_parameter_names_are_normalized_like_references ===
+description: Parameter names are normalized as the names in the body are: an unquoted name matches it in any case, a quoted one as written.
+sql: (array_transform([number], X -> x + 1), array_transform([number], "Y" -> "Y" + 1))
+status: ok
+scalar: tuple(array_transform(array(number (#0)), ["x"] -> x + 1), array_transform(array(number (#0)), ["Y"] -> Y + 1))
+type: Tuple(Array(Int64 NULL), Array(Int64 NULL))

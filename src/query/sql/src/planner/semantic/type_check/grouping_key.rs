@@ -111,7 +111,6 @@ use std::collections::HashMap;
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
-use databend_common_ast::ast::Identifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use smallvec::SmallVec;
@@ -237,14 +236,6 @@ impl CoreExprArena<'_> {
         }
         column_refs
     }
-}
-
-/// The names of the parameters of a lambda, as they are bound.
-fn lambda_param_names(params: &[Identifier]) -> Vec<String> {
-    params
-        .iter()
-        .map(|param| param.name.to_lowercase())
-        .collect()
 }
 
 /// Whether the node calls a function, which may not be deterministic.
@@ -393,7 +384,7 @@ where A: TypeCheckAdapter
                 ..
             } => {
                 let args = self.are_grouping_key_eligible(arena, args.iter().copied());
-                let mut params = vec![lambda_param_names(lambda_params)];
+                let mut params = vec![lambda_params.clone()];
                 let body = self.lambda_body_eligibility(arena, *lambda_expr, &mut params);
                 if args.eligible && body.eligible {
                     Eligibility {
@@ -492,7 +483,7 @@ where A: TypeCheckAdapter
                 ..
             } => {
                 let mut eligibility = self.lambda_body_children_eligibility(arena, args, params);
-                params.push(lambda_param_names(lambda_params));
+                params.push(lambda_params.clone());
                 let body = self.lambda_body_eligibility(arena, *lambda_expr, params);
                 params.pop();
                 eligibility.eligible &= body.eligible;

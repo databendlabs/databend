@@ -115,6 +115,7 @@ where A: TypeCheckAdapter
         CoreExprArena::with_aggregate_function_registry(
             self.func_ctx.week_start as u64,
             self.adapter.aggregate_function_registry(),
+            self.name_resolution_ctx,
         )
     }
 

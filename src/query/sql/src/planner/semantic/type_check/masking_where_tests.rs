@@ -156,7 +156,7 @@ fn where_uses_original_only_for_authorized_base_columns() -> Result<()> {
     };
     // The SELECT item that the WHERE alias `email_alias` stands for.
     let email_expr = ast("v['secret']")?;
-    let mut arena = CoreExprArena::for_adapter(&adapter)?;
+    let mut arena = CoreExprArena::for_adapter(&adapter, &NameResolutionContext::default())?;
     let email_root = arena.lower_ast_expr(&email_expr)?;
     let email_original = [("email_alias".to_string(), email_root)];
     let resolve = |context: &mut BindContext,

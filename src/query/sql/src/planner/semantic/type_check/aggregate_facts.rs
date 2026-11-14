@@ -300,7 +300,7 @@ mod tests {
     fn facts(sql: &str) -> (bool, bool, bool) {
         let tokens = tokenize_sql(sql).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let mut arena = CoreExprArena::new(0);
+        let mut arena = CoreExprArena::new(0, &NameResolutionContext::default());
         let root = arena.lower_ast_expr(&expr).unwrap();
         let names = HashSet::from(["my_udaf".to_string()]);
         let name_resolution_ctx = NameResolutionContext::default();
@@ -354,7 +354,7 @@ mod tests {
     fn collects_names_outside_subqueries() {
         let tokens = tokenize_sql("f(a, t.b) + (SELECT g(c)) + h(d)").unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let mut arena = CoreExprArena::new(0);
+        let mut arena = CoreExprArena::new(0, &NameResolutionContext::default());
         let root = arena.lower_ast_expr(&expr).unwrap();
         let mut columns = arena
             .column_refs(root)

@@ -931,6 +931,7 @@ where A: super::TypeCheckAdapter
         let mut arena = CoreExprArena::with_aggregate_function_registry(
             self.func_ctx.week_start as u64,
             self.adapter.aggregate_function_registry(),
+            self.name_resolution_ctx,
         );
         let root = arena.lower_ast_expr(&expr)?;
         let deref!((scalar, data_type)) = self.resolve_checked_core(&arena, root)?;
@@ -1513,7 +1514,7 @@ pub(crate) fn sql_udf_aggregates(
     load: &mut dyn FnMut(&str) -> Result<Option<UserDefinedFunction>>,
     depth: usize,
 ) -> Result<bool> {
-    let mut arena = CoreExprArena::new(0);
+    let mut arena = CoreExprArena::new(0, name_resolution_ctx);
     let root = arena.lower_ast_expr(body)?;
     let mut aggregating = HashSet::new();
     for name in arena.udf_call_names(root) {
@@ -1589,9 +1590,8 @@ impl SqlUdfParameterSubstitution<'_> {
         {
             let depth = self.lambda_params.len();
             self.lambda_params.extend(
-                body.params
-                    .iter()
-                    .map(|param| normalize_identifier(param, self.name_resolution_ctx).name),
+                self.name_resolution_ctx
+                    .normalize_lambda_params(&body.params),
             );
             result = body.expr.walk_mut(self).map(|_| ());
             self.lambda_params.truncate(depth);

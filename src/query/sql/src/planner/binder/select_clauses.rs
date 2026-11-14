@@ -251,7 +251,10 @@ impl Binder {
             order_by,
         } = written;
         let mut clauses = SelectClauseExprs {
-            arena: CoreExprArena::for_adapter(&FullTypeCheckAdapter::new(self.ctx.clone())?)?,
+            arena: CoreExprArena::for_adapter(
+                &FullTypeCheckAdapter::new(self.ctx.clone())?,
+                &self.name_resolution_ctx,
+            )?,
             select_list,
             items: Vec::with_capacity(select_list.len()),
             expr_positions: Vec::new(),

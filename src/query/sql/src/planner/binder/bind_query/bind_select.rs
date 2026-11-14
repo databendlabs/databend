@@ -982,10 +982,9 @@ impl Visitor for MaxColumnPosition {
         }
 
         self.lambda_params.push(
-            lambda
-                .params
-                .iter()
-                .map(|param| self.name_resolution_ctx.normalize_identifier(param).name)
+            self.name_resolution_ctx
+                .normalize_lambda_params(&lambda.params)
+                .into_iter()
                 .collect(),
         );
         let result = lambda.expr.walk(self);

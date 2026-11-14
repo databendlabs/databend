@@ -20,7 +20,6 @@ use std::convert::Infallible;
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::LambdaArgument;
 use databend_common_exception::ErrorCode;
@@ -128,7 +127,9 @@ impl<'a> CoreExprArena<'a> {
             span,
             func_name,
             args,
-            lambda_params: &lambda.params,
+            lambda_params: self
+                .name_resolution_ctx
+                .normalize_lambda_params(&lambda.params),
             lambda_expr,
         }))
     }
@@ -335,7 +336,7 @@ where A: super::TypeCheckAdapter
         span: Span,
         func_name: &str,
         args: &CoreExprArgs,
-        lambda_params: &[Identifier],
+        lambda_params: &[String],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if func_name == "json_path_transform" {
@@ -376,7 +377,7 @@ where A: super::TypeCheckAdapter
         func_name: &str,
         mut arg: ScalarExpr,
         mut arg_type: DataType,
-        lambda_params: &[Identifier],
+        lambda_params: &[String],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut func_name = func_name;
@@ -410,10 +411,7 @@ where A: super::TypeCheckAdapter
             is_cast_variant = true;
         }
 
-        let params = lambda_params
-            .iter()
-            .map(|param| param.name.to_lowercase())
-            .collect::<Vec<_>>();
+        let params = lambda_params.to_vec();
 
         self.check_lambda_param_count(func_name, params.len(), span)?;
 
@@ -664,7 +662,7 @@ where A: super::TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         span: Span,
         args: &CoreExprArgs,
-        lambda_params: &[Identifier],
+        lambda_params: &[String],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let func_name = "json_path_transform";
@@ -696,10 +694,7 @@ where A: super::TypeCheckAdapter
 
         let fold_to_null = json_type == DataType::Null || path_type == DataType::Null;
 
-        let params = lambda_params
-            .iter()
-            .map(|param| param.name.to_lowercase())
-            .collect::<Vec<_>>();
+        let params = lambda_params.to_vec();
         let param_type = DataType::Nullable(Box::new(DataType::Variant));
         let lambda_columns = vec![(params[0].clone(), param_type.clone())];
 

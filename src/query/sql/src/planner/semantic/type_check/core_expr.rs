@@ -43,38 +43,41 @@ use super::scalar_rewrite::binary_op_core_function;
 use super::scalar_rewrite::can_lower_binary_op;
 use super::variant::json_op_core_function;
 use super::with_semantic_span;
+use crate::NameResolutionContext;
 use crate::binder::ExprContext;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryType;
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn new(week_start: u64) -> Self {
-        Self {
-            nodes: Vec::new(),
-            week_start,
-            aggregate_function_registry: &AGGR_REGISTRY,
-            in_lambda_function: false,
-        }
+    pub(super) fn new(week_start: u64, name_resolution_ctx: &NameResolutionContext) -> Self {
+        Self::with_aggregate_function_registry(week_start, &AGGR_REGISTRY, name_resolution_ctx)
     }
 
-    /// An arena for expressions that `adapter` type checks.
-    pub(crate) fn for_adapter<A: TypeCheckAdapter>(adapter: &A) -> Result<Self> {
+    /// An arena for expressions that `adapter` type checks with
+    /// `name_resolution_ctx`.
+    pub(crate) fn for_adapter<A: TypeCheckAdapter>(
+        adapter: &A,
+        name_resolution_ctx: &NameResolutionContext,
+    ) -> Result<Self> {
         Ok(Self::with_aggregate_function_registry(
             adapter.function_context()?.week_start as u64,
             adapter.aggregate_function_registry(),
+            name_resolution_ctx,
         ))
     }
 
     pub(super) fn with_aggregate_function_registry(
         week_start: u64,
         aggregate_function_registry: &'static AggregateRegistry,
+        name_resolution_ctx: &NameResolutionContext,
     ) -> Self {
         Self {
             nodes: Vec::new(),
             week_start,
             aggregate_function_registry,
             in_lambda_function: false,
+            name_resolution_ctx: name_resolution_ctx.clone(),
         }
     }
 
@@ -862,13 +865,13 @@ mod tests {
     fn assert_sql_lowers_to(sql: &str, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
         let tokens = tokenize_sql(sql).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let mut arena = CoreExprArena::new(0);
+        let mut arena = CoreExprArena::new(0, &NameResolutionContext::default());
         let root = arena.lower_ast_expr(&expr).unwrap();
         check(&arena, root);
     }
 
     fn assert_expr_lowers_to(expr: &Expr, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
-        let mut arena = CoreExprArena::new(0);
+        let mut arena = CoreExprArena::new(0, &NameResolutionContext::default());
         let root = arena.lower_ast_expr(expr).unwrap();
         check(&arena, root);
     }
@@ -876,7 +879,7 @@ mod tests {
     fn assert_sql_lower_error_contains(sql: &str, expected: &str) {
         let tokens = tokenize_sql(sql).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let mut arena = CoreExprArena::new(0);
+        let mut arena = CoreExprArena::new(0, &NameResolutionContext::default());
         let err = match arena.lower_ast_expr(&expr) {
             Ok(_) => panic!("expected lower to fail for `{sql}`"),
             Err(err) => err,
@@ -1133,7 +1136,7 @@ mod tests {
                     panic!("json_path_transform should lower as a lambda function");
                 };
                 assert_eq!(args.len(), 2);
-                assert_eq!(lambda_params[0].name, "value");
+                assert_eq!(lambda_params[0], "value");
                 assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
                     func_name: "plus",
                     ..

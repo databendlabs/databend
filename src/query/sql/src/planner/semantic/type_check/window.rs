@@ -272,7 +272,8 @@ where A: TypeCheckAdapter
         display_name: &str,
         window: &CoreWindow<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let aggregate_arena = CoreExprArena::new(self.func_ctx.week_start as u64);
+        let aggregate_arena =
+            CoreExprArena::new(self.func_ctx.week_start as u64, self.name_resolution_ctx);
         let params = SmallVec::new();
         let args = SmallVec::new();
         let order_by = SmallVec::new();

@@ -109,6 +109,8 @@ pub struct CoreExprArena<'a> {
     week_start: u64,
     pub(super) aggregate_function_registry: &'static AggregateRegistry,
     pub(super) in_lambda_function: bool,
+    /// How identifiers are normalized, for the parameters of lambdas.
+    name_resolution_ctx: NameResolutionContext,
 }
 
 enum CoreExpr<'a> {
@@ -161,7 +163,8 @@ enum CoreExpr<'a> {
         span: Span,
         func_name: &'static str,
         args: CoreExprArgs,
-        lambda_params: &'a [Identifier],
+        /// The names of the parameters, normalized.
+        lambda_params: Vec<String>,
         lambda_expr: CoreExprId,
     },
     SearchFunction {
