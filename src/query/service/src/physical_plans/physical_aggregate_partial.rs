@@ -202,7 +202,11 @@ impl IPhysicalPlan for AggregatePartial {
             builder.settings.get_max_memory_usage()? as usize,
             builder.main_pipeline.output_len(),
         );
-        let partial_agg_config = HashTableConfig::partial_aggregate();
+        // The final aggregates of this node scatter the states by group hash among
+        // `max_threads` partitions (see `build_final_aggregates`): split the partial tables the
+        // same way, so that each partition is handed over without copying its rows.
+        let partial_agg_config = HashTableConfig::partial_aggregate()
+            .with_route_partitions(builder.settings.get_max_threads()?);
 
         // For rank limit, we can filter data using sort with rank before partial.
         if let Some((sort_desc, limit)) =
