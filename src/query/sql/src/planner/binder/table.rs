@@ -179,7 +179,12 @@ impl Binder {
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
         let mut new_bind_context = BindContext {
-            parent: Some(Box::new(bind_context.clone())),
+            // A CTE definition is bound at the point of its `WITH` clause, not at the point
+            // where it is referenced. Chaining the referencing context as a parent would let
+            // the body bind its columns — a CTE referenced from a lateral subquery would
+            // silently correlate with whatever the subquery's left side produces. Earlier
+            // CTEs still resolve through the cloned `cte_context`.
+            parent: None,
             binding_depth: bind_context.next_depth()?,
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -207,6 +212,10 @@ impl Binder {
 
         let (s_expr, mut res_bind_context) =
             self.bind_query(&mut new_bind_context, &cte_info.query)?;
+        // The body above was bound without the referencing scope, but the scan it produced is
+        // part of the referencing query: a correlated subquery that reads the CTE still has to
+        // reach the columns of the query it sits in.
+        res_bind_context.parent = Some(Box::new(bind_context.clone()));
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {

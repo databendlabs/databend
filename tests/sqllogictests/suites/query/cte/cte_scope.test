@@ -1,0 +1,46 @@
+# A CTE body is bound where its WITH clause is, so it can never resolve a column
+# that only the query referencing it provides. Issue #20983.
+
+# The enclosing SELECT does not provide x.
+statement error 1065
+WITH t AS (SELECT x) SELECT * FROM t
+
+# Another item of the referencing FROM does not provide x.
+statement error 1065
+WITH t AS (SELECT x) SELECT * FROM (SELECT 1 AS x) s, t
+
+# The left side of a LATERAL subquery used to leak into the CTE body and
+# this query returned `1 1`.
+statement error 1065
+WITH t AS (SELECT x) SELECT * FROM (SELECT 1 AS x) s, LATERAL (SELECT * FROM t)
+
+# A self-contained CTE is still readable from a lateral subquery.
+query II
+WITH t AS (SELECT 1 AS x) SELECT * FROM (SELECT 1 AS x) s, LATERAL (SELECT * FROM t)
+----
+1 1
+
+# A CTE body may still reference a CTE defined earlier in the same WITH clause.
+query I
+WITH a AS (SELECT 1 AS x), b AS (SELECT x + 1 AS y FROM a) SELECT * FROM b
+----
+2
+
+# A correlated subquery that reads a CTE still reaches the columns of the
+# query it sits in (the TPC-DS Q1 shape).
+statement ok
+create or replace table cte_scope_t(k int, v int)
+
+statement ok
+insert into cte_scope_t values (1, 10), (1, 30), (2, 5)
+
+query II
+WITH c AS (SELECT k, v FROM cte_scope_t)
+SELECT k, v FROM c c1
+WHERE v > (SELECT avg(v) * 1.2 FROM c c2 WHERE c1.k = c2.k)
+ORDER BY k
+----
+1 30
+
+statement ok
+drop table cte_scope_t
