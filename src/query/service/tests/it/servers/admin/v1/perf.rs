@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_query::servers::admin::v1::perf::process_memory_perf_page;
 use databend_query::servers::admin::v1::perf::process_perf_page;
+use databend_query::servers::admin::v1::perf::query_memory_perf_page;
 use databend_query::servers::admin::v1::perf::query_perf_page;
 use http::Method;
 use http::StatusCode;
@@ -63,5 +65,44 @@ async fn test_process_perf_page() -> anyhow::Result<()> {
     assert!(body.contains("CPU profile of every thread on every node"));
     assert!(body.contains(r#"id="seconds" type="number" value="60" min="1" max="600""#));
     assert!(!body.contains("{{"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_memory_perf_pages() -> anyhow::Result<()> {
+    let ep = Route::new()
+        .at(
+            "/v1/queries/:query_id/memory_perf",
+            get(query_memory_perf_page),
+        )
+        .at("/v1/memory_perf", get(process_memory_perf_page));
+
+    for (uri, title) in [
+        (
+            "/v1/queries/q1/memory_perf",
+            "Memory allocation profile of query q1",
+        ),
+        (
+            "/v1/memory_perf",
+            "Memory allocation profile of every query on every node",
+        ),
+    ] {
+        let response = ep
+            .call(
+                Request::builder()
+                    .uri(Uri::from_static(uri))
+                    .method(Method::GET)
+                    .finish(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().into_string().await?;
+        assert!(body.contains(title));
+        // The frequency is CPU only.
+        assert!(body.contains(r#"<label style="display: none;">Frequency (Hz)"#));
+        assert!(!body.contains("{{"));
+    }
     Ok(())
 }

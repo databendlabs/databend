@@ -59,6 +59,7 @@ use log::LevelFilter;
 use pin_project_lite::pin_project;
 
 use crate::runtime::MemStatBuffer;
+use crate::runtime::MemoryProfiler;
 use crate::runtime::OutOfLimit;
 use crate::runtime::QueryPerf;
 use crate::runtime::TimeSeriesProfiles;
@@ -152,7 +153,7 @@ pub struct TrackingPayload {
     /// Read hardware perf counters around processor runs (EXPLAIN PERF).
     pub perf_enabled: bool,
     /// The query this thread works for, 0 if none. A query-scoped
-    /// `CpuProfiler` samples the threads carrying its token. A plain integer
+    /// `CpuProfiler` or `MemoryProfiler` samples the threads carrying its token. A plain integer
     /// so that cloning the payload, done for every processor run, costs no
     /// atomic operation.
     pub perf_query_token: u64,
@@ -392,8 +393,9 @@ impl Drop for TrackingGuard {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
 
-            // Sync the perf query token of the restored payload for the profiler
+            // Sync the perf query token of the restored payload for the profilers
             QueryPerf::sync_from_payload(&thread_tracker.payload);
+            MemoryProfiler::sync_from_payload(&thread_tracker.payload);
         });
     }
 }
@@ -481,8 +483,9 @@ impl ThreadTracker {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
-            // Sync the perf query token of the new payload for the profiler
+            // Sync the perf query token of the new payload for the profilers
             QueryPerf::sync_from_payload(&thread_tracker.payload);
+            MemoryProfiler::sync_from_payload(&thread_tracker.payload);
 
             guard
         })
@@ -597,6 +600,15 @@ impl ThreadTracker {
                 unsafe { std::mem::transmute(tracker.payload.io_stats.as_ref()) }
             })
             .unwrap_or(None)
+    }
+
+    /// Calls `f` with the payload of the current thread, `None` while the
+    /// tracker is switched or torn down. Safe to call from the allocator.
+    pub(crate) fn with_payload<R>(f: impl FnOnce(&TrackingPayload) -> R) -> Option<R> {
+        TRACKER
+            .try_with(|tracker| tracker.try_borrow().ok().map(|t| f(&t.payload)))
+            .ok()
+            .flatten()
     }
 
     pub fn perf_query_token() -> u64 {
