@@ -77,7 +77,7 @@ description: A lambda UDF whose body is pure SQL is inlined, so it must remain u
 sql: SELECT array_transform([a], x -> sql_add_one(x)) FROM t
 status: ok
 EvalScalar
-├── scalars: [array_transform(array(t.a (#0)), ["x"] -> x (#2) + 1) AS (#2)]
+├── scalars: [array_transform(array(t.a (#0)), ["x"] -> x + 1) AS (#2)]
 └── Scan
     ├── table: default.t (#0)
     ├── filters: []

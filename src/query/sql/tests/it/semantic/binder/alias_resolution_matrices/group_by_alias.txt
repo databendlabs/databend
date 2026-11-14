@@ -144,10 +144,10 @@ status: ok
 EvalScalar
 ├── scalars: [x (#2) AS (#2), COUNT(*) (#3) AS (#3)]
 └── Aggregate(Initial)
-    ├── group items: [array_transform(array(t.a (#0)), ["v"] -> v (#2) + 1) AS (#2)]
+    ├── group items: [array_transform(array(t.a (#0)), ["v"] -> v + 1) AS (#2)]
     ├── aggregate functions: [count() AS (#3)]
     └── EvalScalar
-        ├── scalars: [array_transform(array(t.a (#0)), ["v"] -> v (#2) + 1) AS (#2)]
+        ├── scalars: [array_transform(array(t.a (#0)), ["v"] -> v + 1) AS (#2)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []

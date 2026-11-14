@@ -81,6 +81,7 @@ where A: TypeCheckAdapter
             forbid_virtual_computed_column: false,
             grouping_key: Default::default(),
             grouping_key_memo: Default::default(),
+            lambda_params: Vec::new(),
         })
     }
 

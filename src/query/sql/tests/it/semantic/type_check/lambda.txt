@@ -16,7 +16,7 @@ message: function array_transform must have a lambda expression
 description: Lambda functions should be allowed inside another lambda body.
 sql: array_transform([number], x -> array_transform([x], y -> y))
 status: ok
-scalar: array_transform(array(number (#0)), ["x"] -> array_transform(array(x (#7)), ["y"] -> y (#8)))
+scalar: array_transform(array(number (#0)), ["x"] -> array_transform(array(x), ["y"] -> y))
 type: Array(Array(Int64 NULL))
 
 === lambda_function_requires_collection_argument ===

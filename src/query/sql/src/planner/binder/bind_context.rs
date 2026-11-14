@@ -636,6 +636,22 @@ impl BindContext {
     // The column index may not be consecutive, and the length of columns
     // cannot be used to calculate the column index of the lambda argument.
     // We need to start from the current largest column index.
+    /// Whether the expressions bound in this context read `index` from its
+    /// input: as one of its columns, or as the output of one of its grouping
+    /// keys.
+    pub fn owns_symbol(&self, index: Symbol) -> bool {
+        self.columns.iter().any(|column| column.index == index)
+            || self.aggregate_info.is_grouping_key_output(index)
+    }
+
+    /// The context that owns `index`, this one or an enclosing one, with the
+    /// number of contexts between them.
+    pub fn symbol_owner(&self, index: Symbol) -> Option<(usize, &BindContext)> {
+        std::iter::successors(Some(self), |context| context.parent.as_deref())
+            .enumerate()
+            .find(|(_, context)| context.owns_symbol(index))
+    }
+
     pub fn next_column_index(&self) -> Symbol {
         self.columns
             .iter()

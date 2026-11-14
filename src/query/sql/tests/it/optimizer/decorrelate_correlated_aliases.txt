@@ -214,7 +214,7 @@ EvalScalar
         │       └── EvalScalar
         │           ├── scalars: [1 AS (#2)]
         │           └── Filter
-        │               ├── filters: [eq(c0array (#1), c0array (#0)), eq(array_any(array_filter(c0array (#1), ["x"] -> x (#2) = 'baz')), 'baz')]
+        │               ├── filters: [eq(c0array (#1), c0array (#0)), eq(array_any(array_filter(c0array (#1), ["x"] -> x = 'baz')), 'baz')]
         │               └── ConstantTableScan
         │                   ├── columns: [c0array (#1)]
         │                   └── num_rows: [1]
@@ -238,7 +238,7 @@ Exchange(Merge)
                 │   └── EvalScalar
                 │       ├── scalars: [c0array (#1) AS (#1), 1 AS (#2)]
                 │       └── Filter
-                │           ├── filters: [eq(array_any(array_filter(c0array (#1), ["x"] -> x (#2) = 'baz')), 'baz')]
+                │           ├── filters: [eq(array_any(array_filter(c0array (#1), ["x"] -> x = 'baz')), 'baz')]
                 │           └── ConstantTableScan
                 │               ├── columns: [c0array (#1)]
                 │               └── num_rows: [1]
@@ -276,7 +276,7 @@ EvalScalar
         │       └── EvalScalar
         │           ├── scalars: [1 AS (#2)]
         │           └── Filter
-        │               ├── filters: [eq(c (#1), 1), eq(array_any(array_filter(c0array (#0), ["x"] -> x (#2) = 'baz')), 'baz')]
+        │               ├── filters: [eq(c (#1), 1), eq(array_any(array_filter(c0array (#0), ["x"] -> x = 'baz')), 'baz')]
         │               └── ConstantTableScan
         │                   ├── columns: [c (#1)]
         │                   └── num_rows: [1]
@@ -318,7 +318,7 @@ Exchange(Merge)
                 │                   └── Exchange(Hash)
                 │                       ├── Exchange(Hash): keys: [c0array (#4)]
                 │                       └── Filter
-                │                           ├── filters: [eq(array_any(array_filter(c0array (#4), ["x"] -> x (#2) = 'baz')), 'baz')]
+                │                           ├── filters: [eq(array_any(array_filter(c0array (#4), ["x"] -> x = 'baz')), 'baz')]
                 │                           └── ConstantTableScan
                 │                               ├── columns: [c0array (#4)]
                 │                               └── num_rows: [1]

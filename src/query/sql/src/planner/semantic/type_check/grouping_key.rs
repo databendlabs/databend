@@ -726,16 +726,7 @@ where A: TypeCheckAdapter
         let first = self
             .grouping_key_input_scope()
             .map_or(0, |position| position + 1);
-        let Some((position, owner)) =
-            context_chain(self.bind_context)
-                .enumerate()
-                .find(|(_, context)| {
-                    context
-                        .columns
-                        .iter()
-                        .any(|input| input.index == column.index)
-                })
-        else {
+        let Some((position, owner)) = self.bind_context.symbol_owner(column.index) else {
             return Ok(());
         };
         if position < first

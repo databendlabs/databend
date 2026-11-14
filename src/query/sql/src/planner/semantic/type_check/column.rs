@@ -57,6 +57,12 @@ where A: TypeCheckAdapter
         Ok(match ident {
             ColumnID::Name(ident) => {
                 let column = normalize_identifier(ident, self.name_resolution_ctx);
+                if database.is_none()
+                    && table.is_none()
+                    && let Some(param) = self.lambda_param(&column.name)
+                {
+                    return Ok(NameResolutionResult::Column(param.clone()));
+                }
                 self.bind_context.resolve_name(
                     database.as_deref(),
                     table.as_deref(),

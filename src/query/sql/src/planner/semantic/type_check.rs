@@ -45,6 +45,7 @@ use tokio::runtime::Handle;
 
 use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
+use crate::ColumnBinding;
 use crate::MetadataRef;
 use crate::binder::AliasLookup;
 use crate::binder::ScalarFoldingPolicy;
@@ -553,6 +554,9 @@ pub struct TypeChecker<'a, A> {
     // Grouping-key matching work memoized for the arena being bound, see
     // `grouping_key.rs`.
     grouping_key_memo: grouping_key::GroupingKeyMemo,
+    // The parameters of the lambdas whose bodies are being bound, the
+    // innermost last, see `lambda.rs`.
+    lambda_params: Vec<Vec<ColumnBinding>>,
 }
 
 #[cfg(test)]
