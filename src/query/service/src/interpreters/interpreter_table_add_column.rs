@@ -36,6 +36,7 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -91,7 +92,10 @@ impl Interpreter for AddTableColumnInterpreter {
 
             let mut table_info = tbl.get_table_info().clone();
             let engine = table_info.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+            if matches!(
+                engine.to_uppercase().as_str(),
+                VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
+            ) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
                     self.plan.database, self.plan.table, engine

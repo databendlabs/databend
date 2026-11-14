@@ -24,6 +24,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::binder::validate_constraints_by_schema;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
@@ -77,7 +78,10 @@ impl Interpreter for DropTableColumnInterpreter {
 
             let table_info = table.get_table_info();
             let engine = table_info.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+            if matches!(
+                engine.to_uppercase().as_str(),
+                VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
+            ) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
                     self.plan.database, self.plan.table, engine

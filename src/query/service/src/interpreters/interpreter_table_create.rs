@@ -279,13 +279,18 @@ impl CreateTableInterpreter {
         let tenant = self.ctx.get_tenant();
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        // Tables of an external catalog (iceberg) are committed by the catalog itself right
+        // away: they cannot be staged as dropped and they have no meta table id to commit.
+        let external_catalog = catalog.is_external();
 
         let mut req = self.build_request()?;
         let dictionary_indexes = self.take_dictionary_indexes(&mut req.table_meta).await?;
 
         // create a dropped table first.
-        req.as_dropped = true;
-        req.table_meta.drop_on = Some(Utc::now());
+        if !external_catalog {
+            req.as_dropped = true;
+            req.table_meta.drop_on = Some(Utc::now());
+        }
         let table_meta = req.table_meta.clone();
         // The prefix is moved into the pipeline's 'static finish hook, while the request itself can
         // be consumed by the catalog.
@@ -321,7 +326,7 @@ impl CreateTableInterpreter {
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
         let db_id = reply.db_id;
 
-        if temp_prefix.is_none() {
+        if temp_prefix.is_none() && !external_catalog {
             self.process_ownership(&tenant, reply).await?;
         }
 
@@ -381,7 +386,13 @@ impl CreateTableInterpreter {
             schema: self.plan.schema.clone(),
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan),
-            table_info: Some(table_info),
+            // An external catalog resolves the table it created from the catalog; the staged
+            // table info has no iceberg engine options to read it with.
+            table_info: if external_catalog {
+                None
+            } else {
+                Some(table_info)
+            },
             lineage_target_table_id: None,
             lineage_target_catalog_type: if self.plan.engine == Engine::Iceberg {
                 CatalogType::Iceberg
@@ -433,9 +444,8 @@ impl CreateTableInterpreter {
         //
         // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
 
-        pipeline
-            .main_pipeline
-            .lift_on_finished(move |info: &ExecutionInfo| {
+        if !external_catalog {
+            pipeline.main_pipeline.lift_on_finished(move |info: &ExecutionInfo| {
                 let qualified_table_name = format!("{}.{}", db_name, table_name);
 
                 if info.res.is_ok() {
@@ -466,6 +476,20 @@ impl CreateTableInterpreter {
 
                 Ok(())
             });
+        } else {
+            let qualified_table_name = format!("{}.{}", db_name, table_name);
+            pipeline
+                .main_pipeline
+                .lift_on_finished(move |info: &ExecutionInfo| {
+                    if info.res.is_ok() {
+                        info!(
+                            "create_table_as_select {} success, committed by the external catalog",
+                            qualified_table_name
+                        );
+                    }
+                    Ok(())
+                });
+        }
 
         if let Some(temp_prefix) = temp_prefix {
             let temp_tbl_mgr = self.ctx.get_current_session().temp_tbl_mgr();

@@ -28,6 +28,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::NumberScalar;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -37,11 +38,17 @@ use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_storage::MutationStatus;
 use iceberg::arrow::schema_to_arrow_schema;
 use iceberg::spec::DataFileFormat;
+use iceberg::spec::Datum;
 use iceberg::spec::Literal;
 use iceberg::spec::PartitionKey;
+use iceberg::spec::PrimitiveLiteral;
+use iceberg::spec::PrimitiveType;
 use iceberg::spec::Struct as IcebergStruct;
 use iceberg::transaction::ApplyTransactionAction;
 use iceberg::transaction::Transaction;
+use iceberg::transform::BoxedTransformFunction;
+use iceberg::transform::TransformFunction;
+use iceberg::transform::create_transform_function;
 use iceberg::writer::IcebergWriter;
 use iceberg::writer::IcebergWriterBuilder;
 use iceberg::writer::base_writer::data_file_writer::DataFileWriterBuilder;
@@ -211,7 +218,7 @@ impl IcebergDataFileWriter {
     {
         // Get partition column indices and field info
         let partition_fields = partition_spec.fields();
-        let mut partition_column_indices = Vec::with_capacity(partition_fields.len());
+        let mut partition_sources = Vec::with_capacity(partition_fields.len());
 
         for field in partition_fields {
             // Find the source column index in the schema
@@ -234,7 +241,29 @@ impl IcebergDataFileWriter {
                     ))
                 })?;
 
-            partition_column_indices.push((col_idx, field.clone()));
+            let source_type = match schema_field.field_type.as_ref() {
+                iceberg::spec::Type::Primitive(primitive) => primitive.clone(),
+                _ => {
+                    return Err(ErrorCode::TableEngineNotSupported(format!(
+                        "Iceberg partition source column '{field_name}' is not a primitive type"
+                    )));
+                }
+            };
+
+            // The stored partition value is the transformed source value, which is not
+            // necessarily the raw column value (bucket, truncate, temporal transforms).
+            let transform = create_transform_function(&field.transform).map_err(|err| {
+                ErrorCode::TableEngineNotSupported(format!(
+                    "Iceberg partition transform '{}' on column '{field_name}' is not supported: {err}",
+                    field.transform
+                ))
+            })?;
+
+            partition_sources.push(PartitionSource {
+                column_index: col_idx,
+                transform,
+                source_type,
+            });
         }
 
         // Group rows by partition values
@@ -244,7 +273,7 @@ impl IcebergDataFileWriter {
         for row_idx in 0..num_rows {
             // Build partition value for this row
             let partition_value =
-                self.extract_partition_value(&block, row_idx, &partition_column_indices)?;
+                self.extract_partition_value(&block, row_idx, &partition_sources)?;
             let bitmap = partition_groups.entry(partition_value).or_insert_with(|| {
                 let mut bitmap = MutableBitmap::new();
                 bitmap.extend_constant(num_rows, false);
@@ -293,76 +322,22 @@ impl IcebergDataFileWriter {
         &self,
         block: &DataBlock,
         row_idx: usize,
-        partition_column_indices: &[(usize, iceberg::spec::PartitionField)],
+        partition_sources: &[PartitionSource],
     ) -> Result<IcebergStruct> {
-        let mut literals: Vec<Option<Literal>> = Vec::with_capacity(partition_column_indices.len());
+        let mut literals: Vec<Option<Literal>> = Vec::with_capacity(partition_sources.len());
 
-        for (col_idx, _field) in partition_column_indices {
-            let entry = &block.columns()[*col_idx];
+        for source in partition_sources {
+            let entry = &block.columns()[source.column_index];
             let column = entry.to_column();
             let value = column.index(row_idx);
-
-            // Convert Databend ScalarRef to Iceberg Literal
-            // Note: We only support Identity transform for now
-            let literal = self.scalar_to_iceberg_literal(value)?;
-            literals.push(literal);
+            literals.push(transform_partition_literal(
+                value,
+                &source.source_type,
+                source.transform.as_ref(),
+            )?);
         }
 
         Ok(IcebergStruct::from_iter(literals))
-    }
-
-    fn scalar_to_iceberg_literal(&self, scalar: Option<ScalarRef>) -> Result<Option<Literal>> {
-        match scalar {
-            None => Ok(None),
-            Some(s) => {
-                let lit = match s {
-                    ScalarRef::Null => return Ok(None),
-                    ScalarRef::Boolean(v) => Literal::bool(v),
-                    ScalarRef::Number(n) => match n {
-                        databend_common_expression::types::NumberScalar::Int8(v) => {
-                            Literal::int(v as i32)
-                        }
-                        databend_common_expression::types::NumberScalar::Int16(v) => {
-                            Literal::int(v as i32)
-                        }
-                        databend_common_expression::types::NumberScalar::Int32(v) => {
-                            Literal::int(v)
-                        }
-                        databend_common_expression::types::NumberScalar::Int64(v) => {
-                            Literal::long(v)
-                        }
-                        databend_common_expression::types::NumberScalar::UInt8(v) => {
-                            Literal::int(v as i32)
-                        }
-                        databend_common_expression::types::NumberScalar::UInt16(v) => {
-                            Literal::int(v as i32)
-                        }
-                        databend_common_expression::types::NumberScalar::UInt32(v) => {
-                            Literal::long(v as i64)
-                        }
-                        databend_common_expression::types::NumberScalar::UInt64(v) => {
-                            Literal::decimal(v as i128)
-                        }
-                        databend_common_expression::types::NumberScalar::Float32(v) => {
-                            Literal::float(v.0)
-                        }
-                        databend_common_expression::types::NumberScalar::Float64(v) => {
-                            Literal::double(v.0)
-                        }
-                    },
-                    ScalarRef::String(v) => Literal::string(v),
-                    ScalarRef::Date(v) => Literal::date(v),
-                    ScalarRef::Timestamp(v) => Literal::timestamp(v),
-                    _ => {
-                        return Err(ErrorCode::Unimplemented(format!(
-                            "Unsupported partition column type: {:?}",
-                            s
-                        )));
-                    }
-                };
-                Ok(Some(lit))
-            }
-        }
     }
 
     fn build_record_batch_with_schema(
@@ -370,41 +345,163 @@ impl IcebergDataFileWriter {
         block: DataBlock,
         arrow_schema: Arc<ArrowSchema>,
     ) -> Result<arrow_array::RecordBatch> {
-        use arrow_array::RecordBatch;
-        use arrow_array::cast::AsArray;
-        use arrow_schema::DataType as ArrowDataType;
+        block_to_record_batch(block, arrow_schema)
+    }
+}
 
-        let num_rows = block.num_rows();
-        if arrow_schema.fields().is_empty() {
-            return Ok(RecordBatch::try_new_with_options(
-                arrow_schema,
-                vec![],
-                &arrow_array::RecordBatchOptions::default().with_row_count(Some(num_rows)),
-            )?);
+/// Convert a databend block into a record batch of the iceberg table schema.
+fn block_to_record_batch(
+    block: DataBlock,
+    arrow_schema: Arc<ArrowSchema>,
+) -> Result<arrow_array::RecordBatch> {
+    use arrow_array::RecordBatch;
+
+    let num_rows = block.num_rows();
+    if arrow_schema.fields().is_empty() {
+        return Ok(RecordBatch::try_new_with_options(
+            arrow_schema,
+            vec![],
+            &arrow_array::RecordBatchOptions::default().with_row_count(Some(num_rows)),
+        )?);
+    }
+
+    let mut arrays = Vec::with_capacity(block.columns().len());
+    for (entry, field) in block.columns().iter().zip(arrow_schema.fields()) {
+        let array = entry.to_column().maybe_gc().into_arrow_rs();
+
+        // Databend stores view types as well as 64-bit decimals and large lists, while
+        // the iceberg writer expects the physical types of the table schema.
+        let array = if array.data_type() == field.data_type() {
+            array
+        } else {
+            // A safe cast would turn a value that does not fit the target type into NULL, so a
+            // write that cannot represent its input would silently store NULLs instead of
+            // failing.
+            let casted = arrow_cast::cast_with_options(
+                &array,
+                field.data_type(),
+                &arrow_cast::CastOptions {
+                    safe: false,
+                    ..Default::default()
+                },
+            )
+            .map_err(|err| {
+                ErrorCode::TableSchemaMismatch(format!(
+                    "Cannot cast column '{}' from {:?} to {:?} for the iceberg table: {err}",
+                    field.name(),
+                    array.data_type(),
+                    field.data_type(),
+                ))
+            })?;
+            debug_assert_eq!(casted.data_type(), field.data_type());
+            casted
+        };
+
+        arrays.push(array);
+    }
+
+    Ok(RecordBatch::try_new(arrow_schema, arrays)?)
+}
+
+/// One partition field of the table's partition spec, bound to the block column it reads.
+struct PartitionSource {
+    column_index: usize,
+    transform: BoxedTransformFunction,
+    source_type: PrimitiveType,
+}
+
+/// Serialize a primitive value with iceberg's binary single-value serialization, the format
+/// [`Datum::try_from_bytes`] parses.
+fn iceberg_value_bytes(ty: &PrimitiveType, value: &PrimitiveLiteral) -> Result<Vec<u8>> {
+    let bytes = match (ty, value) {
+        (PrimitiveType::Boolean, PrimitiveLiteral::Boolean(v)) => vec![u8::from(*v)],
+        (PrimitiveType::Int | PrimitiveType::Date, PrimitiveLiteral::Int(v)) => {
+            v.to_le_bytes().to_vec()
         }
+        (
+            PrimitiveType::Long
+            | PrimitiveType::Time
+            | PrimitiveType::Timestamp
+            | PrimitiveType::Timestamptz
+            | PrimitiveType::TimestampNs
+            | PrimitiveType::TimestamptzNs,
+            PrimitiveLiteral::Long(v),
+        ) => v.to_le_bytes().to_vec(),
+        (PrimitiveType::Float, PrimitiveLiteral::Float(v)) => v.0.to_le_bytes().to_vec(),
+        (PrimitiveType::Double, PrimitiveLiteral::Double(v)) => v.0.to_le_bytes().to_vec(),
+        (PrimitiveType::String, PrimitiveLiteral::String(v)) => v.clone().into_bytes(),
+        (PrimitiveType::Binary | PrimitiveType::Fixed(_), PrimitiveLiteral::Binary(v)) => v.clone(),
+        (PrimitiveType::Decimal { .. }, PrimitiveLiteral::Int128(v)) => v.to_be_bytes().to_vec(),
+        (PrimitiveType::Uuid, PrimitiveLiteral::UInt128(v)) => v.to_be_bytes().to_vec(),
+        (ty, value) => {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "Iceberg cannot use partition source value {value:?} as type {ty}"
+            )));
+        }
+    };
+    Ok(bytes)
+}
 
-        let mut arrays = Vec::with_capacity(block.columns().len());
-        for (entry, field) in block.columns().iter().zip(arrow_schema.fields()) {
-            let array = entry.to_column().maybe_gc().into_arrow_rs();
+/// Apply a partition transform to one source value.
+///
+/// The partition value stored in the metadata and used to build the file path is the
+/// *transformed* value, not the raw column value.
+fn transform_partition_literal(
+    scalar: Option<ScalarRef>,
+    source_type: &PrimitiveType,
+    transform: &dyn TransformFunction,
+) -> Result<Option<Literal>> {
+    let Some(literal) = scalar_to_iceberg_literal(scalar)? else {
+        return Ok(None);
+    };
+    let primitive = literal.as_primitive_literal().ok_or_else(|| {
+        ErrorCode::TableEngineNotSupported(
+            "Iceberg partition source value must be a primitive value".to_string(),
+        )
+    })?;
+    // Iceberg transforms operate on `Datum`, which can only be built from the spec's binary
+    // single-value serialization (or from another `Datum`) outside of the iceberg crate.
+    let bytes = iceberg_value_bytes(source_type, &primitive)?;
+    let datum = Datum::try_from_bytes(&bytes, source_type.clone()).map_err(|err| {
+        ErrorCode::Internal(format!("Iceberg partition source value is invalid: {err}"))
+    })?;
+    let transformed = transform
+        .transform_literal(&datum)
+        .map_err(|err| ErrorCode::Internal(format!("Iceberg partition transform failed: {err}")))?;
+    Ok(transformed.map(Literal::from))
+}
 
-            let array = match (array.data_type(), field.data_type()) {
-                (ArrowDataType::Utf8View, ArrowDataType::Utf8) => {
-                    let string_view = array.as_string_view();
-                    Arc::new(arrow_array::StringArray::from_iter(string_view.iter()))
-                        as Arc<dyn arrow_array::Array>
+fn scalar_to_iceberg_literal(scalar: Option<ScalarRef>) -> Result<Option<Literal>> {
+    match scalar {
+        None => Ok(None),
+        Some(s) => {
+            let lit = match s {
+                ScalarRef::Null => return Ok(None),
+                ScalarRef::Boolean(v) => Literal::bool(v),
+                ScalarRef::Number(n) => match n {
+                    NumberScalar::Int8(v) => Literal::int(v as i32),
+                    NumberScalar::Int16(v) => Literal::int(v as i32),
+                    NumberScalar::Int32(v) => Literal::int(v),
+                    NumberScalar::Int64(v) => Literal::long(v),
+                    NumberScalar::UInt8(v) => Literal::int(v as i32),
+                    NumberScalar::UInt16(v) => Literal::int(v as i32),
+                    NumberScalar::UInt32(v) => Literal::long(v as i64),
+                    NumberScalar::UInt64(v) => Literal::decimal(v as i128),
+                    NumberScalar::Float32(v) => Literal::float(v.0),
+                    NumberScalar::Float64(v) => Literal::double(v.0),
+                },
+                ScalarRef::String(v) => Literal::string(v),
+                ScalarRef::Date(v) => Literal::date(v),
+                ScalarRef::Timestamp(v) => Literal::timestamp(v),
+                _ => {
+                    return Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported partition column type: {:?}",
+                        s
+                    )));
                 }
-                (ArrowDataType::BinaryView, ArrowDataType::Binary) => {
-                    let binary_view = array.as_binary_view();
-                    Arc::new(arrow_array::BinaryArray::from_iter(binary_view.iter()))
-                        as Arc<dyn arrow_array::Array>
-                }
-                _ => array,
             };
-
-            arrays.push(array);
+            Ok(Some(lit))
         }
-
-        Ok(RecordBatch::try_new(arrow_schema, arrays)?)
     }
 }
 
@@ -550,5 +647,217 @@ impl AsyncSink for IcebergCommitSink {
         reader.remove(&cache_key);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use iceberg::spec::Datum;
+    use iceberg::spec::Transform;
+    use iceberg::transform::create_transform_function;
+
+    use super::*;
+
+    fn transform_value(
+        value: ScalarRef,
+        source_type: PrimitiveType,
+        transform: Transform,
+    ) -> Option<Literal> {
+        let transform = create_transform_function(&transform).unwrap();
+        transform_partition_literal(Some(value), &source_type, transform.as_ref()).unwrap()
+    }
+
+    #[test]
+    fn test_identity_partition_value_is_the_source_value() {
+        let value = ScalarRef::Number(NumberScalar::Int64(7));
+        assert_eq!(
+            transform_value(value, PrimitiveType::Long, Transform::Identity),
+            Some(Literal::long(7))
+        );
+    }
+
+    #[test]
+    fn test_bucket_partition_value_is_hashed() {
+        // Same value as the iceberg bucket transform test: bucket(10) of 34 is 9.
+        let value = ScalarRef::Number(NumberScalar::Int32(34));
+        assert_eq!(
+            transform_value(value, PrimitiveType::Int, Transform::Bucket(10)),
+            Some(Literal::int(9))
+        );
+    }
+
+    #[test]
+    fn test_truncate_partition_value_is_rounded_down() {
+        let value = ScalarRef::Number(NumberScalar::Int32(-1));
+        assert_eq!(
+            transform_value(value, PrimitiveType::Int, Transform::Truncate(10)),
+            Some(Literal::int(-10))
+        );
+    }
+
+    #[test]
+    fn test_partition_value_of_null_stays_null() {
+        assert_eq!(
+            transform_value(ScalarRef::Null, PrimitiveType::Int, Transform::Bucket(10)),
+            None
+        );
+    }
+
+    /// Build a databend block the way a query produces it: decimal(10, 2) as Decimal64 and
+    /// arrays as LargeList, which is not what the iceberg table schema asks for.
+    fn decimal_and_array_block() -> (DataBlock, Arc<ArrowSchema>) {
+        use arrow_array::Decimal64Array;
+        use arrow_array::LargeListArray;
+        use arrow_array::RecordBatch;
+        use arrow_schema::DataType as ArrowDataType;
+        use arrow_schema::Field;
+        use arrow_schema::Fields;
+        use arrow_schema::Schema;
+        use databend_common_expression::DataSchema;
+
+        let source_schema = Schema::new(Fields::from(vec![
+            Field::new("dec", ArrowDataType::Decimal64(10, 2), true),
+            Field::new(
+                "arr",
+                ArrowDataType::LargeList(Arc::new(Field::new("item", ArrowDataType::Int64, true))),
+                true,
+            ),
+        ]));
+        let decimals = Decimal64Array::from(vec![Some(1234_i64), Some(-5_i64)])
+            .with_precision_and_scale(10, 2)
+            .unwrap();
+        let arrays =
+            LargeListArray::from_iter_primitive::<arrow_array::types::Int64Type, _, _>(vec![
+                Some(vec![Some(1), Some(2)]),
+                Some(vec![Some(3)]),
+            ]);
+        let batch = RecordBatch::try_new(Arc::new(source_schema.clone()), vec![
+            Arc::new(decimals),
+            Arc::new(arrays),
+        ])
+        .unwrap();
+        let data_schema = DataSchema::try_from(&source_schema).unwrap();
+        let block = DataBlock::from_record_batch(&data_schema, &batch).unwrap();
+
+        // What `database::convert_table_schema` produces for the same columns.
+        let iceberg_schema = Schema::new(Fields::from(vec![
+            Field::new("dec", ArrowDataType::Decimal128(10, 2), true),
+            Field::new(
+                "arr",
+                ArrowDataType::List(Arc::new(Field::new("element", ArrowDataType::Int64, true))),
+                true,
+            ),
+        ]));
+        (block, Arc::new(iceberg_schema))
+    }
+
+    #[test]
+    fn test_decimal_and_array_columns_are_written_as_the_iceberg_physical_types() {
+        use arrow_array::cast::AsArray;
+
+        let (block, iceberg_schema) = decimal_and_array_block();
+        let batch = block_to_record_batch(block, iceberg_schema.clone()).unwrap();
+
+        assert_eq!(batch.schema().as_ref(), iceberg_schema.as_ref());
+        let decimals = batch
+            .column(0)
+            .as_primitive::<arrow_array::types::Decimal128Type>();
+        assert_eq!(decimals.value(0), 1234_i128);
+        assert_eq!(decimals.value(1), -5_i128);
+        assert_eq!(batch.column(1).as_list::<i32>().value(0).len(), 2);
+    }
+
+    #[test]
+    fn test_value_that_does_not_fit_the_iceberg_type_is_an_error() {
+        use arrow_array::BinaryArray;
+        use arrow_array::RecordBatch;
+        use arrow_schema::DataType as ArrowDataType;
+        use arrow_schema::Field;
+        use arrow_schema::Fields;
+        use arrow_schema::Schema;
+        use databend_common_expression::DataSchema;
+
+        let source_schema = Schema::new(Fields::from(vec![Field::new(
+            "b",
+            ArrowDataType::Binary,
+            true,
+        )]));
+        let batch = RecordBatch::try_new(Arc::new(source_schema.clone()), vec![Arc::new(
+            BinaryArray::from(vec![Some(&[1u8, 2, 3][..])]),
+        )])
+        .unwrap();
+        let data_schema = DataSchema::try_from(&source_schema).unwrap();
+        let block = DataBlock::from_record_batch(&data_schema, &batch).unwrap();
+
+        // Three bytes do not fit fixed(16). A safe cast would write the value as NULL.
+        let iceberg_schema = Schema::new(Fields::from(vec![Field::new(
+            "b",
+            ArrowDataType::FixedSizeBinary(16),
+            true,
+        )]));
+        let err = block_to_record_batch(block, Arc::new(iceberg_schema)).unwrap_err();
+        assert!(err.message().contains("Cannot cast column 'b'"), "{err}");
+    }
+
+    #[test]
+    fn test_timestamp_outside_the_nanosecond_range_is_an_error() {
+        use arrow_array::RecordBatch;
+        use arrow_array::TimestampMicrosecondArray;
+        use arrow_schema::DataType as ArrowDataType;
+        use arrow_schema::Field;
+        use arrow_schema::Fields;
+        use arrow_schema::Schema;
+        use arrow_schema::TimeUnit;
+        use databend_common_expression::DataSchema;
+
+        // Year 3000 in microseconds, which is outside what timestamp[ns] can represent.
+        let year_3000 = 32_503_680_000_000_000_i64;
+        let source_schema = Schema::new(Fields::from(vec![Field::new(
+            "ts",
+            ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
+            true,
+        )]));
+        let batch = RecordBatch::try_new(Arc::new(source_schema.clone()), vec![Arc::new(
+            TimestampMicrosecondArray::from(vec![year_3000]),
+        )])
+        .unwrap();
+        let data_schema = DataSchema::try_from(&source_schema).unwrap();
+        let block = DataBlock::from_record_batch(&data_schema, &batch).unwrap();
+
+        let iceberg_schema = Schema::new(Fields::from(vec![Field::new(
+            "ts",
+            ArrowDataType::Timestamp(TimeUnit::Nanosecond, None),
+            true,
+        )]));
+        let err = block_to_record_batch(block, Arc::new(iceberg_schema)).unwrap_err();
+        assert!(err.message().contains("Cannot cast column 'ts'"), "{err}");
+    }
+
+    #[test]
+    fn test_partition_value_serialization_matches_iceberg_datum() {
+        // Round tripping through the binary single-value serialization has to reproduce the
+        // exact datum, otherwise the transform would hash different bytes.
+        for (literal, ty, datum) in [
+            (Literal::int(34), PrimitiveType::Int, Datum::int(34)),
+            (Literal::long(-7), PrimitiveType::Long, Datum::long(-7)),
+            (
+                Literal::date(17486),
+                PrimitiveType::Date,
+                Datum::date(17486),
+            ),
+            (
+                Literal::string("iceberg"),
+                PrimitiveType::String,
+                Datum::string("iceberg"),
+            ),
+            (
+                Literal::binary(vec![0, 1, 2]),
+                PrimitiveType::Binary,
+                Datum::binary(vec![0, 1, 2]),
+            ),
+        ] {
+            let bytes = iceberg_value_bytes(&ty, &literal.as_primitive_literal().unwrap()).unwrap();
+            assert_eq!(Datum::try_from_bytes(&bytes, ty).unwrap(), datum);
+        }
     }
 }
