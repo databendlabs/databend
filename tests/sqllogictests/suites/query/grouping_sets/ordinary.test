@@ -55,6 +55,20 @@ SELECT sum(a) AS b, b FROM t GROUP BY ALL
 1 4
 2 5
 
+# A name is an input column as name resolution finds it: with quoted
+# identifiers case sensitive, `"a"` is the alias of the aggregate, not the
+# column `"A"`, and otherwise the column.
+query II
+SETTINGS (sql_dialect = 'PostgreSQL', quoted_ident_case_sensitive = 1) SELECT sum("A") AS "a", "a" + 1 FROM (VALUES (1), (2)) t("A") GROUP BY ALL
+----
+3 4
+
+query II rowsort
+SETTINGS (sql_dialect = 'PostgreSQL', quoted_ident_case_sensitive = 0) SELECT sum("A") AS "a", "a" + 1 FROM (VALUES (1), (2)) t("A") GROUP BY ALL
+----
+1 2
+2 3
+
 query III rowsort
 SELECT *, count(*) FROM t GROUP BY ALL
 ----

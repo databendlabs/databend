@@ -103,7 +103,8 @@ pub(crate) enum SelectItemSource<'a> {
 impl<'a> SelectClauseExprs<'a> {
     /// The positions that GROUP BY ALL stands for: those of the items that
     /// contain no aggregate function and refer to no earlier item that does.
-    /// A name refers to an item unless an input column has it.
+    /// A name refers to an item unless it resolves to a column, as GROUP BY
+    /// resolves names column first.
     pub(crate) fn group_by_all(
         &self,
         names: &NameResolutionContext,
@@ -130,12 +131,9 @@ impl<'a> SelectClauseExprs<'a> {
                             else {
                                 return false;
                             };
-                            let name = normalize_identifier(ident, names).name;
-                            aliases.get(name.as_str()).copied().unwrap_or(false)
-                                && !inputs
-                                    .columns
-                                    .iter()
-                                    .any(|column| column.column_name.eq_ignore_ascii_case(&name))
+                            let ident = normalize_identifier(ident, names);
+                            aliases.get(ident.name.as_str()).copied().unwrap_or(false)
+                                && !inputs.resolves_to_column(&ident, names)
                         })
                 }
             };

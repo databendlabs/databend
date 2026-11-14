@@ -745,6 +745,25 @@ impl BindContext {
         Ok(result)
     }
 
+    /// Whether the unqualified `column`, normalized, resolves to a column of
+    /// this context or an enclosing one, as a name that is resolved column
+    /// first does before it can be an alias.
+    pub(crate) fn resolves_to_column(
+        &self,
+        column: &Identifier,
+        name_resolution_ctx: &NameResolutionContext,
+    ) -> bool {
+        let mut result = NameResolutionCandidates::default();
+        self.search_bound_columns_recursively(
+            None,
+            None,
+            column,
+            name_resolution_ctx.is_case_sensitive(column),
+            &mut result,
+        );
+        !result.is_empty()
+    }
+
     fn finish_resolve_name(
         column: &Identifier,
         result: NameResolutionCandidates,
