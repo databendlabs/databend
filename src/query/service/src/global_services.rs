@@ -76,6 +76,22 @@ impl GlobalServices {
         GlobalServices::init_with(config, version, ee_mode).await
     }
 
+    /// The server memory limit in bytes: `max_server_memory_usage`, or when that is 0, 80% of
+    /// the memory of the machine, or of the cgroup the process runs in.
+    pub fn server_memory_limit(config: &InnerConfig) -> u64 {
+        match config.query.common.max_server_memory_usage {
+            0 => {
+                let mut system = sysinfo::System::new();
+                system.refresh_memory();
+                let total = system
+                    .cgroup_limits()
+                    .map_or(system.total_memory(), |limits| limits.total_memory);
+                total / 10 * 8
+            }
+            limit => limit,
+        }
+    }
+
     #[async_backtrace::framed]
     pub async fn init_with(
         config: &InnerConfig,
@@ -202,17 +218,11 @@ impl GlobalServices {
             &config.query.common.share_endpoint_auth_token_file,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
-        // The shared pools are reclaimed when the server memory limit is reached; without an
-        // enforced limit they never would be.
-        if config.cache.shared_memory_enabled && !config.query.common.max_memory_limit_enabled {
-            return Err(ErrorCode::InvalidConfig(
-                "cache.shared_memory_enabled requires a server memory limit: set \
-                 query.max_memory_limit_enabled and query.max_server_memory_usage",
-            ));
-        }
+        // The shared pools are a share of the server memory limit. They are reclaimed when it
+        // is reached, so only while `max_memory_limit_enabled` enforces it.
         CacheManager::init(
             &config.cache,
-            &config.query.common.max_server_memory_usage,
+            &Self::server_memory_limit(config),
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;

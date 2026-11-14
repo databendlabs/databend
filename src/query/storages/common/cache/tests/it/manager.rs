@@ -46,7 +46,8 @@ use crate::fakes::wait_for;
 
 const MIB: u64 = 1 << 20;
 
-/// The disk cache on, of 1 MiB, under `dir`, with the default pool ratios 10/20/70.
+/// The disk cache on, of 1 MiB, under `dir`, with the default pool ratios 10/20/70, over the
+/// legacy memory backend.
 pub fn disk_config(dir: &TempDir) -> CacheConfig {
     CacheConfig {
         data_cache_storage: CacheStorageTypeInnerConfig::Disk,
@@ -55,6 +56,13 @@ pub fn disk_config(dir: &TempDir) -> CacheConfig {
             path: dir.path().to_string_lossy().to_string(),
             ..Default::default()
         },
+        ..legacy_config()
+    }
+}
+
+fn legacy_config() -> CacheConfig {
+    CacheConfig {
+        shared_memory_enabled: false,
         ..CacheConfig::default()
     }
 }
@@ -110,7 +118,7 @@ fn test_disk_cache_follows_ee_mode_and_config() {
     assert_eq!(disk_rows(&ee).len(), disk_kinds() + Pool::ALL.len());
 
     assert!(manager(&config, false).disk().is_none());
-    assert!(manager(&CacheConfig::default(), true).disk().is_none());
+    assert!(manager(&legacy_config(), true).disk().is_none());
     let tiny = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
             max_bytes: 1024,
@@ -301,7 +309,7 @@ fn test_set_disk_capacity() -> Result<()> {
     );
 
     // Without a disk cache.
-    let no_disk = self::manager(&CacheConfig::default(), true);
+    let no_disk = self::manager(&legacy_config(), true);
     assert!(
         no_disk
             .set_cache_capacity_arg("disk_pool:data", "0")
@@ -408,7 +416,7 @@ fn empty_snapshot() -> Arc<TableSnapshot> {
 /// a kind enabled at runtime keeps its unit.
 #[test]
 fn test_legacy_capacity_by_name() -> Result<()> {
-    let manager = manager(&CacheConfig::default(), false);
+    let manager = manager(&legacy_config(), false);
     let snapshots = manager.cache::<table::Snapshot>();
     for i in 0..3 {
         snapshots.put(&i.to_string(), empty_snapshot());
@@ -538,7 +546,7 @@ fn test_capacity_default() -> Result<()> {
         assert!(shared.set_cache_capacity_default(other).is_err(), "{other}");
     }
 
-    let legacy = manager(&CacheConfig::default(), false);
+    let legacy = manager(&legacy_config(), false);
     assert!(
         legacy
             .set_cache_capacity_default("memory_cache_table_snapshot")

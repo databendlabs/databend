@@ -135,7 +135,7 @@ async fn precheck_services(conf: &InnerConfig) -> Result<(), MainError> {
     let make_error = || "failed to precheck";
 
     if conf.query.common.max_memory_limit_enabled {
-        let size = conf.query.common.max_server_memory_usage as i64;
+        let size = GlobalServices::server_memory_limit(conf) as i64;
         info!("Set memory limit: {}", size);
         GLOBAL_MEM_STAT.set_limit(size, false);
     }
@@ -324,7 +324,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         if conf.query.common.max_memory_limit_enabled {
             format!(
                 "Memory: server memory limit to {} (bytes)",
-                conf.query.common.max_server_memory_usage
+                GlobalServices::server_memory_limit(conf)
             )
         } else {
             "unlimited".to_string()

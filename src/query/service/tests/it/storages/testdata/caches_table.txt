@@ -1,31 +1,35 @@
 ---------- TABLE INFO ------------
 DB.Table: 'system'.'caches', Table: caches-table_id:1, ver:0, Engine: SystemCache
 -------- TABLE CONTENTS ----------
-+-------------+----------------------------------------------+----------+----------+-------------+----------+----------+----------+----------+
-| Column 0    | Column 1                                     | Column 2 | Column 3 | Column 4    | Column 5 | Column 6 | Column 7 | Column 8 |
-+-------------+----------------------------------------------+----------+----------+-------------+----------+----------+----------+----------+
-| 'test-node' | 'memory_cache_bloom_index_file_meta_data'    | 0        | 0        | 3000        | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_bloom_index_filter'            | 0        | 0        | 2147483648  | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_column_oriented_segment_info'  | 0        | 0        | 1073741824  | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_compact_segment_info'          | 0        | 0        | 1073741824  | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_iceberg_table'                 | 0        | 0        | 1024        | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_inverted_index_full_payload'   | 0        | 0        | 4294967296  | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_inverted_index_lookup'         | 0        | 0        | 8589934592  | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_inverted_index_meta_data'      | 0        | 0        | 30000       | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_inverted_index_payload'        | 0        | 0        | 12884901888 | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_parquet_meta_data'             | 0        | 0        | 3000        | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_prune_partitions'              | 0        | 0        | 256         | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_segment_statistics'            | 0        | 0        | 1073741824  | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_segment_zone_map_chunk'        | 0        | 0        | 536870912   | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_segment_zone_map_meta_data'    | 0        | 0        | 1024        | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_spatial_index_file'            | 0        | 0        | 64424509440 | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_spatial_index_file_meta_data'  | 0        | 0        | 30000       | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_table_snapshot'                | 0        | 0        | 256         | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_table_statistics'              | 0        | 0        | 256         | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_vector_index_file'             | 0        | 0        | 64424509440 | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_vector_index_file_meta_data'   | 0        | 0        | 30000       | 'count'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_vector_index_refine'           | 0        | 0        | 34359738368 | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_virtual_column_file_meta_data' | 0        | 0        | 30000       | 'count'  | 0        | 0        | 0        |
-+-------------+----------------------------------------------+----------+----------+-------------+----------+----------+----------+----------+
++-------------+----------------------------------------------+----------+----------+----------------------+----------+----------+----------+----------+
+| Column 0    | Column 1                                     | Column 2 | Column 3 | Column 4             | Column 5 | Column 6 | Column 7 | Column 8 |
++-------------+----------------------------------------------+----------+----------+----------------------+----------+----------+----------+----------+
+| 'test-node' | '__pool:data'                                | 0        | 0        | 107374182            | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | '__pool:index'                               | 0        | 0        | 429496729            | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | '__pool:meta'                                | 0        | 0        | 107374182            | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_bloom_index_file_meta_data'    | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_bloom_index_filter'            | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_column_oriented_segment_info'  | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_compact_segment_info'          | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_iceberg_table'                 | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_inverted_index_full_payload'   | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_inverted_index_lookup'         | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_inverted_index_meta_data'      | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_inverted_index_payload'        | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_parquet_meta_data'             | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_prune_partitions'              | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_segment_statistics'            | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_segment_zone_map_chunk'        | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_segment_zone_map_meta_data'    | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_spatial_index_file'            | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_spatial_index_file_meta_data'  | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_table_data'                    | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_table_snapshot'                | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_table_statistics'              | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_vector_index_file'             | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_vector_index_file_meta_data'   | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_vector_index_refine'           | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
+| 'test-node' | 'memory_cache_virtual_column_file_meta_data' | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
++-------------+----------------------------------------------+----------+----------+----------------------+----------+----------+----------+----------+
 
 
