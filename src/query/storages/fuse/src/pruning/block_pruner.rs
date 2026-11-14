@@ -1024,10 +1024,13 @@ impl BlockPruner {
                     )
                     .await?;
 
-                if let Some(matches) = matches {
-                    prune_result.apply_index_matches(block_meta, matches, &pruning_stats);
-                } else {
-                    prune_result.keep = false;
+                match matches {
+                    Some(matches) if inverted_index_pruner.match_required() => {
+                        prune_result.apply_index_matches(block_meta, matches, &pruning_stats);
+                    }
+                    // The rows without a match may still be output: read them all.
+                    Some(matches) => prune_result.inverted_index_matches = Some(matches),
+                    None => prune_result.keep = false,
                 }
 
                 if prune_result.keep {
@@ -1189,7 +1192,8 @@ struct BlockPruneResult {
     range: Option<Range<usize>>,
     // the surviving sparse-granule-index granule runs (maximally coalesced) for the cluster-key predicate
     granule_ranges: Option<Vec<Range<usize>>>,
-    // the rows matched by the inverted index, narrowed to the surviving granules
+    // the rows matched by the inverted index; narrowed to the surviving granules when the
+    // filter of the query requires the match
     inverted_index_matches: Option<IndexMatches>,
     // the optional block meta of virtual columns
     virtual_block_meta: Option<VirtualBlockMetaIndex>,
@@ -1238,6 +1242,10 @@ impl BlockPruneResult {
     /// Tantivy documents are appended in row order into a single segment, so a hit's `doc_id` is
     /// the block-relative row and `row / granule_rows` is its granule. The search already covered
     /// the whole block; this only narrows the byte ranges the block read has to fetch.
+    ///
+    /// The granules without a hit are not read, so this is only valid when the filter of the
+    /// query rejects the rows the index did not match (`InvertedIndexPruner::match_required`).
+    ///
     /// Keeps the matched rows that fall in the surviving granules, with their scores aligned,
     /// and narrows the granule ranges to the granules that still hold a match.
     fn apply_index_matches(
