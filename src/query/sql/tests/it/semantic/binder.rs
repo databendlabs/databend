@@ -831,6 +831,12 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT 2, 1 + 1, coalesce(1 + 1, 100), count(*) FROM t GROUP BY ROLLUP(1 + 1)",
         },
         SqlTestCase {
+            name: "literal_grouping_set_key_is_read_as_its_output",
+            description: "A literal that is a grouping-set key reads the key output, alone, in `grouping()` and inside another expression.",
+            setup_sqls: T,
+            sql: "SELECT 'x', grouping('x'), concat('x', 'y'), count(*) FROM t GROUP BY GROUPING SETS (('x'), ())",
+        },
+        SqlTestCase {
             name: "dependent_key_is_pruned",
             description: "A key over another key, `a + 1` over `a`, is not a group item of its own and is computed above the aggregate.",
             setup_sqls: T,

@@ -21,7 +21,8 @@
 //!
 //! - it is structurally eligible: it contains no subquery, lambda, search,
 //!   window or aggregate function, nor `grouping()`, and it references a
-//!   column or calls a function;
+//!   column or calls a function, or `K` is a key of grouping sets of this
+//!   SELECT;
 //! - its pre-aggregate form is not a deterministic expression without
 //!   columns, unless the node references a column or `K` is a key of grouping
 //!   sets of this SELECT;
@@ -46,8 +47,10 @@
 //! A node that is not deterministic, such as `rand()`, `now()`, `nextval(s)`
 //! or a script UDF, is matched like any other, since evaluating it again after
 //! the aggregate gives another value than the key. Literals and constant
-//! tuples call no function, so they are never bound to be tried: `2` in
-//! `SELECT 2 FROM t GROUP BY ROLLUP(1 + 1)` is 2 in every row.
+//! tuples, which call no function, are only tried for keys of grouping sets,
+//! and compared as written too: `'x'` in `SELECT 'x' FROM t GROUP BY
+//! GROUPING SETS (('x'), ())` is the key, NULL in the grand total, while `2`
+//! in `SELECT 2 FROM t GROUP BY ROLLUP(1 + 1)` is 2 in every row.
 //!
 //! The outermost matching node wins, as with GROUP BY, so `a + 1` in
 //! `GROUPING SETS ((a), (a + 1))` binds to the key `a + 1` rather than to the
@@ -181,9 +184,10 @@ impl Eligibility {
         has_call: false,
     };
 
-    /// Whether the subtree is a grouping key candidate. One without columns
-    /// is only matched if its form is not deterministic, see the module
-    /// documentation, so one that calls no function is not tried.
+    /// Whether the subtree is a grouping key candidate of any key. One
+    /// without columns is only matched to an ordinary key if its form is not
+    /// deterministic, see the module documentation, so one that calls no
+    /// function, a literal, is only tried for keys of grouping sets.
     fn is_candidate(self) -> bool {
         self.eligible && (self.has_column || self.has_call)
     }
@@ -539,7 +543,9 @@ where A: TypeCheckAdapter
             return Ok(None);
         }
         let eligibility = self.grouping_key_eligibility(arena, id);
-        let is_srf = if eligibility.is_candidate() {
+        // A literal, or a tuple of them, which calls no function.
+        let literal = eligibility.eligible && !eligibility.has_column && !eligibility.has_call;
+        let is_srf = if eligibility.is_candidate() || literal {
             false
         } else if self.is_grouping_key_srf_candidate(arena, id) {
             true
@@ -552,17 +558,20 @@ where A: TypeCheckAdapter
             if is_srf && position != 0 {
                 break;
             }
+            // Literals and deterministic forms without columns are only
+            // matched to keys of grouping sets of this SELECT, see the module
+            // documentation.
+            let grouping_sets_here =
+                position == 0 && self.bind_context.aggregate_info.grouping_sets().is_some();
+            if literal && !grouping_sets_here {
+                return Ok(None);
+            }
             let Some(input) = self.resolve_grouping_key_input(arena, id, position)? else {
                 continue;
             };
             let context = context_chain(self.bind_context).nth(position).unwrap();
-            // A deterministic form without columns is only matched to a key
-            // of grouping sets of this SELECT, see the module documentation.
             let constant = input.facts.column_free && input.facts.deterministic;
-            if constant
-                && !eligibility.has_column
-                && (position != 0 || context.aggregate_info.grouping_sets().is_none())
-            {
+            if constant && !eligibility.has_column && !grouping_sets_here {
                 return Ok(None);
             }
             let input = input.scalar;

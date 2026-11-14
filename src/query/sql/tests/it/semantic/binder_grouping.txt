@@ -385,6 +385,24 @@ EvalScalar
             └── limit: NONE
 
 
+=== literal_grouping_set_key_is_read_as_its_output ===
+description: A literal that is a grouping-set key reads the key output, alone, in `grouping()` and inside another expression.
+sql: SELECT 'x', grouping('x'), concat('x', 'y'), count(*) FROM t GROUP BY GROUPING SETS (('x'), ())
+status: ok
+EvalScalar
+├── scalars: ['x' (#2) AS (#2), COUNT(*) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5), concat('x' (#2), 'y') AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: ['x' (#2) AS (#2), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── EvalScalar
+        ├── scalars: [CAST('x' AS String NULL) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === dependent_key_is_pruned ===
 description: A key over another key, `a + 1` over `a`, is not a group item of its own and is computed above the aggregate.
 sql: SELECT a, a + 1 AS k, sum(b) FROM t GROUP BY 1, 2
