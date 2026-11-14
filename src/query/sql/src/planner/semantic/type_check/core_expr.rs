@@ -668,9 +668,10 @@ where A: TypeCheckAdapter
                 args,
             } => {
                 self.check_set_returning_function(*span)?;
+                let alias_first = self.bind_context.expr_context.prefer_resolve_alias();
                 let original_context = self
                     .bind_context
-                    .replace_expr_context(ExprContext::InSetReturningFunction);
+                    .replace_expr_context(ExprContext::InSetReturningFunction { alias_first });
                 let arguments_result = self.resolve_expr_args(arena, args);
                 self.bind_context.expr_context = original_context;
                 let (arguments, argument_types) = arguments_result?;

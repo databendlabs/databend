@@ -12,6 +12,8 @@ local_dimensions:
     values: [select-list, having, order-by]
   - name: position
     values: [in-range, after-star, zero, past-end]
+  - name: call
+    values: [srf-argument, async-argument]
 regions:
   - description: bare GROUP BY names bind input columns first and fall back to SELECT scalar aliases
     main:
@@ -361,6 +363,39 @@ regions:
           - "CREATE TABLE t(a Int32, b Int32)"
         runs:
           - sql: "SELECT sum(a) AS s, count(*) FROM t GROUP BY GROUPING SETS ((b), ()) ORDER BY grouping(s)"
+  - description: names in the arguments of set-returning and async functions resolve as GROUP BY does, an input column first and otherwise a SELECT scalar alias
+    main:
+      consumers: [G0]
+      name_shapes: [N2]
+      producers: [S1]
+    local:
+      relation: [input-conflict, no-input]
+      call: [srf-argument, async-argument]
+    cases:
+      - key: G0N2S1_15_00
+        name: group_by_srf_argument_select_alias_conflict_uses_input
+        setup_sqls:
+          - "CREATE TABLE t(a Int32)"
+        runs:
+          - sql: "SELECT 0 AS a, count(*) FROM t GROUP BY unnest([a])"
+      - key: G0N2S1_15_01
+        name: group_by_async_argument_select_alias_conflict_uses_input
+        setup_sqls:
+          - "CREATE TABLE t(a Int32)"
+        runs:
+          - sql: "SELECT 0 AS a, count(*) FROM t GROUP BY sleep(a)"
+      - key: G0N2S1_15_10
+        name: group_by_srf_argument_select_alias_no_input_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT 0 AS a, count(*) FROM t GROUP BY unnest([a])"
+      - key: G0N2S1_15_11
+        name: group_by_async_argument_select_alias_no_input_fallback
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT 0 AS a, count(*) FROM t GROUP BY sleep(a)"
   - description: GROUP BY-family main-coordinate closure outside positive coverage obligations
     excluded: true
     reason: this coarse region closes GROUP BY-family main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
@@ -369,13 +404,13 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, N0]
     cases:
-      - key: G0N3S1_15_
+      - key: G0N3S1_16_
         name: group_by_qualified_complex_does_not_fallback_to_select_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i AS k, count(*) FROM t GROUP BY t.k + 1"
-      - key: G1N1S1_15_
+      - key: G1N1S1_16_
         name: grouping_sets_qualified_name_does_not_fallback_to_select_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"

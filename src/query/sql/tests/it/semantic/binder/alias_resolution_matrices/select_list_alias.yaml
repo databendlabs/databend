@@ -2,6 +2,8 @@ matrix: select_list_alias
 local_dimensions:
   - name: relation
     values: [input-conflict, no-input]
+  - name: call
+    values: [srf-argument]
 regions:
   - description: prior SELECT-list aliases consumed by later SELECT-list items
     main:
@@ -30,6 +32,27 @@ regions:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT number + 1 AS s, s + 1 AS next FROM t"
+  - description: names in the arguments of a set-returning function resolve as in the SELECT list, an input column first and otherwise a prior alias
+    main:
+      consumers: [S0]
+      name_shapes: [N2]
+      producers: [S0]
+    local:
+      relation: [input-conflict, no-input]
+      call: [srf-argument]
+    cases:
+      - key: S0N2S0_1_00
+        name: select_list_srf_argument_prior_alias_conflict_uses_input
+        setup_sqls:
+          - "CREATE TABLE t(a Int32)"
+        runs:
+          - sql: "SELECT 0 AS a, unnest([a]) FROM t"
+      - key: S0N2S0_1_10
+        name: select_list_srf_argument_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT 0 AS a, unnest([a]) FROM t"
   - description: SELECT-list main-coordinate closure outside positive coverage obligations
     excluded: true
     reason: this coarse region closes SELECT-list main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
@@ -38,13 +61,13 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, N0]
     cases:
-      - key: S0N1S0_1_
+      - key: S0N1S0_2_
         name: select_list_qualified_name_binds_relation_not_prior_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32, k Int32)"
         runs:
           - sql: "SELECT i AS k, t.k FROM t"
-      - key: S0N4N0_1_
+      - key: S0N4N0_2_
         name: select_list_ordinal_is_literal_expression_not_alias_lookup
         setup_sqls:
           - "CREATE TABLE t(i Int32)"

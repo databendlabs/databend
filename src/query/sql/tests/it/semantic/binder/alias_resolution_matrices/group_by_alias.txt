@@ -523,9 +523,95 @@ status: error
 code: 1006
 message: Arguments of grouping should be group by expressions
 
+=== group_by_alias__group_by_srf_argument_select_alias_conflict_uses_input ===
+matrix: group_by_alias
+key: G0N2S1_15_00
+sql: SELECT 0 AS a, count(*) FROM t GROUP BY unnest([a])
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#3) AS (#3), 0 AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [get(1)(unnest(array(t.a (#0))) (#1)) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [get(1)(unnest(array(t.a (#0))) (#1)) AS (#2)]
+        └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(40..51), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(47..50), func_name: "array", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(48..49), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "a", column_name_lower: None, index: 0, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } })] })] }), index: 1 }] })
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== group_by_alias__group_by_async_argument_select_alias_conflict_uses_input ===
+matrix: group_by_alias
+key: G0N2S1_15_01
+sql: SELECT 0 AS a, count(*) FROM t GROUP BY sleep(a)
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#2) AS (#2), 0 AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [sleep(a) AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [sleep(a) (#1) AS (#1)]
+        └── AsyncFunction
+            ├── scalars: [sleep(a) AS (#1)]
+            └── EvalScalar
+                ├── scalars: [CAST(t.a (#0) AS Float64) AS (#4)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== group_by_alias__group_by_srf_argument_select_alias_no_input_fallback ===
+matrix: group_by_alias
+key: G0N2S1_15_10
+sql: SELECT 0 AS a, count(*) FROM t GROUP BY unnest([a])
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#3) AS (#3), 0 AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [get(1)(unnest([0]) (#1)) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [get(1)(unnest([0]) (#1)) AS (#2)]
+        └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(40..51), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(47..50), value: Array(UInt8([0])) })] }), index: 1 }] })
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== group_by_alias__group_by_async_argument_select_alias_no_input_fallback ===
+matrix: group_by_alias
+key: G0N2S1_15_11
+sql: SELECT 0 AS a, count(*) FROM t GROUP BY sleep(a)
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#2) AS (#2), 0 AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [sleep(a) AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [sleep(a) (#1) AS (#1)]
+        └── AsyncFunction
+            ├── scalars: [sleep(a) AS (#1)]
+            └── EvalScalar
+                ├── scalars: [CAST(0 AS Float64) AS (#4)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
 === group_by_alias__group_by_qualified_complex_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G0N3S1_15_
+key: G0N3S1_16_
 sql: SELECT i AS k, count(*) FROM t GROUP BY t.k + 1
 status: error
 code: 1065
@@ -533,7 +619,7 @@ message: column k doesn't exist
 
 === group_by_alias__grouping_sets_qualified_name_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G1N1S1_15_
+key: G1N1S1_16_
 sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))
 status: error
 code: 1065

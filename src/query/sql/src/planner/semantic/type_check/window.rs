@@ -369,7 +369,10 @@ where A: TypeCheckAdapter
         window: &CoreWindow<'_>,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if self.bind_context.expr_context == ExprContext::InSetReturningFunction {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InSetReturningFunction { .. }
+        ) {
             return Err(ErrorCode::SemanticError(
                 "window functions cannot be used as set-returning function arguments".to_string(),
             )

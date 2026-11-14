@@ -233,9 +233,11 @@ the SELECT alias namespace is consumed as a query-block-level namespace.
 
 This matrix owns conflicts between input columns and earlier SELECT aliases,
 and it owns the difference between bare-name reuse and reuse inside a complex
-expression.
+expression. The arguments of a set-returning function resolve names as the
+SELECT list does.
 
-Local context axes: `relation` (input-conflict, no-input).
+Local context axes: `relation` (input-conflict, no-input) and `call`
+(srf-argument).
 
 ### `group_by_alias`
 
@@ -256,7 +258,9 @@ whichever clause the call is. The cases show where it applies:
   not aliases here;
 - aggregate and SRF aliases, which are not legal keys;
 - ordinals and GROUP BY ALL, which consume positions rather than names;
-- `grouping()` arguments, which must be keys.
+- `grouping()` arguments, which must be keys;
+- the arguments of set-returning and async functions, which resolve names as
+  GROUP BY does.
 
 Local context axes, in key order:
 
@@ -268,12 +272,13 @@ alias_form   explicit, implicit
 key_side     input-column, alias-item
 clause       select-list, having, order-by
 position     in-range, after-star, zero, past-end
+call         srf-argument, async-argument
 ```
 
 `alias_items` describes the SELECT items that share a bare alias; an
 unmatched form is one that is not matched to keys, such as a lambda. `key_side`
-says which side of an input conflict is the key, and `clause` where a
-`grouping()` call is.
+says which side of an input conflict is the key, `clause` where a
+`grouping()` call is, and `call` the function whose arguments hold the name.
 
 ### `predicate_alias`
 

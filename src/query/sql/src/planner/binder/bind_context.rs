@@ -141,10 +141,19 @@ pub enum ExprContext {
     OrderByClause,
     LimitClause,
 
-    InSetReturningFunction,
+    /// The arguments of a set-returning function, which resolve names as
+    /// the clause of the call does: `alias_first` if that clause prefers
+    /// aliases.
+    InSetReturningFunction {
+        alias_first: bool,
+    },
     InAggregateFunction,
     InLambdaFunction,
-    InAsyncFunction,
+    /// The arguments of an async function, which resolve names as the
+    /// clause of the call does, see `InSetReturningFunction`.
+    InAsyncFunction {
+        alias_first: bool,
+    },
 
     #[default]
     Unknown,
@@ -154,13 +163,17 @@ impl ExprContext {
     /// Whether a name resolves to a SELECT alias before an input column. In
     /// SELECT, WHERE and GROUP BY, which includes the arguments of
     /// `grouping()`, a name is an input column first; in the other clauses,
-    /// e.g. ORDER BY and QUALIFY, an alias. Whether HAVING should resolve
-    /// input columns first is not settled; it prefers aliases for now.
+    /// e.g. ORDER BY and QUALIFY, an alias. The arguments of set-returning
+    /// and async functions resolve names as their clause does. Whether
+    /// HAVING should resolve input columns first is not settled; it prefers
+    /// aliases for now.
     pub fn prefer_resolve_alias(&self) -> bool {
-        !matches!(
-            self,
-            ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue
-        )
+        match self {
+            ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue => false,
+            ExprContext::InSetReturningFunction { alias_first }
+            | ExprContext::InAsyncFunction { alias_first } => *alias_first,
+            _ => true,
+        }
     }
 
     pub fn allow_resolve_alias(&self) -> bool {
