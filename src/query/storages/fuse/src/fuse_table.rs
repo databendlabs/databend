@@ -1029,6 +1029,7 @@ impl FuseTable {
         match snapshot_hint {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
+                table_info.meta.field_stats_truncate_len.clear();
             }
             Some((hint, base_table_schema)) => {
                 let full_location = &hint.snapshot_full_path;
@@ -1080,6 +1081,10 @@ impl FuseTable {
                 } else {
                     table_info.meta.schema = Arc::new(base_table_schema);
                 }
+
+                // Keep settings for dropped/unselected columns: time travel can
+                // restore their IDs. Old hints replace stale settings with an empty map.
+                table_info.meta.field_stats_truncate_len = hint.field_stats_truncate_len;
 
                 // tweak table/field comments
                 let comments = hint.entity_comments;
@@ -1483,14 +1488,15 @@ impl Table for FuseTable {
         }
 
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
-        // ATTACH does not preserve the source column's STATS_TRUNCATE_LEN option.
-        // Its string bounds may have been truncated at any number of characters.
-        let unknown_string_truncation = self.table_type == FuseTableType::Attached;
         let r = reduced
             .into_iter()
             .map(|(k, v)| {
-                let truncate_len = col_stats_truncate_lens
-                    .get(&k)
+                let configured_truncate_len = col_stats_truncate_lens.get(&k);
+                // Attached columns without explicit settings stay conservative:
+                // a missing entry may come from an old hint, not default settings.
+                let unknown_string_truncation =
+                    self.table_type == FuseTableType::Attached && configured_truncate_len.is_none();
+                let truncate_len = configured_truncate_len
                     .map(|&n| n as usize)
                     .unwrap_or(STATS_STRING_PREFIX_LEN);
                 // STATS_TRUNCATE_LEN N truncates string min/max statistics when the

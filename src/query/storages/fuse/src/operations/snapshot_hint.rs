@@ -20,6 +20,7 @@ use std::time::Instant;
 use bytes::Buf;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableMeta;
 use log::info;
@@ -50,6 +51,10 @@ pub struct SnapshotHint {
     pub entity_comments: EntityComments,
     #[serde(default)]
     pub indexes: BTreeMap<String, TableIndex>,
+    /// Explicit source settings, including dropped columns needed by time travel.
+    /// Missing entries stay conservative on attached tables, including old hints.
+    #[serde(default)]
+    pub field_stats_truncate_len: BTreeMap<ColumnId, u64>,
 }
 
 impl SnapshotHint {
@@ -127,6 +132,7 @@ async fn try_read_legacy_hint(
                     field_comments: vec![],
                 },
                 indexes: Default::default(),
+                field_stats_truncate_len: BTreeMap::new(),
             }))
         }
         Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(None),
@@ -179,6 +185,7 @@ impl SnapshotHintWriter<'_> {
             snapshot_full_path: last_snapshot_path,
             entity_comments: EntityComments::from(table_meta),
             indexes: table_meta.indexes.clone(),
+            field_stats_truncate_len: table_meta.field_stats_truncate_len.clone(),
         };
 
         let mut bytes = vec![];
