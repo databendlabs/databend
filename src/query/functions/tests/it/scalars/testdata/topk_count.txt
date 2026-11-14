@@ -1,0 +1,73 @@
+ast            : is_topk_count_candidate(NULL, a)
+raw expr       : is_topk_count_candidate(NULL, a::Int64 NULL)
+checked expr   : is_topk_count_candidate<NULL, Int64 NULL>(NULL, a)
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : is_topk_count_candidate(from_hex('00'), a)
+raw expr       : is_topk_count_candidate(from_hex('00'), a::Int64 NULL)
+checked expr   : is_topk_count_candidate<Binary, Int64 NULL>(from_hex<String>("00"), a)
+optimized expr : is_topk_count_candidate<Binary, Int64 NULL>(00, a)
+output type    : Boolean
+output domain  : {FALSE, TRUE}
+output         : true
+
+
+ast            : is_topk_count_candidate(from_hex('010200000003000000000000000500000000000000'), a)
+raw expr       : is_topk_count_candidate(from_hex('010200000003000000000000000500000000000000'), a::Int64 NULL)
+checked expr   : is_topk_count_candidate<Binary, Int64 NULL>(from_hex<String>("010200000003000000000000000500000000000000"), a)
+optimized expr : is_topk_count_candidate<Binary, Int64 NULL>(010200000003000000000000000500000000000000, a)
+evaluation:
++--------+------------------+---------------+
+|        | a                | Output        |
++--------+------------------+---------------+
+| Type   | Int64 NULL       | Boolean       |
+| Domain | {3..=5} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | 3                | true          |
+| Row 1  | 4                | false         |
+| Row 2  | NULL             | true          |
+| Row 3  | 5                | true          |
++--------+------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------+
+| Column | Data                                                                           |
++--------+--------------------------------------------------------------------------------+
+| a      | Column(NullableColumn { column: Int64([3, 4, 0, 5]), validity: [0b____1011] }) |
+| Output | Boolean([0b____1101])                                                          |
++--------+--------------------------------------------------------------------------------+
+
+
+ast            : is_topk_count_candidate(from_hex('0100000000'), 5::Int64)
+raw expr       : is_topk_count_candidate(from_hex('0100000000'), CAST(5 AS Int64))
+checked expr   : is_topk_count_candidate<Binary, Int64>(from_hex<String>("0100000000"), CAST<UInt8>(5_u8 AS Int64))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : is_topk_count_candidate(from_hex('0101000000020000006162'), s)
+raw expr       : is_topk_count_candidate(from_hex('0101000000020000006162'), s::String NULL)
+checked expr   : is_topk_count_candidate<Binary, String NULL>(from_hex<String>("0101000000020000006162"), s)
+optimized expr : is_topk_count_candidate<Binary, String NULL>(0101000000020000006162, s)
+evaluation:
++--------+------------------------+---------------+
+|        | s                      | Output        |
++--------+------------------------+---------------+
+| Type   | String NULL            | Boolean       |
+| Domain | {"ab"..="cd"} ∪ {NULL} | {FALSE, TRUE} |
+| Row 0  | 'ab'                   | true          |
+| Row 1  | 'cd'                   | false         |
+| Row 2  | NULL                   | true          |
++--------+------------------------+---------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------+
+| Column | Data                                                                              |
++--------+-----------------------------------------------------------------------------------+
+| s      | Column(NullableColumn { column: StringColumn[ab, cd, ], validity: [0b_____011] }) |
+| Output | Boolean([0b_____101])                                                             |
++--------+-----------------------------------------------------------------------------------+
+
+

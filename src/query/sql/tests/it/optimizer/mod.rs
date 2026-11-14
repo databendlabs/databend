@@ -28,6 +28,7 @@ mod decorrelate_scalar_aggregate;
 mod distributed_join;
 mod eager_aggregation;
 mod eliminate_eval_scalar;
+mod heavy_hitter_aggregate;
 mod hierarchical_grouping_sets;
 mod insert_multi_table;
 mod join_cardinality;

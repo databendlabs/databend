@@ -1,0 +1,89 @@
+# EXPLAIN shape tests for the heavy hitter aggregation (`enable_heavy_hitter_aggregate`).
+
+statement ok
+create or replace table t_heavy_hitter_explain(k int not null, v int not null)
+
+statement ok
+insert into t_heavy_hitter_explain select number % 50000, number from numbers(100000)
+
+statement ok
+set enable_heavy_hitter_aggregate = 2
+
+# A local pure COUNT uses bounded exact counting. Its unchanged full aggregation is a
+# lazy fallback; it is not built or scanned when the runtime proof succeeds.
+query T
+explain select k, count(*) c from t_heavy_hitter_explain where v > 10 group by k order by c desc limit 10
+----
+TopN(Final)
+├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
+├── sort keys: [COUNT(*) DESC NULLS LAST]
+├── limit: 10
+├── offset: 0
+├── estimated rows: <slt:ignore>
+└── TopN(Partial)
+    ├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
+    ├── sort keys: [COUNT(*) DESC NULLS LAST]
+    ├── limit: 10
+    ├── offset: 0
+    ├── estimated rows: <slt:ignore>
+    └── AdaptiveTopKCount
+        └── AggregateFinal
+            ├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
+            ├── group by: [k]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: <slt:ignore>
+            └── AggregatePartial
+                ├── group by: [k]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: <slt:ignore>
+                └── TableScan
+                    ├── table: default.default.t_heavy_hitter_explain
+                    ├── scan id: 0
+                    ├── output columns: [k (#0)]
+                    ├── read rows: <slt:ignore>
+                    ├── read size: <slt:ignore>
+                    ├── partitions total: <slt:ignore>
+                    ├── partitions scanned: <slt:ignore>
+                    ├── pruning stats: <slt:ignore>
+                    ├── push downs: [filters: [t_heavy_hitter_explain.v (#1) > 10], limit: NONE]
+                    └── estimated rows: <slt:ignore>
+
+# Ascending counts are not rewritten.
+query T
+explain select k, count(*) c from t_heavy_hitter_explain group by k order by c limit 10
+----
+TopN(Final)
+├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
+├── sort keys: [COUNT(*) ASC NULLS LAST]
+├── limit: 10
+├── offset: 0
+├── estimated rows: <slt:ignore>
+└── TopN(Partial)
+    ├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
+    ├── sort keys: [COUNT(*) ASC NULLS LAST]
+    ├── limit: 10
+    ├── offset: 0
+    ├── estimated rows: <slt:ignore>
+    └── AggregateFinal
+        ├── output columns: [COUNT(*) (#2), t_heavy_hitter_explain.k (#0)]
+        ├── group by: [k]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: <slt:ignore>
+        └── AggregatePartial
+            ├── group by: [k]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: <slt:ignore>
+            └── TableScan
+                ├── table: default.default.t_heavy_hitter_explain
+                ├── scan id: 0
+                ├── output columns: [k (#0)]
+                ├── read rows: <slt:ignore>
+                ├── read size: <slt:ignore>
+                ├── partitions total: <slt:ignore>
+                ├── partitions scanned: <slt:ignore>
+                ├── pruning stats: <slt:ignore>
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: <slt:ignore>
+
+statement ok
+drop table t_heavy_hitter_explain

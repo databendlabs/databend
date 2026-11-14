@@ -521,6 +521,7 @@ impl SExprVisitor for StatsApplier<'_> {
                     histograms,
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    approx_top_n: Default::default(),
                 });
 
                 return Ok(VisitAction::Replace(

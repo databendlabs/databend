@@ -1,0 +1,210 @@
+# run-with-settings: enable_heavy_hitter_aggregate=2
+
+# GROUP BY key ORDER BY COUNT(*) DESC LIMIT n must return the same rows with and without the
+# heavy hitter aggregation. Local pure COUNT tries bounded exact counting in one pass and falls
+# back to full aggregation when needed. Other aggregates/distributed queries use candidate filtering.
+
+statement ok
+create or replace database heavy_hitter_aggregate
+
+statement ok
+use heavy_hitter_aggregate
+
+# 30% of the rows go to 7 heavy keys, 20% are NULL, the other keys occur once.
+statement ok
+create table events(k int null, s string null, d date not null, v int not null)
+
+statement ok
+insert into events select if(number % 5 = 0, null, if(number % 10 < 3, number % 7, number)), if(number % 4 = 0, null, concat('s', (number % 30000)::string)), to_date(number % 20000), number from numbers(100000)
+
+query II
+select k, count(*) c from events group by k order by c desc, k limit 5
+----
+NULL 20000
+4 2859
+1 2858
+3 2858
+0 2857
+
+query II
+select k, count(*) as c from events group by k order by count(*) desc, k limit 3 offset 2
+----
+1 2858
+3 2858
+0 2857
+
+query IIII
+select k, count(*), sum(v), min(v) from events group by k order by count(*) desc, k limit 4
+----
+NULL 20000 999950000 0
+4 2859 142904291 4
+1 2858 142875707 1
+3 2858 142861438 3
+
+query II
+select k, count(*) c from events where v % 3 = 0 group by k order by c desc, k limit 4
+----
+NULL 6667
+0 953
+3 953
+5 953
+
+query TI
+select s, count(*) c from events group by s order by c desc, s limit 3
+----
+NULL 25000
+s1 4
+s10 4
+
+query TI
+select d, count(*) c from events group by d order by c desc, d limit 2
+----
+1970-01-01 5
+1970-01-02 5
+
+query II
+select k % 1000 as m, count(*) c from events group by m order by c desc, m limit 3
+----
+NULL 20000
+4 2958
+3 2957
+
+# Every key occurs once: the candidates cannot be proven, so every row is aggregated.
+query II
+select v, count(*) c from events group by v order by c desc, v limit 3
+----
+0 1
+1 1
+2 1
+
+# The heavy key only appears after many distinct keys.
+statement ok
+create table late(k int not null)
+
+statement ok
+insert into late select number from numbers(50000)
+
+statement ok
+insert into late select 999999999 from numbers(3000)
+
+query II
+select k, count(*) c from late group by k order by c desc, k limit 2
+----
+999999999 3000
+0 1
+
+# The top key ranks last in every block: each block holds 100 rows of it and 101 rows of each of
+# 3000 keys of its own.
+statement ok
+create table spread(k string not null)
+
+statement ok
+insert into spread select 'abc' from numbers(100) union all select concat('a', (number % 3000)::string) from numbers(303000)
+
+statement ok
+insert into spread select 'abc' from numbers(100) union all select concat('b', (number % 3000)::string) from numbers(303000)
+
+statement ok
+insert into spread select 'abc' from numbers(100) union all select concat('c', (number % 3000)::string) from numbers(303000)
+
+query TI
+select k, count(*) c from spread group by k order by c desc, k limit 2
+----
+abc 300
+a0 101
+
+# A late hot key cannot use a residual as its exact count, even for LIMIT 1.
+query II
+select k, count(*) c from late group by k order by c desc, k limit 1
+----
+999999999 3000
+
+# Nullable strings with tied hot counts. Keep all ties until the outer TopN
+# applies secondary ordering and OFFSET; the NULL group has an exact count too.
+statement ok
+create table tied(k string null)
+
+statement ok
+insert into tied select if(number % 4 = 0, null, if(number % 4 = 1, 'hot', number::string)) from numbers(100000)
+
+query TI
+select k, count(*) c from tied group by k order by c desc, k nulls first limit 1 offset 1
+----
+hot 25000
+
+query TI
+select k, count(*) c from tied where k is not null group by k order by c desc, k limit 1
+----
+hot 25000
+
+statement ok
+create table only_null(k bigint null)
+
+statement ok
+insert into only_null select null from numbers(100)
+
+query II
+select k, count(*) c from only_null group by k order by c desc limit 10
+----
+NULL 100
+
+statement ok
+create table empty_input(k timestamp null)
+
+query TI
+select k, count(*) c from empty_input group by k order by c desc limit 10
+----
+
+# A hot key is admitted only after enough unique keys to force reduction.
+# NULL is exact, but non-NULL counts require the candidate-validation path.
+statement ok
+create table candidate_validation(k bigint null) row_per_block = 32768
+
+statement ok
+insert into candidate_validation select if(number % 5 = 0, null, if(number % 32768 < 20000, number, 999999999)) from numbers(500000)
+
+query II
+select k,count(*) c from candidate_validation group by k order by c desc,k nulls first limit 2
+----
+999999999 153216
+NULL 100000
+
+query II
+select k,count(*) c from candidate_validation group by k order by c desc,k nulls first limit 1 offset 1
+----
+NULL 100000
+
+# The same validation must preserve typed String keys (including UTF-8) and NULL.
+statement ok
+create table candidate_validation_string(k string null)
+
+statement ok
+insert into candidate_validation_string select if(k = 999999999, '热点', k::string) from candidate_validation
+
+query TI
+select k,count(*) c from candidate_validation_string group by k order by c desc,k nulls first limit 2
+----
+热点 153216
+NULL 100000
+
+# The first sample may favor one key, but only the COMPLETE summary can
+# authorize filtering. A later hot key must not be pruned by a prefix proof.
+statement ok
+create table misleading_prefix(k bigint not null)
+
+statement ok
+insert into misleading_prefix select 1 from numbers(20000)
+
+statement ok
+insert into misleading_prefix select number + 100 from numbers(50000)
+
+statement ok
+insert into misleading_prefix select 999999999 from numbers(100000)
+
+query II
+select k,count(*) c from misleading_prefix group by k order by c desc,k limit 1
+----
+999999999 100000
+
+statement ok
+drop database heavy_hitter_aggregate

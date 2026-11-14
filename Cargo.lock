@@ -3477,6 +3477,7 @@ dependencies = [
 name = "databend-common-functions"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.12",
  "anyhow",
  "argminmax",
  "base64 0.22.1",

@@ -273,6 +273,7 @@ impl Binder {
         }
 
         let aggregate = Aggregate {
+            adaptive_topk_count: None,
             group_items,
             aggregate_functions,
             from_distinct: false,
