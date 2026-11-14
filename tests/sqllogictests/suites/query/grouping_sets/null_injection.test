@@ -72,6 +72,16 @@ x [1] 0 1 1
 y NULL 1 NULL 1
 y [2,3] 0 2 1
 
+## Lambda keys
+
+# A lambda function that is a key is NULL in the sets without it.
+query TI rowsort
+SELECT array_transform([a], x -> x + 1), count(*) FROM t GROUP BY ROLLUP(array_transform([a], x -> x + 1))
+----
+NULL 2
+[2] 1
+[3] 1
+
 ## Constant keys
 
 # An expression without columns that is a key is NULL in the sets without it,

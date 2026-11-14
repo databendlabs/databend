@@ -19,10 +19,10 @@
 //! [`GroupingKeyScope`] of a SELECT is active, every node is checked top-down,
 //! before its children are resolved. A node binds to the output of key `K` iff
 //!
-//! - it is structurally eligible: it contains no subquery, lambda, search,
-//!   window or aggregate function, nor `grouping()`, and it references a
-//!   column or calls a function, or `K` is a key of grouping sets of this
-//!   SELECT;
+//! - it is structurally eligible: it contains no subquery, search, window or
+//!   aggregate function, nor `grouping()`, nor a parameter of a lambda whose
+//!   body it is in, and it references a column or calls a function, or `K` is
+//!   a key of grouping sets of this SELECT;
 //! - its pre-aggregate form is not a deterministic expression without
 //!   columns, unless the node references a column or `K` is a key of grouping
 //!   sets of this SELECT;
@@ -65,6 +65,15 @@
 //! are not eligible can only refer to a key through a SELECT alias or
 //! position.
 //!
+//! A lambda function is eligible as a whole if its arguments and its body
+//! are, with its parameters, and those of lambdas nested in it, allowed in
+//! its body: the compiled body refers to the parameters by position and
+//! displays them by name, so two bindings of the same lambda are equal, and
+//! `array_transform([a], x -> x + 1)` matches the same key. In its body, a
+//! node that refers to a parameter is not eligible, as its form depends on
+//! the binding of the parameter; the other nodes, e.g. `a + 1` in
+//! `x -> x + (a + 1)`, match keys like any other.
+//!
 //! Trying every node would bind each node once per enclosing node, which is
 //! quadratic in the depth of the expression. Instead, the pre-aggregate form
 //! of a node for a scope is bound once: it is memoized while the form of an
@@ -78,9 +87,10 @@
 //! the arena, which only holds the lowered expressions: the forms are binding
 //! results, only valid for the arena being bound and for the binding context
 //! of the type checker. So a type checker binds every arena with a memo of its
-//! own, and so does the type checker of a lambda body, whose parameters are
-//! bound anew each time. The pre-aggregate forms of the
-//! SELECT items are kept apart, with the items, see `pre_aggregate.rs`.
+//! own. Lambda bodies are bound by the type checker around them, and the
+//! nodes of a body whose forms depend on its parameters are not eligible, so
+//! none of them is memoized. The pre-aggregate forms of the SELECT items are
+//! kept apart, with the items, see `pre_aggregate.rs`.
 //!
 //! A form is a speculative binding: a reference to an ungrouped input column
 //! of an enclosing scope is not rejected while binding it, since the node may
@@ -99,7 +109,9 @@
 use std::collections::HashMap;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Identifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use smallvec::SmallVec;
@@ -120,6 +132,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::GroupingScopeState;
 use crate::binder::SetReturningAnalyzer;
+use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
@@ -226,6 +239,26 @@ impl CoreExprArena<'_> {
     }
 }
 
+/// The names of the parameters of a lambda, as they are bound.
+fn lambda_param_names(params: &[Identifier]) -> Vec<String> {
+    params
+        .iter()
+        .map(|param| param.name.to_lowercase())
+        .collect()
+}
+
+/// Whether the node calls a function, which may not be deterministic.
+fn is_call_node(expr: &CoreExpr<'_>) -> bool {
+    matches!(
+        expr,
+        CoreExpr::Call { .. }
+            | CoreExpr::ScalarFunction { .. }
+            | CoreExpr::SpecialFunction { .. }
+            | CoreExpr::AsyncFunction { .. }
+            | CoreExpr::UdfCall { .. }
+    )
+}
+
 /// The children of a node that is structurally eligible as a part of a
 /// grouping key if its children are, or `None` if it isn't.
 fn grouping_key_children(expr: &CoreExpr<'_>) -> Option<SmallVec<[CoreExprId; 4]>> {
@@ -255,8 +288,9 @@ fn grouping_key_children(expr: &CoreExpr<'_>) -> Option<SmallVec<[CoreExprId; 4]
         CoreExpr::UdfCall {
             args, filter: None, ..
         } => args.iter().map(|(_, arg)| *arg).collect(),
+        // The body of a lambda is not a child, see `lambda_body_eligibility`.
+        CoreExpr::LambdaFunction { args, .. } => args.clone(),
         CoreExpr::UdfCall { .. }
-        | CoreExpr::LambdaFunction { .. }
         | CoreExpr::SearchFunction { .. }
         | CoreExpr::SetReturningFunction { .. }
         | CoreExpr::Subquery { .. }
@@ -348,30 +382,159 @@ where A: TypeCheckAdapter
             return *eligibility;
         }
         let expr = arena.get(id);
-        let eligibility = match grouping_key_children(expr) {
+        let eligibility = match expr {
+            CoreExpr::ColumnRef { column, .. } if self.is_lambda_param_ref(column) => {
+                Eligibility::INELIGIBLE
+            }
+            CoreExpr::LambdaFunction {
+                args,
+                lambda_params,
+                lambda_expr,
+                ..
+            } => {
+                let args = self.are_grouping_key_eligible(arena, args.iter().copied());
+                let mut params = vec![lambda_param_names(lambda_params)];
+                let body = self.lambda_body_eligibility(arena, *lambda_expr, &mut params);
+                if args.eligible && body.eligible {
+                    Eligibility {
+                        eligible: true,
+                        has_column: args.has_column || body.has_column,
+                        has_call: true,
+                    }
+                } else {
+                    Eligibility::INELIGIBLE
+                }
+            }
+            _ => self.grouping_key_eligibility_of_children(arena, expr),
+        };
+        self.grouping_key_memo
+            .eligibility
+            .insert(id.index, eligibility);
+        eligibility
+    }
+
+    fn grouping_key_eligibility_of_children(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        expr: &CoreExpr<'_>,
+    ) -> Eligibility {
+        match grouping_key_children(expr) {
             None => Eligibility::INELIGIBLE,
             Some(children) => {
                 let eligibility = self.are_grouping_key_eligible(arena, children.into_iter());
                 Eligibility {
                     has_column: eligibility.has_column
                         || (eligibility.eligible && matches!(expr, CoreExpr::ColumnRef { .. })),
-                    has_call: eligibility.has_call
-                        || (eligibility.eligible
-                            && matches!(
-                                expr,
-                                CoreExpr::Call { .. }
-                                    | CoreExpr::ScalarFunction { .. }
-                                    | CoreExpr::SpecialFunction { .. }
-                                    | CoreExpr::AsyncFunction { .. }
-                                    | CoreExpr::UdfCall { .. }
-                            )),
+                    has_call: eligibility.has_call || (eligibility.eligible && is_call_node(expr)),
                     ..eligibility
                 }
             }
+        }
+    }
+
+    /// Whether `column` names a parameter of a lambda whose body is being
+    /// bound, as resolving it would find, see `TypeChecker::lambda_param`.
+    fn is_lambda_param_ref(&self, column: &ColumnRef) -> bool {
+        self.unqualified_name(column)
+            .is_some_and(|name| self.lambda_param(&name).is_some())
+    }
+
+    fn unqualified_name(&self, column: &ColumnRef) -> Option<String> {
+        match column {
+            ColumnRef {
+                database: None,
+                table: None,
+                column: ColumnID::Name(ident),
+            } => Some(normalize_identifier(ident, self.name_resolution_ctx).name),
+            _ => None,
+        }
+    }
+
+    /// The eligibility of the body of a lambda, whose parameters and those of
+    /// lambdas nested in it, `params`, are allowed, while those of a lambda
+    /// whose body is being bound are not. It is not memoized: the nodes of the
+    /// body are memoized as they are tried, where the parameters of the lambda
+    /// are not allowed.
+    #[recursive::recursive]
+    fn lambda_body_eligibility(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+        params: &mut Vec<Vec<String>>,
+    ) -> Eligibility {
+        let expr = arena.get(id);
+        match expr {
+            CoreExpr::ColumnRef { column, .. } => {
+                let name = self.unqualified_name(column);
+                if name
+                    .as_ref()
+                    .is_some_and(|name| params.iter().flatten().any(|param| param == name))
+                {
+                    Eligibility {
+                        eligible: true,
+                        has_column: false,
+                        has_call: false,
+                    }
+                } else if self.is_lambda_param_ref(column) {
+                    Eligibility::INELIGIBLE
+                } else {
+                    Eligibility {
+                        eligible: true,
+                        has_column: true,
+                        has_call: false,
+                    }
+                }
+            }
+            CoreExpr::LambdaFunction {
+                args,
+                lambda_params,
+                lambda_expr,
+                ..
+            } => {
+                let mut eligibility = self.lambda_body_children_eligibility(arena, args, params);
+                params.push(lambda_param_names(lambda_params));
+                let body = self.lambda_body_eligibility(arena, *lambda_expr, params);
+                params.pop();
+                eligibility.eligible &= body.eligible;
+                eligibility.has_column |= body.has_column;
+                eligibility.has_call = true;
+                if eligibility.eligible {
+                    eligibility
+                } else {
+                    Eligibility::INELIGIBLE
+                }
+            }
+            _ => match grouping_key_children(expr) {
+                None => Eligibility::INELIGIBLE,
+                Some(children) => {
+                    let mut eligibility =
+                        self.lambda_body_children_eligibility(arena, &children, params);
+                    eligibility.has_call |= eligibility.eligible && is_call_node(expr);
+                    eligibility
+                }
+            },
+        }
+    }
+
+    fn lambda_body_children_eligibility(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        children: &[CoreExprId],
+        params: &mut Vec<Vec<String>>,
+    ) -> Eligibility {
+        let mut eligibility = Eligibility {
+            eligible: true,
+            has_column: false,
+            has_call: false,
         };
-        self.grouping_key_memo
-            .eligibility
-            .insert(id.index, eligibility);
+        for child in children {
+            let child = self.lambda_body_eligibility(arena, *child, params);
+            if !child.eligible {
+                return Eligibility::INELIGIBLE;
+            }
+            eligibility.has_column |= child.has_column;
+            eligibility.has_call |= child.has_call;
+        }
         eligibility
     }
 

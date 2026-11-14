@@ -136,28 +136,9 @@ EvalScalar
             └── limit: NONE
 
 
-=== group_by_alias__group_by_alias_of_duplicate_unmatched_items_is_those_items ===
-matrix: group_by_alias
-key: G0N0S1_3_11
-sql: SELECT array_transform([a], v -> v + 1) AS x, array_transform([a], v -> v + 1) AS x, count(*) FROM t GROUP BY x
-status: ok
-EvalScalar
-├── scalars: [x (#2) AS (#2), COUNT(*) (#3) AS (#3)]
-└── Aggregate(Initial)
-    ├── group items: [array_transform(array(t.a (#0)), ["v"] -> v + 1) AS (#2)]
-    ├── aggregate functions: [count() AS (#3)]
-    └── EvalScalar
-        ├── scalars: [array_transform(array(t.a (#0)), ["v"] -> v + 1) AS (#2)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
 === group_by_alias__group_by_alias_of_different_items_is_ambiguous ===
 matrix: group_by_alias
-key: G0N0S1_3_12
+key: G0N0S1_3_11
 sql: SELECT a AS x, b AS x, count(*) FROM t GROUP BY x
 status: error
 code: 1065

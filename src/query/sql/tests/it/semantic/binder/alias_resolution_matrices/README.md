@@ -266,8 +266,7 @@ Local context axes, in key order:
 
 ```text
 relation     input-conflict, no-input, input-ambiguous
-alias_items  duplicate-same-form, duplicate-same-unmatched-form,
-             duplicate-different-form
+alias_items  duplicate-same-form, duplicate-different-form
 alias_form   explicit, implicit
 key_side     input-column, alias-item
 clause       select-list, having, order-by
@@ -275,8 +274,7 @@ position     in-range, after-star, zero, past-end
 call         srf-argument, async-argument
 ```
 
-`alias_items` describes the SELECT items that share a bare alias; an
-unmatched form is one that is not matched to keys, such as a lambda. `key_side`
+`alias_items` describes the SELECT items that share a bare alias. `key_side`
 says which side of an input conflict is the key, `clause` where a
 `grouping()` call is, and `call` the function whose arguments hold the name.
 

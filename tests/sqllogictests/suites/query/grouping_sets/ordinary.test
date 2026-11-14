@@ -38,6 +38,13 @@ SELECT (SELECT max(a) FROM t) AS k, count(*) FROM t GROUP BY 1
 ----
 2 3
 
+# A lambda function is a key as written, like any expression.
+query TI rowsort
+SELECT array_transform([a], x -> x + 1), count(*) FROM t GROUP BY array_transform([a], x -> x + 1)
+----
+[2] 2
+[3] 1
+
 ## GROUP BY ALL
 
 # The keys are the items without aggregates, over aliases of earlier items.

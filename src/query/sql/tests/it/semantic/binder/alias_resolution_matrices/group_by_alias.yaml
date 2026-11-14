@@ -3,7 +3,7 @@ local_dimensions:
   - name: relation
     values: [input-conflict, no-input, input-ambiguous]
   - name: alias_items
-    values: [duplicate-same-form, duplicate-same-unmatched-form, duplicate-different-form]
+    values: [duplicate-same-form, duplicate-different-form]
   - name: alias_form
     values: [explicit, implicit]
   - name: key_side
@@ -85,14 +85,14 @@ regions:
           - "CREATE TABLE t(k Int32)"
         runs:
           - sql: "SELECT 1 AS k, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY k + 1"
-  - description: a bare GROUP BY alias of several SELECT items is all of them if they have the same form, whether or not that form is matched to keys, and ambiguous otherwise
+  - description: a bare GROUP BY alias of several SELECT items is all of them if they have the same form, and ambiguous otherwise
     main:
       consumers: [G0]
       name_shapes: [N0]
       producers: [S1]
     local:
       relation: [no-input]
-      alias_items: [duplicate-same-form, duplicate-same-unmatched-form, duplicate-different-form]
+      alias_items: [duplicate-same-form, duplicate-different-form]
     cases:
       - key: G0N0S1_3_10
         name: group_by_alias_of_duplicate_items_is_those_items
@@ -101,12 +101,6 @@ regions:
         runs:
           - sql: "SELECT a + 1 AS x, a + 1 AS x, count(*) FROM t GROUP BY x"
       - key: G0N0S1_3_11
-        name: group_by_alias_of_duplicate_unmatched_items_is_those_items
-        setup_sqls:
-          - "CREATE TABLE t(a Int32, b Int32)"
-        runs:
-          - sql: "SELECT array_transform([a], v -> v + 1) AS x, array_transform([a], v -> v + 1) AS x, count(*) FROM t GROUP BY x"
-      - key: G0N0S1_3_12
         name: group_by_alias_of_different_items_is_ambiguous
         setup_sqls:
           - "CREATE TABLE t(a Int32, b Int32)"

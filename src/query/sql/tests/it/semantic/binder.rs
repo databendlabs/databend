@@ -891,6 +891,12 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT sleep(a), count(*) FROM t GROUP BY ROLLUP(sleep(a))",
         },
         SqlTestCase {
+            name: "lambda_key_reads_key_output",
+            description: "A lambda function that is a key is read as the key output: its body refers to the parameter by position, so the SELECT item equals the key.",
+            setup_sqls: T,
+            sql: "SELECT array_transform([a], x -> x + 1), count(*) FROM t GROUP BY ROLLUP(array_transform([a], x -> x + 1))",
+        },
+        SqlTestCase {
             name: "internal_column_key_reads_key_output",
             description: "An internal column that is a key is read as the key output.",
             setup_sqls: T,
