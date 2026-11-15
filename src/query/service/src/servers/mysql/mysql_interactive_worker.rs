@@ -368,32 +368,17 @@ impl InteractiveWorkerBase {
         let tenant = ctx.get_tenant();
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
-        let mut user = user_api
-            .get_user_with_client_ip(&tenant, identity.clone(), Some(client_ip))
+        let global_network_policy = ctx.get_settings().get_network_policy().unwrap_or_default();
+        let (user, verified) = user_api
+            .login_with_password(
+                &tenant,
+                identity,
+                Some(client_ip),
+                &global_network_policy,
+                |user| user.auth_info.auth_mysql(&info.user_password, salt),
+            )
             .await?;
-
-        // check global network policy if user is not account admin
-        if !user.is_account_admin() {
-            let global_network_policy = ctx.get_settings().get_network_policy().unwrap_or_default();
-            if !global_network_policy.is_empty() {
-                user_api
-                    .enforce_network_policy(&tenant, &global_network_policy, Some(client_ip))
-                    .await?;
-            }
-        }
-
-        // Check password policy for login
-        let need_change = user_api
-            .check_login_password(&tenant, identity.clone(), &user)
-            .await?;
-        if need_change {
-            user.update_auth_need_change_password();
-        }
-
-        let authed = user.auth_info.auth_mysql(&info.user_password, salt)?;
-        user_api
-            .update_user_login_result(tenant, identity, authed, &user)
-            .await?;
+        let authed = verified?;
         if authed {
             self.session.set_authed_user(user, None).await?;
         }

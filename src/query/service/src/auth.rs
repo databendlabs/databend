@@ -354,31 +354,8 @@ impl AuthMgr {
             } => {
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(name, "%");
-                let mut user = user_api
-                    .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
-                    .await?;
-
-                // check global network policy if user is not account admin
-                if !user.is_account_admin() && !global_network_policy.is_empty() {
-                    user_api
-                        .enforce_network_policy(
-                            &tenant,
-                            &global_network_policy,
-                            client_ip.as_deref(),
-                        )
-                        .await?;
-                }
-
-                // Check password policy for login
-                let need_change = UserApiProvider::instance()
-                    .check_login_password(&tenant, identity.clone(), &user)
-                    .await?;
-                if need_change {
-                    user.update_auth_need_change_password();
-                }
-
-                let check_password = |user: &UserInfo| match &user.auth_info {
-                    AuthInfo::None => Ok(()),
+                let verify = |user: &UserInfo| match &user.auth_info {
+                    AuthInfo::None => Ok(true),
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
@@ -387,55 +364,26 @@ impl AuthMgr {
                         None => Err(ErrorCode::AuthenticateFailure(
                             "Authentication failed: password is required but was not provided",
                         )),
-                        Some(p) => {
-                            if *h == t.hash(p) {
-                                Ok(())
-                            } else {
-                                Err(ErrorCode::AuthenticateFailure(
-                                    "Authentication failed: incorrect password",
-                                ))
-                            }
-                        }
+                        Some(p) => Ok(*h == t.hash(p)),
                     },
                     _ => Err(ErrorCode::AuthenticateFailure(
                         "Authentication failed: user exists but is not configured for password authentication",
                     )),
                 };
-                let mut authed = check_password(&user);
-                if authed.is_err() {
-                    if let Some(fresh) = user_api
-                        .refresh_rejected_user(
-                            &tenant,
-                            identity.clone(),
-                            &user,
-                            client_ip.as_deref(),
-                        )
-                        .await?
-                    {
-                        if !fresh.is_account_admin() && !global_network_policy.is_empty() {
-                            user_api
-                                .enforce_network_policy(
-                                    &tenant,
-                                    &global_network_policy,
-                                    client_ip.as_deref(),
-                                )
-                                .await?;
-                        }
-                        user = fresh;
-                        if UserApiProvider::instance()
-                            .check_login_password(&tenant, identity.clone(), &user)
-                            .await?
-                        {
-                            user.update_auth_need_change_password();
-                        }
-                        authed = check_password(&user);
-                    }
-                }
-                UserApiProvider::instance()
-                    .update_user_login_result(tenant, identity, authed.is_ok(), &user)
+                let (user, verified) = user_api
+                    .login_with_password(
+                        &tenant,
+                        identity,
+                        client_ip.as_deref(),
+                        &global_network_policy,
+                        verify,
+                    )
                     .await?;
-
-                authed?;
+                if !verified? {
+                    return Err(ErrorCode::AuthenticateFailure(
+                        "Authentication failed: incorrect password",
+                    ));
+                }
 
                 session.set_authed_user(user, None).await?;
                 Ok((name.to_string(), None))

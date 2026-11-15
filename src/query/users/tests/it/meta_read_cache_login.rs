@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The password retry after a rejection answered from the meta read cache.
+//! Password login when the user answered from the meta read cache is stale.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,6 +29,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
@@ -88,8 +89,7 @@ async fn cached() -> anyhow::Result<Cached> {
 
 impl Cached {
     /// Create `old` and read it, so that it is kept; then another node replaces it by `new`.
-    /// Return the kept, now stale, user.
-    async fn change_on_other_node(&self, old: UserInfo, new: UserInfo) -> anyhow::Result<UserInfo> {
+    async fn change_on_other_node(&self, old: UserInfo, new: UserInfo) -> anyhow::Result<()> {
         assert!(
             self.other_node
                 .create_user(old.clone(), false)
@@ -103,83 +103,108 @@ impl Cached {
         assert!(self.other_node.create_user(new, true).await?.is_ok());
         let stale = self.api.get_user(&self.tenant, identity).await?;
         assert_eq!(stale.auth_info, old.auth_info, "the kept user answers");
-        Ok(stale)
+        Ok(())
     }
 
-    async fn refresh(
+    /// Log in with `p` from `ip`, under the global network policy `global_policy`.
+    async fn login(
         &self,
-        rejected: &UserInfo,
+        name: &str,
+        p: &str,
         ip: &str,
-    ) -> databend_common_exception::Result<Option<UserInfo>> {
-        let identity = UserIdentity::new(&rejected.name, "%");
+        global_policy: &str,
+    ) -> databend_common_exception::Result<(UserInfo, databend_common_exception::Result<bool>)>
+    {
+        let hash = PasswordHashMethod::Sha256.hash(p.as_bytes());
+        let verify = |user: &UserInfo| match &user.auth_info {
+            AuthInfo::Password { hash_value, .. } => Ok(*hash_value == hash),
+            _ => Ok(false),
+        };
         self.api
-            .refresh_rejected_user(&self.tenant, identity, rejected, Some(ip))
+            .login_with_password(
+                &self.tenant,
+                UserIdentity::new(name, "%"),
+                Some(ip),
+                global_policy,
+                verify,
+            )
             .await
+    }
+
+    /// Whether logging in with `p` succeeds.
+    async fn logs_in(&self, name: &str, p: &str) -> anyhow::Result<bool> {
+        let (_, verified) = self.login(name, p, "10.0.0.1", "").await?;
+        Ok(verified?)
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_refresh_rejected_user() -> anyhow::Result<()> {
+async fn test_login_after_change_on_other_node() -> anyhow::Result<()> {
     let s = cached().await?;
 
-    // The password changed on another node: the fresh record is returned.
-    let stale = s
-        .change_on_other_node(
-            user("u1", "old", UserOption::empty()),
-            user("u1", "new", UserOption::empty()),
-        )
-        .await?;
-    let fresh = s.refresh(&stale, "10.0.0.1").await?.unwrap();
+    // The password changed on another node: the new one logs in, checked on meta-service.
+    s.change_on_other_node(
+        user("u1", "old", UserOption::empty()),
+        user("u1", "new", UserOption::empty()),
+    )
+    .await?;
+    let (fresh, verified) = s.login("u1", "new", "10.0.0.1", "").await?;
+    assert!(verified?);
     assert_eq!(fresh.auth_info, password("new"));
-
-    // Unchanged in meta-service: nothing to retry with.
-    assert!(s.refresh(&fresh, "10.0.0.1").await?.is_none());
+    assert!(!s.logs_in("u1", "wrong").await?);
 
     // The change also disabled the user: the new password must not log in.
-    let stale = s
-        .change_on_other_node(
-            user("u2", "old", UserOption::empty()),
-            user("u2", "new", UserOption::empty().with_disabled(Some(true))),
-        )
-        .await?;
-    let err = s.refresh(&stale, "10.0.0.1").await.unwrap_err();
+    s.change_on_other_node(
+        user("u2", "old", UserOption::empty()),
+        user("u2", "new", UserOption::empty().with_disabled(Some(true))),
+    )
+    .await?;
+    let err = s.login("u2", "new", "10.0.0.1", "").await.unwrap_err();
     assert!(err.message().contains("disabled"), "{err}");
 
     // The change attached a network policy that does not exist, so no client may log in.
-    let stale = s
-        .change_on_other_node(
-            user("u3", "old", UserOption::empty()),
-            user(
-                "u3",
-                "new",
-                UserOption::empty().with_network_policy(Some("missing".to_string())),
-            ),
-        )
-        .await?;
-    assert!(s.refresh(&stale, "10.0.0.1").await.is_err());
+    s.change_on_other_node(
+        user("u3", "old", UserOption::empty()),
+        user(
+            "u3",
+            "new",
+            UserOption::empty().with_network_policy(Some("missing".to_string())),
+        ),
+    )
+    .await?;
+    assert!(s.login("u3", "new", "10.0.0.1", "").await.is_err());
 
-    // With the cache off, a rejection was decided on meta-service: nothing to retry with.
-    let stale = s
-        .change_on_other_node(
-            user("u4", "old", UserOption::empty()),
-            user("u4", "new", UserOption::empty()),
-        )
+    // The change revoked account admin, so the global network policy, which does not exist,
+    // now applies: no client may log in. The kept account admin was exempt.
+    let mut admin = user("u4", "old", UserOption::empty());
+    admin
+        .grants
+        .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+    s.change_on_other_node(admin, user("u4", "new", UserOption::empty()))
         .await?;
+    assert!(s.login("u4", "old", "10.0.0.1", "missing").await?.1?);
+    assert!(s.login("u4", "new", "10.0.0.1", "missing").await.is_err());
+
+    // With the cache off, the user is read from meta-service.
+    s.change_on_other_node(
+        user("u5", "old", UserOption::empty()),
+        user("u5", "new", UserOption::empty()),
+    )
+    .await?;
     s.api.set_meta_read_cache_ttl(&s.tenant, Duration::ZERO);
-    assert!(s.refresh(&stale, "10.0.0.1").await?.is_none());
+    assert!(s.logs_in("u5", "new").await?);
+    assert!(!s.logs_in("u5", "old").await?);
     Ok(())
 }
 
-/// A configured user is never retried against a meta user with the same name.
+/// A configured user is never checked against a meta user with the same name.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_refresh_skips_configured_user() -> anyhow::Result<()> {
+async fn test_login_skips_meta_user_for_configured_user() -> anyhow::Result<()> {
     let s = cached().await?;
     let meta_user = user(CONFIGURED, "meta-pwd", UserOption::empty());
     assert!(s.other_node.create_user(meta_user, false).await?.is_ok());
 
-    let identity = UserIdentity::new(CONFIGURED, "%");
-    let configured = s.api.get_user(&s.tenant, identity).await?;
-    assert_eq!(configured.auth_info, password("configured-pwd"));
-    assert!(s.refresh(&configured, "10.0.0.1").await?.is_none());
+    assert!(!s.logs_in(CONFIGURED, "meta-pwd").await?);
+    assert!(s.logs_in(CONFIGURED, "configured-pwd").await?);
     Ok(())
 }

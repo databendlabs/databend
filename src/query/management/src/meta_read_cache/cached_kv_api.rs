@@ -34,6 +34,7 @@ use futures::stream::BoxStream;
 use super::MetaReadCache;
 use super::ttl_cache::Items;
 use super::ttl_cache::Read;
+use super::ttl_cache::ReadStart;
 
 /// A [`KVApi`] that keeps [`MetaReadCache`] consistent with the writes it forwards, and
 /// optionally answers reads from it.
@@ -147,9 +148,9 @@ impl KVApi for CachedKvApi {
             .collect();
         let missing: Vec<usize> = (0..keys.len()).filter(|&i| values[i].is_none()).collect();
         if !missing.is_empty() {
-            let generations: Vec<Option<u64>> = missing
+            let starts: Vec<Option<ReadStart>> = missing
                 .iter()
-                .map(|&i| self.cache.find(&keys[i]).map(|c| c.generation()))
+                .map(|&i| self.cache.find(&keys[i]).map(|c| c.start_read()))
                 .collect();
             let req: Vec<Result<String, MetaError>> =
                 missing.iter().map(|&i| Ok(keys[i].clone())).collect();
@@ -159,11 +160,11 @@ impl KVApi for CachedKvApi {
                 .await?
                 .try_collect()
                 .await?;
-            for ((&i, item), generation) in missing.iter().zip(fetched).zip(generations) {
+            for ((&i, item), start) in missing.iter().zip(fetched).zip(starts) {
                 let value = item.value.map(SeqV::from);
-                if let (Some(c), Some(generation)) = (self.cache.find(&keys[i]), generation) {
+                if let (Some(c), Some(start)) = (self.cache.find(&keys[i]), start) {
                     let items = value.iter().map(|v| (keys[i].clone(), v.clone())).collect();
-                    c.put(Read::Get(keys[i].clone()), items, generation);
+                    c.put(Read::Get(keys[i].clone()), items, start, ttl);
                 }
                 values[i] = Some(value);
             }
@@ -191,14 +192,14 @@ impl KVApi for CachedKvApi {
         let items = match c.get(&read, ttl) {
             Some(items) => items,
             None => {
-                let generation = c.generation();
+                let start = c.start_read();
                 let fetched: Vec<StreamItem> =
                     self.inner.list_kv(opts).await?.try_collect().await?;
                 let items: Items = fetched
                     .into_iter()
                     .filter_map(|item| Some((item.key, SeqV::from(item.value?))))
                     .collect();
-                c.put(read, items.clone(), generation);
+                c.put(read, items.clone(), start, ttl);
                 items
             }
         };

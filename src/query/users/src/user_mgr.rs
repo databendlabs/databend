@@ -120,13 +120,94 @@ impl UserApiProvider {
         Ok(())
     }
 
+    /// Log `identity` in with a password: load the user, check that it may log in from
+    /// `client_ip`, and check the password with `verify`, which tells whether it matches.
+    /// `global_network_policy` applies unless the user is an account admin; empty means none.
+    ///
+    /// The loaded user may come from the meta read cache, which can lag a change made by another
+    /// node. If `verify` rejects it, the user in meta-service goes through the same checks and
+    /// `verify` again. The outcome is recorded for the password policy.
+    ///
+    /// Returns the user and what `verify` returned for it. An error before `verify` ran, such as
+    /// a disabled user or a blocked client, is returned as the error.
+    pub async fn login_with_password(
+        &self,
+        tenant: &Tenant,
+        identity: UserIdentity,
+        client_ip: Option<&str>,
+        global_network_policy: &str,
+        verify: impl Fn(&UserInfo) -> Result<bool>,
+    ) -> Result<(UserInfo, Result<bool>)> {
+        let mut user = self
+            .get_user_with_client_ip(tenant, identity.clone(), client_ip)
+            .await?;
+        self.check_password_login(
+            tenant,
+            &identity,
+            &mut user,
+            client_ip,
+            global_network_policy,
+        )
+        .await?;
+        let mut verified = verify(&user);
+        if !matches!(verified, Ok(true)) {
+            if let Some(mut fresh) = self
+                .refresh_rejected_user(tenant, identity.clone(), &user, client_ip)
+                .await?
+            {
+                self.check_password_login(
+                    tenant,
+                    &identity,
+                    &mut fresh,
+                    client_ip,
+                    global_network_policy,
+                )
+                .await?;
+                user = fresh;
+                verified = verify(&user);
+            }
+        }
+        self.update_user_login_result(
+            tenant.clone(),
+            identity,
+            matches!(verified, Ok(true)),
+            &user,
+        )
+        .await?;
+        Ok((user, verified))
+    }
+
+    /// The checks of a password login after those of [`Self::check_login_allowed`]: the global
+    /// network policy unless `user` is an account admin, and the password policy, which may
+    /// require `user` to change the password.
+    async fn check_password_login(
+        &self,
+        tenant: &Tenant,
+        identity: &UserIdentity,
+        user: &mut UserInfo,
+        client_ip: Option<&str>,
+        global_network_policy: &str,
+    ) -> Result<()> {
+        if !user.is_account_admin() && !global_network_policy.is_empty() {
+            self.enforce_network_policy(tenant, global_network_policy, client_ip)
+                .await?;
+        }
+        if self
+            .check_login_password(tenant, identity.clone(), user)
+            .await?
+        {
+            user.update_auth_need_change_password();
+        }
+        Ok(())
+    }
+
     /// After the credentials of `rejected` failed: it may come from the meta read cache, which
     /// can lag a change made by another node. Return the record in meta-service if it has other
     /// credentials and may log in, so the caller checks the credentials against it.
     ///
     /// A configured user never comes from the cache, and its configured credentials take
     /// precedence over a meta user with the same name.
-    pub async fn refresh_rejected_user(
+    async fn refresh_rejected_user(
         &self,
         tenant: &Tenant,
         user: UserIdentity,

@@ -37,10 +37,18 @@ pub(crate) type Items = Vec<(String, SeqV)>;
 
 struct Entry {
     items: Items,
+    /// When the read that loaded `items` started: they may be as old as that.
     loaded_at: Instant,
 }
 
-/// Results of reads under one key range, each kept for a TTL after it was loaded.
+/// Taken before reading meta-service, and passed with the result to [`TtlCache::put`].
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ReadStart {
+    generation: u64,
+    at: Instant,
+}
+
+/// Results of reads under one key range, each kept for a TTL after its read started.
 ///
 /// It knows nothing about what the keys mean. A write under the range drops every result, and
 /// the generation keeps a read that started before the write from storing what it loaded.
@@ -68,7 +76,7 @@ impl TtlCache {
         }
     }
 
-    /// The result of `read` if it was loaded less than `ttl` ago.
+    /// The result of `read` if its read started less than `ttl` ago.
     pub(crate) fn get(&self, read: &Read, ttl: Duration) -> Option<Items> {
         let entries = self.entries.lock().unwrap();
         let found = entries
@@ -85,19 +93,27 @@ impl TtlCache {
     }
 
     /// Call before reading meta-service, and pass the result to [`Self::put`].
-    pub(crate) fn generation(&self) -> u64 {
-        self.generation.load(Ordering::Acquire)
+    pub(crate) fn start_read(&self) -> ReadStart {
+        ReadStart {
+            generation: self.generation.load(Ordering::Acquire),
+            at: Instant::now(),
+        }
     }
 
-    /// Keep `items` as the result of `read`, unless a write happened since `generation`: the
-    /// read may have run before that write.
-    pub(crate) fn put(&self, read: Read, items: Items, generation: u64) {
+    /// Keep `items` as the result of `read`, unless a write happened since `start`: the read may
+    /// have run before that write. They are kept for `ttl` from `start`, not from now: a slow
+    /// read may return what meta-service held when it started. A result already older than
+    /// `ttl` is not kept.
+    pub(crate) fn put(&self, read: Read, items: Items, start: ReadStart, ttl: Duration) {
         if items.is_empty() && !self.keep_absent {
+            return;
+        }
+        if start.at.elapsed() >= ttl {
             return;
         }
         let mut entries = self.entries.lock().unwrap();
         // Checked under the lock: `invalidate` increments before it takes the lock to clear.
-        if self.generation.load(Ordering::Acquire) != generation {
+        if self.generation.load(Ordering::Acquire) != start.generation {
             return;
         }
         if entries.len() >= MAX_ENTRIES {
@@ -105,7 +121,7 @@ impl TtlCache {
         }
         entries.insert(read, Entry {
             items,
-            loaded_at: Instant::now(),
+            loaded_at: start.at,
         });
     }
 
@@ -148,7 +164,7 @@ mod tests {
         let c = TtlCache::new("d/".to_string(), false);
         assert_eq!(c.get(&get("d/k"), TTL), None);
 
-        c.put(get("d/k"), items(1), c.generation());
+        c.put(get("d/k"), items(1), c.start_read(), TTL);
         assert_eq!(c.get(&get("d/k"), TTL), Some(items(1)));
         // A `Get` and a `List` of the same string are different reads.
         assert_eq!(c.get(&Read::List("d/k".to_string()), TTL), None);
@@ -160,28 +176,48 @@ mod tests {
     #[test]
     fn test_write_drops_results_and_in_flight_reads() {
         let c = TtlCache::new("d/".to_string(), false);
-        c.put(get("d/k"), items(1), c.generation());
+        c.put(get("d/k"), items(1), c.start_read(), TTL);
 
         // A read starts, then a write completes, then the read stores what it loaded.
-        let before_write = c.generation();
+        let before_write = c.start_read();
         c.invalidate();
         assert_eq!(c.get(&get("d/k"), TTL), None);
-        c.put(get("d/k"), items(1), before_write);
+        c.put(get("d/k"), items(1), before_write, TTL);
         assert_eq!(c.get(&get("d/k"), TTL), None);
 
         // A read that started after the write is kept.
-        c.put(get("d/k"), items(2), c.generation());
+        c.put(get("d/k"), items(2), c.start_read(), TTL);
         assert_eq!(c.get(&get("d/k"), TTL), Some(items(2)));
+    }
+
+    #[test]
+    fn test_ttl_counts_from_read_start() {
+        let ttl = Duration::from_millis(500);
+        let c = TtlCache::new("d/".to_string(), false);
+
+        // A read that took longer than the TTL: its result may already be too old to keep.
+        let start = c.start_read();
+        std::thread::sleep(ttl);
+        c.put(get("d/k"), items(1), start, ttl);
+        assert_eq!(c.get(&get("d/k"), ttl), None);
+
+        // A read that took half the TTL: kept for the other half only.
+        let start = c.start_read();
+        std::thread::sleep(ttl / 2);
+        c.put(get("d/k"), items(2), start, ttl);
+        assert_eq!(c.get(&get("d/k"), ttl), Some(items(2)));
+        std::thread::sleep(ttl / 2);
+        assert_eq!(c.get(&get("d/k"), ttl), None);
     }
 
     #[test]
     fn test_absent_is_kept_only_if_asked() {
         let c = TtlCache::new("d/".to_string(), false);
-        c.put(get("d/k"), vec![], c.generation());
+        c.put(get("d/k"), vec![], c.start_read(), TTL);
         assert_eq!(c.get(&get("d/k"), TTL), None);
 
         let c = TtlCache::new("d/".to_string(), true);
-        c.put(get("d/k"), vec![], c.generation());
+        c.put(get("d/k"), vec![], c.start_read(), TTL);
         assert_eq!(c.get(&get("d/k"), TTL), Some(vec![]));
     }
 }
