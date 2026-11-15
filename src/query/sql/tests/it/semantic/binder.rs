@@ -435,6 +435,24 @@ async fn test_binder_nested_udf_rewrite() -> Result<()> {
             ],
             sql: "SELECT array_transform([a], x -> sql_add_one(x)) FROM t",
         },
+        SqlTestCase {
+            name: "sql_udf_with_subquery_inside_sql_lambda_body_is_rejected",
+            description: "The body of a SQL UDF called in a lambda body is a part of it, so a subquery in it is rejected like one in the lambda body, instead of leaking an internal column id.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_add_subquery AS (x) -> x + (SELECT 1)",
+            ],
+            sql: "SELECT array_transform([a], x -> sql_add_subquery(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "sql_udf_with_long_in_list_inside_sql_lambda_body_keeps_the_list",
+            description: "A long IN list in the body of a SQL UDF called in a lambda body is kept, as in the lambda body, rather than turned into a subquery.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_in_list AS (x) -> x IN (1, 2, 3)",
+            ],
+            sql: "SETTINGS (inlist_to_join_threshold = 2) SELECT array_transform([a], x -> sql_in_list(x)) FROM t",
+        },
     ];
 
     run_binder_cases("binder_nested_udf.txt", &cases).await

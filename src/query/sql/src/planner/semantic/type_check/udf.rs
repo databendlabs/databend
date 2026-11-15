@@ -1007,7 +1007,20 @@ where A: super::TypeCheckAdapter
         // Pre-aggregate forms matched against grouping keys stay unfolded,
         // including the bodies of SQL UDFs in them.
         type_checker.set_folding_policy(self.scalar_folding_policy());
-        let deref!((scalar, data_type)) = type_checker.resolve(&expr)?;
+        let mut arena = type_checker.core_expr_arena();
+        let root = arena.lower_ast_expr(&expr)?;
+        // The body of a UDF called in a lambda body is a part of that body,
+        // which must compile into the expression evaluated per element. The
+        // nodes it cannot hold are rejected as in the lambda body, and an
+        // empty frame of parameters tells the type checker of the UDF that it
+        // binds a lambda body, with none of the parameters in scope: an IN
+        // list is kept, an aggregate function is rejected, and the SQL UDFs
+        // that the body calls are checked in turn.
+        if !self.lambda_params.is_empty() {
+            arena.reject_lambda_body_nodes(0)?;
+            type_checker.lambda_params.push(Vec::new());
+        }
+        let deref!((scalar, data_type)) = type_checker.resolve_checked_core(&arena, root)?;
 
         // The definition body is resolved with its own `BindContext`, so any runtime
         // rewrite requirement discovered there (script/server UDF calls, async
