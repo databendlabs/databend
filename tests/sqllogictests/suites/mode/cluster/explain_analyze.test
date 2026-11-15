@@ -69,6 +69,12 @@ drop table if exists author;
 statement ok
 set enable_distributed_pruning = 0;
 
+# Re-reads of `article` would hit the in-memory table data cache of whichever node scanned
+# each block before, so a scan could report both `read from remote` and `read from memory
+# cache`. Disable that cache on every node to keep the read sources deterministic.
+statement ok
+call system$set_cache_capacity('memory_cache_table_data', 0);
+
 statement ok
 create table if not exists article (article_id int, author_id int, viewer_id int, view_date date);
 
@@ -139,7 +145,7 @@ Exchange
     ├── output rows: 6
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
-    ├── read from <slt:ignore>
+    ├── read from remote: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
@@ -152,8 +158,6 @@ Exchange
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 6.00
 
-# Re-reads of `article` may hit the in-memory data cache of whichever node scans each block,
-# so the remote/memory split is not deterministic.
 query T
 EXPLAIN ANALYZE SELECT * FROM article where article_id < 3;
 ----
@@ -166,7 +170,7 @@ Exchange
     ├── output rows: 4
     ├── output bytes: 80.00 B
     ├── bytes scanned: 80.00 B
-    ├── read from <slt:ignore>
+    ├── read from remote: 448.00 B
     ├── runtime filter bloom time: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
@@ -230,7 +234,7 @@ Exchange
         ├── output rows: 1
         ├── output bytes: 20.00 B
         ├── bytes scanned: 20.00 B
-        ├── read from <slt:ignore>
+        ├── read from remote: 112.00 B
         ├── parts pruned by runtime filter: 5
         ├── runtime filter bloom time: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
@@ -252,6 +256,9 @@ drop table if exists article;
 
 statement ok
 drop table if exists author;
+
+statement ok
+call system$set_cache_capacity('memory_cache_table_data', 'default');
 
 statement ok
 set enable_distributed_pruning = 1;
