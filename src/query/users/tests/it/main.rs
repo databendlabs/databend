@@ -14,6 +14,7 @@
 
 mod external_access;
 mod jwt;
+mod meta_read_cache_login;
 mod network_policy;
 mod password_policy;
 mod role_cache_mgr;

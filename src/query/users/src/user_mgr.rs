@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
 use databend_common_management::errors::meta_service_error;
+use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserIdentity;
@@ -118,6 +119,37 @@ impl UserApiProvider {
             self.enforce_network_policy(tenant, name, client_ip).await?;
         }
         Ok(())
+    }
+
+    /// After the credentials of `rejected` failed: it may come from the meta read cache, which
+    /// can lag a change made by another node. Return the record in meta-service if it has other
+    /// credentials and may log in, so the caller checks the credentials against it.
+    ///
+    /// A configured user never comes from the cache, and its configured credentials take
+    /// precedence over a meta user with the same name.
+    pub async fn refresh_rejected_user(
+        &self,
+        tenant: &Tenant,
+        user: UserIdentity,
+        rejected: &UserInfo,
+        client_ip: Option<&str>,
+    ) -> Result<Option<UserInfo>> {
+        if MetaReadCache::try_instance().is_none()
+            || self.get_configured_user(&user.username).is_some()
+        {
+            return Ok(None);
+        }
+        let Ok(fresh) = self.get_meta_user(tenant, user).await else {
+            return Ok(None);
+        };
+        if fresh.data.auth_info == rejected.auth_info {
+            return Ok(None);
+        }
+        // The login checks ran on the cached record; the change may also have disabled the user
+        // or restricted its network.
+        self.check_login_allowed(tenant, &fresh.data, client_ip)
+            .await?;
+        Ok(Some(fresh.data))
     }
 
     pub async fn enforce_network_policy(

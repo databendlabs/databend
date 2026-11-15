@@ -22,7 +22,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
@@ -403,39 +402,33 @@ impl AuthMgr {
                     )),
                 };
                 let mut authed = check_password(&user);
-                // A configured user never comes from the meta read cache, and its configured
-                // credentials take precedence over a meta user with the same name.
-                if authed.is_err()
-                    && MetaReadCache::try_instance().is_some()
-                    && user_api.get_configured_user(name).is_none()
-                {
-                    // The user may come from the meta read cache, which can lag a change made
-                    // by another node: decide a rejection on a fresh read.
-                    if let Ok(fresh) = user_api.get_meta_user(&tenant, identity.clone()).await {
-                        if fresh.data.auth_info != user.auth_info {
-                            user = fresh.data;
-                            // The checks above ran on the cached record; the change may also
-                            // have disabled the user or restricted its network.
+                if authed.is_err() {
+                    if let Some(fresh) = user_api
+                        .refresh_rejected_user(
+                            &tenant,
+                            identity.clone(),
+                            &user,
+                            client_ip.as_deref(),
+                        )
+                        .await?
+                    {
+                        if !fresh.is_account_admin() && !global_network_policy.is_empty() {
                             user_api
-                                .check_login_allowed(&tenant, &user, client_ip.as_deref())
+                                .enforce_network_policy(
+                                    &tenant,
+                                    &global_network_policy,
+                                    client_ip.as_deref(),
+                                )
                                 .await?;
-                            if !user.is_account_admin() && !global_network_policy.is_empty() {
-                                user_api
-                                    .enforce_network_policy(
-                                        &tenant,
-                                        &global_network_policy,
-                                        client_ip.as_deref(),
-                                    )
-                                    .await?;
-                            }
-                            if UserApiProvider::instance()
-                                .check_login_password(&tenant, identity.clone(), &user)
-                                .await?
-                            {
-                                user.update_auth_need_change_password();
-                            }
-                            authed = check_password(&user);
                         }
+                        user = fresh;
+                        if UserApiProvider::instance()
+                            .check_login_password(&tenant, identity.clone(), &user)
+                            .await?
+                        {
+                            user.update_auth_need_change_password();
+                        }
+                        authed = check_password(&user);
                     }
                 }
                 UserApiProvider::instance()
