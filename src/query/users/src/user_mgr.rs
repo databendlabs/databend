@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
 use databend_common_management::errors::meta_service_error;
-use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserIdentity;
@@ -134,9 +133,7 @@ impl UserApiProvider {
         rejected: &UserInfo,
         client_ip: Option<&str>,
     ) -> Result<Option<UserInfo>> {
-        if MetaReadCache::try_instance().is_none()
-            || self.get_configured_user(&user.username).is_some()
-        {
+        if !self.meta_read_cache_enabled() || self.get_configured_user(&user.username).is_some() {
             return Ok(None);
         }
         let Ok(fresh) = self.get_meta_user(tenant, user).await else {

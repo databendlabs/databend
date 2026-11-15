@@ -3982,6 +3982,7 @@ dependencies = [
 name = "databend-common-settings"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-backtrace",
  "chrono-tz 0.10.4",
  "dashmap 6.1.0",
@@ -3993,6 +3994,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-users",
  "databend-common-version",
+ "databend-meta-client 260205.13.5",
  "itertools 0.13.0",
  "log",
  "num_cpus",
@@ -14482,8 +14484,8 @@ dependencies = [
 
 [[package]]
 name = "sub-cache"
-version = "0.3.0"
-source = "git+https://github.com/databendlabs/sub-cache?rev=30175f8a4ac73fbbaf2e2a6710cf17d10ed5f287#30175f8a4ac73fbbaf2e2a6710cf17d10ed5f287"
+version = "0.2.1"
+source = "git+https://github.com/databendlabs/sub-cache?tag=v0.2.1#2826eb3290f6f9830b469d3808aefdca444f893f"
 dependencies = [
  "async-trait",
  "futures",

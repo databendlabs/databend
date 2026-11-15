@@ -20,5 +20,4 @@ pub use warehouse_api::SystemManagedCluster;
 pub use warehouse_api::SystemManagedWarehouse;
 pub use warehouse_api::WarehouseApi;
 pub use warehouse_api::WarehouseInfo;
-pub(crate) use warehouse_mgr::WAREHOUSE_API_KEY_PREFIX;
 pub use warehouse_mgr::WarehouseMgr;

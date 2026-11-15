@@ -32,7 +32,6 @@ use databend_common_exception::Result;
 use databend_common_exception::StackTrace;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_management::WorkloadMgr;
-use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_meta_api::kv_pb_api::compress;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_store::MetaStoreProvider;
@@ -142,16 +141,6 @@ impl GlobalServices {
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // 4. cluster discovery init.
-        // Before every user of the cached prefixes: cluster discovery, users and settings.
-        MetaReadCache::init(
-            config.meta.to_meta_grpc_client_conf(),
-            &config.query.tenant_id,
-            &config.cache.meta_read_cache,
-            std::time::Duration::from_secs(
-                config.cache.meta_read_cache_verify_interval_secs.max(1),
-            ),
-        )
-        .await?;
         ClusterDiscovery::init(config, version).await?;
 
         SpillsBufferPool::init(&config.spill)?;

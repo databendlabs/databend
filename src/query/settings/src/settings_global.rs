@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -28,6 +29,16 @@ use crate::settings::ChangeValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 
+/// The global setting that turns the meta read cache on and gives its TTL.
+const META_READ_CACHE_TTL_SECS: &str = "meta_read_cache_ttl_secs";
+
+/// The TTL given by the global value of [`META_READ_CACHE_TTL_SECS`]; absent or unreadable
+/// means off.
+fn meta_read_cache_ttl(value: Option<&UserSettingValue>) -> Duration {
+    let secs = value.and_then(|v| v.as_string().parse::<u64>().ok());
+    Duration::from_secs(secs.unwrap_or(0))
+}
+
 impl Settings {
     #[async_backtrace::framed]
     pub async fn load_settings(
@@ -36,17 +47,32 @@ impl Settings {
     ) -> Result<Vec<UserSetting>> {
         // A plain read of the global settings of every new session; may come from the meta read
         // cache.
-        user_api.cached_setting_api(tenant).get_settings().await
+        let settings = user_api.cached_setting_api(tenant).get_settings().await?;
+
+        // The cache is controlled by one of the settings just read. While it is off, every
+        // session reads meta-service, so turning it on is seen at once; while it is on, a
+        // change of the TTL is seen when the cached settings expire.
+        let ttl = settings
+            .iter()
+            .find(|s| s.name == META_READ_CACHE_TTL_SECS)
+            .map(|s| &s.value);
+        user_api.set_meta_read_cache_ttl(tenant, meta_read_cache_ttl(ttl));
+        Ok(settings)
     }
 
     #[async_backtrace::framed]
     pub async fn try_drop_global_setting(&self, key: &str) -> Result<()> {
         self.changes.remove(key);
 
-        UserApiProvider::instance()
+        let user_api = UserApiProvider::instance();
+        user_api
             .setting_api(&self.tenant)
             .try_drop_setting(key)
-            .await
+            .await?;
+        if key == META_READ_CACHE_TTL_SECS {
+            user_api.set_meta_read_cache_ttl(&self.tenant, meta_read_cache_ttl(None));
+        }
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -58,10 +84,18 @@ impl Settings {
             level: ScopeLevel::Global,
         });
 
-        UserApiProvider::instance()
+        let user_api = UserApiProvider::instance();
+        user_api
             .setting_api(&self.tenant)
-            .set_setting(UserSetting { name: key, value })
+            .set_setting(UserSetting {
+                name: key.clone(),
+                value: value.clone(),
+            })
             .await?;
+        // On this node at once; other nodes follow as described in `load_settings`.
+        if key == META_READ_CACHE_TTL_SECS {
+            user_api.set_meta_read_cache_ttl(&self.tenant, meta_read_cache_ttl(Some(&value)));
+        }
         Ok(())
     }
 

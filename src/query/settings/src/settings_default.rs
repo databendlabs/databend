@@ -1620,6 +1620,13 @@ impl DefaultSettings {
                     scope: SettingScope::Global,
                     range: None,
                 }),
+                ("meta_read_cache_ttl_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Seconds a node keeps the users and the global settings it read from meta-service, instead of reading them for every query. A change made on another node, such as a dropped user or a new password, takes effect on this node at most this many seconds later. 0 reads meta-service every time.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=300)),
+                }),
                 ("max_public_keys_per_user", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
                     desc: "Maximum number of public keys allowed per user for key-pair authentication",

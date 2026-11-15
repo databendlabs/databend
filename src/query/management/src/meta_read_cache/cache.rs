@@ -13,209 +13,90 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use databend_common_base::base::GlobalInstance;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_store::MetaStore;
-use databend_common_meta_store::MetaStoreProvider;
-use databend_meta_client::RpcClientConf;
-use log::info;
 
-use super::cached_prefix::CachedPrefix;
-use super::prefix_cache::PrefixCache;
-use super::prefix_cache::PrefixStats;
-use super::verifier;
+use super::registry::CachedRange;
+use super::ttl_cache::TtlCache;
 
-/// The cached prefixes of this process; see the module documentation.
+/// Reads answered from memory and reads sent to meta-service, of one range.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RangeStats {
+    pub hit: u64,
+    pub miss: u64,
+}
+
+/// The cached ranges of one tenant, and how long a result is kept.
+///
+/// The TTL starts at zero, which keeps nothing: every read goes to meta-service. The owner sets
+/// it, see [`Self::set_ttl`].
 pub struct MetaReadCache {
-    pub(super) prefixes: Vec<Arc<PrefixCache>>,
+    tenant: Tenant,
+    ranges: Vec<(CachedRange, TtlCache)>,
+    ttl_ms: AtomicU64,
 }
 
 impl MetaReadCache {
-    /// Create the process-wide instance if any prefix is configured; otherwise do nothing, and
-    /// [`Self::try_instance`] returns `None` so that every read goes to meta-service.
-    pub async fn init(
-        conf: RpcClientConf,
-        tenant: &Tenant,
-        prefixes: &[String],
-        verify_interval: Duration,
-    ) -> Result<()> {
-        if prefixes.is_empty() {
-            return Ok(());
-        }
-        let kinds = prefixes
+    pub fn create(tenant: &Tenant) -> Arc<Self> {
+        let ranges = CachedRange::ALL
             .iter()
-            .map(|p| CachedPrefix::parse(p))
-            .collect::<Result<Vec<_>>>()?;
-        let meta = MetaStoreProvider::new(conf)
-            .create_default_meta_store()
-            .await
-            .map_err(|e| {
-                ErrorCode::MetaServiceError(e.to_string())
-                    .add_message_back("(while create meta read cache)")
-            })?;
-        match meta.get_local_addr().await {
-            Ok(addr) => info!("meta read cache: meta-service sees this client at {addr}"),
-            Err(e) => info!("meta read cache: local address unknown: {e}"),
-        }
-        let cache = Self::create(meta, tenant, &kinds, verify_interval).await?;
-        GlobalInstance::set(cache);
-        Ok(())
-    }
-
-    pub fn try_instance() -> Option<Arc<MetaReadCache>> {
-        GlobalInstance::try_get()
-    }
-
-    /// Start one watch stream per prefix and the verifier.
-    pub async fn create(
-        meta: MetaStore,
-        tenant: &Tenant,
-        kinds: &[CachedPrefix],
-        verify_interval: Duration,
-    ) -> Result<Arc<Self>> {
-        Self::create_with_leader(meta.clone(), meta, tenant, kinds, verify_interval).await
-    }
-
-    /// Watch `meta` and verify against `leader`. Tests use a separate `leader` to stand for a
-    /// meta-service whose state the watch stream no longer delivers.
-    pub(crate) async fn create_with_leader(
-        meta: MetaStore,
-        leader: MetaStore,
-        tenant: &Tenant,
-        kinds: &[CachedPrefix],
-        verify_interval: Duration,
-    ) -> Result<Arc<Self>> {
-        let mut prefixes = Vec::with_capacity(kinds.len());
-        for kind in kinds {
-            let dir = kind.dir(tenant)?;
-            info!("meta read cache: watch prefix {} at {}", kind.name(), dir);
-            prefixes.push(Arc::new(
-                PrefixCache::new(meta.inner().clone(), kind.name(), dir, kind.serve_absent()).await,
-            ));
-        }
-        let cache = Arc::new(MetaReadCache { prefixes });
-        verifier::spawn(Arc::downgrade(&cache), Arc::new(leader), verify_interval);
-        Ok(cache)
-    }
-
-    /// The cached prefix containing `key`.
-    pub(crate) fn find(&self, key: &str) -> Option<&Arc<PrefixCache>> {
-        self.prefixes.iter().find(|p| key.starts_with(&p.dir))
-    }
-
-    /// Per-prefix counters, for logs and tests.
-    pub fn stats(&self) -> Vec<(&'static str, PrefixStats)> {
-        self.prefixes.iter().map(|p| (p.name, p.stats())).collect()
-    }
-
-    /// Whether `name`'s prefix currently answers reads from memory; for tests.
-    pub fn is_serving(&self, name: &str) -> bool {
-        self.prefixes
-            .iter()
-            .any(|p| p.name == name && p.is_serving())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    use databend_common_meta_app::tenant::Tenant;
-    use databend_common_meta_store::MetaStore;
-    use databend_meta_client::kvapi::KVApi;
-    use databend_meta_client::kvapi::KvApiExt;
-    use databend_meta_client::types::MetaError;
-    use databend_meta_client::types::UpsertKV;
-    use databend_meta_runtime::DatabendRuntime;
-
-    use super::MetaReadCache;
-    use crate::meta_read_cache::CachedKvApi;
-    use crate::meta_read_cache::CachedPrefix;
-
-    struct Stalled {
-        cache: Arc<MetaReadCache>,
-        /// Keeps the watched meta-service running; the cache holds only a client of it.
-        _watched: MetaStore,
-        leader: MetaStore,
-        reading: CachedKvApi,
-        fencing: CachedKvApi,
-        key: String,
-    }
-
-    /// The cache watches a store that never receives the writes made to `leader`, as a stalled
-    /// watch stream would; the verifier and the fallback reads go to `leader`.
-    async fn stalled() -> anyhow::Result<Stalled> {
-        let watched = MetaStore::new_local_testing::<DatabendRuntime>().await;
-        let leader = MetaStore::new_local_testing::<DatabendRuntime>().await;
-        let cache = MetaReadCache::create_with_leader(
-            watched.clone(),
-            leader.clone(),
-            &Tenant::new_literal("t1"),
-            &[CachedPrefix::Setting],
-            Duration::from_millis(200),
-        )
-        .await?;
-        for _ in 0..200 {
-            if cache.is_serving("setting") {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-        assert!(cache.is_serving("setting"), "{:?}", cache.stats());
-        let inner: Arc<dyn KVApi<Error = MetaError>> = Arc::new(leader.clone());
-        Ok(Stalled {
-            reading: CachedKvApi::reading(inner.clone(), cache.clone()),
-            fencing: CachedKvApi::fencing(inner, cache.clone()),
-            key: format!("{}max_threads", cache.prefixes[0].dir),
-            cache,
-            _watched: watched,
-            leader,
+            .map(|r| (*r, TtlCache::new(r.dir(tenant), r.keep_absent())))
+            .collect();
+        Arc::new(MetaReadCache {
+            tenant: tenant.clone(),
+            ranges,
+            ttl_ms: AtomicU64::new(0),
         })
     }
 
-    /// After the verifier gives up on the cache, reads are answered by the leader.
-    async fn assert_resynced(s: &Stalled) -> anyhow::Result<()> {
-        let st = s.cache.stats()[0].1;
-        assert!(st.resync >= 1, "{st:?}");
-        assert!(!s.cache.is_serving("setting"));
-        assert_eq!(s.reading.get_kv(&s.key).await?.unwrap().data, b"v".to_vec());
-        assert!(s.cache.stats()[0].1.fallback_suspect >= 1);
-        Ok(())
+    /// Whether the ranges of `tenant` are the cached ones.
+    pub fn is_for(&self, tenant: &Tenant) -> bool {
+        self.tenant.tenant_name() == tenant.tenant_name()
     }
 
-    /// A local write the stream does not deliver within one interval, while the leader has it,
-    /// stops serving from memory at the next verification.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_stalled_stream_with_local_write_resyncs() -> anyhow::Result<()> {
-        let s = stalled().await?;
-        s.fencing.upsert_kv(UpsertKV::update(&s.key, b"v")).await?;
-
-        // Fenced: falls back and returns what the leader has.
-        assert_eq!(s.reading.get_kv(&s.key).await?.unwrap().data, b"v".to_vec());
-        assert!(s.cache.stats()[0].1.fallback_fence >= 1);
-
-        // One verification at 200 ms finds the overdue fence and the difference.
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        assert_resynced(&s).await
+    /// Keep results for `ttl` from now on; zero stops answering from memory at once.
+    pub fn set_ttl(&self, ttl: Duration) {
+        self.ttl_ms.store(ttl.as_millis() as u64, Ordering::Release);
     }
 
-    /// A write by another node that the stream does not deliver makes consecutive verifications
-    /// differ from the leader, which stops serving from memory.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_stalled_stream_with_remote_write_resyncs() -> anyhow::Result<()> {
-        let s = stalled().await?;
-        s.leader.upsert_kv(UpsertKV::update(&s.key, b"v")).await?;
+    pub fn is_enabled(&self) -> bool {
+        self.ttl().is_some()
+    }
 
-        // Not fenced and not delivered: the stale cache answers.
-        assert!(s.reading.get_kv(&s.key).await?.is_none());
+    /// `None` if nothing is answered from memory.
+    pub(crate) fn ttl(&self) -> Option<Duration> {
+        match self.ttl_ms.load(Ordering::Acquire) {
+            0 => None,
+            ms => Some(Duration::from_millis(ms)),
+        }
+    }
 
-        // Mismatches at 200 ms and at the re-check 200 ms later.
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-        assert_resynced(&s).await
+    /// The cached range containing `key`.
+    pub(crate) fn find(&self, key: &str) -> Option<&TtlCache> {
+        self.ranges
+            .iter()
+            .map(|(_, c)| c)
+            .find(|c| key.starts_with(&c.dir))
+    }
+
+    /// Drop every result of every range.
+    pub(crate) fn invalidate_all(&self) {
+        for (_, c) in &self.ranges {
+            c.invalidate();
+        }
+    }
+
+    /// Per-range counters, for logs and tests.
+    pub fn stats(&self) -> Vec<(&'static str, RangeStats)> {
+        self.ranges
+            .iter()
+            .map(|(r, c)| {
+                let (hit, miss) = c.stats();
+                (r.name(), RangeStats { hit, miss })
+            })
+            .collect()
     }
 }

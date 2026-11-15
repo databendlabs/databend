@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The password retry after a rejection served from a lagging meta read cache.
+//! The password retry after a rejection answered from the meta read cache.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,22 +23,18 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
-use databend_common_management::meta_read_cache::CachedPrefix;
-use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_store::MetaStore;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::types::MetaError;
-use databend_meta_runtime::DatabendRuntime;
 
 const CONFIGURED: &str = "configured";
 
@@ -56,37 +52,19 @@ fn user(name: &str, p: &str, option: UserOption) -> UserInfo {
     user
 }
 
-fn user_mgr(meta: MetaStore, tenant: &Tenant) -> UserMgr {
-    let kv: Arc<dyn KVApi<Error = MetaError>> = Arc::new(meta);
-    UserMgr::create(kv, tenant)
-}
-
-struct Lagging {
+struct Cached {
     api: Arc<UserApiProvider>,
     tenant: Tenant,
-    /// What the meta read cache sees: a meta-service the watch stream has stopped following.
-    cached: UserMgr,
-    /// The current state in meta-service, written without fences, as by another node.
-    current: UserMgr,
+    /// Writes to meta-service as another node does: this node's cache is not told.
+    other_node: UserMgr,
 }
 
-/// A [`UserApiProvider`] whose meta read cache watches a separate store, so a user written
-/// there differs from the one in meta-service until the test writes both.
-async fn lagging() -> anyhow::Result<Lagging> {
+/// A [`UserApiProvider`] that keeps what it reads for an hour.
+async fn cached() -> anyhow::Result<Cached> {
     let thread_name = std::thread::current().name().unwrap().to_string();
     GlobalInstance::init_testing(&thread_name);
     GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
     let tenant = Tenant::new_literal("test");
-
-    let watched = MetaStore::new_local_testing::<DatabendRuntime>().await;
-    let cache = MetaReadCache::create(
-        watched.clone(),
-        &tenant,
-        &[CachedPrefix::User],
-        Duration::from_secs(3600),
-    )
-    .await?;
-    GlobalInstance::set(cache);
 
     let mut builtin = BuiltIn::default();
     builtin
@@ -99,37 +77,33 @@ async fn lagging() -> anyhow::Result<Lagging> {
         &tenant,
     )
     .await?;
-    let current = user_mgr(api.get_meta_store_client().as_ref().clone(), &tenant);
-    Ok(Lagging {
-        cached: user_mgr(watched, &tenant),
-        current,
+    api.set_meta_read_cache_ttl(&tenant, Duration::from_secs(3600));
+    let kv: Arc<dyn KVApi<Error = MetaError>> = api.get_meta_store_client();
+    Ok(Cached {
+        other_node: UserMgr::create(kv, &tenant),
         api,
         tenant,
     })
 }
 
-impl Lagging {
-    /// Write `cached` where the cache sees it and `current` to meta-service; return the user
-    /// once the cache serves `cached`.
-    async fn write(&self, cached: UserInfo, current: UserInfo) -> anyhow::Result<UserInfo> {
+impl Cached {
+    /// Create `old` and read it, so that it is kept; then another node replaces it by `new`.
+    /// Return the kept, now stale, user.
+    async fn change_on_other_node(&self, old: UserInfo, new: UserInfo) -> anyhow::Result<UserInfo> {
         assert!(
-            self.cached
-                .create_user(cached.clone(), false)
+            self.other_node
+                .create_user(old.clone(), false)
                 .await?
                 .is_ok()
         );
-        assert!(self.current.create_user(current, false).await?.is_ok());
-        let identity = UserIdentity::new(&cached.name, "%");
-        for _ in 0..200 {
-            let got = self.api.get_user(&self.tenant, identity.clone()).await;
-            if let Ok(got) = got
-                && got.auth_info == cached.auth_info
-            {
-                return Ok(got);
-            }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-        panic!("the cache does not serve {}", cached.name);
+        let identity = UserIdentity::new(&old.name, "%");
+        let kept = self.api.get_user(&self.tenant, identity.clone()).await?;
+        assert_eq!(kept.auth_info, old.auth_info);
+
+        assert!(self.other_node.create_user(new, true).await?.is_ok());
+        let stale = self.api.get_user(&self.tenant, identity).await?;
+        assert_eq!(stale.auth_info, old.auth_info, "the kept user answers");
+        Ok(stale)
     }
 
     async fn refresh(
@@ -146,11 +120,11 @@ impl Lagging {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_refresh_rejected_user() -> anyhow::Result<()> {
-    let s = lagging().await?;
+    let s = cached().await?;
 
     // The password changed on another node: the fresh record is returned.
     let stale = s
-        .write(
+        .change_on_other_node(
             user("u1", "old", UserOption::empty()),
             user("u1", "new", UserOption::empty()),
         )
@@ -163,7 +137,7 @@ async fn test_refresh_rejected_user() -> anyhow::Result<()> {
 
     // The change also disabled the user: the new password must not log in.
     let stale = s
-        .write(
+        .change_on_other_node(
             user("u2", "old", UserOption::empty()),
             user("u2", "new", UserOption::empty().with_disabled(Some(true))),
         )
@@ -173,7 +147,7 @@ async fn test_refresh_rejected_user() -> anyhow::Result<()> {
 
     // The change attached a network policy that does not exist, so no client may log in.
     let stale = s
-        .write(
+        .change_on_other_node(
             user("u3", "old", UserOption::empty()),
             user(
                 "u3",
@@ -183,15 +157,25 @@ async fn test_refresh_rejected_user() -> anyhow::Result<()> {
         )
         .await?;
     assert!(s.refresh(&stale, "10.0.0.1").await.is_err());
+
+    // With the cache off, a rejection was decided on meta-service: nothing to retry with.
+    let stale = s
+        .change_on_other_node(
+            user("u4", "old", UserOption::empty()),
+            user("u4", "new", UserOption::empty()),
+        )
+        .await?;
+    s.api.set_meta_read_cache_ttl(&s.tenant, Duration::ZERO);
+    assert!(s.refresh(&stale, "10.0.0.1").await?.is_none());
     Ok(())
 }
 
 /// A configured user is never retried against a meta user with the same name.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_refresh_skips_configured_user() -> anyhow::Result<()> {
-    let s = lagging().await?;
+    let s = cached().await?;
     let meta_user = user(CONFIGURED, "meta-pwd", UserOption::empty());
-    assert!(s.current.create_user(meta_user, false).await?.is_ok());
+    assert!(s.other_node.create_user(meta_user, false).await?.is_ok());
 
     let identity = UserIdentity::new(CONFIGURED, "%");
     let configured = s.api.get_user(&s.tenant, identity).await?;

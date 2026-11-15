@@ -3177,24 +3177,6 @@ pub struct CacheConfig {
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
 
-    /// Meta-service prefixes answered from a local, watch-synchronized read cache: any of
-    /// `user`, `setting`, `cluster`. Empty (the default) disables it.
-    #[clap(
-        long = "cache-meta-read-cache",
-        value_name = "VALUE",
-        value_delimiter = ','
-    )]
-    pub meta_read_cache: Vec<String>,
-
-    /// Seconds between comparisons of the meta read cache with the meta-service leader; bounds
-    /// how long a silently stalled watch stream can serve stale data.
-    #[clap(
-        long = "cache-meta-read-cache-verify-interval-secs",
-        value_name = "VALUE",
-        default_value = "10"
-    )]
-    pub meta_read_cache_verify_interval_secs: u64,
-
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
     #[serde(default = "bool_true")]
@@ -3625,8 +3607,6 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             meta_service_ownership_cache: false,
-            meta_read_cache: vec![],
-            meta_read_cache_verify_interval_secs: 10,
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,

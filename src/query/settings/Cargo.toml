@@ -24,7 +24,9 @@ once_cell = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 databend-common-version = { workspace = true }
+databend-meta-client = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 

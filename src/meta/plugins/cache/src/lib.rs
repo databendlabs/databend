@@ -99,7 +99,3 @@ mod meta_cache_types;
 pub mod meta_client_source;
 
 pub use cache::Cache;
-pub use meta_cache_types::MetaCacheTypes;
-
-/// A cloneable, non-blocking read handle of a [`Cache`]; see [`sub_cache::CacheReader`].
-pub type CacheReader = sub_cache::CacheReader<MetaCacheTypes>;

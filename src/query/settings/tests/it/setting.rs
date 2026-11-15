@@ -18,7 +18,10 @@ use databend_common_config::default_server_memory_limit;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
+use databend_common_users::UserApiProvider;
+use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
+use databend_meta_client::RpcClientConf;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
@@ -408,4 +411,61 @@ async fn test_max_memory_usage_default_is_server_memory_limit() {
         settings.get_max_memory_usage().unwrap(),
         default_server_memory_limit()
     );
+}
+
+/// `meta_read_cache_ttl_secs` is global only; setting, loading and dropping its global value
+/// turns this node's meta read cache on and off.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_read_cache_ttl_controls_the_cache() -> anyhow::Result<()> {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+    let conf = InnerConfig::default();
+    GlobalConfig::init(&conf, &BUILD_INFO).unwrap();
+    let tenant = Tenant::new_literal("test");
+    UserApiProvider::init(
+        RpcClientConf::empty(),
+        &conf.cache,
+        BuiltIn::default(),
+        &tenant,
+        None,
+    )
+    .await?;
+    let users = UserApiProvider::instance();
+    let name = "meta_read_cache_ttl_secs".to_string();
+
+    // Off by default; a session value is refused.
+    let settings = Settings::create(tenant.clone());
+    settings.load_changes().await?;
+    assert!(!users.meta_read_cache_enabled());
+    assert!(settings.set_setting(name.clone(), "5".to_string()).is_err());
+
+    // SET GLOBAL: on at once on this node.
+    settings
+        .set_global_setting(name.clone(), "5".to_string())
+        .await?;
+    assert!(users.meta_read_cache_enabled());
+
+    // A node that only loads the global settings follows what it read.
+    users.set_meta_read_cache_ttl(&tenant, std::time::Duration::ZERO);
+    Settings::create(tenant.clone()).load_changes().await?;
+    assert!(users.meta_read_cache_enabled());
+
+    // Another tenant's settings do not control this node's cache.
+    let other = Tenant::new_literal("other");
+    Settings::create(other).load_changes().await?;
+    assert!(users.meta_read_cache_enabled());
+
+    // SET GLOBAL 0 and UNSET GLOBAL: off at once.
+    settings
+        .set_global_setting(name.clone(), "0".to_string())
+        .await?;
+    assert!(!users.meta_read_cache_enabled());
+    settings
+        .set_global_setting(name.clone(), "5".to_string())
+        .await?;
+    settings.try_drop_global_setting(&name).await?;
+    assert!(!users.meta_read_cache_enabled());
+    Settings::create(tenant).load_changes().await?;
+    assert!(!users.meta_read_cache_enabled());
+    Ok(())
 }
