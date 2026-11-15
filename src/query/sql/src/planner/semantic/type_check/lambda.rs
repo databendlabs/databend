@@ -53,7 +53,6 @@ use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::Visibility;
 use crate::binder::AliasLookup;
-use crate::binder::ExprContext;
 use crate::binder::SelectItems;
 use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::BoundColumnRef;
@@ -110,6 +109,43 @@ impl<'a> CoreExprArena<'a> {
         Ok(Some(self.lambda_function(span, func_name, args, lambda)?))
     }
 
+    /// Reject the nodes lowered from `first` on that a lambda body cannot
+    /// hold.
+    ///
+    /// A body must compile into the `RemoteExpr` that the expression
+    /// evaluator runs for each element: scalar functions, casts and other
+    /// lambdas over the parameters, the captured columns and constants.
+    /// Subqueries and aggregate, window, set-returning, async and search
+    /// functions are evaluated by operators of their own, so they are rejected
+    /// here, where they are lowered, with their spans. Script and server UDFs
+    /// are the one exception: only binding tells them from SQL UDFs, see
+    /// `reject_runtime_udf_in_lambda_body`.
+    pub(super) fn reject_lambda_body_nodes(&self, first: usize) -> Result<()> {
+        for node in &self.nodes[first..] {
+            let (span, kind) = match node {
+                CoreExpr::Subquery { span, .. } => (span, "subqueries"),
+                CoreExpr::AggregateFunction { span, .. } => (span, "aggregate functions"),
+                CoreExpr::AggregateWindowFunction { span, .. }
+                | CoreExpr::CountAllWindowFunction { span, .. }
+                | CoreExpr::GeneralWindowFunction { span, .. }
+                | CoreExpr::UdfCall {
+                    span,
+                    has_window: true,
+                    ..
+                } => (span, "window functions"),
+                CoreExpr::SetReturningFunction { span, .. } => (span, "set-returning functions"),
+                CoreExpr::AsyncFunction { span, .. } => (span, "async functions"),
+                CoreExpr::SearchFunction { span, .. } => (span, "search functions"),
+                _ => continue,
+            };
+            return Err(ErrorCode::SemanticError(format!(
+                "{kind} can not be used in lambda function"
+            ))
+            .set_span(*span));
+        }
+        Ok(())
+    }
+
     pub(super) fn lambda_function(
         &mut self,
         span: Span,
@@ -118,11 +154,9 @@ impl<'a> CoreExprArena<'a> {
         lambda: &'a Lambda,
     ) -> Result<CoreExprId> {
         let args = self.lower_expr_args(args)?;
-        let previous_in_lambda_function = self.in_lambda_function;
-        self.in_lambda_function = true;
-        let lambda_expr = self.lower_ast_expr(&lambda.expr);
-        self.in_lambda_function = previous_in_lambda_function;
-        let lambda_expr = lambda_expr?;
+        let first = self.nodes.len();
+        let lambda_expr = self.lower_ast_expr(&lambda.expr)?;
+        self.reject_lambda_body_nodes(first)?;
         Ok(self.alloc(CoreExpr::LambdaFunction {
             span,
             func_name,
@@ -155,9 +189,9 @@ where A: super::TypeCheckAdapter
     /// as in the expression around the lambda, also to the output of a
     /// grouping key, but never to a SELECT alias, see [`LambdaBodyState`] for
     /// the state it is bound with. The parameters are numbered
-    /// past every symbol of the query and of the enclosing lambdas, and are not
-    /// registered in metadata, so the body must not allocate symbols, which is
-    /// checked below. Returns the bound body, its type and the parameters.
+    /// in a range of their own, past those of the enclosing lambdas, and are
+    /// not registered in metadata: the compiled body refers to them by
+    /// position. Returns the bound body, its type and the parameters.
     fn resolve_core_lambda_expr(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -166,13 +200,12 @@ where A: super::TypeCheckAdapter
         lambda_columns: &[(String, DataType)],
         lambda_expr: CoreExprId,
     ) -> Result<(ScalarExpr, DataType, Vec<ColumnBinding>)> {
-        let first_symbol = self.metadata.read().next_column_index();
         let base = self
             .lambda_params
             .iter()
             .flatten()
             .map(|param| param.index.as_usize() + 1)
-            .fold(first_symbol.as_usize(), usize::max);
+            .fold(FIRST_LAMBDA_PARAMETER, usize::max);
         let params = lambda_columns
             .iter()
             .enumerate()
@@ -194,13 +227,6 @@ where A: super::TypeCheckAdapter
         state.leave(self);
 
         let deref!((body, data_type)) = result?;
-        // Only subqueries allocate symbols while binding an expression.
-        if self.metadata.read().next_column_index() != first_symbol {
-            return Err(ErrorCode::SemanticError(format!(
-                "subqueries are not supported in the lambda body of {func_name}"
-            ))
-            .set_span(span));
-        }
         Self::reject_runtime_udf_in_lambda_body(func_name, span, &body)?;
         Ok((body, data_type, params))
     }
@@ -782,19 +808,23 @@ where A: super::TypeCheckAdapter
     }
 }
 
+/// The first symbol of lambda parameters, far past the symbols of a query,
+/// which metadata allocates from zero, and below the dummy columns.
+const FIRST_LAMBDA_PARAMETER: usize = usize::MAX / 2;
+
 /// The state of a type checker that binding a lambda body sets, and restores
 /// after it.
 ///
-/// The body is bound as a type checker of its own would bind it: in the
-/// lambda expression context, without SELECT aliases, nor the aliases of a
-/// WHERE that uses unmasked values, and not inside an aggregate function, a
-/// window function or a masking policy. Every other field is inherited from
-/// the expression around the lambda: the grouping-key matching state and its
+/// The body is bound as a type checker of its own would bind it: without
+/// SELECT aliases, nor the aliases of a WHERE that uses unmasked values, and
+/// not inside an aggregate function, a window function or a masking policy.
+/// Every other field is inherited from the expression around the lambda: the
+/// expression context of its clause, the grouping-key matching state and its
 /// memo, the folding policy, whether masking policies apply and whether
 /// virtual computed columns are forbidden, which are the mode of the whole
-/// binding, and the parameters of enclosing lambdas.
+/// binding, and the parameters of enclosing lambdas, whose presence tells
+/// that a body is bound.
 struct LambdaBodyState<'a> {
-    expr_context: ExprContext,
     aliases: AliasLookup<'a>,
     select_items: Option<SelectItems<'a>>,
     in_aggregate_function: bool,
@@ -807,9 +837,6 @@ struct LambdaBodyState<'a> {
 impl<'a> LambdaBodyState<'a> {
     fn enter<A: super::TypeCheckAdapter>(checker: &mut TypeChecker<'a, A>) -> Self {
         Self {
-            expr_context: checker
-                .bind_context
-                .replace_expr_context(ExprContext::InLambdaFunction),
             aliases: std::mem::replace(&mut checker.aliases, AliasLookup::all(&[])),
             select_items: checker.select_items.take(),
             in_aggregate_function: std::mem::take(&mut checker.in_aggregate_function),
@@ -823,7 +850,6 @@ impl<'a> LambdaBodyState<'a> {
     }
 
     fn leave<A: super::TypeCheckAdapter>(self, checker: &mut TypeChecker<'a, A>) {
-        checker.bind_context.expr_context = self.expr_context;
         checker.aliases = self.aliases;
         checker.select_items = self.select_items;
         checker.in_aggregate_function = self.in_aggregate_function;

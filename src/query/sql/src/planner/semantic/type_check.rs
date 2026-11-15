@@ -108,7 +108,6 @@ pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
     pub(super) aggregate_function_registry: &'static AggregateRegistry,
-    pub(super) in_lambda_function: bool,
     /// How identifiers are normalized, for the parameters of lambdas.
     name_resolution_ctx: NameResolutionContext,
 }

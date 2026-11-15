@@ -40,6 +40,27 @@ status: error
 code: 1065
 message: incorrect number of parameters in lambda function, array_transform expects 1 parameter(s), but got 2
 
+=== lambda_body_rejects_subquery ===
+description: A lambda body compiles into an expression evaluated per element, which cannot hold a subquery.
+sql: array_transform([number], x -> x + (SELECT 1))
+status: error
+code: 1065
+message: subqueries can not be used in lambda function
+
+=== lambda_body_rejects_set_returning_function ===
+description: A lambda body cannot hold a set-returning function, which a ProjectSet evaluates.
+sql: array_transform([number], x -> x + unnest([1]))
+status: error
+code: 1065
+message: set-returning functions can not be used in lambda function
+
+=== lambda_body_rejects_async_function ===
+description: A lambda body cannot hold an async function, which an AsyncFunction plan evaluates.
+sql: array_transform([number], x -> x + sleep(1))
+status: error
+code: 1065
+message: async functions can not be used in lambda function
+
 === lambda_parameter_names_are_normalized_like_references ===
 description: Parameter names are normalized as the names in the body are: an unquoted name matches it in any case, a quoted one as written.
 sql: (array_transform([number], X -> x + 1), array_transform([number], "Y" -> "Y" + 1))

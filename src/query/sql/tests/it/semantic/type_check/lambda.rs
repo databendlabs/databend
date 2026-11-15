@@ -40,6 +40,24 @@ async fn test_type_check_lambda_functions() -> Result<()> {
             sql: "array_transform([number], (x, y) -> x)",
         },
         SqlTestCase {
+            name: "lambda_body_rejects_subquery",
+            description: "A lambda body compiles into an expression evaluated per element, which cannot hold a subquery.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> x + (SELECT 1))",
+        },
+        SqlTestCase {
+            name: "lambda_body_rejects_set_returning_function",
+            description: "A lambda body cannot hold a set-returning function, which a ProjectSet evaluates.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> x + unnest([1]))",
+        },
+        SqlTestCase {
+            name: "lambda_body_rejects_async_function",
+            description: "A lambda body cannot hold an async function, which an AsyncFunction plan evaluates.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> x + sleep(1))",
+        },
+        SqlTestCase {
             name: "lambda_parameter_names_are_normalized_like_references",
             description: "Parameter names are normalized as the names in the body are: an unquoted name matches it in any case, a quoted one as written.",
             setup_sqls: &[],

@@ -148,7 +148,6 @@ pub enum ExprContext {
         alias_first: bool,
     },
     InAggregateFunction,
-    InLambdaFunction,
     /// The arguments of an async function, which resolve names as the
     /// clause of the call does, see `InSetReturningFunction`.
     InAsyncFunction {

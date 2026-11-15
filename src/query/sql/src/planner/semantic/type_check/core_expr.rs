@@ -76,7 +76,6 @@ impl<'a> CoreExprArena<'a> {
             nodes: Vec::new(),
             week_start,
             aggregate_function_registry,
-            in_lambda_function: false,
             name_resolution_ctx: name_resolution_ctx.clone(),
         }
     }
@@ -374,7 +373,6 @@ impl<'a> CoreExprArena<'a> {
         func: &'a ASTFunctionCall,
     ) -> Result<CoreExprId> {
         let func_name = func.name.name.to_ascii_lowercase();
-        self.ensure_window_not_in_lambda(span, func.window.is_some())?;
         if let Some(expr) = self.try_lower_udf_call(span, &func_name, func)? {
             return Ok(expr);
         }

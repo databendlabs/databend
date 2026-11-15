@@ -303,10 +303,9 @@ where A: TypeCheckAdapter
         args: &CoreExprArgs,
         order_by: &CoreOrderByExprs,
     ) -> Result<AggregateArguments> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        ) {
+        // Lowering rejects those written in a lambda body; this one is in a
+        // SQL UDF that aggregates, expanded in a body.
+        if !self.lambda_params.is_empty() {
             return Err(ErrorCode::SemanticError(
                 "aggregate functions can not be used in lambda function".to_string(),
             )

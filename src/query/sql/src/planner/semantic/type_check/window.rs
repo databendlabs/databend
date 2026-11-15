@@ -148,16 +148,6 @@ impl<'a> CoreExprArena<'a> {
         })))
     }
 
-    pub(super) fn ensure_window_not_in_lambda(&self, span: Span, has_window: bool) -> Result<()> {
-        if self.in_lambda_function && has_window {
-            return Err(ErrorCode::SemanticError(
-                "window functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-        Ok(())
-    }
-
     pub(super) fn ensure_window_function_call(
         &self,
         span: Span,

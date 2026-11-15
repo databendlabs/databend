@@ -934,6 +934,9 @@ where A: super::TypeCheckAdapter
             self.name_resolution_ctx,
         );
         let root = arena.lower_ast_expr(&expr)?;
+        if !self.lambda_params.is_empty() {
+            arena.reject_lambda_body_nodes(0)?;
+        }
         let deref!((scalar, data_type)) = self.resolve_checked_core(&arena, root)?;
         let scalar = UDFLambdaCall {
             span,

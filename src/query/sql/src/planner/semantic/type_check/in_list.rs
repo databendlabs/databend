@@ -76,10 +76,7 @@ where A: super::TypeCheckAdapter
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let inlist_to_join_threshold = self.adapter.inlist_to_join_threshold()?;
         // A lambda body is evaluated per element and cannot host a subquery.
-        let in_lambda = matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        );
+        let in_lambda = !self.lambda_params.is_empty();
         // A grouping key and the forms compared with it keep the list: a new
         // subquery each time would never compare equal, and binding one is
         // an effect that matching must not have.
