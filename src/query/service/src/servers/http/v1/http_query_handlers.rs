@@ -709,6 +709,36 @@ async fn query_page_handler(
     query_page_handle.await
 }
 
+async fn get_initial_query_response(
+    ctx: &HttpQueryContext,
+    query: &Arc<HttpQuery>,
+    sql: &str,
+) -> PoemResult<HttpQueryResponseInternal> {
+    match query.get_response_page(0).await {
+        Ok(response) => Ok(response),
+        Err(err) => {
+            // Bind cleanup to the query we just registered, not a replacement
+            // that may have reused its ID while the page read was pending.
+            let mut close_ctx = ctx.clone();
+            close_ctx.authenticated_query = Some(query.clone());
+            if let Err(close_err) = HttpQueryManager::instance()
+                .close_query(&query.id, CloseReason::Canceled, Some(&close_ctx))
+                .await
+            {
+                warn!(
+                    "Failed to close query {} after initial page error: {close_err}",
+                    query.id
+                );
+            }
+            let err = err.display_with_sql(sql);
+            Err(poem::Error::from_string(
+                err.message(),
+                StatusCode::NOT_FOUND,
+            ))
+        }
+    }
+}
+
 /// Logs an error of `sql`, which is returned to its client as is. The
 /// rendered excerpt and message may quote credentials of the SQL.
 fn log_start_query_error(err: &ErrorCode, sql: &str) {
@@ -828,16 +858,7 @@ pub(crate) async fn query_handler(
                     }
                     Ok(query) => query,
                 };
-                let mut resp = query
-                    .get_response_page(0)
-                    .await
-                    .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(|err| {
-                        poem::Error::from_string(
-                            format!("{}", err.message()),
-                            StatusCode::NOT_FOUND,
-                        )
-                    })?;
+                let mut resp = get_initial_query_response(ctx, &query, &sql).await?;
 
                 resp.query_token = Some(query.query_token.clone());
                 if matches!(resp.state.state, ExecuteStateKind::Failed) {
@@ -1319,6 +1340,85 @@ mod tests {
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "current_thread")]
+    async fn test_initial_page_error_closes_registered_query() -> anyhow::Result<()> {
+        let _fixture = TestFixture::setup().await?;
+        let captured = Arc::new(Mutex::new(None));
+        let slot = captured.clone();
+        let ep = Route::new().at(
+            "/query",
+            post(query_handler)
+                .before(move |req: Request| {
+                    *slot.lock() = req.extensions().get::<HttpQueryContext>().cloned();
+                    async move { Ok(req) }
+                })
+                .with(HTTPSessionMiddleware::create(
+                    HttpHandlerKind::Query,
+                    EndpointKind::StartQuery,
+                ))
+                .with(CookieJarManager::new()),
+        );
+        let response = ep
+            .call(
+                Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/query".parse()?)
+                    .header("authorization", "Basic cm9vdDo=")
+                    .header("content-type", "application/json")
+                    .body(r#"{"sql":"SELECT number FROM numbers(3)","pagination":{"wait_time_secs":5,"max_rows_per_page":1}}"#),
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let ctx = captured.lock().take().unwrap();
+        assert!(!ctx.is_query_id_from_client);
+        assert!(ctx.authenticated_query.is_none());
+        let manager = HttpQueryManager::instance();
+        let query = manager.get_query(&ctx.query_id).unwrap();
+        assert_eq!(manager.status().0, 1);
+        assert!(query.check_closed().is_none());
+        // Advance the real page manager so page 0 is no longer available.
+        // This deterministically exercises the initial-read error cleanup
+        // without a production failpoint or a mock page reader.
+        query.get_response_page(1).await?;
+        let error = get_initial_query_response(&ctx, &query, "SELECT number FROM numbers(3)")
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+        assert!(error.to_string().contains("Invalid page number"));
+        assert!(query.check_closed().is_some());
+        assert_eq!(manager.status().0, 0);
+        assert!(manager.status().1.is_some());
+        let page = query.get_response_page(2).await?;
+        assert_eq!(page.data.unwrap().page.data.num_rows(), 0);
+        let response = ep
+            .call(
+                Request::builder()
+                    .method(http::Method::POST)
+                    .uri("/query".parse()?)
+                    .header("authorization", "Basic cm9vdDo=")
+                    .header("content-type", "application/json")
+                    .body(r#"{"sql":"SELECT 1"}"#),
+            )
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let other_ctx = captured.lock().take().unwrap();
+        let other = manager.get_query(&other_ctx.query_id).unwrap();
+        assert_eq!(manager.status().0, 1);
+        // Repeated cleanup must not decrement another query's active count.
+        assert!(
+            get_initial_query_response(&ctx, &query, "SELECT 1")
+                .await
+                .is_err()
+        );
+        assert_eq!(manager.status().0, 1);
+        assert!(other.check_closed().is_none());
+        manager
+            .close_query(&other.id, CloseReason::Canceled, None)
+            .await?;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn test_arrow_encoding_error_keeps_query_credentials() -> anyhow::Result<()> {
         let _fixture = TestFixture::setup().await?;
         let ep = Route::new().nest("/v1", query_route());
@@ -1481,6 +1581,15 @@ mod tests {
             .get_query(&old_query.id)
             .unwrap();
         assert!(!Arc::ptr_eq(&old_query, &current));
+
+        // An old initial-page failure must not cancel a same-ID replacement.
+        let error = get_initial_query_response(&basic, &old_query, "SELECT 1")
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+        assert!(current.check_closed().is_none());
+        assert_eq!(manager.status().0, 1);
 
         // Invoke the actual handlers with the contexts captured after middleware
         // authentication, rather than re-authenticating against the new object.

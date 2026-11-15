@@ -84,6 +84,11 @@ the retained in-memory query record, including its closed retention period. It
 does not reopen closed result pages. Removal, expiry or node restart loses both
 query state and token; cross-node recovery and SQL replay are not provided.
 
+If initial page collection fails after registration, the server closes the new
+query and releases its result resources before returning the error, rather than
+leaving an active query without client credentials. This does not undo SQL that
+has already committed and is not a signal to automatically re-execute it.
+
 - Missing node-local query state returns **404**, not a reason to refresh credentials.
 - Invalid credentials, wrong tokens or ownership/session mismatches return **401**.
 - A query absent during ordinary authentication remains **404** if inserted before
