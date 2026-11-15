@@ -54,10 +54,21 @@ impl UserApiProvider {
             user_info.option.set_all_flag();
             Ok(user_info)
         } else {
-            Ok(self.get_meta_user(tenant, user).await?.data)
+            // Only the data is returned, so it may come from the meta read cache.
+            let client = self.cached_user_api(tenant);
+            Ok(client
+                .get_user(&user)
+                .await
+                .map_err(meta_service_error)?
+                .ok_or_else(|| {
+                    ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
+                })?
+                .data)
         }
     }
 
+    /// Read the user and its seq from meta-service, bypassing the meta read cache: callers use
+    /// the seq for a conditional write.
     pub async fn get_meta_user(
         &self,
         tenant: &Tenant,

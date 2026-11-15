@@ -17,6 +17,7 @@
 
 mod connection;
 mod file_format;
+pub mod meta_read_cache;
 mod network_policy;
 mod password_policy;
 mod quota;

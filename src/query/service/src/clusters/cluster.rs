@@ -45,6 +45,7 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WarehouseApi;
 use databend_common_management::WarehouseMgr;
+use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
@@ -320,7 +321,8 @@ impl ClusterDiscovery {
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
         let cluster_manager =
-            WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
+            WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?
+                .with_read_cache(MetaReadCache::try_instance());
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }

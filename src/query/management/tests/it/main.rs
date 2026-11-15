@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
+mod meta_read_cache;
 mod owned_object_ownership;
 mod quota;
 mod role;

@@ -22,6 +22,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
@@ -377,7 +378,7 @@ impl AuthMgr {
                     user.update_auth_need_change_password();
                 }
 
-                let authed = match &user.auth_info {
+                let check_password = |user: &UserInfo| match &user.auth_info {
                     AuthInfo::None => Ok(()),
                     AuthInfo::Password {
                         hash_value: h,
@@ -401,6 +402,23 @@ impl AuthMgr {
                         "Authentication failed: user exists but is not configured for password authentication",
                     )),
                 };
+                let mut authed = check_password(&user);
+                if authed.is_err() && MetaReadCache::try_instance().is_some() {
+                    // The user may come from the meta read cache, which can lag a change made
+                    // by another node: decide a rejection on a fresh read.
+                    if let Ok(fresh) = user_api.get_meta_user(&tenant, identity.clone()).await {
+                        if fresh.data.auth_info != user.auth_info {
+                            user = fresh.data;
+                            if UserApiProvider::instance()
+                                .check_login_password(&tenant, identity.clone(), &user)
+                                .await?
+                            {
+                                user.update_auth_need_change_password();
+                            }
+                            authed = check_password(&user);
+                        }
+                    }
+                }
                 UserApiProvider::instance()
                     .update_user_login_result(tenant, identity, authed.is_ok(), &user)
                     .await?;

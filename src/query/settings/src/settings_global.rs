@@ -34,7 +34,9 @@ impl Settings {
         user_api: Arc<UserApiProvider>,
         tenant: &Tenant,
     ) -> Result<Vec<UserSetting>> {
-        user_api.setting_api(tenant).get_settings().await
+        // A plain read of the global settings of every new session; may come from the meta read
+        // cache.
+        user_api.cached_setting_api(tenant).get_settings().await
     }
 
     #[async_backtrace::framed]

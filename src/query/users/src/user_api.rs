@@ -34,6 +34,8 @@ use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
+use databend_common_management::meta_read_cache::CachedKvApi;
+use databend_common_management::meta_read_cache::MetaReadCache;
 use databend_common_management::task::TaskMgr;
 use databend_common_management::udf::UdfMgr;
 use databend_common_meta_api::crud::CrudMgr;
@@ -70,6 +72,13 @@ mod external_access_tests;
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
+
+    /// Like `client`, and records this process's writes of users and settings in the
+    /// [`MetaReadCache`], if enabled. Used for everything that may read-modify-write.
+    fenced_client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
+
+    /// Answers plain reads of users and settings from the [`MetaReadCache`] when allowed.
+    read_client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
 
     /// Optional cache for ownership information for all keys [`TenantOwnershipObjectIdent`] in meta-service.
     ///
@@ -152,9 +161,23 @@ impl UserApiProvider {
                 (None, None)
             };
 
+        let client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync> =
+            meta_store.clone().arc();
+        let (fenced_client, read_client) = match MetaReadCache::try_instance() {
+            Some(cache) => {
+                let fenced: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync> =
+                    Arc::new(CachedKvApi::fencing(client.clone(), cache.clone()));
+                let read: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync> =
+                    Arc::new(CachedKvApi::reading(client.clone(), cache));
+                (fenced, read)
+            }
+            None => (client.clone(), client.clone()),
+        };
         let user_mgr = UserApiProvider {
             meta: meta_store.clone(),
-            client: meta_store.arc(),
+            client,
+            fenced_client,
+            read_client,
             ownership_cache: cache,
             external_access_cache_tenant: tenant.clone(),
             network_rule_cache,
@@ -244,8 +267,14 @@ impl UserApiProvider {
     }
 
     pub fn user_api(&self, tenant: &Tenant) -> Arc<impl UserApi> {
-        let user_mgr = UserMgr::create(self.client.clone(), tenant);
+        let user_mgr = UserMgr::create(self.fenced_client.clone(), tenant);
         Arc::new(user_mgr)
+    }
+
+    /// For plain reads only: may answer from the [`MetaReadCache`], so the returned seq must not
+    /// be used for a conditional write.
+    pub fn cached_user_api(&self, tenant: &Tenant) -> Arc<impl UserApi> {
+        Arc::new(UserMgr::create(self.read_client.clone(), tenant))
     }
 
     pub fn role_api(&self, tenant: &Tenant) -> RoleMgr {
@@ -288,7 +317,12 @@ impl UserApiProvider {
     }
 
     pub fn setting_api(&self, tenant: &Tenant) -> SettingMgr {
-        SettingMgr::create(self.client.clone(), tenant)
+        SettingMgr::create(self.fenced_client.clone(), tenant)
+    }
+
+    /// For plain reads only; may answer from the [`MetaReadCache`].
+    pub fn cached_setting_api(&self, tenant: &Tenant) -> SettingMgr {
+        SettingMgr::create(self.read_client.clone(), tenant)
     }
     pub fn procedure_api(&self, tenant: &Tenant) -> ProcedureMgr {
         ProcedureMgr::create(self.client.clone(), tenant)

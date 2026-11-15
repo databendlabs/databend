@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
+use std::sync::Arc;
 use std::time::Duration;
 
 use databend_base::uniq_id::GlobalUniq;
@@ -48,6 +49,8 @@ use log::error;
 use log::info;
 
 use crate::errors::meta_service_error;
+use crate::meta_read_cache::CachedKvApi;
+use crate::meta_read_cache::MetaReadCache;
 use crate::warehouse::WarehouseApi;
 use crate::warehouse::warehouse_api::SelectedNode;
 use crate::warehouse::warehouse_api::SystemManagedCluster;
@@ -74,6 +77,10 @@ type LostNodes = Vec<SelectedNode>;
 // 		|- /test_warehouse: SystemManaged(SystemManagedWarehouse { id: "udcQQnniiBBFmfP9jziSy4", status: "Running", display_name: "test_warehouse", clusters: {"test_cluster": SystemManagedCluster { nodes: [Random(Some("test")), Random(None)] }} })
 pub struct WarehouseMgr {
     metastore: MetaStore,
+    /// All transactions go through it, so that a [`MetaReadCache`] sees this process's writes.
+    write_kv: Arc<dyn KVApi<Error = MetaError>>,
+    /// Serves the cluster node list, possibly from a [`MetaReadCache`].
+    read_kv: Arc<dyn KVApi<Error = MetaError>>,
     lift_time: Duration,
     node_key_prefix: String,
     cluster_node_key_prefix: String,
@@ -94,8 +101,11 @@ impl WarehouseMgr {
             ));
         }
 
+        let kv: Arc<dyn KVApi<Error = MetaError>> = Arc::new(metastore.clone());
         Ok(WarehouseMgr {
             metastore,
+            write_kv: kv.clone(),
+            read_kv: kv,
             lift_time,
             version,
             // Prefix for all online nodes of the tenant
@@ -119,6 +129,16 @@ impl WarehouseMgr {
         })
     }
 
+    /// Keep `cache` consistent with this manager's writes and serve the cluster node list from it.
+    pub fn with_read_cache(mut self, cache: Option<Arc<MetaReadCache>>) -> Self {
+        if let Some(cache) = cache {
+            let inner: Arc<dyn KVApi<Error = MetaError>> = Arc::new(self.metastore.clone());
+            self.write_kv = Arc::new(CachedKvApi::fencing(inner.clone(), cache.clone()));
+            self.read_kv = Arc::new(CachedKvApi::reading(inner, cache));
+        }
+        self
+    }
+
     async fn shutdown_system_managed(&self, node_info: &NodeInfo) -> Result<()> {
         let node_key = self.node_key(node_info)?;
 
@@ -132,7 +152,7 @@ impl WarehouseMgr {
         }
 
         match self
-            .metastore
+            .write_kv
             .transaction(txn)
             .await
             .map_err(meta_service_error)?
@@ -239,7 +259,7 @@ impl WarehouseMgr {
                 .push(TxnCondition::eq_seq(&warehouse_key, wh_seq));
 
             let mut txn_reply = self
-                .metastore
+                .write_kv
                 .transaction(warehouse_txn)
                 .await
                 .map_err(meta_service_error)?;
@@ -339,7 +359,7 @@ impl WarehouseMgr {
         txn.else_then = vec![TxnOp::get(&node_key), TxnOp::get(&warehouse_key)];
 
         let mut txn_reply = self
-            .metastore
+            .write_kv
             .transaction(txn)
             .await
             .map_err(meta_service_error)?;
@@ -548,7 +568,7 @@ impl WarehouseMgr {
             ];
 
             if self
-                .metastore
+                .write_kv
                 .transaction(txn)
                 .await
                 .map_err(meta_service_error)?
@@ -585,14 +605,14 @@ impl WarehouseMgr {
             ];
 
             return self
-                .metastore
+                .write_kv
                 .transaction(txn)
                 .await
                 .map_err(meta_service_error);
         }
 
         txn.if_then = vec![TxnOp::get(node_key.clone())];
-        self.metastore
+        self.write_kv
             .transaction(txn)
             .await
             .map_err(meta_service_error)
@@ -625,7 +645,7 @@ impl WarehouseMgr {
 
         txn.if_then.push(TxnOp::get(node_key.clone()));
         txn.else_then.push(TxnOp::get(node_key.clone()));
-        self.metastore
+        self.write_kv
             .transaction(txn)
             .await
             .map_err(meta_service_error)
@@ -658,7 +678,7 @@ impl WarehouseMgr {
 
         txn.if_then.push(TxnOp::get(node_key.clone()));
         txn.else_then.push(TxnOp::get(node_key.clone()));
-        self.metastore
+        self.write_kv
             .transaction(txn)
             .await
             .map_err(meta_service_error)
@@ -785,7 +805,7 @@ impl WarehouseMgr {
             after_txn.condition.push(condition);
 
             let txn_reply = self
-                .metastore
+                .write_kv
                 .transaction(after_txn)
                 .await
                 .map_err(meta_service_error)?;
@@ -866,7 +886,7 @@ impl WarehouseMgr {
             txn.if_then.push(TxnOp::delete(cluster_node_key));
 
             if self
-                .metastore
+                .write_kv
                 .transaction(txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1152,7 +1172,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             if !self
-                .metastore
+                .write_kv
                 .transaction(delete_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1241,7 +1261,7 @@ impl WarehouseApi for WarehouseMgr {
             txn.else_then.push(TxnOp::get(warehouse_info_key));
 
             return match self
-                .metastore
+                .write_kv
                 .transaction(txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1377,7 +1397,7 @@ impl WarehouseApi for WarehouseMgr {
             ));
 
             if self
-                .metastore
+                .write_kv
                 .transaction(resume_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1457,7 +1477,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             if self
-                .metastore
+                .write_kv
                 .transaction(suspend_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1572,7 +1592,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             return match self
-                .metastore
+                .write_kv
                 .transaction(rename_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1748,7 +1768,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             return match self
-                .metastore
+                .write_kv
                 .transaction(create_cluster_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1852,7 +1872,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             return match self
-                .metastore
+                .write_kv
                 .transaction(drop_cluster_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -1978,7 +1998,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             return match self
-                .metastore
+                .write_kv
                 .transaction(rename_cluster_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -2107,7 +2127,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             return match self
-                .metastore
+                .write_kv
                 .transaction(add_cluster_node_txn)
                 .await
                 .map_err(meta_service_error)?
@@ -2231,7 +2251,7 @@ impl WarehouseApi for WarehouseMgr {
             }
 
             let txn_reply = self
-                .metastore
+                .write_kv
                 .transaction(drop_cluster_node_txn)
                 .await
                 .map_err(meta_service_error)?;
@@ -2261,7 +2281,7 @@ impl WarehouseApi for WarehouseMgr {
         );
 
         let values = self
-            .metastore
+            .read_kv
             .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
             .await
             .map_err(meta_service_error)?;
