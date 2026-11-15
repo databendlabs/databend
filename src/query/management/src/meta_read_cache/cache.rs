@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -32,11 +33,13 @@ pub struct RangeStats {
 /// The cached ranges of one tenant, and how long a result is kept.
 ///
 /// The TTL starts at zero, which keeps nothing: every read goes to meta-service. The owner sets
-/// it, see [`Self::set_ttl`].
+/// it, see [`Self::set_ttl`] and [`Self::set_ttl_as_read`].
 pub struct MetaReadCache {
     tenant: Tenant,
     ranges: Vec<(CachedRange, TtlCache)>,
     ttl_ms: AtomicU64,
+    /// Incremented by [`Self::set_ttl`]; held while the TTL changes.
+    ttl_epoch: Mutex<u64>,
 }
 
 impl MetaReadCache {
@@ -49,6 +52,7 @@ impl MetaReadCache {
             tenant: tenant.clone(),
             ranges,
             ttl_ms: AtomicU64::new(0),
+            ttl_epoch: Mutex::new(0),
         })
     }
 
@@ -57,9 +61,29 @@ impl MetaReadCache {
         self.tenant.tenant_name() == tenant.tenant_name()
     }
 
-    /// Keep results for `ttl` from now on; zero stops answering from memory at once.
+    /// The setting giving the TTL was written by this process: keep results for `ttl` from now
+    /// on; zero stops answering from memory at once.
     pub fn set_ttl(&self, ttl: Duration) {
+        let mut epoch = self.ttl_epoch.lock().unwrap();
+        *epoch += 1;
         self.ttl_ms.store(ttl.as_millis() as u64, Ordering::Release);
+    }
+
+    /// Take before reading the setting that gives the TTL, and pass to [`Self::set_ttl_as_read`].
+    pub fn ttl_epoch(&self) -> u64 {
+        *self.ttl_epoch.lock().unwrap()
+    }
+
+    /// The setting giving the TTL was read as `ttl` by a read that started at `epoch`. Apply it
+    /// unless [`Self::set_ttl`] ran since: the read may predate that write, and would undo it.
+    /// Returns whether it was applied.
+    pub fn set_ttl_as_read(&self, epoch: u64, ttl: Duration) -> bool {
+        let current = self.ttl_epoch.lock().unwrap();
+        if *current != epoch {
+            return false;
+        }
+        self.ttl_ms.store(ttl.as_millis() as u64, Ordering::Release);
+        true
     }
 
     pub fn is_enabled(&self) -> bool {

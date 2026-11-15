@@ -47,16 +47,18 @@ impl Settings {
     ) -> Result<Vec<UserSetting>> {
         // A plain read of the global settings of every new session; may come from the meta read
         // cache.
+        let epoch = user_api.meta_read_cache_ttl_epoch();
         let settings = user_api.cached_setting_api(tenant).get_settings().await?;
 
         // The cache is controlled by one of the settings just read. While it is off, every
         // session reads meta-service, so turning it on is seen at once; while it is on, a
-        // change of the TTL is seen when the cached settings expire.
+        // change of the TTL is seen when the cached settings expire. A `SET GLOBAL` or
+        // `UNSET GLOBAL` of it on this node during the read wins over what the read returned.
         let ttl = settings
             .iter()
             .find(|s| s.name == META_READ_CACHE_TTL_SECS)
             .map(|s| &s.value);
-        user_api.set_meta_read_cache_ttl(tenant, meta_read_cache_ttl(ttl));
+        user_api.set_meta_read_cache_ttl_as_read(tenant, epoch, meta_read_cache_ttl(ttl));
         Ok(settings)
     }
 

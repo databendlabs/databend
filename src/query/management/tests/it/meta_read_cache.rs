@@ -213,3 +213,23 @@ async fn test_expired_keys_and_limited_lists() -> anyhow::Result<()> {
     assert_eq!(list(None).await?, vec![b]);
     Ok(())
 }
+
+/// A read of the TTL setting that started before this process wrote the setting does not undo
+/// the write when it completes.
+#[test]
+fn test_superseded_ttl_read_is_ignored() {
+    let cache = MetaReadCache::create(&tenant());
+    cache.set_ttl(LONG);
+
+    // A read of the setting starts, this process turns the cache off, then the read returns the
+    // old TTL.
+    let epoch = cache.ttl_epoch();
+    cache.set_ttl(Duration::ZERO);
+    assert!(!cache.set_ttl_as_read(epoch, LONG));
+    assert!(!cache.is_enabled());
+
+    // A read that started after the write is applied.
+    let epoch = cache.ttl_epoch();
+    assert!(cache.set_ttl_as_read(epoch, LONG));
+    assert!(cache.is_enabled());
+}

@@ -327,11 +327,27 @@ impl UserApiProvider {
         SettingMgr::create(self.read_client.clone(), tenant)
     }
 
-    /// Apply the global setting `meta_read_cache_ttl_secs` of `tenant`; zero answers every read
-    /// from meta-service. Only the tenant this node serves is cached.
+    /// This node wrote the global setting `meta_read_cache_ttl_secs` of `tenant`: apply it at
+    /// once; zero answers every read from meta-service. Only the tenant this node serves is
+    /// cached.
     pub fn set_meta_read_cache_ttl(&self, tenant: &Tenant, ttl: Duration) {
         if self.read_cache.is_for(tenant) {
             self.read_cache.set_ttl(ttl);
+        }
+    }
+
+    /// Take before reading the global settings, and pass to
+    /// [`Self::set_meta_read_cache_ttl_as_read`].
+    pub fn meta_read_cache_ttl_epoch(&self) -> u64 {
+        self.read_cache.ttl_epoch()
+    }
+
+    /// The global setting `meta_read_cache_ttl_secs` of `tenant` was read as `ttl`, by a read
+    /// that started at `epoch`. Applied unless this node wrote the setting since: the read may
+    /// predate that write.
+    pub fn set_meta_read_cache_ttl_as_read(&self, tenant: &Tenant, epoch: u64, ttl: Duration) {
+        if self.read_cache.is_for(tenant) {
+            self.read_cache.set_ttl_as_read(epoch, ttl);
         }
     }
 
