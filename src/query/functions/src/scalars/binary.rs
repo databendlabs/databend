@@ -26,6 +26,7 @@ use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::GeometryType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::binary::BinaryColumn;
@@ -35,6 +36,8 @@ use databend_common_expression::types::nullable::NullableType;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_io::prelude::BinaryDisplayFormat;
+use encoding_rs::Encoding;
+use encoding_rs::UTF_8;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry
@@ -62,6 +65,66 @@ pub fn register(registry: &mut FunctionRegistry) {
             error_to_null(eval_binary_to_string),
         );
     });
+
+    registry.register_passthrough_nullable_2_arg::<BinaryType, StringType, StringType, _, _>(
+        "to_string",
+        |_, _, _| FunctionDomain::MayThrow,
+        |val, format, ctx| {
+            let Some(format) = format.as_scalar() else {
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`format` parameter must be a scalar constant, not a column or expression",
+                );
+            };
+            eval_binary_to_string_with_format(val, format, ctx)
+        },
+    );
+
+    registry.register_combine_nullable_2_arg::<BinaryType, StringType, StringType, _, _>(
+        "try_to_string",
+        |_, _, _| FunctionDomain::MayThrow,
+        |val, format, ctx| {
+            let Some(format) = format.as_scalar() else {
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`format` parameter must be a scalar constant, not a column or expression",
+                );
+            };
+            error_to_null(|val, ctx| eval_binary_to_string_with_format(val, format, ctx))(val, ctx)
+        },
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BinaryType, StringType, StringType, _, _>(
+        "convert_from",
+        |_, _, _| FunctionDomain::MayThrow,
+        |val, charset, ctx| {
+            let Some(charset) = charset.as_scalar() else {
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`charset` parameter must be a scalar constant, not a column or expression",
+                );
+            };
+            eval_decode_charset(val, charset, ctx)
+        },
+    );
+
+    registry.register_combine_nullable_2_arg::<BinaryType, StringType, StringType, _, _>(
+        "try_convert_from",
+        |_, _, _| FunctionDomain::MayThrow,
+        |val, charset, ctx| {
+            let Some(charset) = charset.as_scalar() else {
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`charset` parameter must be a scalar constant, not a column or expression",
+                );
+            };
+            error_to_null(|val, ctx| eval_decode_charset(val, charset, ctx))(val, ctx)
+        },
+    );
 
     registry
         .scalar_builder("to_jsonb_binary")
@@ -164,27 +227,31 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
         "to_binary",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         |val, format, ctx| {
             let Some(format) = format.as_scalar() else {
-                ctx.set_error(
-                    0,
+                return conversion_error(
+                    true,
+                    ctx,
                     "`format` parameter must be a scalar constant, not a column or expression",
                 );
-                return Value::Scalar(Vec::new());
             };
-            match format.to_ascii_lowercase().as_str() {
-                "hex" => eval_unhex(val, ctx),
-                "base64" => eval_from_base64(val, ctx),
-                "utf-8" => match val {
-                    Value::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
-                    Value::Column(col) => Value::Column(col.into()),
-                },
-                _ => {
-                    ctx.set_error(0, "The format option only supports hex, base64, and utf-8");
-                    Value::Scalar(Vec::new())
-                }
-            }
+            eval_string_to_binary_with_format(val, format, ctx)
+        },
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
+        "convert_to",
+        |_, _, _| FunctionDomain::MayThrow,
+        |val, charset, ctx| {
+            let Some(charset) = charset.as_scalar() else {
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`charset` parameter must be a scalar constant, not a column or expression",
+                );
+            };
+            eval_encode_charset(val, charset, ctx)
         },
     );
 
@@ -204,23 +271,31 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_combine_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
         "try_to_binary",
-        |_, _, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::MayThrow,
         |val, format, ctx| {
             let Some(format) = format.as_scalar() else {
-                return Value::Scalar(None);
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`format` parameter must be a scalar constant, not a column or expression",
+                );
             };
-            match format.to_ascii_lowercase().as_str() {
-                "hex" => error_to_null(eval_unhex)(val, ctx),
-                "base64" => error_to_null(eval_from_base64)(val, ctx),
-                "utf-8" => match val {
-                    Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
-                    Value::Column(col) => {
-                        let validity = Bitmap::new_constant(true, col.len());
-                        Value::Column(NullableColumn::new(col.into(), validity))
-                    }
-                },
-                _ => Value::Scalar(None),
-            }
+            error_to_null(|val, ctx| eval_string_to_binary_with_format(val, format, ctx))(val, ctx)
+        },
+    );
+
+    registry.register_combine_nullable_2_arg::<StringType, StringType, BinaryType, _, _>(
+        "try_convert_to",
+        |_, _, _| FunctionDomain::MayThrow,
+        |val, charset, ctx| {
+            let Some(charset) = charset.as_scalar() else {
+                return conversion_error(
+                    true,
+                    ctx,
+                    "`charset` parameter must be a scalar constant, not a column or expression",
+                );
+            };
+            error_to_null(|val, ctx| eval_encode_charset(val, charset, ctx))(val, ctx)
         },
     );
 
@@ -282,12 +357,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         .vectorized(vectorize_binary_to_string(
             |col| col.total_bytes_len() * 4 / 3 + col.len() * 4,
             |val, output, _| {
-                base64::write::EncoderWriter::new(
-                    &mut output.row_buffer,
-                    &base64::engine::general_purpose::STANDARD,
-                )
-                .write_all(val)
-                .unwrap();
+                write_base64(val, output);
                 output.commit_row();
             },
         ))
@@ -343,6 +413,142 @@ fn eval_utf8_bytes(val: Value<StringType>) -> Value<BinaryType> {
     }
 }
 
+/// `to_binary(string, format)`: `format` is `hex`, `base64`, or a charset label such as
+/// `utf-8`, `gbk`, `gb18030`, `big5`, `shift_jis`, `windows-1252`.
+fn eval_string_to_binary_with_format(
+    val: Value<StringType>,
+    format: &str,
+    ctx: &mut EvalContext,
+) -> Value<BinaryType> {
+    match format.to_ascii_lowercase().as_str() {
+        "hex" => eval_unhex(val, ctx),
+        "base64" => eval_from_base64(val, ctx),
+        _ => eval_encode_charset(val, format, ctx),
+    }
+}
+
+/// `to_string(binary, format)`: the inverse of [`eval_string_to_binary_with_format`].
+fn eval_binary_to_string_with_format(
+    val: Value<BinaryType>,
+    format: &str,
+    ctx: &mut EvalContext,
+) -> Value<StringType> {
+    match format.to_ascii_lowercase().as_str() {
+        "hex" => vectorize_binary_to_string(
+            |col| col.total_bytes_len() * 2,
+            |val, output, _| {
+                write_hex_lower(val, output);
+                output.commit_row();
+            },
+        )(val, ctx),
+        "base64" => vectorize_binary_to_string(
+            |col| col.total_bytes_len() * 4 / 3 + col.len() * 4,
+            |val, output, _| {
+                write_base64(val, output);
+                output.commit_row();
+            },
+        )(val, ctx),
+        _ => eval_decode_charset(val, format, ctx),
+    }
+}
+
+/// Resolve a charset label (WHATWG encoding label, case-insensitive) such as `utf-8`, `gbk`,
+/// `gb18030`, `big5`, `shift_jis`, `euc-kr`, `windows-1252`, `utf-16le`.
+fn resolve_charset(label: &str) -> Result<&'static Encoding, String> {
+    Encoding::for_label(label.as_bytes()).ok_or_else(|| format!("unsupported charset '{label}'"))
+}
+
+/// Validation failures apply to every active row, not just row 0 (which may be NULL).
+/// Retain column shape so nullable adapters can preserve the input validity bitmap.
+fn conversion_error<O: ReturnType>(
+    is_column: bool,
+    ctx: &mut EvalContext,
+    message: &str,
+) -> Value<O> {
+    let rows = if is_column { ctx.num_rows } else { 1 };
+    let mut builder = O::create_builder(rows, ctx.generics);
+    for _ in 0..rows {
+        O::push_default(&mut builder);
+    }
+    for row in 0..if is_column { rows } else { ctx.num_rows.max(1) } {
+        ctx.set_error(row, message);
+    }
+    if is_column {
+        Value::Column(O::build_column(builder))
+    } else {
+        Value::Scalar(O::build_scalar(builder))
+    }
+}
+
+/// Decode bytes in `charset` to a UTF-8 string. Malformed input is an error, not a U+FFFD.
+fn eval_decode_charset(
+    val: Value<BinaryType>,
+    charset: &str,
+    ctx: &mut EvalContext,
+) -> Value<StringType> {
+    let encoding = match resolve_charset(charset) {
+        Ok(encoding) => encoding,
+        Err(message) => return conversion_error(matches!(val, Value::Column(_)), ctx, &message),
+    };
+    vectorize_binary_to_string(
+        |col| col.total_bytes_len(),
+        |val, output, ctx| {
+            match encoding.decode_without_bom_handling_and_without_replacement(val) {
+                Some(decoded) => output.put_str(&decoded),
+                None => ctx.set_error(
+                    output.len(),
+                    format!("invalid {} byte sequence", encoding.name()),
+                ),
+            }
+            output.commit_row();
+        },
+    )(val, ctx)
+}
+
+/// Encode a UTF-8 string into bytes in `charset`. Characters that the charset cannot represent
+/// are an error, not a `?`/numeric reference substitution.
+fn eval_encode_charset(
+    val: Value<StringType>,
+    charset: &str,
+    ctx: &mut EvalContext,
+) -> Value<BinaryType> {
+    let encoding = match resolve_charset(charset) {
+        Ok(encoding) => encoding,
+        Err(message) => return conversion_error(matches!(val, Value::Column(_)), ctx, &message),
+    };
+    if encoding == UTF_8 {
+        return eval_utf8_bytes(val);
+    }
+    // encoding_rs only decodes UTF-16 and `replacement`; encoding them falls back to UTF-8.
+    if encoding.output_encoding() != encoding {
+        return conversion_error(
+            matches!(val, Value::Column(_)),
+            ctx,
+            &format!(
+                "charset '{}' is not supported for encoding",
+                encoding.name()
+            ),
+        );
+    }
+    vectorize_string_to_binary(
+        |col| col.total_bytes_len(),
+        |val, output, ctx| {
+            let (encoded, _, had_unmappable) = encoding.encode(val);
+            if had_unmappable {
+                ctx.set_error(
+                    output.len(),
+                    format!(
+                        "string contains characters that cannot be encoded in {}",
+                        encoding.name()
+                    ),
+                );
+            }
+            output.put_slice(&encoded);
+            output.commit_row();
+        },
+    )(val, ctx)
+}
+
 fn eval_utf8_bytes_nullable(val: Value<StringType>) -> Value<NullableType<BinaryType>> {
     match val {
         Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
@@ -372,6 +578,15 @@ pub fn write_hex_lower(bytes: &[u8], output: &mut StringColumnBuilder) {
     let old_len = output.row_buffer.len();
     output.row_buffer.resize(old_len + bytes.len() * 2, 0);
     hex::encode_to_slice(bytes, &mut output.row_buffer[old_len..]).unwrap();
+}
+
+fn write_base64(bytes: &[u8], output: &mut StringColumnBuilder) {
+    base64::write::EncoderWriter::new(
+        &mut output.row_buffer,
+        &base64::engine::general_purpose::STANDARD,
+    )
+    .write_all(bytes)
+    .unwrap();
 }
 
 fn eval_from_base64(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
