@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::sync::Weak;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_meta_store::MetaStore;
 use databend_meta_client::kvapi::KvApiExt;
@@ -81,16 +82,12 @@ pub(crate) fn spawn(cache: Weak<MetaReadCache>, meta: Arc<MetaStore>, interval: 
 }
 
 async fn verify(p: &PrefixCache, meta: &MetaStore, interval: Duration) {
-    if let Some(age) = p.oldest_unobserved_fence() {
-        if age > interval {
-            p.resync(&format!("a local write is not delivered after {age:?}"));
-            return;
-        }
-    }
+    let fence_age = p.oldest_unobserved_fence();
 
     // The watch stream and this read share one client. If the read cannot complete, the stream
     // may be stuck the same way (e.g. a half-open connection) while the caller's own client works,
     // so stop trusting the cache instead of waiting for the client timeout.
+    let started = Instant::now();
     let read = meta.list_kv_collect(ListOptions::unlimited(p.dir.as_str()));
     let timeout = READ_TIMEOUT.min(interval);
     let leader = match tokio::time::timeout(timeout, read).await {
@@ -118,7 +115,14 @@ async fn verify(p: &PrefixCache, meta: &MetaStore, interval: Duration) {
     };
 
     if leader == local {
+        // The read started after these writes completed, so it includes them; the cache equals it.
+        p.retire_fences_before(started);
         p.verified();
+        return;
+    }
+
+    if let Some(age) = fence_age.filter(|age| *age > interval) {
+        p.resync(&format!("a local write is not delivered after {age:?}"));
         return;
     }
 

@@ -93,7 +93,18 @@ impl UserApiProvider {
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
         let user_info = self.get_user(tenant, user).await?;
+        self.check_login_allowed(tenant, &user_info, client_ip)
+            .await?;
+        Ok(user_info)
+    }
 
+    /// Reject a disabled user, or a client outside the user's network policy.
+    pub async fn check_login_allowed(
+        &self,
+        tenant: &Tenant,
+        user_info: &UserInfo,
+        client_ip: Option<&str>,
+    ) -> Result<()> {
         if let Some(disabled) = user_info.option.disabled() {
             if *disabled {
                 return Err(ErrorCode::AuthenticateFailure(format!(
@@ -106,7 +117,7 @@ impl UserApiProvider {
         if let Some(name) = user_info.option.network_policy() {
             self.enforce_network_policy(tenant, name, client_ip).await?;
         }
-        Ok(user_info)
+        Ok(())
     }
 
     pub async fn enforce_network_policy(

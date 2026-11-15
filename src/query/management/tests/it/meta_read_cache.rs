@@ -175,7 +175,7 @@ async fn test_expired_nodes_are_not_served() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Reports a write with a seq the watch stream will never deliver, as a stalled stream would.
+/// Reports a write with a seq the watch stream will never deliver.
 struct NeverDelivered(MetaStore);
 
 #[async_trait::async_trait]
@@ -206,10 +206,10 @@ impl KVApi for NeverDelivered {
     }
 }
 
-/// A local write not delivered within one verify interval stops serving from memory and
-/// re-fetches the stream; reads keep working from meta-service meanwhile.
+/// A fence the stream can never satisfy, as for a key deleted remotely while the stream was down,
+/// falls back until a verification finds the cache equal to the leader, then is retired.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_undelivered_write_stops_serving() -> anyhow::Result<()> {
+async fn test_matching_verification_retires_fence() -> anyhow::Result<()> {
     let (meta, cache, inner) = setup(Duration::from_millis(200)).await?;
     let reading = CachedKvApi::reading(inner, cache.clone());
     wait_serving(&cache, "setting").await;
@@ -224,10 +224,10 @@ async fn test_undelivered_write_stops_serving() -> anyhow::Result<()> {
     assert!(stats(&cache, "setting").fallback_fence >= 1);
 
     tokio::time::sleep(Duration::from_millis(700)).await;
-    let st = stats(&cache, "setting");
-    assert!(st.resync >= 1, "{st:?}");
-    assert!(!cache.is_serving("setting"));
+    let hits = stats(&cache, "setting").hit;
     assert_eq!(reading.get_kv(key).await?.unwrap().data, b"real".to_vec());
-    assert!(stats(&cache, "setting").fallback_suspect >= 1);
+    let st = stats(&cache, "setting");
+    assert_eq!(st.hit, hits + 1, "{st:?}");
+    assert_eq!(st.resync, 0, "{st:?}");
     Ok(())
 }

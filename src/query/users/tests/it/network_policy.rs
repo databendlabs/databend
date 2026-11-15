@@ -146,3 +146,64 @@ async fn test_user_network_policy() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// The login restrictions are checked on the given record, not on a stored or cached one: the
+/// password retry after a cache miss checks the fresh record with it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_check_login_allowed_on_record() -> anyhow::Result<()> {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
+    let tenant = Tenant::new_literal("test");
+    let user_mgr = UserApiProvider::try_create_simple(RpcClientConf::empty(), &tenant).await?;
+
+    user_mgr
+        .add_network_policy(
+            &tenant,
+            NetworkPolicy {
+                name: "p".to_string(),
+                allowed_ip_list: vec!["192.168.0.0/24".to_string()],
+                blocked_ip_list: vec![],
+                comment: "".to_string(),
+                create_on: Utc.with_ymd_and_hms(2023, 7, 10, 12, 0, 9).unwrap(),
+                update_on: None,
+            },
+            &CreateOption::Create,
+        )
+        .await?;
+
+    let auth_info = AuthInfo::Password {
+        hash_value: Vec::from("pwd"),
+        hash_method: PasswordHashMethod::Sha256,
+        need_change: false,
+    };
+    let with_option = |option: UserOption| {
+        let mut user = UserInfo::new("u", "%", auth_info.clone());
+        user.update_auth_option(None, Some(option));
+        user
+    };
+    let ip = Some("10.0.0.1");
+
+    let plain = with_option(UserOption::empty());
+    user_mgr.check_login_allowed(&tenant, &plain, ip).await?;
+
+    let disabled = with_option(UserOption::empty().with_disabled(Some(true)));
+    assert!(
+        user_mgr
+            .check_login_allowed(&tenant, &disabled, ip)
+            .await
+            .is_err()
+    );
+
+    let restricted = with_option(UserOption::empty().with_network_policy(Some("p".to_string())));
+    assert!(
+        user_mgr
+            .check_login_allowed(&tenant, &restricted, ip)
+            .await
+            .is_err()
+    );
+    user_mgr
+        .check_login_allowed(&tenant, &restricted, Some("192.168.0.1"))
+        .await?;
+    Ok(())
+}

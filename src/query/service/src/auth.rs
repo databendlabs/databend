@@ -403,12 +403,31 @@ impl AuthMgr {
                     )),
                 };
                 let mut authed = check_password(&user);
-                if authed.is_err() && MetaReadCache::try_instance().is_some() {
+                // A configured user never comes from the meta read cache, and its configured
+                // credentials take precedence over a meta user with the same name.
+                if authed.is_err()
+                    && MetaReadCache::try_instance().is_some()
+                    && user_api.get_configured_user(name).is_none()
+                {
                     // The user may come from the meta read cache, which can lag a change made
                     // by another node: decide a rejection on a fresh read.
                     if let Ok(fresh) = user_api.get_meta_user(&tenant, identity.clone()).await {
                         if fresh.data.auth_info != user.auth_info {
                             user = fresh.data;
+                            // The checks above ran on the cached record; the change may also
+                            // have disabled the user or restricted its network.
+                            user_api
+                                .check_login_allowed(&tenant, &user, client_ip.as_deref())
+                                .await?;
+                            if !user.is_account_admin() && !global_network_policy.is_empty() {
+                                user_api
+                                    .enforce_network_policy(
+                                        &tenant,
+                                        &global_network_policy,
+                                        client_ip.as_deref(),
+                                    )
+                                    .await?;
+                            }
                             if UserApiProvider::instance()
                                 .check_login_password(&tenant, identity.clone(), &user)
                                 .await?
