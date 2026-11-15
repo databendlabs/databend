@@ -25,6 +25,7 @@ use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_QUERY_TOKEN;
 use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
@@ -628,6 +629,10 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
     for (key, value) in headers.iter() {
         headers_ref.insert(key, value.to_owned());
     }
+    // Sensitivity is an in-memory flag, not part of the forwarded HTTP headers.
+    if let Some(token) = headers_ref.get_mut(HEADER_QUERY_TOKEN) {
+        token.set_sensitive(true);
+    }
     Ok(poem_resp)
 }
 
@@ -959,18 +964,85 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use databend_common_base::headers::HEADER_QUERY_ID;
+    use databend_common_base::headers::HEADER_QUERY_TOKEN;
     use databend_common_exception::ErrorCode;
+    use databend_meta_client::types::NodeInfo;
     use poem::Request;
     use poem::http::HeaderMap;
+    use poem::http::HeaderValue;
+    use poem::http::Method;
     use poem::http::StatusCode;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
 
     use super::EndpointKind;
     use super::auth_error_response;
+    use super::forward_request_with_body;
     use crate::servers::http::middleware::session::get_client_ip;
     use crate::servers::http::middleware::session::get_request_info;
     use crate::servers::http::middleware::session::sanitize_request_headers;
     use crate::servers::login_history::LoginEventType;
     use crate::servers::login_history::LoginHistory;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_forwarded_query_token_is_sensitive() -> anyhow::Result<()> {
+        let _fixture = TestFixture::setup().await?;
+        let server = MockServer::start().await;
+        let node = Arc::new(NodeInfo {
+            http_address: server.address().to_string(),
+            ..Default::default()
+        });
+        for with_token in [true, false] {
+            let mut template = ResponseTemplate::new(202)
+                .insert_header(HEADER_QUERY_ID, "forwarded-query")
+                .insert_header("cache-control", "no-store")
+                .set_body_string("forwarded body");
+            if with_token {
+                let mut token = HeaderValue::from_static("forwarded-query-token-secret");
+                token.set_sensitive(true);
+                template = template.insert_header(HEADER_QUERY_TOKEN, token);
+            }
+            let _mock = Mock::given(method("POST"))
+                .and(path("/v1/query"))
+                .respond_with(template)
+                .expect(1)
+                .mount_as_scoped(&server)
+                .await;
+            // Exercise the actual HTTP hop: received headers do not inherit
+            // the target node's in-memory sensitive flag.
+            let response = forward_request_with_body(
+                node.clone(),
+                "/query",
+                "submitted body",
+                Method::POST,
+                HeaderMap::new(),
+            )
+            .await?;
+            assert_eq!(response.status(), StatusCode::ACCEPTED);
+            assert_eq!(response.headers()[HEADER_QUERY_ID], "forwarded-query");
+            assert!(!response.headers()[HEADER_QUERY_ID].is_sensitive());
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            if with_token {
+                let token = &response.headers()[HEADER_QUERY_TOKEN];
+                assert!(token.is_sensitive());
+                assert_eq!(token.to_str()?, "forwarded-query-token-secret");
+                assert!(
+                    !format!("{:?}", response.headers()).contains("forwarded-query-token-secret")
+                );
+            } else {
+                assert!(response.headers().get(HEADER_QUERY_TOKEN).is_none());
+            }
+            assert_eq!(response.into_body().into_string().await?, "forwarded body");
+        }
+        Ok(())
+    }
 
     #[test]
     fn test_missing_query_does_not_record_login_failure() {
