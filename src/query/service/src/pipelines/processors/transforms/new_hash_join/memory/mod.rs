@@ -23,6 +23,7 @@ mod right_join_anti;
 mod right_join_semi;
 
 pub use basic_state::BasicHashJoinState;
+pub use basic_state::BuildArena;
 pub use inner_join::InnerHashJoin;
 pub use left_join_anti::AntiLeftHashJoin;
 pub use left_join_semi::SemiLeftHashJoin;

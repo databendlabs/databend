@@ -40,6 +40,7 @@ use crate::pipelines::processors::transforms::UniqueSingleBinaryHashJoinHashTabl
 use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
+use crate::pipelines::processors::transforms::new_hash_join::memory::BuildArena;
 
 pub struct BasicHashJoin {
     pub(crate) desc: Arc<HashJoinDesc>,
@@ -297,6 +298,8 @@ impl BasicHashJoin {
 
     fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
         let mut arena = Vec::with_capacity(0);
+        let num_keys = keys.num_rows();
+        let key_types = keys.columns().iter().map(|c| c.data_type()).collect();
 
         match self.state.hash_table.deref() {
             HashJoinHashTable::Null => (),
@@ -318,11 +321,15 @@ impl BasicHashJoin {
             HashJoinHashTable::UniqueKeysU256(v) => v.insert(keys, chunk_idx, &mut arena)?,
         };
 
-        if arena.capacity() != 0 {
-            let locked = self.state.mutex.lock();
-            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-            self.state.arenas.as_mut().push(arena);
-        }
+        // Recorded even when empty: it marks the chunk as rewritten by `final_build`.
+        let locked = self.state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.state.arenas.as_mut().push(BuildArena {
+            chunk_index: chunk_idx,
+            num_keys,
+            key_types,
+            data: arena,
+        });
 
         Ok(())
     }

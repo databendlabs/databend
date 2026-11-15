@@ -72,8 +72,15 @@ impl HashJoinFactory {
         self: &Arc<Self>,
         typ: JoinType,
         states: HybridLevelStates,
+        shared_build_chunks: bool,
     ) -> Result<Box<dyn Join>> {
-        Ok(Box::new(self.create_hybrid_join(typ, states)?))
+        let join = self.create_hybrid_join(typ, states)?;
+        // A cache scan reads the build chunks from the shared state, so they must stay there.
+        if shared_build_chunks {
+            return Ok(Box::new(join));
+        }
+
+        Ok(Box::new(join.with_spill_in_final_build()))
     }
 
     /// Create a basic memory join (used internally by HybridHashJoin)

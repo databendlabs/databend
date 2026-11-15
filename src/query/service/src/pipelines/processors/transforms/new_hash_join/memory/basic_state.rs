@@ -24,6 +24,16 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 
+/// The hash table entries of one build chunk. Entries are laid out in the row order of the
+/// chunk's valid keys and each holds its encoded key, so the keys of a chunk can be recovered
+/// after its key columns have been projected away.
+pub struct BuildArena {
+    pub chunk_index: usize,
+    pub num_keys: usize,
+    pub key_types: Vec<DataType>,
+    pub data: Vec<u8>,
+}
+
 pub struct BasicHashJoinState {
     pub mutex: Mutex<()>,
     pub build_rows: CStyleCell<usize>,
@@ -32,7 +42,7 @@ pub struct BasicHashJoinState {
     pub column_types: CStyleCell<Vec<DataType>>,
     pub build_queue: CStyleCell<VecDeque<usize>>,
 
-    pub arenas: CStyleCell<Vec<Vec<u8>>>,
+    pub arenas: CStyleCell<Vec<BuildArena>>,
     pub hash_table: CStyleCell<HashJoinHashTable>,
     pub packets: CStyleCell<Vec<JoinRuntimeFilterPacket>>,
 

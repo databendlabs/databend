@@ -467,7 +467,11 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                factory.create_hash_join(self.join_type, level_states.clone())?,
+                factory.create_hash_join(
+                    self.join_type,
+                    level_states.clone(),
+                    self.build_side_cache_info.is_some(),
+                )?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),

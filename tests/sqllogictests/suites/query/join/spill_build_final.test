@@ -1,0 +1,58 @@
+# Test hash join spill triggered while building the in-memory hash table.
+#
+# The query memory limit is set between the memory of the collected build data and the memory
+# of that data plus its hash table, so the build stage keeps the data in memory and the spill
+# happens while the hash table is built. Each build side only has its join key, which makes the
+# hash table several times larger than the data, and the key is not output, so the spilled
+# chunks that were already inserted are restored from the keys stored in the hash table.
+statement ok
+create or replace database spill_build_final;
+
+statement ok
+use spill_build_final;
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set max_threads = 4;
+
+statement ok
+create or replace table probe_side as select number % 500000 as k, concat('k', (number % 500000)::string) as s, number as v from numbers(600000);
+
+statement ok
+create or replace table build_keys as select number * 7 as k from numbers(4000000);
+
+statement ok
+create or replace table build_nullable_keys as select if(number % 7 = 0, null, number * 7) as k from numbers(4000000);
+
+statement ok
+create or replace table build_string_keys as select concat('k', (number * 7)::string) as s from numbers(2000000);
+
+statement ok
+set max_query_memory_usage = 134217728;
+
+query II
+select count(*), sum(probe_side.v) from probe_side join build_keys on probe_side.k = build_keys.k;
+----
+85715 25714371427
+
+# Build rows with NULL keys are kept for the right join and restored behind the valid rows.
+query II
+select count(*), sum(probe_side.v) from probe_side right join build_nullable_keys on probe_side.k = build_nullable_keys.k;
+----
+4012245 22040632657
+
+statement ok
+set max_query_memory_usage = 150994944;
+
+query II
+select count(*), sum(probe_side.v) from probe_side join build_string_keys on probe_side.s = build_string_keys.s;
+----
+85715 25714371427
+
+statement ok
+unset (max_query_memory_usage, disable_join_reorder, max_threads);
+
+statement ok
+drop database spill_build_final;
