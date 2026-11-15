@@ -24,7 +24,6 @@ use databend_common_config::CatalogHiveConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::ThriftProtocol;
 use databend_common_exception::ErrorCode;
-use databend_query::GlobalServices;
 use pretty_assertions::assert_eq;
 
 // From env, defaulting.
@@ -1034,10 +1033,10 @@ fn test_server_memory_limit_defaults() {
 
     let mut system = sysinfo::System::new();
     system.refresh_memory();
-    let derived = GlobalServices::server_memory_limit(&config);
+    let derived = config.server_memory_limit();
     assert!(derived > 0);
     assert!(derived <= system.total_memory() / 10 * 8);
 
     config.query.common.max_server_memory_usage = 1 << 30;
-    assert_eq!(GlobalServices::server_memory_limit(&config), 1 << 30);
+    assert_eq!(config.server_memory_limit(), 1 << 30);
 }

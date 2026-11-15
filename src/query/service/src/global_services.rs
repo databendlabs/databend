@@ -76,22 +76,6 @@ impl GlobalServices {
         GlobalServices::init_with(config, version, ee_mode).await
     }
 
-    /// The server memory limit in bytes: `max_server_memory_usage`, or when that is 0, 80% of
-    /// the memory of the machine, or of the cgroup the process runs in.
-    pub fn server_memory_limit(config: &InnerConfig) -> u64 {
-        match config.query.common.max_server_memory_usage {
-            0 => {
-                let mut system = sysinfo::System::new();
-                system.refresh_memory();
-                let total = system
-                    .cgroup_limits()
-                    .map_or(system.total_memory(), |limits| limits.total_memory);
-                total / 10 * 8
-            }
-            limit => limit,
-        }
-    }
-
     #[async_backtrace::framed]
     pub async fn init_with(
         config: &InnerConfig,
@@ -222,7 +206,7 @@ impl GlobalServices {
         // is reached, so only while `max_memory_limit_enabled` enforces it.
         CacheManager::init(
             &config.cache,
-            &Self::server_memory_limit(config),
+            &config.server_memory_limit(),
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
