@@ -205,7 +205,7 @@ where A: super::TypeCheckAdapter
             .iter()
             .flatten()
             .map(|param| param.index.as_usize() + 1)
-            .fold(FIRST_LAMBDA_PARAMETER, usize::max);
+            .fold(Symbol::MIN_LAMBDA_PARAMETER.as_usize(), usize::max);
         let params = lambda_columns
             .iter()
             .enumerate()
@@ -807,10 +807,6 @@ where A: super::TypeCheckAdapter
         Ok(())
     }
 }
-
-/// The first symbol of lambda parameters, far past the symbols of a query,
-/// which metadata allocates from zero, and below the dummy columns.
-const FIRST_LAMBDA_PARAMETER: usize = usize::MAX / 2;
 
 /// The state of a type checker that binding a lambda body sets, and restores
 /// after it.

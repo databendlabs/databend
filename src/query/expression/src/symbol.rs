@@ -40,6 +40,10 @@ impl Symbol {
 
     pub const DUMMY_COLUMN: Self = Self::new_dummy_column(DummyColumnType::Default);
 
+    /// The first symbol of lambda parameters, far past the symbols of a query,
+    /// which metadata allocates from zero, and below the dummy columns.
+    pub const MIN_LAMBDA_PARAMETER: Self = Self(usize::MAX / 2);
+
     pub const fn new(index: usize) -> Self {
         Self(index)
     }
