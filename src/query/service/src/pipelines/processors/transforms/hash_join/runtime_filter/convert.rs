@@ -68,6 +68,14 @@ pub async fn build_runtime_filter_infos(
         let desc = runtime_filter_descs.get(&packet.id).unwrap();
         let bloom_enabled =
             should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
+        // The bloom filter depends only on the build side, so all probe targets
+        // of this packet share one immutable filter.
+        let bloom = match packet.bloom {
+            Some(hashes) if bloom_enabled => {
+                Some(build_bloom_filter(hashes, max_threads, desc.id).await?)
+            }
+            _ => None,
+        };
 
         // Apply this single runtime filter to all probe targets (scan_id, probe_key pairs)
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
@@ -80,16 +88,6 @@ pub async fn build_runtime_filter_infos(
             } else {
                 (None, 0)
             };
-            let bloom = if bloom_enabled {
-                if let Some(ref bloom) = packet.bloom {
-                    Some(build_bloom_filter(bloom.clone(), max_threads, desc.id).await?)
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
             let min_max = if let Some(ref min_max) = packet.min_max {
                 Some(build_min_max_filter(
                     min_max.clone(),
@@ -104,7 +102,7 @@ pub async fn build_runtime_filter_infos(
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
-                bloom,
+                bloom: bloom.clone(),
                 inlist,
                 inlist_value_count,
                 min_max,
@@ -284,6 +282,7 @@ async fn build_bloom_filter(
 mod tests {
     use std::borrow::Cow;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use databend_common_catalog::sbbf::Sbbf;
     use databend_common_expression::ColumnBuilder;
@@ -372,6 +371,86 @@ mod tests {
         assert_eq!(entry.inlist_value_count, 2);
         assert!(entry.min_max.is_some());
         assert!(entry.enabled);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_build_runtime_filter_infos_shares_bloom_across_probe_targets() {
+        let data_type = DataType::Number(NumberDataType::Int32);
+        let column = |name: &str| {
+            Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: name.to_string(),
+                data_type: data_type.clone(),
+                display_name: name.to_string(),
+            })
+        };
+        let build_key = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: data_type.clone(),
+            display_name: "build_key".to_string(),
+        });
+        // Filter 0 has targets in two scans and a second target in scan 7,
+        // as a UNION ALL probe or join equivalence produces.
+        let desc = RuntimeFilterDesc {
+            id: 0,
+            build_key,
+            probe_targets: vec![(column("a"), 7), (column("b"), 8), (column("c"), 7)],
+            build_table_rows: Some(1000),
+            enable_bloom_runtime_filter: true,
+            enable_inlist_runtime_filter: true,
+            enable_min_max_runtime_filter: true,
+        };
+        let mut other_desc = desc.clone();
+        other_desc.id = 1;
+        other_desc.probe_targets = vec![(column("d"), 9)];
+
+        let packets = HashMap::from([
+            (0, RuntimeFilterPacket {
+                id: 0,
+                inlist: None,
+                min_max: None,
+                bloom: Some(vec![11, 22]),
+            }),
+            (1, RuntimeFilterPacket {
+                id: 1,
+                inlist: None,
+                min_max: None,
+                bloom: Some(vec![33, 44]),
+            }),
+        ]);
+
+        let infos = build_runtime_filter_infos(
+            JoinRuntimeFilterPacket::complete(packets, 2),
+            HashMap::from([(0, &desc), (1, &other_desc)]),
+            1,
+            1,
+        )
+        .await
+        .unwrap();
+
+        let bloom = |scan_id: usize, index: usize| {
+            infos[&scan_id].filters[index]
+                .bloom
+                .as_ref()
+                .unwrap()
+                .filter
+                .clone()
+        };
+        let shared = bloom(7, 0);
+        assert!(Arc::ptr_eq(&shared, &bloom(8, 0)));
+        assert!(Arc::ptr_eq(&shared, &bloom(7, 1)));
+        assert!([11, 22].into_iter().all(|hash| shared.check_hash(hash)));
+
+        let other = bloom(9, 0);
+        assert!(!Arc::ptr_eq(&shared, &other));
+        assert!([33, 44].into_iter().all(|hash| other.check_hash(hash)));
+
+        // Statistics stay per target.
+        assert!(!Arc::ptr_eq(
+            &infos[&7].filters[0].stats,
+            &infos[&8].filters[0].stats
+        ));
     }
 
     #[test]
