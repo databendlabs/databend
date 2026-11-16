@@ -32,10 +32,13 @@ use crate::settings_default::DefaultSettings;
 /// The global setting that turns the meta read cache on and gives its TTL.
 const META_READ_CACHE_TTL_SECS: &str = "meta_read_cache_ttl_secs";
 
-/// The TTL given by the global value of [`META_READ_CACHE_TTL_SECS`]; absent or unreadable
-/// means off.
+/// The TTL given by the global value of [`META_READ_CACHE_TTL_SECS`]; absent means the default
+/// of the setting, unreadable means off.
 fn meta_read_cache_ttl(value: Option<&UserSettingValue>) -> Duration {
-    let secs = value.and_then(|v| v.as_string().parse::<u64>().ok());
+    let secs = match value {
+        Some(v) => v.as_string().parse::<u64>().ok(),
+        None => DefaultSettings::try_get_u64(META_READ_CACHE_TTL_SECS).ok(),
+    };
     Duration::from_secs(secs.unwrap_or(0))
 }
 
@@ -50,10 +53,11 @@ impl Settings {
         let epoch = user_api.meta_read_cache_ttl_epoch();
         let settings = user_api.cached_setting_api(tenant).get_settings().await?;
 
-        // The cache is controlled by one of the settings just read. While it is off, every
-        // session reads meta-service, so turning it on is seen at once; while it is on, a
-        // change of the TTL is seen when the cached settings expire. A `SET GLOBAL` or
-        // `UNSET GLOBAL` of it on this node during the read wins over what the read returned.
+        // The cache is controlled by one of the settings just read; without a global value the
+        // default applies, which is on. While it is off, every session reads meta-service, so
+        // turning it on is seen at once; while it is on, a change of the TTL is seen when the
+        // cached settings expire. A `SET GLOBAL` or `UNSET GLOBAL` of it on this node during the
+        // read wins over what the read returned.
         let ttl = settings
             .iter()
             .find(|s| s.name == META_READ_CACHE_TTL_SECS)

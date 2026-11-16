@@ -1621,7 +1621,7 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("meta_read_cache_ttl_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(5),
                     desc: "Seconds a node keeps the users and the global settings it read from meta-service, instead of reading them for every query. A change made on another node, such as a dropped user, a new password, or a revoked privilege or role, takes effect on this node at most this many seconds later. 0 reads meta-service every time.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,

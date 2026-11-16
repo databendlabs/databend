@@ -433,39 +433,44 @@ async fn test_meta_read_cache_ttl_controls_the_cache() -> anyhow::Result<()> {
     let users = UserApiProvider::instance();
     let name = "meta_read_cache_ttl_secs".to_string();
 
-    // Off by default; a session value is refused.
+    // Nothing is kept until the global settings are read; then the default applies, which is
+    // on. A session value is refused.
+    assert!(!users.meta_read_cache_enabled());
     let settings = Settings::create(tenant.clone());
     settings.load_changes().await?;
-    assert!(!users.meta_read_cache_enabled());
+    assert!(users.meta_read_cache_enabled());
     assert!(settings.set_setting(name.clone(), "5".to_string()).is_err());
 
-    // SET GLOBAL: on at once on this node.
-    settings
-        .set_global_setting(name.clone(), "5".to_string())
-        .await?;
-    assert!(users.meta_read_cache_enabled());
-
-    // A node that only loads the global settings follows what it read.
-    users.set_meta_read_cache_ttl(&tenant, std::time::Duration::ZERO);
-    Settings::create(tenant.clone()).load_changes().await?;
-    assert!(users.meta_read_cache_enabled());
-
-    // Another tenant's settings do not control this node's cache.
-    let other = Tenant::new_literal("other");
-    Settings::create(other).load_changes().await?;
-    assert!(users.meta_read_cache_enabled());
-
-    // SET GLOBAL 0 and UNSET GLOBAL: off at once.
+    // SET GLOBAL 0: off at once on this node.
     settings
         .set_global_setting(name.clone(), "0".to_string())
         .await?;
     assert!(!users.meta_read_cache_enabled());
+
+    // A node that only loads the global settings follows what it read.
+    users.set_meta_read_cache_ttl(&tenant, std::time::Duration::from_secs(5));
+    Settings::create(tenant.clone()).load_changes().await?;
+    assert!(!users.meta_read_cache_enabled());
+
+    // Another tenant's settings do not control this node's cache.
+    let other = Tenant::new_literal("other");
+    Settings::create(other).load_changes().await?;
+    assert!(!users.meta_read_cache_enabled());
+
+    // SET GLOBAL: on at once.
     settings
-        .set_global_setting(name.clone(), "5".to_string())
+        .set_global_setting(name.clone(), "7".to_string())
+        .await?;
+    assert!(users.meta_read_cache_enabled());
+
+    // UNSET GLOBAL: back to the default, also for a node that only loads the settings.
+    settings
+        .set_global_setting(name.clone(), "0".to_string())
         .await?;
     settings.try_drop_global_setting(&name).await?;
-    assert!(!users.meta_read_cache_enabled());
+    assert!(users.meta_read_cache_enabled());
+    users.set_meta_read_cache_ttl(&tenant, std::time::Duration::ZERO);
     Settings::create(tenant).load_changes().await?;
-    assert!(!users.meta_read_cache_enabled());
+    assert!(users.meta_read_cache_enabled());
     Ok(())
 }

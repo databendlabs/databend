@@ -75,7 +75,8 @@ pub struct UserApiProvider {
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
 
     /// Results of user and global setting reads of this node's tenant, kept for the TTL given by
-    /// the global setting `meta_read_cache_ttl_secs`; nothing is kept while it is zero.
+    /// the global setting `meta_read_cache_ttl_secs`; nothing is kept while it is zero, or before
+    /// the global settings were first read.
     read_cache: Arc<MetaReadCache>,
 
     /// Like `client`, and a write drops the cached results of its range. Used for everything
