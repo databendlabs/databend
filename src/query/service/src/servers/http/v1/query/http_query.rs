@@ -64,6 +64,7 @@ use super::ExecuteStateKind;
 use super::Executor;
 use super::HttpQueryContext;
 use super::PageManager;
+use super::QueryToken;
 use super::ResponseData;
 use super::Wait;
 use super::blocks_serializer::BlocksSerializer;
@@ -633,6 +634,7 @@ pub struct ResponseState {
 }
 
 pub struct HttpQueryResponseInternal {
+    pub query_token: Option<QueryToken>,
     pub data: Option<ResponseData>,
     pub session_id: String,
     pub session: Option<HttpSessionConf>,
@@ -693,8 +695,9 @@ pub enum TimeoutResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
+    pub(crate) owner_tenant: Tenant,
+    pub(crate) query_token: QueryToken,
     pub(crate) user_name: String,
-    tenant: Tenant,
     pub(crate) client_session_id: Option<String>,
     pagination: PaginationConf,
 
@@ -761,9 +764,6 @@ impl HttpQuery {
         arrow_result_version: Option<u64>,
         arrow_features: Option<ArrowFeatures>,
     ) -> Result<HttpQuery> {
-        // Capture the authenticated tenant before restoring query settings,
-        // which may select a sandbox tenant for execution only.
-        let tenant = http_ctx.session.get_current_tenant();
         http_ctx.try_set_worksheet_session(&req.session).await?;
         let (session, ctx) = http_ctx
             .create_session(&req.session, SessionType::HTTPQuery)
@@ -805,8 +805,9 @@ impl HttpQuery {
 
         Ok(HttpQuery {
             id: query_id,
+            owner_tenant: http_ctx.authenticated_tenant.clone(),
+            query_token: QueryToken::new(),
             user_name: http_ctx.user_name.clone(),
-            tenant,
             client_session_id: http_ctx.client_session_id.clone(),
             pagination: req.pagination.clone(),
             execute_state: executor,
@@ -843,6 +844,7 @@ impl HttpQuery {
         };
 
         Ok(HttpQueryResponseInternal {
+            query_token: None,
             data,
             state,
             session,
@@ -856,6 +858,7 @@ impl HttpQuery {
         let state = self.get_state();
 
         Ok(HttpQueryResponseInternal {
+            query_token: None,
             data: None,
             session_id: self.client_session_id.clone().unwrap_or_default(),
             node_id: HttpQueryManager::instance().server_info.id.clone(),
@@ -1138,7 +1141,7 @@ impl HttpQuery {
     /// Query ownership is restricted to the originating tenant and user.
     /// These fields are immutable, including after the executor releases its session.
     pub(crate) fn check_owner(&self, ctx: &HttpQueryContext) -> poem::error::Result<()> {
-        if self.tenant != ctx.session.get_current_tenant() || self.user_name != ctx.user_name {
+        if self.owner_tenant != ctx.authenticated_tenant || self.user_name != ctx.user_name {
             return Err(poem::error::Error::from_string(
                 "Authentication error: query owner mismatch",
                 StatusCode::UNAUTHORIZED,

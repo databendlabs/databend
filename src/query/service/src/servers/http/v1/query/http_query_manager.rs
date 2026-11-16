@@ -98,6 +98,8 @@ impl Queries {
             // Authorize and mark closed under the same queries write lock. Only
             // the server-side timeout task closes queries without a request context.
             if let Some(ctx) = ctx {
+                // This ID could have been reused since middleware authorized it.
+                ctx.check_query_access(&q)?;
                 q.check_owner(ctx)?;
                 // Final consumes session state; cancellation may come from a
                 // separate connection belonging to the same query owner.
