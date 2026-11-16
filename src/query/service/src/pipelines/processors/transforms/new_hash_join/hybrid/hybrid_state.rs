@@ -135,9 +135,11 @@ impl HybridHashJoinState {
         self.ever_spilled.load(Ordering::Acquire)
     }
 
-    pub fn request_final_build_spill(&self) {
-        self.final_build_spill_requested
-            .store(true, Ordering::Release);
+    /// Returns true for the one call that sets the request.
+    pub fn request_final_build_spill(&self) -> bool {
+        !self
+            .final_build_spill_requested
+            .swap(true, Ordering::AcqRel)
     }
 
     pub fn final_build_spill_requested(&self) -> bool {

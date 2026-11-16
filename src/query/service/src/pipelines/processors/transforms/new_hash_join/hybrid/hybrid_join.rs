@@ -272,11 +272,12 @@ impl Join for HybridHashJoin {
             if self.need_final_build_spill() {
                 // Other processors may be inserting into the shared hash table right now, so
                 // only stop here; the switch happens at the stage barrier.
-                self.state.request_final_build_spill();
-                info!(
-                    "HashJoin spill triggered while building hash table, level: {}",
-                    self.state.level
-                );
+                if self.state.request_final_build_spill() {
+                    info!(
+                        "HashJoin spill triggered while building hash table, level: {}",
+                        self.state.level
+                    );
+                }
                 return Ok(None);
             }
         }
