@@ -613,7 +613,11 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
         let compression = mt::principal::StageFileCompression::to_pb_enum(&self.compression) as i32;
         Self::PB {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            min_reader_ver: if self.quote_style == CsvQuoteStyle::QuoteNonNumeric {
+                193
+            } else {
+                MIN_READER_VER
+            },
             compression,
             headers: self.headers,
             field_delimiter: self.field_delimiter.clone(),

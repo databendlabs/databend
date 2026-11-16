@@ -19,6 +19,7 @@ use std::sync::LazyLock;
 use std::sync::Weak;
 
 use databend_common_exception::Result;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::CachedVectorIndex;
 use databend_storages_common_cache::MemCache;
@@ -68,6 +69,7 @@ fn storage_namespace(operator: &Operator) -> Uuid {
 pub(super) struct VectorIndexLoader {
     operator: Operator,
     settings: ReadSettings,
+    policy: CachePolicy,
     namespace: Uuid,
     distance_type: DistanceType,
     dim: usize,
@@ -78,6 +80,7 @@ impl VectorIndexLoader {
     pub fn new(
         operator: Operator,
         settings: ReadSettings,
+        policy: CachePolicy,
         distance_type: DistanceType,
         dim: usize,
         identity: VectorIndexIdentity,
@@ -86,6 +89,7 @@ impl VectorIndexLoader {
         Self {
             operator,
             settings,
+            policy,
             namespace,
             distance_type,
             dim,
@@ -95,6 +99,10 @@ impl VectorIndexLoader {
 
     pub fn identity(&self) -> &VectorIndexIdentity {
         &self.identity
+    }
+
+    pub fn policy(&self) -> CachePolicy {
+        self.policy
     }
 
     /// Index files are immutable and uniquely named, so the storage backend, path,
@@ -115,8 +123,10 @@ impl VectorIndexLoader {
     ) -> Result<CacheRef<CachedVectorIndex>> {
         // Checked on every load, not only on a cache miss: the key does not include
         // the index version, and a legacy file may hold an outdated version.
-        check_index_current(&self.operator, location, &self.identity).await?;
-        let cache = FuseCaches::instance().vector_indexes.clone();
+        check_index_current(&self.operator, location, &self.identity, self.policy).await?;
+        let cache = FuseCaches::instance()
+            .vector_indexes
+            .with_policy(self.policy);
         let key = self.cache_key(location.path());
         load_cached_index(cache, key, || {
             let loader = self.clone();
@@ -130,6 +140,7 @@ impl VectorIndexLoader {
                     &loader.identity,
                     &names,
                     row_count,
+                    loader.policy,
                 )
                 .await?;
                 HNSWIndex::open(

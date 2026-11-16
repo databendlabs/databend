@@ -54,3 +54,4 @@ pub use inner::MetaConfig;
 pub use inner::QueryConfig;
 pub use inner::SpillConfig;
 pub use inner::ThriftProtocol;
+pub use inner::default_server_memory_limit;

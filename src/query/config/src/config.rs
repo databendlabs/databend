@@ -1715,15 +1715,17 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub global_statement_queue: bool,
 
-    /// The max total memory in bytes that can be used by this process.
+    /// The max total memory in bytes that can be used by this process. 0, the default, is 80%
+    /// of the memory of the machine, or of the cgroup the process runs in.
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
+    /// Enforce `max_server_memory_usage`: queries are killed when the process reaches it.
     #[clap(
         long,
         value_name = "VALUE",
         value_parser = clap::value_parser!(bool),
-        default_value = "false"
+        default_value = "true"
     )]
     pub max_memory_limit_enabled: bool,
 
@@ -3551,15 +3553,15 @@ pub struct CacheConfig {
 
     /// Use the shared cache backend: three memory pools (meta, index and data), each sized as a
     /// percentage of the server memory limit, evicted with S3-FIFO and shrunk under memory
-    /// pressure before queries are killed. Requires a server memory limit
-    /// (`max_memory_limit_enabled` and `max_server_memory_usage`). The per-cache capacity options
-    /// above and `enable_table_meta_cache` are then ignored; disk cache options still apply.
+    /// pressure before queries are killed, which takes `max_memory_limit_enabled`. The per-cache
+    /// capacity options above and `enable_table_meta_cache` are then ignored; disk cache options
+    /// still apply. Set it to false for the legacy backend, sized by those options.
     #[clap(
         long = "cache-shared-memory-enabled",
         value_name = "VALUE",
-        default_value = "false"
+        default_value = "true"
     )]
-    #[serde(default = "bool_false")]
+    #[serde(default = "bool_true")]
     pub shared_memory_enabled: bool,
 
     /// Shared backend: percentage of the server memory limit for table, segment and index
@@ -3580,18 +3582,19 @@ pub struct CacheConfig {
     )]
     pub index_max_ratio: u64,
 
-    /// Shared backend: percentage of the server memory limit for column data.
+    /// Shared backend: percentage of the server memory limit for column data. 0 disables the
+    /// in-memory column data pool.
     #[clap(
         long = "cache-data-max-ratio",
         value_name = "VALUE",
-        default_value = "10"
+        default_value = "0"
     )]
     pub data_max_ratio: u64,
 
     /// Shared backend: byte limits of single caches within their pool, keyed by their name in
     /// `system.caches` (e.g. `memory_cache_table_data`); 0 turns a cache off. A cache without an
-    /// entry is on, bounded only by its pool, except `memory_cache_column_data`, off. Config
-    /// file only: `[cache.kind_max_bytes]`.
+    /// entry is on, bounded only by its pool, except `memory_cache_column_data` and
+    /// `memory_cache_segment_block_metas`, off. Config file only: `[cache.kind_max_bytes]`.
     #[clap(skip)]
     pub kind_max_bytes: BTreeMap<String, u64>,
 
@@ -3647,10 +3650,10 @@ impl Default for CacheConfig {
             table_data_deserialized_memory_ratio: 0,
             table_data_encoded_dictionary_ndv_ratio: 100,
             iceberg_table_meta_count: 1024,
-            shared_memory_enabled: false,
+            shared_memory_enabled: true,
             meta_max_ratio: 10,
             index_max_ratio: 40,
-            data_max_ratio: 10,
+            data_max_ratio: 0,
             kind_max_bytes: BTreeMap::new(),
 
             // ----- the following options/args are all deprecated               ----
@@ -3686,10 +3689,11 @@ impl Default for CacheStorageTypeConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum DiskCacheKeyReloadPolicy {
-    // remove all the disk cache during restart
+    // Start with an empty disk cache: what was cached before a restart is never read after it.
     Reset,
-    // recovery the cache keys during restart,
-    // but cache capacity will not be checked
+    // Keep the disk cache across restarts, within the configured capacity. An object rewritten
+    // or deleted just before a host crash may then be read as cached, if the file system lost
+    // the deletion of its cached copy.
     Fuzzy,
 }
 
@@ -3729,6 +3733,8 @@ pub struct DiskCacheConfig {
     ///
     /// Setting this to true improves stability in memory-constrained / containerized environments at the cost
     /// of potentially reduced write performance.
+    ///
+    /// Read at start only.
     #[clap(
         long = "cache-disk-sync-data",
         value_name = "VALUE",
@@ -3736,6 +3742,75 @@ pub struct DiskCacheConfig {
     )]
     #[serde(default = "bool_true")]
     pub sync_data: bool,
+
+    /// Share of `max_bytes` for table, segment and index metadata. The three disk pool ratios
+    /// split `max_bytes` in proportion to their sum, which need not be 100; 0 turns a pool off.
+    #[clap(
+        long = "cache-disk-meta-max-ratio",
+        id = "cache_disk_meta_max_ratio",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
+    pub meta_max_ratio: u64,
+
+    /// Share of `max_bytes` for bloom, vector, inverted and spatial index data.
+    #[clap(
+        long = "cache-disk-index-max-ratio",
+        id = "cache_disk_index_max_ratio",
+        value_name = "VALUE",
+        default_value = "20"
+    )]
+    pub index_max_ratio: u64,
+
+    /// Share of `max_bytes` for column data.
+    #[clap(
+        long = "cache-disk-data-max-ratio",
+        id = "cache_disk_data_max_ratio",
+        value_name = "VALUE",
+        default_value = "70"
+    )]
+    pub data_max_ratio: u64,
+
+    /// Bytes waiting to be written to the disk cache, at most. A read whose entry finds the
+    /// queue full waits up to `queue_wait_ms` for room, then is served without filling the
+    /// cache. Read at start only.
+    #[clap(
+        long = "cache-disk-queue-bytes",
+        id = "cache_disk_queue_bytes",
+        value_name = "VALUE",
+        default_value = "268435456"
+    )]
+    pub queue_bytes: u64,
+
+    /// Milliseconds a read waits for room in a full write queue before giving up the fill;
+    /// 0 never waits. Read at start only.
+    #[clap(
+        long = "cache-disk-queue-wait-ms",
+        id = "cache_disk_queue_wait_ms",
+        value_name = "VALUE",
+        default_value = "50"
+    )]
+    pub queue_wait_ms: u64,
+
+    /// Percent of the file system in use above which the disk cache evicts before it writes:
+    /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
+    /// Read at start only.
+    #[clap(
+        long = "cache-disk-watermark-ratio",
+        id = "cache_disk_watermark_ratio",
+        value_name = "VALUE",
+        default_value = "90"
+    )]
+    pub watermark_ratio: u64,
+
+    /// Threads writing the disk cache. Read at start only.
+    #[clap(
+        long = "cache-disk-writer-threads",
+        id = "cache_disk_writer_threads",
+        value_name = "VALUE",
+        default_value = "4"
+    )]
+    pub writer_threads: u64,
 }
 
 impl Default for DiskCacheConfig {
@@ -3744,6 +3819,13 @@ impl Default for DiskCacheConfig {
             max_bytes: 21474836480,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
+            meta_max_ratio: 10,
+            index_max_ratio: 20,
+            data_max_ratio: 70,
+            queue_bytes: 268435456,
+            queue_wait_ms: 50,
+            watermark_ratio: 90,
+            writer_threads: 4,
         }
     }
 }

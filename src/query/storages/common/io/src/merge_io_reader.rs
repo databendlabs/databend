@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::time::Instant;
 
+use bytes::BytesMut;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_exception::ErrorCode;
@@ -23,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use futures::future::try_join_all;
+use opendal::Buffer;
 use opendal::Operator;
 
 use crate::MergeIOReadResult;
@@ -71,8 +73,19 @@ impl MergeIOReader {
                     metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
                 }
 
-                let read = op.read_with(location).range(range);
-                UnlimitedFuture::create(async move { read.await.map(|chunk| (idx, chunk)) })
+                let op = op.clone();
+                UnlimitedFuture::create(async move {
+                    // Copy the response into one exact-sized buffer instead of keeping its
+                    // chunks until the block is decoded. Each chunk pins an HTTP read buffer that
+                    // can be several times its size, and the connection task allocates those
+                    // buffers charged to no query. This buffer is charged to the reading query.
+                    let mut buf = BytesMut::with_capacity((range.end - range.start) as usize);
+                    op.reader(location)
+                        .await?
+                        .read_into(&mut buf, range)
+                        .await?;
+                    Ok::<_, opendal::Error>((idx, Buffer::from(buf.freeze())))
+                })
             });
         let owner_memory = OwnerMemory::create(try_join_all(read_handlers).await?);
 
@@ -118,6 +131,8 @@ impl MergeIOReader {
 
 #[cfg(test)]
 mod tests {
+    use opendal::services::Fs;
+
     use super::*;
 
     #[test]
@@ -136,5 +151,40 @@ mod tests {
             0..64,
             16 * 1024 * 1024..16 * 1024 * 1024 + 64
         ]);
+    }
+
+    #[tokio::test]
+    async fn test_merge_io_read_returns_one_contiguous_buffer_per_range() {
+        const SIZE: usize = 5 * 1024 * 1024;
+        let data: Vec<u8> = (0..SIZE).map(|i| (i % 251) as u8).collect();
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("block"), &data).unwrap();
+        // The fs service yields a range in pieces of at most 2 MiB, like the
+        // chunks of an HTTP response body.
+        let op = Operator::new(Fs::default().root(dir.path().to_str().unwrap()))
+            .unwrap()
+            .finish();
+        let read_settings = ReadSettings {
+            max_gap_size: 48,
+            max_range_size: 512 * 1024,
+            parquet_fast_read_bytes: u64::MAX,
+        };
+        // Columns 0 and 1 merge into one read, column 2 is a read of its own.
+        let raw_ranges = [(0, 0..64), (1, 64..128), (2, 1024 * 1024..SIZE as u64)];
+
+        let result = MergeIOReader::merge_io_read(&read_settings, op, "block", &raw_ranges)
+            .await
+            .unwrap();
+
+        assert_eq!(result.owner_memory.chunks.len(), 2);
+        for (column_id, range) in raw_ranges {
+            let (chunk_idx, offsets) = result.columns_chunk_offsets[&column_id].clone();
+            let chunk = result.owner_memory.get_chunk(chunk_idx, "block").unwrap();
+            assert_eq!(chunk.clone().count(), 1);
+            assert_eq!(
+                chunk.slice(offsets).to_bytes().as_ref(),
+                &data[range.start as usize..range.end as usize]
+            );
+        }
     }
 }

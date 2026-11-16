@@ -54,7 +54,7 @@ fn test_if_accepts_non_strict_decimal_columns() {
             let legacy =
                 Column::Decimal(DecimalColumn::Decimal128(vec![123_i128, 456].into(), size));
             let column = if nullable {
-                NullableColumn::new_column(legacy, vec![true, false].into())
+                legacy.wrap_nullable(Some(vec![true, false].into()))
             } else {
                 legacy
             };
@@ -195,8 +195,9 @@ fn test_if_with_opaque_result() {
     let nullable_type = data_type.wrap_nullable();
     let then_column = Column::random(&data_type, 4, None);
     let else_column = Column::random(&data_type, 4, None);
-    let nullable_then =
-        NullableColumn::new_column(then_column.clone(), vec![true, true, false, true].into());
+    let nullable_then = then_column
+        .clone()
+        .wrap_nullable(Some(vec![true, true, false, true].into()));
     let null = Expr::constant(Scalar::Null, Some(nullable_type.clone()));
 
     for cond in [

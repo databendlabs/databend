@@ -146,6 +146,44 @@ impl Session {
         }
     }
 
+    /// Derive an internal session from the current authenticated execution environment.
+    /// Settings are copied and the temporary-table manager is shared, but transactions,
+    /// query history and connection state remain independent of the caller.
+    pub async fn create_internal_session(&self) -> Result<Arc<Session>> {
+        let tenant = self.get_current_tenant();
+        let settings = Settings::create(tenant.clone());
+        // Inherit validated session values without sharing mutable settings.
+        unsafe {
+            settings.unchecked_apply_changes(self.get_settings().changes());
+        }
+        let manager = SessionManager::instance();
+        let mut session = manager.create_with_settings(SessionType::Dummy, settings, None)?;
+        session.set_current_tenant(tenant)?;
+        session.set_temp_tbl_mgr(self.temp_tbl_mgr());
+        let session = manager.register_session(session)?;
+        session
+            .set_authed_user(
+                self.get_current_user()?,
+                self.privilege_mgr().get_auth_role(),
+            )
+            .await?;
+        if let Some(role) = self.get_current_role() {
+            session.set_current_role_checked(&role.name).await?;
+        }
+        session
+            .set_secondary_roles_checked(self.get_secondary_roles())
+            .await?;
+        session
+            .set_current_warehouse(self.get_current_warehouse().await)
+            .await?;
+        if let Some(workload_group) = self.get_current_workload_group() {
+            session.set_current_workload_group(workload_group);
+        }
+        session.set_current_catalog(self.get_current_catalog());
+        session.set_current_database(self.get_current_database());
+        Ok(session)
+    }
+
     /// Create a query context for query.
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.

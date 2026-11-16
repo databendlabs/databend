@@ -32,6 +32,7 @@ use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::PhysicalRelOperator;
+use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -125,7 +126,12 @@ impl PhysicalPlanBuilder {
         plan.get_all_data_source(&mut sources);
 
         for (plan_id, source) in sources {
-            if source.statistics.pruning_stats != Default::default() {
+            // Lazy sources are pruned by a pipeline later, which publishes the
+            // complete statistics then; what they carry now (such as zone map
+            // pruning numbers) is an input to that pipeline, not a result.
+            let first = source.parts.partitions.first();
+            let is_lazy = first.is_some_and(|p| p.as_any().is::<FuseLazyPartInfo>());
+            if !is_lazy && source.statistics.pruning_stats != Default::default() {
                 self.ctx
                     .set_pruned_partitions_stats(plan_id, source.statistics);
             }

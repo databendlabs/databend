@@ -44,6 +44,7 @@ impl CacheDef for Snapshot {
     const POOL: Pool = Pool::Meta;
     /// Snapshot files are written once, under new locations.
     const SHARE_LOADS: bool = true;
+    const DISK: bool = true;
 }
 
 /// Table statistics (HLL, histograms, ...) of snapshots, by location.
@@ -55,6 +56,7 @@ impl CacheDef for SnapshotStats {
     const POOL: Pool = Pool::Meta;
     /// Statistics files are written once, under new locations.
     const SHARE_LOADS: bool = true;
+    const DISK: bool = true;
 }
 
 /// Pruning results of deterministic scans (`enable_prune_cache`).

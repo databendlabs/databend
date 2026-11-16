@@ -316,5 +316,28 @@ SELECT sum(a) OVER w FROM t1 WINDOW w AS (PARTITION BY (sum(a) OVER()))
 statement error (?s)1065.*Duplicate window name: w
 SELECT rank() OVER w FROM empsalary WINDOW w AS (PARTITION BY depname), W AS (ORDER BY salary)
 
+# Cyclic window inheritance must fail without crashing the query server.
+statement error (?s)1065.*Cyclic window reference
+SELECT count(*) OVER w FROM (VALUES (1), (2)) AS t(a) WINDOW w AS (w)
+
+statement error (?s)1065.*Cyclic window reference
+SELECT count(*) OVER w FROM (VALUES (1), (2)) AS t(a) WINDOW w AS (W)
+
+statement error (?s)1065.*Cyclic window reference
+SELECT count(*) OVER w1 FROM (VALUES (1), (2)) AS t(a) WINDOW w1 AS (w2), w2 AS (w1)
+
+statement error (?s)1065.*Cyclic window reference
+SELECT count(*) OVER w1 FROM (VALUES (1), (2)) AS t(a) WINDOW w1 AS (w2), w2 AS (w3), w3 AS (w1)
+
+statement error (?s)1065.*Cyclic window reference
+SELECT 1 WINDOW w AS (w)
+
+# Forward references and shared base windows must still work after the errors.
+query II
+SELECT count(*) OVER w1, count(*) OVER w2 FROM (VALUES (1), (2)) AS t(a) WINDOW w1 AS (w3), w2 AS (w3), w3 AS ()
+----
+2 2
+2 2
+
 statement ok
 DROP DATABASE test_named_window_basic

@@ -568,6 +568,7 @@ impl<'a> Selector<'a> {
                     strict_eval: eval_options.strict_eval,
                 };
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
+                self.evaluator.record_eval(function);
                 let result = eval.eval(&args, &mut ctx);
                 if !ctx.suppress_error {
                     EvalContext::render_error(

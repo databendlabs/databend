@@ -129,8 +129,10 @@ impl ColumnStatisticsState {
 mod tests {
     use std::sync::Arc;
 
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
@@ -143,7 +145,6 @@ mod tests {
     use databend_storages_common_index::RangeIndex;
 
     use super::*;
-    use crate::statistics::END_OF_UNICODE_RANGE;
     use crate::statistics::gen_columns_statistics;
 
     #[test]
@@ -198,20 +199,150 @@ mod tests {
     }
 
     #[test]
+    fn test_column_stats_state_string_successor() -> Result<()> {
+        let data_type = DataType::Nullable(Box::new(DataType::String));
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        )]));
+        let truncate_lens = BTreeMap::from([(0, 4)]);
+        let stats_columns = vec![(0, data_type.clone())];
+        let input = "ab\u{10FFFF}\u{10FFFF}-suffix";
+        let blocks = [
+            DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![None, Some(input)])]),
+            DataBlock::new(
+                vec![BlockEntry::new_const_column(
+                    data_type,
+                    Scalar::String(input.to_string()),
+                    2,
+                )],
+                2,
+            ),
+        ];
+
+        for block in blocks {
+            let expected =
+                gen_columns_statistics(&block, None, &schema, &truncate_lens, HashMap::new())?;
+            let mut state =
+                ColumnStatisticsState::new(&stats_columns, &stats_columns, &truncate_lens);
+            state.add_block(&schema, &block)?;
+            let actual = state.finalize(HashMap::new())?;
+
+            assert_eq!(actual, expected);
+            assert_eq!(actual[&0].max(), &Scalar::String("ac\0\0".to_string()));
+            assert_eq!(actual[&0].max().as_string().unwrap().chars().count(), 4);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_column_stats_state_string_successor_multiple_chunks() -> Result<()> {
+        let data_type = DataType::Nullable(Box::new(DataType::String));
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        )]));
+        let truncate_lens = BTreeMap::from([(0, 4)]);
+        let stats_columns = vec![(0, data_type.clone())];
+        let scalar_block = |scalar, rows| {
+            DataBlock::new(
+                vec![BlockEntry::new_const_column(
+                    data_type.clone(),
+                    scalar,
+                    rows,
+                )],
+                rows,
+            )
+        };
+        let blocks = [
+            // NULLs before the first value must not establish string extrema.
+            DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![None::<&str>; 2])]),
+            DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![
+                Some("abca-min-suffix"),
+                Some("abcd-initial-suffix"),
+                None,
+            ])]),
+            // A scalar chunk advances max across the surrogate boundary.
+            scalar_block(Scalar::String("ab\u{D7FF}\u{10FFFF}-suffix".to_string()), 2),
+            // An all-NULL scalar chunk must preserve earlier extrema.
+            scalar_block(Scalar::Null, 2),
+            // A later column chunk advances max again, now carrying into 'b'.
+            DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![
+                Some("ab\u{10FFFF}\u{10FFFF}-suffix"),
+                None,
+            ])]),
+            // Smaller values and trailing NULLs must not overwrite the max.
+            scalar_block(Scalar::String("abcb-lower-suffix".to_string()), 2),
+            DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![None::<&str>])]),
+        ];
+        let expected_maxes = [
+            None,
+            Some("abce"),
+            Some("ab\u{E000}\0"),
+            Some("ab\u{E000}\0"),
+            Some("ac\0\0"),
+            Some("ac\0\0"),
+            Some("ac\0\0"),
+        ];
+        let mut expected_memory_size = 0;
+
+        // Check every chunk boundary, not just the final result, so NULL and
+        // smaller-value chunks cannot silently reset previously seen extrema.
+        for end in 1..=blocks.len() {
+            let chunk_stats = gen_columns_statistics(
+                &blocks[end - 1],
+                None,
+                &schema,
+                &truncate_lens,
+                HashMap::new(),
+            )?;
+            expected_memory_size += chunk_stats[&0].in_memory_size;
+            let prefix = &blocks[..end];
+            let mut state =
+                ColumnStatisticsState::new(&stats_columns, &stats_columns, &truncate_lens);
+            for block in prefix {
+                state.add_block(&schema, block)?;
+            }
+            let actual = state.finalize(HashMap::new())?;
+            let combined = DataBlock::concat(prefix)?;
+            let mut expected =
+                gen_columns_statistics(&combined, None, &schema, &truncate_lens, HashMap::new())?;
+            // Memory is accounted per input chunk (including each bitmap),
+            // unlike min/max, null count and NDV, which match concatenated data.
+            expected.get_mut(&0).unwrap().in_memory_size = expected_memory_size;
+            assert_eq!(actual, expected, "after {end} chunks");
+
+            let expected_max = expected_maxes[end - 1]
+                .map(|s| Scalar::String(s.to_string()))
+                .unwrap_or(Scalar::Null);
+            assert_eq!(actual[&0].max(), &expected_max, "after {end} chunks");
+            if let Some(max) = actual[&0].max().as_string() {
+                assert_eq!(max.chars().count(), 4);
+                assert!(max.len() >= 4);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_column_stats_state_adaptive_string_prefix() -> Result<()> {
         let field = TableField::new("a", TableDataType::String);
         let schema = Arc::new(TableSchema::new(vec![field]));
         let prefix = "abcdefghijklmnop";
         let min = format!("{prefix}a-min-suffix");
         let max = format!("{prefix}z-max-suffix");
-        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec![
-            min.as_str(),
-            max.as_str(),
-        ])]);
+        let blocks = [
+            DataBlock::new_from_columns(vec![StringType::from_data(vec![min.as_str()])]),
+            DataBlock::new_from_columns(vec![StringType::from_data(vec![max.as_str()])]),
+        ];
         let stats_columns = vec![(0, DataType::String)];
 
         let mut state = ColumnStatisticsState::new(&stats_columns, &[], &BTreeMap::new());
-        state.add_block(&schema, &block)?;
+        // Infer the adaptive length from the extrema across all chunks, not
+        // from an individual chunk's constant value.
+        for block in &blocks {
+            state.add_block(&schema, block)?;
+        }
         let stats = state.finalize(HashMap::new())?;
         let col_stats = stats.get(&0).unwrap();
 
@@ -221,7 +352,7 @@ mod tests {
         );
         assert_eq!(
             col_stats.max(),
-            &databend_common_expression::Scalar::String(format!("{prefix}{END_OF_UNICODE_RANGE}"))
+            &databend_common_expression::Scalar::String(format!("{prefix}{{"))
         );
         Ok(())
     }

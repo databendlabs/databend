@@ -55,6 +55,10 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
         "VacuumTemporaryFiles"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         true
     }

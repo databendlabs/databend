@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -33,25 +32,18 @@ use crate::table_functions::TableArgs;
 use crate::table_functions::string_literal;
 use crate::table_functions::string_value;
 
-/// Capacity argument that puts a cache back in its default state, bounded only by its pool.
-const DEFAULT_CAPACITY: &str = "default";
-
 #[derive(Clone)]
 pub struct SetCapacity {
     cache_name: String,
-    /// `None`: `DEFAULT_CAPACITY`.
-    capacity: Option<u64>,
+    /// As written: bytes, `'<n>%'` (disk pools) or `'default'`; parsed by `CacheManager`.
+    capacity: String,
 }
 
 impl From<&SetCapacity> for TableArgs {
     fn from(value: &SetCapacity) -> Self {
         TableArgs::new_positioned(vec![
             string_literal(&value.cache_name),
-            string_literal(
-                &value
-                    .capacity
-                    .map_or(DEFAULT_CAPACITY.to_string(), |c| c.to_string()),
-            ),
+            string_literal(&value.capacity),
         ])
     }
 }
@@ -83,10 +75,7 @@ impl SimpleTableFunc for SetCacheCapacity {
     ) -> Result<Option<DataBlock>> {
         let cache_mgr = CacheManager::instance();
         let op = &self.operation;
-        match op.capacity {
-            Some(capacity) => cache_mgr.set_cache_capacity(&op.cache_name, capacity)?,
-            None => cache_mgr.set_cache_capacity_default(&op.cache_name)?,
-        }
+        cache_mgr.set_cache_capacity_arg(&op.cache_name, &op.capacity)?;
 
         let node = vec![ctx.get_cluster().local_id.clone()];
         let res = vec!["Ok".to_owned()];
@@ -101,14 +90,7 @@ impl SimpleTableFunc for SetCacheCapacity {
     where Self: Sized {
         let args = table_args.expect_all_positioned("", Some(2))?;
         let cache_name = string_value(&args[0])?;
-        let capacity = match string_value(&args[1])?.as_str() {
-            DEFAULT_CAPACITY => None,
-            capacity => Some(capacity.parse::<u64>().map_err(|_| {
-                ErrorCode::BadArguments(format!(
-                    "cache capacity must be a number or '{DEFAULT_CAPACITY}', got '{capacity}'"
-                ))
-            })?),
-        };
+        let capacity = string_value(&args[1])?;
 
         let operation = SetCapacity {
             cache_name,

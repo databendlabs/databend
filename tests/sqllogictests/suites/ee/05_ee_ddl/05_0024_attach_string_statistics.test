@@ -1,0 +1,60 @@
+## ATTACH must not treat truncated string bounds as original values when the
+## source column's STATS_TRUNCATE_LEN option is absent from attached metadata.
+statement ok
+DROP TABLE IF EXISTS attach_stats_target;
+
+statement ok
+DROP TABLE IF EXISTS attach_stats_source;
+
+statement ok
+CREATE TABLE attach_stats_source(id INT, s STRING STATS_TRUNCATE_LEN 4)
+'fs:///tmp/attach_string_statistics/' row_per_block=100;
+
+statement ok
+INSERT INTO attach_stats_source VALUES (1, repeat('👍', 17));
+
+## The stored min/max contain four characters, not the original 17.
+query II
+SELECT char_length(statistics:min::string), char_length(statistics:max::string)
+FROM fuse_block_statistics('default', 'attach_stats_source')
+WHERE column_name = 's';
+----
+4 4
+
+## Derive the table's generated storage prefix instead of assuming table IDs.
+statement ok
+SET VARIABLE attach_stats_sql = (
+    SELECT 'ATTACH TABLE attach_stats_target ''fs:///tmp/attach_string_statistics/'
+           || split_part(snapshot_location, '/_ss/', 1) || ''''
+    FROM fuse_snapshot('default', 'attach_stats_source')
+);
+
+statement ok
+EXECUTE IMMEDIATE $attach_stats_sql;
+
+## Aggregates on the attached table must return the complete string, not a
+## prefix or the synthetic upper bound used for pruning.
+query BB
+SELECT MIN(s) = repeat('👍', 17), MAX(s) = repeat('👍', 17)
+FROM attach_stats_target;
+----
+1 1
+
+## Numeric statistics must remain eligible for aggregate rewriting.
+query T
+EXPLAIN SELECT MIN(id), MAX(id) FROM attach_stats_target;
+----
+EvalScalar
+├── output columns: [MIN(id) (#2), MAX(id) (#3)]
+├── expressions: [1, 1]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+statement ok
+DROP TABLE attach_stats_target;
+
+statement ok
+DROP TABLE attach_stats_source;
+
+statement ok
+UNSET VARIABLE attach_stats_sql;

@@ -119,3 +119,122 @@ drop table west;
 
 statement ok
 set max_block_size = 65536;
+
+# Regression for #21017: a pushed-down filter can leave empty blocks on
+# the right side of MergeJoin. Keep multiple probe rows and disable repartitioning
+# so those empty blocks reach the merge loop alongside non-empty blocks.
+statement ok
+set max_threads = 1;
+
+statement ok
+set max_block_size = 2;
+
+statement ok
+set enable_cbo = 0;
+
+statement ok
+create table range_join_empty_left(a int null, c string null);
+
+statement ok
+create table range_join_empty_right(x int null);
+
+# This entire insert is rejected by the LIKE filter.
+statement ok
+insert into range_join_empty_left values (10, ''), (7, 'hello'), (-1, 'hello'), (NULL, NULL);
+
+# These are the six matching rows from the issue, including a NULL join key.
+statement ok
+insert into range_join_empty_left values (1, 'ab'), (7, 'b'), (3, 'b'), (-100, 'b'), (NULL, 'abc'), (-100, 'b');
+
+# Preserve the original join-key distribution, including NULLs and duplicates.
+statement ok
+insert into range_join_empty_right values
+(10), (-100), (1000), (1000), (100), (-1), (7), (2),
+(7), (NULL), (NULL), (-1), (NULL), (7), (NULL), (NULL),
+(NULL), (2), (-1), (100), (3), (NULL), (NULL), (100),
+(NULL), (1), (-1), (NULL), (1), (1000), (100), (7),
+(NULL), (1), (100), (-1), (2), (3), (1), (-1);
+
+query I
+select count(*)
+from range_join_empty_left l cross join range_join_empty_right r
+where l.c like '%b%' and l.a <= r.x;
+----
+108
+
+query I
+select count(*)
+from range_join_empty_left l inner join range_join_empty_right r
+on l.c like '%b%' and l.a < r.x;
+----
+96
+
+query I
+select count(*)
+from range_join_empty_left l cross join range_join_empty_right r
+where l.c like '%b%' and l.a >= r.x;
+----
+49
+
+query I
+select count(*)
+from range_join_empty_left l inner join range_join_empty_right r
+on l.c like '%b%' and l.a > r.x;
+----
+37
+
+# Check materialized matches as well as count-only projections.
+query II
+select l.a, count(*)
+from range_join_empty_left l cross join range_join_empty_right r
+where l.c like '%b%' and l.a <= r.x
+group by l.a order by l.a;
+----
+-100 58
+1 22
+3 15
+7 13
+
+# An entirely filtered side and a side with only NULL keys produce no matches.
+query I
+select count(*)
+from range_join_empty_left l cross join range_join_empty_right r
+where l.c like '%missing%' and l.a <= r.x;
+----
+0
+
+query I
+select count(*)
+from range_join_empty_left l cross join range_join_empty_right r
+where l.c like '%abc%' and l.a <= r.x;
+----
+0
+
+# Also exercise the partitioning path that scatters and removes empty blocks.
+statement ok
+set max_block_size = 65536;
+
+statement ok
+set max_threads = 4;
+
+query I
+select count(*)
+from range_join_empty_left l cross join range_join_empty_right r
+where l.c like '%b%' and l.a <= r.x;
+----
+108
+
+statement ok
+drop table range_join_empty_left;
+
+statement ok
+drop table range_join_empty_right;
+
+statement ok
+unset enable_cbo;
+
+statement ok
+unset max_block_size;
+
+statement ok
+unset max_threads;

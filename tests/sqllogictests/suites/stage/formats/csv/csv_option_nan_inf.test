@@ -43,7 +43,7 @@ remove @s1
 query ???
 copy into @s1 from ff file_format = (type = CSV)
 ----
-3 34 34
+3 46 46
 
 query ??
 select $1, $2 from @s1 (file_format=>'csv') order by $1
@@ -58,7 +58,7 @@ remove @s1
 query ???
 copy into @s1 from ff file_format = (type = CSV nan_display='null')
 ----
-3 36 36
+3 48 48
 
 query ??
 select $1, $2 from @s1 (file_format=>'csv') order by $1

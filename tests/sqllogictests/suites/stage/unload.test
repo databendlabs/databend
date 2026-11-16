@@ -44,12 +44,12 @@ query ???
 copy into @unload from ii file_format=(type=csv);
 -----
 ----
-3 12 12
+3 24 24
 
 query ??
 select right(name, 4), size from list_stage(location=>'@unload');
 ----
-.csv 12
+.csv 24
 
 query ??
 select $1, $2 from @unload(file_format=>'csv');
@@ -65,7 +65,7 @@ remove @unload;
 query ???
 copy into @unload from ii file_format=(format_name='csv_gzip');
 ----
-3 12 32
+3 24 44
 
 statement error
 copy into @unload from ii file_format=(format_name='csv_snappy');
@@ -73,19 +73,19 @@ copy into @unload from ii file_format=(format_name='csv_snappy');
 query ???
 copy into @unload from ii file_format=(format_name='csv_none');
 ----
-3 12 12
+3 24 24
 
 query ???
 copy into @unload from ii file_format=(format_name='csv_zip');
 ----
-3 12 136
+3 24 148
 
 query ??
 select right(name, 7), size from list_stage(location=>'@unload');
 ----
-.csv.gz 32
-000.csv 12
-csv.zip 136
+.csv.gz 44
+000.csv 24
+csv.zip 148
 
 query ??
 select $1, $2 from @unload(file_format => 'csv_gzip' pattern => '.*.gz');
@@ -132,12 +132,12 @@ select $1, $2 from @unload(file_format => 'text');
 query ???
 copy into @unload/a_raw_path.csv from (select 1,2) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
 ----
-a_raw_path.csv 4 1
+a_raw_path.csv 8 1
 
 query ???
 copy into @unload/a_raw_path.csv from (select 3,4) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
 ----
-a_raw_path.csv 4 1
+a_raw_path.csv 8 1
 
 query ??
 select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
@@ -148,7 +148,7 @@ select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
 query ???
 copy into @unload/a_raw_path.csv from (select 5,6) file_format=(type=csv) single=true include_query_id=true use_raw_path=true detailed_output=true overwrite=true;
 ----
-a_raw_path.csv 4 1
+a_raw_path.csv 8 1
 
 query ??
 select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
@@ -158,7 +158,7 @@ select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
 query ???
 copy into @unload/gbk.csv from (select '张三', 1) file_format=(type=csv encoding='gbk') single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
 ----
-gbk.csv 9 1
+gbk.csv 11 1
 
 query ??
 select $1, $2 from @unload/gbk.csv (file_format => 'csv_gbk');

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_app::storage::S3StorageClass;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -336,7 +337,8 @@ impl FuseTable {
             let (snapshot, format_version) = if location == latest_location {
                 (latest_snapshot.clone(), latest_version)
             } else {
-                SnapshotsIO::read_snapshot(location.clone(), operator.clone(), true).await?
+                SnapshotsIO::read_snapshot(location.clone(), operator.clone(), CachePolicy::DEFAULT)
+                    .await?
             };
             if format_version != TableSnapshot::VERSION || !is_uuid_v7(&snapshot.snapshot_id) {
                 return Ok(None);
@@ -352,9 +354,12 @@ impl FuseTable {
                     if candidate.snapshot_id == latest_snapshot.snapshot_id {
                         return Ok(Some((latest_snapshot, latest_version)));
                     }
-                    let (snapshot, _) =
-                        SnapshotsIO::read_snapshot(candidate.location, operator.clone(), true)
-                            .await?;
+                    let (snapshot, _) = SnapshotsIO::read_snapshot(
+                        candidate.location,
+                        operator.clone(),
+                        CachePolicy::DEFAULT,
+                    )
+                    .await?;
                     return Ok(Some((snapshot, candidate.format_version)));
                 }
             }

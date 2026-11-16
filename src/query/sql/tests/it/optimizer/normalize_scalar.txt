@@ -674,7 +674,7 @@ EvalScalar
 ├── scalars: [infer_decimal_chain.a (#0) AS (#0), infer_decimal_chain.b (#1) AS (#3), infer_decimal_chain.c (#2) AS (#4)]
 └── Scan
     ├── table: default.infer_decimal_chain (#0)
-    ├── filters: [lt(infer_decimal_chain.a (#0), 8), gte(infer_decimal_chain.b (#1), 5.00), lt(infer_decimal_chain.b (#1), 8), gte(infer_decimal_chain.c (#2), 5.00), lt(infer_decimal_chain.c (#2), 8), eq(infer_decimal_chain.a (#0), infer_decimal_chain.b (#1)), eq(infer_decimal_chain.b (#1), infer_decimal_chain.c (#2))]
+    ├── filters: [lt(infer_decimal_chain.a (#0), 8), gte(infer_decimal_chain.b (#1), 5.00), lt(infer_decimal_chain.b (#1), 8), gte(infer_decimal_chain.c (#2), 5.00), eq(infer_decimal_chain.a (#0), infer_decimal_chain.b (#1)), eq(infer_decimal_chain.b (#1), infer_decimal_chain.c (#2))]
     ├── order by: []
     └── limit: NONE
 

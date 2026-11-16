@@ -85,6 +85,12 @@ impl TableMeta {
         Ok(())
     }
 
+    /// Whether any row access or masking policy is attached.
+    pub fn has_security_policy(&self) -> bool {
+        !self.column_mask_policy_columns_ids.is_empty()
+            || self.row_access_policy_columns_ids.is_some()
+    }
+
     /// Check if a column reference a security policy.
     pub fn is_column_reference_policy(&self, column_id: &ColumnId) -> bool {
         self.column_mask_policy_columns_ids.contains_key(column_id)

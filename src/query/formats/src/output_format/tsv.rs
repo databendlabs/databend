@@ -127,6 +127,7 @@ mod test {
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::types::BinaryType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::number::Int32Type;
     use databend_common_meta_app::principal::FileFormatOptionsReader;
@@ -187,9 +188,27 @@ mod test {
             let buffer = output_format.serialize_block(&block)?;
 
             let csv_block = String::from_utf8(buffer)?;
-            let expect = "1$\"a\"$true$1.1$\"1970-01-02\"\r\n2$\"b\"\"\"$true$2.2$\"1970-01-03\"\r\n3$\"c'\"$false$NaN$\"1970-01-04\"\r\n";
+            let expect = "\"1\"$\"a\"$\"true\"$\"1.1\"$\"1970-01-02\"\r\n\"2\"$\"b\"\"\"$\"true\"$\"2.2\"$\"1970-01-03\"\r\n\"3\"$\"c'\"$\"false\"$\"NaN\"$\"1970-01-04\"\r\n";
             assert_eq!(&csv_block, expect);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_binary_output() -> Result<()> {
+        let (schema, block) = gen_schema_and_block(
+            vec![TableField::new(
+                "binary",
+                TableDataType::Binary.wrap_nullable(),
+            )],
+            vec![BinaryType::from_opt_data(vec![
+                Some(b"".as_slice()),
+                None,
+                Some(b"\xff".as_slice()),
+            ])],
+        );
+        let mut formatter = get_output_format_clickhouse("tsv", schema)?;
+        assert_eq!(formatter.serialize_block(&block)?, b"\n\\N\nFF\n");
         Ok(())
     }
 
@@ -281,7 +300,7 @@ mod test {
         let buffer = output_format.serialize_block(&block)?;
 
         let csv_block = String::from_utf8(buffer)?;
-        let expect = "1\x01\"a\"\x01true\x011.1\x01\"1970-01-02\"\r\n2\x01\"b\"\"\"\x01true\x012.2\x01\"1970-01-03\"\r\n3\x01\"c'\"\x01false\x01NaN\x01\"1970-01-04\"\r\n";
+        let expect = "\"1\"\x01\"a\"\x01\"true\"\x01\"1.1\"\x01\"1970-01-02\"\r\n\"2\"\x01\"b\"\"\"\x01\"true\"\x01\"2.2\"\x01\"1970-01-03\"\r\n\"3\"\x01\"c'\"\x01\"false\"\x01\"NaN\"\x01\"1970-01-04\"\r\n";
         assert_eq!(&csv_block, expect);
 
         Ok(())

@@ -120,7 +120,11 @@ impl PendingColumn {
                 data_type: pending_type,
                 rows: pending_rows,
                 ..
-            } if pending == scalar && pending_type == data_type => {
+            } if pending == scalar
+                && pending_type == data_type
+                // SQL equality alone cannot prove that presentation offsets are identical.
+                && !data_type.contains_timestamp_tz() =>
+            {
                 *pending_rows += rows;
                 true
             }
@@ -575,6 +579,9 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
             (ColumnBuilder::Interval(builder), Column::Interval(column)) => {
                 copy_primitive_type(builder, column, indices);
             }
+            (ColumnBuilder::TimestampTz(builder), Column::TimestampTz(column)) => {
+                copy_primitive_type(builder, column, indices);
+            }
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(column)) => {
                 copy_primitive_type(builder, column, indices);
             }
@@ -672,8 +679,8 @@ fn copy_nullable<I: Index>(
     from: &NullableColumn<AnyType>,
     indices: &[I],
 ) {
-    copy_boolean(&mut to.validity, &from.validity, indices);
-    copy_column(indices, &from.column, &mut to.builder)
+    copy_boolean(&mut to.validity, from.validity(), indices);
+    copy_column(indices, from.column(), &mut to.builder)
 }
 
 fn copy_opaque<I: Index>(indices: &[I], builder: &mut OpaqueColumnBuilder, column: &OpaqueColumn) {

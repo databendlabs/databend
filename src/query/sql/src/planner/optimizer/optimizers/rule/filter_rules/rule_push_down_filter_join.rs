@@ -23,7 +23,6 @@ use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::JoinProperty;
@@ -51,11 +50,11 @@ use crate::plans::VisitorMut;
 pub struct RulePushDownFilterJoin {
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
-    stat_context: StatContext,
+    func_ctx: FunctionContext,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(metadata: MetadataRef, stat_context: StatContext) -> Self {
+    pub fn new(metadata: MetadataRef, func_ctx: FunctionContext) -> Self {
         Self {
             // Filter
             //  \
@@ -71,7 +70,7 @@ impl RulePushDownFilterJoin {
                 }],
             }],
             metadata,
-            stat_context,
+            func_ctx,
         }
     }
 }
@@ -91,7 +90,7 @@ impl Rule for RulePushDownFilterJoin {
 
         // Second, try to convert outer join to inner join
         let (s_expr, outer_to_inner) =
-            outer_join_to_inner_join(s_expr, self.metadata.clone(), &self.stat_context)?;
+            outer_join_to_inner_join(s_expr, self.metadata.clone(), &self.func_ctx)?;
 
         // Third, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr, self.metadata.clone())?;
@@ -106,11 +105,8 @@ impl Rule for RulePushDownFilterJoin {
         }
 
         // Finally, push down filter to join.
-        let (need_push, mut result) = try_push_down_filter_join(
-            &s_expr,
-            self.metadata.clone(),
-            &self.stat_context.function_context,
-        )?;
+        let (need_push, mut result) =
+            try_push_down_filter_join(&s_expr, self.metadata.clone(), &self.func_ctx)?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }

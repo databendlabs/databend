@@ -58,6 +58,7 @@ use crate::interpreters::interpreter_connection_create::CreateConnectionInterpre
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
 use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
 use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
+use crate::interpreters::interpreter_connection_show_create::ShowCreateConnectionInterpreter;
 #[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
 #[cfg(feature = "storage-stage")]
@@ -99,8 +100,6 @@ use crate::interpreters::interpreter_show_workload_groups::ShowWorkloadGroupsInt
 use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_add_constraint::AddTableConstraintInterpreter;
-use crate::interpreters::interpreter_table_branch_create::CreateTableBranchInterpreter;
-use crate::interpreters::interpreter_table_branch_drop::DropTableBranchInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_drop_constraint::DropTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
@@ -545,15 +544,7 @@ impl InterpreterFactory {
             Plan::DropAllTableRowAccessPolicies(p) => Ok(Arc::new(
                 DropAllTableRowAccessPoliciesInterpreter::try_create(ctx, *p.clone())?,
             )),
-            Plan::CreateTableBranch(p) => Ok(Arc::new(CreateTableBranchInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
             Plan::CreateTableTag(p) => Ok(Arc::new(CreateTableTagInterpreter::try_create(
-                ctx,
-                *p.clone(),
-            )?)),
-            Plan::DropTableBranch(p) => Ok(Arc::new(DropTableBranchInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
@@ -906,6 +897,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::ShowCreateConnection(p) => Ok(Arc::new(
+                ShowCreateConnectionInterpreter::try_create(ctx, *p.clone())?,
+            )),
             Plan::ShowConnections(_) => Ok(Arc::new(ShowConnectionsInterpreter::try_create(ctx)?)),
             Plan::Begin => Ok(Arc::new(BeginInterpreter::try_create(ctx)?)),
             Plan::Commit => Ok(Arc::new(CommitInterpreter::try_create(ctx)?)),

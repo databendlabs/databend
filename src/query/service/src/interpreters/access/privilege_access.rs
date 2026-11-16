@@ -2515,13 +2515,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterTableTtl(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
             }
-            Plan::CreateTableBranch(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
-            }
             Plan::CreateTableTag(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
-            }
-            Plan::DropTableBranch(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableTag(plan) => {
@@ -2862,6 +2856,10 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DescConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
+            Plan::ShowCreateConnection(plan) => {
                 self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
                     .await?;
             }

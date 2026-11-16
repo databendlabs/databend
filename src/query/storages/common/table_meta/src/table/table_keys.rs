@@ -32,6 +32,12 @@ pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
+/// Set on the temporary table a materialized CTE is spilled into. The table
+/// lives only for its query, so it does not count as session state (it does
+/// not make an HTTP session sticky). The CTE's CREATE goes through SQL text,
+/// so this key cannot be reserved; a user who sets it on their own temporary
+/// table opts that table out of stickiness.
+pub const OPT_KEY_MATERIALIZED_CTE: &str = "materialized_cte";
 /// Default namespace for unqualified table references in a stored query definition.
 pub const OPT_KEY_QUERY_CATALOG: &str = "query_catalog";
 pub const OPT_KEY_QUERY_DATABASE: &str = "query_database";
@@ -193,6 +199,7 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_QUERY_CATALOG);
     r.insert(OPT_KEY_QUERY_DATABASE);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_MATERIALIZED_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);

@@ -82,7 +82,7 @@ impl RuleFactory {
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
             RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(
                 metadata,
-                ctx.get_stat_context().clone(),
+                ctx.get_function_context().clone(),
             ))),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
@@ -128,6 +128,7 @@ impl RuleFactory {
             }
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
                 ctx.get_stat_context().clone(),
+                ctx.get_function_context().query_specific_values.clone(),
             ))),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new(
                 ctx.get_stat_context().clone(),

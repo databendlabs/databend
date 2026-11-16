@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use super::ConstantFolder;
 use super::FoldResult;
+use super::fold_rules::FoldRules;
 use crate::ColumnIndex;
 use crate::Scalar;
 use crate::expression::Cast;
@@ -26,19 +27,25 @@ use crate::expression::FunctionCall;
 use crate::types::DataType;
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
-    /// Check if AND expressions contain mutually exclusive range conditions.
-    /// Returns Some(true) if no row can satisfy the comparisons, otherwise None.
-    /// An inconclusive result does not prove that the expressions are satisfiable.
-    pub(super) fn check_mutually_exclusive_ranges(
-        &self,
-        args: &[FoldResult<'_, Index>],
-    ) -> Option<bool> {
+    /// Whether AND arguments contain mutually exclusive range conditions,
+    /// i.e. no row can satisfy them. `false` is inconclusive.
+    pub(super) fn check_mutually_exclusive_ranges(&self, args: &[FoldResult<'_, Index>]) -> bool {
+        FoldRules::ranges_mutually_exclusive(
+            args.iter()
+                .filter_map(|arg| RangeConstraint::try_from_expr(arg.as_ref())),
+        )
+    }
+}
+
+impl FoldRules {
+    /// Whether no row can satisfy all the conjoined comparisons. `false` is
+    /// inconclusive: it does not prove that the comparisons are satisfiable.
+    pub fn ranges_mutually_exclusive<Index: ColumnIndex>(
+        constraints: impl IntoIterator<Item = RangeConstraint<Index>>,
+    ) -> bool {
         let mut column_constraints: HashMap<(Index, DataType), ConstraintState> = HashMap::new();
 
-        for arg in args {
-            let Some(constraint) = RangeConstraint::try_from_expr(arg.as_ref()) else {
-                continue;
-            };
+        for constraint in constraints {
             // Scalar ordering does not model mixed-type SQL comparisons. NULL
             // comparisons are handled by the caller's boolean domain analysis.
             if constraint.constant.as_ref().infer_data_type()
@@ -51,16 +58,17 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 .entry((constraint.column_id, constraint.data_type))
                 .or_default();
             if state.add(&constraint.operator, constraint.constant) {
-                return Some(true);
+                return true;
             }
         }
 
         column_constraints
             .values()
             .any(ConstraintState::is_mutually_exclusive)
-            .then_some(true)
     }
+}
 
+impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     /// Check if two range constraints are mutually exclusive
     pub fn are_constraints_mutually_exclusive(
         &self,
@@ -387,7 +395,7 @@ mod tests {
         let domains = HashMap::new();
         let context = FunctionContext::default();
         let folder = ConstantFolder::new_for_test(&domains, &context, registry);
-        assert_eq!(folder.check_mutually_exclusive_ranges(&args), None);
+        assert!(!folder.check_mutually_exclusive_ranges(&args));
     }
 
     #[test]

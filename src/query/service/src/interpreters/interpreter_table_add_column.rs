@@ -36,6 +36,7 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -85,16 +86,16 @@ impl Interpreter for AddTableColumnInterpreter {
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             // Column definitions were bound against this query's cached schema.
-            let tbl = self
-                .ctx
-                .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
-                .await?;
+            let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
             // check mutability
             tbl.check_mutable()?;
 
             let mut table_info = tbl.get_table_info().clone();
             let engine = table_info.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+            if matches!(
+                engine.to_uppercase().as_str(),
+                VIEW_ENGINE | STREAM_ENGINE | ICEBERG_ENGINE
+            ) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
                     self.plan.database, self.plan.table, engine
@@ -173,14 +174,7 @@ impl Interpreter for AddTableColumnInterpreter {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                let table_ref = if let Some(branch) = &self.plan.branch {
-                    format!(
-                        "`{}`.`{}`/`{}`",
-                        self.plan.database, self.plan.table, branch
-                    )
-                } else {
-                    format!("`{}`.`{}`", self.plan.database, self.plan.table)
-                };
+                let table_ref = format!("`{}`.`{}`", self.plan.database, self.plan.table);
 
                 let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
                 return build_select_insert_plan(
@@ -195,12 +189,6 @@ impl Interpreter for AddTableColumnInterpreter {
             }
 
             let need_update = num_rows > 0 && !self.plan.is_deterministic;
-            if self.plan.branch.is_some() && need_update {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot add non-deterministic default column to branch table '{}', UPDATE is not supported on branch tables yet",
-                    table_info.desc
-                )));
-            }
             if need_update && tbl.change_tracking_enabled() {
                 // Rebuild table while change tracking is active may break the consistency
                 // of tracked changes, leading to incorrect change records.

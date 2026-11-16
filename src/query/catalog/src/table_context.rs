@@ -33,6 +33,7 @@ use databend_common_settings::Settings;
 use databend_common_storage::StageFileInfo;
 
 mod authorization;
+mod cache_policy;
 mod execution;
 mod materialization;
 mod partitions;
@@ -45,6 +46,7 @@ mod table_access;
 mod table_management;
 
 pub use authorization::TableContextAuthorization;
+pub use cache_policy::TableContextCachePolicy;
 pub use databend_common_component::BroadcastChannel;
 pub use execution::TableContextPerf;
 pub use execution::TableContextProgress;
@@ -81,6 +83,7 @@ pub mod prelude {
     pub use super::SegmentLocationsState;
     pub use super::TableContext;
     pub use super::TableContextAuthorization;
+    pub use super::TableContextCachePolicy;
     pub use super::TableContextCluster;
     pub use super::TableContextCopy;
     pub use super::TableContextCte;
@@ -167,6 +170,7 @@ pub struct FilteredCopyFiles {
 #[async_trait::async_trait]
 pub trait TableContext:
     TableContextAuthorization
+    + TableContextCachePolicy
     + TableContextCluster
     + TableContextCopy
     + TableContextCte

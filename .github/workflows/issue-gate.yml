@@ -1,0 +1,30 @@
+name: issue-gate
+
+# Applies the description bar from AI_POLICY.md to issues from non-members.
+# Failing issues are labelled and closed; fixing the description reopens them.
+# PR descriptions are checked by the `quality` job of the PR Assistant (pr.yml).
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-gate-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate issue description
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Set the repo variable DESCRIPTION_GATE_CLOSE_ISSUES=false to only
+          # label + comment on failing issues instead of closing them.
+          GATE_CLOSE_ISSUES: ${{ vars.DESCRIPTION_GATE_CLOSE_ISSUES || 'true' }}
+        run: python3 .github/scripts/check_issue_quality.py

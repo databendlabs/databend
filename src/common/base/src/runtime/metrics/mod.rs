@@ -34,6 +34,7 @@ pub use registry::FamilyHistogram;
 pub use registry::GLOBAL_METRICS_REGISTRY;
 pub use registry::MAX_HISTOGRAM_BOUND;
 pub use registry::MIN_HISTOGRAM_BOUND;
+pub use registry::SampleCollector;
 pub use registry::ScopedRegistry;
 pub use registry::register_counter;
 pub use registry::register_counter_family;

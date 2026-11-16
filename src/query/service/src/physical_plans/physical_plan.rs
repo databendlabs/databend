@@ -34,7 +34,6 @@ use dyn_clone::DynClone;
 use serde::Deserializer;
 use serde::Serializer;
 
-use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
@@ -184,13 +183,8 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
 
     #[recursive::recursive]
     fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let is_exchange_sink = self.as_any().downcast_ref::<ExchangeSink>().is_some();
-        builder.is_exchange_stack.push(is_exchange_sink);
-
         if !self.display_in_profile() {
-            self.build_pipeline2(builder)?;
-            builder.is_exchange_stack.pop();
-            return Ok(());
+            return self.build_pipeline2(builder);
         }
 
         let desc = self.get_desc()?;
@@ -208,9 +202,7 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         );
 
         let _guard = scope.enter_scope_guard();
-        self.build_pipeline2(builder)?;
-        builder.is_exchange_stack.pop();
-        Ok(())
+        self.build_pipeline2(builder)
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {

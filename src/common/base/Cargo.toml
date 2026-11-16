@@ -63,7 +63,6 @@ perf-event2 = { workspace = true }
 procfs = { workspace = true }
 
 [dev-dependencies]
-anyerror = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 quickcheck = { workspace = true }

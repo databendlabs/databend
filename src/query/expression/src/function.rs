@@ -21,6 +21,8 @@ use std::ops::BitAnd;
 use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -160,6 +162,50 @@ pub struct FunctionContext {
     pub random_function_seed: bool,
     pub week_start: u8,
     pub date_format_style: String,
+    pub query_specific_values: QuerySpecificValues,
+}
+
+/// Records that a value valid only for the current query was computed, for example by
+/// evaluating `now()` or `rand()`. The planner cache does not store a logical plan built while
+/// such a value was computed.
+///
+/// Clones share one record, and the record is never cleared within a query. Comparisons
+/// ignore it.
+#[derive(Debug, Clone, Default)]
+pub struct QuerySpecificValues(Option<Arc<AtomicBool>>);
+
+impl QuerySpecificValues {
+    pub fn tracked() -> Self {
+        Self(Some(Arc::new(AtomicBool::new(false))))
+    }
+
+    pub fn record(&self) {
+        if let Some(recorded) = &self.0 {
+            recorded.store(true, Ordering::Relaxed);
+        }
+    }
+
+    pub fn recorded(&self) -> bool {
+        self.0
+            .as_ref()
+            .is_some_and(|recorded| recorded.load(Ordering::Relaxed))
+    }
+}
+
+impl PartialEq for QuerySpecificValues {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl FunctionContext {
+    /// A copy whose evaluations are not recorded, for values used only in estimates.
+    pub fn untracked(&self) -> Self {
+        Self {
+            query_specific_values: QuerySpecificValues::default(),
+            ..self.clone()
+        }
+    }
 }
 
 impl Default for FunctionContext {
@@ -181,6 +227,7 @@ impl Default for FunctionContext {
             random_function_seed: false,
             week_start: 0,
             date_format_style: "oracle".to_string(),
+            query_specific_values: QuerySpecificValues::default(),
         }
     }
 }
@@ -680,20 +727,16 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
     debug_assert!(!O::data_type().is_nullable_or_null());
     move |val, ctx| {
         let output = func(val, ctx);
-        if let Some((validity, _)) = ctx.errors.take() {
-            match output {
-                Value::Scalar(_) => Value::Scalar(None),
-                Value::Column(column) => {
-                    Value::Column(NullableColumn::new_unchecked(column, validity.into()))
-                }
-            }
-        } else {
-            match output {
-                Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn::new_unchecked(
-                    column,
-                    Bitmap::new_constant(true, ctx.num_rows),
-                )),
+        match (output, ctx.errors.take()) {
+            // Scalar evaluation runs once; its error bitmap has not been broadcast yet.
+            (Value::Scalar(_), Some(_)) => Value::Scalar(None),
+            (Value::Scalar(scalar), None) => Value::Scalar(Some(scalar)),
+            (Value::Column(column), errors) => {
+                let validity = match errors {
+                    Some((validity, _)) => validity.into(),
+                    None => Bitmap::new_constant(true, ctx.num_rows),
+                };
+                NullableType::<O>::wrap_value(Value::Column(column), validity, ctx.generics)
             }
         }
     }

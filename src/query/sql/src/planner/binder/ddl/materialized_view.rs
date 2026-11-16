@@ -80,6 +80,7 @@ use crate::TableEntry;
 use crate::binder::Binder;
 use crate::binder::ViewIdent;
 use crate::binder::bind_table_reference::MaterializedViewReadMode;
+use crate::check_materialized_view_source_without_policy;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::planner::semantic::MaterializedViewChecker;
@@ -95,7 +96,6 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::MaintenanceTarget;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::Plan;
-use crate::plans::ReclusterPlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
@@ -187,6 +187,12 @@ impl Binder {
             }
             let source_table = source_entry.table();
             if !is_fuse_engine(source_table.engine()) {
+                continue;
+            }
+            // MV storage does not follow the source's row access or masking policies. Skip such a
+            // source before binding any candidate, so a protected source query never reads MV
+            // storage and an unusable candidate cannot fail the user's query.
+            if source_table.get_table_info().meta.has_security_policy() {
                 continue;
             }
 
@@ -571,6 +577,10 @@ impl Binder {
                 direct_source_catalog, direct_source_database, direct_source_name
             )));
         }
+        check_materialized_view_source_without_policy(
+            &source_table.get_table_info().meta,
+            &view_name,
+        )?;
         let source_catalog_name = source_entry.catalog().to_string();
         let source_database = source_entry.database().to_string();
         let source_table_name = source_entry.name().to_string();
@@ -878,7 +888,6 @@ impl Binder {
                         database,
                         table,
                         target: MaintenanceTarget::MaterializedView { table_id },
-                        branch: None,
                         cluster_keys,
                         cluster_type: cluster_by.cluster_type.to_string().parse()?,
                     },
@@ -891,29 +900,8 @@ impl Binder {
                     database,
                     table,
                     target: MaintenanceTarget::MaterializedView { table_id },
-                    branch: None,
                 },
             ))),
-            AlterTableAction::ReclusterTable {
-                is_final,
-                selection,
-                limit,
-            } => {
-                if selection.is_some() {
-                    return Err(ErrorCode::Unimplemented(
-                        "ALTER MATERIALIZED VIEW RECLUSTER WHERE is not supported".to_string(),
-                    ));
-                }
-                Ok(Plan::ReclusterTable(Box::new(ReclusterPlan {
-                    catalog,
-                    database,
-                    table,
-                    target: MaintenanceTarget::MaterializedView { table_id },
-                    limit: limit.map(|value| value as usize),
-                    selection: None,
-                    is_final: *is_final,
-                })))
-            }
             AlterTableAction::SetOptions { set_options } => {
                 Ok(Plan::SetOptions(Box::new(SetOptionsPlan {
                     set_options: set_options.clone(),

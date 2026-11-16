@@ -40,6 +40,7 @@ use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -318,7 +319,7 @@ pub async fn verify_compact_tasks(
             dal.clone(),
             loc.clone(),
             TestFixture::default_table_schema(),
-            false,
+            CachePolicy::READ_ONLY,
         )
         .await?;
         let segment = SegmentInfo::try_from(compact_segment)?;

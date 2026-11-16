@@ -184,26 +184,25 @@ impl Interval {
                     continue;
                 }
                 b'0'..=b'9' => {
-                    let (number, fraction, next_pos) = parse_number(&str[pos..])?;
+                    let (number, next_pos) = parse_number(&str[pos..])?;
                     pos += next_pos;
                     let (specifier, next_pos) = parse_identifier(&str[pos..]);
 
                     pos += next_pos;
-                    apply_specifier(&mut result, number, fraction, &specifier)?;
+                    apply_specifier(&mut result, number, &specifier)?;
                     found_any = true;
                 }
                 b'-' => {
                     pos += 1;
-                    let (number, fraction, next_pos) = parse_number(&str[pos..])?;
+                    let (number, next_pos) = parse_number(&str[pos..])?;
                     let number = -number;
-                    let fraction = -fraction;
 
                     pos += next_pos;
 
                     let (specifier, next_pos) = parse_identifier(&str[pos..]);
 
                     pos += next_pos;
-                    apply_specifier(&mut result, number, fraction, &specifier)?;
+                    apply_specifier(&mut result, number, &specifier)?;
                     found_any = true;
                 }
                 b'a' | b'A' => {
@@ -273,22 +272,25 @@ fn parse_integer(bytes: &[u8]) -> Result<(i64, usize)> {
     Ok((value, pos))
 }
 
-fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
-    let (number, mut pos) = parse_integer(bytes)?;
-    let mut fraction: i64 = 0;
+fn parse_number(bytes: &[u8]) -> Result<(i64, usize)> {
+    let (mut number, mut pos) = parse_integer(bytes)?;
 
     if pos < bytes.len() && bytes[pos] == b'.' {
         pos += 1;
-        let mut mult: i64 = 100000;
+        let fraction_start = pos;
         while pos < bytes.len() && bytes[pos].is_ascii_digit() {
-            if mult > 0 {
-                fraction += (bytes[pos] - b'0') as i64 * mult;
-            }
-            mult /= 10;
             pos += 1;
         }
-    }
-    if pos < bytes.len() && bytes[pos] == b':' {
+        // A fractional quantity rounds to a whole number of its unit, halves away
+        // from zero: `1.3 hour` is 1 hour and `1.5 hour` is 2 hours.
+        // The caller negates the result, so rounding the magnitude up rounds away
+        // from zero for negative quantities too.
+        if pos > fraction_start && bytes[fraction_start] >= b'5' {
+            number = number
+                .checked_add(1)
+                .ok_or(ErrorCode::BadArguments("Number too large"))?;
+        }
+    } else if pos < bytes.len() && bytes[pos] == b':' {
         let time_bytes = &bytes[pos..];
         let mut time_pos = 0;
         let mut total_micros = i128::from(number) * i128::from(MICROS_PER_HOUR);
@@ -314,14 +316,14 @@ fn parse_number(bytes: &[u8]) -> Result<(i64, i64, usize)> {
         }
         let total_micros = i64::try_from(total_micros)
             .map_err(|_| ErrorCode::BadArguments("Interval overflow"))?;
-        return Ok((total_micros, 0, pos + time_pos));
+        return Ok((total_micros, pos + time_pos));
     }
 
     if pos == 0 {
         return Err(ErrorCode::BadArguments("Expected number".to_string()));
     }
 
-    Ok((number, fraction, pos))
+    Ok((number, pos))
 }
 
 fn parse_time_part(bytes: &[u8]) -> Result<(i64, i64, usize)> {
@@ -507,20 +509,11 @@ const MONTHS_PER_DECADE: i32 = 120;
 const MONTHS_PER_CENTURY: i32 = 1200;
 const MONTHS_PER_MILLENNIUM: i32 = 12000;
 
-fn apply_specifier(
-    result: &mut Interval,
-    number: i64,
-    fraction: i64,
-    specifier_str: &str,
-) -> Result<()> {
+fn apply_specifier(result: &mut Interval, number: i64, specifier_str: &str) -> Result<()> {
     if specifier_str.is_empty() {
         result.micros = result
             .micros
             .checked_add(number)
-            .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
-        result.micros = result
-            .micros
-            .checked_add(fraction)
             .ok_or(ErrorCode::BadArguments("Overflow".to_string()))?;
         return Ok(());
     }

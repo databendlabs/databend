@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use databend_base::non_empty::NonEmptyString;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -140,7 +141,7 @@ impl Table for TenantQuotaTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let tenants = self
             .args

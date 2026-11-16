@@ -30,7 +30,6 @@ use databend_common_expression::types::GenericType;
 use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -128,10 +127,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |arg, _| match &arg {
-            Value::Column(NullableColumn { validity, .. }) => {
-                let bitmap = validity.clone();
-                Value::Column(bitmap)
-            }
+            Value::Column(column) => Value::Column(column.validity().clone()),
             Value::Scalar(None) => Value::Scalar(false),
             Value::Scalar(Some(_)) => Value::Scalar(true),
         },

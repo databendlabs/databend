@@ -57,7 +57,6 @@ use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
 use crate::types::DecimalSize;
 use crate::types::GeographyColumn;
-use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::VectorColumn;
@@ -362,13 +361,18 @@ impl Column {
                     array.to_data().buffers()[0].clone().into();
                 Column::Interval(buffer)
             }
-            DataType::Nullable(_) => {
+            DataType::Nullable(inner) => {
+                if inner.is_nullable_or_null() {
+                    return Err(ErrorCode::Internal(format!(
+                        "invalid nullable inner type: {inner}"
+                    )));
+                }
                 let validity = match array.nulls() {
                     Some(nulls) => Bitmap::from_null_buffer(nulls.clone()),
                     None => Bitmap::new_constant(true, array.len()),
                 };
-                let column = Column::from_arrow_rs(array, &data_type.remove_nullable())?;
-                NullableColumn::new_column(column, validity)
+                let column = Column::from_arrow_rs(array, inner)?;
+                column.wrap_nullable(Some(validity))
             }
             DataType::Array(inner) => {
                 let f = DataField::new("DUMMY", *inner.clone());

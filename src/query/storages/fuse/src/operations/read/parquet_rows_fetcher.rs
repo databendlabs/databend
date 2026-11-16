@@ -274,6 +274,7 @@ impl ParquetRowsFetcher {
         let schema = table.schema();
         let operator = table.operator.clone();
         let segment_reader = SegmentInfoReader::new(operator, schema.clone());
+        let segment_cache = FuseCaches::instance().segments.with_policy(reader.policy);
         let column_nodes = ColumnNodes::new_from_schema(&schema.as_ref().into(), Some(&schema));
         ParquetRowsFetcher {
             table,
@@ -285,7 +286,7 @@ impl ParquetRowsFetcher {
             settings,
             max_threads: max_threads.max(1),
             io_semaphore,
-            segment_cache: FuseCaches::instance().segments.clone(),
+            segment_cache,
             fetched_segments: RowFetchSegmentCache::new(SEGMENT_CACHE_CAPACITY),
         }
     }

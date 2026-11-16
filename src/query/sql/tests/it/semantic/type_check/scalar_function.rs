@@ -59,7 +59,7 @@ async fn test_type_check_scalar_function_rules() -> Result<()> {
         },
         SqlTestCase {
             name: "decimal_cast_factory_params",
-            description: "Decimal factory params must match the params reconstructed by Expr::Cast.",
+            description: "Literal decimal params match the params that Expr::Cast reconstructs, so the call is a cast.",
             setup_sqls: &[],
             sql: "to_decimal(10, 2)(assume_not_null(number))",
         },

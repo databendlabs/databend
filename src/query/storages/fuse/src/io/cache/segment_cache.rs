@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -48,6 +49,11 @@ impl SegmentCache {
     /// Caches a segment just written, so later reads skip storage.
     pub fn put(&self, location: &str, segment: Arc<CompactSegmentInfo>) {
         self.segments.put(location, segment);
+    }
+
+    /// Drops the segment at `location`, rewritten in place without a value to replace it.
+    pub fn evict(&self, location: &str) {
+        self.segments.evict(location);
     }
 
     /// Whether segments can be cached; writers skip building a `CompactSegmentInfo` otherwise.
@@ -96,12 +102,12 @@ impl SegmentCache {
         self.column_oriented.fill(location, segment);
     }
 
-    pub fn read_only(&self) -> Self {
+    pub fn with_policy(&self, policy: CachePolicy) -> Self {
         SegmentCache {
-            segments: self.segments.read_only(),
-            column_oriented: self.column_oriented.read_only(),
-            block_metas: self.block_metas.read_only(),
-            stats: self.stats.read_only(),
+            segments: self.segments.with_policy(policy),
+            column_oriented: self.column_oriented.with_policy(policy),
+            block_metas: self.block_metas.with_policy(policy),
+            stats: self.stats.with_policy(policy),
         }
     }
 }
@@ -150,7 +156,7 @@ mod tests {
                 LegacyCapacity::Bytes(1 << 20),
             ),
         ]));
-        FuseCaches::new(&CacheManager::new(store, HashMap::new()))
+        FuseCaches::new(&CacheManager::new(store, None))
     }
 
     fn block(i: u64) -> Arc<BlockMeta> {
@@ -201,7 +207,10 @@ mod tests {
 
         // A read-only miss is served but not cached.
         let uncached = write_segment(&operator, "1/2/_sg/b.mpk", 1).await?;
-        segments.read_only().get(&reader, uncached.clone()).await?;
+        segments
+            .with_policy(CachePolicy::READ_ONLY)
+            .get(&reader, uncached.clone())
+            .await?;
 
         operator.delete(&cached.0).await?;
         operator.delete(&uncached.0).await?;
@@ -228,7 +237,9 @@ mod tests {
         assert_eq!(segments.lookup_block_metas("a").unwrap().len(), 2);
 
         // Read-only views decode on every miss and leave nothing behind.
-        segments.read_only().block_metas("b", decode)?;
+        segments
+            .with_policy(CachePolicy::READ_ONLY)
+            .block_metas("b", decode)?;
         assert_eq!(decodes.get(), 2);
         assert!(segments.lookup_block_metas("b").is_none());
         Ok(())
@@ -264,7 +275,9 @@ mod tests {
                 segment_schema: TableSchema::empty(),
             })
         };
-        segments.read_only().fill_column_oriented("a", segment());
+        segments
+            .with_policy(CachePolicy::READ_ONLY)
+            .fill_column_oriented("a", segment());
         assert!(segments.lookup_column_oriented("a").is_none());
         segments.fill_column_oriented("a", segment());
         assert!(segments.lookup_column_oriented("a").is_some());

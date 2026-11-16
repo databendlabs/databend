@@ -13,12 +13,10 @@
 // limitations under the License.
 
 use crate::CachedItem;
-use crate::Disk;
 use crate::KindLimit;
 use crate::Pool;
 
-/// Definition of one cache kind: what it caches, and how the shared backend and the disk tier
-/// treat it. Each kind implements it once, next to its value type in `kinds`, and registers in
+/// Definition of one cache kind: what it caches, and how the shared backend treats it. Each kind implements it once, next to its value type in `kinds`, and registers in
 /// `CacheRegistry::builtin`.
 pub trait CacheDef: 'static {
     type Value: CachedItem;
@@ -33,11 +31,12 @@ pub trait CacheDef: 'static {
     /// `set_cache_capacity(<name>, 'default')` restores.
     const SHARED_DEFAULT: KindLimit = KindLimit::UNLIMITED;
 
-    /// Disk tier, for kinds that have one.
-    const DISK: Option<Disk<Self::Value>> = None;
-
     /// Whether concurrent misses on one key share a load (`MemCache::get`). Only for kinds no
     /// writer invalidates, by `evict` or a `put` under the same key: a reader coming after an
     /// invalidation could join a load started before it, and get the old value.
     const SHARE_LOADS: bool = false;
+
+    /// Whether the object bytes this kind is decoded from are kept in the disk cache. Readers
+    /// of a kind without it read storage directly, whatever they ask `DiskCachedStorage`.
+    const DISK: bool = false;
 }

@@ -27,6 +27,8 @@ pub struct Input<'a> {
     pub tokens: &'a [Token<'a>],
     pub dialect: Dialect,
     pub mode: ParseMode,
+    /// Active structural expression depth in this parser branch.
+    pub expr_depth: usize,
 }
 
 impl<'a> std::ops::Deref for Input<'a> {

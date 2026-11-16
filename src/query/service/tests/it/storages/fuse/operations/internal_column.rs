@@ -39,6 +39,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -65,9 +66,9 @@ fn expected_data_block(
             offsets: None,
             base_block_ids: None,
             inner: None,
-            matched_rows: block_meta.matched_rows.clone(),
-            matched_scores: block_meta.matched_scores.clone(),
-            // The table has no vector index.
+            // The table has no inverted or vector index.
+            matched_rows: None,
+            matched_scores: None,
             vector_scores: None,
         };
         let block = DataBlock::empty_with_rows(num_rows);
@@ -121,7 +122,10 @@ async fn check_partitions(parts: &Vec<PartInfoPtr>, fixture: &TestFixture) -> Re
             TestFixture::default_table_schema(),
         );
         let compact_segment_info = compact_segment_reader
-            .read(&(segment.0.clone(), SegmentInfo::VERSION))
+            .read(
+                &(segment.0.clone(), SegmentInfo::VERSION),
+                &CachePolicy::BYPASS,
+            )
             .await?;
         let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 

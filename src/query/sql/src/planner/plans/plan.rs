@@ -77,7 +77,6 @@ use crate::plans::CreateSequencePlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
-use crate::plans::CreateTableBranchPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
@@ -119,7 +118,6 @@ use crate::plans::DropSequencePlan;
 use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
-use crate::plans::DropTableBranchPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
@@ -182,6 +180,7 @@ use crate::plans::SetSecondaryRolesPlan;
 use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
+use crate::plans::ShowCreateConnectionPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateMaterializedViewPlan;
 use crate::plans::ShowCreateTablePlan;
@@ -349,9 +348,7 @@ pub enum Plan {
     AddTableRowAccessPolicy(Box<AddTableRowAccessPolicyPlan>),
     DropTableRowAccessPolicy(Box<DropTableRowAccessPolicyPlan>),
     DropAllTableRowAccessPolicies(Box<DropAllTableRowAccessPoliciesPlan>),
-    CreateTableBranch(Box<CreateTableBranchPlan>),
     CreateTableTag(Box<CreateTableTagPlan>),
-    DropTableBranch(Box<DropTableBranchPlan>),
     DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize
@@ -449,6 +446,7 @@ pub enum Plan {
     CreateConnection(Box<CreateConnectionPlan>),
     DescConnection(Box<DescConnectionPlan>),
     DropConnection(Box<DropConnectionPlan>),
+    ShowCreateConnection(Box<ShowCreateConnectionPlan>),
     ShowConnections(Box<ShowConnectionsPlan>),
 
     // Presign
@@ -578,6 +576,7 @@ impl Plan {
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
+            | Plan::ReclusterTable(_)
             | Plan::DataMutation { .. }
             | Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
@@ -646,6 +645,7 @@ impl Plan {
             Plan::DescRowAccessPolicy(plan) => plan.schema(),
             Plan::DescNotification(plan) => plan.schema(),
             Plan::DescConnection(plan) => plan.schema(),
+            Plan::ShowCreateConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),
             Plan::ExecuteImmediate(plan) => plan.schema(),
             Plan::CallProcedure(plan) => plan.schema(),

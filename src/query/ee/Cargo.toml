@@ -56,25 +56,19 @@ jsonwebtoken = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parking_lot = { workspace = true }
-serde = { workspace = true }
 siphasher = { workspace = true }
 tempfile = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-common-settings = { workspace = true }
-databend-storages-common-pruner = { workspace = true }
 http = { workspace = true }
-jsonb = { workspace = true }
+parking_lot = { workspace = true }
 reqsign = { workspace = true }
 reqwest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["serde"]
 
 [lints]
 workspace = true

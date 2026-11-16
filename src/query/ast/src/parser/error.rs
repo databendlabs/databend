@@ -28,6 +28,9 @@ use crate::span::pretty_print_error;
 
 const MAX_DISPLAY_ERROR_COUNT: usize = 60;
 
+pub(crate) const EXPR_STACK_LIMIT: &str = "expression nesting exceeds the available stack space";
+pub(crate) const EXPR_DEPTH_LIMIT: &str = "expression nesting exceeds the maximum parsing depth";
+
 /// An error propagated along the active parse branch.
 ///
 /// The `alt` combinator keeps the farthest error and merges candidates only
@@ -92,6 +95,12 @@ impl<'a> nom::error::ContextError<Input<'a>> for Error {
 }
 
 impl Error {
+    pub(crate) fn is_expression_limit(&self) -> bool {
+        self.errors.iter().any(|kind| {
+            matches!(kind, ErrorKind::Other(message) if message == EXPR_STACK_LIMIT || message == EXPR_DEPTH_LIMIT)
+        })
+    }
+
     fn merge(mut self, mut other: Self) -> Self {
         match self.span.start.cmp(&other.span.start) {
             Ordering::Equal => {

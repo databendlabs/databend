@@ -61,6 +61,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
@@ -162,7 +163,7 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let mut block_metas = vec![];
     for (segment_loc, ver) in &new_snapshot.segments {
         let segment_info = segment_reader
-            .read(&(segment_loc.to_string(), *ver))
+            .read(&(segment_loc.to_string(), *ver), &CachePolicy::BYPASS)
             .await?;
         for block_meta in segment_info.block_metas()? {
             block_metas.push(block_meta);
@@ -226,6 +227,7 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
 
         let index_reader = InvertedIndexReader::create(
             dal.clone(),
+            CachePolicy::DEFAULT,
             has_score,
             prepared.tokenizer_manager,
             prepared.warmup,
@@ -309,7 +311,9 @@ async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()>
     let reader = SegmentInfoReader::new(fuse_table.get_operator(), table.schema());
     let mut block_rows = Vec::new();
     for (location, version) in &snapshot.segments {
-        let segment = reader.read(&(location.clone(), *version)).await?;
+        let segment = reader
+            .read(&(location.clone(), *version), &CachePolicy::BYPASS)
+            .await?;
         for block in segment.block_metas()? {
             block_rows.push(block.row_count);
             assert!(
@@ -450,6 +454,7 @@ async fn test_refresh_batch_shared_reads_and_hint_scope() -> anyhow::Result<()> 
                 &bloom_location.0,
                 block.bloom_filter_index_size,
                 None,
+                CachePolicy::BYPASS,
             )
             .await?;
             let gram = if mode == RefreshBatchMode::VirtualMetadata {
@@ -466,6 +471,7 @@ async fn test_refresh_batch_shared_reads_and_hint_scope() -> anyhow::Result<()> 
             let spatial = load_spatial_index_meta(
                 fuse.get_operator(),
                 &block.spatial_index_location.as_ref().unwrap().0,
+                CachePolicy::BYPASS,
             )
             .await?;
             for name in ["geo0", "geo1"] {
@@ -700,7 +706,7 @@ async fn refresh_batch_non_index_metadata(
     let reader = SegmentInfoReader::new(fuse.get_operator(), table.schema());
     let mut result = BTreeMap::new();
     for location in &snapshot.segments {
-        let segment = reader.read(location).await?;
+        let segment = reader.read(location, &CachePolicy::BYPASS).await?;
         let blocks = segment.block_metas()?;
         assert_eq!(blocks.len(), 1);
         assert_eq!(
@@ -710,6 +716,7 @@ async fn refresh_batch_non_index_metadata(
         let stats = read_segment_stats(
             fuse.get_operator(),
             segment.summary.additional_stats_loc().unwrap(),
+            CachePolicy::BYPASS,
         )
         .await?;
         assert!(!stats.block_hlls[0].is_empty());
@@ -745,6 +752,7 @@ async fn refresh_batch_filters(
             &location.0,
             block.bloom_filter_index_size,
             None,
+            CachePolicy::BYPASS,
         )
         .await?;
         let names = meta
@@ -758,6 +766,7 @@ async fn refresh_batch_filters(
             &names,
             &location.0,
             block.bloom_filter_index_size,
+            CachePolicy::BYPASS,
         )
         .await?;
         let filters = bloom
@@ -781,7 +790,12 @@ async fn refresh_batch_blocks(
     let reader = SegmentInfoReader::new(fuse.get_operator(), table.schema());
     let mut blocks = Vec::new();
     for location in &snapshot.segments {
-        blocks.extend(reader.read(location).await?.block_metas()?);
+        blocks.extend(
+            reader
+                .read(location, &CachePolicy::BYPASS)
+                .await?
+                .block_metas()?,
+        );
     }
     Ok((snapshot, blocks))
 }
@@ -883,6 +897,7 @@ async fn test_refresh_batch_legacy_spatial_statistics_and_indexes() -> anyhow::R
             &ReadSettings::from_ctx(&context)?,
             &["0".into()],
             &location.0,
+            CachePolicy::BYPASS,
         )
         .await?;
         assert!(!columns[0].index(0).unwrap().as_binary().unwrap().is_empty());
@@ -892,6 +907,7 @@ async fn test_refresh_batch_legacy_spatial_statistics_and_indexes() -> anyhow::R
                 &ReadSettings::from_ctx(&context)?,
                 &["0_srid".into(), "0".into()],
                 &location.0,
+                CachePolicy::BYPASS,
             )
             .await?;
             assert_eq!(columns[0].index(0).unwrap().to_string(), "0");
@@ -1276,7 +1292,9 @@ async fn replace_refresh_batch_legacy_spatial_block(
     let snapshot = fuse.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.segments.len(), 1);
     let reader = SegmentInfoReader::new(operator.clone(), table.schema());
-    let compact = reader.read(&snapshot.segments[0]).await?;
+    let compact = reader
+        .read(&snapshot.segments[0], &CachePolicy::BYPASS)
+        .await?;
     let mut segment = SegmentInfo::try_from(compact.as_ref())?;
     assert_eq!(segment.blocks.len(), 1);
     segment.summary.index_size = block.bloom_filter_index_size

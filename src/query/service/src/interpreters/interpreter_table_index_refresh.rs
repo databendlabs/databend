@@ -48,6 +48,10 @@ impl Interpreter for RefreshTableIndexInterpreter {
         "RefreshTableIndexInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         false
     }

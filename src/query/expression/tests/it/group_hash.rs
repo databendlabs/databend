@@ -21,7 +21,6 @@ use databend_common_expression::types::DictColumn;
 use databend_common_expression::types::EncodedColumn;
 use databend_common_expression::types::Int16Type;
 use databend_common_expression::types::NarrowBuffer;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::*;
 use databend_common_io::HybridBitmap;
@@ -93,11 +92,11 @@ fn assert_hash_class(scalars: &[Scalar]) -> databend_common_exception::Result<()
             let mut expected = None;
             for entry in &entries {
                 let entry = if nullable {
-                    NullableColumn::new_column(
-                        entry.to_column().remove_nullable(),
-                        (0..rows).map(|row| row != rows - 1).collect(),
-                    )
-                    .into()
+                    entry
+                        .to_column()
+                        .remove_nullable()
+                        .wrap_nullable(Some((0..rows).map(|row| row != rows - 1).collect()))
+                        .into()
                 } else {
                     entry.clone()
                 };

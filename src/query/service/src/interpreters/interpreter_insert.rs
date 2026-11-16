@@ -35,6 +35,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::Constraint;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 #[cfg(feature = "storage-stage")]
@@ -68,6 +69,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::common::build_update_stream_reqs;
 use crate::interpreters::common::check_deduplicate_label;
+use crate::physical_plans::AggregateFinal;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::EvalScalar;
@@ -422,12 +424,7 @@ impl Interpreter for InsertInterpreter {
                     .get_table_by_info(table_info)?
             } else {
                 self.ctx
-                    .get_table_with_branch(
-                        &self.plan.catalog,
-                        &self.plan.database,
-                        &self.plan.table,
-                        self.plan.branch.as_deref(),
-                    )
+                    .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
                     .await?
             };
 
@@ -518,17 +515,15 @@ impl Interpreter for InsertInterpreter {
                             table_meta_timestamps,
                         )?;
 
-                        if self.plan.branch.is_none() {
-                            let hook_operator = HookOperator::create(
-                                self.ctx.clone(),
-                                self.plan.catalog.clone(),
-                                self.plan.database.clone(),
-                                self.plan.table.clone(),
-                                MutationKind::Insert,
-                                hook_lock_opt.clone(),
-                            );
-                            hook_operator.execute(&mut build_res.main_pipeline).await;
-                        }
+                        let hook_operator = HookOperator::create(
+                            self.ctx.clone(),
+                            self.plan.catalog.clone(),
+                            self.plan.database.clone(),
+                            self.plan.table.clone(),
+                            MutationKind::Insert,
+                            hook_lock_opt.clone(),
+                        );
+                        hook_operator.execute(&mut build_res.main_pipeline).await;
 
                         return Ok(build_res);
                     }
@@ -562,7 +557,7 @@ impl Interpreter for InsertInterpreter {
                 }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
-                    let (select_plan, select_column_bindings, metadata) = match plan.as_ref() {
+                    let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
                         Plan::Query {
                             s_expr,
                             metadata,
@@ -581,6 +576,17 @@ impl Interpreter for InsertInterpreter {
                         }
                         _ => unreachable!(),
                     };
+                    // The physical query of an aggregating materialized view stores aggregate
+                    // states; reads merge them per group and compaction re-aggregates them. The
+                    // refresh may thus write a group as several state rows, which lets the final
+                    // aggregate output on memory pressure instead of spilling all the states.
+                    // `materialized_view_refresh_target` is also set by dynamic table refreshes,
+                    // whose rows are read as they are.
+                    if self.materialized_view_refresh_target == Some(table.get_id())
+                        && is_materialized_view_engine(table.engine())
+                    {
+                        AggregateFinal::allow_duplicate_groups(&mut select_plan);
+                    }
 
                     let explain_plan = {
                         let metadata = metadata.read();
@@ -656,17 +662,15 @@ impl Interpreter for InsertInterpreter {
                     )?;
 
                     //  Execute the hook operator.
-                    if self.plan.branch.is_none() {
-                        let hook_operator = HookOperator::create(
-                            self.ctx.clone(),
-                            self.plan.catalog.clone(),
-                            self.plan.database.clone(),
-                            self.plan.table.clone(),
-                            MutationKind::Insert,
-                            hook_lock_opt.clone(),
-                        );
-                        hook_operator.execute(&mut build_res.main_pipeline).await;
-                    }
+                    let hook_operator = HookOperator::create(
+                        self.ctx.clone(),
+                        self.plan.catalog.clone(),
+                        self.plan.database.clone(),
+                        self.plan.table.clone(),
+                        MutationKind::Insert,
+                        hook_lock_opt.clone(),
+                    );
+                    hook_operator.execute(&mut build_res.main_pipeline).await;
 
                     return Ok(build_res);
                 }
@@ -726,17 +730,15 @@ impl Interpreter for InsertInterpreter {
             )?;
 
             //  Execute the hook operator.
-            if self.plan.branch.is_none() {
-                let hook_operator = HookOperator::create(
-                    self.ctx.clone(),
-                    self.plan.catalog.clone(),
-                    self.plan.database.clone(),
-                    self.plan.table.clone(),
-                    MutationKind::Insert,
-                    hook_lock_opt,
-                );
-                hook_operator.execute(&mut build_res.main_pipeline).await;
-            }
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                self.plan.catalog.clone(),
+                self.plan.database.clone(),
+                self.plan.table.clone(),
+                MutationKind::Insert,
+                hook_lock_opt,
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
 
             Ok(build_res)
         })

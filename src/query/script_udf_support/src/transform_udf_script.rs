@@ -1103,7 +1103,7 @@ pub(super) mod venv {
     use walkdir::WalkDir;
     use zip::ZipArchive;
     use zip::ZipWriter;
-    use zip::write::FileOptions;
+    use zip::write::SimpleFileOptions;
 
     static PY_VENV_ARCHIVE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
         let base = std::env::var("DATABEND_PY_UDF_CACHE_DIR")
@@ -1375,7 +1375,7 @@ pub(super) mod venv {
         let writer = File::create(&archive_path)
             .map_err(|e| format!("Failed to create python deps archive: {}", e))?;
         let mut zip = ZipWriter::new(writer);
-        let options = FileOptions::<'static, ()>::default()
+        let options = SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
             .unix_permissions(0o755);
 

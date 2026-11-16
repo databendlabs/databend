@@ -28,6 +28,12 @@ pub struct FusePruningStatistics {
     /// Segment block metas decompress cost in nanoseconds.
     pub segments_decompress_cost: AtomicU64,
 
+    /// Segment zone map pruning stats.
+    pub segments_zone_map_pruning_before: AtomicU64,
+    pub segments_zone_map_pruning_after: AtomicU64,
+    /// Segment zone map pruning cost in nanoseconds.
+    pub segments_zone_map_pruning_cost: AtomicU64,
+
     /// Segment range pruning stats.
     pub segments_range_pruning_before: AtomicU64,
     pub segments_range_pruning_after: AtomicU64,
@@ -90,6 +96,30 @@ impl FusePruningStatistics {
 
     pub fn get_segments_decompress_cost(&self) -> u64 {
         nanos_to_display_micros(self.segments_decompress_cost.load(Ordering::Relaxed))
+    }
+
+    /// Record a segment zone map pruning step; the costs are given in microseconds,
+    /// as they come from a `PruningStatistics` of the plan.
+    pub fn set_segments_zone_map_pruning(&self, before: u64, after: u64, cost_micros: u64) {
+        self.segments_zone_map_pruning_before
+            .store(before, Ordering::Relaxed);
+        self.segments_zone_map_pruning_after
+            .store(after, Ordering::Relaxed);
+        self.segments_zone_map_pruning_cost
+            .store(cost_micros.saturating_mul(1_000), Ordering::Relaxed);
+    }
+
+    pub fn get_segments_zone_map_pruning_before(&self) -> u64 {
+        self.segments_zone_map_pruning_before
+            .load(Ordering::Relaxed)
+    }
+
+    pub fn get_segments_zone_map_pruning_after(&self) -> u64 {
+        self.segments_zone_map_pruning_after.load(Ordering::Relaxed)
+    }
+
+    pub fn get_segments_zone_map_pruning_cost(&self) -> u64 {
+        nanos_to_display_micros(self.segments_zone_map_pruning_cost.load(Ordering::Relaxed))
     }
 
     pub fn set_segments_range_pruning_before(&self, v: u64) {

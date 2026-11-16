@@ -38,6 +38,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -347,6 +348,7 @@ impl FuseTable {
         statistics_rows: u64,
         insert_top_n: &BlockTopN,
         refresh_top_n: bool,
+        policy: CachePolicy,
     ) -> Result<TableStatsGenerator> {
         // Extract previous stats meta (row_count / hll, etc.) from snapshot.
         let summary = snapshot.summary();
@@ -400,7 +402,7 @@ impl FuseTable {
             (true, _) => {
                 if let Some(loc) = &prev_stats_location {
                     let ver = TableMetaLocationGenerator::table_statistics_version(loc);
-                    let caches = FuseCaches::instance();
+                    let caches = FuseCaches::instance().with_policy(policy);
                     let reader = SnapshotStatsReader::new(self.get_operator());
                     let prev_stats = caches
                         .snapshots
@@ -458,6 +460,7 @@ impl FuseTable {
                 &new_hll,
                 insert_top_n,
                 table_row_count,
+                policy,
             )
             .await?
         } else {
@@ -501,9 +504,10 @@ impl FuseTable {
         hll: &BlockHLL,
         insert_top_n: &BlockTopN,
         row_count: u64,
+        policy: CachePolicy,
     ) -> Result<Option<TableSnapshotStatistics>> {
         let prev_table_stats = self
-            .read_table_snapshot_statistics(snapshot.as_ref())
+            .read_table_snapshot_statistics_with_policy(snapshot.as_ref(), policy)
             .await?;
         let fresh_prev_stats = if let (Some(previous), Some(prev_stats)) =
             (snapshot.as_ref(), prev_table_stats.as_ref())

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod caches;
 pub mod cluster;
 pub mod clustering_information;
 pub mod config;

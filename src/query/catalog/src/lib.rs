@@ -20,6 +20,7 @@
     clippy::uninlined_format_args
 )]
 
+pub mod cache_policy;
 pub mod catalog;
 pub mod catalog_kind;
 pub mod cluster_info;

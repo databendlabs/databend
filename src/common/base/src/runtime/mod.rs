@@ -42,6 +42,7 @@ pub use executor_stats::ExecutorStatsSlot;
 pub use executor_stats::ExecutorStatsSnapshot;
 pub use global_runtime::GlobalControlRuntime;
 pub use global_runtime::GlobalIORuntime;
+pub use global_runtime::GlobalPruningRuntime;
 pub use global_runtime::GlobalQueryRuntime;
 pub use memory::GLOBAL_MEM_STAT;
 pub use memory::GLOBAL_QUERIES_MANAGER;

@@ -19,17 +19,15 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::plan::block_id_in_segment;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
-use databend_common_expression::types::F32;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use futures_util::future;
 use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
@@ -97,7 +95,6 @@ impl BlockPruner {
             return Ok(block_metas);
         }
 
-        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let pruning_ctx = self.pruning_ctx.clone();
 
@@ -137,18 +134,13 @@ impl BlockPruner {
 
         let start = Instant::now();
 
-        let join_handlers = pruning_runtime
-            .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
-            .await?;
-
-        let joint = future::try_join_all(join_handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
-
-        let result = joint
+        let result = self
+            .pruning_ctx
+            .run_tasks(pruning_semaphore.clone(), pruning_tasks)
+            .await?
             .into_iter()
-            .filter_map(|prune_result| prune_result.transpose())
-            .collect::<Result<Vec<_>>>()?;
+            .flatten()
+            .collect::<Vec<_>>();
 
         let elapsed = start.elapsed().as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
@@ -191,7 +183,6 @@ impl BlockPruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
-        let pruning_runtime = self.pruning_ctx.pruning_runtime()?;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
@@ -201,7 +192,7 @@ impl BlockPruner {
         let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
-            if limit_pruner.exceeded() {
+            if limit_pruner.exceeded() || pruning_ctx.check_aborting().is_err() {
                 return None;
             }
 
@@ -283,18 +274,14 @@ impl BlockPruner {
 
         let start = Instant::now();
 
-        let join_handlers = pruning_runtime
-            .try_spawn_batch_with_owned_semaphore(pruning_semaphore.clone(), pruning_tasks)
+        let joint = self
+            .pruning_ctx
+            .run_tasks(pruning_semaphore.clone(), pruning_tasks)
             .await?;
-
-        let joint = future::try_join_all(join_handlers)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
         let mut result = Vec::with_capacity(joint.len());
         let block_num = block_metas.len();
         for prune_result in joint {
-            let prune_result = prune_result?;
             if prune_result.keep {
                 let block = block_metas[prune_result.block_idx].clone();
 
@@ -309,9 +296,8 @@ impl BlockPruner {
                         block_location: prune_result.block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
-                        matched_rows: prune_result.matched_rows.clone(),
-                        matched_scores: prune_result.matched_scores.clone(),
-                        vector_scores: None,
+                        inverted_index_matches: prune_result.inverted_index_matches,
+                        vector_index_matches: None,
                         virtual_block_meta: prune_result.virtual_block_meta.clone(),
                     },
                     block,
@@ -340,6 +326,7 @@ impl BlockPruner {
         if !prune_result.keep {
             return Ok(prune_result);
         }
+        pruning_ctx.check_aborting()?;
 
         let pruning_stats = pruning_ctx.pruning_stats.clone();
         let pruning_cost = pruning_ctx.pruning_cost.clone();
@@ -394,7 +381,7 @@ impl BlockPruner {
                 metrics_inc_bytes_block_inverted_index_pruning_before(block_meta.block_size);
                 pruning_stats.set_blocks_inverted_index_pruning_before(1);
 
-                let matched_rows = pruning_cost
+                prune_result.inverted_index_matches = pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksInverted,
                         inverted_index_pruner.should_keep(
@@ -405,12 +392,7 @@ impl BlockPruner {
                     )
                     .await?;
 
-                if let Some((rows, scores)) = matched_rows {
-                    prune_result.matched_rows = Some(rows);
-                    prune_result.matched_scores = scores;
-                } else {
-                    prune_result.keep = false;
-                }
+                prune_result.keep = prune_result.inverted_index_matches.is_some();
 
                 if prune_result.keep {
                     metrics_inc_blocks_inverted_index_pruning_after(1);
@@ -526,9 +508,8 @@ impl BlockPruner {
                         block_location: block_meta.as_ref().location.0.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
-                        matched_rows: None,
-                        matched_scores: None,
-                        vector_scores: None,
+                        inverted_index_matches: None,
+                        vector_index_matches: None,
                         virtual_block_meta: None,
                     },
                     block_meta.clone(),
@@ -557,11 +538,8 @@ struct BlockPruneResult {
     keep: bool,
     // the page ranges should be kept in the block
     range: Option<Range<usize>>,
-    // the matched rows in the block (aligned with `matched_scores` when present)
-    // only used by inverted index search
-    matched_rows: Option<Vec<usize>>,
-    // optional scores for the matched rows
-    matched_scores: Option<Vec<F32>>,
+    // the rows matched by the inverted index
+    inverted_index_matches: Option<IndexMatches>,
     // the optional block meta of virtual columns
     virtual_block_meta: Option<VirtualBlockMetaIndex>,
 }
@@ -573,8 +551,7 @@ impl BlockPruneResult {
             block_location,
             keep: false,
             range: None,
-            matched_rows: None,
-            matched_scores: None,
+            inverted_index_matches: None,
             virtual_block_meta: None,
         }
     }
@@ -585,16 +562,14 @@ impl BlockPruneResult {
             block_location: block_meta_index.block_location.clone(),
             keep: true,
             range: block_meta_index.range.clone(),
-            matched_rows: block_meta_index.matched_rows.clone(),
-            matched_scores: block_meta_index.matched_scores.clone(),
+            inverted_index_matches: block_meta_index.inverted_index_matches.clone(),
             virtual_block_meta: block_meta_index.virtual_block_meta.clone(),
         }
     }
 
     fn apply_to_block_meta_index(self, mut block_meta_index: BlockMetaIndex) -> BlockMetaIndex {
         block_meta_index.range = self.range;
-        block_meta_index.matched_rows = self.matched_rows;
-        block_meta_index.matched_scores = self.matched_scores;
+        block_meta_index.inverted_index_matches = self.inverted_index_matches;
         block_meta_index.virtual_block_meta = self.virtual_block_meta;
         block_meta_index
     }

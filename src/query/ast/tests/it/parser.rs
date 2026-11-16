@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::io::Write;
 
 use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Statement;
@@ -34,6 +35,113 @@ use databend_common_ast::parser::*;
 use goldenfile::Mint;
 use nom::Parser;
 use nom_rule::rule;
+
+#[test]
+fn test_deep_expression_parsing() {
+    // Do not let a larger test-thread stack hide missing recursion guards.
+    std::thread::Builder::new()
+        .stack_size(2 * 1024 * 1024)
+        .spawn(|| {
+            for sql in [
+                format!("{}1{}", "(".repeat(100), ")".repeat(100)),
+                format!("{}1{}", "abs(".repeat(100), ")".repeat(100)),
+                format!("{}1{}", "{'a':".repeat(100), "}".repeat(100)),
+                format!("{}true", "NOT ".repeat(300)),
+                format!("{}1", "1 ^ ".repeat(300)),
+            ] {
+                let tokens = tokenize_sql(&sql).unwrap();
+                // The exact accepted depth depends on build mode and stack size.
+                if let Err(err) = parse_expr(&tokens, Dialect::PostgreSQL) {
+                    assert!(
+                        err.1
+                            .contains("expression nesting exceeds the available stack space")
+                    );
+                }
+            }
+            for (prefix, value) in [("NOT ", "true"), ("1 ^ ", "1")] {
+                let sql = format!("{}{value}", prefix.repeat(10_000));
+                let tokens = tokenize_sql(&sql).unwrap();
+                let err = parse_expr(&tokens, Dialect::PostgreSQL).unwrap_err();
+                assert!(
+                    err.1
+                        .contains("expression nesting exceeds the available stack space")
+                );
+                // The stack error must survive parenthesis/subquery backtracking.
+                let sql = format!("SELECT ((({sql})))");
+                let tokens = tokenize_sql(&sql).unwrap();
+                let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+                assert!(
+                    err.1
+                        .contains("expression nesting exceeds the available stack space")
+                );
+            }
+            let tokens = tokenize_sql("1 + 2").unwrap();
+            assert!(parse_expr(&tokens, Dialect::PostgreSQL).is_ok());
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
+fn test_structural_expression_depth_limit() {
+    // A large stack isolates the structural budget from Pratt's stack-space check.
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            for (prefix, suffix) in [
+                ("(", ")"),
+                ("abs(", ")"),
+                ("{'a':", "}"),
+                ("[", "]"),
+                ("(SELECT ", ")"),
+            ] {
+                for depth in [8, 256, 1_024] {
+                    let sql = format!("{}1{}", prefix.repeat(depth), suffix.repeat(depth));
+                    let tokens = tokenize_sql(&sql).unwrap();
+                    if depth == 8 {
+                        parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+                        continue;
+                    }
+                    let input = Input {
+                        tokens: &tokens,
+                        dialect: Dialect::PostgreSQL,
+                        mode: ParseMode::Default,
+                        expr_depth: 0,
+                    };
+                    let err = expr(input).unwrap_err();
+                    assert!(matches!(err, nom::Err::Failure(error) if error.errors.contains(
+                        &ErrorKind::other("expression nesting exceeds the maximum parsing depth")
+                    )));
+                }
+            }
+
+            // The root expression also consumes one of the 256 levels.
+            let sql = format!("{}1{}", "(".repeat(255), ")".repeat(255));
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+
+            // The fatal depth error must survive SELECT/parenthesis backtracking.
+            let sql = format!("SELECT {}1{}", "(".repeat(1_024), ")".repeat(1_024));
+            let tokens = tokenize_sql(&sql).unwrap();
+            let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+            assert!(err.1.contains("expression nesting exceeds the maximum parsing depth"));
+
+            // Siblings, including precedence-limited BETWEEN operands, share the parent budget.
+            let args = vec!["abs(1) BETWEEN 0 AND 2"; 1_000].join(", ");
+            let sql = format!("concat({args})");
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+            let sql = format!("SELECT {args}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let tokens = tokenize_sql("1 + 2").unwrap();
+            parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
 
 #[test]
 fn test_external_access_sql() {
@@ -266,6 +374,7 @@ fn run_parser_with_dialect<P, O>(
         tokens: &tokens,
         dialect,
         mode,
+        expr_depth: 0,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
@@ -318,6 +427,48 @@ fn test_masking_where_unmasked_value_option() {
     ] {
         let tokens = tokenize_sql(sql).unwrap();
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
+#[test]
+fn test_connection_mask_secrets() {
+    let conns = [
+        ("access_key_id", "AKIAEXAMPLE"),
+        ("secret_access_key", "wJalrXUtnFEMI"),
+        ("session_token", "token-value"),
+        ("account_key", "azure-account-key"),
+        ("unknown_option", "some-value"),
+        ("endpoint_url", "https://user:pass@s3.example.com/"),
+        ("region", "us-east-1"),
+        ("role_arn", "arn:aws:iam::123456789012:role/r"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    let masked = Connection::new(conns).mask_secrets().conns;
+    assert_eq!(masked["access_key_id"], "AK***LE");
+    assert_eq!(masked["secret_access_key"], "wJ***MI");
+    assert_eq!(masked["session_token"], "to***ue");
+    assert_eq!(masked["account_key"], "az***ey");
+    assert_eq!(masked["unknown_option"], "so***ue");
+    assert_eq!(masked["endpoint_url"], "https://***:***@s3.example.com/");
+    assert_eq!(masked["region"], "us-east-1");
+    assert_eq!(masked["role_arn"], "arn:aws:iam::123456789012:role/r");
+
+    // Binders accept endpoints without a scheme by prepending `https://`.
+    for (endpoint, expected) in [
+        (
+            "s3.amazonaws.com?token=secret",
+            "s3.amazonaws.com/?token=***",
+        ),
+        ("user:pass@s3.example.com", "***:***@s3.example.com/"),
+        ("s3.amazonaws.com", "s3.amazonaws.com"),
+        ("http://127.0.0.1:9900/", "http://127.0.0.1:9900/"),
+        ("http://[bad?token=secret", "ht***et"),
+    ] {
+        let conns = [("endpoint_url".to_string(), endpoint.to_string())].into();
+        let masked = Connection::new(conns).mask_secrets().conns;
+        assert_eq!(masked["endpoint_url"], expected, "{endpoint}");
     }
 }
 
@@ -601,7 +752,7 @@ SELECT * from s;"#,
         r#"create user `a'a` identified by '123'"#,
         r#"drop role if exists test"#,
         r#"drop role if exists 'test'"#,
-        r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
+        r#"OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t PURGE;"#,
         r#"OPTIMIZE TABLE db.t PURGE;"#,
@@ -651,9 +802,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t ADD CHECK (a != 1);"#,
         r#"ALTER TABLE t DROP CONSTRAINT a_not_1;"#,
         r#"ALTER TABLE t FLASHBACK TO (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5');"#,
-        r#"ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS;"#,
         r#"ALTER TABLE t CREATE TAG tag1 AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) RETAIN 30 SECONDS;"#,
-        r#"ALTER TABLE t DROP BRANCH b1;"#,
         r#"ALTER TABLE t DROP TAG tag1;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
@@ -1245,6 +1394,7 @@ SELECT * from s;"#,
         r#"CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'"#,
         r#"DROP CONNECTION IF EXISTS my_conn;"#,
         r#"DESC CONNECTION my_conn;"#,
+        r#"SHOW CREATE CONNECTION my_conn;"#,
         r#"SHOW CONNECTIONS;"#,
         r#"SHOW LOCKS IN ACCOUNT"#,
         r#"SHOW STATISTICS FROM TABLE test_db.test"#,
@@ -1538,7 +1688,6 @@ fn test_statement_error() {
         r#"show settings ilike 'enable%'"#,
         r#"PRESIGN INVALID @my_stage/path/to/file"#,
         r#"show columns from db1.t from ctl.db"#,
-        r#"alter table t1 create branch from_dev at (branch => dev)"#,
         r#"SELECT c a as FROM t"#,
         r#"SELECT c a as b FROM t"#,
         r#"SELECT top -1 c a as b FROM t"#,
@@ -1640,8 +1789,13 @@ fn test_statement_error() {
 }
 
 #[test]
-fn test_removed_vacuum_syntax() {
+fn test_removed_syntax() {
     let cases = [
+        "ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS",
+        "ALTER TABLE t DROP BRANCH b1",
+        "SELECT * FROM db.t/b1",
+        "INSERT INTO db.t/b1 VALUES (1)",
+        "ALTER TABLE db.t/b1 ADD COLUMN a INT",
         "VACUUM TABLE t DRY RUN",
         "VACUUM TABLE t DRY RUN SUMMARY",
         "VACUUM TABLE catalog.db.t",
@@ -1975,6 +2129,19 @@ fn test_expr() {
         r#"(1,2,)"#,
         r#"[1]"#,
         r#"[1,]"#,
+        r#"[-1]"#,
+        r#"[1, 2]"#,
+        r#"[1.5, -2.25, 3e2, -4E-3, 0, 007, 1_000, 5.]"#,
+        r#"[-1, - 2,]"#,
+        r#"[18446744073709551616, -18446744073709551616, -18446744073709551615]"#,
+        r#"[0.1, -0.2][1]"#,
+        r#"[1, 2] = [1, -2]"#,
+        r#"[1, .5]"#,
+        r#"[1, -.5]"#,
+        r#"[1, 2 + 3]"#,
+        r#"[1, -a]"#,
+        r#"[1, --2]"#,
+        r#"[1, +2]"#,
         r#"[[1]]"#,
         r#"[[1],[2]]"#,
         r#"[[[1,2,3],[4,5,6]],[[7,8,9]]][0][1][2]"#,
@@ -2207,6 +2374,7 @@ fn test_ambiguous_trailing_lambda_argument() {
         tokens: &tokens,
         dialect: Dialect::PostgreSQL,
         mode: ParseMode::Default,
+        expr_depth: 0,
     };
     let (_, expr) = expr(input).unwrap();
     let Expr::FunctionCall { func, .. } = expr else {
@@ -2229,6 +2397,7 @@ fn test_json_arrow_argument_before_aggregate_filter() {
         tokens: &tokens,
         dialect: Dialect::PostgreSQL,
         mode: ParseMode::Default,
+        expr_depth: 0,
     };
     let (_, expr) = expr(input).unwrap();
     let Expr::FunctionCall { func, .. } = expr else {

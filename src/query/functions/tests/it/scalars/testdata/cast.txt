@@ -1133,7 +1133,7 @@ output         : 0
 
 ast            : to_decimal(10, 3)(123.456)
 raw expr       : to_decimal(10, 3)(123.456)
-checked expr   : to_decimal<Decimal(6, 3)>(10, 3)(123.456_d64(6,3))
+checked expr   : CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(10, 3))
 optimized expr : 123.456_d64(10,3)
 output type    : Decimal(10, 3)
 output domain  : {123.456..=123.456}
@@ -1142,7 +1142,7 @@ output         : 123.456
 
 ast            : to_decimal(10, 3)(-123.456)
 raw expr       : to_decimal(10, 3)(-123.456)
-checked expr   : to_decimal<Decimal(6, 3)>(10, 3)(-123.456_d64(6,3))
+checked expr   : CAST<Decimal(6, 3)>(-123.456_d64(6,3) AS Decimal(10, 3))
 optimized expr : -123.456_d64(10,3)
 output type    : Decimal(10, 3)
 output domain  : {-123.456..=-123.456}
@@ -1151,7 +1151,7 @@ output         : -123.456
 
 ast            : to_decimal(12, 1)(-9876.5)
 raw expr       : to_decimal(12, 1)(-9876.5)
-checked expr   : to_decimal<Decimal(5, 1)>(12, 1)(-9876.5_d64(5,1))
+checked expr   : CAST<Decimal(5, 1)>(-9876.5_d64(5,1) AS Decimal(12, 1))
 optimized expr : -9876.5_d64(12,1)
 output type    : Decimal(12, 1)
 output domain  : {-9876.5..=-9876.5}
@@ -1160,7 +1160,7 @@ output         : -9876.5
 
 ast            : to_decimal(6, 2)(5)
 raw expr       : to_decimal(6, 2)(5)
-checked expr   : to_decimal<UInt8>(6, 2)(5_u8)
+checked expr   : CAST<UInt8>(5_u8 AS Decimal(6, 2))
 optimized expr : 5.00_d64(6,2)
 output type    : Decimal(6, 2)
 output domain  : {5.00..=5.00}
@@ -1169,7 +1169,7 @@ output         : 5.00
 
 ast            : to_decimal(6, 2)(-5)
 raw expr       : to_decimal(6, 2)(-5)
-checked expr   : to_decimal<Int8>(6, 2)(-5_i8)
+checked expr   : CAST<Int8>(-5_i8 AS Decimal(6, 2))
 optimized expr : -5.00_d64(6,2)
 output type    : Decimal(6, 2)
 output domain  : {-5.00..=-5.00}
@@ -1178,7 +1178,7 @@ output         : -5.00
 
 ast            : to_decimal(6, 2)(true)
 raw expr       : to_decimal(6, 2)(true)
-checked expr   : to_decimal<Boolean>(6, 2)(true)
+checked expr   : CAST<Boolean>(true AS Decimal(6, 2))
 optimized expr : 1.00_d64(6,2)
 output type    : Decimal(6, 2)
 output domain  : {1.00..=1.00}
@@ -1187,7 +1187,7 @@ output         : 1.00
 
 ast            : to_decimal(10, 2)(123.45::FLOAT32)
 raw expr       : to_decimal(10, 2)(CAST(123.45 AS Float32))
-checked expr   : to_decimal<Float32>(10, 2)(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32))
+checked expr   : CAST<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32) AS Decimal(10, 2))
 optimized expr : 123.44_d64(10,2)
 output type    : Decimal(10, 2)
 output domain  : {123.44..=123.44}
@@ -1196,7 +1196,7 @@ output         : 123.44
 
 ast            : to_decimal(10, 2)(-123.45::FLOAT32)
 raw expr       : to_decimal(10, 2)(minus(CAST(123.45 AS Float32)))
-checked expr   : to_decimal<Float32>(10, 2)(minus<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32)))
+checked expr   : CAST<Float32>(minus<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32)) AS Decimal(10, 2))
 optimized expr : -123.44_d64(10,2)
 output type    : Decimal(10, 2)
 output domain  : {-123.44..=-123.44}
@@ -1205,7 +1205,7 @@ output         : -123.44
 
 ast            : to_decimal(12, 4)(123.456::DECIMAL(9,3))
 raw expr       : to_decimal(12, 4)(CAST(123.456 AS Decimal(9, 3)))
-checked expr   : to_decimal<Decimal(9, 3)>(12, 4)(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3)))
+checked expr   : CAST<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3)) AS Decimal(12, 4))
 optimized expr : 123.4560_d64(12,4)
 output type    : Decimal(12, 4)
 output domain  : {123.4560..=123.4560}
@@ -1214,7 +1214,7 @@ output         : 123.4560
 
 ast            : to_decimal(12, 4)(-123.456::DECIMAL(9,3))
 raw expr       : to_decimal(12, 4)(minus(CAST(123.456 AS Decimal(9, 3))))
-checked expr   : to_decimal<Decimal(9, 3)>(12, 4)(minus<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3))))
+checked expr   : CAST<Decimal(9, 3)>(minus<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3))) AS Decimal(12, 4))
 optimized expr : -123.4560_d64(12,4)
 output type    : Decimal(12, 4)
 output domain  : {-123.4560..=-123.4560}
@@ -1223,7 +1223,7 @@ output         : -123.4560
 
 ast            : to_decimal(12, 4)(a)
 raw expr       : to_decimal(12, 4)(a::Float64)
-checked expr   : to_decimal<Float64>(12, 4)(a)
+checked expr   : CAST<Float64>(a AS Decimal(12, 4))
 evaluation:
 +--------+----------------------+----------------------+
 |        | a                    | Output               |
@@ -1245,7 +1245,7 @@ evaluation (internal):
 
 ast            : to_decimal(8, 0)(b)
 raw expr       : to_decimal(8, 0)(b::Int32)
-checked expr   : to_decimal<Int32>(8, 0)(b)
+checked expr   : CAST<Int32>(b AS Decimal(8, 0))
 evaluation:
 +--------+---------------+---------------+
 |        | b             | Output        |
@@ -1268,7 +1268,7 @@ evaluation (internal):
 
 ast            : to_decimal(9, 3)(c)
 raw expr       : to_decimal(9, 3)(c::Float32)
-checked expr   : to_decimal<Float32>(9, 3)(c)
+checked expr   : CAST<Float32>(c AS Decimal(9, 3))
 evaluation:
 +--------+------------------+--------------------+
 |        | c                | Output             |
@@ -1290,7 +1290,7 @@ evaluation (internal):
 
 ast            : to_decimal(15, 3)(d)
 raw expr       : to_decimal(15, 3)(d::Decimal(10, 2))
-checked expr   : to_decimal<Decimal(10, 2)>(15, 3)(d)
+checked expr   : CAST<Decimal(10, 2)>(d AS Decimal(15, 3))
 evaluation:
 +--------+----------------------+------------------------+
 |        | d                    | Output                 |
@@ -3645,7 +3645,7 @@ output         : 0
 
 ast            : try_to_decimal(10, 3)(123.456)
 raw expr       : try_to_decimal(10, 3)(123.456)
-checked expr   : try_to_decimal<Decimal(6, 3)>(10, 3)(123.456_d64(6,3))
+checked expr   : TRY_CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(10, 3) NULL)
 optimized expr : 123.456_d64(10,3)
 output type    : Decimal(10, 3) NULL
 output domain  : {123.456..=123.456}
@@ -3654,7 +3654,7 @@ output         : 123.456
 
 ast            : try_to_decimal(10, 3)(-123.456)
 raw expr       : try_to_decimal(10, 3)(-123.456)
-checked expr   : try_to_decimal<Decimal(6, 3)>(10, 3)(-123.456_d64(6,3))
+checked expr   : TRY_CAST<Decimal(6, 3)>(-123.456_d64(6,3) AS Decimal(10, 3) NULL)
 optimized expr : -123.456_d64(10,3)
 output type    : Decimal(10, 3) NULL
 output domain  : {-123.456..=-123.456}
@@ -3663,7 +3663,7 @@ output         : -123.456
 
 ast            : try_to_decimal(12, 1)(-9876.5)
 raw expr       : try_to_decimal(12, 1)(-9876.5)
-checked expr   : try_to_decimal<Decimal(5, 1)>(12, 1)(-9876.5_d64(5,1))
+checked expr   : TRY_CAST<Decimal(5, 1)>(-9876.5_d64(5,1) AS Decimal(12, 1) NULL)
 optimized expr : -9876.5_d64(12,1)
 output type    : Decimal(12, 1) NULL
 output domain  : {-9876.5..=-9876.5}
@@ -3672,7 +3672,7 @@ output         : -9876.5
 
 ast            : try_to_decimal(6, 2)(5)
 raw expr       : try_to_decimal(6, 2)(5)
-checked expr   : try_to_decimal<UInt8>(6, 2)(5_u8)
+checked expr   : TRY_CAST<UInt8>(5_u8 AS Decimal(6, 2) NULL)
 optimized expr : 5.00_d64(6,2)
 output type    : Decimal(6, 2) NULL
 output domain  : {5.00..=5.00}
@@ -3681,7 +3681,7 @@ output         : 5.00
 
 ast            : try_to_decimal(6, 2)(-5)
 raw expr       : try_to_decimal(6, 2)(-5)
-checked expr   : try_to_decimal<Int8>(6, 2)(-5_i8)
+checked expr   : TRY_CAST<Int8>(-5_i8 AS Decimal(6, 2) NULL)
 optimized expr : -5.00_d64(6,2)
 output type    : Decimal(6, 2) NULL
 output domain  : {-5.00..=-5.00}
@@ -3690,7 +3690,7 @@ output         : -5.00
 
 ast            : try_to_decimal(6, 2)(true)
 raw expr       : try_to_decimal(6, 2)(true)
-checked expr   : try_to_decimal<Boolean>(6, 2)(true)
+checked expr   : TRY_CAST<Boolean>(true AS Decimal(6, 2) NULL)
 optimized expr : 1.00_d64(6,2)
 output type    : Decimal(6, 2) NULL
 output domain  : {1.00..=1.00}
@@ -3699,7 +3699,7 @@ output         : 1.00
 
 ast            : try_to_decimal(10, 2)(123.45::FLOAT32)
 raw expr       : try_to_decimal(10, 2)(CAST(123.45 AS Float32))
-checked expr   : try_to_decimal<Float32>(10, 2)(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32))
+checked expr   : TRY_CAST<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32) AS Decimal(10, 2) NULL)
 optimized expr : 123.44_d64(10,2)
 output type    : Decimal(10, 2) NULL
 output domain  : {123.44..=123.44}
@@ -3708,7 +3708,7 @@ output         : 123.44
 
 ast            : try_to_decimal(10, 2)(-123.45::FLOAT32)
 raw expr       : try_to_decimal(10, 2)(minus(CAST(123.45 AS Float32)))
-checked expr   : try_to_decimal<Float32>(10, 2)(minus<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32)))
+checked expr   : TRY_CAST<Float32>(minus<Float32>(CAST<Decimal(5, 2)>(123.45_d64(5,2) AS Float32)) AS Decimal(10, 2) NULL)
 optimized expr : -123.44_d64(10,2)
 output type    : Decimal(10, 2) NULL
 output domain  : {-123.44..=-123.44}
@@ -3717,7 +3717,7 @@ output         : -123.44
 
 ast            : try_to_decimal(12, 4)(123.456::DECIMAL(9,3))
 raw expr       : try_to_decimal(12, 4)(CAST(123.456 AS Decimal(9, 3)))
-checked expr   : try_to_decimal<Decimal(9, 3)>(12, 4)(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3)))
+checked expr   : TRY_CAST<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3)) AS Decimal(12, 4) NULL)
 optimized expr : 123.4560_d64(12,4)
 output type    : Decimal(12, 4) NULL
 output domain  : {123.4560..=123.4560}
@@ -3726,7 +3726,7 @@ output         : 123.4560
 
 ast            : try_to_decimal(12, 4)(-123.456::DECIMAL(9,3))
 raw expr       : try_to_decimal(12, 4)(minus(CAST(123.456 AS Decimal(9, 3))))
-checked expr   : try_to_decimal<Decimal(9, 3)>(12, 4)(minus<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3))))
+checked expr   : TRY_CAST<Decimal(9, 3)>(minus<Decimal(9, 3)>(CAST<Decimal(6, 3)>(123.456_d64(6,3) AS Decimal(9, 3))) AS Decimal(12, 4) NULL)
 optimized expr : -123.4560_d64(12,4)
 output type    : Decimal(12, 4) NULL
 output domain  : {-123.4560..=-123.4560}
@@ -3735,7 +3735,7 @@ output         : -123.4560
 
 ast            : try_to_decimal(12, 4)(a)
 raw expr       : try_to_decimal(12, 4)(a::Float64)
-checked expr   : try_to_decimal<Float64>(12, 4)(a)
+checked expr   : TRY_CAST<Float64>(a AS Decimal(12, 4) NULL)
 evaluation:
 +--------+----------------------+----------------------+
 |        | a                    | Output               |
@@ -3757,7 +3757,7 @@ evaluation (internal):
 
 ast            : try_to_decimal(8, 0)(b)
 raw expr       : try_to_decimal(8, 0)(b::Int32)
-checked expr   : try_to_decimal<Int32>(8, 0)(b)
+checked expr   : TRY_CAST<Int32>(b AS Decimal(8, 0) NULL)
 evaluation:
 +--------+---------------+--------------------+
 |        | b             | Output             |
@@ -3780,7 +3780,7 @@ evaluation (internal):
 
 ast            : try_to_decimal(9, 3)(c)
 raw expr       : try_to_decimal(9, 3)(c::Float32)
-checked expr   : try_to_decimal<Float32>(9, 3)(c)
+checked expr   : TRY_CAST<Float32>(c AS Decimal(9, 3) NULL)
 evaluation:
 +--------+------------------+--------------------+
 |        | c                | Output             |
@@ -3802,7 +3802,7 @@ evaluation (internal):
 
 ast            : try_to_decimal(15, 3)(d)
 raw expr       : try_to_decimal(15, 3)(d::Decimal(10, 2))
-checked expr   : try_to_decimal<Decimal(10, 2)>(15, 3)(d)
+checked expr   : TRY_CAST<Decimal(10, 2)>(d AS Decimal(15, 3) NULL)
 evaluation:
 +--------+----------------------+------------------------+
 |        | d                    | Output                 |

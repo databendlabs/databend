@@ -88,6 +88,14 @@ impl FixedOffset {
         ts.wrapping_add(self.micros).div_euclid(MICROS_PER_DAY)
     }
 
+    /// The local wall-clock time of `ts` in whole `unit` microseconds, modulo `modulo`: the
+    /// hour, minute or second of the day.
+    pub(crate) fn clock_field(&self, ts: i64, unit: i64, modulo: i64) -> u8 {
+        ts.wrapping_add(self.micros)
+            .div_euclid(unit)
+            .rem_euclid(modulo) as u8
+    }
+
     /// The instant of the local wall-clock time of `ts` truncated to a
     /// multiple of `unit` microseconds; `reach` passed to [`Self::of`] must be
     /// at least `unit`.

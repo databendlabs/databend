@@ -36,6 +36,7 @@ use databend_common_storages_fuse::io::VirtualColumnLayoutPolicy;
 use databend_common_storages_fuse::io::VirtualColumnReader;
 use databend_common_storages_fuse::pruning::VirtualColumnPruner;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::ProjectedVirtualPath;
 use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
@@ -166,8 +167,9 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         virtual_columns_complete: false,
     };
 
-    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down))?
-        .expect("virtual column pruner");
+    let pruner =
+        VirtualColumnPruner::try_create(dal.clone(), CachePolicy::DEFAULT, &Some(push_down))?
+            .expect("virtual column pruner");
     let virtual_block_meta_index = pruner
         .prune_virtual_columns(&Some(virtual_block_meta), None)
         .await?
@@ -264,6 +266,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         schema.clone(),
         virtual_column_info,
         write_settings.table_compression,
+        CachePolicy::DEFAULT,
     )?;
 
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -432,7 +435,9 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let dal = fuse_table.get_operator();
     dal.write(&draft_columns.virtual_location.0, state.data)
         .await?;
-    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down))?.unwrap();
+    let pruner =
+        VirtualColumnPruner::try_create(dal.clone(), CachePolicy::DEFAULT, &Some(push_down))?
+            .unwrap();
     let index = pruner
         .prune_virtual_columns(&Some(virtual_block_meta), Some(&projected_segment_schema))
         .await?
@@ -459,6 +464,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
             virtual_column_fields: vec![field],
         },
         write_settings.table_compression,
+        CachePolicy::DEFAULT,
     )?;
     let table_ctx: Arc<dyn TableContext> = ctx;
     let read_settings = ReadSettings::from_ctx(&table_ctx)?;

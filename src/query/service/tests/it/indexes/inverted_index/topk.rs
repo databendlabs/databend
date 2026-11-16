@@ -98,17 +98,35 @@ async fn test_fts_top_k_pushdown_from_sql() -> anyhow::Result<()> {
                 expected,
                 "pipeline={pruning_pipeline}: {sql}"
             );
-            if pruning_pipeline == 0
-                && let Some(k) = expected
-            {
+            if pruning_pipeline == 0 {
+                // The scan outputs only the matched rows when the filter is the match
+                // alone, and every row when another predicate still has to see them.
+                let only_index = source
+                    .push_downs
+                    .as_ref()
+                    .is_some_and(PushDownInfo::filter_only_use_index);
                 assert!(!source.parts.partitions.is_empty(), "{sql}");
                 for part in &source.parts.partitions {
                     let part = FuseBlockPartInfo::from_part(part)?;
                     let index = part.block_meta_index.as_ref().unwrap();
-                    let rows = index.matched_rows.as_ref().unwrap();
-                    let scores = index.matched_scores.as_ref().unwrap();
-                    assert_eq!(rows.len(), k.min(16), "{sql}");
-                    assert_eq!(scores.len(), rows.len(), "{sql}");
+                    let matches = index.inverted_index_matches.as_ref().unwrap();
+                    if let Some(k) = expected {
+                        let scores = matches.scores.as_ref().unwrap();
+                        assert_eq!(matches.rows.len(), k.min(16), "{sql}");
+                        assert_eq!(scores.len(), matches.rows.len(), "{sql}");
+                    }
+                    assert_eq!(matches.rows_only, only_index, "{sql}");
+                    // The block has 16 rows: the scan outputs the matched ones
+                    // unless they are all of them.
+                    let selected_rows = (only_index && matches.rows.len() < part.nums_rows)
+                        .then_some(matches.rows.len());
+                    assert_eq!(
+                        index
+                            .selected_rows(part.nums_rows)
+                            .map(|rows| rows.true_count()),
+                        selected_rows,
+                        "{sql}"
+                    );
                 }
             }
         }

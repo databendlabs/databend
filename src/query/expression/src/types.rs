@@ -625,6 +625,18 @@ impl DataType {
         matches!(self, DataType::Timestamp | DataType::Date)
     }
 
+    /// Whether SQL equality can hide a stored timezone offset, including in nested values.
+    pub fn contains_timestamp_tz(&self) -> bool {
+        match self {
+            DataType::TimestampTz => true,
+            DataType::Nullable(inner) | DataType::Array(inner) | DataType::Map(inner) => {
+                inner.contains_timestamp_tz()
+            }
+            DataType::Tuple(fields) => fields.iter().any(Self::contains_timestamp_tz),
+            _ => false,
+        }
+    }
+
     /// Whether values that are equal as group keys are also indistinguishable to every function,
     /// so an expression of a group key can be computed after the aggregation from any row of its
     /// group. Keep this in line with the hash and equality of group keys.
@@ -913,6 +925,12 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
             "{} does not read frame of reference columns",
             std::any::type_name::<Self>()
         )
+    }
+
+    /// Whether this column already represents nullable or null values at the top level.
+    /// Types with a dynamic column representation must inspect the physical column.
+    fn column_is_nullable_or_null(_col: &Self::Column) -> bool {
+        false
     }
 
     fn column_len(col: &Self::Column) -> usize;

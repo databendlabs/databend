@@ -14,6 +14,7 @@
 
 use databend_common_base::vec_ext::VecExt;
 use databend_common_base::vec_ext::VecU8Ext;
+use databend_common_column::types::timestamp_tz;
 
 use crate::Column;
 use crate::ProjectedBlock;
@@ -113,7 +114,10 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                 unimplemented!()
             }
             Column::Timestamp(v) => row_space.store_value_uncheckd(&v[row]),
-            Column::TimestampTz(v) => row_space.store_value_uncheckd(&v[row]),
+            Column::TimestampTz(v) => {
+                // Only the equality key discards the offset; projection uses the original column.
+                row_space.store_value_uncheckd(&timestamp_tz::new(v[row].timestamp(), 0));
+            }
             Column::Date(v) => row_space.store_value_uncheckd(&v[row]),
             Column::Interval(v) => row_space.store_value_uncheckd(&v[row]),
             Column::Array(array) | Column::Map(array) => {
@@ -125,12 +129,12 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                 }
             }
             Column::Nullable(c) => {
-                let valid = c.validity.get_bit(row);
+                let valid = c.validity().get_bit(row);
 
                 row_space.push_unchecked(valid as u8);
 
                 if valid {
-                    serialize_column_binary(&c.column, row, row_space);
+                    serialize_column_binary(c.column(), row, row_space);
                 }
             }
             Column::Tuple(fields) => {
@@ -160,10 +164,7 @@ fn normalize_bitmap_in_column(column: Column) -> Column {
         },
         Column::Nullable(deref!(nullable)) => {
             let (col, validity) = nullable.destructure();
-            Column::Nullable(Box::new(NullableColumn::<AnyType> {
-                column: normalize_bitmap_in_column(col),
-                validity,
-            }))
+            normalize_bitmap_in_column(col).wrap_nullable(Some(validity))
         }
         Column::Tuple(columns) => Column::Tuple(
             columns

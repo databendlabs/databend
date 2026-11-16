@@ -1,0 +1,13 @@
+# An older query keeps writing to the table. Its snapshot encoder has no segment
+# zone map field, so the pointer is not carried over.
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (22, 'j')
+
+query I
+SELECT count(*) FROM compat_segment_zone_map
+----
+10

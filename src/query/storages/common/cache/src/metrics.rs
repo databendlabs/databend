@@ -26,12 +26,23 @@
 //! `CacheManager::composition`, which leaves out the access, hit and miss counts; those are
 //! exported by their own families.
 //!
-//! Gauges, per kind and per disk tier, labelled by `cache_name` and `pool` (`meta`, `index`,
+//! Gauges, per kind in memory and on disk, labelled by `cache_name` and `pool` (`meta`, `index`,
 //! `data`, or `disk`): `cache_items`, `cache_resident_bytes` (charged, including values evicted
 //! but still held by queries), `cache_in_cache_bytes` (still in the cache), `cache_capacity` (in
-//! the kind's `unit`, absent when unlimited) and `cache_enabled`. Per pool, shared backend only:
-//! `cache_pool_items`, `cache_pool_resident_bytes`, `cache_pool_in_cache_bytes` and
-//! `cache_pool_capacity_bytes`.
+//! the kind's `unit`, absent when unlimited) and `cache_enabled`. Per memory pool, shared backend
+//! only: `cache_pool_items`, `cache_pool_resident_bytes`, `cache_pool_in_cache_bytes` and
+//! `cache_pool_capacity_bytes`. Per disk pool: `cache_disk_pool_items`,
+//! `cache_disk_pool_used_bytes` and `cache_disk_pool_capacity_bytes`; for the disk cache as a
+//! whole, `cache_disk_queue_bytes` and the counter `cache_disk_dropped` by `reason`
+//! (`queue_full`, `rejected`, `io_error`).
+//!
+//! Counters per kind on disk, since the process started (see `disk_kind_families`):
+//! `cache_disk_hit_bytes`, `cache_disk_queued_hit_count`, `cache_disk_read_microseconds`,
+//! `cache_disk_storage_read_bytes`, `cache_disk_write_count`, `cache_disk_write_bytes`,
+//! `cache_disk_drop_count` by `reason`, `cache_disk_eviction_count` and
+//! `cache_disk_eviction_bytes` by `reason` (`capacity`: room for a write or a lowered
+//! capacity; `disk_pressure`: the file system over `cache.disk.watermark_ratio`), and
+//! `cache_disk_invalidation_count` and `cache_disk_invalidation_bytes`.
 //!
 //! Counters, shared backend only, since the process started:
 //! - `cache_eviction_count` and `cache_eviction_bytes` per kind, by `reason`: `capacity` (room in
@@ -41,7 +52,11 @@
 //!   `pool_full_pinned`.
 //! - `cache_memory_reclaim_count`, `cache_memory_reclaim_bytes` (charges released) and
 //!   `cache_memory_reclaim_milliseconds` (spent).
+//!
+//! Every family reaches both the Prometheus scrape and `system.metrics` (a `SampleCollector`),
+//! from one read; `TRUNCATE system.metrics` does not reset them.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -49,6 +64,9 @@ use std::sync::Once;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::runtime::metrics::MetricSample;
+use databend_common_base::runtime::metrics::MetricValue;
+use databend_common_base::runtime::metrics::SampleCollector;
 use prometheus_client::collector::Collector;
 use prometheus_client::encoding::DescriptorEncoder;
 use prometheus_client::encoding::EncodeMetric;
@@ -57,7 +75,11 @@ use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::counter::ConstCounter;
 use prometheus_client::metrics::gauge::ConstGauge;
 
+use crate::CacheKind;
 use crate::CacheManager;
+use crate::DiskCache;
+use crate::disk::disk_pool::Eviction;
+use crate::disk::disk_writer::DropReason;
 use crate::manager::CacheRow;
 
 /// Collects the metrics of one manager, or of the global one.
@@ -79,12 +101,13 @@ impl Debug for CacheMetricsCollector {
 }
 
 impl CacheMetricsCollector {
-    /// Registers the collector of the global manager, once per process.
+    /// Registers the collector of the global manager, once per process, for both the scrape and
+    /// `system.metrics`.
     pub(crate) fn register_global() {
         static REGISTER: Once = Once::new();
         REGISTER.call_once(|| {
             GLOBAL_METRICS_REGISTRY
-                .register_collector(Box::new(CacheMetricsCollector { manager: None }));
+                .register_sample_collector(Arc::new(CacheMetricsCollector { manager: None }));
         });
     }
 
@@ -156,6 +179,32 @@ impl Family {
             encode(*value, family.encode_family(labels)?)?;
         }
         Ok(())
+    }
+
+    /// The samples of `system.metrics`, named as the scrape names them: counters with the
+    /// `_total` suffix the encoder appends.
+    fn sample(&self, samples: &mut Vec<MetricSample>) {
+        let counter = matches!(self.metric_type, MetricType::Counter);
+        let name = if counter {
+            format!("{}_total", self.name)
+        } else {
+            self.name.to_string()
+        };
+        for (labels, value) in &self.samples {
+            let value = *value as f64;
+            samples.push(MetricSample {
+                name: name.clone(),
+                labels: labels
+                    .iter()
+                    .map(|(key, value)| (key.to_string(), value.clone()))
+                    .collect::<HashMap<_, _>>(),
+                value: if counter {
+                    MetricValue::Counter(value)
+                } else {
+                    MetricValue::Gauge(value)
+                },
+            });
+        }
     }
 }
 
@@ -275,19 +324,148 @@ impl Families {
     }
 }
 
-impl Collector for CacheMetricsCollector {
-    fn encode(&self, mut encoder: DescriptorEncoder) -> Result<(), std::fmt::Error> {
+/// Counters per kind on disk, labelled like its gauges (`cache_name` `disk_cache_<...>`, `pool`
+/// `disk`) and, where given, by `reason`. With `cache_hit_count`, `cache_miss_count` and
+/// `cache_miss_bytes` of the same names, they tell what each kind serves, misses, writes and
+/// loses, and how much.
+fn disk_kind_families(disk: &DiskCache) -> Vec<Family> {
+    let counter = Family::counter;
+    let mut hit_bytes = counter("cache_disk_hit_bytes", "Bytes served by the disk cache.");
+    let mut queued_hits = counter(
+        "cache_disk_queued_hit_count",
+        "Lookups served from entries still waiting to be written.",
+    );
+    let mut read_micros = counter(
+        "cache_disk_read_microseconds",
+        "Time spent reading disk cache files.",
+    );
+    let mut storage_read = counter(
+        "cache_disk_storage_read_bytes",
+        "Bytes read from storage on disk cache misses.",
+    );
+    let mut written = counter(
+        "cache_disk_write_count",
+        "Entries written to the disk cache.",
+    );
+    let mut written_bytes = counter("cache_disk_write_bytes", "Bytes written to the disk cache.");
+    let mut dropped = counter(
+        "cache_disk_drop_count",
+        "Entries not written to the disk cache, by reason.",
+    );
+    let mut evicted = counter(
+        "cache_disk_eviction_count",
+        "Entries evicted from the disk cache, by reason.",
+    );
+    let mut evicted_bytes = counter(
+        "cache_disk_eviction_bytes",
+        "Bytes evicted from the disk cache, by reason.",
+    );
+    let mut invalidated = counter(
+        "cache_disk_invalidation_count",
+        "Entries dropped because their object was rewritten or deleted.",
+    );
+    let mut invalidated_bytes = counter(
+        "cache_disk_invalidation_bytes",
+        "Bytes dropped because their object was rewritten or deleted.",
+    );
+    for kind in CacheKind::all().filter(|kind| kind.on_disk()) {
+        let stats = disk.kind_stats(kind);
+        let labels: Labels = vec![
+            ("cache_name", disk.metric_name(kind).to_string()),
+            ("pool", "disk".to_string()),
+        ];
+        hit_bytes.push(labels.clone(), stats.hit_bytes);
+        queued_hits.push(labels.clone(), stats.queued_hits);
+        read_micros.push(labels.clone(), stats.read_micros);
+        storage_read.push(labels.clone(), stats.storage_read_bytes);
+        written.push(labels.clone(), stats.events.written);
+        written_bytes.push(labels.clone(), stats.events.written_bytes);
+        invalidated.push(labels.clone(), stats.events.invalidated);
+        invalidated_bytes.push(labels.clone(), stats.events.invalidated_bytes);
+        for reason in DropReason::ALL {
+            dropped.push(
+                with(&labels, "reason", reason.name()),
+                stats.dropped[reason as usize],
+            );
+        }
+        for reason in Eviction::ALL {
+            let i = reason as usize;
+            let reason = with(&labels, "reason", reason.name());
+            evicted.push(reason.clone(), stats.events.evicted[i]);
+            evicted_bytes.push(reason, stats.events.evicted_bytes[i]);
+        }
+    }
+    vec![
+        hit_bytes,
+        queued_hits,
+        read_micros,
+        storage_read,
+        written,
+        written_bytes,
+        dropped,
+        evicted,
+        evicted_bytes,
+        invalidated,
+        invalidated_bytes,
+    ]
+}
+
+impl CacheMetricsCollector {
+    /// The families of one read, shared by the scrape and `system.metrics` so the two cannot
+    /// disagree.
+    fn families(&self) -> Vec<Family> {
         let Some(manager) = self.manager() else {
-            return Ok(());
+            return Vec::new();
         };
         let mut families = Families::new();
+        let mut disk_pools = Family::gauge(
+            "cache_disk_pool_used_bytes",
+            "Bytes of the entries in a disk cache pool.",
+        );
+        let mut disk_pool_items =
+            Family::gauge("cache_disk_pool_items", "Entries in a disk cache pool.");
+        let mut disk_pool_capacity = Family::gauge(
+            "cache_disk_pool_capacity_bytes",
+            "Byte capacity of a disk cache pool.",
+        );
         for row in manager.composition() {
-            match row.kind {
-                Some(_) => families.add_kind(&row),
-                None => families.add_pool(&row),
+            match (row.kind, row.disk) {
+                (Some(_), _) => families.add_kind(&row),
+                (None, false) => families.add_pool(&row),
+                (None, true) => {
+                    let labels: Labels =
+                        vec![("pool", row.pool.map_or("", |p| p.name()).to_string())];
+                    disk_pool_items.push(labels.clone(), row.num_items);
+                    disk_pools.push(labels.clone(), row.size);
+                    if let Some(cap) = row.capacity {
+                        disk_pool_capacity.push(labels, cap);
+                    }
+                }
             }
         }
         let mut families = families.into_vec();
+        families.extend([disk_pool_items, disk_pools, disk_pool_capacity]);
+        if let Some(disk) = manager.disk() {
+            let stats = disk.stats();
+            let mut queued = Family::gauge(
+                "cache_disk_queue_bytes",
+                "Bytes queued to be written to the disk cache.",
+            );
+            queued.push(Labels::new(), stats.queued_bytes);
+            let mut dropped = Family::counter(
+                "cache_disk_dropped",
+                "Entries not written to the disk cache, by reason.",
+            );
+            for (reason, count) in [
+                ("queue_full", stats.dropped_queue_full),
+                ("rejected", stats.dropped_rejected),
+                ("io_error", stats.dropped_io_error),
+            ] {
+                dropped.push(vec![("reason", reason.to_string())], count);
+            }
+            families.extend([queued, dropped]);
+            families.extend(disk_kind_families(&disk));
+        }
         if let Some(stats) = manager.reclaim_stats() {
             for (name, help, value) in [
                 (
@@ -311,9 +489,23 @@ impl Collector for CacheMetricsCollector {
                 families.push(family);
             }
         }
-        for family in families {
+        families
+    }
+}
+
+impl Collector for CacheMetricsCollector {
+    fn encode(&self, mut encoder: DescriptorEncoder) -> Result<(), std::fmt::Error> {
+        for family in self.families() {
             family.encode(&mut encoder)?;
         }
         Ok(())
+    }
+}
+
+impl SampleCollector for CacheMetricsCollector {
+    fn sample(&self, samples: &mut Vec<MetricSample>) {
+        for family in self.families() {
+            family.sample(samples);
+        }
     }
 }

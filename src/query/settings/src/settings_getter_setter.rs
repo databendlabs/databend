@@ -834,6 +834,10 @@ impl Settings {
         self.try_get_u64("compact_max_block_selection")
     }
 
+    pub fn get_enable_recluster_task_selection_v2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_recluster_task_selection_v2")? != 0)
+    }
+
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
         Ok(self.try_get_u64("ddl_column_type_nullable")? != 0)
     }
@@ -1093,6 +1097,18 @@ impl Settings {
 
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
+    }
+
+    pub fn get_enable_segment_zone_map(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_segment_zone_map")? == 1)
+    }
+
+    pub fn get_enable_segment_zone_map_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_segment_zone_map_pruning")? == 1)
+    }
+
+    pub fn get_segment_zone_map_full_segment_threshold(&self) -> Result<u64> {
+        self.try_get_u64("segment_zone_map_full_segment_threshold")
     }
 
     pub fn get_persist_materialized_cte(&self) -> Result<bool> {

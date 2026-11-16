@@ -36,6 +36,7 @@ use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reduce_block_metas;
 use databend_query::test_kits::BlockWriter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -383,7 +384,7 @@ async fn test_segment_cache() -> anyhow::Result<()> {
         operator.clone(),
         &location,
         &block_level_field_names(),
-        true,
+        CachePolicy::DEFAULT,
     )
     .await?;
     let cached = cache.lookup_column_oriented(&location).unwrap();
@@ -397,8 +398,13 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     let mut projection = block_level_field_names();
     projection.insert(meta_name(col_id));
     projection.insert(stat_name(col_id));
-    let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
+    let _column_oriented_segment = read_column_oriented_segment(
+        operator.clone(),
+        &location,
+        &projection,
+        CachePolicy::DEFAULT,
+    )
+    .await?;
     let cached = cache.lookup_column_oriented(&location).unwrap();
     assert_eq!(cached.segment_schema.fields.len(), 13);
 
@@ -420,8 +426,13 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     let mut projection = block_level_field_names();
     projection.insert(meta_name(col_id));
     projection.insert(stat_name(col_id));
-    let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
+    let _column_oriented_segment = read_column_oriented_segment(
+        operator.clone(),
+        &location,
+        &projection,
+        CachePolicy::DEFAULT,
+    )
+    .await?;
     let cached = cache.lookup_column_oriented(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 14);
@@ -434,8 +445,13 @@ async fn test_segment_cache() -> anyhow::Result<()> {
     let mut projection = block_level_field_names();
     projection.insert(meta_name(col_id));
     projection.insert(stat_name(col_id));
-    let column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
+    let column_oriented_segment = read_column_oriented_segment(
+        operator.clone(),
+        &location,
+        &projection,
+        CachePolicy::DEFAULT,
+    )
+    .await?;
     let cached = cache.lookup_column_oriented(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 14);

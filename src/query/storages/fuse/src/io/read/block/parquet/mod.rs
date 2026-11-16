@@ -100,7 +100,7 @@ impl BlockReader {
 
         let caches = FuseCaches::instance();
         let array_cache = Some(&caches.column_arrays)
-            .filter(|cache| self.put_cache && !has_selection && cache.is_enabled());
+            .filter(|cache| self.policy.memory.writes() && !has_selection && cache.is_enabled());
 
         for ((i, field), column_node) in self
             .projected_schema

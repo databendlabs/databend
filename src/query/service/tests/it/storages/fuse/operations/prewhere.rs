@@ -56,6 +56,7 @@ use databend_common_storages_fuse::operations::ReadStateOutput;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextRuntimeFilter;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use opendal::Buffer;
@@ -98,7 +99,7 @@ async fn run_prewhere_test_with_threshold(
     )?;
 
     // Create ReadState which combines prewhere and runtime filter logic
-    let read_state = ReadState::create(
+    let mut read_state = ReadState::create(
         ctx.clone(),
         scan_id,
         Some(&prewhere_info),
@@ -341,7 +342,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         operator.clone(),
         schema.clone(),
         prewhere_info.output_columns.clone(),
-        false,
+        CachePolicy::READ_ONLY,
     )?;
 
     // Extract column chunks from parquet bytes

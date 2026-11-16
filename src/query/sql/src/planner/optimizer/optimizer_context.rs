@@ -36,6 +36,10 @@ pub struct OptimizerContext {
     #[educe(Debug(ignore))]
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
+    /// Values computed with it may enter the plan, so non-deterministic evaluations are
+    /// recorded for the planner cache.
+    function_context: FunctionContext,
+    /// Used only for estimates, so its evaluations are not recorded.
     stat_context: StatContext,
 
     // Optimizer configurations
@@ -85,7 +89,8 @@ impl OptimizerContext {
         Arc::new(Self {
             table_ctx,
             metadata,
-            stat_context: StatContext::new(function_context, &settings),
+            stat_context: StatContext::new(function_context.clone(), &settings),
+            function_context,
 
             enable_distributed_optimization: RwLock::new(false),
             force_local_execution: RwLock::new(false),
@@ -128,6 +133,10 @@ impl OptimizerContext {
 
     pub fn get_stat_context(&self) -> &StatContext {
         &self.stat_context
+    }
+
+    pub fn get_function_context(&self) -> &FunctionContext {
+        &self.function_context
     }
 
     pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> &Arc<Self> {

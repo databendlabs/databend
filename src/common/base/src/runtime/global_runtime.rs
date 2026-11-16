@@ -25,6 +25,25 @@ pub struct GlobalControlRuntime(pub Runtime);
 
 pub struct GlobalQueryRuntime(pub Runtime);
 
+/// The runtime that the queries of the global queries executor prune on. It is
+/// initialized together with that executor, with as many threads, so that such
+/// queries do not spawn and join pruning threads of their own.
+#[derive(Clone)]
+pub struct GlobalPruningRuntime(Arc<Runtime>);
+
+impl GlobalPruningRuntime {
+    pub fn init(threads: usize) -> Result<()> {
+        let rt = Runtime::with_worker_threads(threads, Some("pruning-worker".to_owned()))?;
+        GlobalInstance::set(GlobalPruningRuntime(Arc::new(rt)));
+        Ok(())
+    }
+
+    /// The runtime, `None` where the global queries executor is not enabled.
+    pub fn try_instance() -> Option<Arc<Runtime>> {
+        GlobalInstance::try_get::<GlobalPruningRuntime>().map(|runtime| runtime.0)
+    }
+}
+
 impl GlobalQueryRuntime {
     #[inline(always)]
     pub fn runtime(self: &Arc<Self>) -> &Runtime {

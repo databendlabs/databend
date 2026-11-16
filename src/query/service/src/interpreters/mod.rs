@@ -31,6 +31,7 @@ mod interpreter_connection_create;
 mod interpreter_connection_desc;
 mod interpreter_connection_drop;
 mod interpreter_connection_show;
+mod interpreter_connection_show_create;
 #[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_location;
 #[cfg(feature = "storage-stage")]
@@ -127,8 +128,6 @@ mod interpreter_show_online_nodes;
 mod interpreter_show_warehouses;
 mod interpreter_show_workload_groups;
 mod interpreter_stream_create;
-mod interpreter_table_branch_create;
-mod interpreter_table_branch_drop;
 mod interpreter_worker_alter;
 mod interpreter_worker_create;
 mod interpreter_worker_drop;
@@ -344,6 +343,8 @@ pub use interpreter_table_undrop::UndropTableInterpreter;
 pub use interpreter_table_vacuum::VacuumTableInterpreter;
 pub use interpreter_tag_create::CreateTagInterpreter;
 pub use interpreter_tag_drop::DropTagInterpreter;
+pub use interpreter_txn_commit::PostCommitHooks;
+pub use interpreter_txn_commit::commit_transaction;
 pub use interpreter_txn_commit::execute_commit_statement;
 pub use interpreter_unset::UnSetInterpreter;
 pub use interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;

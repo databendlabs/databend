@@ -35,9 +35,12 @@ use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline::sinks::SyncSenderSink;
 use databend_common_pipeline::sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
+use databend_query::pipelines::executor::CompletedAsyncTask;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::ExecutorTask;
 use databend_query::pipelines::executor::ExecutorWorkerContext;
+use databend_query::pipelines::executor::QueriesExecutorTasksQueue;
+use databend_query::pipelines::executor::QueriesPipelineExecutor;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
@@ -185,6 +188,111 @@ async fn test_resize_pipeline_init_queue() -> anyhow::Result<()> {
             }"
         );
     }
+
+    Ok(())
+}
+
+/// A waker may carry a worker id that is not one of the shared executor's, as
+/// the fuse sources do with `max_storage_io_requests` above the worker count.
+/// It must not panic: a panic finishes the executor of all the queries.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_queries_executor_completed_async_task_of_foreign_worker() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let graph = create_simple_pipeline(ctx)?;
+
+    let workers = 2;
+    let condvar = WorkersCondvar::create(workers);
+    let queue = QueriesExecutorTasksQueue::create(workers);
+    for worker_id in [workers, 2 * workers + 1] {
+        condvar.inc_active_async_worker();
+        queue.completed_async_task(
+            condvar.clone(),
+            CompletedAsyncTask::create(NodeIndex::new(0), worker_id, Ok(()), graph.clone()),
+        );
+    }
+    assert!(!condvar.has_waiting_async_task());
+
+    // Both tasks are still handed to the workers of the executor.
+    let executor = QueriesPipelineExecutor::create(workers)?;
+    let mut received = vec![];
+    for _ in 0..16 {
+        let mut context = ExecutorWorkerContext::create(0, condvar.clone());
+        queue.steal_task_to_context(&mut context, &executor);
+        if let ExecutorTask::AsyncCompleted(task) = context.take_task() {
+            received.push(task.worker_id);
+        }
+        if received.len() == 2 {
+            break;
+        }
+    }
+    received.sort();
+    assert_eq!(received, vec![workers, 2 * workers + 1]);
+
+    Ok(())
+}
+
+/// A processor whose `event` panics fails its own query only: the shared
+/// executor keeps its workers, and runs the next query.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_queries_executor_survives_event_panic() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    type Finished = Arc<(parking_lot::Mutex<bool>, parking_lot::Condvar)>;
+    let create_graph = |panic_event: Option<usize>| -> Result<(Arc<RunningGraph>, Finished)> {
+        let mut pipeline = Pipeline::create();
+        pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
+            ProcessorPtr::create(Box::new(SecondEventSource {
+                events: 0,
+                panic_event,
+            })),
+            vec![],
+            vec![OutputPort::create()],
+        )]));
+        let finished = Finished::default();
+        let query_id = Arc::new(format!("test-event-panic-{panic_event:?}"));
+        let graph = RunningGraph::create(pipeline, 1, query_id, Some(finished.clone()), vec![])?;
+        Ok((graph, finished))
+    };
+    let wait = |finished: &Finished| {
+        let (lock, cvar) = &**finished;
+        let mut finished = lock.lock();
+        if !*finished {
+            cvar.wait_for(&mut finished, std::time::Duration::from_secs(10));
+        }
+        *finished
+    };
+
+    let executor = QueriesPipelineExecutor::create(1)?;
+    let workers = databend_common_base::runtime::Thread::spawn({
+        let executor = executor.clone();
+        move || executor.execute()
+    });
+
+    // The first event runs when the graph is sent, the next ones on a worker.
+    let (graph, _finished) = create_graph(Some(1))?;
+    let error = executor.send_graph(graph).unwrap_err();
+    assert_eq!(error.code(), ErrorCode::UNWIND_ERROR);
+    assert!(!executor.is_finished());
+
+    let (graph, finished) = create_graph(Some(2))?;
+    executor.send_graph(graph.clone())?;
+    assert!(wait(&finished), "the query of the panic must finish");
+    let error = graph.get_error().expect("the query of the panic must fail");
+    assert_eq!(error.code(), ErrorCode::UNWIND_ERROR);
+    assert!(!executor.is_finished());
+
+    let (graph, finished) = create_graph(None)?;
+    executor.send_graph(graph.clone())?;
+    assert!(wait(&finished), "the next query must still be executed");
+    assert!(graph.get_error().is_none());
+
+    // Once the executor is finished, a query fails instead of waiting forever.
+    executor.finish(Some(ErrorCode::Internal("test finish")));
+    workers.join().unwrap().unwrap_err();
+    let (graph, _finished) = create_graph(None)?;
+    let error = executor.send_graph(graph).unwrap_err();
+    assert_eq!(error.message(), "test finish");
 
     Ok(())
 }
@@ -633,6 +741,38 @@ struct MemoryTrackingSource {
 }
 
 struct InterruptCheckingSource;
+
+/// A source that is processed once, then finishes. It panics in the
+/// `panic_event`-th call of `event`, if any.
+struct SecondEventSource {
+    events: usize,
+    panic_event: Option<usize>,
+}
+
+impl Processor for SecondEventSource {
+    fn name(&self) -> String {
+        "SecondEventSource".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        self.events += 1;
+        if self.panic_event == Some(self.events) {
+            panic!("event panic");
+        }
+        match self.events {
+            1 => Ok(Event::Sync),
+            _ => Ok(Event::Finished),
+        }
+    }
+
+    fn process(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
 
 impl Processor for InterruptCheckingSource {
     fn name(&self) -> String {

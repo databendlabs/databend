@@ -18,7 +18,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [
             Identifier {
@@ -67,7 +66,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [
             Identifier {
@@ -116,7 +114,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [],
         source: Select {
@@ -161,7 +158,6 @@ Insert(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,

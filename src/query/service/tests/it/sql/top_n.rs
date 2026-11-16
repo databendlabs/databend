@@ -506,6 +506,89 @@ async fn test_aggregate_rank_limit_registers_scan_filters_on_union_all_branches(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_multi_key_rank_limit_registers_scan_filters_on_union_all_branches() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let left = format!("{}.multi_key_rank_limit_union_left", db);
+    let right = format!("{}.multi_key_rank_limit_union_right", db);
+    let widened = format!("{}.multi_key_rank_limit_union_widened", db);
+    // The NOT NULL right key is cast to the nullable union type, which keeps
+    // its values; the Int32 key is widened to Int64, which does not.
+    for sql in [
+        format!("CREATE TABLE {left} (k1 Int64 NULL, k2 String) ENGINE=FUSE ROW_PER_BLOCK=5"),
+        format!("CREATE TABLE {right} (k1 Int64 NOT NULL, k2 String) ENGINE=FUSE ROW_PER_BLOCK=5"),
+        format!("CREATE TABLE {widened} (k1 Int32 NULL, k2 String) ENGINE=FUSE ROW_PER_BLOCK=5"),
+        format!("INSERT INTO {left} SELECT number % 10, (number % 3)::STRING FROM numbers(30)"),
+        format!("INSERT INTO {right} SELECT number + 1, '0' FROM numbers(20)"),
+        format!("INSERT INTO {widened} SELECT number, '1' FROM numbers(20)"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let new_ctx = || async {
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+        settings.set_max_threads(4)?;
+        settings.set_max_block_size(5)?;
+        settings.set_setting("max_push_down_limit".into(), "10000".into())?;
+        Result::Ok(ctx)
+    };
+    // Without the rule, the query is a plain aggregate and sort: the oracle.
+    let oracle_ctx = || async {
+        let ctx = new_ctx().await?;
+        ctx.get_settings().set_setting(
+            "optimizer_skip_list".into(),
+            "PushDownRankLimitAggregate".into(),
+        )?;
+        Result::Ok(ctx)
+    };
+    let expected = |rows: &[(i64, &str, u64)]| {
+        rows.iter()
+            .map(|(k1, k2, count)| {
+                vec![
+                    Scalar::Number(NumberScalar::Int64(*k1)),
+                    Scalar::String(k2.to_string()),
+                    Scalar::Number(NumberScalar::UInt64(*count)),
+                ]
+            })
+            .collect::<Vec<_>>()
+    };
+
+    // Scan ids follow the binding order of the branches.
+    let query = format!(
+        "SELECT k1, k2, count(*) FROM (SELECT k1, k2 FROM {left} UNION ALL SELECT k1, k2 FROM {right}) u GROUP BY k1, k2 ORDER BY k1, k2 LIMIT 4"
+    );
+    let ctx = new_ctx().await?;
+    let rows = execute_rows(ctx.clone(), &query).await?;
+    // Group (1, '0') merges a row from each branch.
+    assert_eq!(
+        rows,
+        expected(&[(0, "0", 1), (0, "1", 1), (0, "2", 1), (1, "0", 2)])
+    );
+    assert!(!ctx.get_runtime_scan_filters(0).is_empty());
+    assert!(!ctx.get_runtime_scan_filters(1).is_empty());
+
+    let ctx = oracle_ctx().await?;
+    assert_eq!(rows, execute_rows(ctx.clone(), &query).await?);
+    assert!(ctx.get_runtime_scan_filters(0).is_empty());
+    assert!(ctx.get_runtime_scan_filters(1).is_empty());
+
+    let query = format!(
+        "SELECT k1, k2, count(*) FROM (SELECT k1, k2 FROM {left} UNION ALL SELECT k1, k2 FROM {widened}) u GROUP BY k1, k2 ORDER BY k1 DESC, k2 DESC LIMIT 3"
+    );
+    let ctx = new_ctx().await?;
+    let rows = execute_rows(ctx.clone(), &query).await?;
+    assert_eq!(rows, expected(&[(19, "1", 1), (18, "1", 1), (17, "1", 1)]));
+    assert!(!ctx.get_runtime_scan_filters(0).is_empty());
+    assert!(ctx.get_runtime_scan_filters(1).is_empty());
+
+    let ctx = oracle_ctx().await?;
+    assert_eq!(rows, execute_rows(ctx, &query).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_top_n_in_correlated_scalar_subquery() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;

@@ -17,14 +17,20 @@ use std::future::Future;
 
 use databend_common_exception::Result;
 
+use crate::CachePolicy;
 use crate::CachedItem;
 
-/// IO and decoding for one kind of data. Knows nothing about caching.
+/// IO and decoding for one kind of data. Knows nothing about the memory cache; reads its bytes
+/// through `DiskCachedStorage` with `policy.disk`.
 pub trait Reader: Send + Sync {
     type Key: Send + Sync;
     type Item: CachedItem;
 
     fn cache_key<'a>(&self, key: &'a Self::Key) -> Cow<'a, str>;
 
-    fn read(&self, key: &Self::Key) -> impl Future<Output = Result<Self::Item>> + Send;
+    fn read(
+        &self,
+        key: &Self::Key,
+        policy: &CachePolicy,
+    ) -> impl Future<Output = Result<Self::Item>> + Send;
 }

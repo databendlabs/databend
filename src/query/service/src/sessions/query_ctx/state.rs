@@ -30,6 +30,16 @@ impl TableContextMergeInto for QueryContext {
     }
 }
 
+impl TableContextCachePolicy for QueryContext {
+    fn cache_policy(&self) -> CachePolicy {
+        *self.shared.cache_policy.read()
+    }
+
+    fn set_cache_policy(&self, policy: CachePolicy) {
+        *self.shared.cache_policy.write() = policy;
+    }
+}
+
 impl TableContextPerf for QueryContext {
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         let mut all = SessionManager::instance().get_query_execution_stats();
@@ -77,6 +87,10 @@ impl TableContextQueryIdentity for QueryContext {
 
     fn attach_query_str(&self, kind: QueryKind, query: String) {
         self.shared.attach_query_str(kind, query);
+    }
+
+    fn attach_query_kind(&self, kind: QueryKind) {
+        self.shared.attach_query_kind(kind);
     }
 
     fn add_query_secrets(&self, secrets: SqlSecrets) {

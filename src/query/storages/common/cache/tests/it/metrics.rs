@@ -15,10 +15,23 @@
 //! The cache metrics: gauges of what each kind and pool holds, and the counts of why entries
 //! leave or are refused, which only the shared backend keeps.
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use bytes::Bytes;
+use databend_common_base::runtime::metrics::MetricSample;
+use databend_common_base::runtime::metrics::MetricValue;
+use databend_common_base::runtime::metrics::SampleCollector;
+use databend_common_config::CacheConfig;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheMetricsCollector;
 use databend_storages_common_cache::CacheRow;
+use databend_storages_common_cache::DiskKey;
+use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::segment;
 use futures::executor::block_on;
 use prometheus_client::encoding::text::encode;
@@ -30,9 +43,11 @@ use crate::fakes::cache;
 use crate::fakes::data_kind;
 use crate::fakes::meta_kind;
 use crate::fakes::shared_store;
+use crate::fakes::wait_for;
 use crate::kinds::samples::Sample;
 use crate::kinds::setup::Backend;
 use crate::kinds::setup::manager;
+use crate::manager::disk_config;
 
 const MEMORY: u64 = 1 << 30;
 
@@ -117,6 +132,105 @@ fn test_gauges_follow_cache_rows() {
     }
 }
 
+/// The disk cache adds gauges per disk pool, the queue, and the counter of dropped entries;
+/// the rows of kinds on disk are in the kind gauges with `pool="disk"`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_disk_gauges_follow_cache_rows() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let manager = Arc::new(manager(&disk_config(&dir), MEMORY, true));
+    let disk = manager.disk().unwrap();
+    let kind = CacheKind::of::<column::Data>();
+    let key = DiskKey::whole("1/2/_b/x.parquet");
+    assert!(disk.put(kind, &key, Bytes::from_static(b"bytes")).await);
+    wait_for(|| disk.contains(kind, &key));
+    // Larger than a quarter of the data pool: dropped.
+    let big = Bytes::from(vec![0; (disk.default_pool_cap(Pool::Data) / 2) as usize]);
+    assert!(disk.put(kind, &DiskKey::whole("big"), big).await);
+    wait_for(|| disk.stats().dropped_rejected == 1);
+    // A hit, a miss, and an object written then changed.
+    assert!(disk.get(kind, &key).await.is_some());
+    assert!(disk.get(kind, &DiskKey::whole("missing")).await.is_none());
+    let changed = DiskKey::whole("1/2/_b/y.parquet");
+    assert!(disk.put(kind, &changed, Bytes::from_static(b"old")).await);
+    wait_for(|| disk.contains(kind, &changed));
+    assert_eq!(disk.evict_object("1/2/_b/y.parquet"), 1);
+
+    let text = scrape(CacheMetricsCollector::of(manager.clone()));
+    let rows = manager.rows();
+    let column_data = rows
+        .iter()
+        .find(|r| r.name == "disk_cache_column_data")
+        .unwrap();
+    let labels = kind_labels(column_data);
+    assert!(labels.contains("pool=\"disk\""));
+    assert_eq!(sample(&text, "cache_items", &labels), Some(1));
+    assert_eq!(sample(&text, "cache_in_cache_bytes", &labels), Some(9));
+    for row in rows.iter().filter(|r| r.disk && r.kind.is_none()) {
+        let labels = format!("pool=\"{}\"", row.pool.unwrap().name());
+        let get = |name| sample(&text, name, &labels);
+        assert_eq!(
+            get("cache_disk_pool_items"),
+            Some(row.num_items),
+            "{}",
+            row.name
+        );
+        assert_eq!(
+            get("cache_disk_pool_used_bytes"),
+            Some(row.size),
+            "{}",
+            row.name
+        );
+        assert_eq!(
+            get("cache_disk_pool_capacity_bytes"),
+            row.capacity,
+            "{}",
+            row.name
+        );
+    }
+    assert_eq!(sample(&text, "cache_disk_queue_bytes", ""), Some(0));
+    assert_eq!(
+        sample(&text, "cache_disk_dropped_total", "reason=\"rejected\""),
+        Some(1)
+    );
+    assert_eq!(
+        sample(&text, "cache_disk_dropped_total", "reason=\"queue_full\""),
+        Some(0)
+    );
+    // Per kind: what it served, wrote, lost. Files hold the value and a 4 byte checksum.
+    let get = |name: &str, extra: &str| {
+        sample(&text, &format!("{name}_total"), &format!("{labels}{extra}"))
+    };
+    assert_eq!(get("cache_disk_hit_bytes", ""), Some(5));
+    assert_eq!(get("cache_disk_queued_hit_count", ""), Some(0));
+    assert_eq!(get("cache_disk_write_count", ""), Some(2));
+    assert_eq!(get("cache_disk_write_bytes", ""), Some(9 + 7));
+    assert_eq!(get("cache_disk_invalidation_count", ""), Some(1));
+    assert_eq!(get("cache_disk_invalidation_bytes", ""), Some(7));
+    assert!(get("cache_disk_read_microseconds", "").is_some());
+    assert_eq!(get("cache_disk_storage_read_bytes", ""), Some(0));
+    for (reason, count) in [("queue_full", 0), ("rejected", 1), ("io_error", 0)] {
+        let reason = format!(",reason=\"{reason}\"");
+        assert_eq!(
+            get("cache_disk_drop_count", &reason),
+            Some(count),
+            "{reason}"
+        );
+    }
+    for reason in ["capacity", "disk_pressure"] {
+        let reason = format!(",reason=\"{reason}\"");
+        assert_eq!(
+            get("cache_disk_eviction_count", &reason),
+            Some(0),
+            "{reason}"
+        );
+        assert_eq!(
+            get("cache_disk_eviction_bytes", &reason),
+            Some(0),
+            "{reason}"
+        );
+    }
+}
+
 /// The shared store counts why entries leave or are refused, per kind.
 #[test]
 fn test_shared_store_counts_events() {
@@ -185,4 +299,152 @@ fn test_counters_are_scraped() {
             Backend::Shared => assert_eq!((evictions, reclaims), (Some(0), Some(1))),
         }
     }
+}
+
+type Series = BTreeMap<(String, Vec<(String, String)>), (String, f64)>;
+
+/// The samples of a scrape, by name and sorted labels, with the type of their family.
+fn scraped(text: &str) -> Series {
+    let mut types = HashMap::new();
+    let mut series = Series::new();
+    for line in text.lines() {
+        if let Some(declared) = line.strip_prefix("# TYPE ") {
+            let (name, kind) = declared.split_once(' ').unwrap();
+            types.insert(name.to_string(), kind.to_string());
+            continue;
+        }
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        let (series_name, value) = line.rsplit_once(' ').unwrap();
+        let (name, labels) = match series_name.split_once('{') {
+            None => (series_name, Vec::new()),
+            Some((name, labels)) => {
+                let mut labels: Vec<_> = labels
+                    .strip_suffix('}')
+                    .unwrap()
+                    .split(',')
+                    .map(|pair| {
+                        let (key, value) = pair.split_once('=').unwrap();
+                        (key.to_string(), value.trim_matches('"').to_string())
+                    })
+                    .collect();
+                labels.sort();
+                (name, labels)
+            }
+        };
+        let family = name
+            .strip_suffix("_total")
+            .filter(|f| types.contains_key(*f));
+        let kind = types[family.unwrap_or(name)].clone();
+        series.insert((name.to_string(), labels), (kind, value.parse().unwrap()));
+    }
+    series
+}
+
+/// The samples `system.metrics` shows, keyed like `scraped`.
+fn sampled(collector: &CacheMetricsCollector) -> Series {
+    let mut samples: Vec<MetricSample> = Vec::new();
+    collector.sample(&mut samples);
+    samples
+        .into_iter()
+        .map(|sample| {
+            let mut labels: Vec<_> = sample.labels.into_iter().collect();
+            labels.sort();
+            let value = match sample.value {
+                MetricValue::Counter(value) | MetricValue::Gauge(value) => value,
+                other => panic!("{}: unexpected {other:?}", sample.name),
+            };
+            ((sample.name, labels), (sample.value.kind(), value))
+        })
+        .collect()
+}
+
+/// `system.metrics` shows every series of the scrape, with the same name, labels, type and
+/// value, and nothing else.
+fn assert_sampled_as_scraped(manager: &Arc<CacheManager>) -> Series {
+    let text = scrape(CacheMetricsCollector::of(manager.clone()));
+    let scraped = scraped(&text);
+    assert!(!scraped.is_empty());
+    assert_eq!(
+        sampled(&CacheMetricsCollector::of(manager.clone())),
+        scraped
+    );
+    scraped
+}
+
+/// Each backend, after lookups, evictions and a reclaim, shows in `system.metrics` exactly
+/// what it scrapes.
+#[test]
+fn test_samples_follow_scrape() {
+    for backend in Backend::ALL {
+        let manager = Arc::new(manager(&backend.config(MEMORY), MEMORY, false));
+        let segments = manager.cache::<segment::Info>();
+        let _held = segments.put("a", segment::Info::sample(1));
+        segments.put("b", segment::Info::sample(2));
+        segments.evict("a");
+        manager.shrink_for_pressure(&|| false);
+        assert_sampled_as_scraped(&manager);
+    }
+}
+
+/// With the shared backend and the disk cache, every cache family is in `system.metrics`.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_every_cache_family_is_sampled() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config = CacheConfig {
+        shared_memory_enabled: true,
+        ..disk_config(&dir)
+    };
+    let manager = Arc::new(manager(&config, MEMORY, true));
+    let disk = manager.disk().unwrap();
+    let kind = CacheKind::of::<column::Data>();
+    let key = DiskKey::whole("1/2/_b/x.parquet");
+    assert!(disk.put(kind, &key, Bytes::from_static(b"bytes")).await);
+    wait_for(|| disk.contains(kind, &key));
+    assert!(disk.get(kind, &key).await.is_some());
+    assert!(disk.get(kind, &DiskKey::whole("missing")).await.is_none());
+    let segments = manager.cache::<segment::Info>();
+    segments.put("a", segment::Info::sample(1));
+    manager.shrink_for_pressure(&|| false);
+
+    let series = assert_sampled_as_scraped(&manager);
+    let names: BTreeSet<&str> = series.keys().map(|(name, _)| name.as_str()).collect();
+    let expected = [
+        "cache_items",
+        "cache_resident_bytes",
+        "cache_in_cache_bytes",
+        "cache_capacity",
+        "cache_enabled",
+        "cache_pool_items",
+        "cache_pool_resident_bytes",
+        "cache_pool_in_cache_bytes",
+        "cache_pool_capacity_bytes",
+        "cache_eviction_count_total",
+        "cache_eviction_bytes_total",
+        "cache_insert_rejected_count_total",
+        "cache_memory_reclaim_count_total",
+        "cache_memory_reclaim_bytes_total",
+        "cache_memory_reclaim_milliseconds_total",
+        "cache_disk_pool_items",
+        "cache_disk_pool_used_bytes",
+        "cache_disk_pool_capacity_bytes",
+        "cache_disk_queue_bytes",
+        "cache_disk_dropped_total",
+        "cache_disk_hit_bytes_total",
+        "cache_disk_queued_hit_count_total",
+        "cache_disk_read_microseconds_total",
+        "cache_disk_storage_read_bytes_total",
+        "cache_disk_write_count_total",
+        "cache_disk_write_bytes_total",
+        "cache_disk_drop_count_total",
+        "cache_disk_eviction_count_total",
+        "cache_disk_eviction_bytes_total",
+        "cache_disk_invalidation_count_total",
+        "cache_disk_invalidation_bytes_total",
+    ];
+    for name in expected {
+        assert!(names.contains(name), "{name} is not in system.metrics");
+    }
+    assert_eq!(names.len(), expected.len(), "{names:?}");
 }

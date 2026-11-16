@@ -235,18 +235,24 @@ impl RuleHierarchicalGroupingSetsToUnion {
 
     /// Check if aggregates are suitable for hierarchical optimization
     fn can_optimize_hierarchically(&self, agg_functions: &[ScalarItem]) -> bool {
-        agg_functions.iter().all(|item| {
-            if let ScalarExpr::AggregateFunction(agg) = &item.scalar {
-                // Only functions that support hierarchical aggregation
-                matches!(
-                    agg.func_name.as_str(),
-                    "sum" | "count" | "min" | "max" | "sum0"
-                ) && !agg.distinct
-                    && agg.args.len() <= 1
-            } else {
-                false
-            }
-        })
+        // Without aggregate functions there is nothing to re-aggregate between
+        // levels. The grand-total level would become a key-less, function-less
+        // aggregate that the physical builder folds into a zero-column
+        // ConstantTableScan; a materialized CTE cannot carry such rows and its
+        // consumers never finish. Leave these queries to the ordinary UNION rewrite.
+        !agg_functions.is_empty()
+            && agg_functions.iter().all(|item| {
+                if let ScalarExpr::AggregateFunction(agg) = &item.scalar {
+                    // Only functions that support hierarchical aggregation
+                    matches!(
+                        agg.func_name.as_str(),
+                        "sum" | "count" | "min" | "max" | "sum0"
+                    ) && !agg.distinct
+                        && agg.args.len() <= 1
+                } else {
+                    false
+                }
+            })
     }
 
     /// Build the complete hierarchical plan with true layering

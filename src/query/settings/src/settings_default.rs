@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::default_server_memory_limit;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -130,7 +131,7 @@ impl DefaultSettings {
     pub fn instance() -> Result<Arc<DefaultSettings>> {
         Ok(Arc::clone(DEFAULT_SETTINGS.get_or_try_init(|| -> Result<Arc<DefaultSettings>> {
             let num_cpus = Self::num_cpus();
-            let max_memory_usage = Self::max_memory_usage()?;
+            let max_memory_usage = Self::max_memory_usage();
             let max_query_memory_usage = max_memory_usage / 2;
             let recluster_block_size = Self::recluster_block_size(max_memory_usage);
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
@@ -681,14 +682,14 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("grouping_sets_to_union", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables grouping sets to union.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_cascading_grouping_sets", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Builds hierarchical grouping sets from the closest available parent grouping.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1113,6 +1114,13 @@ impl DefaultSettings {
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Deprecated; retained for compatibility and has no effect.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_recluster_task_selection_v2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1556,6 +1564,27 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_segment_zone_map", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Maintain segment zone maps (per-segment min/max of every column) after each committed recluster round. Turn off to stop building them; existing zone maps stay usable. A table opts out with the table option enable_segment_zone_map = 0.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_segment_zone_map_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Use a table's segment zone map, if it has one, to skip segments before reading segment info. Turn off to read every segment as before.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("segment_zone_map_full_segment_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50),
+                    desc: "Refresh a table's segment zone map after a recluster round once more than this many full segments are estimated to be missing from it.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_prune_pipeline", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable pruning pipeline",
@@ -1868,16 +1897,13 @@ impl DefaultSettings {
         }
     }
 
-    fn max_memory_usage() -> Result<u64> {
-        let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-
-        Ok(match GlobalConfig::try_get_instance() {
-            None => 1024 * memory_info.total * 80 / 100,
-            Some(conf) => match conf.query.common.max_server_memory_usage {
-                0 => 1024 * memory_info.total * 80 / 100,
-                max_server_memory_usage => max_server_memory_usage,
-            },
-        })
+    /// The server memory limit, so that the spill thresholds derived from it stay below the
+    /// limit the allocator enforces.
+    fn max_memory_usage() -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => default_server_memory_limit(),
+            Some(conf) => conf.server_memory_limit(),
+        }
     }
 
     fn recluster_block_size(max_memory_usage: u64) -> u64 {

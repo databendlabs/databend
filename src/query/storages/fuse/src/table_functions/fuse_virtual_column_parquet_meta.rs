@@ -34,6 +34,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnIdWithMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
@@ -125,7 +126,7 @@ impl FuseVirtualColumnParquetMeta {
         'outer: for chunk in snapshot.segments.chunks(chunk_size) {
             let chunk_refs = chunk.iter().collect::<Vec<_>>();
             let segments = segments_io
-                .generic_read_compact_segments::<R>(&chunk_refs, true, &projection)
+                .generic_read_compact_segments::<R>(&chunk_refs, CachePolicy::DEFAULT, &projection)
                 .await?;
             for segment in segments {
                 let segment = segment?;
@@ -137,6 +138,7 @@ impl FuseVirtualColumnParquetMeta {
                     let virtual_meta = match load_virtual_column_file_meta(
                         tbl.operator.clone(),
                         &virtual_location,
+                        ctx.cache_policy(),
                     )
                     .await
                     {

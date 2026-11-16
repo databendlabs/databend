@@ -208,7 +208,10 @@ impl QueriesExecutorTasksQueue {
 
     pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
         let mut workers_tasks = self.workers_tasks.lock();
-        let mut worker_id = task.worker_id;
+        // The worker id of a waker is not always the id of a worker of this
+        // executor, e.g. a fuse source passes its index among the sources.
+        let workers = workers_tasks.workers_waiting_status.total_size();
+        let mut worker_id = task.worker_id % workers;
         workers_tasks.current_tasks.tasks_size += 1;
         workers_tasks.current_tasks.workers_completed_async_tasks[worker_id].push_back(task);
 

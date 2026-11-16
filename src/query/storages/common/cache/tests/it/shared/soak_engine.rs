@@ -42,6 +42,7 @@ use std::time::Instant;
 use databend_common_base::runtime::Thread;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
@@ -186,7 +187,7 @@ impl Reader for ValueReader {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, _key: &String) -> Result<Value> {
+    async fn read(&self, _key: &String, _ctx: &CachePolicy) -> Result<Value> {
         Ok(Value::new(&self.live, self.bytes))
     }
 }

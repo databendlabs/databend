@@ -40,6 +40,7 @@ use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
@@ -56,6 +57,7 @@ use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::QuerySpecificValues;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -143,6 +145,8 @@ pub struct QueryContextShared {
     /// Do not combine it with worker-local wall-clock timestamps to calculate
     /// elapsed time; use `created_time` for local context timing instead.
     pub(super) query_created_time: SystemTime,
+    /// Shared by every function context of this query, for the planner cache.
+    pub(super) query_specific_values: QuerySpecificValues,
     // now it is only set in query_log::log_query_finished
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
@@ -196,6 +200,8 @@ pub struct QueryContextShared {
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
+    /// What the reads of the statement may do with the caches (`TableContextCachePolicy`).
+    pub(super) cache_policy: RwLock<CachePolicy>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
@@ -266,6 +272,7 @@ impl QueryContextShared {
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time,
             query_created_time,
+            query_specific_values: QuerySpecificValues::tracked(),
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
@@ -301,6 +308,7 @@ impl QueryContextShared {
             },
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
+            cache_policy: RwLock::new(CachePolicy::DEFAULT),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
@@ -693,24 +701,26 @@ impl QueryContextShared {
     }
 
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
+        self.attach_query_kind(kind);
+
         // `create view as view_query` the view_query should not cover create view
         if !self.get_query_str().is_empty() {
             return;
         }
-        {
-            let mut running_query = self.running_query.write();
-            // Callers attach masked SQL, see `Statement::to_mask_sql`.
-            *running_query = Some(short_sql(
-                query,
-                self.get_settings()
-                    .get_short_sql_max_length()
-                    .unwrap_or(1000),
-            ));
-        }
+        let mut running_query = self.running_query.write();
+        // Callers attach masked SQL, see `Statement::to_mask_sql`.
+        *running_query = Some(short_sql(
+            query,
+            self.get_settings()
+                .get_short_sql_max_length()
+                .unwrap_or(1000),
+        ));
+    }
 
-        {
-            let mut running_query_kind = self.running_query_kind.write();
-            *running_query_kind = Some(kind);
+    /// The first known kind wins, see `TableContextQueryIdentity::attach_query_kind`.
+    pub fn attach_query_kind(&self, kind: QueryKind) {
+        if kind != QueryKind::Unknown {
+            self.running_query_kind.write().get_or_insert(kind);
         }
     }
 

@@ -16,16 +16,12 @@
 
 use std::mem::size_of;
 
-use bytes::Bytes;
-use databend_common_exception::Result;
 use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
 
 use crate::CacheDef;
 use crate::CachedItem;
-use crate::Disk;
-use crate::DiskCodec;
 use crate::Pool;
 
 /// Persisted footers, by `inverted_index_meta_cache_key`.
@@ -35,9 +31,7 @@ impl CacheDef for Meta {
     type Value = InvertedIndexMeta;
     const NAME: &'static str = "memory_cache_inverted_index_meta_data";
     const POOL: Pool = Pool::Meta;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("inverted_index_meta_v1", |c| {
-        c.disk_cache_inverted_index_meta_size
-    }));
+    const DISK: bool = true;
 }
 
 /// Term dictionaries and small fieldnorm / fast files, whole or paged.
@@ -47,9 +41,7 @@ impl CacheDef for Lookup {
     type Value = InvertedIndexLookupBytes;
     const NAME: &'static str = "memory_cache_inverted_index_lookup";
     const POOL: Pool = Pool::Index;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("inverted_index_lookup_v1", |c| {
-        c.disk_cache_inverted_index_lookup_size
-    }));
+    const DISK: bool = true;
 }
 
 /// Pages of postings, positions, store and large fieldnorm / fast files.
@@ -59,9 +51,7 @@ impl CacheDef for Payload {
     type Value = InvertedIndexPayloadBytes;
     const NAME: &'static str = "memory_cache_inverted_index_payload";
     const POOL: Pool = Pool::Index;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("inverted_index_payload_v1", |c| {
-        c.disk_cache_inverted_index_payload_size
-    }));
+    const DISK: bool = true;
 }
 
 /// Complete `.idx` / `.pos` components, apart from pages so warmups cannot evict hot pages.
@@ -71,6 +61,7 @@ impl CacheDef for FullPayload {
     type Value = InvertedIndexPayloadBytes;
     const NAME: &'static str = "memory_cache_inverted_index_full_payload";
     const POOL: Pool = Pool::Index;
+    const DISK: bool = true;
 }
 
 impl CachedItem for InvertedIndexMeta {
@@ -88,35 +79,5 @@ impl CachedItem for InvertedIndexLookupBytes {
 impl CachedItem for InvertedIndexPayloadBytes {
     fn mem_bytes(&self) -> usize {
         size_of::<Self>() + self.data.len()
-    }
-}
-
-impl DiskCodec for InvertedIndexMeta {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
-    }
-}
-
-impl DiskCodec for InvertedIndexLookupBytes {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
-    }
-}
-
-impl DiskCodec for InvertedIndexPayloadBytes {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
     }
 }

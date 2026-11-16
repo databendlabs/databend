@@ -58,15 +58,15 @@ impl PoolCaps {
 
 impl SharedStore {
     /// Pools sized by ratio of the server memory limit, `max_server_memory_usage`, which must
-    /// be set: the pools are bounded by it and reclaimed when it is reached.
+    /// not be 0: the pools are bounded by it and reclaimed when it is reached.
     pub fn from_config(config: &CacheConfig, max_server_memory_usage: u64) -> Result<SharedStore> {
         // The pools are a share of the server memory limit, and shrink when it is reached:
         // without a limit they would neither be bounded by it nor ever be reclaimed.
         let memory_limit = match max_server_memory_usage {
             0 => {
                 return Err(ErrorCode::InvalidConfig(
-                    "cache.shared_memory_enabled requires a server memory limit: set \
-                     query.max_memory_limit_enabled and query.max_server_memory_usage",
+                    "cache.shared_memory_enabled requires a server memory limit to size \
+                     its pools: set query.max_server_memory_usage",
                 ));
             }
             limit => limit,

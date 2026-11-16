@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::Partitions;
@@ -136,7 +137,7 @@ impl IPhysicalPlan for FuseBlockRead {
             builder.ctx.clone(),
             &self.source,
             &mut builder.main_pipeline,
-            true,
+            CachePolicy::DEFAULT,
         )?;
         build_scan_output_pipeline(
             builder,

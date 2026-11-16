@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnMatchMode;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
@@ -129,7 +130,7 @@ impl ParquetTableForCopy {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;

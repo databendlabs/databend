@@ -33,6 +33,8 @@ pub(crate) use selectivity::SelectivityVisitor;
 
 #[derive(Clone, Debug)]
 pub struct StatContext {
+    /// Estimates do not enter the plan, so their evaluations are not recorded for the planner
+    /// cache. A rule that turns an estimate into a plan value records it explicitly.
     pub function_context: FunctionContext,
     pub filter_and_strategy: FilterAndStrategy,
 }
@@ -41,7 +43,7 @@ impl StatContext {
     /// For callers without query settings, such as standalone statistics unit tests.
     pub fn without_settings(function_context: FunctionContext) -> Self {
         Self {
-            function_context,
+            function_context: function_context.untracked(),
             filter_and_strategy: FilterAndStrategy::Independent,
         }
     }
@@ -53,7 +55,7 @@ impl StatContext {
             .and_then(|value| FilterAndStrategy::parse(&value))
             .unwrap_or(FilterAndStrategy::Independent);
         Self {
-            function_context,
+            function_context: function_context.untracked(),
             filter_and_strategy,
         }
     }

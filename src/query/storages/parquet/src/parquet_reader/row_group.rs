@@ -21,8 +21,9 @@ use bytes::Bytes;
 use databend_common_base::rangemap::RangeMerger;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::ColumnData;
+use databend_storages_common_cache::CacheFill;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::kinds::column;
 use opendal::Operator;
 use parquet::arrow::ProjectionMask;
@@ -492,30 +493,29 @@ pub async fn cached_range_read(
     merged_ranges: Vec<Range<u64>>,
     enable_cache: bool,
 ) -> Result<HashMap<Range<u64>, Bytes>> {
-    let mut handles = Vec::with_capacity(merged_ranges.len());
-    let column_data_cache = enable_cache.then(|| CacheManager::instance().cache::<column::Data>());
-    for range in merged_ranges {
-        let fut_read = op.read_with(location);
-        let key = format!("{}_{location}_{range:?}", op.info().root());
-        let column_data_cache = column_data_cache.clone();
-        handles.push(async move {
-            if let Some(buffer) = column_data_cache
-                .as_ref()
-                .and_then(|cache| cache.lookup_sized(&key, range.end - range.start))
-            {
-                Ok::<_, ErrorCode>((range, buffer.bytes()))
-            } else {
-                let data = fut_read.range(range.start..range.end).await?;
-                let data = data.to_bytes();
-                if let Some(cache) = &column_data_cache {
-                    cache.fill(&key, ColumnData::from_bytes(data.clone()));
-                }
-                Ok::<_, ErrorCode>((range, data))
-            }
-        });
-    }
-    let chunk_data = futures::future::try_join_all(handles).await?;
-    Ok(chunk_data.into_iter().collect())
+    // `enable_cache` is off for stage tables, COPY included, and small files read whole: they
+    // stay off the disk cache altogether, as off the memory cache on main, so a stage file
+    // overwritten under its name is read as rewritten. Iceberg, Hive and result cache reads
+    // turn it on.
+    let fill = if enable_cache {
+        CacheFill::ReadWrite
+    } else {
+        CacheFill::Bypass
+    };
+    // Paths of external files are relative to the operator root, so keys carry it. The units
+    // are the merged ranges, not column chunks: the same column read under another projection
+    // is another entry. Known limitation; caching per column chunk needs the reader to keep the
+    // chunk ranges through the merge.
+    let storage =
+        DiskCachedStorage::new(op.clone()).with_key_prefix(format!("{}_", op.info().root()));
+    storage
+        .read_ranges(
+            CacheKind::of::<column::Data>(),
+            location,
+            merged_ranges,
+            fill,
+        )
+        .await
 }
 
 #[cfg(test)]

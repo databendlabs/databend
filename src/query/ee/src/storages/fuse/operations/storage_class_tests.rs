@@ -32,6 +32,7 @@ mod real_s3 {
     use databend_common_storages_fuse::io::SegmentsIO;
     use databend_common_users::UserApiProvider;
     use databend_query::test_kits::TestFixture;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_table_meta::meta::CompactSegmentInfo;
     use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
     use opendal::Buffer;
@@ -172,7 +173,10 @@ mod real_s3 {
             anyhow::ensure!(!snapshot.segments.is_empty(), "INSERT must create segments");
             let segments_io = SegmentsIO::create(ctx, table.get_operator(), table.schema());
             let segments = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(&snapshot.segments, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(
+                    &snapshot.segments,
+                    CachePolicy::READ_ONLY,
+                )
                 .await?;
             for ((location, _), segment) in snapshot.segments.iter().zip(segments) {
                 objects.insert(format!("{prefix}{location}"));

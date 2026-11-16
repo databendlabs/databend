@@ -269,6 +269,23 @@ impl Metadata {
             .filter(move |column| column.table_index() == Some(index))
     }
 
+    /// Returns the index of an internal column already bound for the table, if any.
+    pub fn internal_column_index(
+        &self,
+        table_index: IndexType,
+        column_id: ColumnId,
+    ) -> Option<Symbol> {
+        self.columns_by_table_index(table_index)
+            .find_map(|column| match column {
+                ColumnEntry::InternalColumn(column)
+                    if column.internal_column.column_id() == column_id =>
+                {
+                    Some(column.column_index)
+                }
+                _ => None,
+            })
+    }
+
     pub fn virtual_columns_by_table_index(
         &self,
         index: IndexType,
@@ -418,7 +435,6 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
-        branch: Option<String>,
         table_alias_name: Option<String>,
         source_of_view: bool,
         source_of_stage: bool,
@@ -435,7 +451,6 @@ impl Metadata {
             database,
             catalog,
             table: table_meta.clone(),
-            branch,
             alias_name: table_alias_name,
             source_of_view,
             source_of_stage,
@@ -673,7 +688,6 @@ pub struct TableEntry {
     catalog: String,
     database: String,
     name: String,
-    branch: Option<String>,
     alias_name: Option<String>,
     index: IndexType,
     source_of_view: bool,
@@ -733,10 +747,6 @@ impl TableEntry {
         &self.name
     }
 
-    pub fn branch(&self) -> &Option<String> {
-        &self.branch
-    }
-
     /// Get the alias name of this table entry.
     pub fn alias_name(&self) -> &Option<String> {
         &self.alias_name
@@ -771,13 +781,7 @@ impl TableEntry {
     }
 
     pub fn qualified_name(&self) -> String {
-        match &self.branch {
-            None => format!("{}.{}.{}", self.catalog, self.database, self.name),
-            Some(branch) => format!(
-                "{}.{}.{}/{}",
-                self.catalog, self.database, self.name, branch
-            ),
-        }
+        format!("{}.{}.{}", self.catalog, self.database, self.name)
     }
 }
 

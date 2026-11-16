@@ -69,10 +69,7 @@ impl Interpreter for RenameTableColumnInterpreter {
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
             // The plan contains a full schema; do not apply it to a newer table version.
-            let table = self
-                .ctx
-                .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
-                .await?;
+            let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
             // check mutability
             table.check_mutable()?;

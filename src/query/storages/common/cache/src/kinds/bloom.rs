@@ -17,15 +17,11 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
-use bytes::Bytes;
-use databend_common_exception::Result;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::filters::FilterImpl;
 
 use crate::CacheDef;
 use crate::CachedItem;
-use crate::Disk;
-use crate::DiskCodec;
 use crate::Pool;
 use crate::size::vec;
 
@@ -38,9 +34,7 @@ impl CacheDef for IndexMeta {
     const POOL: Pool = Pool::Meta;
     /// Index files are written once, under new locations.
     const SHARE_LOADS: bool = true;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("bloom_meta_v1", |c| {
-        c.disk_cache_table_bloom_index_meta_size
-    }));
+    const DISK: bool = true;
 }
 
 /// Bloom filters, one per index column, by `{index_location}-{filter_name}`.
@@ -50,9 +44,7 @@ impl CacheDef for Filter {
     type Value = Arc<FilterImpl>;
     const NAME: &'static str = "memory_cache_bloom_index_filter";
     const POOL: Pool = Pool::Index;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("bloom_filter_v1", |c| {
-        c.disk_cache_table_bloom_index_data_size
-    }));
+    const DISK: bool = true;
 }
 
 impl CachedItem for BloomIndexMeta {
@@ -68,25 +60,5 @@ impl CachedItem for BloomIndexMeta {
 impl CachedItem for FilterImpl {
     fn mem_bytes(&self) -> usize {
         FilterImpl::mem_bytes(self)
-    }
-}
-
-impl DiskCodec for BloomIndexMeta {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
-    }
-}
-
-impl DiskCodec for FilterImpl {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
     }
 }

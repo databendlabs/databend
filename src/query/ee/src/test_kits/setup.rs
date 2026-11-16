@@ -20,6 +20,7 @@ use databend_query::GlobalServices;
 use databend_query::clusters::ClusterDiscovery;
 use log::info;
 
+use crate::resource_management::init_resources_management;
 use crate::test_kits::mock_services::MockServices;
 
 pub struct TestFixture;
@@ -36,7 +37,10 @@ impl TestFixture {
             databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
-        GlobalServices::init_with(config, version, false).await?;
+        // In EE mode, as an EE server starts: the disk cache exists only there, and resources
+        // are managed by EE.
+        GlobalServices::init_with(config, version, true).await?;
+        init_resources_management(config, version).await?;
         MockServices::init(config, public_key).await?;
 
         // Cluster register.

@@ -22,3 +22,4 @@ pub use meta_readers::SnapshotReader;
 pub use meta_readers::SnapshotStatsReader;
 pub use meta_readers::bytes_reader;
 pub use meta_readers::read_thrift_file_metadata;
+pub use meta_readers::read_whole;

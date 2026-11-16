@@ -37,8 +37,8 @@ use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::RefreshSelection;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Table;
-use databend_storages_common_io::Files;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -61,6 +61,7 @@ use crate::io::BlockReader;
 use crate::io::FuseCaches;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::SegmentInfoReader;
+use crate::io::TableFiles;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnBuilder;
 use crate::io::VirtualColumnLayoutPlanner;
@@ -107,7 +108,10 @@ pub async fn prepare_refresh_virtual_column(
         ));
     }
     let start = Instant::now();
-    let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
+    let Some(snapshot) = fuse_table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         // no snapshot
         info!(
             "Prepare virtual column refresh finished in {} ms (no snapshot)",
@@ -146,10 +150,12 @@ pub async fn prepare_refresh_virtual_column(
     );
 
     let projection = Projection::Columns(field_indices);
-    let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
+    let block_reader =
+        fuse_table.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
 
     let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
-    let segment_cache = FuseCaches::instance().segments.read_only();
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;
@@ -191,7 +197,7 @@ pub async fn prepare_refresh_virtual_column(
         let stats = match segment_info.summary.additional_stats_loc() {
             Some(loc) => {
                 let mut stats =
-                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), loc).await?);
+                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), loc, policy).await?);
                 stats.align_to_blocks(block_metas.len())?;
                 Some(stats)
             }
@@ -376,7 +382,10 @@ pub async fn commit_refresh_virtual_column(
         return Ok(0);
     }
 
-    let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
+    let Some(latest_snapshot) = fuse_table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         info!(
             "Commit virtual column refresh finished in {} ms (no snapshot)",
             start.elapsed().as_millis()
@@ -385,7 +394,8 @@ pub async fn commit_refresh_virtual_column(
     };
     let table_schema = fuse_table.schema();
     let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
-    let segment_cache = FuseCaches::instance().segments.read_only();
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let mut results_by_block = HashMap::with_capacity(results.len());
     for result in results {
@@ -493,7 +503,10 @@ pub async fn do_vacuum_virtual_column(
     pipeline: &mut Pipeline,
 ) -> Result<VirtualColumnVacuumResult> {
     let start = Instant::now();
-    let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
+    let Some(latest_snapshot) = fuse_table
+        .read_table_snapshot_with_policy(ctx.cache_policy())
+        .await?
+    else {
         info!(
             "Vacuum virtual column finished in {} ms (no snapshot)",
             start.elapsed().as_millis()
@@ -502,7 +515,7 @@ pub async fn do_vacuum_virtual_column(
     };
 
     let mutation_entries =
-        prepare_vacuum_virtual_column_mutations(fuse_table, latest_snapshot.clone()).await?;
+        prepare_vacuum_virtual_column_mutations(&ctx, fuse_table, latest_snapshot.clone()).await?;
 
     let removed_files = mutation_entries.len() as u64;
     let need_commit = !mutation_entries.is_empty();
@@ -596,7 +609,8 @@ pub async fn cleanup_vacuum_virtual_column_files(
 
     let table_schema = fuse_table.schema();
     let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema);
-    let segment_cache = FuseCaches::instance().segments.read_only();
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let mut referenced_virtual_locations = HashSet::new();
     for (location, ver) in &snapshot_referenced_segments {
@@ -632,7 +646,7 @@ pub async fn cleanup_vacuum_virtual_column_files(
         return Ok(0);
     }
 
-    let op = Files::create(ctx, fuse_table.get_operator());
+    let op = TableFiles::create(ctx, fuse_table.get_operator());
     op.remove_file_in_batch(&files_to_remove).await?;
 
     Ok(files_to_remove.len() as u64)
@@ -640,12 +654,14 @@ pub async fn cleanup_vacuum_virtual_column_files(
 
 #[async_backtrace::framed]
 async fn prepare_vacuum_virtual_column_mutations(
+    ctx: &Arc<dyn TableContext>,
     fuse_table: &FuseTable,
     latest_snapshot: Arc<TableSnapshot>,
 ) -> Result<Vec<MutationLogEntry>> {
     let table_schema = fuse_table.schema();
     let segment_reader = SegmentInfoReader::new(fuse_table.get_operator(), table_schema.clone());
-    let segment_cache = FuseCaches::instance().segments.read_only();
+    let policy = CachePolicy::READ_ONLY.at_most(ctx.cache_policy());
+    let segment_cache = FuseCaches::instance().segments.with_policy(policy);
 
     let mut mutation_entries = Vec::new();
 
@@ -677,8 +693,12 @@ async fn prepare_vacuum_virtual_column_mutations(
                     segment_stats = match additional_stats_loc.clone() {
                         Some(loc) => {
                             let mut stats = Arc::unwrap_or_clone(
-                                read_segment_stats(fuse_table.get_operator_ref().clone(), loc)
-                                    .await?,
+                                read_segment_stats(
+                                    fuse_table.get_operator_ref().clone(),
+                                    loc,
+                                    policy,
+                                )
+                                .await?,
                             );
                             stats.align_to_blocks(block_count)?;
                             Some(stats)

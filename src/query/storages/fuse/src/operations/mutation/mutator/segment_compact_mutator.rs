@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -134,6 +135,7 @@ impl SegmentCompactMutator {
             &self.data_accessor,
             &self.location_generator,
             self.table_meta_timestamps,
+            self.ctx.cache_policy(),
         );
         compactor.partition_key_count = self.partition_key_count;
         compactor.partition_key_id = self.partition_key_id;
@@ -195,9 +197,11 @@ impl<'a> SegmentCompactor<'a> {
         operator: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
         table_meta_timestamps: TableMetaTimestamps,
+        cache_policy: CachePolicy,
     ) -> Self {
         let merge_tasks = MergeTasks {
             operator: operator.clone(),
+            cache_policy,
             io_permits: Arc::new(Semaphore::new(max_io_requests)),
             decode_permits: Arc::new(Semaphore::new(max_threads)),
             cluster_key_info: cluster_key_info.clone(),
@@ -284,7 +288,7 @@ impl<'a> SegmentCompactor<'a> {
                 self.operator.clone(),
                 self.schema.clone(),
                 locations,
-                false,
+                CachePolicy::READ_ONLY.at_most(self.merge_tasks.cache_policy),
                 self.merge_tasks.io_permits.clone(),
             )
             .await?
@@ -408,6 +412,8 @@ impl<'a> SegmentCompactor<'a> {
 // must drain its writers before deleting their output paths.
 struct MergeTasks {
     operator: Operator,
+    // How the source statistics are read: the policy of the compaction.
+    cache_policy: CachePolicy,
     // Bounds all storage requests of one compaction: segment reads, stats
     // reads and merge output writes.
     io_permits: Arc<Semaphore>,
@@ -454,6 +460,7 @@ impl MergeTasks {
         self.paths.push(location.clone());
         let task = Self::merge_group(
             self.operator.clone(),
+            self.cache_policy,
             fragments,
             location,
             self.cluster_key_info.clone(),
@@ -551,6 +558,7 @@ impl MergeTasks {
 
     async fn merge_group(
         operator: Operator,
+        cache_policy: CachePolicy,
         fragments: Vec<SegmentEntry>,
         location: String,
         cluster_key_info: Option<ClusterKeyInfo>,
@@ -566,8 +574,14 @@ impl MergeTasks {
         } = Self::decode_fragments(fragments, cluster_key_info, decode_permits.clone()).await?;
         let stats = if let Some(stats_locations) = stats_locations {
             Some(
-                Self::read_source_stats(&operator, &io_permits, stats_locations, stats_read_window)
-                    .await?,
+                Self::read_source_stats(
+                    &operator,
+                    cache_policy,
+                    &io_permits,
+                    stats_locations,
+                    stats_read_window,
+                )
+                .await?,
             )
         } else {
             None
@@ -623,6 +637,7 @@ impl MergeTasks {
     // semaphore bounds active requests across all groups.
     async fn read_source_stats(
         operator: &Operator,
+        cache_policy: CachePolicy,
         io_permits: &Arc<Semaphore>,
         stats_locations: Vec<(Location, usize)>,
         stats_read_window: usize,
@@ -635,7 +650,10 @@ impl MergeTasks {
                 let permits = io_permits.clone();
                 runtime.spawn(async move {
                     let _permit = acquire_io(&permits).await?;
-                    Ok::<_, ErrorCode>((read_segment_stats(dal, location).await?, block_count))
+                    Ok::<_, ErrorCode>((
+                        read_segment_stats(dal, location, cache_policy).await?,
+                        block_count,
+                    ))
                 })
             })
             .buffered(stats_read_window);

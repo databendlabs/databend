@@ -30,7 +30,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
+use databend_storages_common_cache::CacheFill;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_index::BundleExternalFiles;
 use databend_storages_common_index::BundleFileRanges;
 use databend_storages_common_index::FooterDirectory;
@@ -41,6 +46,7 @@ use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
 use databend_storages_common_index::SearchPinDirectory;
 use databend_storages_common_index::inverted_index_meta_cache_key;
+use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
 use tantivy::Directory;
 use tantivy::HasLen;
@@ -150,7 +156,7 @@ fn footer_fetch_lock(location: &str) -> Arc<FetchLock> {
 
 #[derive(Clone)]
 struct RemoteBundleDirectory {
-    operator: Operator,
+    storage: DiskCachedStorage,
     location: Arc<str>,
     file_ranges: BundleFileRanges,
     external_files: BundleExternalFiles,
@@ -192,7 +198,8 @@ impl fmt::Debug for RemoteBundleDirectory {
 }
 
 struct RemoteBundleFileHandle {
-    operator: Operator,
+    /// Object storage behind the disk cache; pages and whole components are its units.
+    storage: DiskCachedStorage,
     /// Bundle location; cache keys and fetch locks are scoped by it.
     location: Arc<str>,
     /// Object actually read: the bundle itself or a sibling object for an external file.
@@ -316,7 +323,8 @@ impl RemoteBundleFileHandle {
         }
     }
 
-    async fn fetch_range(&self, range: Range<usize>) -> io::Result<Bytes> {
+    /// Range of the object holding `range` of the file.
+    fn absolute_range(&self, range: &Range<usize>) -> io::Result<Range<u64>> {
         let logical_start = u64::try_from(range.start).map_err(io::Error::other)?;
         let logical_end = u64::try_from(range.end).map_err(io::Error::other)?;
         let absolute_start = self
@@ -329,14 +337,45 @@ impl RemoteBundleFileHandle {
             .start
             .checked_add(logical_end)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "bundle range overflow"))?;
+        Ok(absolute_start..absolute_end)
+    }
+
+    async fn fetch_range(&self, range: Range<usize>) -> io::Result<Bytes> {
+        self.fetch(range, None).await
+    }
+
+    /// `range` of the file as one unit of the disk cache of `kind`.
+    async fn fetch_unit(
+        &self,
+        kind: CacheKind,
+        fill: CacheFill,
+        range: Range<usize>,
+    ) -> io::Result<Bytes> {
+        self.fetch(range, Some((kind, fill))).await
+    }
+
+    async fn fetch(
+        &self,
+        range: Range<usize>,
+        disk: Option<(CacheKind, CacheFill)>,
+    ) -> io::Result<Bytes> {
+        let absolute = self.absolute_range(&range)?;
         let start = Instant::now();
-        let data = self
-            .operator
-            .read_with(self.object.as_ref())
-            .range(absolute_start..absolute_end)
-            .await
-            .map_err(io::Error::other)?
-            .to_bytes();
+        let data = match disk {
+            Some((kind, fill)) => self
+                .storage
+                .read(kind, self.object.as_ref(), Some(absolute), fill)
+                .await
+                .map_err(io::Error::other)?,
+            None => self
+                .storage
+                .operator()
+                .read_with(self.object.as_ref())
+                .range(absolute)
+                .await
+                .map_err(io::Error::other)?
+                .to_bytes(),
+        };
         if data.len() != range.len() {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
@@ -353,6 +392,22 @@ impl RemoteBundleFileHandle {
         first_page: usize,
         last_page: usize,
     ) -> io::Result<Vec<(usize, Bytes)>> {
+        let (disk_kind, fill) = match kind {
+            PageCacheKind::Lookup => (
+                CacheKind::of::<inverted::Lookup>(),
+                self.lookup_cache.policy().disk,
+            ),
+            PageCacheKind::Payload => (
+                CacheKind::of::<inverted::Payload>(),
+                self.payload_cache.policy().disk,
+            ),
+        };
+        if self.storage.uses_disk(disk_kind, fill) {
+            return self
+                .fetch_disk_pages(disk_kind, fill, kind, first_page, last_page)
+                .await;
+        }
+
         let logical_start = self.page_range(first_page)?.start;
         let logical_end = self.page_range(last_page)?.end;
         let data = self.fetch_range(logical_start..logical_end).await?;
@@ -371,6 +426,57 @@ impl RemoteBundleFileHandle {
         Ok(pages)
     }
 
+    /// Each page is a unit of the disk cache; the pages missing on disk are read with one
+    /// request, as without it.
+    async fn fetch_disk_pages(
+        &self,
+        disk_kind: CacheKind,
+        fill: CacheFill,
+        kind: PageCacheKind,
+        first_page: usize,
+        last_page: usize,
+    ) -> io::Result<Vec<(usize, Bytes)>> {
+        let mut units = Vec::with_capacity(last_page - first_page + 1);
+        for page_no in first_page..=last_page {
+            let id = u32::try_from(page_no).map_err(io::Error::other)?;
+            units.push((id, self.absolute_range(&self.page_range(page_no)?)?));
+        }
+        // Adjacent pages are always merged into one request of at most `MAX_MERGED_READ_SIZE`.
+        let settings = ReadSettings {
+            max_gap_size: 0,
+            max_range_size: MAX_MERGED_READ_SIZE as u64,
+            parquet_fast_read_bytes: 0,
+        };
+        let start = Instant::now();
+        let read = self
+            .storage
+            .read_units(disk_kind, self.object.as_ref(), &units, fill, &settings)
+            .await
+            .map_err(io::Error::other)?;
+        let mut pages = Vec::with_capacity(units.len());
+        let mut read_bytes = 0;
+        for (id, range) in &units {
+            let data = read.unit(*id).ok_or_else(|| {
+                io::Error::new(io::ErrorKind::NotFound, "inverted-index page was not read")
+            })?;
+            if data.len() as u64 != range.end - range.start {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "object storage returned a short inverted-index range",
+                ));
+            }
+            read_bytes += data.len();
+            let page_no = *id as usize;
+            // Copy each page so evicting one page does not retain the complete merged read.
+            pages.push((
+                page_no,
+                self.insert_page(kind, page_no, Bytes::copy_from_slice(&data)),
+            ));
+        }
+        record_inverted_index_read(read_bytes, start.elapsed());
+        Ok(pages)
+    }
+
     fn is_full_postings_read(&self, range: &Range<usize>) -> bool {
         range.start == 0
             && range.end == self.len()
@@ -386,7 +492,13 @@ impl RemoteBundleFileHandle {
         if let Some(data) = self.cached_full_payload() {
             return Ok(OwnedBytes::new(data.to_vec()));
         }
-        let data = self.fetch_range(0..self.len()).await?;
+        let data = self
+            .fetch_unit(
+                CacheKind::of::<inverted::FullPayload>(),
+                self.full_payload_cache.policy().disk,
+                0..self.len(),
+            )
+            .await?;
         // Full components are stored as one entry in a separate memory pool. Oversized files
         // are only pinned for this search; they must not evict hot payload pages.
         let cache = &self.full_payload_cache;
@@ -421,7 +533,13 @@ impl RemoteBundleFileHandle {
             self.lookup_cache.evict(&key);
         }
 
-        let data = self.fetch_range(0..self.len()).await?;
+        let data = self
+            .fetch_unit(
+                CacheKind::of::<inverted::Lookup>(),
+                self.lookup_cache.policy().disk,
+                0..self.len(),
+            )
+            .await?;
         self.lookup_cache
             .fill(&key, InvertedIndexLookupBytes::new(data.clone()));
         Ok(OwnedBytes::new(data.slice(range).to_vec()))
@@ -439,8 +557,20 @@ impl RemoteBundleFileHandle {
             return Ok(OwnedBytes::empty());
         }
 
+        // A tier is used when the kind is cached in memory or on disk, either alone.
+        let lookup = CacheKind::of::<inverted::Lookup>();
+        let lookup_disk = self.lookup_cache.policy().disk;
+        // The whole component is fetched only for a tier that can keep it: one the disk pool
+        // refuses as too large would be fetched again by every read. One the disk cache already
+        // holds, kept before its pool shrank, is read from there.
+        let lookup_whole = self.lookup_cache.is_enabled()
+            || self.storage.admits(lookup, self.len() as u64, lookup_disk)
+            || self.absolute_range(&(0..self.len())).is_ok_and(|whole| {
+                self.storage
+                    .holds(lookup, self.object.as_ref(), Some(whole), lookup_disk)
+            });
         match self.cache_policy {
-            RangeCachePolicy::LookupWhole if self.lookup_cache.is_enabled() => {
+            RangeCachePolicy::LookupWhole if lookup_whole => {
                 return self.read_cached_lookup_file(range).await;
             }
             RangeCachePolicy::Pages(kind) => {
@@ -448,17 +578,18 @@ impl RemoteBundleFileHandle {
                     if let Some(data) = self.cached_full_payload() {
                         return Ok(OwnedBytes::new(data.slice(range).to_vec()));
                     }
+                    let full_payload = CacheKind::of::<inverted::FullPayload>();
                     if self.is_full_postings_read(&range)
-                        && (self.payload_cache.is_enabled() || self.full_payload_cache.is_enabled())
+                        && (self.payload_cache.is_enabled()
+                            || self.full_payload_cache.is_enabled()
+                            || self
+                                .storage
+                                .uses_disk(full_payload, self.full_payload_cache.policy().disk))
                     {
                         return self.read_full_postings_file().await;
                     }
                 }
-                let pages_enabled = match kind {
-                    PageCacheKind::Lookup => self.lookup_cache.is_enabled(),
-                    PageCacheKind::Payload => self.payload_cache.is_enabled(),
-                };
-                if pages_enabled {
+                if self.pages_kept(kind, &range) {
                     return self.read_pages(kind, range).await;
                 }
             }
@@ -468,6 +599,39 @@ impl RemoteBundleFileHandle {
         self.fetch_range(range)
             .await
             .map(|data| OwnedBytes::new(data.to_vec()))
+    }
+
+    /// Whether the pages of `range` are worth reading whole: a tier can keep each of them, at
+    /// its own length, or the disk cache holds it, kept before its pool shrank. Pages no tier
+    /// keeps would be fetched again by every read; the range alone is read then.
+    fn pages_kept(&self, kind: PageCacheKind, range: &Range<usize>) -> bool {
+        let (memory, disk_kind, fill) = match kind {
+            PageCacheKind::Lookup => (
+                self.lookup_cache.is_enabled(),
+                CacheKind::of::<inverted::Lookup>(),
+                self.lookup_cache.policy().disk,
+            ),
+            PageCacheKind::Payload => (
+                self.payload_cache.is_enabled(),
+                CacheKind::of::<inverted::Payload>(),
+                self.payload_cache.policy().disk,
+            ),
+        };
+        if memory {
+            return true;
+        }
+        let first_page = range.start / CACHE_PAGE_SIZE;
+        let last_page = (range.end - 1) / CACHE_PAGE_SIZE;
+        (first_page..=last_page).all(|page_no| {
+            let Ok(page) = self.page_range(page_no) else {
+                return false;
+            };
+            self.storage.admits(disk_kind, page.len() as u64, fill)
+                || self.absolute_range(&page).is_ok_and(|page| {
+                    self.storage
+                        .holds(disk_kind, self.object.as_ref(), Some(page), fill)
+                })
+        })
     }
 
     async fn read_pages(&self, kind: PageCacheKind, range: Range<usize>) -> io::Result<OwnedBytes> {
@@ -598,7 +762,7 @@ impl Directory for RemoteBundleDirectory {
         let component_name = component_name(path).to_owned();
         let cache_policy = range_cache_policy(&component_name, file_len_u64);
         Ok(Arc::new(RemoteBundleFileHandle {
-            operator: self.operator.clone(),
+            storage: self.storage.clone(),
             location: self.location.clone(),
             object,
             file_range,
@@ -753,14 +917,14 @@ impl FooterCacheState {
 
     async fn load_or_fetch(
         &self,
-        operator: &Operator,
+        storage: &DiskCachedStorage,
         location: &str,
     ) -> Result<InvertedIndexBundleFooter> {
         if let Some(footer) = self.load() {
             return Ok(footer);
         }
         if !self.meta_cache.is_enabled() {
-            return self.fetch_and_store(operator, location).await;
+            return self.fetch_and_store(storage, location).await;
         }
 
         // Serialize cold recovery per immutable object. Recheck under the lock so waiters reuse
@@ -770,24 +934,30 @@ impl FooterCacheState {
         if let Some(footer) = self.load() {
             return Ok(footer);
         }
-        self.fetch_and_store(operator, location).await
+        self.fetch_and_store(storage, location).await
     }
 
     async fn fetch_and_store(
         &self,
-        operator: &Operator,
+        storage: &DiskCachedStorage,
         location: &str,
     ) -> Result<InvertedIndexBundleFooter> {
         let initial_read_size = u64::try_from(INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE)
             .map_err(|_| ErrorCode::StorageOther("inverted-index footer read size is invalid"))?;
         let tail_start = self.object_size.saturating_sub(initial_read_size);
+        // The tail and, when larger, the footer are units of the disk cache.
+        let meta_kind = CacheKind::of::<inverted::Meta>();
+        let fill = self.meta_cache.policy().disk;
         let start = Instant::now();
-        let tail = operator
-            .read_with(location)
-            .range(tail_start..self.object_size)
+        let tail_bytes = storage
+            .read(
+                meta_kind,
+                location,
+                Some(tail_start..self.object_size),
+                fill,
+            )
             .await?;
-        record_inverted_index_read(tail.len(), start.elapsed());
-        let tail_bytes = tail.to_bytes();
+        record_inverted_index_read(tail_bytes.len(), start.elapsed());
         let footer_start = InvertedIndexBundleFooter::footer_start_from_tail(
             tail_bytes.as_ref(),
             self.object_size,
@@ -813,12 +983,15 @@ impl FooterCacheState {
             (Bytes::copy_from_slice(footer_bytes), footer)
         } else {
             let start = Instant::now();
-            let footer_data = operator
-                .read_with(location)
-                .range(footer_start..self.object_size)
+            let footer_bytes = storage
+                .read(
+                    meta_kind,
+                    location,
+                    Some(footer_start..self.object_size),
+                    fill,
+                )
                 .await?;
-            record_inverted_index_read(footer_data.len(), start.elapsed());
-            let footer_bytes = footer_data.to_bytes();
+            record_inverted_index_read(footer_bytes.len(), start.elapsed());
             let footer = InvertedIndexBundleFooter::open_footer_for_object(
                 footer_bytes.as_ref(),
                 self.object_size,
@@ -842,18 +1015,20 @@ pub(crate) async fn load_bundle_search_directory(
     operator: &Operator,
     location: &str,
     object_size: u64,
+    policy: CachePolicy,
 ) -> Result<BundleSearchDirectory> {
-    let caches = &FuseCaches::instance().inverted;
+    let caches = &FuseCaches::instance().inverted.with_policy(policy);
     let cache_state = FooterCacheState::new(
         location,
         object_size,
         caches.meta.clone(),
         caches.lookup.clone(),
     );
-    let footer = cache_state.load_or_fetch(operator, location).await?;
+    let storage = DiskCachedStorage::new(operator.clone());
+    let footer = cache_state.load_or_fetch(&storage, location).await?;
 
     let remote = RemoteBundleDirectory {
-        operator: operator.clone(),
+        storage,
         location: Arc::from(location),
         file_ranges: footer.file_ranges.clone(),
         external_files: footer.external_files.clone(),
@@ -869,9 +1044,12 @@ pub(crate) async fn load_bundle_search_directory(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::time::Duration;
 
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::CachedItem;
+    use databend_storages_common_cache::DiskCache;
+    use databend_storages_common_cache::DiskKey;
     use databend_storages_common_cache::kinds::inverted;
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
@@ -996,7 +1174,7 @@ mod tests {
         operator.write(location, data.clone()).await?;
         Ok((
             RemoteBundleFileHandle {
-                operator,
+                storage: DiskCachedStorage::with_disk(operator, None),
                 location: Arc::from(location),
                 object: Arc::from(location),
                 file_range: 0..u64::try_from(data.len()).unwrap(),
@@ -1079,6 +1257,81 @@ mod tests {
                 (2 * MAX_MERGED_READ_SIZE) as u64..requested_len as u64,
             ]);
         }
+        Ok(())
+    }
+
+    /// With a disk cache, each page is a unit of it: the pages missing on disk are read with
+    /// the same merged requests as without it, and a later read of the same pages, with the
+    /// memory cache gone, reads nothing from storage.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_pages_are_units_of_the_disk_cache() -> Result<()> {
+        let requested_len = (MAX_MERGED_PAGES + 1) * CACHE_PAGE_SIZE;
+        // One page more than read, so the read is not of the whole component.
+        let data = (0..requested_len + CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let dir = tempfile::TempDir::new()?;
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 1 << 29, 1 << 20],
+            false,
+        )?);
+        let (mut file, ranges) = payload_file_handle("disk-pages", data.clone()).await?;
+        file.storage =
+            DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk.clone()));
+
+        assert_eq!(
+            file.read_range(0..requested_len).await?.as_ref(),
+            &data[..requested_len]
+        );
+        assert_eq!(*ranges.lock().unwrap(), vec![
+            0..MAX_MERGED_READ_SIZE as u64,
+            MAX_MERGED_READ_SIZE as u64..requested_len as u64,
+        ]);
+        let last_page = requested_len / CACHE_PAGE_SIZE - 1;
+        let on_disk = |page_no: usize| {
+            let range =
+                (page_no * CACHE_PAGE_SIZE) as u64..((page_no + 1) * CACHE_PAGE_SIZE) as u64;
+            disk.contains(
+                CacheKind::of::<inverted::Payload>(),
+                &DiskKey::range("disk-pages", range),
+            )
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !(0..=last_page).all(on_disk) {
+            assert!(Instant::now() < deadline, "pages not written in time");
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        // Memory gone, disk serves every page; storage is not read.
+        for page_no in 0..=last_page {
+            assert!(
+                file.payload_cache
+                    .evict(&file.page_key(PageCacheKind::Payload, page_no))
+            );
+        }
+        ranges.lock().unwrap().clear();
+        assert_eq!(
+            file.read_range(0..requested_len).await?.as_ref(),
+            &data[..requested_len]
+        );
+        assert!(ranges.lock().unwrap().is_empty());
+
+        // One page evicted from disk: one request, for that page alone.
+        assert!(disk.evict(
+            CacheKind::of::<inverted::Payload>(),
+            &DiskKey::range("disk-pages", 0..CACHE_PAGE_SIZE as u64),
+        ));
+        for page_no in 0..=last_page {
+            file.payload_cache
+                .evict(&file.page_key(PageCacheKind::Payload, page_no));
+        }
+        assert_eq!(
+            file.read_range(0..requested_len).await?.as_ref(),
+            &data[..requested_len]
+        );
+        assert_eq!(*ranges.lock().unwrap(), vec![0..CACHE_PAGE_SIZE as u64]);
         Ok(())
     }
 
@@ -1179,7 +1432,7 @@ mod tests {
         operator.write(location, data).await?;
         Ok((
             RemoteBundleDirectory {
-                operator,
+                storage: DiskCachedStorage::with_disk(operator, None),
                 location: Arc::from(location),
                 file_ranges: footer.file_ranges.clone(),
                 external_files: footer.external_files.clone(),
@@ -1390,6 +1643,113 @@ mod tests {
         Ok(())
     }
 
+    /// A lookup component the disk pool refuses as too large, with no memory cache, is read by
+    /// range: fetched whole, it would be kept nowhere and fetched again by every read.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lookup_too_large_for_the_disk_pool_is_read_by_range() -> Result<()> {
+        // Over a quarter of the 1 MiB index pool.
+        let data = (0..512 * 1024).map(|index| index as u8).collect::<Vec<_>>();
+        let dir = tempfile::TempDir::new()?;
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 1 << 20, 1 << 20],
+            false,
+        )?);
+        let (mut file, ranges) = payload_file_handle("lookup-oversized", data.clone()).await?;
+        file.storage = DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk));
+        file.path = PathBuf::from("segment.term");
+        file.component_name = "term".to_owned();
+        file.cache_policy = RangeCachePolicy::LookupWhole;
+        file.lookup_cache = no_lookup_cache();
+
+        let range = 7..31;
+        assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
+        assert_eq!(*ranges.lock().unwrap(), vec![7..31]);
+        Ok(())
+    }
+
+    /// Pages no tier can keep are not fetched whole: the range alone is read. A short final page
+    /// the pool can keep is.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lookup_pages_too_large_for_the_disk_pool_are_read_by_range() -> Result<()> {
+        let data = (0..4 * CACHE_PAGE_SIZE + 1024)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let dir = tempfile::TempDir::new()?;
+        // A page is over a quarter of the 128 KiB index pool.
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 128 << 10, 1 << 20],
+            false,
+        )?);
+        let (mut file, ranges) =
+            payload_file_handle("lookup-pages-oversized", data.clone()).await?;
+        file.storage = DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk));
+        file.path = PathBuf::from("segment.term");
+        file.component_name = "term".to_owned();
+        file.cache_policy = RangeCachePolicy::Pages(PageCacheKind::Lookup);
+        file.lookup_cache = no_lookup_cache();
+
+        let range = 7..39;
+        for _ in 0..2 {
+            let read = file.read_range(range.clone()).await?;
+            assert_eq!(read.as_ref(), &data[range.clone()]);
+        }
+        assert_eq!(*ranges.lock().unwrap(), vec![7..39, 7..39]);
+
+        let last = 4 * CACHE_PAGE_SIZE;
+        let range = last + 7..last + 39;
+        ranges.lock().unwrap().clear();
+        let read = file.read_range(range.clone()).await?;
+        assert_eq!(read.as_ref(), &data[range]);
+        let last = last as u64;
+        assert_eq!(*ranges.lock().unwrap(), vec![last..last + 1024]);
+        Ok(())
+    }
+
+    /// A whole component kept on disk before its pool shrank under the admission limit is
+    /// still read from disk.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lookup_kept_on_disk_is_read_after_the_pool_shrinks() -> Result<()> {
+        // Under a quarter of the 4 MiB index pool, over a quarter of 1 MiB.
+        let data = (0..512 * 1024).map(|index| index as u8).collect::<Vec<_>>();
+        let dir = tempfile::TempDir::new()?;
+        let disk = Arc::new(DiskCache::new(
+            dir.path(),
+            1 << 30,
+            [1 << 20, 4 << 20, 1 << 20],
+            false,
+        )?);
+        let (mut file, ranges) = payload_file_handle("lookup-kept", data.clone()).await?;
+        file.storage =
+            DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk.clone()));
+        file.path = PathBuf::from("segment.term");
+        file.component_name = "term".to_owned();
+        file.cache_policy = RangeCachePolicy::LookupWhole;
+        file.lookup_cache = no_lookup_cache();
+
+        let range = 7..31;
+        let read = file.read_range(range.clone()).await?;
+        assert_eq!(read.as_ref(), &data[range.clone()]);
+        let whole = 0..data.len() as u64;
+        assert_eq!(*ranges.lock().unwrap(), vec![whole.clone()]);
+        let key = DiskKey::range("lookup-kept", whole);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !disk.contains(CacheKind::of::<inverted::Lookup>(), &key) {
+            assert!(Instant::now() < deadline, "the component was not written");
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        disk.set_pool_cap(databend_storages_common_cache::Pool::Index, 1 << 20)?;
+        assert!(disk.contains(CacheKind::of::<inverted::Lookup>(), &key));
+        ranges.lock().unwrap().clear();
+        assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
+        assert!(ranges.lock().unwrap().is_empty());
+        Ok(())
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_lookup_reads_replace_invalid_entry_and_share_fetch() -> Result<()> {
         let data = (0..CACHE_PAGE_SIZE + 23)
@@ -1531,7 +1891,12 @@ mod tests {
         operator.write("index", object).await?;
         let state = cache_state("index", object_size);
         for _ in 0..2 {
-            let footer = state.load_or_fetch(&operator, "index").await?;
+            let footer = state
+                .load_or_fetch(
+                    &DiskCachedStorage::with_disk(operator.clone(), None),
+                    "index",
+                )
+                .await?;
             assert!(state.meta_cache.contains(&state.meta_key));
             for (path, bytes) in files {
                 let file_id = footer
@@ -1574,7 +1939,9 @@ mod tests {
         operator.write("index", object).await?;
         let state = cache_state("index", object_size);
 
-        let footer = state.load_or_fetch(&operator, "index").await?;
+        let footer = state
+            .load_or_fetch(&DiskCachedStorage::with_disk(operator, None), "index")
+            .await?;
 
         assert_eq!(footer.managed_json.as_ref(), managed_json);
         let metadata = state.meta_cache.lookup(&state.meta_key).unwrap();
@@ -1610,7 +1977,7 @@ mod tests {
         operator.write("index.idx", postings.clone()).await?;
         let footer = InvertedIndexBundleFooter::open(&object)?;
         let remote = RemoteBundleDirectory {
-            operator,
+            storage: DiskCachedStorage::with_disk(operator, None),
             location: Arc::from("index"),
             file_ranges: footer.file_ranges.clone(),
             external_files: footer.external_files.clone(),

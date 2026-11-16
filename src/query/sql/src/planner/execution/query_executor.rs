@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::QuerySpecificValues;
 
 use crate::DefinitionScope;
 
@@ -36,5 +39,41 @@ pub trait QueryExecutor: Send + Sync {
             ));
         }
         self.execute_query_with_sql_string(sql).await
+    }
+}
+
+/// Records each query it runs: a result read while planning is valid only for the current
+/// query, so the planner cache must not store the plan built from it.
+pub(crate) struct RecordingQueryExecutor {
+    inner: Arc<dyn QueryExecutor>,
+    query_specific_values: QuerySpecificValues,
+}
+
+impl RecordingQueryExecutor {
+    pub(crate) fn wrap(
+        inner: Arc<dyn QueryExecutor>,
+        query_specific_values: QuerySpecificValues,
+    ) -> Arc<dyn QueryExecutor> {
+        Arc::new(Self {
+            inner,
+            query_specific_values,
+        })
+    }
+}
+
+#[async_trait]
+impl QueryExecutor for RecordingQueryExecutor {
+    async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>> {
+        self.query_specific_values.record();
+        self.inner.execute_query_with_sql_string(sql).await
+    }
+
+    async fn execute_query_in_scope(
+        &self,
+        sql: &str,
+        scope: DefinitionScope,
+    ) -> Result<Vec<DataBlock>> {
+        self.query_specific_values.record();
+        self.inner.execute_query_in_scope(sql, scope).await
     }
 }

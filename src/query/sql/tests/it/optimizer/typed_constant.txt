@@ -1,0 +1,222 @@
+=== typed_true_filter_is_removed ===
+description: A filter that is a typed TRUE constant is dropped.
+sql: SELECT a FROM typed_constant_left WHERE CAST(true AS BOOLEAN NULL)
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [true]
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.typed_constant_left (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+
+=== typed_null_filter_is_empty ===
+description: A filter that is a typed NULL constant yields no rows.
+sql: SELECT a FROM typed_constant_left WHERE CAST(NULL AS BOOLEAN)
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [NULL]
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== range_absorbs_typed_constant ===
+description: Filter inference merges a range bounded by a typed constant with another range on the same column.
+sql: SELECT a FROM typed_constant_left WHERE a > 5 AND a > CAST(3 AS INT NULL)
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(typed_constant_left.a (#0), 5), gt(typed_constant_left.a (#0), 3)]
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.typed_constant_left (#0)
+├── filters: [gt(typed_constant_left.a (#0), 5)]
+├── order by: []
+└── limit: NONE
+
+
+=== comparison_with_typed_null_is_false ===
+description: Filter inference turns a comparison with a typed NULL into a false filter.
+sql: SELECT a FROM typed_constant_left WHERE a = CAST(NULL AS INT) AND b > 1
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [NULL, gt(typed_constant_left.b (#1), 1)]
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== trivial_cast_removed_against_typed_constant ===
+description: A lossless cast of a column compared with a typed constant is removed; the constant is converted to the column type.
+sql: SELECT a FROM typed_constant_left WHERE CAST(s AS BIGINT) > CAST(1 AS BIGINT NULL)
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(CAST(typed_constant_left.s (#2) AS Int64 NULL), 1)]
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0), typed_constant_left.s (#2) AS (#3)]
+└── Scan
+    ├── table: default.typed_constant_left (#0)
+    ├── filters: [gt(typed_constant_left.s (#2), 1)]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== null_rejecting_typed_constant_makes_inner_join ===
+description: A filter on the right side that is NULL when the right columns are NULL turns a LEFT join into an INNER join; a typed constant in it does not block the check.
+sql: SELECT l.a FROM typed_constant_left AS l LEFT JOIN typed_constant_right AS r ON l.a = r.a WHERE r.b + CAST(1 AS INT NULL) > 0
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(plus(typed_constant_right.b (#4), 1), 0)]
+    └── Join(Left)
+        ├── build keys: [typed_constant_right.a (#3)]
+        ├── probe keys: [typed_constant_left.a (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.typed_constant_right (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.typed_constant_left (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0), typed_constant_right.b (#4) AS (#5)]
+└── Join(Inner)
+    ├── build keys: [typed_constant_right.a (#3)]
+    ├── probe keys: [typed_constant_left.a (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.typed_constant_right (#1)
+    │   ├── filters: [gt(plus(typed_constant_right.b (#4), 1), 0)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== typed_constant_in_subquery ===
+description: A typed constant on the left of IN (subquery) is decorrelated like a literal.
+sql: SELECT a FROM typed_constant_left WHERE CAST(1 AS INT NULL) IN (SELECT a FROM typed_constant_right)
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#3)]
+    ├── subquerys
+    │   └── Subquery (Any)
+    │       ├── compare_op: Equal
+    │       ├── output_column: typed_constant_right.a (#3)
+    │       └── EvalScalar
+    │           ├── scalars: [typed_constant_right.a (#3) AS (#3)]
+    │           └── Scan
+    │               ├── table: default.typed_constant_right (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0), marker (#5) AS (#6)]
+└── Join(LeftSemi)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: [eq(1, typed_constant_right.a (#3))]
+    ├── Scan
+    │   ├── table: default.typed_constant_right (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== in_unnest_of_typed_array ===
+description: IN over the unnest of a typed constant array becomes a comparison with its elements.
+sql: SELECT a FROM typed_constant_left WHERE a IN (SELECT * FROM UNNEST(CAST([1, 2] AS ARRAY(INT) NULL)) AS t)
+raw_plan:
+EvalScalar
+├── scalars: [typed_constant_left.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [SUBQUERY AS (#4)]
+    ├── subquerys
+    │   └── Subquery (Any)
+    │       ├── compare_op: Equal
+    │       ├── output_column: unnest(CAST([1, 2] AS ARRAY(Int32) NULL)) (#4)
+    │       └── EvalScalar
+    │           ├── scalars: [unnest(CAST([1, 2] AS ARRAY(Int32) NULL)) (#4) AS (#4)]
+    │           └── EvalScalar
+    │               ├── scalars: [get(1)(unnest([1, 2]) (#3)) AS (#4)]
+    │               └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(60..104), func_name: "unnest", params: [], arguments: [TypedConstantExpr(ConstantExpr { span: Some(72..78), value: Array(Int32([1, 2])) }, Nullable(Array(Number(Int32))))] }), index: 3 }] })
+    │                   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+    └── Scan
+        ├── table: default.typed_constant_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.typed_constant_left (#0)
+├── filters: [or_filters(eq(typed_constant_left.a (#0), 1), eq(typed_constant_left.a (#0), 2))]
+├── order by: []
+└── limit: NONE
+
+

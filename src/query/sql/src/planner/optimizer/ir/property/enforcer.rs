@@ -73,6 +73,9 @@ impl Enforcer for DistributionEnforcer {
             Distribution::NodeToNodeHash(hash_keys) => {
                 Ok(Exchange::NodeToNodeHash(hash_keys.clone()).into())
             }
+            Distribution::NonBroadcast => Err(ErrorCode::Internal(
+                "Cannot enforce non-broadcast distribution on a replicated or unknown input",
+            )),
             Distribution::GlobalHash(hash_keys) => {
                 Ok(Exchange::GlobalHash(hash_keys.clone()).into())
             }

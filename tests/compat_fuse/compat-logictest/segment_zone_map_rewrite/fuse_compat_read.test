@@ -1,0 +1,52 @@
+# The current query takes over a table that older queries wrote to. Their
+# snapshots carry no zone map pointer, so it reads without a zone map, and the
+# next recluster rebuilds the zone map over segments written by both versions.
+
+query B
+SELECT segment_zone_map_location IS NULL FROM fuse_snapshot('default', 'compat_segment_zone_map') ORDER BY timestamp DESC LIMIT 1
+----
+1
+
+query IT
+SELECT id, label FROM compat_segment_zone_map WHERE id >= 14 ORDER BY id
+----
+14 h
+21 i
+22 j
+
+statement ok
+SET enable_compact_after_write = 0
+
+statement ok
+SET segment_zone_map_full_segment_threshold = 0
+
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (31, 'k'), (33, 'm')
+
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (32, 'l'), (34, 'n')
+
+# FINAL merges everything that is left into one block and refreshes after it.
+statement ok
+OPTIMIZE TABLE compat_segment_zone_map RECLUSTER FINAL
+
+query BI
+SELECT segment_zone_map_location IS NOT NULL, segment_count FROM fuse_snapshot('default', 'compat_segment_zone_map') ORDER BY timestamp DESC LIMIT 1
+----
+1 1
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map WHERE id = 100
+----
+<slt:ignore>zone map pruning: 1 to 0<slt:ignore>
+
+query IT
+SELECT id, label FROM compat_segment_zone_map WHERE id = 1 OR id = 34 ORDER BY id
+----
+1 a
+34 n
+
+query I
+SELECT count(*) FROM compat_segment_zone_map
+----
+14

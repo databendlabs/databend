@@ -79,12 +79,12 @@ pub fn snapshot_history(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
 
     use databend_common_exception::Result;
     use databend_common_expression::TableSchema;
     use databend_storages_common_cache::CacheKind;
     use databend_storages_common_cache::CacheManager;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_cache::Reader;
     use databend_storages_common_cache::kinds::table;
     use databend_storages_common_cache::legacy::LegacyCapacity;
@@ -104,7 +104,7 @@ mod tests {
             CacheKind::of::<table::Snapshot>(),
             LegacyCapacity::Items(10),
         )]));
-        FuseCaches::new(&CacheManager::new(store, HashMap::new()))
+        FuseCaches::new(&CacheManager::new(store, None))
     }
 
     fn snapshot(prev: Option<Arc<TableSnapshot>>) -> Arc<TableSnapshot> {
@@ -164,11 +164,16 @@ mod tests {
         let [first, _] = write_chain(&operator, &location_gen).await?;
 
         let reader = SnapshotReader::new(operator);
-        let decoded = reader.read(&(first, TableSnapshot::VERSION)).await?;
+        let decoded = reader
+            .read(&(first, TableSnapshot::VERSION), &CachePolicy::DEFAULT)
+            .await?;
         assert!(decoded.prev_snapshot_id.is_none());
 
         let missing = reader
-            .read(&("1/2/missing".to_string(), TableSnapshot::VERSION))
+            .read(
+                &("1/2/missing".to_string(), TableSnapshot::VERSION),
+                &CachePolicy::DEFAULT,
+            )
             .await;
         assert_eq!(missing.unwrap_err().code(), ErrorCode::STORAGE_NOT_FOUND);
         Ok(())

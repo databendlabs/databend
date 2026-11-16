@@ -20,7 +20,6 @@ use databend_storages_common_index::SpatialIndexFile;
 use databend_storages_common_index::SpatialIndexMeta;
 
 use crate::CacheDef;
-use crate::Disk;
 use crate::Pool;
 
 /// Footers of spatial index files, by index location.
@@ -32,9 +31,7 @@ impl CacheDef for Meta {
     const POOL: Pool = Pool::Meta;
     /// Index files are written once, under new locations.
     const SHARE_LOADS: bool = true;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("spatial_index_meta_v1", |c| {
-        c.disk_cache_spatial_index_meta_size
-    }));
+    const DISK: bool = true;
 }
 
 /// Spatial index columns, by `{index_location}-{column}`.
@@ -44,7 +41,5 @@ impl CacheDef for Index {
     type Value = SpatialIndexFile;
     const NAME: &'static str = "memory_cache_spatial_index_file";
     const POOL: Pool = Pool::Index;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("spatial_index_file_v1", |c| {
-        c.disk_cache_spatial_index_data_size
-    }));
+    const DISK: bool = true;
 }

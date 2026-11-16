@@ -13,20 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::borrow::Cow;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::Expr;
+use databend_common_expression::FoldRules;
 use databend_common_expression::RawExpr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::type_check;
@@ -739,12 +736,8 @@ impl PhysicalPlanBuilder {
                         dest_type: common_ty.clone(),
                     };
                     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                    let (expr, _) =
-                        ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
-                    let expr = expr.into_owned();
-                    if let Expr::Constant(Constant {
-                        scalar: new_scalar, ..
-                    }) = expr
+                    if let Some(new_scalar) =
+                        FoldRules::eval_constant(&func_ctx, &BUILTIN_FUNCTIONS, &expr)
                     {
                         if new_scalar.is_positive() {
                             **scalar = new_scalar;

@@ -54,6 +54,7 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -250,7 +251,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
     let reader = SnapshotReader::new(fuse_table.get_operator());
     let snapshot = FuseCaches::instance()
         .snapshots
-        .read_only()
+        .with_policy(CachePolicy::READ_ONLY)
         .get(&reader, snapshot_loc.clone(), TableSnapshot::VERSION)
         .await?;
 

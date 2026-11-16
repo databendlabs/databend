@@ -63,7 +63,7 @@ impl SnapshotGenerator for TruncateGenerator {
         table_meta_timestamps: TableMetaTimestamps,
         _table_stats_gen: TableStatsGenerator,
     ) -> Result<TableSnapshot> {
-        TableSnapshot::try_new(
+        let mut snapshot = TableSnapshot::try_new(
             Some(table_info.ident.seq),
             previous.clone(),
             table_info.schema().as_ref().clone(),
@@ -72,6 +72,9 @@ impl SnapshotGenerator for TruncateGenerator {
             cluster_key_info,
             None,
             table_meta_timestamps,
-        )
+        )?;
+        // No segment survives a truncate.
+        snapshot.segment_zone_map = None;
+        Ok(snapshot)
     }
 }

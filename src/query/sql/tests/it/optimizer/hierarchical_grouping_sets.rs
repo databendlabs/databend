@@ -106,7 +106,7 @@ async fn test_hierarchical_grouping_sets_optimizer_outcomes() -> Result<()> {
 
     let shared_base = SqlTestCase {
         name: "rollup_shared_base",
-        description: "The default hierarchy derives every lower ROLLUP level from the most detailed grouping.",
+        description: "The shared-base hierarchy derives every lower ROLLUP level from the most detailed grouping.",
         setup_sqls: &[ROLLUP_TABLE],
         sql: ROLLUP_QUERY,
     };
@@ -114,7 +114,7 @@ async fn test_hierarchical_grouping_sets_optimizer_outcomes() -> Result<()> {
 
     let cascading = SqlTestCase {
         name: "rollup_nearest_parent_cascade",
-        description: "The optional cascade derives every lower ROLLUP level from its closest strict superset.",
+        description: "The default cascade derives every lower ROLLUP level from its closest strict superset.",
         setup_sqls: &[ROLLUP_TABLE],
         sql: ROLLUP_QUERY,
     };
@@ -146,6 +146,14 @@ FROM c GROUP BY GROUPING SETS ((s, a), (s), (a), ())",
     for case in cases {
         write_optimized_case(&mut file, &case, true, "HierarchicalGroupingSetsToUnion").await?;
     }
+
+    let no_aggregates = SqlTestCase {
+        name: "rollup_without_aggregates_skips_hierarchy",
+        description: "A key-only ROLLUP has nothing to re-aggregate, so the hierarchical rule yields to the ordinary UNION rewrite instead of materializing a zero-column grand-total CTE.",
+        setup_sqls: &[ROLLUP_TABLE],
+        sql: "SELECT a, b, grouping(a, b) FROM t GROUP BY ROLLUP(a, b)",
+    };
+    write_optimized_case(&mut file, &no_aggregates, true, "").await?;
     Ok(())
 }
 

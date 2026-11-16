@@ -13,15 +13,16 @@
 // limitations under the License.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use databend_common_exception::Result;
+use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedItem;
 use databend_storages_common_cache::KindLimit;
 use databend_storages_common_cache::MemCache;
@@ -38,6 +39,7 @@ use futures::future::join_all;
 use tokio::sync::Notify;
 
 use crate::fakes::FakeReader;
+use crate::fakes::Item;
 use crate::fakes::Live;
 use crate::fakes::cache;
 use crate::fakes::data_kind;
@@ -62,7 +64,7 @@ impl<T: CachedItem + Clone> Reader for UpdatingReader<T> {
         Cow::Borrowed(key)
     }
 
-    async fn read(&self, _: &String) -> Result<T> {
+    async fn read(&self, _: &String, _: &CachePolicy) -> Result<T> {
         if self.reads.fetch_add(1, Ordering::Relaxed) == 0 {
             let old = self.old.clone();
             self.started.notify_one();
@@ -76,7 +78,7 @@ impl<T: CachedItem + Clone> Reader for UpdatingReader<T> {
 
 async fn assert_update_does_not_join_old_load<K: Sample>()
 where K::Value: Clone {
-    let manager = CacheManager::new(shared_store(1 << 30, 0, 0), HashMap::new());
+    let manager = CacheManager::new(shared_store(1 << 30, 0, 0), None);
     let cache = manager.cache::<K>();
     let reader = UpdatingReader {
         old: K::sample(1),
@@ -214,12 +216,17 @@ async fn test_get_hits_after_first_read() -> Result<()> {
 async fn test_read_only_does_not_fill() -> Result<()> {
     let cache = cache(&shared_store(1 << 20, 0, 0), meta_kind());
     let reader = FakeReader::new(10);
-    let value = cache.read_only().get(&reader, "k".to_string()).await?;
+    let value = cache
+        .with_policy(CachePolicy::READ_ONLY)
+        .get(&reader, "k".to_string())
+        .await?;
     assert!(!value.is_charged());
     assert!(!cache.contains("k"));
 
     let live = Live::default();
-    cache.read_only().put("p", live.item(10));
+    cache
+        .with_policy(CachePolicy::READ_ONLY)
+        .put("p", live.item(10));
     assert!(cache.contains("p"));
     Ok(())
 }
@@ -230,7 +237,7 @@ async fn test_read_only_does_not_fill() -> Result<()> {
 async fn test_read_only_load_shared_with_full_cache_does_not_fill() -> Result<()> {
     let cache = cache(&shared_store(1 << 20, 0, 0), meta_kind());
     let reader = FakeReader::slow(10, Duration::from_millis(50));
-    let read_only = cache.read_only();
+    let read_only = cache.with_policy(CachePolicy::READ_ONLY);
     let (a, b) = tokio::join!(read_only.get(&reader, "k".to_string()), async {
         tokio::time::sleep(Duration::from_millis(10)).await;
         cache.get(&reader, "k".to_string()).await
@@ -285,5 +292,116 @@ fn test_get_sync_computes_once() -> Result<()> {
         })?;
     }
     assert_eq!(computed, 1);
+    Ok(())
+}
+
+/// Records what the handle let it do with the disk cache.
+struct CtxReader {
+    live: Live,
+    seen: parking_lot::Mutex<Vec<CacheFill>>,
+}
+
+impl Reader for CtxReader {
+    type Key = String;
+    type Item = Item;
+
+    fn cache_key<'a>(&self, key: &'a String) -> Cow<'a, str> {
+        Cow::Borrowed(key)
+    }
+
+    async fn read(&self, _: &String, ctx: &CachePolicy) -> Result<Item> {
+        self.seen.lock().push(ctx.disk);
+        Ok(self.live.item(10))
+    }
+}
+
+/// A miss through a handle that fills reads and fills the disk cache; through a read-only view
+/// it reads the disk cache but does not fill it, as for background tasks.
+#[tokio::test]
+async fn test_handle_passes_its_disk_fill_to_the_reader() -> Result<()> {
+    let cache = cache(&shared_store(1 << 20, 1 << 20, 1 << 20), meta_kind());
+    let reader = CtxReader {
+        live: Live::default(),
+        seen: Default::default(),
+    };
+    assert_eq!(cache.policy().disk, CacheFill::ReadWrite);
+    cache.get(&reader, "a".to_string()).await?;
+    let view = cache.with_policy(CachePolicy::READ_ONLY);
+    assert_eq!(view.policy().disk, CacheFill::ReadOnly);
+    view.get(&reader, "b".to_string()).await?;
+    assert_eq!(*reader.seen.lock(), [
+        CacheFill::ReadWrite,
+        CacheFill::ReadOnly
+    ]);
+    Ok(())
+}
+
+/// A view can only narrow the policy of the handle it comes from, cache by cache.
+#[test]
+fn test_with_policy_only_narrows() {
+    let cache = cache(&shared_store(1 << 20, 0, 0), meta_kind());
+    assert_eq!(cache.policy(), CachePolicy::DEFAULT);
+    let read_only = cache.with_policy(CachePolicy::READ_ONLY);
+    assert_eq!(
+        read_only.with_policy(CachePolicy::DEFAULT).policy(),
+        CachePolicy::READ_ONLY
+    );
+    assert_eq!(
+        read_only.with_policy(CachePolicy::MAINTENANCE).policy(),
+        CachePolicy {
+            memory: CacheFill::ReadOnly,
+            disk: CacheFill::Bypass,
+        }
+    );
+    assert_eq!(
+        cache.with_policy(CachePolicy::BYPASS).policy(),
+        CachePolicy::BYPASS
+    );
+    // The handle it came from keeps its own.
+    assert_eq!(cache.policy(), CachePolicy::DEFAULT);
+}
+
+/// A view that bypasses the memory cache neither serves what it holds nor fills it: every get
+/// reads, and what was cached stays as it was.
+#[tokio::test]
+async fn test_memory_bypass_reads_through() -> Result<()> {
+    let cache = cache(&shared_store(1 << 20, 0, 0), meta_kind());
+    let live = Live::default();
+    cache.put("k", live.item(1));
+    let bypass = cache.with_policy(CachePolicy::BYPASS);
+    assert!(bypass.lookup("k").is_none());
+
+    let reader = FakeReader::new(10);
+    for reads in 1..=2 {
+        let value = bypass.get(&reader, "k".to_string()).await?;
+        assert_eq!(value.bytes, 10);
+        assert!(!value.is_charged());
+        assert_eq!(reader.reads(), reads);
+    }
+    assert_eq!(cache.lookup("k").map(|hit| hit.bytes), Some(1));
+    assert!(bypass.get(&reader, "n".to_string()).await.is_ok());
+    assert!(!cache.contains("n"));
+    Ok(())
+}
+
+/// Under `CachePolicy::MAINTENANCE` the memory cache serves and fills as for queries, while a
+/// miss reads with the disk cache bypassed.
+#[tokio::test]
+async fn test_maintenance_fills_memory_and_bypasses_disk() -> Result<()> {
+    let cache = cache(&shared_store(1 << 20, 1 << 20, 1 << 20), meta_kind());
+    let reader = CtxReader {
+        live: Live::default(),
+        seen: Default::default(),
+    };
+    let maintenance = cache.with_policy(CachePolicy::MAINTENANCE);
+    assert!(
+        maintenance
+            .get(&reader, "m".to_string())
+            .await?
+            .is_charged()
+    );
+    assert!(cache.contains("m"));
+    maintenance.get(&reader, "m".to_string()).await?;
+    assert_eq!(*reader.seen.lock(), [CacheFill::Bypass]);
     Ok(())
 }

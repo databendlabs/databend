@@ -9,7 +9,6 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 databend-base = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
@@ -23,6 +22,9 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
 
 [lints]
 workspace = true

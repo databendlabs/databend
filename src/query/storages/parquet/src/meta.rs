@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableField;
 use databend_common_storage::read_metadata_async;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::kinds;
 use opendal::Operator;
@@ -551,7 +552,11 @@ impl Reader for ParquetMetaReader {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, (location, size): &Self::Key) -> Result<Arc<ParquetMetaData>> {
+    async fn read(
+        &self,
+        (location, size): &Self::Key,
+        _ctx: &CachePolicy,
+    ) -> Result<Arc<ParquetMetaData>> {
         let path = &location[self.prefix_len..];
         let size = match size {
             Some(v) => *v,

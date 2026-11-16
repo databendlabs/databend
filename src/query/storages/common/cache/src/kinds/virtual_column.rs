@@ -17,15 +17,11 @@
 use std::mem::size_of;
 use std::sync::Arc;
 
-use bytes::Bytes;
-use databend_common_exception::Result;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnNode;
 
 use crate::CacheDef;
 use crate::CachedItem;
-use crate::Disk;
-use crate::DiskCodec;
 use crate::Pool;
 use crate::size::hash_map;
 use crate::size::vec;
@@ -37,11 +33,9 @@ impl CacheDef for Meta {
     type Value = Arc<VirtualColumnFileMeta>;
     const NAME: &'static str = "memory_cache_virtual_column_file_meta_data";
     const POOL: Pool = Pool::Meta;
-    const DISK: Option<Disk<Self::Value>> = Some(Disk::new("virtual_column_meta_v1", |c| {
-        c.disk_cache_virtual_column_meta_size
-    }));
     /// Virtual column files are written once, under new locations.
     const SHARE_LOADS: bool = true;
+    const DISK: bool = true;
 }
 
 fn virtual_column_node(n: &VirtualColumnNode) -> usize {
@@ -61,15 +55,5 @@ impl CachedItem for VirtualColumnFileMeta {
 
     fn legacy_bytes(&self) -> usize {
         0
-    }
-}
-
-impl DiskCodec for VirtualColumnFileMeta {
-    fn encode(&self) -> Result<Vec<u8>> {
-        Vec::<u8>::try_from(self)
-    }
-
-    fn decode(bytes: Bytes) -> Result<Self> {
-        Self::try_from(bytes)
     }
 }

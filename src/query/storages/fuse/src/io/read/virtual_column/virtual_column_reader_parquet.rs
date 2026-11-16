@@ -45,10 +45,10 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::kinds::column;
 use databend_storages_common_index::VirtualColumnSharedDataType;
-use databend_storages_common_io::MergeIOReadResult;
-use databend_storages_common_io::MergeIOReader;
-use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualFieldReadPlan;
@@ -166,35 +166,28 @@ impl VirtualColumnReader {
             }
         }
 
-        let merge_io_result = if ranges.is_empty() {
-            MergeIOReadResult::create(
-                OwnerMemory::create(vec![]),
-                HashMap::new(),
-                virtual_loc.clone(),
-            )
-        } else {
-            match MergeIOReader::merge_io_read(
-                read_settings,
-                self.dal.clone(),
+        // Sidecar column chunks, from the virtual block meta, are units of the disk cache.
+        let units = DiskCachedStorage::new(self.dal.clone())
+            .read_units(
+                CacheKind::of::<column::Data>(),
                 virtual_loc,
                 &ranges,
+                self.policy.disk,
+                read_settings,
             )
-            .await
-            {
-                Ok(result) => result,
-                Err(error) => {
-                    warn!(
-                        "failed to read virtual sidecar, fallback to source columns: stage=merge_io, location={}, range_count={}, error={}",
-                        virtual_loc,
-                        ranges.len(),
-                        error
-                    );
-                    return None;
-                }
+            .await;
+        let block_read_res = match units {
+            Ok(units) => BlockReadResult::from(units),
+            Err(error) => {
+                warn!(
+                    "failed to read virtual sidecar, fallback to source columns: stage=merge_io, location={}, range_count={}, error={}",
+                    virtual_loc,
+                    ranges.len(),
+                    error
+                );
+                return None;
             }
         };
-
-        let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
         // The planner already excluded source columns that the scan needs for their own
         // values, so the ignored set from the pruner can be used directly.
         let ignore_column_ids = (!virtual_block_meta.ignored_source_column_ids.is_empty())

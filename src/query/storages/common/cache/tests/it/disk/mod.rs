@@ -12,5 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cache;
-mod tier;
+//! The disk cache, as `src/disk`: `DiskCache` over the pools and writer, and
+//! `DiskCachedStorage`, the read path in front of object storage. Files are checked on disk,
+//! since the cache writes in background threads.
+
+mod disk_cache;
+mod disk_cached_storage;
+mod disk_file;
+mod disk_pool;
+mod disk_writer;
+mod key;
+
+use std::path::Path;
+use std::path::PathBuf;
+
+/// The cache files under `dir`, recursively.
+pub fn files_under(dir: &Path) -> Vec<PathBuf> {
+    let mut files = vec![];
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return files;
+    };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_dir() {
+            files.extend(files_under(&path));
+        } else {
+            files.push(path);
+        }
+    }
+    files
+}

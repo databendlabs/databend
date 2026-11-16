@@ -25,7 +25,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::CoreExpr;
 use super::CoreExprArena;
-use super::CoreExprArgs;
 use super::CoreExprId;
 use super::TypeChecker;
 use crate::binder::ExprContext;
@@ -73,13 +72,7 @@ impl<'a> CoreExprArena<'a> {
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
-    pub(super) fn resolve_set_returning_function(
-        &mut self,
-        arena: &CoreExprArena<'_>,
-        span: Span,
-        func_name: &str,
-        args: &CoreExprArgs,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    pub(super) fn check_set_returning_function(&self, span: Span) -> Result<()> {
         match self.bind_context.expr_context {
             ExprContext::InSetReturningFunction => {
                 return Err(ErrorCode::SemanticError(
@@ -115,12 +108,16 @@ where A: super::TypeCheckAdapter
             .set_span(span));
         }
 
-        let original_context = self
-            .bind_context
-            .replace_expr_context(ExprContext::InSetReturningFunction);
-        let arguments_result = self.resolve_expr_args(arena, args);
-        self.bind_context.expr_context = original_context;
-        let (arguments, argument_types) = arguments_result?;
+        Ok(())
+    }
+
+    pub(super) fn resolve_set_returning_function(
+        &self,
+        span: Span,
+        func_name: &str,
+        arguments: Vec<ScalarExpr>,
+        argument_types: Vec<DataType>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let srf_return_type = type_check::infer_function_return_type(
             span,
             func_name,
