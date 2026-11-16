@@ -610,6 +610,9 @@ async fn test_caches_table() -> anyhow::Result<()> {
 
     let mut config = ConfigBuilder::create().build();
     config.storage.params = StorageParams::Fs(StorageFsConfig::default());
+    // The pools of the shared cache backend are a share of the memory limit: fix it, as the
+    // default is derived from the memory of the machine.
+    config.query.common.max_server_memory_usage = 1 << 30;
     let fixture = TestFixture::setup_with_config(&config).await?;
     let cluster_desc = ClusterDescriptor::new().with_local_id("test-node");
     let ctx = fixture.new_query_ctx_with_cluster(cluster_desc).await?;

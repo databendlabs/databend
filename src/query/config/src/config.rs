@@ -1715,15 +1715,17 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub global_statement_queue: bool,
 
-    /// The max total memory in bytes that can be used by this process.
+    /// The max total memory in bytes that can be used by this process. 0, the default, is 80%
+    /// of the memory of the machine, or of the cgroup the process runs in.
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
+    /// Enforce `max_server_memory_usage`: queries are killed when the process reaches it.
     #[clap(
         long,
         value_name = "VALUE",
         value_parser = clap::value_parser!(bool),
-        default_value = "false"
+        default_value = "true"
     )]
     pub max_memory_limit_enabled: bool,
 
@@ -3551,15 +3553,15 @@ pub struct CacheConfig {
 
     /// Use the shared cache backend: three memory pools (meta, index and data), each sized as a
     /// percentage of the server memory limit, evicted with S3-FIFO and shrunk under memory
-    /// pressure before queries are killed. Requires a server memory limit
-    /// (`max_memory_limit_enabled` and `max_server_memory_usage`). The per-cache capacity options
-    /// above and `enable_table_meta_cache` are then ignored; disk cache options still apply.
+    /// pressure before queries are killed, which takes `max_memory_limit_enabled`. The per-cache
+    /// capacity options above and `enable_table_meta_cache` are then ignored; disk cache options
+    /// still apply. Set it to false for the legacy backend, sized by those options.
     #[clap(
         long = "cache-shared-memory-enabled",
         value_name = "VALUE",
-        default_value = "false"
+        default_value = "true"
     )]
-    #[serde(default = "bool_false")]
+    #[serde(default = "bool_true")]
     pub shared_memory_enabled: bool,
 
     /// Shared backend: percentage of the server memory limit for table, segment and index
@@ -3647,7 +3649,7 @@ impl Default for CacheConfig {
             table_data_deserialized_memory_ratio: 0,
             table_data_encoded_dictionary_ndv_ratio: 100,
             iceberg_table_meta_count: 1024,
-            shared_memory_enabled: false,
+            shared_memory_enabled: true,
             meta_max_ratio: 10,
             index_max_ratio: 40,
             data_max_ratio: 10,
