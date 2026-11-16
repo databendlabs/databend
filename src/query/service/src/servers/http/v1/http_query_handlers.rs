@@ -98,6 +98,7 @@ use crate::servers::http::v1::catalog::list_database_tables_handler;
 use crate::servers::http::v1::catalog::list_databases_handler;
 use crate::servers::http::v1::catalog::search_databases_handler;
 use crate::servers::http::v1::catalog::search_tables_handler;
+use crate::servers::http::v1::data_search_handler;
 use crate::servers::http::v1::discovery_nodes;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::logout_handler;
@@ -1182,6 +1183,11 @@ pub fn query_route() -> Route {
             EndpointKind::StreamingLoad,
         ),
         ("/roles", get(list_roles_handler), EndpointKind::Metadata),
+        (
+            "/data/search",
+            post(data_search_handler),
+            EndpointKind::Data,
+        ),
     ];
 
     let mut route = Route::new();

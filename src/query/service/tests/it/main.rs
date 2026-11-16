@@ -21,6 +21,7 @@ mod auth;
 mod catalogs;
 mod clusters;
 mod configs;
+mod data;
 mod databases;
 mod distributed;
 mod frame;

@@ -108,6 +108,8 @@ pub enum EndpointKind {
     Catalog,
     Metadata,
     StreamingLoad,
+    /// `POST /v1/data/<op>`: operates on the data of a table without SQL.
+    Data,
 }
 
 impl EndpointKind {
@@ -123,6 +125,7 @@ impl EndpointKind {
                 | EndpointKind::Logout
                 | EndpointKind::HeartBeat
                 | EndpointKind::Catalog
+                | EndpointKind::Data
         )
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
@@ -137,7 +140,8 @@ impl EndpointKind {
             | EndpointKind::StreamingLoad
             | EndpointKind::UploadToStage
             | EndpointKind::Metadata
-            | EndpointKind::Catalog => {
+            | EndpointKind::Catalog
+            | EndpointKind::Data => {
                 if GlobalConfig::instance().query.common.management_mode {
                     Ok(None)
                 } else {

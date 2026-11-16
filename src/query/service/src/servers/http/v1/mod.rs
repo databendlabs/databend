@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod catalog;
+mod data;
 mod discovery;
 mod http_query_handlers;
 mod query;
@@ -24,6 +25,8 @@ mod streaming_load;
 pub mod users;
 mod verify;
 
+pub use data::DataSearchResponse;
+pub use data::data_search_handler;
 #[cfg(not(feature = "storage-stage"))]
 use databend_common_base::base::ProgressValues;
 pub use discovery::discovery_nodes;

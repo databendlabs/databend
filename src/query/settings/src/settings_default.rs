@@ -1662,6 +1662,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("data_api_table_cache_ttl_ms", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "How old, in milliseconds, a table resolved by an earlier data API request (/v1/data/<op>) may be to be reused, skipping its meta reads: the request then sees the table as of that time, its snapshot and its row access and masking policies. Privileges are checked on every request. 0 resolves the table on every request.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=60_000)),
+                }),
                 ("vector_refine_factor", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Refines limit * factor vector index candidates with the FP16 data of indexes created with refine = true. 0 disables refinement; 1 only reorders the results.",

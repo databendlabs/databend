@@ -339,6 +339,37 @@ pub(crate) async fn validate_share_object_by_id(
     }
 }
 
+/// Checks that the current user may read `catalog.database.table`, as for a SQL query
+/// reading it: for readers that do not plan, like the data API (`crate::data`).
+pub(crate) async fn validate_table_read(
+    ctx: Arc<QueryContext>,
+    catalog_name: &str,
+    db_name: &str,
+    table_name: &str,
+) -> Result<()> {
+    let checker = PrivilegeAccess::new(ctx);
+    if checker.ctx.get_current_user()?.auth_info.get_need_change() {
+        return Err(ErrorCode::NeedChangePasswordDenied(
+            "Must change password before execute other operations".to_string(),
+        ));
+    }
+    let Some((db_id, table_id)) = checker
+        .check_table_select_grants(catalog_name, db_name, table_name)
+        .await?
+    else {
+        return Ok(());
+    };
+    let pending = [PendingSelectOwnership {
+        catalog_name,
+        db_name,
+        table_name,
+        db_id,
+        table_id,
+    }];
+    checker.prefetch_select_ownerships(&pending).await?;
+    checker.validate_table_select_ownership(&pending[0]).await
+}
+
 impl PrivilegeAccess {
     fn new(ctx: Arc<QueryContext>) -> Self {
         PrivilegeAccess {

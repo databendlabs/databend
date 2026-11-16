@@ -1087,6 +1087,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }
 
+    pub fn get_data_api_table_cache_ttl_ms(&self) -> Result<u64> {
+        self.try_get_u64("data_api_table_cache_ttl_ms")
+    }
+
     pub fn get_vector_refine_factor(&self) -> Result<u64> {
         self.try_get_u64("vector_refine_factor")
     }

@@ -34,6 +34,7 @@ use crate::io::create_index_schema;
 use crate::io::create_tokenizer_manager;
 use crate::io::read::InvertedIndexReader;
 use crate::io::read::InvertedIndexWarmupInfo;
+use crate::io::resolve_inverted_index_user_dictionary;
 use crate::io::resolve_inverted_index_user_dictionary_blocking;
 
 // Each block file has a corresponding index file,
@@ -112,6 +113,36 @@ impl InvertedIndexPruner {
             })));
         }
         Ok(None)
+    }
+
+    /// A pruner that finds the `top_k` best scored rows of each block, for readers that rank
+    /// rows without a plan (the search API). A block is searched as by a scan pruned for
+    /// `WHERE match(..) ORDER BY score() DESC LIMIT top_k`.
+    pub async fn create_scored(
+        dal: Operator,
+        cache_policy: CachePolicy,
+        inverted_index_info: &InvertedIndexInfo,
+        top_k: usize,
+    ) -> Result<Arc<InvertedIndexPruner>> {
+        let user_dictionary =
+            resolve_inverted_index_user_dictionary(&dal, &inverted_index_info.index_options)
+                .await?;
+        let prepared = create_inverted_index_query(inverted_index_info, user_dictionary)?;
+        let reader = InvertedIndexReader::create(
+            dal,
+            cache_policy,
+            true,
+            prepared.tokenizer_manager,
+            prepared.warmup,
+        )
+        .with_top_k(Some(top_k));
+        Ok(Arc::new(InvertedIndexPruner {
+            index_name: inverted_index_info.index_name.clone(),
+            index_version: inverted_index_info.index_version.clone(),
+            reader,
+            query: prepared.query,
+            rows_only: true,
+        }))
     }
 
     #[async_backtrace::framed]

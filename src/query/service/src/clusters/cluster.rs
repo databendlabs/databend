@@ -475,36 +475,39 @@ impl ClusterDiscovery {
         };
 
         match node_info_opt {
-            None => {
-                let mut node_info = NodeInfo::create(
-                    config.query.node_id.clone(),
-                    config.query.node_secret.clone(),
-                    format!(
-                        "{}:{}",
-                        config.query.common.http_handler_host,
-                        config.query.common.http_handler_port
-                    ),
-                    config.query.common.flight_api_address.clone(),
-                    config.query.common.discovery_address.clone(),
-                    String::new(),
-                    String::new(),
-                );
-
-                // For embedded mode, set virtual cluster/warehouse IDs to make node "assigned"
-                if use_embedded_mode {
-                    node_info.cluster_id = "embedded_cluster".to_string();
-                    node_info.warehouse_id = "embedded_warehouse".to_string();
-                } else {
-                    node_info.cluster_id = config.query.common.cluster_id.clone();
-                    node_info.warehouse_id = config.query.common.warehouse_id.clone();
-                }
-                Ok(Cluster::empty(node_info))
-            }
+            None => Ok(Self::local_cluster(config)),
             Some(v) => Ok(Cluster::create(
                 vec![Arc::new(v)],
                 config.query.node_id.clone(),
             )),
         }
+    }
+
+    /// This node alone, as configured, without reading meta-service: for work that never
+    /// leaves this node.
+    pub fn local_cluster(config: &InnerConfig) -> Arc<Cluster> {
+        let mut node_info = NodeInfo::create(
+            config.query.node_id.clone(),
+            config.query.node_secret.clone(),
+            format!(
+                "{}:{}",
+                config.query.common.http_handler_host, config.query.common.http_handler_port
+            ),
+            config.query.common.flight_api_address.clone(),
+            config.query.common.discovery_address.clone(),
+            String::new(),
+            String::new(),
+        );
+
+        // For embedded mode, set virtual cluster/warehouse IDs to make node "assigned"
+        if databend_common_config::GlobalConfig::is_embedded_mode() {
+            node_info.cluster_id = "embedded_cluster".to_string();
+            node_info.warehouse_id = "embedded_warehouse".to_string();
+        } else {
+            node_info.cluster_id = config.query.common.cluster_id.clone();
+            node_info.warehouse_id = config.query.common.warehouse_id.clone();
+        }
+        Cluster::empty(node_info)
     }
 
     pub async fn find_node_by_warehouse(

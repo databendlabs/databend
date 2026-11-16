@@ -22,3 +22,4 @@ pub use management_mode_access::ManagementModeAccess;
 pub use privilege_access::PrivilegeAccess;
 pub(crate) use privilege_access::validate_share_management_for_connection;
 pub(crate) use privilege_access::validate_share_object_by_id;
+pub(crate) use privilege_access::validate_table_read;

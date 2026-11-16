@@ -48,6 +48,7 @@ pub mod auth;
 pub mod builtin;
 pub mod catalogs;
 pub mod clusters;
+pub mod data;
 pub mod databases;
 pub mod history_tables;
 pub mod interpreters;
