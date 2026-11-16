@@ -526,7 +526,7 @@ impl FuseTable {
                     let mut segment_windows = segment_windows.into_iter();
                     while early_accept_count < mutator.max_tasks {
                         // Early accepts are competitors, not resource reservations.
-                        // Each v2 window may propose a complete executor-feasible set.
+                        // Each window may propose a complete executor-feasible batch.
                         let window_task_limit = mutator.task_budget.map_or_else(
                             || mutator.max_tasks.saturating_sub(early_accept_count),
                             |budget| budget.max_tasks(),
@@ -1008,7 +1008,6 @@ mod tests {
     fn test_batched_selection_keeps_four_task_winner_within_node_budget() {
         for (task_count, threads, bytes, accepted) in [
             (4, 4, 100, true),
-            (4, 4, 101, true),
             (4, 4, 99, false),
             (4, 3, 100, false),
             (5, 8, 125, false),

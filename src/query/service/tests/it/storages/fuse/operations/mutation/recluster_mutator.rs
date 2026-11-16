@@ -629,7 +629,7 @@ async fn materialize_candidate_window(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_joint_gain_selection_is_unconditional() -> anyhow::Result<()> {
+async fn test_recluster_joint_gain_selection() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_recluster_block_size(1000)?;
@@ -637,27 +637,64 @@ async fn test_recluster_joint_gain_selection_is_unconditional() -> anyhow::Resul
     let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
     let thresholds = BlockThresholds::default();
     // Identical ranges, original-order sizes 600,600,400,400 and budget 1000:
-    // Skip-fill finds two pairs without a session setting, in either mode.
-    let blocks = [600, 600, 400, 400]
-        .into_iter()
-        .map(|size| make_recluster_block(0, 1, 100, 0, 1000, size, size / 2))
-        .collect();
-    let location =
-        write_recluster_segment(&data_accessor, &location_generator, blocks, thresholds, 0).await?;
-    for mode in [ReclusterMode::Aggressive, ReclusterMode::Conservative] {
-        let (_, block_count, parts) = materialize_segment_locations_with_mode(
-            ctx.clone(),
-            data_accessor.clone(),
-            vec![location.clone()],
+    // joint-gain selection finds two pairs in either mode, including after
+    // preparation separates a block with obsolete cluster-key statistics.
+    for prepared in [false, true] {
+        let cluster_key_id = u32::from(prepared);
+        let mut blocks = Vec::new();
+        if prepared {
+            let mut old = make_recluster_block(0, 1, 100, 0, 1000, 100, 50);
+            Arc::make_mut(&mut old).col_stats.insert(
+                0,
+                ColumnStatistics::new(Scalar::from(1i32), Scalar::from(100i32), 0, 100, None),
+            );
+            blocks.push(old);
+        }
+        blocks.extend([600, 600, 400, 400].into_iter().map(|size| {
+            make_recluster_block(
+                cluster_key_id,
+                1,
+                100,
+                i32::from(prepared),
+                1000,
+                size,
+                size / 2,
+            )
+        }));
+        let location = write_recluster_segment(
+            &data_accessor,
+            &location_generator,
+            blocks,
             thresholds,
-            0,
-            2,
-            8,
-            mode,
+            cluster_key_id,
         )
         .await?;
-        assert_eq!(task_part_counts(&parts), vec![2, 2]);
-        assert_eq!(block_count, 4);
+        for mode in [ReclusterMode::Aggressive, ReclusterMode::Conservative] {
+            let (_, block_count, parts) = materialize_segment_locations_with_mode(
+                ctx.clone(),
+                data_accessor.clone(),
+                vec![location.clone()],
+                thresholds,
+                cluster_key_id,
+                if prepared { 3 } else { 2 },
+                8,
+                mode,
+            )
+            .await?;
+            let case = format!("prepared={prepared}, mode={mode:?}");
+            let expected_counts = if prepared { vec![2, 2, 1] } else { vec![2, 2] };
+            assert_eq!(task_part_counts(&parts), expected_counts, "{case}");
+            assert_eq!(block_count, if prepared { 5 } else { 4 }, "{case}");
+            assert!(
+                parts.tasks[..2]
+                    .iter()
+                    .all(|task| task.kind == ReclusterTaskKind::MergeBlocks),
+                "{case}"
+            );
+            if prepared {
+                assert_eq!(parts.tasks[2].kind, ReclusterTaskKind::SortBlocks, "{case}");
+            }
+        }
     }
     Ok(())
 }
@@ -692,47 +729,6 @@ async fn test_recluster_does_not_fall_back_after_non_positive_gain() -> anyhow::
         .await?;
         assert_eq!(count, 0);
         assert!(parts.is_empty());
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_preparation_uses_joint_gain_selection() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_recluster_block_size(1000)?;
-    let operator = ctx.get_application_level_data_operator()?.operator();
-    let locations = TableMetaLocationGenerator::new("_prepared_joint".to_owned());
-    let thresholds = BlockThresholds::default();
-    let mut old = make_recluster_block(0, 1, 100, 0, 1000, 100, 50);
-    Arc::make_mut(&mut old).col_stats.insert(
-        0,
-        ColumnStatistics::new(Scalar::from(1i32), Scalar::from(100i32), 0, 100, None),
-    );
-    let mut blocks = vec![old];
-    blocks.extend(
-        [600, 600, 400, 400]
-            .into_iter()
-            .map(|size| make_recluster_block(1, 1, 100, 1, 1000, size, size / 2)),
-    );
-    let location = write_recluster_segment(&operator, &locations, blocks, thresholds, 1).await?;
-    for mode in [ReclusterMode::Aggressive, ReclusterMode::Conservative] {
-        let (_, count, parts) = materialize_segment_locations_with_mode(
-            ctx.clone(),
-            operator.clone(),
-            vec![location.clone()],
-            thresholds,
-            1,
-            3,
-            8,
-            mode,
-        )
-        .await?;
-        assert_eq!(count, 5);
-        assert_eq!(task_part_counts(&parts), vec![2, 2, 1]);
-        assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::MergeBlocks);
-        assert_eq!(parts.tasks[1].kind, ReclusterTaskKind::MergeBlocks);
-        assert_eq!(parts.tasks[2].kind, ReclusterTaskKind::SortBlocks);
     }
     Ok(())
 }
@@ -1055,11 +1051,11 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_sql_without_selector_setting() -> anyhow::Result<()> {
+async fn test_recluster_after_cluster_key_change() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     for mode in [0, 1] {
-        let table = format!("{}.single_selector_{mode}", fixture.default_db_name());
+        let table = format!("{}.cluster_key_change_{mode}", fixture.default_db_name());
         for sql in [
             format!(
                 "CREATE TABLE {table}(a INT, b INT) CLUSTER BY (a) ROW_PER_BLOCK=2 BLOCK_PER_SEGMENT=2 AGGRESSIVE_RECLUSTER={mode}"
