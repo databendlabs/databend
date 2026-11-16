@@ -72,13 +72,19 @@ async fn test_split_grouped_count_distinct() -> Result<()> {
             "SELECT g, count(DISTINCT x), count(*) FROM t GROUP BY g",
         ),
     ] {
-        let plan = ctx.optimize_plan(ctx.bind_sql(sql).await?).await?;
+        let raw_plan = ctx.bind_sql(sql).await?;
+        let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
         write_case_title(&mut file, name, description)?;
         writeln!(file, "sql: {sql}")?;
         writeln!(
             file,
-            "{}",
-            plan.format_indent(Default::default(), &ctx.stat_context()?)?
+            "raw_plan:\n{}",
+            raw_plan.format_indent(Default::default(), &ctx.stat_context()?)?
+        )?;
+        writeln!(
+            file,
+            "optimized_plan:\n{}",
+            optimized_plan.format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
     }
     Ok(())
