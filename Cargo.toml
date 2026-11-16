@@ -654,6 +654,10 @@ databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.gi
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
+# ownedbytes and tantivy*: tantivy 0.26.2 with block-max MaxScore, heap top-k and remembered
+# term infos (datafuse-extras/tantivy, branch databend-0.26.2). All of tantivy's workspace crates
+# come from the same commit, so tantivy and Databend share one copy of each.
+ownedbytes = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
 # dev: v0.2.0 plus the reqwest rustls fix (datafuse-extras/paimon-rust#1).
 paimon = { git = "https://github.com/datafuse-extras/paimon-rust", branch = "dev" }
 parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
@@ -664,5 +668,13 @@ rquickjs-core = { git = "https://github.com/DelSkayn/rquickjs.git", rev = "52631
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
+tantivy-bitpacker = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
+tantivy-columnar = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
+tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
+tantivy-sstable = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
+tantivy-stacker = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
+tantivy-tokenizer-api = { git = "https://github.com/datafuse-extras/tantivy", rev = "accaa2507dc485872138d5204a75950e7258f1a2" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.5.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
