@@ -420,15 +420,19 @@ impl PlanFragment {
     ) -> Result<()> {
         struct TasksCollector {
             tasks: Vec<ReclusterTask>,
+            batches: Option<Vec<Vec<usize>>>,
         }
 
         impl TasksCollector {
             pub fn create() -> Box<dyn PhysicalPlanVisitor> {
-                Box::new(TasksCollector { tasks: Vec::new() })
+                Box::new(TasksCollector {
+                    tasks: Vec::new(),
+                    batches: None,
+                })
             }
 
-            pub fn take(&mut self) -> Vec<ReclusterTask> {
-                std::mem::take(&mut self.tasks)
+            pub fn take(&mut self) -> (Vec<ReclusterTask>, Option<Vec<Vec<usize>>>) {
+                (std::mem::take(&mut self.tasks), self.batches.take())
             }
         }
 
@@ -443,7 +447,8 @@ impl PlanFragment {
                         unreachable!("logic error, expect only one recluster");
                     }
 
-                    self.tasks = recluster.tasks.clone()
+                    self.tasks = recluster.tasks.clone();
+                    self.batches = recluster.task_batches.clone();
                 }
 
                 Ok(())
@@ -453,23 +458,53 @@ impl PlanFragment {
         let mut visitor = TasksCollector::create();
         self.plan.visit(&mut visitor)?;
 
-        let mut tasks = vec![];
-        if let Some(visitor) = visitor.as_any().downcast_mut::<TasksCollector>() {
-            tasks = visitor.take();
-        }
+        let (tasks, batches) = visitor
+            .as_any()
+            .downcast_mut::<TasksCollector>()
+            .map(|visitor| visitor.take())
+            .unwrap_or_default();
 
-        let executors = Fragmenter::get_executors(ctx);
-        if tasks.len() > executors.len() {
-            return Err(ErrorCode::Internal(format!(
-                "Cannot recluster {} tasks to {} executors",
-                tasks.len(),
-                executors.len()
-            )));
-        }
-
-        let task_reshuffle = Self::reshuffle(executors, tasks)?;
+        let mut executors = Fragmenter::get_executors(ctx);
+        let batched = batches.is_some();
+        let task_reshuffle = if let Some(batches) = batches {
+            if batches.len() > executors.len() {
+                return Err(ErrorCode::Internal(
+                    "Recluster placement exceeds available executors",
+                ));
+            }
+            // Preserve the planning-time placement witness. Round-robin task
+            // redistribution could combine full batches and exceed a node's budget.
+            executors.sort();
+            let mut placement = executors
+                .iter()
+                .map(|id| (id.clone(), Vec::new()))
+                .collect::<HashMap<_, _>>();
+            let mut seen = vec![false; tasks.len()];
+            for (executor, batch) in executors.into_iter().zip(batches) {
+                let assigned = placement.get_mut(&executor).unwrap();
+                for task_idx in batch {
+                    if task_idx >= tasks.len() || std::mem::replace(&mut seen[task_idx], true) {
+                        return Err(ErrorCode::Internal("Invalid recluster task placement"));
+                    }
+                    assigned.push(tasks[task_idx].clone());
+                }
+            }
+            if seen.iter().any(|seen| !seen) {
+                return Err(ErrorCode::Internal("Recluster placement omitted a task"));
+            }
+            placement
+        } else {
+            if tasks.len() > executors.len() {
+                return Err(ErrorCode::Internal(format!(
+                    "Cannot recluster {} tasks to {} executors",
+                    tasks.len(),
+                    executors.len()
+                )));
+            }
+            Self::reshuffle(executors, tasks)?
+        };
         for (executor, tasks) in task_reshuffle.into_iter() {
-            let mut handle = ReclusterDeriveHandle::create(tasks);
+            let mut handle = ReclusterDeriveHandle::create(tasks, batched);
             let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -693,11 +728,12 @@ impl DeriveHandle for ReadSourceDeriveHandle {
 
 struct ReclusterDeriveHandle {
     tasks: Vec<ReclusterTask>,
+    batched: bool,
 }
 
 impl ReclusterDeriveHandle {
-    pub fn create(tasks: Vec<ReclusterTask>) -> Box<dyn DeriveHandle> {
-        Box::new(ReclusterDeriveHandle { tasks })
+    pub fn create(tasks: Vec<ReclusterTask>, batched: bool) -> Box<dyn DeriveHandle> {
+        Box::new(ReclusterDeriveHandle { tasks, batched })
     }
 }
 
@@ -717,7 +753,10 @@ impl DeriveHandle for ReclusterDeriveHandle {
 
         Ok(PhysicalPlan::new(Recluster {
             tasks: self.tasks.clone(),
-            ..recluster.clone()
+            task_batches: self.batched.then(|| vec![(0..self.tasks.len()).collect()]),
+            meta: recluster.meta.clone(),
+            table_info: recluster.table_info.clone(),
+            table_meta_timestamps: recluster.table_meta_timestamps,
         }))
     }
 }

@@ -21,30 +21,20 @@ use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
 
 #[test]
-fn test_recluster_task_selection_v2_setting() {
+fn test_removed_recluster_task_selection_setting() {
     let settings = Settings::create(Tenant::new_literal("test"));
-    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
-    for value in ["1", "0"] {
-        settings
+    for value in ["0", "1"] {
+        let error = settings
             .set_setting(
                 "enable_recluster_task_selection_v2".to_string(),
                 value.to_string(),
             )
-            .unwrap();
+            .unwrap_err();
         assert_eq!(
-            settings.get_enable_recluster_task_selection_v2().unwrap(),
-            value == "1"
+            error.code(),
+            databend_common_exception::ErrorCode::UnknownVariable("").code()
         );
     }
-    assert!(
-        settings
-            .set_setting(
-                "enable_recluster_task_selection_v2".to_string(),
-                "2".to_string()
-            )
-            .is_err()
-    );
-    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
