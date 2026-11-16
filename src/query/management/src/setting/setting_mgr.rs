@@ -83,11 +83,15 @@ impl SettingMgr {
 
         let mut settings = Vec::new();
         while let Some(item) = strm.try_next().await.map_err(meta_service_error)? {
-            let setting: UserSetting = serde_json::from_slice(&item.value.unwrap().data)?;
-            settings.push(setting);
+            settings.push(Self::decode_setting(&item.value.unwrap().data)?);
         }
 
         Ok(settings)
+    }
+
+    /// A setting stored under the setting prefix, as listed by `get_settings`.
+    pub fn decode_setting(data: &[u8]) -> Result<UserSetting> {
+        Ok(serde_json::from_slice(data)?)
     }
 
     #[async_backtrace::framed]

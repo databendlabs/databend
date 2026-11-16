@@ -331,7 +331,7 @@ impl AuthMgr {
                 let identity = UserIdentity::new(&user_name, "%");
                 let tenant = session.get_current_tenant();
                 let user = user_api
-                    .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
+                    .get_login_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
 
                 match &user.auth_info {
@@ -367,7 +367,7 @@ impl AuthMgr {
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(name, "%");
                 let mut user = user_api
-                    .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
+                    .get_login_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
 
                 // check global network policy if user is not account admin
