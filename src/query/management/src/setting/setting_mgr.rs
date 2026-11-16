@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::SettingIdent;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::tenant::Tenant;
+use databend_meta_client::ClientHandle;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
@@ -25,7 +26,10 @@ use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::UpsertKV;
+use databend_meta_plugin_cache::Cache;
+use databend_meta_runtime::DatabendRuntime;
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 use seq_marked::SeqValue;
 
 use crate::errors::meta_service_error;
@@ -33,6 +37,8 @@ use crate::errors::meta_service_error;
 pub struct SettingMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
+    /// The global settings of the tenant, if watched: see `get_watched_settings`.
+    watched: Option<Arc<Mutex<Cache>>>,
 }
 
 impl SettingMgr {
@@ -40,7 +46,24 @@ impl SettingMgr {
         SettingMgr {
             kv_api,
             tenant: tenant.clone(),
+            watched: None,
         }
+    }
+
+    /// Watch the global settings of `tenant`, for `with_watched`. The lock is held only to read
+    /// the copy once, never across an await.
+    pub async fn watch(
+        client: Arc<ClientHandle<DatabendRuntime>>,
+        tenant: &Tenant,
+    ) -> Arc<Mutex<Cache>> {
+        let cache = Cache::new(client, Self::settings_prefix(tenant), "global settings").await;
+        Arc::new(Mutex::new(cache))
+    }
+
+    /// Read the settings by `get_watched_settings` from `watched`, a `watch` of the tenant.
+    pub fn with_watched(mut self, watched: Arc<Mutex<Cache>>) -> Self {
+        self.watched = Some(watched);
+        self
     }
 
     fn setting_ident(&self, name: &str) -> SettingIdent {
@@ -52,7 +75,11 @@ impl SettingMgr {
     }
 
     fn setting_prefix(&self) -> String {
-        self.setting_ident("").to_string_key()
+        Self::settings_prefix(&self.tenant)
+    }
+
+    fn settings_prefix(tenant: &Tenant) -> String {
+        SettingIdent::new(tenant.clone(), "").to_string_key()
     }
 }
 
@@ -83,11 +110,36 @@ impl SettingMgr {
 
         let mut settings = Vec::new();
         while let Some(item) = strm.try_next().await.map_err(meta_service_error)? {
-            let setting: UserSetting = serde_json::from_slice(&item.value.unwrap().data)?;
-            settings.push(setting);
+            if let Some(value) = item.value {
+                settings.push(Self::decode_setting(&value.data)?);
+            }
         }
 
         Ok(settings)
+    }
+
+    /// The global settings, from the watched copy if there is one and it can answer now, or else
+    /// from meta-service, see `Cache::try_list_dir_ready`. Settings from the copy may lag a
+    /// change by the watch delay. Use `get_settings` where a change must be seen at once.
+    #[async_backtrace::framed]
+    pub async fn get_watched_settings(&self) -> Result<Vec<UserSetting>> {
+        let prefix = self.setting_prefix();
+        let local = self
+            .watched
+            .as_ref()
+            .and_then(|w| w.lock().try_list_dir_ready(&prefix));
+        let Some(items) = local else {
+            return self.get_settings().await;
+        };
+        items
+            .iter()
+            .map(|(_, value)| Self::decode_setting(&value.data))
+            .collect()
+    }
+
+    /// A setting stored under the setting prefix.
+    fn decode_setting(data: &[u8]) -> Result<UserSetting> {
+        Ok(serde_json::from_slice(data)?)
     }
 
     #[async_backtrace::framed]
