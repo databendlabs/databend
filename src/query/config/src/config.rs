@@ -3177,6 +3177,13 @@ pub struct CacheConfig {
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
 
+    /// Watch the users and the global settings of the tenant in meta-service, so that
+    /// authentication and new sessions read them locally. They may lag a change by the watch
+    /// delay, a change made through this node included.
+    #[clap(long = "cache-enable-meta-service-watch", default_value = "false")]
+    #[serde(default = "bool_false")]
+    pub meta_service_watch_cache: bool,
+
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
     #[serde(default = "bool_true")]
@@ -3608,6 +3615,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             meta_service_ownership_cache: false,
+            meta_service_watch_cache: false,
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
