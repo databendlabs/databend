@@ -183,6 +183,60 @@ async fn test_successfully_drop_self_managed_node() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A manager watching the cluster nodes lists what a direct read lists, as nodes join, through
+/// it or not, and leave; and only the nodes of the cluster asked for: not those of
+/// `test-cluster-id-2`, whose escaped key extends that of `test-cluster-id`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
+    let (kv, direct) = new_cluster_api(Duration::from_mins(60)).await?;
+    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
+        .watch_cluster_nodes()
+        .await;
+    let node_1 = self_managed_node("node_1");
+    let node_2 = self_managed_node("node_2");
+    let other_cluster = NodeInfo {
+        cluster_id: "test-cluster-id-2".to_string(),
+        warehouse_id: "test-cluster-id-2".to_string(),
+        ..self_managed_node("node_3")
+    };
+
+    assert_watched_nodes(&watched, &direct, &[]).await?;
+    direct.start_node(node_1.clone()).await?;
+    direct.start_node(other_cluster).await?;
+    assert_watched_nodes(&watched, &direct, std::slice::from_ref(&node_1)).await?;
+    watched.start_node(node_2.clone()).await?;
+    assert_watched_nodes(&watched, &direct, &[node_1.clone(), node_2.clone()]).await?;
+    direct.shutdown_node(node_1.id).await?;
+    assert_watched_nodes(&watched, &direct, &[node_2]).await?;
+    Ok(())
+}
+
+/// `direct` lists `want` in `test-cluster-id`, and `watched` comes to list the same.
+async fn assert_watched_nodes(
+    watched: &WarehouseMgr,
+    direct: &WarehouseMgr,
+    want: &[NodeInfo],
+) -> anyhow::Result<()> {
+    let (warehouse, cluster) = ("test-cluster-id", "test-cluster-id");
+    assert_eq!(
+        direct
+            .list_warehouse_cluster_nodes(warehouse, cluster)
+            .await?,
+        want
+    );
+    for _ in 0..100 {
+        if watched
+            .list_warehouse_cluster_nodes(warehouse, cluster)
+            .await?
+            == want
+        {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    anyhow::bail!("the watched cluster nodes did not come to list {want:?}")
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_unknown_node_drop_self_managed_node() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
