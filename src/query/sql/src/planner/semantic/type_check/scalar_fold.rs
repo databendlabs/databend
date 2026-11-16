@@ -139,8 +139,17 @@ fn full_domain(data_type: &DataType) -> Option<Domain> {
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
+    /// The folding policy of the expression being bound: that of the
+    /// grouping scope whose keys, or the pre-aggregate forms compared with
+    /// them, are being bound, see `key_binding_scope`, and `Normal`
+    /// otherwise. The body of a SQL UDF folds as the expression it is
+    /// expanded in.
     pub(super) fn scalar_folding_policy(&self) -> ScalarFoldingPolicy {
-        self.folding_policy
+        if let Some(policy) = self.inherited_folding_policy {
+            return policy;
+        }
+        self.key_binding_scope()
+            .map_or(ScalarFoldingPolicy::Normal, |scope| scope.folding_policy)
     }
 
     /// Attaches facts to an expression bound without them.

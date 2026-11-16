@@ -129,6 +129,7 @@ use crate::binder::AggregateRewriter;
 use crate::binder::AliasLookup;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
+use crate::binder::GroupingKeyScope;
 use crate::binder::GroupingScopeState;
 use crate::binder::SetReturningAnalyzer;
 use crate::planner::semantic::normalize_identifier;
@@ -529,13 +530,32 @@ where A: TypeCheckAdapter
         eligibility
     }
 
+    /// The grouping scope whose keys, or the pre-aggregate forms compared
+    /// with them, are being bound: the scope that a pre-aggregate form is
+    /// bound for, or the scope of this SELECT while its GROUP BY is bound.
+    pub(super) fn key_binding_scope(&self) -> Option<&GroupingKeyScope> {
+        match self.grouping_key_input_scope() {
+            Some(position) => context_chain(self.bind_context)
+                .nth(position)?
+                .grouping_key_scope
+                .as_ref(),
+            None => self
+                .bind_context
+                .grouping_key_scope
+                .as_ref()
+                .filter(|scope| scope.state == GroupingScopeState::GroupBy),
+        }
+    }
+
     /// The position of the scope whose pre-aggregate form is being bound.
     pub(super) fn grouping_key_input_scope(&self) -> Option<usize> {
         self.grouping_key.phase.input_scope()
     }
 
-    /// Bind an input form with an explicit policy, restoring both dimensions
-    /// even on error. The returned state records availability/deferred errors.
+    /// Bind a pre-aggregate form for the scope at `scope`, restoring the
+    /// phase even on error. The form is bound with the folding policy of the
+    /// scope, see `scalar_folding_policy`. The returned state records
+    /// availability/deferred errors.
     fn with_grouping_key_input<R>(
         &mut self,
         scope: usize,
@@ -549,15 +569,7 @@ where A: TypeCheckAdapter
             in_grouping_arguments,
             ..Default::default()
         });
-        // Without a scope yet, as for GROUP BY, the forms are bound with the
-        // policy of this type checker.
-        let input_policy = context_chain(self.bind_context)
-            .nth(scope)
-            .and_then(|context| context.grouping_key_scope.as_ref())
-            .map_or(self.folding_policy, |scope| scope.input_folding_policy);
-        let policy = std::mem::replace(&mut self.folding_policy, input_policy);
         let result = bind(self);
-        self.folding_policy = policy;
         (result, std::mem::replace(&mut self.grouping_key, state))
     }
 
@@ -973,7 +985,7 @@ mod tests {
         );
         context.grouping_key_scope = Some(GroupingKeyScope {
             state: GroupingScopeState::Suspended,
-            input_folding_policy: ScalarFoldingPolicy::PreserveStructure,
+            folding_policy: ScalarFoldingPolicy::PreserveStructure,
             input_columns: context.column_set(),
         });
         let names = NameResolutionContext::default();
@@ -1040,7 +1052,11 @@ mod tests {
                 ScalarFoldingPolicy::Normal,
                 ScalarFoldingPolicy::PreserveStructure,
             ] {
-                checker.folding_policy = policy;
+                // A key of GROUP BY is bound with the policy of the scope.
+                let scope = checker.bind_context.grouping_key_scope.as_mut().unwrap();
+                scope.state = GroupingScopeState::GroupBy;
+                scope.folding_policy = policy;
+                assert_eq!(checker.scalar_folding_policy(), policy);
                 for sql in [
                     "number + (40 + 2)",
                     "CAST(is_null(number) AS INT)",
@@ -1066,12 +1082,12 @@ mod tests {
     }
 
     #[test]
-    fn input_phase_and_folding_policy_restore_after_nested_errors() -> Result<()> {
+    fn input_phase_restores_after_nested_errors_and_policy_follows_scope() -> Result<()> {
         with_checker(|checker| {
             let ordinary = BindContext {
                 grouping_key_scope: Some(GroupingKeyScope {
                     state: GroupingScopeState::Active,
-                    input_folding_policy: ScalarFoldingPolicy::Normal,
+                    folding_policy: ScalarFoldingPolicy::Normal,
                     input_columns: Default::default(),
                 }),
                 ..BindContext::new()
@@ -1079,7 +1095,7 @@ mod tests {
             let grouping_sets = BindContext {
                 grouping_key_scope: Some(GroupingKeyScope {
                     state: GroupingScopeState::Active,
-                    input_folding_policy: ScalarFoldingPolicy::PreserveStructure,
+                    folding_policy: ScalarFoldingPolicy::PreserveStructure,
                     input_columns: Default::default(),
                 }),
                 parent: Some(Box::new(ordinary)),

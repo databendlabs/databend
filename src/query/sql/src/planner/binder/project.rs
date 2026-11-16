@@ -58,7 +58,6 @@ use crate::WindowChecker;
 use crate::binder::AliasLookup;
 use crate::binder::AliasTable;
 use crate::binder::ExprContext;
-use crate::binder::ScalarFoldingPolicy;
 use crate::binder::Visibility;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
@@ -347,7 +346,7 @@ impl Binder {
             select_list,
             ..Default::default()
         })?;
-        let mut forms = SelectItemForms::new(&clauses, ScalarFoldingPolicy::Normal);
+        let mut forms = SelectItemForms::new(&clauses);
         self.bind_select_list(input_context, &clauses, &mut forms)
     }
 

@@ -410,10 +410,16 @@ pub struct BindContext {
     pub window_definitions: DashMap<String, WindowSpec>,
 }
 
-/// Whether the expressions being bound in a grouped SELECT are evaluated
-/// after its aggregate.
+/// Which expressions of a grouped SELECT are being bound, and whether they
+/// are evaluated after its aggregate.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GroupingScopeState {
+    /// Before the aggregate, while GROUP BY is bound: the expressions bound
+    /// are the keys.
+    GroupBy,
+    /// Before the aggregate, after GROUP BY and before the SELECT list, while
+    /// WHERE is bound.
+    BeforeAggregate,
     /// After the aggregate: nodes are matched to the keys.
     #[default]
     Active,
@@ -422,15 +428,26 @@ pub enum GroupingScopeState {
     Suspended,
 }
 
-/// Post-aggregate binding state of a grouped SELECT, including zero-key
-/// global aggregates. While active, whole-key matches bind to key outputs
-/// before their children are checked. See `TypeChecker` for the rules.
+impl GroupingScopeState {
+    /// Whether the expressions after the aggregate are being bound, also in
+    /// the arguments of the aggregate functions in them.
+    pub fn after_aggregate(self) -> bool {
+        matches!(self, Self::Active | Self::Suspended)
+    }
+}
+
+/// The binding state of a grouped SELECT, including zero-key global
+/// aggregates, from GROUP BY on. While active, whole-key matches bind to key
+/// outputs before their children are checked. See `TypeChecker` for the
+/// rules.
 #[derive(Clone, Debug, Default)]
 pub struct GroupingKeyScope {
     pub state: GroupingScopeState,
-    /// The key and its matching input forms must use the same folding policy.
-    pub input_folding_policy: ScalarFoldingPolicy,
+    /// The folding policy of the keys and of the pre-aggregate forms compared
+    /// with them, which must be the same, see `scalar_fold.rs`.
+    pub folding_policy: ScalarFoldingPolicy,
     /// Input symbols owned by this SELECT, excluding later lambda parameters.
+    /// Known from the SELECT list on.
     pub input_columns: crate::ColumnSet,
 }
 
@@ -505,7 +522,7 @@ pub struct MaterializedCTEInfo {
 
 impl BindContext {
     /// The state of the grouping scope of this SELECT, if it is grouped and
-    /// its expressions after the aggregate are being bound.
+    /// its expressions from GROUP BY on are being bound.
     pub fn grouping_scope_state(&self) -> Option<GroupingScopeState> {
         self.grouping_key_scope.as_ref().map(|scope| scope.state)
     }

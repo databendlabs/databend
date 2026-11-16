@@ -1222,20 +1222,28 @@ impl Binder {
         result
     }
 
+    /// Open the grouping scope of a grouped SELECT, before its GROUP BY is
+    /// bound with `folding_policy`, the policy of its keys.
+    pub(crate) fn open_grouping_scope(
+        bind_context: &mut BindContext,
+        folding_policy: ScalarFoldingPolicy,
+    ) {
+        bind_context.grouping_key_scope = Some(GroupingKeyScope {
+            state: GroupingScopeState::GroupBy,
+            folding_policy,
+            input_columns: Default::default(),
+        });
+    }
+
     /// Prepare to bind the SELECT list after the keys are known. Before the
     /// aggregate, only the GROUP BY, the WHERE and the SELECT items they refer
     /// to are bound, which either fail on aggregate functions or register
-    /// what is evaluated before the aggregate. `input_folding_policy` is the
-    /// policy the keys were bound with.
-    pub(crate) fn prepare_grouping_scope(
-        bind_context: &mut BindContext,
-        input_folding_policy: ScalarFoldingPolicy,
-    ) {
-        bind_context.grouping_key_scope = Some(GroupingKeyScope {
-            state: GroupingScopeState::Active,
-            input_columns: bind_context.column_set(),
-            input_folding_policy,
-        });
+    /// what is evaluated before the aggregate.
+    pub(crate) fn prepare_grouping_scope(bind_context: &mut BindContext) {
+        let input_columns = bind_context.column_set();
+        let scope = bind_context.grouping_key_scope.get_or_insert_default();
+        scope.state = GroupingScopeState::Active;
+        scope.input_columns = input_columns;
     }
 
     pub fn bind_aggregate(
@@ -1448,7 +1456,6 @@ impl Binder {
                             group_by_aliases,
                             false,
                         )?;
-                        type_checker.set_folding_policy(select_items.folding_policy());
                         type_checker.set_select_items(select_items.reborrow());
                         *type_checker.resolve_checked_core(arena, root)?
                     };

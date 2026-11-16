@@ -56,6 +56,7 @@ use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::GroupedSelectItems;
+use crate::planner::binder::GroupingScopeState;
 use crate::planner::binder::ScalarFoldingPolicy;
 use crate::planner::binder::SelectClauseExprs;
 use crate::planner::binder::SelectClauses;
@@ -178,7 +179,7 @@ impl Binder {
                 self.bind_grouped_select_list(&mut from_context, clauses, &udaf_names)?;
             (select_list, Some(grouped))
         } else {
-            let mut forms = SelectItemForms::new(clauses, ScalarFoldingPolicy::Normal);
+            let mut forms = SelectItemForms::new(clauses);
             let select_list = self.bind_select_list(&mut from_context, clauses, &mut forms)?;
             (select_list, None)
         };
@@ -229,11 +230,12 @@ impl Binder {
     ) -> Result<(SelectList<'a>, GroupedSelect<'a>)> {
         let group_by = self.expand_group_by(clauses, udaf_names, from_context);
         // The keys, and every pre-aggregate form matched against them, are
-        // bound with this policy.
+        // bound with the policy of the scope.
         let folding_policy = group_by
             .as_ref()
             .map_or(ScalarFoldingPolicy::Normal, ExpandedGroup::folding_policy);
-        let mut items = GroupedSelectItems::new(clauses, folding_policy);
+        Self::open_grouping_scope(from_context, folding_policy);
+        let mut items = GroupedSelectItems::new(clauses);
         if let Some(group_by) = &group_by {
             self.analyze_group_items(
                 from_context,
@@ -246,12 +248,15 @@ impl Binder {
         // WHERE is evaluated before the aggregate. Bind it before the SELECT
         // list, so that whatever its items register, e.g. set-returning
         // functions, is registered before the aggregate.
+        if let Some(scope) = &mut from_context.grouping_key_scope {
+            scope.state = GroupingScopeState::BeforeAggregate;
+        }
         let where_predicate = clauses
             .selection()
             .map(|root| self.bind_grouped_where(from_context, items.lend(), root))
             .transpose()?;
 
-        Self::prepare_grouping_scope(from_context, folding_policy);
+        Self::prepare_grouping_scope(from_context);
         let select_list = self.bind_select_list(from_context, clauses, &mut items.forms)?;
         Ok((select_list, GroupedSelect {
             items,

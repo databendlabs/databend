@@ -31,7 +31,6 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::binder::AliasLookup;
-use crate::binder::ScalarFoldingPolicy;
 use crate::plans::ScalarExpr;
 
 impl<'a, A> TypeChecker<'a, A>
@@ -63,7 +62,7 @@ where A: TypeCheckAdapter
         let func_ctx = adapter.function_context()?;
         let dialect = adapter.sql_dialect()?;
         Ok(Self {
-            folding_policy: ScalarFoldingPolicy::Normal,
+            inherited_folding_policy: None,
             bind_context,
             adapter,
             dialect,
@@ -83,13 +82,6 @@ where A: TypeCheckAdapter
             grouping_key_memo: Default::default(),
             lambda_params: Vec::new(),
         })
-    }
-
-    /// Bind with `policy`, e.g. to keep column-dependent expressions unfolded
-    /// in the keys of grouping sets and the pre-aggregate forms matched
-    /// against them. A type checker folds normally otherwise.
-    pub fn set_folding_policy(&mut self, policy: ScalarFoldingPolicy) {
-        self.folding_policy = policy;
     }
 
     /// Only maintenance bindings opt out; normal SELECT and DML use masking policies.

@@ -41,7 +41,6 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::ScalarFoldingPolicy;
 use crate::planner::binder::SelectClauses;
 use crate::planner::binder::SelectInfo;
 use crate::planner::binder::SelectItemForms;
@@ -372,7 +371,7 @@ impl Dataframe {
                 order_by: &order,
                 ..Default::default()
             })?;
-        let mut forms = SelectItemForms::new(&clauses, ScalarFoldingPolicy::Normal);
+        let mut forms = SelectItemForms::new(&clauses);
         let select_list =
             self.binder
                 .bind_select_list(&mut self.bind_context, &clauses, &mut forms)?;

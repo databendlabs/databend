@@ -28,6 +28,7 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::binder::ExprContext;
+use crate::binder::GroupingScopeState;
 use crate::binder::ItemForm;
 use crate::binder::NameResolutionResult;
 use crate::binder::SelectItemSource;
@@ -153,7 +154,9 @@ where A: TypeCheckAdapter
         }
         items.set_form(position, ItemForm::Binding);
         let arena = exprs.arena();
-        let after_aggregate = bind_context.grouping_key_scope.is_some();
+        let after_aggregate = bind_context
+            .grouping_scope_state()
+            .is_some_and(GroupingScopeState::after_aggregate);
 
         let expr_context = bind_context.replace_expr_context(ExprContext::SelectClause);
         let result = (|| -> Result<Option<ScalarExpr>> {
@@ -164,10 +167,6 @@ where A: TypeCheckAdapter
                 metadata.clone(),
                 exprs.select_item_lookup(position),
             )?;
-            // Before the aggregate, the form is bound with the policy of the
-            // keys, also if WHERE refers to the item first; after it, the
-            // scope of the keys has the same policy.
-            type_checker.set_folding_policy(items.folding_policy());
             type_checker.set_select_items(items.reborrow());
             if after_aggregate && !type_checker.binds_nothing(arena, root)? {
                 return Ok(None);

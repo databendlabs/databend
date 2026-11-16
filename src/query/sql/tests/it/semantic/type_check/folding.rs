@@ -15,6 +15,8 @@
 //! The folding policy keeps column-dependent expressions unfolded, as when
 //! binding the pre-aggregate forms that GROUPING SETS keys are matched against.
 
+use databend_common_sql::binder::GroupingKeyScope;
+use databend_common_sql::binder::GroupingScopeState;
 use databend_common_sql::binder::ScalarFoldingPolicy;
 
 use super::*;
@@ -25,13 +27,19 @@ fn non_null_context() -> BindContext {
     context
 }
 
-/// Bind `sql` over a non-null `number` with `policy`.
+/// Bind `sql` over a non-null `number` with `policy`, as a key of GROUP BY
+/// with that policy.
 fn resolve_with_policy(
     sql: &str,
     adapter: TestTypeCheckAdapter,
     policy: ScalarFoldingPolicy,
 ) -> Result<(ScalarExpr, DataType)> {
     let mut context = non_null_context();
+    context.grouping_key_scope = Some(GroupingKeyScope {
+        state: GroupingScopeState::GroupBy,
+        folding_policy: policy,
+        input_columns: Default::default(),
+    });
     let tokens = tokenize_sql(sql)?;
     let expr = parse_expr(&tokens, adapter.sql_dialect()?)?;
     let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings.as_ref())?;
@@ -42,7 +50,6 @@ fn resolve_with_policy(
         Arc::new(RwLock::new(Metadata::default())),
         &[],
     )?;
-    type_checker.set_folding_policy(policy);
     type_checker.resolve(&expr).map(|resolved| *resolved)
 }
 

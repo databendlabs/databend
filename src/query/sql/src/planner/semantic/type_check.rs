@@ -549,8 +549,10 @@ pub struct TypeChecker<'a, A> {
     resolving_masking_where_aliases: Vec<String>,
     forbid_virtual_computed_column: bool,
 
-    // Folding policy is independent of the grouping-key binding phase.
-    folding_policy: ScalarFoldingPolicy,
+    // The folding policy of the expression that the body of a SQL UDF bound
+    // by this type checker is expanded in. The bind context of the body has
+    // no parent to derive it from, see `scalar_folding_policy`.
+    inherited_folding_policy: Option<ScalarFoldingPolicy>,
     // Grouping-key matching state, see `grouping_key.rs`.
     grouping_key: grouping_key::GroupingKeyState,
     // Grouping-key matching work memoized for the arena being bound, see

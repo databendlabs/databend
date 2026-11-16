@@ -38,16 +38,11 @@ use databend_common_exception::ErrorCode;
 
 use super::select_clauses::SelectClauseExprs;
 use super::select_clauses::SelectItemSource;
-use crate::planner::binder::ScalarFoldingPolicy;
 use crate::plans::ScalarExpr;
 
 /// The state of the pre-aggregate form of each SELECT item.
 pub(crate) struct SelectItemForms {
     forms: Vec<ItemForm>,
-    /// The folding policy of the grouping keys. Every pre-aggregate form is
-    /// bound with it, whichever clause binds it first, so that a form equals
-    /// the key it is written as.
-    folding_policy: ScalarFoldingPolicy,
 }
 
 /// The state of the pre-aggregate form of a SELECT item.
@@ -66,10 +61,9 @@ pub(crate) enum ItemForm {
 }
 
 impl SelectItemForms {
-    pub(crate) fn new(exprs: &SelectClauseExprs<'_>, folding_policy: ScalarFoldingPolicy) -> Self {
+    pub(crate) fn new(exprs: &SelectClauseExprs<'_>) -> Self {
         Self {
             forms: vec![ItemForm::Unbound; exprs.len()],
-            folding_policy,
         }
     }
 }
@@ -82,11 +76,8 @@ pub(crate) struct GroupedSelectItems<'a> {
 }
 
 impl<'a> GroupedSelectItems<'a> {
-    pub(crate) fn new(
-        exprs: &'a SelectClauseExprs<'a>,
-        folding_policy: ScalarFoldingPolicy,
-    ) -> Self {
-        let forms = SelectItemForms::new(exprs, folding_policy);
+    pub(crate) fn new(exprs: &'a SelectClauseExprs<'a>) -> Self {
+        let forms = SelectItemForms::new(exprs);
         Self { exprs, forms }
     }
 
@@ -116,11 +107,6 @@ impl<'s> SelectItems<'s> {
 
     pub(crate) fn exprs(&self) -> &'s SelectClauseExprs<'s> {
         self.exprs
-    }
-
-    /// The folding policy of the grouping keys and the pre-aggregate forms.
-    pub(crate) fn folding_policy(&self) -> ScalarFoldingPolicy {
-        self.forms.folding_policy
     }
 
     pub(crate) fn form(&self, position: usize) -> &ItemForm {

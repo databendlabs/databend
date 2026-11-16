@@ -1004,9 +1004,12 @@ where A: super::TypeCheckAdapter
             RwLock::new(metadata).into(),
             &[],
         )?;
-        // Pre-aggregate forms matched against grouping keys stay unfolded,
-        // including the bodies of SQL UDFs in them.
-        type_checker.set_folding_policy(self.scalar_folding_policy());
+        // The body is a part of the expression around the call, and folds as
+        // it does: a key of grouping sets, or a form compared with one, stays
+        // unfolded with the bodies of the SQL UDFs in it. The bind context of
+        // the body has no parent, so the policy is passed on, the one place
+        // where it crosses a context boundary.
+        type_checker.inherited_folding_policy = Some(self.scalar_folding_policy());
         let mut arena = type_checker.core_expr_arena();
         let root = arena.lower_ast_expr(&expr)?;
         // The body of a UDF called in a lambda body is a part of that body,

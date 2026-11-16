@@ -827,9 +827,9 @@ where A: super::TypeCheckAdapter
 /// uses unmasked values, and not inside an aggregate function or a window
 /// function. Every other field is inherited from the expression around the
 /// lambda: the expression context of its clause, the grouping-key matching
-/// state and its memo, the folding policy, whether masking policies apply and
-/// whether virtual computed columns are forbidden, which are the mode of the
-/// whole binding, and the parameters of enclosing lambdas, whose presence
+/// state and its memo, and so the folding policy that follows from them,
+/// whether masking policies apply and whether virtual computed columns are
+/// forbidden, which are the mode of the whole binding, and the parameters of enclosing lambdas, whose presence
 /// tells that a body is bound. Whether a masking policy is being bound is
 /// inherited too: a body in a policy is a part of it, and a column it refers
 /// to must not have the policy applied again, which would bind the policy
