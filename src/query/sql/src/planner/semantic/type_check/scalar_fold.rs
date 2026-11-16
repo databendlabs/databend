@@ -22,6 +22,41 @@
 //! values implied by types and nullability, filter absorption, contradictory
 //! ranges and `if` branch selection. They come from
 //! `databend_common_expression::FoldRules`.
+//!
+//! # Folding policy
+//!
+//! The keys of a grouping scope and the pre-aggregate forms compared with
+//! them are bound with the same folding policy, that of the scope; every
+//! other expression folds as it is evaluated. The policies differ only for
+//! grouping sets, whose keys keep their structure, see `may_fold`: the
+//! aggregate injects NULLs into the outputs of the keys, so folding by value
+//! would turn `a IS NULL` over a NOT NULL key `a` into `false`. A type
+//! checker derives the policy from the scope, see `scalar_folding_policy`;
+//! only the body of a SQL UDF, bound in a context without a parent, has it
+//! passed.
+//!
+//! # Layers of folding
+//!
+//! - `FoldRules`: the node-local rules, shared by the layers below.
+//! - Bind time, this module: applies the rules to `ScalarExpr` as it is
+//!   bound, with [`ScalarFacts`] for the parents. Its results are visible to
+//!   binding: keys and forms compare as folded, and a folded constant types
+//!   its parent as a literal does.
+//! - The optimizer: rules that evaluate predicates with `ConstantFolder`,
+//!   e.g. selectivity estimation and the conversion of outer joins to inner
+//!   joins.
+//! - Physical plans: `ConstantFolder::fold` on the expressions they evaluate,
+//!   e.g. of filters and project sets.
+//!
+//! Two known inconsistencies are kept:
+//!
+//! - A lambda body is compiled with `ConstantFolder::fold` whatever the
+//!   policy, see `compile_lambda_body`. Under `ROLLUP`, `x -> x + (1 + 1)`
+//!   is thus the key `x -> x + 2::UInt16`, the type of `1 + 1`, though not
+//!   `x -> x + 2`.
+//! - An ordinary GROUP BY compares keys and forms as folded, grouping sets as
+//!   written: `SELECT a + 2 FROM t GROUP BY a + (1 + 1)` binds, and with
+//!   `ROLLUP(a + (1 + 1))` it is rejected.
 
 use databend_common_ast::Span;
 use databend_common_exception::Result;
