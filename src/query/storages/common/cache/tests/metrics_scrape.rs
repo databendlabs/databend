@@ -68,6 +68,8 @@ fn test_scrape_and_reclaim_under_the_registry_lock() {
     GlobalInstance::init_production();
     let config = CacheConfig {
         shared_memory_enabled: true,
+        // The data pool is off by default.
+        data_max_ratio: 10,
         kind_max_bytes: [("memory_cache_column_data".to_string(), 1 << 20)].into(),
         ..CacheConfig::default()
     };

@@ -463,6 +463,8 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
         // Ignored by the shared backend.
         enable_table_meta_cache: false,
         table_meta_snapshot_count: 1,
+        // The data pool is off by default.
+        data_max_ratio: 10,
         kind_max_bytes: [
             ("cache_vector_index_file".to_string(), 1234),
             ("memory_cache_column_data".to_string(), 5000),
@@ -522,7 +524,12 @@ fn test_shared_backend_sizes_pools_by_ratio() -> Result<()> {
 /// no such default.
 #[test]
 fn test_capacity_default() -> Result<()> {
-    let shared = CacheManager::try_new(&shared_config(), &1_000_000, "test", false)?;
+    let config = CacheConfig {
+        // The data pool is off by default; the kinds in it need a pool to be sized within.
+        data_max_ratio: 10,
+        ..shared_config()
+    };
+    let shared = CacheManager::try_new(&config, &1_000_000, "test", false)?;
     let name = "memory_cache_table_data";
     shared.set_cache_capacity(name, 0)?;
     assert!(row(&shared, name).is_none());
