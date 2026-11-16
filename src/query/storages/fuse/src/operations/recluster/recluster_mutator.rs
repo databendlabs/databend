@@ -1024,6 +1024,8 @@ impl ReclusterMutator {
             .into_iter()
             .map(|task| {
                 task_candidate(
+                    // Both callers use scalar Linear strategies, which support ordered merge.
+                    // task_candidate still requires Original stats to produce MergeBlocks.
                     true,
                     task.group,
                     CandidateScore {
