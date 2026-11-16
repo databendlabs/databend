@@ -207,6 +207,7 @@ async fn build_segment_virtual_columns(
     let mut path_counts =
         std::collections::HashMap::<u32, std::collections::HashMap<String, u64>>::new();
     for block_meta in &segment.blocks {
+        crate::operations::ensure_legacy_block(block_meta, "fuse_virtual_column_build")?;
         let block = block_reader
             .read_by_meta(&settings, block_meta, &storage_format)
             .await?;

@@ -113,6 +113,18 @@ pub async fn acquire_task_permit(
     Ok(permit)
 }
 
+/// Rejects a split block in an operation that does not support it yet, instead of letting it
+/// read the block as a legacy block, which would fill every column with its default value.
+pub fn ensure_legacy_block(block_meta: &BlockMeta, operation: &str) -> Result<()> {
+    if block_meta.is_split() {
+        return Err(ErrorCode::Unimplemented(format!(
+            "{operation} does not support block {}, which stores its columns in column groups",
+            block_meta.location.0
+        )));
+    }
+    Ok(())
+}
+
 pub async fn read_block(
     storage_format: FuseStorageFormat,
     reader: &BlockReader,
@@ -120,12 +132,7 @@ pub async fn read_block(
     read_settings: &ReadSettings,
 ) -> Result<DataBlock> {
     let merged_io_read_result = reader
-        .read_columns_data_by_merge_io(
-            read_settings,
-            &block_meta.location.0,
-            &block_meta.col_metas,
-            &None,
-        )
+        .read_files_by_merge_io(read_settings, &block_meta.data_files(), &None)
         .await?;
 
     // deserialize block data
@@ -136,11 +143,9 @@ pub async fn read_block(
     GlobalIORuntime::instance()
         .spawn(async move {
             let column_chunks = merged_io_read_result.columns_chunks()?;
-            reader.deserialize_chunks(
-                block_meta_ptr.location.0.as_str(),
+            reader.deserialize_files(
                 block_meta_ptr.row_count as usize,
-                &block_meta_ptr.compression,
-                &block_meta_ptr.col_metas,
+                &block_meta_ptr.data_files(),
                 column_chunks,
                 &storage_format,
             )

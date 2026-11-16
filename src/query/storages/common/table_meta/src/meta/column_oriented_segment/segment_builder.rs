@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
@@ -152,6 +153,13 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         block_meta: BlockMeta,
         _virtual_input: VirtualBlockInput,
     ) -> Result<()> {
+        if block_meta.is_split() {
+            // A column-oriented segment has no place for the column groups.
+            return Err(ErrorCode::Unimplemented(format!(
+                "column-oriented segments cannot store split block {}",
+                block_meta.location.0
+            )));
+        }
         self.row_count.push(block_meta.row_count);
         self.block_size.push(block_meta.block_size);
         self.file_size.push(block_meta.file_size);

@@ -150,16 +150,16 @@ impl TableMetaFunc for FusePage {
                             continue;
                         }
                         let column_id = field.column_id;
-                        let Some(column_meta) = block.col_metas.get(&column_id) else {
+                        let Some(chunk) = block.column_chunk(&column_id) else {
                             continue;
                         };
-                        let Some(parquet_meta) = column_meta.as_parquet() else {
+                        let Some(parquet_meta) = chunk.meta.as_parquet() else {
                             continue;
                         };
 
                         let column_bytes = read_parquet_column_chunk(
                             &tbl.operator,
-                            &block.location.0,
+                            chunk.location,
                             parquet_meta.offset,
                             parquet_meta.len,
                         )
@@ -172,7 +172,7 @@ impl TableMetaFunc for FusePage {
                         .into_iter()
                         .enumerate()
                         {
-                            block_location.put_and_commit(&block.location.0);
+                            block_location.put_and_commit(chunk.location);
                             column_name.put_and_commit(page.column_name);
                             page_type.put_and_commit(page.page_type);
                             encoding.put_and_commit(page.encoding);

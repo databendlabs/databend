@@ -81,6 +81,29 @@ pub fn column_chunks_to_record_batch(
     selection: Option<RowSelection>,
     hint_fields: Option<&Fields>,
 ) -> databend_common_exception::Result<RecordBatch> {
+    column_chunks_to_record_batch_with_codecs(
+        original_schema,
+        num_rows,
+        column_chunks,
+        *compression,
+        |_| *compression,
+        selection,
+        hint_fields,
+    )
+}
+
+/// Like [`column_chunks_to_record_batch`], but each column chunk is decompressed with the
+/// codec `compression_of` returns for its leaf column id. `default_compression` describes the
+/// columns that have no chunk.
+pub fn column_chunks_to_record_batch_with_codecs(
+    original_schema: &TableSchema,
+    num_rows: usize,
+    column_chunks: &HashMap<ColumnId, DataItem>,
+    default_compression: Compression,
+    compression_of: impl Fn(ColumnId) -> Compression,
+    selection: Option<RowSelection>,
+    hint_fields: Option<&Fields>,
+) -> databend_common_exception::Result<RecordBatch> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
     let hint_fields = hint_fields.unwrap_or(arrow_schema.fields());
@@ -95,14 +118,18 @@ pub fn column_chunks_to_record_batch(
     let mut builder = RowGroupImplBuilder::new(
         num_rows,
         &parquet_schema,
-        ParquetCompression::from(*compression),
+        ParquetCompression::from(default_compression),
     );
     for (column_id, data_item) in column_chunks.iter() {
         match data_item {
             DataItem::RawData(bytes) => {
                 let dfs_id = column_id_to_dfs_id.get(column_id).cloned().unwrap();
                 projection_mask.push(dfs_id);
-                builder.add_column_chunk(dfs_id, bytes.clone());
+                builder.add_column_chunk_with_compression(
+                    dfs_id,
+                    bytes.clone(),
+                    ParquetCompression::from(compression_of(*column_id)),
+                );
             }
             DataItem::ColumnArray(_) => {}
         }
