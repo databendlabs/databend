@@ -3,8 +3,8 @@
 # The query memory limit is set between the memory of the collected build data and the memory
 # of that data plus its hash table, so the build stage keeps the data in memory and the spill
 # happens while the hash table is built. Each build side only has its join key, which makes the
-# hash table several times larger than the data, and the key is not output, so the spilled
-# chunks that were already inserted are restored from the keys stored in the hash table.
+# hash table several times larger than the data. The key is not output, so the chunks already
+# inserted into the hash table no longer have it: they spill the encoded keys of the hash table.
 statement ok
 create or replace database spill_build_final;
 
@@ -37,7 +37,19 @@ select count(*), sum(probe_side.v) from probe_side join build_keys on probe_side
 ----
 85715 25714371427
 
-# Build rows with NULL keys are kept for the right join and restored behind the valid rows.
+# The build key is computed from a column the join does not output.
+query II
+select count(*), sum(probe_side.v) from probe_side join build_keys on probe_side.k = build_keys.k::int32;
+----
+85715 25714371427
+
+# Two fixed size keys packed into one 128-bit key.
+query II
+select count(*), sum(probe_side.v) from probe_side join build_keys on probe_side.k = build_keys.k and probe_side.k % 3 = build_keys.k % 3;
+----
+85715 25714371427
+
+# Build rows with NULL keys must still be returned by the right join after spilling.
 query II
 select count(*), sum(probe_side.v) from probe_side right join build_nullable_keys on probe_side.k = build_nullable_keys.k;
 ----

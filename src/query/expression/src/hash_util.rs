@@ -18,6 +18,7 @@ use databend_common_hashtable::FastHash;
 
 use crate::HashMethod;
 use crate::HashMethodKind;
+use crate::KeysState;
 use crate::ProjectedBlock;
 
 /// Get row hash by [`HashMethod`] (uses [`FastHash`], i.e. the hashtable hash).
@@ -30,72 +31,29 @@ pub fn hash_by_method<T>(
 where
     T: Extend<u64>,
 {
-    match method {
-        HashMethodKind::Serializer(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
+    let keys_state = method.build_keys_state(columns, num_rows)?;
+    hash_keys_state_by_method(method, &keys_state, hashes)
+}
+
+/// Get row hash of keys already encoded by [`HashMethod::build_keys_state`], the same hash as
+/// [`hash_by_method`] gives for the columns they were encoded from.
+pub fn hash_keys_state_by_method<T>(
+    method: &HashMethodKind,
+    keys_state: &KeysState,
+    hashes: &mut T,
+) -> Result<()>
+where
+    T: Extend<u64>,
+{
+    crate::with_hash_method!(|M| match method {
+        HashMethodKind::M(method) => {
             hashes.extend(
                 method
-                    .build_keys_iter(&keys_state)?
+                    .build_keys_iter(keys_state)?
                     .map(|key| key.fast_hash()),
             );
         }
-        HashMethodKind::SingleBinary(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
-        HashMethodKind::KeysU8(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
-        HashMethodKind::KeysU16(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
-        HashMethodKind::KeysU32(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
-        HashMethodKind::KeysU64(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
-        HashMethodKind::KeysU128(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
-        HashMethodKind::KeysU256(method) => {
-            let keys_state = method.build_keys_state(columns, num_rows)?;
-            hashes.extend(
-                method
-                    .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
-            );
-        }
-    }
+    });
     Ok(())
 }
 

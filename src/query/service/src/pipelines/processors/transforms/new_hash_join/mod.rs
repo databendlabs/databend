@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod common;
+mod encoded_build;
 mod grace;
 mod hash_join_factory;
 mod hashtable;

@@ -26,9 +26,16 @@ use databend_common_expression::DataBlock;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
-use crate::pipelines::processors::transforms::new_hash_join::hybrid::final_build_spill::BuildSpillChunk;
+use crate::pipelines::processors::transforms::new_hash_join::memory::BuildArena;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
+
+/// A build chunk that `final_build` had inserted into the hash table when the join switched to
+/// grace mode, with the arena holding the encoded keys of its rows.
+pub struct InsertedChunk {
+    pub block: DataBlock,
+    pub arena: BuildArena,
+}
 
 /// States shared by all processors of one hybrid hash join level.
 #[derive(Clone)]
@@ -72,8 +79,8 @@ pub struct HybridHashJoinState {
     build_input_rows: AtomicUsize,
 
     pub transition_queue: ConcurrentQueue<DataBlock>,
-    // Build chunks to move into grace mode after a spill triggered in `final_build`.
-    pub final_build_spill_queue: ConcurrentQueue<BuildSpillChunk>,
+    // Inserted build chunks to move into grace mode after a spill triggered in `final_build`.
+    pub inserted_queue: ConcurrentQueue<InsertedChunk>,
 
     // Owned here so that every restore partition of the parent grace join gets fresh
     // next-level states: they are dropped together with this level's grace mode.
@@ -106,7 +113,7 @@ impl HybridHashJoinState {
             final_build_spill_requested: AtomicBool::new(false),
             build_input_rows: AtomicUsize::new(0),
             transition_queue: ConcurrentQueue::unbounded(),
-            final_build_spill_queue: ConcurrentQueue::unbounded(),
+            inserted_queue: ConcurrentQueue::unbounded(),
             next_level: Mutex::new(None),
         }))
     }
