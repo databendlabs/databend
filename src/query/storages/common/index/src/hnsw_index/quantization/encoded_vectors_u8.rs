@@ -36,6 +36,10 @@ use crate::hnsw_index::quantization::encoded_vectors::validate_vector_parameters
 use crate::hnsw_index::quantization::quantile::find_min_max_from_iter;
 use crate::hnsw_index::quantization::quantile::find_quantile_interval;
 
+// Ported from qdrant `lib/quantization/src/encoded_vectors_u8.rs`. Deviation: a
+// constant range is widened in `alpha_offset_from_min_max`, qdrant quantizes it
+// with `alpha = 0`.
+
 pub const ALIGNMENT: usize = 16;
 
 pub struct EncodedVectorsU8<TStorage: EncodedStorage> {
@@ -291,6 +295,14 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
     }
 
     fn alpha_offset_from_min_max(min: f32, max: f32) -> (f32, f32) {
+        // A constant range would give `alpha = 0`: every code and multiplier is 0,
+        // and every query is at distance 0 from the block. Widen it around the
+        // constant so a query at another value gets a nonzero distance.
+        let (min, max) = if max > min {
+            (min, max)
+        } else {
+            (min - 0.5, max + 0.5)
+        };
         let alpha = (max - min) / 127.0;
         let offset = min;
         (alpha, offset)
@@ -918,6 +930,49 @@ mod tests {
             &AtomicBool::new(false),
         )?;
         assert_eq!((none.metadata.alpha, none.metadata.offset), (0.0, 0.0));
+        Ok(())
+    }
+
+    /// A block whose real vectors are all the same value has a range of width 0.
+    /// With `alpha = 0` every code was 0 and every query was at distance 0 from
+    /// the block, so it won every TopN.
+    #[test]
+    fn test_constant_range_keeps_distances_nonzero() -> Result<()> {
+        let (dim, count) = (4, 8);
+        let mut data = vec![0.5_f32; dim * count];
+        let null_row = 3;
+        data[null_row * dim..(null_row + 1) * dim].fill(0.0);
+        let keep: Vec<bool> = (0..count).map(|row| row != null_row).collect();
+        let params = VectorParameters {
+            dim,
+            count,
+            distance_type: DistanceType::L2,
+            invert: true,
+        };
+        let encoded = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            keep.iter().copied(),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        assert!(encoded.metadata.alpha > 0.0, "{}", encoded.metadata.alpha);
+
+        // The constant itself is exact, a query at another value is at a distance.
+        let same = encoded.encode_query(&[0.5; 4]);
+        assert!(encoded.score_point(&same, 0).abs() < 1e-6);
+        let other = encoded.encode_query(&[0.9; 4]);
+        let distance = -encoded.score_point(&other, 0);
+        assert!((distance - 4.0 * 0.4 * 0.4).abs() < 0.02, "{distance}");
+
+        // A query beyond the widened range is clamped, and still at a distance.
+        let far = encoded.encode_query(&[5.0; 4]);
+        assert!(
+            -encoded.score_point(&far, 0) > 0.9,
+            "{}",
+            encoded.score_point(&far, 0)
+        );
         Ok(())
     }
 
