@@ -369,7 +369,7 @@ impl InteractiveWorkerBase {
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
         let mut user = user_api
-            .get_user_with_client_ip(&tenant, identity.clone(), Some(client_ip))
+            .get_login_user_with_client_ip(&tenant, identity.clone(), Some(client_ip))
             .await?;
 
         // check global network policy if user is not account admin
