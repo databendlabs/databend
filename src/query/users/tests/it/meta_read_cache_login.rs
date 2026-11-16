@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Password login when the user answered from the meta read cache is stale.
+//! Login when the user answered from the meta read cache is stale.
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
@@ -25,6 +26,7 @@ use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::principal::PublicKeyEntry;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserOption;
@@ -194,6 +196,117 @@ async fn test_login_after_change_on_other_node() -> anyhow::Result<()> {
     s.api.set_meta_read_cache_ttl(&s.tenant, Duration::ZERO);
     assert!(s.logs_in("u5", "new").await?);
     assert!(!s.logs_in("u5", "old").await?);
+    Ok(())
+}
+
+/// A kept user that may not log in is checked again on meta-service: another node may have
+/// enabled it. This holds for every way of logging in.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_login_after_user_enabled_on_other_node() -> anyhow::Result<()> {
+    let s = cached().await?;
+    let ip = Some("10.0.0.1");
+
+    s.change_on_other_node(
+        user("u1", "pwd", UserOption::empty().with_disabled(Some(true))),
+        user("u1", "pwd", UserOption::empty()),
+    )
+    .await?;
+    let got = s
+        .api
+        .get_user_with_client_ip(&s.tenant, UserIdentity::new("u1", "%"), ip)
+        .await?;
+    assert_eq!(got.option.disabled(), None);
+    assert!(s.logs_in("u1", "pwd").await?);
+
+    // Still disabled in meta-service: rejected, with the reason.
+    let disabled = user("u2", "pwd", UserOption::empty().with_disabled(Some(true)));
+    s.change_on_other_node(disabled.clone(), disabled).await?;
+    let err = s
+        .api
+        .get_user_with_client_ip(&s.tenant, UserIdentity::new("u2", "%"), ip)
+        .await
+        .unwrap_err();
+    assert!(err.message().contains("disabled"), "{err}");
+
+    // Dropped on another node: unknown, as a read of meta-service tells.
+    let identity = UserIdentity::new("u2", "%");
+    assert!(s.other_node.drop_user(&identity).await?.is_ok());
+    let err = s
+        .api
+        .get_user_with_client_ip(&s.tenant, identity, ip)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.code(),
+        databend_common_exception::ErrorCode::UNKNOWN_USER
+    );
+    Ok(())
+}
+
+/// The key-pair login asks for the record in meta-service after the kept public keys rejected
+/// the token: another node may have replaced them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_refresh_after_public_key_changed_on_other_node() -> anyhow::Result<()> {
+    let s = cached().await?;
+    let key_pair = |name: &str, key: &str| {
+        UserInfo::new(name, "%", AuthInfo::KeyPair {
+            public_keys: vec![PublicKeyEntry {
+                key: key.to_string(),
+                label: String::new(),
+                created_at: 0,
+            }],
+        })
+    };
+    let ip = Some("10.0.0.1");
+
+    let (old, new) = (key_pair("u1", "old-key"), key_pair("u1", "new-key"));
+    s.change_on_other_node(old.clone(), new.clone()).await?;
+    let identity = UserIdentity::new("u1", "%");
+    let fresh = s
+        .api
+        .refresh_rejected_user(&s.tenant, identity.clone(), &old, ip)
+        .await?;
+    assert_eq!(fresh.map(|u| u.auth_info), Some(new.auth_info.clone()));
+
+    // The rejected keys are the ones in meta-service: nothing else to check.
+    let fresh = s
+        .api
+        .refresh_rejected_user(&s.tenant, identity, &new, ip)
+        .await?;
+    assert_eq!(fresh, None);
+
+    // The change also disabled the user: the new keys must not log in.
+    let mut disabled = key_pair("u2", "new-key");
+    disabled.update_auth_option(None, Some(UserOption::empty().with_disabled(Some(true))));
+    let old = key_pair("u2", "old-key");
+    s.change_on_other_node(old.clone(), disabled).await?;
+    let err = s
+        .api
+        .refresh_rejected_user(&s.tenant, UserIdentity::new("u2", "%"), &old, ip)
+        .await
+        .unwrap_err();
+    assert!(err.message().contains("disabled"), "{err}");
+    Ok(())
+}
+
+/// A user with a password policy is read from meta-service: a lockout recorded by another
+/// node rejects the right password here too, and is not cleared.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_lockout_on_other_node_is_seen() -> anyhow::Result<()> {
+    let s = cached().await?;
+    let with_policy = UserOption::empty().with_password_policy(Some("p1".to_string()));
+    let lockout_time = Utc::now() + chrono::Duration::hours(1);
+    let mut locked = user("u1", "pwd", with_policy.clone());
+    locked.update_lockout_time(lockout_time);
+    s.change_on_other_node(user("u1", "pwd", with_policy), locked)
+        .await?;
+
+    let err = s.login("u1", "pwd", "10.0.0.1", "").await.unwrap_err();
+    assert!(err.message().contains("Disable login before"), "{err}");
+
+    let identity = UserIdentity::new("u1", "%");
+    let stored = s.other_node.get_user(&identity).await?.unwrap().data;
+    assert_eq!(stored.lockout_time, Some(lockout_time));
     Ok(())
 }
 

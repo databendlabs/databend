@@ -318,20 +318,35 @@ impl AuthMgr {
 
                 let identity = UserIdentity::new(&user_name, "%");
                 let tenant = session.get_current_tenant();
-                let user = user_api
+                let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
 
-                match &user.auth_info {
+                let verify = |user: &UserInfo| match &user.auth_info {
                     AuthInfo::KeyPair { public_keys } => {
-                        verify_key_pair_jwt(t.as_str(), public_keys)?;
+                        verify_key_pair_jwt(t.as_str(), public_keys)
                     }
-                    _ => {
-                        return Err(ErrorCode::AuthenticateFailure(format!(
-                            "user '{}' is not configured for key-pair authentication",
-                            user_name
-                        )));
-                    }
+                    _ => Err(ErrorCode::AuthenticateFailure(format!(
+                        "user '{}' is not configured for key-pair authentication",
+                        user_name
+                    ))),
+                };
+                if let Err(rejected) = verify(&user) {
+                    // The user may come from the meta read cache: another node may have
+                    // changed its public keys since.
+                    let Some(fresh) = user_api
+                        .refresh_rejected_user(
+                            &tenant,
+                            identity.clone(),
+                            &user,
+                            client_ip.as_deref(),
+                        )
+                        .await?
+                    else {
+                        return Err(rejected);
+                    };
+                    verify(&fresh)?;
+                    user = fresh;
                 }
 
                 if !user.is_account_admin() && !global_network_policy.is_empty() {

@@ -84,7 +84,17 @@ impl UserApiProvider {
             })
     }
 
-    // Get one user and check client ip if has network policy.
+    /// Whether [`Self::get_user`] may answer `user` from the meta read cache, which can lag a
+    /// change made by another node. A configured user never comes from it.
+    fn may_be_cached(&self, user: &UserIdentity) -> bool {
+        self.meta_read_cache_enabled() && self.get_configured_user(&user.username).is_none()
+    }
+
+    /// Get one user and check that it may log in from `client_ip`.
+    ///
+    /// The user may come from the meta read cache. If that record may not log in, the one in
+    /// meta-service decides: another node may have enabled the user or changed its network
+    /// policy.
     #[async_backtrace::framed]
     pub async fn get_user_with_client_ip(
         &self,
@@ -92,10 +102,22 @@ impl UserApiProvider {
         user: UserIdentity,
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
-        let user_info = self.get_user(tenant, user).await?;
-        self.check_login_allowed(tenant, &user_info, client_ip)
-            .await?;
-        Ok(user_info)
+        let user_info = self.get_user(tenant, user.clone()).await?;
+        let Err(rejected) = self
+            .check_login_allowed(tenant, &user_info, client_ip)
+            .await
+        else {
+            return Ok(user_info);
+        };
+        if !self.may_be_cached(&user) {
+            return Err(rejected);
+        }
+        let fresh = self.get_meta_user(tenant, user).await?.data;
+        if fresh == user_info {
+            return Err(rejected);
+        }
+        self.check_login_allowed(tenant, &fresh, client_ip).await?;
+        Ok(fresh)
     }
 
     /// Reject a disabled user, or a client outside the user's network policy.
@@ -128,6 +150,10 @@ impl UserApiProvider {
     /// node. If `verify` rejects it, the user in meta-service goes through the same checks and
     /// `verify` again. The outcome is recorded for the password policy.
     ///
+    /// A user with a password policy is always read from meta-service: its failed logins and
+    /// its lockout are recorded there by every node, and a lagging record would let a locked
+    /// user in and clear the lockout.
+    ///
     /// Returns the user and what `verify` returned for it. An error before `verify` ran, such as
     /// a disabled user or a blocked client, is returned as the error.
     pub async fn login_with_password(
@@ -141,6 +167,13 @@ impl UserApiProvider {
         let mut user = self
             .get_user_with_client_ip(tenant, identity.clone(), client_ip)
             .await?;
+        if user.option.password_policy().is_some() && self.may_be_cached(&identity) {
+            let fresh = self.get_meta_user(tenant, identity.clone()).await?.data;
+            if fresh != user {
+                self.check_login_allowed(tenant, &fresh, client_ip).await?;
+                user = fresh;
+            }
+        }
         self.check_password_login(
             tenant,
             &identity,
@@ -207,14 +240,14 @@ impl UserApiProvider {
     ///
     /// A configured user never comes from the cache, and its configured credentials take
     /// precedence over a meta user with the same name.
-    async fn refresh_rejected_user(
+    pub async fn refresh_rejected_user(
         &self,
         tenant: &Tenant,
         user: UserIdentity,
         rejected: &UserInfo,
         client_ip: Option<&str>,
     ) -> Result<Option<UserInfo>> {
-        if !self.meta_read_cache_enabled() || self.get_configured_user(&user.username).is_some() {
+        if !self.may_be_cached(&user) {
             return Ok(None);
         }
         let Ok(fresh) = self.get_meta_user(tenant, user).await else {
