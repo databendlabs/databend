@@ -262,12 +262,9 @@ impl Processor for TransformHashJoin {
                 Stage::BuildFinal(BuildFinalState::new())
             }
             Stage::BuildFinal(_) if self.join.final_build_spill_requested() => {
-                // Every processor has read the request before the leader clears it.
-                let _wait_res = self.stage_sync_barrier.wait().await;
-                if wait_res.is_leader() {
-                    self.join.prepare_final_build_spill()?;
-                }
-                let _wait_res = self.stage_sync_barrier.wait().await;
+                // A processor only gets here after its `final_build` returned, so past the
+                // barrier no processor inserts into the hash table anymore.
+                self.join.prepare_final_build_spill()?;
 
                 let wait_elapsed = self.instant.elapsed() - elapsed;
                 log::info!(

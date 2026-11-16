@@ -282,41 +282,44 @@ impl Join for HybridHashJoin {
     }
 
     fn final_build_spill_requested(&self) -> bool {
-        self.state.final_build_spill_requested()
+        // Once this processor has switched to grace mode, the request has been served.
+        matches!(self.mode, HybridJoinMode::Memory(_)) && self.state.final_build_spill_requested()
     }
 
     fn prepare_final_build_spill(&mut self) -> Result<()> {
+        let locked = self.basic_state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        // Every processor calls this; the first one does the work and marks the join spilled.
+        if self.state.check_spilled() {
+            return Ok(());
+        }
+
+        // Every processor has left `final_build`, so each chunk is either untouched or rewritten
+        // with its arena recorded. The arenas still hold the keys that the rewrite projected
+        // away; everything else built from the chunks can go now.
+        *self.basic_state.hash_table.as_mut() = HashJoinHashTable::Null;
+        self.basic_state.columns.as_mut().clear();
+        self.basic_state.column_types.as_mut().clear();
+
+        let mut arenas = std::mem::take(self.basic_state.arenas.as_mut())
+            .into_iter()
+            .map(|arena| (arena.chunk_index, arena))
+            .collect::<HashMap<_, _>>();
+
+        for (chunk_index, block) in std::mem::take(self.basic_state.chunks.as_mut())
+            .into_iter()
+            .enumerate()
         {
-            let locked = self.basic_state.mutex.lock();
-            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-            // Every processor has left `final_build`, so each chunk is either untouched or
-            // rewritten with its arena recorded. The arenas still hold the keys that the rewrite
-            // projected away; everything else built from the chunks can go now.
-            *self.basic_state.hash_table.as_mut() = HashJoinHashTable::Null;
-            self.basic_state.columns.as_mut().clear();
-            self.basic_state.column_types.as_mut().clear();
-
-            let mut arenas = std::mem::take(self.basic_state.arenas.as_mut())
-                .into_iter()
-                .map(|arena| (arena.chunk_index, arena))
-                .collect::<HashMap<_, _>>();
-
-            for (chunk_index, block) in std::mem::take(self.basic_state.chunks.as_mut())
-                .into_iter()
-                .enumerate()
-            {
-                let arena = arenas.remove(&chunk_index);
-                let chunk = BuildSpillChunk { block, arena };
-                if self.state.final_build_spill_queue.push(chunk).is_err() {
-                    return Err(ErrorCode::Internal(
-                        "push unbound concurrent queue is error.",
-                    ));
-                }
+            let arena = arenas.remove(&chunk_index);
+            let chunk = BuildSpillChunk { block, arena };
+            if self.state.final_build_spill_queue.push(chunk).is_err() {
+                return Err(ErrorCode::Internal(
+                    "push unbound concurrent queue is error.",
+                ));
             }
         }
 
-        self.state.clear_final_build_spill_request();
         // The next build final round sees this and switches every processor to grace mode.
         self.state.set_spilled();
         Ok(())
