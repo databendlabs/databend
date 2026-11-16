@@ -400,4 +400,3 @@ async fn test_table_functions_on_split_blocks() -> anyhow::Result<()> {
     execute_on_both(&fixture, "analyze table {t}").await?;
     Ok(())
 }
-
