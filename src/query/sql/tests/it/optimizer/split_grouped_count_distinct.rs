@@ -39,7 +39,7 @@ async fn test_split_grouped_count_distinct() -> Result<()> {
     let mut file = open_golden_file("optimizer", "split_grouped_count_distinct.txt")?;
     let ctx = LiteTableContext::create().await?;
     ctx.register_table_sql_with_stats(
-        "CREATE TABLE t(g BIGINT NOT NULL, h BIGINT NOT NULL, x BIGINT NULL)",
+        "CREATE TABLE t(g BIGINT NOT NULL, h BIGINT NOT NULL, x BIGINT NULL, b BITMAP NULL)",
         Some(TableStatistics {
             num_rows: Some(1_000_000),
             number_of_blocks: Some(1),
@@ -70,6 +70,11 @@ async fn test_split_grouped_count_distinct() -> Result<()> {
             "other_aggregate",
             "Another aggregate would be computed over the pairs: unchanged.",
             "SELECT g, count(DISTINCT x), count(*) FROM t GROUP BY g",
+        ),
+        (
+            "bitmap_argument",
+            "Group keys compare legacy bitmaps by their raw bytes, unlike the distinct set: unchanged.",
+            "SELECT g, count(DISTINCT b) FROM t GROUP BY g",
         ),
     ] {
         let raw_plan = ctx.bind_sql(sql).await?;

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -52,7 +53,9 @@ const MIN_ROWS_PER_GROUP: f64 = 100.0;
 ///
 /// Applies when `count(DISTINCT x)` of a column is the only aggregate function, the group keys
 /// are columns, and their statistics expect at most one group per `MIN_ROWS_PER_GROUP` input
-/// rows. Many groups keep small sets, which the rewrite only adds an aggregation to.
+/// rows. Many groups keep small sets, which the rewrite only adds an aggregation to. `x` is not a
+/// Bitmap: a group key stores a legacy bitmap normalized but compares the input bytes raw, so
+/// equal legacy bitmaps would open groups of their own.
 pub struct RuleSplitGroupedCountDistinct {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -96,7 +99,11 @@ impl Rule for RuleSplitGroupedCountDistinct {
         let [ScalarExpr::BoundColumnRef(arg)] = func.args.as_slice() else {
             return Ok(());
         };
-        if !is_count_distinct || !func.params.is_empty() || !func.sort_descs.is_empty() {
+        if !is_count_distinct
+            || !func.params.is_empty()
+            || !func.sort_descs.is_empty()
+            || matches!(arg.column.data_type.remove_nullable(), DataType::Bitmap)
+        {
             return Ok(());
         }
         let group_columns = agg.group_items.iter().all(|group| {
