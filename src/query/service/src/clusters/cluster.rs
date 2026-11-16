@@ -37,6 +37,7 @@ pub use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::MetaServiceCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
@@ -287,7 +288,7 @@ impl ClusterDiscovery {
         version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version, metastore).await?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
@@ -311,7 +312,7 @@ impl ClusterDiscovery {
         GlobalInstance::get()
     }
 
-    fn create_provider(
+    async fn create_provider(
         cfg: &InnerConfig,
         version: BuildInfoRef,
         metastore: MetaStore,
@@ -319,8 +320,31 @@ impl ClusterDiscovery {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager =
+        let client = metastore.inner().clone();
+        let mut cluster_manager =
             WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
+        let common = &cfg.query.common;
+        if cfg
+            .cache
+            .is_meta_service_cache_enabled(MetaServiceCache::ClusterNode)
+        {
+            if common.cluster_id.is_empty() {
+                // A system-managed node: the warehouse management assigns its cluster at runtime
+                // and can move it, so there is no fixed cluster to watch.
+                warn!(
+                    "cluster_node in cache.meta_service_caches needs a configured cluster_id: this node reads its cluster from meta-service"
+                );
+            } else {
+                cluster_manager = cluster_manager
+                    .watch_cluster_nodes(
+                        client,
+                        &common.warehouse_id,
+                        &common.cluster_id,
+                        &cfg.query.node_id,
+                    )
+                    .await?;
+            }
+        }
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
