@@ -128,6 +128,16 @@ impl InnerConfig {
         Config::load_with_config_file("")?.try_into()
     }
 
+    /// The server memory limit in bytes: `max_server_memory_usage`, or when that is 0,
+    /// [`default_server_memory_limit`]. The allocator limit, the cache pools and the
+    /// `max_memory_usage` setting, from which the spill thresholds derive, all use it.
+    pub fn server_memory_limit(&self) -> u64 {
+        match self.query.common.max_server_memory_usage {
+            0 => default_server_memory_limit(),
+            limit => limit,
+        }
+    }
+
     pub fn tls_query_cli_enabled(&self) -> bool {
         !self
             .query
@@ -168,6 +178,16 @@ impl InnerConfig {
     pub fn into_config(self) -> Config {
         Config::from(self)
     }
+}
+
+/// 80% of the memory of the machine, or of the cgroup the process runs in.
+pub fn default_server_memory_limit() -> u64 {
+    let mut system = sysinfo::System::new();
+    system.refresh_memory();
+    let total = system
+        .cgroup_limits()
+        .map_or(system.total_memory(), |limits| limits.total_memory);
+    total / 10 * 8
 }
 
 impl Debug for InnerConfig {

@@ -834,6 +834,10 @@ impl Settings {
         self.try_get_u64("compact_max_block_selection")
     }
 
+    pub fn get_enable_recluster_task_selection_v2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_recluster_task_selection_v2")? != 0)
+    }
+
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
         Ok(self.try_get_u64("ddl_column_type_nullable")? != 0)
     }

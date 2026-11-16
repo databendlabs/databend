@@ -50,7 +50,7 @@ use databend_storages_common_index::FixedLengthPriorityQueue;
 use databend_storages_common_index::ScoredPointOffset;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::VectorScores;
+use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::IndexFileLocation;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
@@ -780,26 +780,21 @@ struct VectorPruneResult {
 }
 
 impl VectorPruneResult {
-    /// Attaches `scores` (row, score): as `TopN` with `rows_only`, otherwise as
-    /// `All` with `f32::MAX` for the other rows.
+    /// Attaches `scores` (row, score). With `rows_only` the scan outputs only
+    /// these rows; otherwise it outputs every row, and the other rows get the
+    /// placeholder score.
     fn into_block_meta(
         self,
         scores: Vec<(u32, F32)>,
         rows_only: bool,
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
-        let vector_scores = if rows_only {
-            VectorScores::TopN(scores)
-        } else {
-            let mut all_scores = vec![F32::from(f32::MAX); self.block_meta.row_count as usize];
-            for (row, score) in scores {
-                if let Some(slot) = all_scores.get_mut(row as usize) {
-                    *slot = score;
-                }
-            }
-            VectorScores::All(all_scores)
-        };
+        let (rows, scores) = scores.into_iter().unzip();
         let mut block_meta_index = self.block_meta_index;
-        block_meta_index.vector_scores = Some(vector_scores);
+        block_meta_index.vector_index_matches = Some(IndexMatches {
+            rows,
+            scores: Some(scores),
+            rows_only,
+        });
         (block_meta_index, self.block_meta)
     }
 
@@ -1000,28 +995,23 @@ mod tests {
             let results = vec![result(0, 4), result(1, 3), result(2, 2)];
             topn_block_metas(results, top_scores.clone(), rows_only)
                 .into_iter()
-                .map(|(index, meta)| (meta.location.0.clone(), index.vector_scores.unwrap()))
+                .map(|(index, meta)| (meta.location.0.clone(), index.vector_index_matches.unwrap()))
                 .collect::<Vec<_>>()
         };
-        let f = |value: f32| F32::from(value);
-        let max = f(f32::MAX);
-        assert_eq!(blocks(true), vec![
-            (
-                "block_0".to_string(),
-                VectorScores::TopN(vec![(2, f(0.1)), (1, f(0.2))])
-            ),
-            ("block_1".to_string(), VectorScores::TopN(vec![(0, f(0.2))])),
-        ]);
-        // Without `rows_only`, the other rows get the placeholder score.
-        assert_eq!(blocks(false), vec![
-            (
-                "block_0".to_string(),
-                VectorScores::All(vec![max, f(0.2), f(0.1), max])
-            ),
-            (
-                "block_1".to_string(),
-                VectorScores::All(vec![f(0.2), max, max])
-            ),
-        ]);
+        let matches = |rows: &[u32], scores: &[f32], rows_only| IndexMatches {
+            rows: rows.to_vec(),
+            scores: Some(scores.iter().map(|score| F32::from(*score)).collect()),
+            rows_only,
+        };
+        // Each block gets its TopN rows, and `rows_only` as given.
+        for rows_only in [true, false] {
+            assert_eq!(blocks(rows_only), vec![
+                (
+                    "block_0".to_string(),
+                    matches(&[2, 1], &[0.1, 0.2], rows_only)
+                ),
+                ("block_1".to_string(), matches(&[0], &[0.2], rows_only)),
+            ]);
+        }
     }
 }
