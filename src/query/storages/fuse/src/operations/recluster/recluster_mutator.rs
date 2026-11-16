@@ -94,7 +94,7 @@ const MIN_HILBERT_RECLUSTER_DEPTH: u64 = 8;
 const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
 const MULTI_PEAK_LIMIT: usize = 4;
 /// Bound scoring across singleton, full-run and shared-resource competitors.
-const MAX_DYNAMIC_BATCH_GAIN_CALLS: usize = 11;
+const MAX_BATCH_GAIN_CALLS: usize = 11;
 
 #[derive(Clone)]
 struct PlannedLinearTask {
@@ -314,9 +314,9 @@ pub struct ReclusterMutator {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) operator: Operator,
     pub(crate) schema: TableSchemaRef,
-    // Legacy task limit and early-accept target: one per executor, not v2 slots.
+    // Per-executor probe target and task cap for strategies without shared placement.
     pub(crate) max_tasks: usize,
-    // V2 task placement shares one input/thread budget per executor.
+    // Batch placement shares one input/thread budget per executor.
     pub(crate) task_budget: Option<ReclusterTaskBudget>,
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
@@ -539,29 +539,23 @@ impl ReclusterMutator {
 
         // Persisted Linear also covers vector clustering. Only scalar inputs use
         // joint-gain selection; other strategies retain their own geometry.
-        let dynamic = self.properties.cluster_key_info.cluster_type == ClusterType::Linear
+        let scalar_linear = self.properties.cluster_key_info.cluster_type == ClusterType::Linear
             && self.strategy.supports_ordered_merge();
-        let tasks = if dynamic {
-            match self.build_dynamic_linear_tasks(&blocks, task_limit)? {
-                Some(tasks) => {
-                    candidate_window.atomic_tasks = !tasks.is_empty();
-                    tasks
-                }
-                None => {
-                    let tasks = self.build_tasks(
-                        &blocks,
-                        self.task_budget
-                            .map_or(task_limit, |budget| task_limit.min(budget.nodes)),
-                    )?;
-                    // Prepared scalar groups also use joint-gain selection.
-                    // Keep their winners intact across window selection.
-                    candidate_window.atomic_tasks = !tasks.is_empty();
-                    tasks
-                }
+        let tasks = if scalar_linear {
+            match self.build_linear_window_tasks(&blocks, task_limit)? {
+                Some(tasks) => tasks,
+                None => self.build_tasks(
+                    &blocks,
+                    self.task_budget
+                        .map_or(task_limit, |budget| task_limit.min(budget.nodes)),
+                )?,
             }
         } else {
             self.build_tasks(&blocks, task_limit)?
         };
+        // Prepared scalar groups use the same joint-gain selector. Keep their
+        // winners intact across window selection as well.
+        candidate_window.atomic_tasks = scalar_linear && !tasks.is_empty();
 
         for candidate in &tasks {
             for (window_pos, _) in &candidate.selected_blocks {
@@ -676,9 +670,9 @@ impl ReclusterMutator {
     }
 
     /// Select a bounded joint-gain winner that can be placed on the executors.
-    /// V2 resource-aware batches compete with singleton tasks under shared budgets.
+    /// Resource-aware batches compete with singleton tasks under shared budgets.
     /// `None` requests compact/sort preparation, not an alternative overlap selector.
-    fn build_dynamic_linear_tasks(
+    fn build_linear_window_tasks(
         &self,
         blocks: &[&ReclusterBlock],
         task_limit: usize,
@@ -852,7 +846,8 @@ impl ReclusterMutator {
 
         // Vertical focus: one complete original-order contiguous run per
         // leading peak, plus one centered run at the main peak. Packing is
-        // prefix-stable: v2 reuses each full run's first task as its singleton.
+        // prefix-stable: shared-budget planning reuses each run's first task
+        // as its singleton.
         let run_limit = task_budget.map_or(task_limit, |budget| task_limit.min(budget.nodes));
         let mut focus_runs = Vec::new();
         let mut first_groups = Vec::new();
@@ -902,7 +897,7 @@ impl ReclusterMutator {
                         .collect(),
                     task_limit,
                 );
-                if batches.len() >= MAX_DYNAMIC_BATCH_GAIN_CALLS {
+                if batches.len() >= MAX_BATCH_GAIN_CALLS {
                     break 'cross;
                 }
             }
@@ -940,13 +935,13 @@ impl ReclusterMutator {
             // and two joint-gain probes within the existing eleven-score cap.
             let shared_scores = if task_limit >= 2 { 2 } else { 0 };
             let singleton_scores =
-                MAX_DYNAMIC_BATCH_GAIN_CALLS.saturating_sub(unique_runs.len() + shared_scores);
+                MAX_BATCH_GAIN_CALLS.saturating_sub(unique_runs.len() + shared_scores);
             if batches.len() > singleton_scores {
                 extra_singletons = batches.split_off(singleton_scores);
             }
             batches.extend(unique_runs);
         }
-        batches.truncate(MAX_DYNAMIC_BATCH_GAIN_CALLS);
+        batches.truncate(MAX_BATCH_GAIN_CALLS);
 
         let stats = super::linear_recluster::ReclusterDepthStats::create(
             blocks,
@@ -962,11 +957,7 @@ impl ReclusterMutator {
         scored_batches.clear();
         let mut seeds = Vec::new();
         for batch in batches {
-            let gain = stats.gain(
-                batch.iter().map(|task| task.blocks.as_slice()),
-                blocks,
-                properties,
-            )?;
+            let gain = stats.gain(batch.iter().map(|task| task.blocks.as_slice()), properties)?;
             scored_batches.insert(batch_identity(&batch));
             // Non-positive singletons may still improve a batch's joint gain.
             if task_budget.is_some() && batch.len() == 1 {
@@ -998,12 +989,8 @@ impl ReclusterMutator {
                 })
                 .chain(extra_singletons);
             for batch in proposals {
-                if gain_calls >= MAX_DYNAMIC_BATCH_GAIN_CALLS {
+                if gain_calls >= MAX_BATCH_GAIN_CALLS {
                     break;
-                }
-                let identity = batch_identity(&batch);
-                if scored_batches.contains(&identity) {
-                    continue;
                 }
                 let Some(bytes) = batch
                     .iter()
@@ -1011,13 +998,12 @@ impl ReclusterMutator {
                 else {
                     continue;
                 };
-                let gain = stats.gain(
-                    batch.iter().map(|task| task.blocks.as_slice()),
-                    blocks,
-                    properties,
-                )?;
+                if !scored_batches.insert(batch_identity(&batch)) {
+                    continue;
+                }
+                let gain =
+                    stats.gain(batch.iter().map(|task| task.blocks.as_slice()), properties)?;
                 gain_calls += 1;
-                scored_batches.insert(identity);
                 if gain <= 0 {
                     continue;
                 }

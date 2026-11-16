@@ -45,8 +45,8 @@ use crate::statistics::RangeMaxTree;
 pub(crate) struct LinearReclusterStrategy;
 
 /// Window-local depth state shared by the bounded batch evaluations.
-pub(super) struct ReclusterDepthStats {
-    positions: HashMap<String, usize>,
+pub(super) struct ReclusterDepthStats<'a> {
+    blocks: &'a [&'a ReclusterBlock],
     ranges: Vec<(usize, usize)>,
     range_counts: HashMap<(usize, usize), usize>,
     point_changes: Vec<i64>,
@@ -59,9 +59,9 @@ struct ReclusterOutputRun {
     blocks: usize,
 }
 
-impl ReclusterDepthStats {
-    pub(super) fn create(blocks: &[&ReclusterBlock], key_types: &[DataType]) -> Result<Self> {
-        let mut positions = HashMap::with_capacity(blocks.len());
+impl<'a> ReclusterDepthStats<'a> {
+    pub(super) fn create(blocks: &'a [&'a ReclusterBlock], key_types: &[DataType]) -> Result<Self> {
+        let mut locations = HashSet::with_capacity(blocks.len());
         let mut ranges = Vec::with_capacity(blocks.len());
         for block in blocks {
             let stats = block.stats();
@@ -70,10 +70,7 @@ impl ReclusterDepthStats {
                     "Invalid cluster-key arity in recluster window",
                 ));
             }
-            if positions
-                .insert(block.meta.location.0.clone(), ranges.len())
-                .is_some()
-            {
+            if !locations.insert(block.meta.location.0.as_str()) {
                 return Err(ErrorCode::Internal("Duplicate block in recluster window"));
             }
             ranges.push((stats.min().as_slice(), stats.max().as_slice()));
@@ -106,7 +103,7 @@ impl ReclusterDepthStats {
                 .sum()
         };
         Ok(Self {
-            positions,
+            blocks,
             ranges,
             range_counts,
             point_changes,
@@ -114,10 +111,9 @@ impl ReclusterDepthStats {
         })
     }
 
-    pub(super) fn gain<'a>(
+    pub(super) fn gain<'b>(
         &self,
-        tasks: impl ExactSizeIterator<Item = &'a [usize]>,
-        blocks: &[&ReclusterBlock],
+        tasks: impl ExactSizeIterator<Item = &'b [usize]>,
         properties: &ReclusterProperties,
     ) -> Result<i64> {
         let mut selected = HashSet::new();
@@ -126,15 +122,12 @@ impl ReclusterDepthStats {
             let (mut rows, mut bytes, mut compressed) = (0usize, 0usize, 0usize);
             let (mut start, mut end) = (usize::MAX, 0usize);
             for &block_idx in task {
-                let block = blocks[block_idx];
-                let idx = *self.positions.get(&block.meta.location.0).ok_or_else(|| {
-                    ErrorCode::Internal("Candidate missing from recluster window")
-                })?;
-                if !selected.insert(idx) {
+                let block = self.blocks[block_idx];
+                if !selected.insert(block_idx) {
                     return Err(ErrorCode::Internal("Shared input in recluster task batch"));
                 }
-                start = start.min(self.ranges[idx].0);
-                end = end.max(self.ranges[idx].1);
+                start = start.min(self.ranges[block_idx].0);
+                end = end.max(self.ranges[block_idx].1);
                 rows += block.meta.row_count as usize;
                 bytes += block.meta.block_size as usize;
                 compressed += block.meta.file_size as usize;

@@ -20,23 +20,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
 
-#[test]
-fn test_removed_recluster_task_selection_setting() {
-    let settings = Settings::create(Tenant::new_literal("test"));
-    for value in ["0", "1"] {
-        let error = settings
-            .set_setting(
-                "enable_recluster_task_selection_v2".to_string(),
-                value.to_string(),
-            )
-            .unwrap_err();
-        assert_eq!(
-            error.code(),
-            databend_common_exception::ErrorCode::UnknownVariable("").code()
-        );
-    }
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
     let settings = Settings::create(Tenant::new_literal("test"));

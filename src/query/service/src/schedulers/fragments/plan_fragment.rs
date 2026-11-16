@@ -464,7 +464,7 @@ impl PlanFragment {
             .map(|visitor| visitor.take())
             .unwrap_or_default();
 
-        let mut executors = Fragmenter::get_executors(ctx);
+        let mut executors = Fragmenter::get_executors(ctx.clone());
         let batched = batches.is_some();
         let task_reshuffle = if let Some(batches) = batches {
             if batches.len() > executors.len() {
@@ -475,6 +475,12 @@ impl PlanFragment {
             // Preserve the planning-time placement witness. Round-robin task
             // redistribution could combine full batches and exceed a node's budget.
             executors.sort();
+            // Prefer the coordinator without pinning small plans from every
+            // coordinator to the same executor prefix. Only rotate whole batches.
+            let local_executor = Fragmenter::get_local_executor(ctx);
+            if let Some(index) = executors.iter().position(|id| id == &local_executor) {
+                executors.rotate_left(index);
+            }
             let mut placement = executors
                 .iter()
                 .map(|id| (id.clone(), Vec::new()))

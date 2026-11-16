@@ -682,52 +682,210 @@ impl Recluster {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_catalog::plan::ReclusterInfoSideCar;
+    use databend_common_expression::ScalarRef;
+    use databend_common_sql::executor::physical_plans::FragmentKind;
+    use databend_common_storage::ColumnNodes;
+    use databend_common_storages_fuse::io::SegmentInfoReader;
+    use databend_storages_common_cache::Reader;
+    use futures::TryStreamExt;
+
     use super::*;
+    use crate::physical_plans::CommitSink;
+    use crate::physical_plans::CommitType;
+    use crate::physical_plans::Exchange;
+    use crate::physical_plans::ExchangeSink;
+    use crate::physical_plans::PhysicalPlanCast;
+    use crate::schedulers::Fragmenter;
+    use crate::schedulers::QueryFragmentsActions;
+    use crate::test_kits::ClusterDescriptor;
     use crate::test_kits::TestFixture;
+    use crate::test_kits::execute_pipeline;
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_recluster_sort_pipeline_boundary() -> anyhow::Result<()> {
+    async fn test_recluster_batch_pipeline() -> anyhow::Result<()> {
         let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
-        for width in [1, 2] {
-            for kind in [
-                ReclusterTaskKind::SortBlocks,
-                ReclusterTaskKind::MergeBlocks,
-            ] {
-                let kind: ReclusterTaskKind = serde_json::from_str(&serde_json::to_string(&kind)?)?;
-                let schema = DataSchemaRefExt::create(vec![DataField::new(
-                    "k",
-                    DataType::Number(NumberDataType::Int32),
-                )]);
-                let sort = SortPipelineBuilder::create(
-                    ctx.clone(),
-                    schema,
-                    vec![SortColumnDescription {
-                        offset: 0,
-                        asc: true,
-                        nulls_first: false,
-                    }]
-                    .into(),
-                    None,
-                    false,
-                )?;
-                let mut pipeline = Pipeline::create();
-                pipeline.add_source(EmptySource::create, width)?;
-                Recluster::build_recluster_sort_pipeline(kind, sort, &mut pipeline)?;
-                let partial_sorts = pipeline
-                    .graph
-                    .node_weights()
-                    .filter(|node| unsafe { node.proc.name() }.contains("SortPartialTransform"))
-                    .count();
-                assert_eq!(
-                    partial_sorts,
-                    if kind == ReclusterTaskKind::SortBlocks {
-                        width
-                    } else {
-                        0
+        fixture.create_default_database().await?;
+        fixture
+            .default_session()
+            .get_settings()
+            .set_max_threads(2)?;
+        let name = format!(
+            "{}.{}",
+            fixture.default_db_name(),
+            fixture.default_table_name()
+        );
+        fixture.execute_command(&format!(
+            "CREATE TABLE {name}(id INT NOT NULL) CLUSTER BY(id) ROW_PER_BLOCK=4 BLOCK_PER_SEGMENT=2"
+        )).await?;
+        for (multiway, local_id) in [(false, "node-b"), (true, "node-c")] {
+            fixture
+                .execute_command(&format!("TRUNCATE TABLE {name}"))
+                .await?;
+            for start in [0, 2, 4, 6] {
+                fixture
+                    .execute_command(&format!(
+                        "INSERT INTO {name} VALUES ({start}),({})",
+                        start + 1
+                    ))
+                    .await?;
+            }
+            let ctx = fixture.new_query_ctx().await?;
+            ctx.get_settings().set_setting(
+                "enable_recluster_multiway_merge".to_string(),
+                u64::from(multiway).to_string(),
+            )?;
+            let table = fixture.latest_default_table().await?;
+            let fuse = FuseTable::try_from_table(table.as_ref())?;
+            let snapshot = fuse.read_table_snapshot().await?.unwrap();
+            let mut blocks = Vec::new();
+            for location in &snapshot.segments {
+                let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
+                    .read(location, &CachePolicy::BYPASS)
+                    .await?;
+                blocks.extend(segment.block_metas()?.iter().cloned());
+            }
+            assert_eq!(blocks.len(), 4);
+            let schema = fuse.schema();
+            let column_nodes = ColumnNodes::new_from_schema(&schema.as_ref().into(), Some(&schema));
+            let tasks = blocks
+                .chunks(2)
+                .map(|blocks| {
+                    let metas = blocks
+                        .iter()
+                        .map(|block| (None, block.clone()))
+                        .collect::<Vec<_>>();
+                    let (stats, parts) =
+                        FuseTable::to_partitions(Some(&schema), &metas, &column_nodes, None, None);
+                    ReclusterTask {
+                        parts,
+                        stats,
+                        total_rows: blocks.iter().map(|block| block.row_count as usize).sum(),
+                        total_bytes: blocks.iter().map(|block| block.block_size as usize).sum(),
+                        total_compressed: blocks.iter().map(|block| block.file_size as usize).sum(),
+                        level: 0,
+                        input_level_stats: vec![],
+                        kind: ReclusterTaskKind::MergeBlocks,
+                        virtual_column_layout: None,
+                        inverted_index_sources: vec![],
                     }
+                })
+                .collect::<Vec<_>>();
+            let table_meta_timestamps = TestFixture::default_table_meta_timestamps();
+            let source = Recluster {
+                meta: PhysicalPlanMeta::new("Recluster"),
+                tasks,
+                task_batches: Some(vec![vec![1, 0]]),
+                table_info: table.get_table_info().clone(),
+                table_meta_timestamps,
+            };
+
+            // A whole batch follows either coordinator; worker indices are local
+            // even when planning-time task indices arrive in reverse order.
+            let cluster_ctx = fixture
+                .new_query_ctx_with_cluster(
+                    ClusterDescriptor::new()
+                        .with_node("node-c", "")
+                        .with_node("node-a", "")
+                        .with_node("node-b", "")
+                        .with_local_id(local_id),
+                )
+                .await?;
+            let mut plan = PhysicalPlan::new(Exchange {
+                meta: PhysicalPlanMeta::new("Exchange"),
+                input: PhysicalPlan::new(source.clone()),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+            plan.adjust_plan_id(&mut 0);
+            let mut actions = QueryFragmentsActions::create(cluster_ctx.clone());
+            for fragment in Fragmenter::try_create(cluster_ctx.clone())?.build_fragment(&plan)? {
+                fragment.get_actions(cluster_ctx.clone(), &mut actions)?;
+            }
+            let assigned = actions
+                .fragments_actions
+                .iter()
+                .flat_map(|fragment| fragment.get_actions())
+                .filter_map(|action| {
+                    let sink = ExchangeSink::from_physical_plan(&action.physical_plan)?;
+                    let recluster = Recluster::from_physical_plan(&sink.input)?;
+                    (!recluster.tasks.is_empty()).then_some((&action.executor, recluster))
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(assigned.len(), 1);
+            let (executor, worker) = assigned[0];
+            assert_eq!(executor, local_id);
+            assert_eq!(worker.tasks.len(), 2);
+            assert_eq!(worker.task_batches, Some(vec![vec![0, 1]]));
+            for (task, original) in worker.tasks.iter().zip(source.tasks.iter().rev()) {
+                assert_eq!(
+                    FuseBlockPartInfo::from_part(&task.parts.partitions[0])?.location,
+                    FuseBlockPartInfo::from_part(&original.parts.partitions[0])?.location,
                 );
             }
+
+            let mut plan = PhysicalPlan::new(CommitSink {
+                meta: PhysicalPlanMeta::new("CommitSink"),
+                input: PhysicalPlan::new(worker.clone()),
+                snapshot: Some(snapshot.clone()),
+                table_info: table.get_table_info().clone(),
+                commit_type: CommitType::Mutation {
+                    kind: MutationKind::Recluster,
+                    merge_meta: false,
+                },
+                update_stream_meta: vec![],
+                deduplicated_label: None,
+                table_meta_timestamps,
+                recluster_info: Some(ReclusterInfoSideCar {
+                    removed_segment_indexes: (0..snapshot.segments.len()).collect(),
+                    removed_statistics: snapshot.summary.clone(),
+                    ..Default::default()
+                }),
+                expected_ttl: None,
+            });
+            plan.adjust_plan_id(&mut 0);
+            let pipeline = PipelineBuilder::create(
+                ctx.get_function_context()?,
+                ctx.get_settings(),
+                ctx.clone(),
+            )
+            .finalize(&plan)?;
+            assert!(
+                !pipeline
+                    .main_pipeline
+                    .graph
+                    .node_weights()
+                    .any(|node| unsafe { node.proc.name().contains("SortPartialTransform") })
+            );
+            assert_eq!(
+                pipeline
+                    .main_pipeline
+                    .graph
+                    .node_weights()
+                    .filter(|node| unsafe {
+                        node.proc.name() == "HorizontalMultiwayReclusterSource"
+                    })
+                    .count(),
+                if multiway { 2 } else { 0 },
+            );
+            execute_pipeline(ctx, pipeline).await?;
+            let table = fixture.latest_default_table().await?;
+            let next = FuseTable::try_from_table(table.as_ref())?
+                .read_table_snapshot()
+                .await?
+                .unwrap();
+            assert_eq!(next.prev_snapshot_id.unwrap().0, snapshot.snapshot_id);
+            assert_eq!(next.summary.row_count, 8);
+            assert_eq!(next.summary.block_count, 2);
+            let result: Vec<_> = fixture.execute_query(&format!(
+                "SELECT count()=8 AND count(distinct id)=8 AND min(id)=0 AND max(id)=7 FROM {name}"
+            )).await?.try_collect().await?;
+            assert_eq!(
+                result[0].get_by_offset(0).index(0),
+                Some(ScalarRef::Boolean(true))
+            );
         }
         Ok(())
     }
