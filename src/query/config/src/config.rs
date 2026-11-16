@@ -3177,9 +3177,10 @@ pub struct CacheConfig {
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
 
-    /// Watch the users and the global settings of the tenant in meta-service, so that
-    /// authentication and new sessions read them locally. They may lag a change by the watch
-    /// delay, a change made through this node included.
+    /// Watch the users, the global settings and the online cluster nodes of the tenant in
+    /// meta-service, so that authentication, new sessions and cluster discovery read them
+    /// locally. They may lag a change by the watch delay, a change made through this node
+    /// included.
     #[clap(long = "cache-enable-meta-service-watch", default_value = "false")]
     #[serde(default = "bool_false")]
     pub meta_service_watch_cache: bool,

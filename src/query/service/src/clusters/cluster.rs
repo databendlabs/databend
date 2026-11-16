@@ -287,7 +287,7 @@ impl ClusterDiscovery {
         version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version, metastore).await?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
@@ -311,7 +311,7 @@ impl ClusterDiscovery {
         GlobalInstance::get()
     }
 
-    fn create_provider(
+    async fn create_provider(
         cfg: &InnerConfig,
         version: BuildInfoRef,
         metastore: MetaStore,
@@ -319,8 +319,11 @@ impl ClusterDiscovery {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager =
+        let mut cluster_manager =
             WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
+        if cfg.cache.meta_service_watch_cache {
+            cluster_manager = cluster_manager.watch_cluster_nodes().await;
+        }
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }

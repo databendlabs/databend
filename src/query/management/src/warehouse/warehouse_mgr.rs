@@ -44,6 +44,7 @@ use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
 use databend_meta_client::types::anyerror::AnyError;
 use databend_meta_client::types::txn_op_response::Response;
+use databend_meta_plugin_cache::WatchedPrefix;
 use log::error;
 use log::info;
 
@@ -79,6 +80,9 @@ pub struct WarehouseMgr {
     cluster_node_key_prefix: String,
     warehouse_info_key_prefix: String,
     version: BuildInfoRef,
+    /// The online nodes of the clusters, `{cluster_node_key_prefix}/...`, if watched: see
+    /// `watch_cluster_nodes`.
+    cluster_nodes: Option<WatchedPrefix>,
 }
 
 impl WarehouseMgr {
@@ -116,7 +120,19 @@ impl WarehouseMgr {
                 WAREHOUSE_META_KEY_PREFIX,
                 escape_for_key(tenant)?,
             ),
+            cluster_nodes: None,
         })
+    }
+
+    /// List the nodes of a cluster, `list_warehouse_cluster_nodes`, from a watched copy of the
+    /// online nodes of the clusters. A node joining or leaving shows by the watch delay, far
+    /// below the heartbeat lift time a node that stopped stays listed for anyway.
+    pub async fn watch_cluster_nodes(mut self) -> Self {
+        let client = self.metastore.inner().clone();
+        let watched =
+            WatchedPrefix::new(client, &self.cluster_node_key_prefix, "cluster nodes").await;
+        self.cluster_nodes = Some(watched);
+        self
     }
 
     async fn shutdown_system_managed(&self, node_info: &NodeInfo) -> Result<()> {
@@ -2260,11 +2276,19 @@ impl WarehouseApi for WarehouseMgr {
             escape_for_key(cluster)?
         );
 
-        let values = self
-            .metastore
-            .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
-            .await
-            .map_err(meta_service_error)?;
+        let values = match &self.cluster_nodes {
+            Some(watched) => {
+                watched
+                    .list_kv(&self.metastore, &cluster_nodes_prefix)
+                    .await
+            }
+            None => {
+                self.metastore
+                    .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
+                    .await
+            }
+        }
+        .map_err(meta_service_error)?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
