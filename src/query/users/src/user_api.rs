@@ -40,6 +40,7 @@ use databend_common_meta_api::crud::CrudMgr;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::external_access_integration_ident::Resource as ExternalAccessIntegrationResource;
 use databend_common_meta_app::principal::network_rule_ident::Resource as NetworkRuleResource;
 use databend_common_meta_app::schema::CreateOption;
@@ -62,6 +63,7 @@ use tokio::sync::Mutex;
 
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;
+use crate::meta_watch::MetaWatches;
 
 #[cfg(test)]
 #[path = "user_api_external_access_tests.rs"]
@@ -69,7 +71,7 @@ mod external_access_tests;
 
 pub struct UserApiProvider {
     meta: MetaStore,
-    client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
+    pub(crate) client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
 
     /// Optional cache for ownership information for all keys [`TenantOwnershipObjectIdent`] in meta-service.
     ///
@@ -84,6 +86,9 @@ pub struct UserApiProvider {
     external_access_cache_tenant: Tenant,
     pub(crate) network_rule_cache: Option<Mutex<Cache>>,
     pub(crate) external_access_integration_cache: Option<Mutex<Cache>>,
+
+    /// By `cache.meta_service_watch_cache`: users and global settings of the node tenant.
+    pub(crate) meta_watches: Option<MetaWatches>,
 
     builtin: BuiltIn,
 }
@@ -133,6 +138,12 @@ impl UserApiProvider {
             None
         };
 
+        let meta_watches = if cache_config.meta_service_watch_cache {
+            Some(MetaWatches::new(client.clone(), tenant).await)
+        } else {
+            None
+        };
+
         let (network_rule_cache, external_access_integration_cache) =
             if GlobalConfig::instance().query.common.enable_udf_server {
                 let rules = Cache::new(
@@ -159,6 +170,7 @@ impl UserApiProvider {
             external_access_cache_tenant: tenant.clone(),
             network_rule_cache,
             external_access_integration_cache,
+            meta_watches,
             builtin,
         };
 
@@ -233,6 +245,17 @@ impl UserApiProvider {
             }
         }
         Ok(values)
+    }
+
+    /// The global settings of `tenant` for a new session: from the watched copy if it is enabled
+    /// and ready, so they may lag a change by the watch delay. Read them by `setting_api` where a
+    /// change must be seen at once.
+    #[async_backtrace::framed]
+    pub async fn get_session_settings(&self, tenant: &Tenant) -> Result<Vec<UserSetting>> {
+        match MetaWatches::of(&self.meta_watches, tenant) {
+            Some(watches) => watches.get_settings(self.client.as_ref()).await,
+            None => self.setting_api(tenant).get_settings().await,
+        }
     }
 
     pub fn udf_api(&self, tenant: &Tenant) -> UdfMgr {

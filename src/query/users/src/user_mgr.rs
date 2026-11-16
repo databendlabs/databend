@@ -33,12 +33,20 @@ use databend_meta_client::types::SeqV;
 
 use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
+use crate::meta_watch::MetaWatches;
 
 impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
     pub async fn get_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
-        if let Some(auth_info) = self.get_configured_user(&user.username) {
+        match self.configured_user_info(&user) {
+            Some(user_info) => Ok(user_info),
+            None => Ok(self.get_meta_user(tenant, user).await?.data),
+        }
+    }
+
+    fn configured_user_info(&self, user: &UserIdentity) -> Option<UserInfo> {
+        self.get_configured_user(&user.username).map(|auth_info| {
             let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
             user_info.grants.grant_privileges(
                 &GrantObject::Global,
@@ -52,10 +60,8 @@ impl UserApiProvider {
                 .option
                 .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
             user_info.option.set_all_flag();
-            Ok(user_info)
-        } else {
-            Ok(self.get_meta_user(tenant, user).await?.data)
-        }
+            user_info
+        })
     }
 
     pub async fn get_meta_user(
@@ -82,7 +88,43 @@ impl UserApiProvider {
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
         let user_info = self.get_user(tenant, user).await?;
+        self.check_login(tenant, user_info, client_ip).await
+    }
 
+    /// Like `get_user_with_client_ip`, for a login that writes nothing back from the user it
+    /// gets: the user may come from the watched copy, see `cache.meta_service_watch_cache`, and
+    /// lag a change by the watch delay. A user with a password policy is read from meta-service,
+    /// so that its login failures are all counted.
+    #[async_backtrace::framed]
+    pub async fn get_login_user_with_client_ip(
+        &self,
+        tenant: &Tenant,
+        user: UserIdentity,
+        client_ip: Option<&str>,
+    ) -> Result<UserInfo> {
+        let user_info = match (
+            self.configured_user_info(&user),
+            MetaWatches::of(&self.meta_watches, tenant),
+        ) {
+            (Some(user_info), _) => user_info,
+            (None, Some(watches)) => {
+                let user_info = watches.get_user(self.client.as_ref(), &user).await?;
+                match user_info.option.password_policy() {
+                    Some(_) => self.get_meta_user(tenant, user).await?.data,
+                    None => user_info,
+                }
+            }
+            (None, None) => self.get_meta_user(tenant, user).await?.data,
+        };
+        self.check_login(tenant, user_info, client_ip).await
+    }
+
+    async fn check_login(
+        &self,
+        tenant: &Tenant,
+        user_info: UserInfo,
+        client_ip: Option<&str>,
+    ) -> Result<UserInfo> {
         if let Some(disabled) = user_info.option.disabled() {
             if *disabled {
                 return Err(ErrorCode::AuthenticateFailure(format!(

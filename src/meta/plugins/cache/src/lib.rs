@@ -97,5 +97,7 @@
 mod cache;
 mod meta_cache_types;
 pub mod meta_client_source;
+mod watched;
 
 pub use cache::Cache;
+pub use watched::WatchedPrefix;

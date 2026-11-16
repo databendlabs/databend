@@ -66,7 +66,20 @@ impl Settings {
     #[async_backtrace::framed]
     pub async fn load_changes(&self) -> Result<()> {
         self.load_config_changes()?;
-        self.load_global_changes().await
+        let global_settings =
+            Settings::load_settings(UserApiProvider::instance(), &self.tenant).await?;
+        self.apply_global_changes(global_settings)
+    }
+
+    /// Like `load_changes`, for a new session: the global settings may come from the watched
+    /// copy, see `UserApiProvider::get_session_settings`.
+    #[async_backtrace::framed]
+    pub async fn load_session_changes(&self) -> Result<()> {
+        self.load_config_changes()?;
+        let global_settings = UserApiProvider::instance()
+            .get_session_settings(&self.tenant)
+            .await?;
+        self.apply_global_changes(global_settings)
     }
 
     fn apply_local_config(&self, k: &str, v: String) -> Result<()> {
@@ -94,11 +107,8 @@ impl Settings {
         Ok(())
     }
 
-    async fn load_global_changes(&self) -> Result<()> {
+    fn apply_global_changes(&self, global_settings: Vec<UserSetting>) -> Result<()> {
         let default_settings = DefaultSettings::instance()?;
-
-        let api = UserApiProvider::instance();
-        let global_settings = Settings::load_settings(api, &self.tenant).await?;
 
         for global_setting in global_settings {
             let name = global_setting.name;
