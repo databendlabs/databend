@@ -782,6 +782,12 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT unnest([a, a + 10]) AS s, count(*) FROM t WHERE s > 2 GROUP BY ROLLUP(s)",
         },
         SqlTestCase {
+            name: "where_alias_of_grouping_sets_key_keeps_structure",
+            description: "An alias in WHERE binds the pre-aggregate form of its item first, with the policy of the grouping-sets keys, so the form stays unfolded and is the key `a + (1 + 1)`.",
+            setup_sqls: T,
+            sql: "SELECT a + (1 + 1) AS k, count(*) FROM t WHERE k > 0 GROUP BY ROLLUP(k)",
+        },
+        SqlTestCase {
             name: "subquery_in_aggregate_argument_is_below_aggregate",
             description: "A subquery in an aggregate argument is evaluated below the aggregate.",
             setup_sqls: T_U,

@@ -163,6 +163,26 @@ EvalScalar
                     └── limit: NONE
 
 
+=== where_alias_of_grouping_sets_key_keeps_structure ===
+description: An alias in WHERE binds the pre-aggregate form of its item first, with the policy of the grouping-sets keys, so the form stays unfolded and is the key `a + (1 + 1)`.
+sql: SELECT a + (1 + 1) AS k, count(*) FROM t WHERE k > 0 GROUP BY ROLLUP(k)
+status: ok
+EvalScalar
+├── scalars: [k (#2) AS (#2), COUNT(*) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [count() AS (#4)]
+    └── EvalScalar
+        ├── scalars: [CAST(plus(t.a (#0), plus(1, 1)) AS Int64 NULL) AS (#2)]
+        └── Filter
+            ├── filters: [gt(plus(t.a (#0), plus(1, 1)), 0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === subquery_in_aggregate_argument_is_below_aggregate ===
 description: A subquery in an aggregate argument is evaluated below the aggregate.
 sql: SELECT b FROM t GROUP BY b HAVING sum((SELECT max(n) FROM u)) > 0
