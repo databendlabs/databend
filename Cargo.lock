@@ -3670,6 +3670,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
+ "parking_lot 0.12.3",
  "prost 0.14.3",
  "seq-marked",
  "serde",
