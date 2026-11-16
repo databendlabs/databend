@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::Filters;
@@ -25,6 +27,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
@@ -47,18 +50,21 @@ use parking_lot::RwLock;
 
 use crate::BaseTableColumn;
 use crate::Binder;
-use crate::ClusterKeyNormalizer;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::StoredKeyNormalizer;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
+use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
+use crate::planner::semantic::PersistedTypeCheckAdapter;
+use crate::planner::semantic::TypeCheckAdapter;
 use crate::planner::semantic::TypeChecker;
 
 const TABLE_KEY_STRING_PREFIX_LEN: u64 = 8;
@@ -139,6 +145,36 @@ fn normalize_key_expr(expr: Expr<usize>) -> Result<Expr<usize>> {
     )
 }
 
+/// Build a schema-backed context, preserving virtual expressions so CREATE and
+/// schema-change revalidation resolve computed columns identically.
+pub(crate) fn bind_context_from_schema(
+    schema: &TableSchemaRef,
+    metadata: &MetadataRef,
+) -> BindContext {
+    let mut bind_context = BindContext::new();
+    for field in schema.fields() {
+        let data_type = DataType::from(field.data_type());
+        let column_index = metadata
+            .write()
+            .add_derived_column(field.name().clone(), data_type.clone());
+        let virtual_expr = match field.computed_expr() {
+            Some(ComputedExpr::Virtual(expr)) => Some(expr.clone()),
+            Some(ComputedExpr::Stored(_)) | None => None,
+        };
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                field.name().clone(),
+                column_index,
+                Box::new(data_type),
+                Visibility::Visible,
+            )
+            .virtual_expr(virtual_expr)
+            .build(),
+        );
+    }
+    bind_context
+}
+
 pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -146,7 +182,6 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         CATALOG_DEFAULT.to_owned(),
         "default".to_string(),
         table_meta,
-        None,
         None,
         false,
         false,
@@ -202,7 +237,15 @@ pub fn parse_exprs(
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-    parse_ast_exprs(ctx, table_meta, ast_exprs)
+    let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+    // Also used for default expressions, which may legitimately depend on the
+    // session (e.g. `DEFAULT current_user()`), so no context policy here.
+    parse_ast_exprs_with_adapter(
+        FullTypeCheckAdapter::new(ctx)?,
+        table_meta,
+        ast_exprs,
+        &names,
+    )
 }
 
 pub fn parse_exprs_to_field_index(
@@ -216,34 +259,23 @@ pub fn parse_exprs_to_field_index(
         .collect()
 }
 
-fn parse_ast_exprs(
-    ctx: Arc<dyn TableContext>,
+fn parse_ast_exprs_with_adapter<A: TypeCheckAdapter>(
+    adapter: A,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
+    names: &NameResolutionContext,
 ) -> Result<Vec<Expr<ColumnBinding>>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = ctx.get_settings();
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker =
+        TypeChecker::try_create_with_adapter(&mut bind_context, adapter, names, metadata, &[])?;
 
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        false,
-    )?;
-
-    let exprs = ast_exprs
+    ast_exprs
         .iter()
         .map(|ast| {
             let (scalar, _) = *type_checker.resolve(ast)?;
-            let expr = scalar.as_expr()?;
-            Ok(expr)
+            scalar.as_expr()
         })
-        .collect::<Result<_>>()?;
-
-    Ok(exprs)
+        .collect()
 }
 
 pub fn parse_to_filters(
@@ -252,9 +284,22 @@ pub fn parse_to_filters(
     sql: &str,
 ) -> Result<Filters> {
     let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, sql)?
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let tokens = tokenize_sql(sql)?;
+    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+    // Storage-level filters drive pruning, so they must be context independent
+    // and deterministic.
+    let adapter = PersistedTypeCheckAdapter::new(&ctx.get_settings(), ctx.get_function_context()?)?;
+    let exprs = parse_ast_exprs_with_adapter(adapter, table_meta, ast_exprs, &names)?
         .into_iter()
         .map(|expr| {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "filter expression `{}` is not deterministic",
+                    expr.sql_display(),
+                )));
+            }
             Ok(expr
                 .project_column_ref(|binding| {
                     Ok(schema
@@ -384,13 +429,14 @@ pub fn parse_computed_expr_to_string(
 
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::try_create(
+    // Computed columns are persisted and re-evaluated in other sessions.
+    let adapter = PersistedTypeCheckAdapter::new(&settings, ctx.get_function_context()?)?;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        ctx,
+        adapter,
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(ast)?;
@@ -504,39 +550,51 @@ pub fn bind_normalized_key_exprs(
     ast_exprs: Vec<AExpr>,
 ) -> Result<Vec<Expr<usize>>> {
     let schema = table_meta.schema();
-    parse_ast_exprs(ctx, table_meta, ast_exprs)?
-        .into_iter()
-        .map(|expr| {
-            expr.project_column_ref(|col| schema.index_of(&col.column_name))
+    let names = NameResolutionContext::preserve_identifier_case();
+    // Runtime rebinding of already persisted keys: keep permissive so tables
+    // created before the definition-time check stay readable and writable.
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let mut checker = TypeChecker::try_create_with_adapter(
+        &mut bind_context,
+        FullTypeCheckAdapter::new(ctx)?,
+        &names,
+        metadata,
+        &[],
+    )?;
+    // Physical keys are evaluated on stored values, independently of roles and
+    // SELECT WHERE authorization. Keep the permissive runtime adapter for old keys.
+    checker.set_apply_masking_policy(false);
+    ast_exprs
+        .iter()
+        .map(|ast| {
+            let (scalar, _) = *checker.resolve(ast)?;
+            scalar
+                .as_expr()?
+                .project_column_ref(|col| schema.index_of(&col.column_name))
                 .and_then(normalize_key_expr)
         })
         .collect()
 }
 
+/// Bind and normalize cluster-key SQL using the caller-provided name rules.
 pub fn analyze_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
+    name_resolution_ctx: &NameResolutionContext,
 ) -> Result<(String, Vec<Expr<Symbol>>)> {
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-    let mut type_checker = TypeChecker::try_create(
+    let adapter = PersistedTypeCheckAdapter::new(&ctx.get_settings(), ctx.get_function_context()?)?;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        ctx.clone(),
-        &name_resolution_ctx,
+        adapter,
+        name_resolution_ctx,
         metadata,
         &[],
-        true,
     )?;
 
-    let settings = ctx.get_settings();
-    let mut normalizer = ClusterKeyNormalizer {
-        force_quoted_ident: false,
-        unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
-        quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
-        sql_dialect: settings.get_sql_dialect()?,
-    };
+    let mut normalizer = StoredKeyNormalizer::new(name_resolution_ctx);
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     let mut cluster_keys = Vec::with_capacity(ast_exprs.len());
     let mut vector_cluster_key_num = 0;
@@ -578,9 +636,28 @@ pub fn analyze_cluster_keys(
 
         let mut cluster_by = ast.clone();
         cluster_by.drive_mut(&mut normalizer);
-        cluster_keys.push(format!("{:#}", &cluster_by));
+        cluster_keys.push(format!("{:#}", cluster_by));
     }
 
     let cluster_by_str = format!("({})", cluster_keys.join(", "));
     Ok((cluster_by_str, exprs))
+}
+
+/// Re-validate a persisted TTL expression against `table_meta`'s current schema.
+///
+/// Used by schema-changing DDL to reject a target schema on which the stored
+/// TTL can no longer be evaluated.
+pub fn validate_stored_ttl_expr(
+    ctx: Arc<dyn TableContext>,
+    schema: TableSchemaRef,
+    sql: &str,
+) -> Result<()> {
+    let ast = parse_expr(&tokenize_sql(sql)?, Dialect::default())?;
+    super::ttl::bind_ttl_definition(
+        ctx,
+        &schema,
+        &ast,
+        &NameResolutionContext::preserve_identifier_case(),
+    )?;
+    Ok(())
 }

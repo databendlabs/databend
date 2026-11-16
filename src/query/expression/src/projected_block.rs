@@ -48,10 +48,10 @@ impl<'a> ProjectedBlock<'a> {
         }
     }
 
-    pub fn slice<I>(&self, index: I) -> ProjectedBlock<'_>
+    pub fn slice<I>(&self, index: I) -> ProjectedBlock<'a>
     where I: SliceIndex<[usize], Output = [usize]> + SliceIndex<[BlockEntry], Output = [BlockEntry]>
     {
-        match &self.map {
+        match self.map {
             Some(map) => Self {
                 map: Some(&map[index]),
                 entries: self.entries,

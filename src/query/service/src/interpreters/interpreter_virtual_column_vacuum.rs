@@ -51,6 +51,10 @@ impl Interpreter for VacuumVirtualColumnInterpreter {
         "VacuumVirtualColumnInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         false
     }

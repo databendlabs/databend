@@ -30,6 +30,7 @@ recursive = { workspace = true }
 rspack-codespan-reporting = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+stacker = { workspace = true }
 strsim = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

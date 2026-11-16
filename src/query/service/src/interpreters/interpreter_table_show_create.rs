@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -28,11 +33,11 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::StringType;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_sql::ClusterKeyNormalizer;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -41,6 +46,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -48,10 +54,13 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
+use databend_storages_common_table_meta::table::is_internal_table_index_option;
 use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -75,9 +84,8 @@ impl ShowCreateTableInterpreter {
         Ok(ShowCreateTableInterpreter { ctx, plan })
     }
 
-    fn format_table_options(options: &BTreeMap<String, String>) -> String {
+    fn format_table_options<'a>(options: impl Iterator<Item = (&'a String, &'a String)>) -> String {
         options
-            .iter()
             .filter(|(key, _)| !is_internal_opt_key(key))
             .sorted_by_key(|(key, _)| *key)
             .map(|(key, value)| format!(" {}={}", key.to_uppercase(), QuotedString(value, '\'')))
@@ -108,7 +116,7 @@ impl Interpreter for ShowCreateTableInterpreter {
             if is_materialized_view_engine(table.engine()) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
-                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table, self.plan.database, self.plan.table
                 )));
             }
 
@@ -178,6 +186,9 @@ impl ShowCreateTableInterpreter {
                 )
                 .await
             }
+            DYNAMIC_TABLE_ENGINE => {
+                Self::show_create_dynamic_table_query(table, database, settings)
+            }
             _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => Ok(Self::show_attach_table_query(table, database)),
                 None => Self::show_create_table_query(table.get_table_info(), settings),
@@ -189,6 +200,14 @@ impl ShowCreateTableInterpreter {
         table_info: &TableInfo,
         settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
+        Self::format_create_table_query(table_info, settings, None)
+    }
+
+    fn format_create_table_query(
+        table_info: &TableInfo,
+        settings: &ShowCreateQuerySettings,
+        qualified_name: Option<&str>,
+    ) -> Result<String> {
         let name = &table_info.name;
         let engine = table_info.engine();
         let schema = table_info.schema();
@@ -196,42 +215,31 @@ impl ShowCreateTableInterpreter {
         let options = table_info.options();
         let sql_dialect = settings.sql_dialect;
         let force_quoted_ident = settings.force_quoted_ident;
-        let unquoted_ident_case_sensitive = settings.unquoted_ident_case_sensitive;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
         let hide_options_in_show_create_table = settings.hide_options_in_show_create_table;
 
-        let mut table_create_sql = format!(
-            "CREATE TABLE {} (\n",
+        let name = qualified_name.map(str::to_owned).unwrap_or_else(|| {
             display_ident(
                 name,
                 force_quoted_ident,
                 quoted_ident_case_sensitive,
-                sql_dialect
+                sql_dialect,
             )
-        );
-
-        if options.contains_key("TRANSIENT") {
-            table_create_sql = format!(
-                "CREATE TRANSIENT TABLE {} (\n",
-                display_ident(
-                    name,
-                    force_quoted_ident,
-                    quoted_ident_case_sensitive,
-                    sql_dialect
-                )
-            )
-        }
+        });
+        let transient = if options.contains_key("TRANSIENT") {
+            "TRANSIENT "
+        } else {
+            ""
+        };
+        let dynamic = if engine == DYNAMIC_TABLE_ENGINE {
+            "DYNAMIC "
+        } else {
+            ""
+        };
+        let mut table_create_sql = format!("CREATE {transient}{dynamic}TABLE {name} (\n");
 
         if options.contains_key(OPT_KEY_TEMP_PREFIX) {
-            table_create_sql = format!(
-                "CREATE TEMP TABLE {} (\n",
-                display_ident(
-                    name,
-                    force_quoted_ident,
-                    quoted_ident_case_sensitive,
-                    sql_dialect
-                )
-            )
+            table_create_sql = format!("CREATE TEMP TABLE {name} (\n");
         }
 
         // Append columns and indexes.
@@ -302,7 +310,10 @@ impl ShowCreateTableInterpreter {
                 let column_names_str = column_names.join(", ").to_string();
                 let mut options = Vec::with_capacity(index_field.options.len());
                 for (key, value) in index_field.options.iter() {
-                    let option = format!("{} = '{}'", key, value);
+                    if is_internal_table_index_option(key) {
+                        continue;
+                    }
+                    let option = format!("{} = {}", key, QuotedString(value, '\''));
                     options.push(option);
                 }
                 let mut index_str = format!(
@@ -333,19 +344,17 @@ impl ShowCreateTableInterpreter {
             let create_defs_str = format!("{}\n", create_defs.join(",\n"));
             table_create_sql.push_str(&create_defs_str);
         }
-        let table_engine = format!(") ENGINE={}", engine);
-        table_create_sql.push_str(table_engine.as_str());
+        table_create_sql.push(')');
+        if engine != DYNAMIC_TABLE_ENGINE {
+            table_create_sql.push_str(&format!(" ENGINE={engine}"));
+        }
 
+        let mut key_formatter =
+            StoredKeyFormatter::new(force_quoted_ident, quoted_ident_case_sensitive, sql_dialect);
         if let Some(partition_keys_str) = table_info.options().get(OPT_KEY_PARTITION_BY) {
             let mut exprs = parse_cluster_key_exprs(partition_keys_str)?;
-            let mut normalizer = ClusterKeyNormalizer {
-                force_quoted_ident,
-                unquoted_ident_case_sensitive,
-                quoted_ident_case_sensitive,
-                sql_dialect,
-            };
             for expr in exprs.iter_mut() {
-                expr.drive_mut(&mut normalizer);
+                expr.drive_mut(&mut key_formatter);
             }
             let partition_keys_str = exprs.into_iter().map(|e| format!("{e:#}")).join(", ");
             table_create_sql.push_str(format!(" PARTITION BY ({partition_keys_str})").as_str());
@@ -353,14 +362,8 @@ impl ShowCreateTableInterpreter {
 
         if let Some(cluster_keys_str) = table_info.meta.cluster_key_str() {
             let mut exprs = parse_cluster_key_exprs(cluster_keys_str)?;
-            let mut normalizer = ClusterKeyNormalizer {
-                force_quoted_ident,
-                unquoted_ident_case_sensitive,
-                quoted_ident_case_sensitive,
-                sql_dialect,
-            };
             for expr in exprs.iter_mut() {
-                expr.drive_mut(&mut normalizer);
+                expr.drive_mut(&mut key_formatter);
             }
             let cluster_keys_str = format!(
                 "({})",
@@ -384,11 +387,24 @@ impl ShowCreateTableInterpreter {
             }
         }
 
-        if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
-            table_create_sql.push_str(&Self::format_table_options(table_info.options()));
+        if let Some(ttl_str) = &table_info.meta.ttl {
+            let mut expr = parse_expr(&tokenize_sql(ttl_str)?, Dialect::default())?;
+            expr.drive_mut(&mut key_formatter);
+            table_create_sql.push_str(format!(" TTL {expr:#}").as_str());
         }
 
-        if engine != "ICEBERG" && engine != "DELTA" && !table_info.is_shared() {
+        if !hide_options_in_show_create_table || engine == "ICEBERG" {
+            // Dynamic tables are recreated from their query, not an existing snapshot.
+            // Only emit options accepted by CREATE DYNAMIC TABLE.
+            let options = table_info.options().iter().filter(|(key, _)| {
+                engine != DYNAMIC_TABLE_ENGINE
+                    || (is_valid_create_opt(key, &Engine::DynamicTable)
+                        && !key.eq_ignore_ascii_case("transient"))
+            });
+            table_create_sql.push_str(&Self::format_table_options(options));
+        }
+
+        if engine != "ICEBERG" && !table_info.is_shared() {
             if let Some(sp) = &table_info.meta.storage_params {
                 table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }
@@ -404,6 +420,26 @@ impl ShowCreateTableInterpreter {
             );
         }
         Ok(table_create_sql)
+    }
+
+    fn show_create_dynamic_table_query(
+        table: &dyn Table,
+        database: &str,
+        settings: &ShowCreateQuerySettings,
+    ) -> Result<String> {
+        let query = table
+            .options()
+            .get(OPT_KEY_AS_QUERY)
+            .ok_or_else(|| ErrorCode::InvalidOperation("dynamic table definition is missing"))?;
+        let name = format!(
+            "{}.{}",
+            QuotedIdent(database, '`'),
+            QuotedIdent(table.name(), '`')
+        );
+        let mut sql =
+            Self::format_create_table_query(table.get_table_info(), settings, Some(&name))?;
+        sql.push_str(&format!(" AS {query}"));
+        Ok(sql)
     }
 
     fn show_create_view_query(table: &dyn Table, database: &str) -> Result<String> {
@@ -467,7 +503,7 @@ impl ShowCreateTableInterpreter {
         }
 
         if !settings.hide_options_in_show_create_table {
-            create_sql.push_str(&Self::format_table_options(table_info.options()));
+            create_sql.push_str(&Self::format_table_options(table_info.options().iter()));
         }
 
         create_sql.push_str(&format!(" AS {}", definition.original_query));
@@ -536,5 +572,40 @@ impl ShowCreateTableInterpreter {
             table.name(),
             table_data_location,
         )
+    }
+}
+
+/// Re-quote already-resolved identifiers for SHOW CREATE. Does not fold case.
+#[derive(VisitorMut)]
+#[visitor(ColumnRef(enter))]
+struct StoredKeyFormatter {
+    force_quoted_ident: bool,
+    quoted_ident_case_sensitive: bool,
+    sql_dialect: Dialect,
+}
+
+impl StoredKeyFormatter {
+    fn new(
+        force_quoted_ident: bool,
+        quoted_ident_case_sensitive: bool,
+        sql_dialect: Dialect,
+    ) -> Self {
+        Self {
+            force_quoted_ident,
+            quoted_ident_case_sensitive,
+            sql_dialect,
+        }
+    }
+
+    fn enter_column_ref(&mut self, column: &mut ColumnRef) {
+        let ColumnID::Name(ident) = &mut column.column else {
+            return;
+        };
+        ident.quote = ident_opt_quote(
+            &ident.name,
+            self.force_quoted_ident,
+            self.quoted_ident_case_sensitive,
+            self.sql_dialect,
+        );
     }
 }

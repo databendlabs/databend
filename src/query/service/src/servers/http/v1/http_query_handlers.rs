@@ -15,11 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::parser::mask_log_sql_secrets;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::mask_connection_info;
+use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
+use databend_common_base::headers::HEADER_SESSION;
+use databend_common_base::headers::HEADER_SESSION_ID;
+use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
@@ -67,6 +72,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use super::query::MaskedRequest;
 use super::query::ResponseState;
 use super::query::execute_state::ARROW_FEATURE_NEGOTIATION_VERSION;
 use super::query::execute_state::LEGACY_ARROW_RESULT_VERSION;
@@ -521,12 +527,7 @@ async fn query_final_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .close_query(
-                &query_id,
-                CloseReason::Finalized,
-                &ctx.client_session_id,
-                true,
-            )
+            .close_query(&query_id, CloseReason::Finalized, Some(ctx))
             .await?
         {
             Some(query) => {
@@ -574,12 +575,7 @@ async fn query_cancel_handler(
         );
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager
-            .close_query(
-                &query_id,
-                CloseReason::Canceled,
-                &ctx.client_session_id,
-                true,
-            )
+            .close_query(&query_id, CloseReason::Canceled, Some(ctx))
             .await?
         {
             Some(_) => Ok(StatusCode::OK),
@@ -602,6 +598,7 @@ async fn query_state_handler(
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
+                query.check_owner(ctx)?;
                 if let Some(reason) = query.check_closed() {
                     Ok(StateResponse::closed(&query_id, reason.reason).into_response())
                 } else {
@@ -632,24 +629,16 @@ async fn query_page_handler(
         return Err(query_id_not_found(&query_id, &ctx.node_id));
     };
 
+    query.check_owner(ctx)?;
+    query.check_client_session_id(&ctx.client_session_id)?;
     ctx.try_refresh_worksheet_session().await.ok();
 
     let query_mem_stat = query.query_mem_stat.clone();
+    let query_io_stats = query.query_io_stats.clone();
 
     let query_page_handle = {
         let query_id = query_id.clone();
         async move {
-            if query.user_name != ctx.user_name {
-                return Err(poem::error::Error::from_string(
-                    format!(
-                        "Authentication error: query {} expected user {}, but got {}",
-                        query_id, query.user_name, ctx.user_name
-                    ),
-                    StatusCode::UNAUTHORIZED,
-                ));
-            }
-
-            query.check_client_session_id(&ctx.client_session_id)?;
             if let Some(st) = query.check_closed() {
                 info!(
                     "/query/{}/page/{} - query is close (reason: {:?})",
@@ -697,14 +686,22 @@ async fn query_page_handler(
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.mem_stat = query_mem_stat;
         tracking_payload.query_id = Some(query_id.clone());
-        tracking_payload.io_stats = Some(std::sync::Arc::new(
-            databend_common_base::runtime::IoStats::default(),
-        ));
+        tracking_payload.io_stats = Some(query_io_stats);
 
         tracking_payload.tracking(query_page_handle)
     };
 
     query_page_handle.await
+}
+
+/// Logs an error of `sql`, which is returned to its client as is. The
+/// rendered excerpt and message may quote credentials of the SQL.
+fn log_start_query_error(err: &ErrorCode, sql: &str) {
+    let (_, secrets) = mask_raw_sql_with_secrets(sql);
+    error!(
+        "Failed to start SQL query, error: {}",
+        secrets.scrub(&format!("{err:?}"))
+    );
 }
 
 #[poem::handler]
@@ -727,56 +724,50 @@ pub(crate) async fn query_handler(
             .as_ref()
             .map(|s| format!("(client_session_id={s})"))
             .unwrap_or("".to_string());
+        // Masked once for all the logs of this request.
+        let masked_sql = mask_log_sql_secrets(&req.sql);
         info!(
-            "New query request{}{}: {}",
+            "New query request{}{}: {:?}",
             agent_info,
             client_session_id_info,
-            mask_connection_info(&format!("{:?}", req))
+            // The Debug of a request masks the SQL and omits parameters.
+            MaskedRequest {
+                request: &req,
+                masked_sql: &masked_sql,
+            }
         );
         let sql = req.sql.clone();
 
         let http_query_manager = HttpQueryManager::instance();
         if ctx.is_query_id_from_client {
             if let Some(query) = http_query_manager.get_query(&ctx.query_id) {
-                return if query.user_name != ctx.user_name {
-                    Err(poem::Error::from_string(
-                        format!(
-                            "fail to start query: query_id {} already exists",
-                            ctx.query_id
-                        ),
-                        StatusCode::BAD_REQUEST,
-                    ))
-                } else {
-                    info!("get retry to start query: {}", ctx.query_id);
-                    let resp = query.get_response_page(0).await.map_err(|err| {
-                        info!(
-                            "/query/{}/page/{} - get response page error (reason: {})",
-                            ctx.query_id,
-                            0,
-                            err.message()
-                        );
-                        poem::Error::from_string(
-                            format!("{}", err.message()),
-                            StatusCode::NOT_FOUND,
-                        )
-                    })?;
-                    let encoding = ResponseEncoding {
-                        format: query_result_format,
-                        arrow_result_version: require_negotiated_arrow_result_version(
-                            &ctx.query_id,
-                            query_result_format,
-                            resp.state.arrow_result_version,
-                        )
-                        .map_err(HttpErrorCode::bad_request)?,
-                        arrow_features: resp.state.arrow_features.clone(),
-                    };
-                    Ok(QueryResponse::from_internal(
-                        ctx.query_id.clone(),
-                        resp,
-                        false,
-                        encoding,
-                    ))
+                query.check_owner(ctx)?;
+                info!("get retry to start query: {}", ctx.query_id);
+                let resp = query.get_response_page(0).await.map_err(|err| {
+                    info!(
+                        "/query/{}/page/{} - get response page error (reason: {})",
+                        ctx.query_id,
+                        0,
+                        err.message()
+                    );
+                    poem::Error::from_string(format!("{}", err.message()), StatusCode::NOT_FOUND)
+                })?;
+                let encoding = ResponseEncoding {
+                    format: query_result_format,
+                    arrow_result_version: require_negotiated_arrow_result_version(
+                        &ctx.query_id,
+                        query_result_format,
+                        resp.state.arrow_result_version,
+                    )
+                    .map_err(HttpErrorCode::bad_request)?,
+                    arrow_features: resp.state.arrow_features.clone(),
                 };
+                return Ok(QueryResponse::from_internal(
+                    ctx.query_id.clone(),
+                    resp,
+                    false,
+                    encoding,
+                ));
             };
         }
 
@@ -787,24 +778,23 @@ pub(crate) async fn query_handler(
 
         match HttpQuery::try_create(
             ctx,
-            req.clone(),
+            &req,
+            &masked_sql,
             arrow_result_version,
             arrow_features.clone(),
         )
         .await
         {
             Err(err) => {
-                let masked_sql = mask_connection_info(&sql);
-                let err = err.display_with_sql(&masked_sql);
-                error!("Failed to start SQL query, error: {:?}", err);
+                let err = err.display_with_sql(&sql);
+                log_start_query_error(&err, &sql);
                 ctx.set_fail();
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
-                if let Err(err) = query.start_query(sql.clone(), req.params.clone()).await {
-                    let masked_sql = mask_connection_info(&sql);
-                    let err = err.display_with_sql(&masked_sql);
-                    error!("Failed to start SQL query, error: {:?}", err);
+                if let Err(err) = query.start_query(sql.clone(), req.params.take()).await {
+                    let err = err.display_with_sql(&sql);
+                    log_start_query_error(&err, &sql);
                     ctx.set_fail();
                     return Ok(req.fail_to_start_sql(err).into_response());
                 }
@@ -838,11 +828,7 @@ pub(crate) async fn query_handler(
                 };
                 info!(
                     "Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                    &query.id,
-                    &resp.state,
-                    rows,
-                    next_page,
-                    mask_connection_info(&sql)
+                    query.id, resp.state, rows, next_page, masked_sql
                 );
                 query
                     .update_expire_time(false, resp.is_data_drained())
@@ -950,7 +936,7 @@ pub async fn heartbeat_handler(
     let mut nodes_to_forwards = vec![];
     for (node_id, queries) in body.node_to_queries {
         if node_id == local_id {
-            queries_to_remove.extend(HttpQueryManager::instance().on_heartbeat(queries));
+            queries_to_remove.extend(HttpQueryManager::instance().on_heartbeat(queries, ctx));
         } else if let Some(node) = ClusterDiscovery::instance()
             .find_node_by_id(&node_id)
             .await
@@ -988,6 +974,20 @@ pub async fn heartbeat_handler(
                 .expect("heartbeat request should contain auth header")
                 .to_owned(),
         );
+        // Preserve the caller's tenant and session identity on the destination
+        // node, including worksheet detection via the original User-Agent.
+        for name in [
+            HEADER_TENANT,
+            HEADER_CLIENT_CAPABILITIES,
+            HEADER_SESSION,
+            HEADER_SESSION_ID,
+            "cookie",
+            "user-agent",
+        ] {
+            if let Some(value) = req.headers().get(name) {
+                headers.insert(name, value.clone());
+            }
+        }
         for (node, body) in nodes_to_forwards {
             let uri = uri.clone();
             let method = method.clone();

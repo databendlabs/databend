@@ -169,13 +169,12 @@ impl SerializeAggregateStream {
         let AggregatePayload {
             bucket,
             ref payload,
-            max_partition_count,
         } = self.payload;
         match payload.aggregate_flush(&mut self.flush_state)? {
             Some(block) => {
                 self.nums += 1;
                 Ok(Some(block.add_meta(Some(
-                    AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, false),
+                    AggregateSerdeMeta::create_agg_payload(bucket, false),
                 ))?))
             }
             None => {
@@ -185,7 +184,7 @@ impl SerializeAggregateStream {
                     self.nums += 1;
                     let block = payload.empty_block(1);
                     Ok(Some(block.add_meta(Some(
-                        AggregateSerdeMeta::create_agg_payload(bucket, max_partition_count, true),
+                        AggregateSerdeMeta::create_agg_payload(bucket, true),
                     ))?))
                 } else {
                     Ok(None)

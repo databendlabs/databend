@@ -1,0 +1,4 @@
+# Readable even when this cluster does not run history ETL.
+statement ok
+SELECT table_name, heartbeat_node_id, batch_number, last_success_time,
+       last_error_time, last_error FROM system.history_etl;

@@ -184,11 +184,7 @@ impl RoleApi for RoleMgr {
         let req = UpsertPB::insert(ident, info).with(seq);
         let res = self.kv_api.upsert_pb(&req).await?;
 
-        if !can_replace && res.prev.is_some() {
-            return Ok(false);
-        }
-
-        Ok(true)
+        Ok(!(!can_replace && res.prev.is_some()))
     }
 
     #[async_backtrace::framed]
@@ -285,7 +281,7 @@ impl RoleApi for RoleMgr {
                 // But get ownerships should try to ensure success because in this version.
                 Err(err) => error!(
                     "deserialize key {} Got err {} while (list_ownerships)",
-                    &key, err
+                    key, err
                 ),
             }
         }

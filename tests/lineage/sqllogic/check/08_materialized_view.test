@@ -1,0 +1,160 @@
+# Materialized view traversal corresponds to setup/08_materialized_view.test.
+
+# The MV is a distinct hop with its own object domain and lineage kind: distance 1 stops at the
+# MV, distance 2 reaches the source table through the CREATE_MATERIALIZED_VIEW edge.
+query ITTTTTTT rowsort
+SELECT distance, source_object_domain, source_object_database, source_object_name,
+       target_object_domain, target_object_database, target_object_name,
+       parse_json(process)['lineage_kind']::STRING
+FROM get_lineage('lineage_history_mv.from_agg', 'TABLE', 'UPSTREAM', 2)
+----
+1 MATERIALIZED_VIEW lineage_history_mv agg_mv TABLE lineage_history_mv from_agg CTAS
+2 TABLE lineage_history_mv src MATERIALIZED_VIEW lineage_history_mv agg_mv CREATE_MATERIALIZED_VIEW
+
+# Column lineage crosses the MV using its logical columns, not the physical aggregate states.
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_mv.from_agg.total', 'COLUMN', 'UPSTREAM', 2)
+----
+1 lineage_history_mv agg_mv total lineage_history_mv from_agg total
+2 lineage_history_mv src a lineage_history_mv agg_mv total
+
+# count(*) has no source column: the MV object edge exists but cnt has no column mapping.
+query I
+SELECT count(*)
+FROM get_lineage('lineage_history_mv.agg_mv.cnt', 'COLUMN', 'UPSTREAM', 1)
+----
+0
+
+# The MV resolves in the MATERIALIZED_VIEW domain and not in the TABLE domain.
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
+FROM get_lineage('lineage_history_mv.agg_mv', 'MATERIALIZED_VIEW', 'UPSTREAM', 1)
+----
+1 lineage_history_mv src lineage_history_mv agg_mv
+
+query I
+SELECT count(*)
+FROM get_lineage('lineage_history_mv.agg_mv', 'TABLE', 'UPSTREAM', 1)
+----
+0
+
+# A derived MV column maps to both source columns.
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_mv.detail_mv.v', 'COLUMN', 'UPSTREAM', 1)
+----
+1 lineage_history_mv src a lineage_history_mv detail_mv v
+1 lineage_history_mv src b lineage_history_mv detail_mv v
+
+# A stale MV read (storage merged with the source delta, or recomputed) still stops at the MV.
+query ITTTTT
+SELECT distance, source_object_domain, source_object_database, source_object_name,
+       target_object_database, target_object_name
+FROM get_lineage('lineage_history_mv.from_stale_detail', 'TABLE', 'UPSTREAM', 1)
+----
+1 MATERIALIZED_VIEW lineage_history_mv detail_mv lineage_history_mv from_stale_detail
+
+# A query over src that an MV could have answered is attributed to src.
+query ITTTTT
+SELECT distance, source_object_domain, source_object_database, source_object_name,
+       target_object_database, target_object_name
+FROM get_lineage('lineage_history_mv.rewritten', 'TABLE', 'UPSTREAM', 1)
+----
+1 TABLE lineage_history_mv src lineage_history_mv rewritten
+
+# Downstream from a source column fans out to every MV logical column derived from it and then
+# continues through the MVs to their readers.
+query ITTTTTT rowsort
+SELECT distance, source_object_database, source_object_name, source_column_name,
+       target_object_database, target_object_name, target_column_name
+FROM get_lineage('lineage_history_mv.src.a', 'COLUMN', 'DOWNSTREAM', 2)
+----
+1 lineage_history_mv src a lineage_history_mv agg_mv total
+1 lineage_history_mv src a lineage_history_mv detail_mv v
+1 lineage_history_mv src a lineage_history_mv rewritten total
+2 lineage_history_mv agg_mv total lineage_history_mv from_agg total
+2 lineage_history_mv detail_mv v lineage_history_mv from_stale_detail v
+
+# Direct neighbors keep the MATERIALIZED_VIEW domain and orient column maps around the MV.
+query TTTTTT rowsort
+SELECT direction, object_domain, catalog, database, object_name,
+       to_string(column_neighbors)
+FROM get_lineage_neighbors('lineage_history_mv.agg_mv', 'MATERIALIZED_VIEW')
+----
+DOWNSTREAM TABLE default lineage_history_mv from_agg {"k":["k"],"total":["total"]}
+UPSTREAM TABLE default lineage_history_mv src {"k":["k"],"total":["a"]}
+
+# REFRESH MATERIALIZED VIEW moves data but is not a lineage process: the only edges into an MV are
+# its definition edges, and the MV drop left no edges behind.
+query TTI rowsort
+SELECT target_name, lineage_kind, count(*)
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_mv'
+  AND target_name IN ('agg_mv', 'detail_mv', 'dropped_mv', 'other_mv')
+GROUP BY target_name, lineage_kind
+----
+agg_mv CREATE_MATERIALIZED_VIEW 1
+detail_mv CREATE_MATERIALIZED_VIEW 1
+other_mv CREATE_MATERIALIZED_VIEW 1
+
+# Unlike CREATE_VIEW, the MV source is id-addressed because the source binding is pinned to the
+# table id. MV columns come from the persisted logical schema and are id-addressed as well.
+query BB
+SELECT
+  count_if(
+    lineage_kind = 'CREATE_MATERIALIZED_VIEW'
+    AND source_address_kind = 'ID'
+    AND target_address_kind = 'ID'
+    AND column_lineage['source_column_address_kind']::STRING = 'ID'
+    AND column_lineage['target_column_address_kind']::STRING = 'ID'
+    AND column_lineage['mappings'][0]['target']['id']::UInt64 IS NOT NULL
+    AND column_lineage['mappings'][0]['sources'][0]['id']::UInt64 IS NOT NULL
+  ) = 3,
+  count_if(
+    lineage_kind = 'CTAS'
+    AND target_name = 'from_agg'
+    AND source_object_type = 'MATERIALIZED_VIEW'
+    AND column_lineage['source_column_address_kind']::STRING = 'ID'
+  ) = 1
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_mv'
+----
+1 1
+
+# Renaming the source makes the MV temporarily invalid but does not break its binding, so the
+# id-addressed edge keeps resolving to the current name. A View edge would go inactive instead.
+statement ok
+ALTER TABLE lineage_history_mv.src RENAME TO src_renamed
+
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
+FROM get_lineage('lineage_history_mv.agg_mv', 'MATERIALIZED_VIEW', 'UPSTREAM', 1)
+----
+1 lineage_history_mv src_renamed lineage_history_mv agg_mv
+
+statement ok
+ALTER TABLE lineage_history_mv.src_renamed RENAME TO src
+
+# The source of other_mv was dropped and recreated under the same name, which permanently
+# invalidates the MV. The id-addressed edge (asserted present above) follows the binding and goes
+# inactive rather than attaching itself to the new table.
+query I
+SELECT count(*)
+FROM get_lineage('lineage_history_mv.other_mv', 'MATERIALIZED_VIEW', 'UPSTREAM', 1)
+----
+0
+
+statement ok
+DROP MATERIALIZED VIEW lineage_history_mv.other_mv
+
+statement ok
+DROP MATERIALIZED VIEW lineage_history_mv.agg_mv
+
+statement ok
+DROP MATERIALIZED VIEW lineage_history_mv.detail_mv
+
+statement ok
+DROP DATABASE lineage_history_mv

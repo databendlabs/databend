@@ -31,7 +31,15 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------+
 
 
-error: Expected number data type, but got [Null, Number(UInt64)]
+ast: covar_pop(NULL, b)
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| b      | Column(UInt64([1, 2, 3, 4])) |
+| Output | Null { len: 2 }              |
++--------+------------------------------+
+
 
 ast: covar_pop(a, x_null)
 evaluation (internal):

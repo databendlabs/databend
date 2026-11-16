@@ -109,3 +109,118 @@ drop stage replace_files;
 
 statement ok
 drop table replace_target;
+
+# Hash-distributed REPLACE must keep correct data and partition-pure blocks.
+statement ok
+create table replace_hash_target(id int, p int)
+partition by (p % 16) write_distribution_mode='hash'
+row_per_block=1000 block_per_segment=1000;
+
+statement ok
+insert into replace_hash_target
+select number::int, (number % 16)::int from numbers(24);
+
+statement ok
+replace into replace_hash_target on(id)
+select number::int, (number % 16)::int from numbers(2400);
+
+query II
+select count(*), sum(p) from replace_hash_target;
+----
+2400 18000
+
+statement ok
+set replace_into_shuffle_strategy = 1;
+
+statement ok
+replace into replace_hash_target on(id)
+select (number + 2400)::int, (number % 16)::int from numbers(2400);
+
+query II
+select count(*), sum(p) from replace_hash_target;
+----
+4800 36000
+
+query I
+select count(*) from (
+  select _block_name from replace_hash_target group by _block_name
+  having min(p % 16) != max(p % 16)
+);
+----
+0
+
+statement ok
+set replace_into_shuffle_strategy = 0;
+
+statement ok
+drop table replace_hash_target;
+
+# DELETE WHEN with a hash-distributed target.
+statement ok
+create table replace_delete_hash(id int, p int)
+partition by (p % 16) write_distribution_mode='hash';
+
+statement ok
+insert into replace_delete_hash values(0, 0), (1, 1);
+
+statement ok
+create table replace_delete_src(id int, p int, c int);
+
+statement ok
+insert into replace_delete_src values(0, 0, 0), (1, 2, 1), (2, 3, 1);
+
+statement ok
+replace into replace_delete_hash on(id) delete when c = 0
+select * from replace_delete_src;
+
+query II
+select count(*), sum(p) from replace_delete_hash;
+----
+2 5
+
+statement ok
+drop table replace_delete_hash;
+
+statement ok
+drop table replace_delete_src;
+
+# Hash routing must change the physical layout of distributed REPLACE INTO writes.
+statement ok
+set enable_distributed_replace_into = 1;
+
+statement ok
+create or replace table replace_layout_src(a int) row_per_block=128 block_per_segment=1000;
+
+statement ok
+insert into replace_layout_src select number::int from numbers(4096);
+
+statement ok
+create or replace table replace_layout_hash(a int, p int)
+partition by (p % 2) write_distribution_mode='hash'
+row_per_block=1000 block_per_segment=1000;
+
+statement ok
+create or replace table replace_layout_none(a int, p int)
+partition by (p % 2) row_per_block=1000 block_per_segment=1000;
+
+statement ok
+replace into replace_layout_hash on(a) select a, a from replace_layout_src;
+
+statement ok
+replace into replace_layout_none on(a) select a, a from replace_layout_src;
+
+query II
+select to_int64(h.row_count = n.row_count), to_int64(h.block_count < n.block_count)
+from (select row_count, block_count from fuse_snapshot('default', 'replace_layout_hash') order by timestamp desc limit 1) h
+cross join (select row_count, block_count from fuse_snapshot('default', 'replace_layout_none') order by timestamp desc limit 1) n;
+----
+1 1
+
+statement ok
+drop table replace_layout_src;
+
+statement ok
+drop table replace_layout_hash;
+
+statement ok
+drop table replace_layout_none;

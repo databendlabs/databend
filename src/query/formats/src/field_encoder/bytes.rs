@@ -137,6 +137,9 @@ impl FieldEncoderBytes {
         in_nested: bool,
     ) -> Result<()> {
         match &column {
+            Column::Encoded(c) => c.with_row(row_index, |column, row| {
+                self.write_field(column, row, out_buf, in_nested)
+            })?,
             Column::Null { .. } => self.write_null(out_buf),
             Column::EmptyArray { .. } => self.write_empty_array(out_buf),
             Column::EmptyMap { .. } => self.write_empty_map(out_buf),
@@ -221,11 +224,11 @@ impl FieldEncoderBytes {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) -> Result<()> {
-        if !column.validity.get_bit(row_index) {
+        if !column.validity().get_bit(row_index) {
             self.write_null(out_buf);
             Ok(())
         } else {
-            self.write_field(&column.column, row_index, out_buf, in_nested)
+            self.write_field(column.column(), row_index, out_buf, in_nested)
         }
     }
 

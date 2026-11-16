@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
@@ -239,7 +240,7 @@ impl Table for RecursiveCteMemoryTable {
         _ctx: Arc<dyn TableContext>,
         _plan: &databend_common_catalog::plan::DataSourcePlan,
         _pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "RecursiveCteMemoryTable does not support table scans",

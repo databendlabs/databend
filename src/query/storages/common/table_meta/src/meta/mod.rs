@@ -50,6 +50,7 @@ pub use utils::parse_storage_prefix;
 pub use utils::trim_object_prefix;
 pub(crate) use utils::trim_timestamp_to_milli_second;
 pub use utils::try_extract_uuid_str_from_path;
+pub use utils::try_extract_uuid_v7_timestamp_from_path;
 pub use utils::uuid_from_date_time;
 pub use v0::ColumnMeta as ColumnMetaV0;
 pub use versions::SegmentInfoVersion;

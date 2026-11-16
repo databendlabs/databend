@@ -364,6 +364,8 @@ pub enum TableDataType {
         params: Vec<AggregateFunctionParam>,
         argument_types: Vec<TableDataType>,
         state_type: Box<TableDataType>,
+        #[serde(default)]
+        state_version: u64,
     },
     // Only used to persist DataType in meta
     StageLocation,
@@ -405,8 +407,8 @@ impl DataSchema {
 
     #[inline]
     pub fn has_field(&self, name: &str) -> bool {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name() == name {
+        for field in &self.fields {
+            if field.name() == name {
                 return true;
             }
         }
@@ -776,6 +778,9 @@ impl TableSchema {
 
         let mut leaf_default_values = HashMap::with_capacity(self.num_fields());
         for (default_value, field) in default_values.iter().zip_eq(self.fields()) {
+            if is_internal_column_id(field.column_id) {
+                continue;
+            }
             let mut index = 0;
             let data_type = field.data_type();
             let column_ids = field.leaf_column_ids();
@@ -798,8 +803,8 @@ impl TableSchema {
 
     #[inline]
     pub fn has_field(&self, name: &str) -> bool {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name == name {
+        for field in &self.fields {
+            if field.name == name {
                 return true;
             }
         }
@@ -829,8 +834,8 @@ impl TableSchema {
 
     /// Find the index of the column with the given name.
     pub fn index_of(&self, name: &str) -> Result<FieldIndex> {
-        for i in 0..self.fields.len() {
-            if self.fields[i].name == name {
+        for (i, field) in self.fields.iter().enumerate() {
+            if field.name == name {
                 return Ok(i);
             }
         }
@@ -1255,6 +1260,10 @@ impl TableField {
         next_column_id: &mut ColumnId,
     ) {
         column_ids.push(*next_column_id);
+        // Internal columns have fixed IDs and do not allocate nested column IDs.
+        if is_internal_column_id(*next_column_id) {
+            return;
+        }
         match data_type.remove_nullable() {
             TableDataType::Tuple {
                 fields_name: _,
@@ -1406,11 +1415,13 @@ impl From<&TableDataType> for DataType {
                 params,
                 argument_types,
                 state_type,
+                state_version,
             } => DataType::AggregateState(Box::new(AggregateStateDataType {
                 function_name: function_name.clone(),
                 params: params.clone(),
                 argument_types: argument_types.iter().map(Into::into).collect(),
                 state_type: Box::new(state_type.as_ref().into()),
+                state_version: *state_version,
             })),
             TableDataType::Interval => DataType::Interval,
             TableDataType::Number(ty) => DataType::Number(*ty),
@@ -1784,6 +1795,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
                 .map(infer_schema_type)
                 .collect::<Result<Vec<_>>>()?,
             state_type: Box::new(infer_schema_type(&state.state_type)?),
+            state_version: state.state_version,
         }),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),

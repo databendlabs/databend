@@ -172,10 +172,7 @@ mod tests {
                 let mut expected = (0..k).collect::<Vec<_>>();
                 let mut core = AlgoL::new(k.try_into().unwrap(), StdRng::seed_from_u64(seed));
                 let mut sample_index = k - 1;
-                loop {
-                    let Some(next) = sample_index.checked_add(core.search()) else {
-                        break;
-                    };
+                while let Some(next) = sample_index.checked_add(core.search()) {
                     sample_index = next;
                     if sample_index >= ROWS {
                         break;

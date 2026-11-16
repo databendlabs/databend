@@ -49,7 +49,7 @@ pub struct ShowCreateCatalogStmt {
 
 impl Display for ShowCreateCatalogStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "SHOW CREATE CATALOG {}", &self.catalog)
+        write!(f, "SHOW CREATE CATALOG {}", self.catalog)
     }
 }
 

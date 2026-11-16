@@ -15,9 +15,8 @@
 #![allow(internal_features)]
 #![allow(clippy::ptr_arg)]
 #![feature(core_intrinsics)]
-#![feature(allocator_api)]
+#![feature(allocator_ext)]
 #![feature(arbitrary_self_types)]
-#![feature(ptr_metadata)]
 #![feature(trusted_len)]
 
 extern crate core;

@@ -36,3 +36,31 @@ drop role role2;
 
 statement ok
 show roles;
+
+# test_cases.yaml runs rbac_current as 1.2.833 -> current and current -> 1.2.833.
+# Verify the known permissions in both directions. An old reader does not know
+# ATTACH TABLE; a current reader sees it only when written by a current writer.
+# Normalize comma spacing and check readable/updatable grants, not preservation
+# of unknown bits after an old reader rewrites the role.
+query T
+select replace(replace(privileges, ', ', ','), ',ATTACH TABLE', '') from show_grants('role', 'role_attach_table') where object_name = 'attach_table_compat';
+----
+USAGE,CREATE,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT
+
+statement ok
+grant select on attach_table_compat.* to role 'role_attach_table';
+
+# Remove another known privilege to avoid the ALL shorthand on both versions.
+statement ok
+revoke insert on attach_table_compat.* from role 'role_attach_table';
+
+query T
+select replace(replace(privileges, ', ', ','), ',ATTACH TABLE', '') from show_grants('role', 'role_attach_table') where object_name = 'attach_table_compat';
+----
+USAGE,CREATE,SELECT,UPDATE,DELETE,DROP,ALTER,GRANT
+
+statement ok
+drop role role_attach_table;
+
+statement ok
+drop database attach_table_compat;

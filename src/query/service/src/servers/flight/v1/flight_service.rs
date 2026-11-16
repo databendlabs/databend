@@ -46,6 +46,7 @@ use crate::servers::flight::request_builder::RequestGetter;
 use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::flight::v1::network::MAX_FRAMES_IN_FLIGHT;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
@@ -154,14 +155,16 @@ impl FlightService for DatabendQueryFlightService {
             Status::invalid_argument(format!("Failed to parse DoExchangeParams: {}", e))
         })?;
 
-        let sender = DataExchangeManager::instance().handle_do_exchange(
+        let router = DataExchangeManager::instance().handle_do_exchange(
             &params.query_id,
             &params.exchange_id,
             params.num_threads,
+            params.max_bytes_per_connection,
         )?;
 
         let mut stream = req.into_inner();
-        let (tx, rx) = async_channel::bounded(1);
+        // A response per request in flight.
+        let (tx, rx) = async_channel::bounded(MAX_FRAMES_IN_FLIGHT);
 
         GlobalIORuntime::instance().spawn(async move {
             while let Some(result) = stream.next().await {
@@ -169,16 +172,17 @@ impl FlightService for DatabendQueryFlightService {
                     break;
                 };
 
-                if sender.add_data(flight_data).await.is_err() {
-                    break; // Receiver closed
+                if router.route_frame(flight_data).await.is_err() {
+                    // Receiver closed
+                    break;
                 }
 
                 // Send pong (empty response signals readiness for next ping)
-                if let Err(_cause) = tx.try_send(Ok(FlightData::default())) {
+                if tx.send(Ok(FlightData::default())).await.is_err() {
                     break;
                 }
             }
-            // sender is dropped here → closes sub-queues, notifies processors
+            // Dropping the router releases this connection's channel senders.
         });
 
         Ok(RawResponse::new(Box::pin(rx)))

@@ -30,12 +30,12 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
@@ -102,7 +102,7 @@ impl TableMetaFunc for FuseVirtualColumnBlockMeta {
 
         'segments: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for (location, segment) in chunk.iter().zip(segments) {
                 let segment = segment?;
@@ -197,7 +197,7 @@ fn build_virtual_column_metas(
                     .get(source_column_id)
                     .cloned()
                     .unwrap_or_else(|| source_column_id.to_string());
-                format!("{}.{}", &source_name, &path)
+                format!("{}.{}", source_name, path)
             })
             .unwrap_or_else(|| column_id.to_string());
 
@@ -239,15 +239,13 @@ fn build_virtual_column_metas(
         UInt64Type::from_data(lens),
         UInt64Type::from_data(num_values),
         StringType::from_data(data_types),
-        Column::Nullable(Box::new(NullableColumn::new(
-            Column::Tuple(vec![
-                VariantType::from_data(mins),
-                VariantType::from_data(maxes),
-                UInt64Type::from_data(null_counts),
-                UInt64Type::from_data(in_memory_sizes),
-            ]),
-            column_stat_bitmap.into(),
-        ))),
+        Column::Tuple(vec![
+            VariantType::from_data(mins),
+            VariantType::from_data(maxes),
+            UInt64Type::from_data(null_counts),
+            UInt64Type::from_data(in_memory_sizes),
+        ])
+        .wrap_nullable(Some(column_stat_bitmap.into())),
     ]));
 
     let data_type = TableDataType::Array(Box::new(TableDataType::Tuple {
@@ -310,7 +308,7 @@ fn build_virtual_path_statistic(
         for (column_id, path_count) in sorted_path_counts {
             let path_name = path_map
                 .get(column_id)
-                .map(|(_, path)| format!("{}.{}", &source_name, &path))
+                .map(|(_, path)| format!("{}.{}", source_name, path))
                 .unwrap_or_else(|| column_id.to_string());
 
             column_ids.push(*column_id);

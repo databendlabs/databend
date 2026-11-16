@@ -66,7 +66,7 @@ impl Binder {
         self.init_cte(bind_context, with)?;
 
         let target_table_identifier =
-            TableIdentifier::new(self, catalog, database, table, &None, table_alias);
+            TableIdentifier::new(self, catalog, database, table, table_alias);
 
         let target_table_reference = TableReference::Table {
             span: None,
@@ -74,7 +74,6 @@ impl Binder {
                 catalog: catalog.clone(),
                 database: database.clone(),
                 table: table.clone(),
-                branch: None,
             },
             alias: table_alias.clone(),
             temporal: None,
@@ -111,6 +110,7 @@ impl Binder {
             strategy: MutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
+            expected_ttl: None,
         };
 
         let plan = self.bind_mutation(bind_context, mutation).await?;
@@ -131,6 +131,7 @@ impl Binder {
         else {
             return Ok(plan);
         };
+        let s_expr = s_expr.logical()?;
         let RelOperator::Mutation(mutation) = s_expr.plan() else {
             return Ok(plan);
         };
@@ -308,7 +309,7 @@ impl Binder {
             }
 
             if let Some(update) = &mut eval.update {
-                for (_, expr) in update.iter_mut() {
+                for expr in update.values_mut() {
                     for col in &any_columns {
                         expr.replace_column(col.old, col.new)?
                     }
@@ -316,7 +317,7 @@ impl Binder {
             }
         }
 
-        for (_, column) in mutation.field_index_map.iter_mut() {
+        for column in mutation.field_index_map.values_mut() {
             if let Some(col) = any_columns.iter().find(|c| c.old.to_string() == *column) {
                 *column = col.new.to_string()
             };
@@ -345,7 +346,7 @@ impl Binder {
             unreachable!()
         };
         Ok(Plan::DataMutation {
-            s_expr,
+            s_expr: Box::new((*s_expr).into()),
             schema,
             metadata,
         })

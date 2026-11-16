@@ -1,0 +1,77 @@
+# Materialized view boundary: a materialized view is a query-defined object like a View, so it is a
+# CREATE_MATERIALIZED_VIEW target of its source table and a distinct hop for readers. Unlike a View
+# it is a real Fuse table with a persisted logical schema and an id-pinned source binding, so both
+# the object and its columns are id-addressed.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_mv
+
+statement ok
+CREATE DATABASE lineage_history_mv
+
+statement ok
+CREATE TABLE lineage_history_mv.src(k INT, a INT, b INT)
+
+statement ok
+INSERT INTO lineage_history_mv.src VALUES (1, 10, 100), (2, 20, 200)
+
+# An aggregating MV stores aggregate states physically; lineage must expose the logical columns.
+# cnt has no source column, so the object edge carries mappings for k and total only.
+statement ok
+CREATE MATERIALIZED VIEW lineage_history_mv.agg_mv AS
+SELECT k, sum(a) AS total, count(*) AS cnt FROM lineage_history_mv.src GROUP BY k
+
+# A detail MV keeps rows; v is derived from two source columns.
+statement ok
+CREATE MATERIALIZED VIEW lineage_history_mv.detail_mv AS
+SELECT k, a + b AS v FROM lineage_history_mv.src
+
+statement ok
+REFRESH MATERIALIZED VIEW lineage_history_mv.agg_mv
+
+statement ok
+REFRESH MATERIALIZED VIEW lineage_history_mv.detail_mv
+
+# Reading a fresh MV is served from its storage. Lineage stops at the MV, not at src or at the
+# physical state columns.
+statement ok
+CREATE TABLE lineage_history_mv.from_agg AS
+SELECT k, total FROM lineage_history_mv.agg_mv
+
+# A query over src that an MV could answer stays attributed to src: the rewrite is a cost-based
+# execution choice and lineage is captured from the bound plan.
+statement ok
+CREATE TABLE lineage_history_mv.rewritten AS
+SELECT k, sum(a) AS total FROM lineage_history_mv.src GROUP BY k
+
+# After an append the MV is stale and a read merges storage with the source delta (or recomputes
+# from the source). The boundary must hold regardless of how the read is served.
+statement ok
+INSERT INTO lineage_history_mv.src VALUES (3, 30, 300)
+
+statement ok
+CREATE TABLE lineage_history_mv.from_stale_detail AS
+SELECT v FROM lineage_history_mv.detail_mv
+
+# A materialized view cannot be undropped, so DROP emits a deletion tombstone immediately.
+statement ok
+CREATE MATERIALIZED VIEW lineage_history_mv.dropped_mv AS
+SELECT a FROM lineage_history_mv.src
+
+statement ok
+DROP MATERIALIZED VIEW lineage_history_mv.dropped_mv
+
+# Dropping and recreating the source under the same name permanently invalidates the MV because
+# the binding is pinned to the old table id. The check suite asserts the edge goes inactive.
+statement ok
+CREATE TABLE lineage_history_mv.other(k INT, a INT, b INT)
+
+statement ok
+CREATE MATERIALIZED VIEW lineage_history_mv.other_mv AS
+SELECT k, a FROM lineage_history_mv.other
+
+statement ok
+DROP TABLE lineage_history_mv.other
+
+statement ok
+CREATE TABLE lineage_history_mv.other(k INT, a INT, b INT)

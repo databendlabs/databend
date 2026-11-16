@@ -67,8 +67,8 @@ use log::info;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::CopyIntoTable;
 use crate::physical_plans::CopyIntoTableSource;
 use crate::physical_plans::Exchange;
@@ -216,12 +216,12 @@ impl CopyIntoTableInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
+        let update_stream_meta = build_update_stream_reqs(&self.ctx, false).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),
             *(bind_context.clone()),
-            *s_expr.clone(),
+            s_expr.planned()?.clone(),
             metadata.clone(),
             formatted_ast.clone(),
             false,

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Query Profiling</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .panel {
+            max-width: 1200px;
+            margin: 0 auto 20px auto;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel label {
+            margin-right: 12px;
+        }
+
+        .panel input {
+            width: 70px;
+        }
+
+        .panel button {
+            margin-right: 6px;
+        }
+
+        #status {
+            margin-top: 12px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+
+        #flamegraph {
+            display: block;
+            width: 100%;
+            height: 85vh;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+<div class="panel">
+    <h2>{{TITLE}}</h2>
+    <label>Frequency (Hz) <input id="frequency" type="number" value="{{FREQUENCY}}" min="1" max="{{MAX_FREQUENCY}}"></label>
+    <label>Max duration (s) <input id="seconds" type="number" value="{{SECONDS}}" min="1" max="{{MAX_SECONDS}}"></label>
+    <button id="start">Start</button>
+    <button id="stop">Stop</button>
+    <label style="margin-left: 24px;">Auto refresh
+        <select id="interval">
+            <option value="0">off</option>
+            <option value="10">10s</option>
+            <option value="30" selected>30s</option>
+            <option value="60">60s</option>
+        </select>
+    </label>
+    <button id="refresh">Refresh now</button>
+    <div id="status">Loading status...</div>
+</div>
+<div class="panel">
+    <iframe id="flamegraph"></iframe>
+</div>
+<script>
+    // Resolve the API against this page, `/v1/perf` or `/v1/queries/<id>/perf`, so it keeps
+    // working behind a proxy that mounts the admin API under a prefix.
+    const base = location.pathname.replace(/\/+$/, '') + '/';
+    const statusBox = document.getElementById('status');
+    const frame = document.getElementById('flamegraph');
+    let timer = null;
+    let profiling = false;
+
+    function describe(response) {
+        const nodes = Object.entries(response.nodes || {});
+        if (nodes.length === 0) {
+            return 'Not running and no profile on any node.';
+        }
+        return nodes.map(([node, s]) => {
+            let line = node + ': ' + s.state + ', ' + s.elapsed_secs + 's';
+            if (s.message) {
+                line += ', ' + s.message;
+            }
+            return line;
+        }).join('\n');
+    }
+
+    async function call(method, path) {
+        const resp = await fetch(base + path, {method});
+        const text = await resp.text();
+        try {
+            const response = JSON.parse(text);
+            profiling = Object.values(response.nodes || {}).some(s => s.state === 'profiling');
+            statusBox.textContent = describe(response);
+            return response;
+        } catch (e) {
+            profiling = false;
+            statusBox.textContent = text;
+            return null;
+        }
+    }
+
+    function loadFlamegraph() {
+        frame.src = base + 'flamegraph?t=' + Date.now();
+    }
+
+    async function refresh() {
+        const wasProfiling = profiling;
+        await call('GET', 'status');
+        // Reload while sampling, and once more to show the final profile.
+        if (profiling || wasProfiling) {
+            loadFlamegraph();
+        }
+        schedule();
+    }
+
+    function schedule() {
+        clearTimeout(timer);
+        const seconds = Number(document.getElementById('interval').value);
+        if (seconds > 0 && profiling) {
+            timer = setTimeout(refresh, seconds * 1000);
+        }
+    }
+
+    document.getElementById('start').onclick = async () => {
+        const frequency = document.getElementById('frequency').value;
+        const seconds = document.getElementById('seconds').value;
+        await call('POST', 'start?frequency=' + frequency + '&seconds=' + seconds);
+        schedule();
+    };
+    document.getElementById('stop').onclick = async () => {
+        await call('POST', 'stop');
+        loadFlamegraph();
+        schedule();
+    };
+    document.getElementById('refresh').onclick = () => {
+        loadFlamegraph();
+        refresh();
+    };
+    document.getElementById('interval').onchange = schedule;
+
+    call('GET', 'status').then(response => {
+        if (response && Object.keys(response.nodes || {}).length > 0) {
+            loadFlamegraph();
+        }
+        schedule();
+    });
+</script>
+</body>
+</html>

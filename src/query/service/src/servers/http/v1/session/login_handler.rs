@@ -32,6 +32,7 @@ use crate::sessions::TableContextTableAccess;
 
 #[derive(Deserialize, Clone)]
 struct LoginRequest {
+    pub catalog: Option<String>,
     pub database: Option<String>,
     pub role: Option<String>,
     pub settings: Option<BTreeMap<String, String>>,
@@ -63,11 +64,18 @@ async fn check_login(
 ) -> databend_common_exception::Result<()> {
     let session = &ctx.session;
     let table_ctx = session.create_query_context(ctx.version).await?;
-    if let Some(database) = &req.database {
-        let cat = session.get_current_catalog();
-        let cat = table_ctx.get_catalog(&cat).await?;
-        cat.get_database(&ctx.session.get_current_tenant(), database)
-            .await?;
+    // Check `database` in the catalog the client will use for its queries,
+    // and reject an unknown catalog at login time.
+    let catalog = req.catalog.as_deref().filter(|c| !c.is_empty());
+    if catalog.is_some() || req.database.is_some() {
+        let catalog = catalog
+            .map(str::to_string)
+            .unwrap_or_else(|| session.get_current_catalog());
+        let cat = table_ctx.get_catalog(&catalog).await?;
+        if let Some(database) = &req.database {
+            cat.get_database(&ctx.session.get_current_tenant(), database)
+                .await?;
+        }
     }
     if let Some(role_name) = &req.role {
         session.set_current_role_checked(role_name).await?;

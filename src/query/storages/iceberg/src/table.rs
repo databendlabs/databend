@@ -20,6 +20,7 @@ use std::sync::Arc;
 use arrow_schema::Schema;
 use async_trait::async_trait;
 use chrono::Utc;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumnType;
@@ -55,6 +56,7 @@ use databend_common_storage::IcebergFileIO;
 use databend_common_storages_orc::ORCSource;
 use databend_common_storages_orc::StripeDecoder;
 use databend_common_storages_parquet::ParquetReaderBuilder;
+use databend_common_storages_parquet::ParquetSchemaResolver;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -68,6 +70,8 @@ use crate::IcebergMutableCatalog;
 use crate::append::IcebergCommitSink;
 use crate::append::IcebergDataFileWriter;
 use crate::credential::with_refreshing_credentials;
+use crate::parquet_schema::IcebergParquetSchemaResolver;
+use crate::parquet_schema::NAME_MAPPING_PROPERTY;
 use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
@@ -76,6 +80,9 @@ use crate::statistics::IcebergStatistics;
 const ICEBERG_TABLE_FORMAT_OPT: &str = "write.format.default";
 const ICEBERG_TABLE_FORMAT_OPT_ORC: &str = "orc";
 const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
+/// Set by [`IcebergTable::navigate_to`] so that every node rebuilding the table from
+/// `engine_options` scans the same snapshot as the node that bound the query.
+const ICEBERG_SNAPSHOT_ID_OPT: &str = "iceberg.snapshot_id";
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
@@ -95,6 +102,7 @@ impl IcebergTable {
     /// create a new table on the table directory
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let (table, statistics) = Self::parse_engine_options(&info.meta.engine_options)?;
+        let snapshot_id = Self::parse_snapshot_id(&info.meta.engine_options)?;
         let catalog = IcebergMutableCatalog::try_create(info.catalog_info.clone())?;
         let catalog = catalog.iceberg_catalog();
         let table = with_refreshing_credentials(catalog.clone(), table)?;
@@ -102,10 +110,23 @@ impl IcebergTable {
         Ok(Box::new(Self {
             info,
             table,
-            snapshot_id: None,
+            snapshot_id,
             statistics,
             catalog,
         }))
+    }
+
+    fn parse_snapshot_id(options: &BTreeMap<String, String>) -> Result<Option<i64>> {
+        options
+            .get(ICEBERG_SNAPSHOT_ID_OPT)
+            .map(|id| {
+                id.parse::<i64>().map_err(|err| {
+                    ErrorCode::ReadTableDataError(format!(
+                        "Invalid {ICEBERG_SNAPSHOT_ID_OPT} {id}: {err}"
+                    ))
+                })
+            })
+            .transpose()
     }
 
     pub fn iceberg_table(&self) -> &iceberg::table::Table {
@@ -169,9 +190,11 @@ impl IcebergTable {
             field.column_id = field_id;
             fields.push(field);
         }
+        let metadata: BTreeMap<String, String> =
+            arrow_schema.metadata().clone().into_iter().collect();
         Ok(TableSchema {
             fields,
-            metadata: arrow_schema.metadata().clone().into_iter().collect(),
+            metadata,
             next_column_id: 0,
         })
     }
@@ -373,7 +396,24 @@ impl IcebergTable {
                 )
             });
         } else {
-            let arrow_schema: Schema = table_schema.as_ref().into();
+            // TableSchema's Arrow conversion does not retain Iceberg field IDs,
+            // especially nested IDs. The initial reader needs the catalog schema
+            // just like the per-file readers rebuilt after resolving name mapping.
+            let arrow_schema = schema_to_arrow_schema(
+                self.table.metadata().current_schema().as_ref(),
+            )
+            .map_err(|e| {
+                ErrorCode::ReadTableDataError(format!("Cannot convert Iceberg schema: {e}"))
+            })?;
+            let schema_resolver: Arc<dyn ParquetSchemaResolver> =
+                Arc::new(IcebergParquetSchemaResolver::new(
+                    arrow_schema.clone(),
+                    self.table
+                        .metadata()
+                        .properties()
+                        .get(NAME_MAPPING_PROPERTY)
+                        .map(String::as_str),
+                )?);
             let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
             let topk = plan
                 .push_downs
@@ -389,6 +429,7 @@ impl IcebergTable {
                 arrow_schema.clone(),
             )?
             .with_options(read_options)
+            .with_schema_resolver(schema_resolver)
             .with_push_downs(plan.push_downs.as_ref());
 
             if !need_row_number {
@@ -437,14 +478,42 @@ impl IcebergTable {
             self.table.scan()
         };
 
+        // iceberg-rust binds select/filter against the snapshot's schema, which
+        // can lag behind the current schema (rename-only transactions, time
+        // travel). Databend plans with current names, so translate them through
+        // field IDs; anything the snapshot cannot bind stays unpushed.
+        let metadata = self.table.metadata();
+        let snapshot = if let Some(id) = self.snapshot_id {
+            metadata.snapshot_by_id(id)
+        } else {
+            metadata.current_snapshot()
+        };
+        let current_schema = metadata.current_schema();
+        let snapshot_schema = snapshot
+            .map(|snapshot| snapshot.schema(metadata))
+            .transpose()
+            .map_err(|error| {
+                ErrorCode::TableSchemaMismatch(format!("Iceberg snapshot schema: {error}"))
+            })?
+            .unwrap_or_else(|| current_schema.clone());
         if let Some(push_downs) = &push_downs {
             if let Some(projection) = &push_downs.projection {
+                // Columns added after the snapshot are not selectable there.
+                // Databend's reader still resolves every projected field itself.
                 let select_fields =
-                    Self::projection_to_iceberg_select_fields(projection, &self.schema())?;
+                    Self::projection_to_iceberg_select_fields(projection, &self.schema())?
+                        .into_iter()
+                        .filter_map(|name| {
+                            let id = current_schema.field_id_by_name(&name)?;
+                            snapshot_schema.name_by_field_id(id).map(str::to_owned)
+                        })
+                        .collect::<Vec<_>>();
                 scan = scan.select(select_fields);
             }
             if let Some(filter) = &push_downs.filters {
-                let (_, predicate) = PredicateBuilder::build(&filter.filter);
+                let (_, predicate) = PredicateBuilder::new(&self.schema())
+                    .bind_to_snapshot(current_schema, &snapshot_schema)
+                    .build(&filter.filter);
                 scan = scan.with_filter(predicate)
             }
         }
@@ -649,7 +718,7 @@ impl Table for IcebergTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline)
     }
@@ -673,14 +742,36 @@ impl Table for IcebergTable {
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
-        _overwrite: bool,
+        overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
+        if overwrite {
+            // The sink always commits a fast append, which keeps the files of the previous
+            // snapshot. Publishing the rows as new files and dropping the old manifests is not
+            // implemented yet, so reject instead of silently appending.
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "INSERT OVERWRITE is not supported for the table '{}' which uses the '{}' engine",
+                self.get_table_info().desc,
+                self.get_table_info().engine(),
+            )));
+        }
         pipeline.try_resize(1)?;
         pipeline.add_sink(|input| IcebergCommitSink::try_create(input, ctx.clone(), self))?;
         Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
+        // Dropping every data file needs a snapshot that does not carry the current manifests
+        // forward; the default implementation of `truncate` is a silent no-op, which reports
+        // success while leaving all rows in place.
+        Err(ErrorCode::TableEngineNotSupported(format!(
+            "TRUNCATE TABLE is not supported for the table '{}' which uses the '{}' engine",
+            self.get_table_info().desc,
+            self.get_table_info().engine(),
+        )))
     }
 
     fn table_args(&self) -> Option<TableArgs> {
@@ -747,11 +838,30 @@ impl Table for IcebergTable {
                 "No historical data found at given point",
             ));
         }
-        let (table, statistics) = Self::parse_engine_options(&self.info.meta.engine_options)?;
+        let snapshot_id = snapshot_id.expect("checked above");
+        let (table, _) = Self::parse_engine_options(&self.info.meta.engine_options)?;
+        // The navigated snapshot has to travel with the table info: the coordinator plans the
+        // scan, but the pipeline is rebuilt from `engine_options` on every node (and on the
+        // coordinator again for the actual read), which would otherwise scan the current
+        // snapshot.
+        let snapshot = table
+            .metadata()
+            .snapshot_by_id(snapshot_id)
+            .ok_or_else(|| {
+                ErrorCode::TableHistoricalDataNotFound(format!(
+                    "Snapshot {snapshot_id} not found in table '{}'",
+                    self.name()
+                ))
+            })?;
+        let statistics = IcebergStatistics::parse_snapshot(&table, snapshot).await?;
+        let mut info = self.info.clone();
+        info.meta
+            .engine_options
+            .insert(ICEBERG_SNAPSHOT_ID_OPT.to_string(), snapshot_id.to_string());
         Ok(Arc::new(IcebergTable {
-            info: self.info.clone(),
+            info,
             table,
-            snapshot_id,
+            snapshot_id: Some(snapshot_id),
             statistics,
             catalog: self.catalog.clone(),
         }))

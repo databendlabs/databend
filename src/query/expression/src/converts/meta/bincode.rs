@@ -156,10 +156,8 @@ impl From<LegacyColumn> for Column {
             ))),
             LegacyColumn::Bitmap(str_col) => Column::Bitmap(BinaryColumn::from(str_col)),
             LegacyColumn::Nullable(nullable_col) => {
-                Column::Nullable(Box::new(NullableColumn::<AnyType> {
-                    column: nullable_col.column.into(),
-                    validity: nullable_col.validity,
-                }))
+                let column: Column = nullable_col.column.into();
+                column.wrap_nullable(Some(nullable_col.validity))
             }
             LegacyColumn::Tuple(tuple) => {
                 Column::Tuple(tuple.into_iter().map(|c| c.into()).collect())
@@ -201,6 +199,7 @@ impl From<Scalar> for LegacyScalar {
 impl From<Column> for LegacyColumn {
     fn from(value: Column) -> Self {
         match value {
+            Column::Encoded(col) => LegacyColumn::from(col.decode()),
             Column::Null { len } => LegacyColumn::Null { len },
             Column::EmptyArray { len } => LegacyColumn::EmptyArray { len },
             Column::EmptyMap { len } => LegacyColumn::EmptyMap { len },
@@ -230,9 +229,10 @@ impl From<Column> for LegacyColumn {
             })),
             Column::Bitmap(str_col) => LegacyColumn::Bitmap(LegacyBinaryColumn::from(str_col)),
             Column::Nullable(nullable_col) => {
+                let (column, validity) = nullable_col.destructure();
                 LegacyColumn::Nullable(Box::new(LegacyNullableColumn {
-                    column: nullable_col.column.into(),
-                    validity: nullable_col.validity,
+                    column: column.into(),
+                    validity,
                 }))
             }
             Column::Tuple(tuple) => {

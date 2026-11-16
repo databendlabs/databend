@@ -1,0 +1,32 @@
+== CREATE TABLE IF NOT EXISTS on an existing table keeps its owner
+OWNERSHIP	if_not_exists_owner_role
+OWNERSHIP	if_not_exists_owner_role
+same table
+denied
+42
+== CREATE CONNECTION IF NOT EXISTS on an existing connection keeps its owner
+OWNERSHIP	if_not_exists_owner_role
+OWNERSHIP	if_not_exists_owner_role
+denied
+denied
+if_not_exists_conn	s3
+owned before DROP: 1
+owned after DROP: 0
+== CREATE STAGE IF NOT EXISTS on an existing object keeps its owner
+OWNERSHIP	if_not_exists_owner_role
+OWNERSHIP	if_not_exists_owner_role
+denied
+owned before DROP: 1
+owned after DROP: 0
+== CREATE SEQUENCE IF NOT EXISTS on an existing object keeps its owner
+OWNERSHIP	if_not_exists_owner_role
+OWNERSHIP	if_not_exists_owner_role
+denied
+owned before DROP: 1
+owned after DROP: 0
+== CREATE FUNCTION IF NOT EXISTS on an existing object keeps its owner
+OWNERSHIP	if_not_exists_owner_role
+OWNERSHIP	if_not_exists_owner_role
+denied
+owned before DROP: 1
+owned after DROP: 0

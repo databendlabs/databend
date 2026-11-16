@@ -435,3 +435,37 @@ select * from (SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP
 
 statement error
 SELECT  quantity, brand, segment, SUM (quantity) FROM sales GROUP BY    brand, rollup(quantity), all;
+
+query III
+SELECT number % 3, number % 3 + 1, count() FROM numbers(10) GROUP BY number % 3, number % 3 + 1 ORDER BY 1
+----
+0 1 4
+1 2 3
+2 3 3
+
+# A non-deterministic group item is not determined by the group items it uses
+query I
+SELECT count() FROM (SELECT number % 3 FROM numbers(100) GROUP BY number % 3, number % 3 + rand() + 1)
+----
+100
+
+# Grouping equates +0.0 and -0.0, which atan2 tells apart: a float key does not determine it
+statement ok
+CREATE OR REPLACE TABLE t_signed_zero(z DOUBLE NOT NULL)
+
+statement ok
+INSERT INTO t_signed_zero VALUES (0.0), (-0.0)
+
+query I
+SELECT count(*) FROM (SELECT count(*) FROM t_signed_zero GROUP BY z, atan2(z, -1.0))
+----
+2
+
+# Without a constant too: atan2(+0.0, +0.0) = +0.0 and atan2(-0.0, -0.0) = -pi
+query I
+SELECT count(*) FROM (SELECT count(*) FROM t_signed_zero GROUP BY z, atan2(z, z))
+----
+2
+
+statement ok
+DROP TABLE t_signed_zero

@@ -4,12 +4,13 @@ use databend_common_expression::FromData;
 use databend_common_expression::types::*;
 use goldenfile::Mint;
 
-use super::aggregate_case_support::eval_legacy_aggregate;
-use super::aggregate_simulation_support::AggregationSimulator;
-use super::aggregate_simulation_support::simulate_two_groups_group_by;
-use super::aggregate_simulation_support::write_aggregate_expr_case;
+use super::support::AggregationSimulator;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
 
 fn run_quantile_cont_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    let max_38 = i128::max_for_precision(38);
     let columns = [
         ("a", Int64Type::from_data(vec![4i64, 3, 2, 1]).into()),
         (
@@ -34,6 +35,23 @@ fn run_quantile_cont_cases(file: &mut impl Write, simulator: impl AggregationSim
             )
             .into(),
         ),
+        (
+            "d_neg",
+            Decimal64Type::from_data_with_size(
+                vec![-1_i64, -2, -3, -4],
+                Some(DecimalSize::new_unchecked(15, 0)),
+            )
+            .into(),
+        ),
+        (
+            // `upper - lower` overflows i128 here; interpolation must not.
+            "d_wide",
+            Decimal128Type::from_data_with_size(
+                vec![max_38, -max_38, max_38, -max_38],
+                Some(DecimalSize::new_unchecked(38, 0)),
+            )
+            .into(),
+        ),
     ];
     let columns = columns.as_slice();
 
@@ -46,6 +64,28 @@ fn run_quantile_cont_cases(file: &mut impl Write, simulator: impl AggregationSim
         vec![],
     );
     write_aggregate_expr_case(file, "quantile_cont(0.8)(d)", columns, simulator, vec![]);
+    write_aggregate_expr_case(
+        file,
+        "quantile_cont(0.0, 0.1, 0.5, 1.0)(d)",
+        columns,
+        simulator,
+        vec![],
+    );
+    // Ties round half away from zero: -2.5 -> -3.
+    write_aggregate_expr_case(
+        file,
+        "quantile_cont(0.5)(d_neg)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "quantile_cont(0.5)(d_wide)",
+        columns,
+        simulator,
+        vec![],
+    );
     write_aggregate_expr_case(file, "quantile_cont(0.8)(NULL)", columns, simulator, vec![]);
     write_aggregate_expr_case(
         file,
@@ -74,7 +114,7 @@ fn run_quantile_cont_cases(file: &mut impl Write, simulator: impl AggregationSim
 fn test_quantile_cont() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("quantile_cont.txt").unwrap();
-    run_quantile_cont_cases(file, eval_legacy_aggregate);
+    run_quantile_cont_cases(file, eval_aggregate);
 }
 
 #[test]

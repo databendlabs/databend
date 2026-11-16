@@ -36,6 +36,8 @@ pub struct CreateViewPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RefreshLineageSelector {
+    /// Every View and Materialized View in the default catalog; both are query-defined objects
+    /// whose lineage can be recomputed from the stored definition.
     AllViews,
 }
 

@@ -749,8 +749,10 @@ impl Filter for BinaryFuse32Filter {
             return Err(eof());
         }
         let fingerprints = buf[offset..offset + byte_len]
-            .chunks_exact(std::mem::size_of::<u32>())
-            .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| u32::from_le_bytes(*chunk))
             .collect();
         offset += byte_len;
 

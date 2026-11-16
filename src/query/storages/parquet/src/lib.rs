@@ -22,16 +22,14 @@
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]
-#![feature(try_blocks)]
-#![feature(impl_trait_in_assoc_type)]
 #![feature(core_intrinsics)]
-#![feature(int_roundings)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]
 
 mod parquet_part;
+mod read_schema;
 mod read_settings;
 mod utils;
 
@@ -66,6 +64,8 @@ pub use parquet_table::ParquetTable;
 pub use parquet_variant_table::ParquetVariantTable;
 // for it test
 pub use pruning::ParquetPruner;
+pub use read_schema::ParquetReadSchema;
+pub use read_schema::ParquetSchemaResolver;
 pub use read_settings::ReadSettings;
 pub use row_group_serde::deserialize_row_group_meta;
 pub use row_group_serde::deserialize_row_group_meta_from_bytes;

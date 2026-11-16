@@ -217,6 +217,7 @@ impl Walk for Statement {
             Statement::ShowTags(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::AlterObjectTag(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreateStage(_) | Statement::AlterStage(_) => {}
+            Statement::ExternalAccess(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreateConnection(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DropConnection(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DescribeConnection(stmt) => try_walk!(stmt.walk(visitor)),
@@ -231,6 +232,7 @@ impl Walk for Statement {
             Statement::DropTask(_) => {}
             Statement::ShowTasks(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreateDynamicTable(stmt) => try_walk!(stmt.walk(visitor)),
+            Statement::RefreshDynamicTable(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::CreatePipe(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DescribePipe(_) | Statement::DropPipe(_) | Statement::AlterPipe(_) => {}
             Statement::ExecuteImmediate(stmt) => try_walk!(stmt.walk(visitor)),
@@ -445,6 +447,7 @@ impl WalkMut for Statement {
             Statement::ShowTags(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::AlterObjectTag(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreateStage(_) | Statement::AlterStage(_) => {}
+            Statement::ExternalAccess(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreateConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DropConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DescribeConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
@@ -459,6 +462,7 @@ impl WalkMut for Statement {
             Statement::DropTask(_) => {}
             Statement::ShowTasks(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreateDynamicTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
+            Statement::RefreshDynamicTable(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::CreatePipe(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DescribePipe(_) | Statement::DropPipe(_) | Statement::AlterPipe(_) => {}
             Statement::ExecuteImmediate(stmt) => try_walk!(stmt.walk_mut(visitor)),

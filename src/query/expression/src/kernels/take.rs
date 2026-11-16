@@ -93,7 +93,7 @@ where I: TakeIndex + ?Sized
         }
     }
 
-    fn with_optimize_size_enable(mut self, optimize_size_enable: bool) -> Self {
+    pub(super) fn with_optimize_size_enable(mut self, optimize_size_enable: bool) -> Self {
         self.optimize_size_enable = optimize_size_enable;
         self
     }
@@ -129,18 +129,16 @@ where I: TakeIndex + ?Sized
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        self.visit_boolean(column.validity.clone())?;
+        let (column, validity) = column.destructure();
+        self.visit_boolean(validity)?;
         let validity =
             BooleanType::try_downcast_column(self.result.take().unwrap().as_column().unwrap())
                 .unwrap();
 
-        self.visit_column(column.column)?;
+        self.visit_column(column)?;
         let result = self.result.take().unwrap();
         let result = result.as_column().unwrap();
-        self.result = Some(Value::Column(NullableColumn::new_column(
-            result.clone(),
-            validity,
-        )));
+        self.result = Some(Value::Column(result.clone().wrap_nullable(Some(validity))));
         Ok(())
     }
 
@@ -187,16 +185,16 @@ where I: TakeIndex + ?Sized
 
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut unset_bits = 0;
+        let mut set_bits = 0;
         let mut value = 0;
         let mut i = 0;
 
+        // No branch on the bit value: on random bits a branch mispredicts
+        // about half of the time.
         for index in self.indices.iter() {
-            if col.get_bit(index) {
-                value |= BIT_MASK[i % 8];
-            } else {
-                unset_bits += 1;
-            }
+            let bit = col.get_bit(index) as u8;
+            value |= bit << (i % 8);
+            set_bits += bit as usize;
             i += 1;
             if i % 8 == 0 {
                 builder.push(value);
@@ -208,7 +206,7 @@ where I: TakeIndex + ?Sized
         }
 
         let result = unsafe {
-            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, num_rows - set_bits)
                 .ok()
                 .unwrap()
         };
@@ -237,6 +235,14 @@ where I: TakeIndex + ?Sized
         Ok(())
     }
 
+    /// Takes the encoded values (keys / deltas) and keeps the encoding.
+    fn visit_encoded(&mut self, mut column: Box<EncodedColumn>) -> Result<()> {
+        // Reuses the box of the input column.
+        *column = column.map_codes(|codes| self.take_narrow(codes));
+        self.result = Some(Value::Column(Column::Encoded(column)));
+        Ok(())
+    }
+
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
         self.result = Some(Value::Column(
             (with_opaque_mapped_type!(|T| match column {
@@ -252,6 +258,10 @@ where I: TakeIndex + ?Sized
 impl<'a, I> TakeVisitor<'a, I>
 where I: TakeIndex + ?Sized
 {
+    fn take_narrow(&mut self, buffer: NarrowBuffer) -> NarrowBuffer {
+        crate::map_narrow_buffer!(buffer, |b| self.take_primitive_types(b))
+    }
+
     fn take_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         let mut builder = Vec::with_capacity(self.indices.len());
         self.indices
@@ -294,8 +304,8 @@ impl Column {
         match self {
             Column::String(c) => Column::String(c.maybe_gc()),
             Column::Nullable(n) => {
-                let c = n.column.maybe_gc();
-                NullableColumn::new_column(c, n.validity)
+                let (column, validity) = n.destructure();
+                column.maybe_gc().wrap_nullable(Some(validity))
             }
             other => other,
         }

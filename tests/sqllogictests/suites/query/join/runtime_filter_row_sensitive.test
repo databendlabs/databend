@@ -1,0 +1,84 @@
+# The same queries run with RF off (baseline) and on (regression).
+# Separate INSERTs put 0 and 1 in separate blocks: an old RF can prune 0.
+# Join reorder is left at its default; these cases do not need it disabled.
+statement ok
+drop table if exists rf_row_probe;
+
+statement ok
+drop table if exists rf_row_build;
+
+statement ok
+create table rf_row_probe(a int);
+
+statement ok
+create table rf_row_build(a int);
+
+statement ok
+insert into rf_row_probe values (0);
+
+statement ok
+insert into rf_row_probe values (1);
+
+statement ok
+insert into rf_row_build values (1);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+# LIMIT must select 0 before the join; 0 cannot match build key 1: no rows.
+query I
+select p.a
+from (select a from rf_row_probe order by a limit 1) p
+join rf_row_build b on p.a = b.a;
+----
+
+# The window must count both input rows, even though only key 1 joins.
+query II
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a = b.a;
+----
+1 2
+
+# A calculated join key must obey the same window barrier as a column key.
+query II
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a + 10 = b.a + 10;
+----
+1 2
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+# Old RF placement can remove 0 before LIMIT and incorrectly return 1.
+query I
+select p.a
+from (select a from rf_row_probe order by a limit 1) p
+join rf_row_build b on p.a = b.a;
+----
+
+# Removing 0 before the window would incorrectly change the count to 1.
+query II
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a = b.a;
+----
+1 2
+
+# Guard the non-column probe-key path too; it must not bypass the window.
+query II
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a + 10 = b.a + 10;
+----
+1 2
+
+statement ok
+drop table rf_row_probe;
+
+statement ok
+drop table rf_row_build;
+
+statement ok
+unset enable_join_runtime_filter;

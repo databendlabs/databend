@@ -24,6 +24,8 @@ mod delete;
 mod dictionary;
 mod dynamic_table;
 mod explain;
+mod external_access;
+pub use external_access::*;
 mod hint;
 mod index;
 mod insert;

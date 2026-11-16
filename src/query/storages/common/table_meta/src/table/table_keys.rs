@@ -21,22 +21,48 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 
+use super::dynamic_table_keys::OPT_KEY_AS_QUERY;
+use super::dynamic_table_keys::OPT_KEY_SOURCE_TABLE_IDS;
 use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
+/// Set on the temporary table a materialized CTE is spilled into. The table
+/// lives only for its query, so it does not count as session state (it does
+/// not make an HTTP session sticky). The CTE's CREATE goes through SQL text,
+/// so this key cannot be reserved; a user who sets it on their own temporary
+/// table opts that table out of stickiness.
+pub const OPT_KEY_MATERIALIZED_CTE: &str = "materialized_cte";
+/// Default namespace for unqualified table references in a stored query definition.
+pub const OPT_KEY_QUERY_CATALOG: &str = "query_catalog";
+pub const OPT_KEY_QUERY_DATABASE: &str = "query_database";
+
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
     "materialized_view_source_snapshot_location";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME: &str =
+    "materialized_view_source_database_name";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME: &str = "materialized_view_source_table_name";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
 pub const OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS: &str =
     "materialized_view_aggregate_compaction_delta_blocks";
+/// Reason reported when the source table bound by CREATE no longer has the same lifecycle identity.
+pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
+    "source table was dropped, renamed, or replaced";
+/// Reason reported when the database name persisted in the MV definition no longer resolves.
+pub const MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON: &str = "source database was renamed";
+/// Reason reported when the source table's current database is dropped.
+pub const MATERIALIZED_VIEW_DROPPED_SOURCE_DATABASE_REASON: &str = "source database was dropped";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
+/// External-table S3 storage class for new objects; overrides the experimental session setting.
+pub const OPT_KEY_S3_STORAGE_CLASS: &str = "s3_storage_class";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
@@ -58,12 +84,9 @@ pub const MAX_ANALYZE_TOP_N_SIZE: usize = 10_000;
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
 
-// the following are used in for delta and iceberg engine
+// the following are used for the iceberg engine
 pub const OPT_KEY_LOCATION: &str = "location";
 pub const OPT_KEY_CONNECTION_NAME: &str = "connection_name";
-// TableMeta need to contain all info needed to create a Table, store them under this internal key as a JSON.
-// e.g. the partition columns of a Delta table
-pub const OPT_KEY_ENGINE_META: &str = "engine_meta";
 
 /// Legacy table snapshot location key
 ///
@@ -118,7 +141,27 @@ pub fn is_fuse_engine(engine: &str) -> bool {
 }
 
 pub fn is_fuse_backed_engine(engine: &str) -> bool {
-    is_fuse_engine(engine) || is_materialized_view_engine(engine)
+    is_fuse_engine(engine)
+        || is_materialized_view_engine(engine)
+        || engine.eq_ignore_ascii_case(DYNAMIC_TABLE_ENGINE)
+}
+
+/// Table engines that have been removed from Databend but may still be
+/// referenced by table metadata created by older versions.
+///
+/// Every engine listed here must be a read-only external engine, i.e.
+/// Databend never owned any data files of such tables. Dropped tables with
+/// these engines can therefore be reclaimed by removing their metadata only,
+/// without instantiating the (no longer available) table engine.
+pub const RETIRED_TABLE_ENGINES: &[&str] = &[
+    // Removed in #20558, used to read external Delta Lake tables.
+    "DELTA",
+];
+
+pub fn is_retired_engine(engine: &str) -> bool {
+    RETIRED_TABLE_ENGINES
+        .iter()
+        .any(|retired| engine.eq_ignore_ascii_case(retired))
 }
 
 /// Table option keys that reserved for internal usage only
@@ -127,34 +170,55 @@ pub fn is_fuse_backed_engine(engine: &str) -> bool {
 pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
+    r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_QUERY_CATALOG);
+    r.insert(OPT_KEY_QUERY_DATABASE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
 
-/// Table option keys that Should not be shown in `show create table` statement
+/// Table option keys that should not be shown in `show create table` statement.
 pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
+    r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
-    r.insert(OPT_KEY_ENGINE_META);
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
+    r.insert(OPT_KEY_QUERY_CATALOG);
+    r.insert(OPT_KEY_QUERY_DATABASE);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_MATERIALIZED_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
+
+pub fn stored_query_namespace(options: &BTreeMap<String, String>) -> Option<(String, String)> {
+    Some((
+        options.get(OPT_KEY_QUERY_CATALOG)?.clone(),
+        options.get(OPT_KEY_QUERY_DATABASE)?.clone(),
+    ))
+}
 
 pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     RESERVED_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
@@ -246,12 +310,48 @@ mod tests {
         assert!(is_reserved_opt_key(OPT_KEY_CLUSTER_TYPE));
         assert!(is_reserved_opt_key("CLUSTER_TYPE"));
         assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
+        assert!(is_reserved_opt_key(OPT_KEY_CLONE_GROUP_ID));
+        assert!(is_internal_opt_key(OPT_KEY_CLONE_GROUP_ID));
+    }
+
+    #[test]
+    fn test_stored_query_metadata_is_reserved_and_internal() {
+        for key in [OPT_KEY_QUERY_CATALOG, OPT_KEY_QUERY_DATABASE] {
+            assert!(is_reserved_opt_key(key));
+            assert!(is_internal_opt_key(key));
+        }
+        let mut options = BTreeMap::new();
+        assert_eq!(stored_query_namespace(&options), None);
+        options.insert(OPT_KEY_QUERY_CATALOG.to_string(), "default".to_string());
+        options.insert(OPT_KEY_QUERY_DATABASE.to_string(), "db".to_string());
+        assert_eq!(
+            stored_query_namespace(&options),
+            Some(("default".to_string(), "db".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_dynamic_table_source_table_ids_are_reserved_and_internal() {
+        assert!(is_reserved_opt_key(OPT_KEY_SOURCE_TABLE_IDS));
+        assert!(is_internal_opt_key(OPT_KEY_SOURCE_TABLE_IDS));
     }
 
     #[test]
     fn test_materialized_view_source_table_id_is_reserved() {
         assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME
+        ));
+        assert!(is_reserved_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME
         ));
         assert!(is_reserved_opt_key(
             OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ

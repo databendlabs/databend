@@ -53,11 +53,12 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let plan = &self.plan;
-            let tenant = self.ctx.get_tenant();
             let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
-            let table = catalog
-                .get_table_with_branch(&tenant, &plan.database, &plan.table, plan.branch.as_deref())
+            // Commit against the same table version used to bind the cluster key.
+            let table = self
+                .ctx
+                .get_table(&plan.catalog, &plan.database, &plan.table)
                 .await?;
             check_maintenance_target(table.as_ref(), &plan.target)?;
 
@@ -84,14 +85,12 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
                         snapshot.cluster_type = Some(cluster_type);
                         snapshot.summary.cluster_stats = None;
                     }
-                    if plan.branch.is_none() {
-                        meta.cluster_key_v2 = cluster_key_meta;
-                        meta.options
-                            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
-                        meta.options
-                            .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
-                            .or_insert_with(|| "1".to_owned());
-                    }
+                    meta.cluster_key_v2 = cluster_key_meta;
+                    meta.options
+                        .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type.to_string());
+                    meta.options
+                        .entry(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER.to_owned())
+                        .or_insert_with(|| "1".to_owned());
                 },
             )
             .await?;

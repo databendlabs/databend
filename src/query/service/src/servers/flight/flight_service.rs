@@ -21,6 +21,11 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use socket2::Domain;
+use socket2::Protocol;
+use socket2::Socket;
+use socket2::Type;
+use tokio::net::TcpListener;
 use tokio::sync::Notify;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -28,7 +33,40 @@ use tonic::transport::ServerTlsConfig;
 use tonic::transport::server::TcpIncoming;
 
 use super::v1::DatabendQueryFlightService;
+use super::v1::network::MAX_FRAME_BYTES;
+use super::v1::network::MAX_FRAMES_IN_FLIGHT;
 use crate::servers::Server as DatabendQueryServer;
+
+/// Backlog requested for the flight listener.
+///
+/// `TcpIncoming::bind` goes through `std::net::TcpListener::bind`, which
+/// hard-codes a backlog of 128. Every distributed query opens new flight
+/// connections to every node, so bursts can overflow such a small accept
+/// queue; the kernel then drops SYNs and clients back off for seconds.
+/// 4096 matches the default `net.core.somaxconn` of Linux >= 5.4; the kernel
+/// clamps it to that sysctl if it is lower.
+const FLIGHT_LISTEN_BACKLOG: i32 = 4096;
+
+/// HTTP/2 receive window of each flight stream and connection.
+///
+/// Exchange frames flow from client to server over one do_exchange stream per
+/// connection. The window must hold the frames in flight at any `exchange_frame_bytes`,
+/// which is clamped to `MAX_FRAME_BYTES`, or flow control holds them back until the
+/// server task runs again, which takes milliseconds on saturated cores. Senders bound
+/// the bytes in flight by their frame size; the window only stops limiting them.
+const FLIGHT_RECEIVE_WINDOW_BYTES: u32 = (MAX_FRAMES_IN_FLIGHT * MAX_FRAME_BYTES) as u32;
+
+fn bind_flight_listener(addr: SocketAddr) -> std::io::Result<TcpIncoming> {
+    let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+    // Keep the SO_REUSEADDR behavior of `std::net::TcpListener::bind`.
+    #[cfg(not(windows))]
+    socket.set_reuse_address(true)?;
+    socket.bind(&addr.into())?;
+    socket.listen(FLIGHT_LISTEN_BACKLOG)?;
+    socket.set_nonblocking(true)?;
+    let listener = TcpListener::from_std(socket.into())?;
+    Ok(TcpIncoming::from(listener))
+}
 
 pub struct FlightService {
     pub config: InnerConfig,
@@ -62,7 +100,9 @@ impl FlightService {
     #[async_backtrace::framed]
     pub async fn start_with_incoming(&mut self, addr: SocketAddr) -> Result<()> {
         let flight_api_service = DatabendQueryFlightService::create();
-        let builder = Server::builder();
+        let builder = Server::builder()
+            .initial_stream_window_size(FLIGHT_RECEIVE_WINDOW_BYTES)
+            .initial_connection_window_size(FLIGHT_RECEIVE_WINDOW_BYTES);
         let mut builder = if self.config.tls_rpc_server_enabled() {
             info!("databend query tls rpc enabled");
             builder
@@ -78,7 +118,7 @@ impl FlightService {
             builder
         };
 
-        let incoming = TcpIncoming::bind(addr)
+        let incoming = bind_flight_listener(addr)
             .map_err(|e| ErrorCode::CannotListenerPort(format!("{},{}", e, addr)))?
             .with_nodelay(Some(true))
             .with_keepalive(None);

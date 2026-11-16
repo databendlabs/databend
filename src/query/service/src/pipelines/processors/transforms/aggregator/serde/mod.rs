@@ -16,31 +16,8 @@ mod aggregate_scatter;
 mod serde_meta;
 mod transform_aggregate_serializer;
 mod transform_deserializer;
-mod transform_exchange_aggregate_serializer;
 
 pub use aggregate_scatter::*;
 pub use serde_meta::*;
 pub use transform_aggregate_serializer::*;
 pub use transform_deserializer::*;
-pub use transform_exchange_aggregate_serializer::*;
-
-pub mod exchange_defines {
-    use arrow_schema::Schema;
-    use databend_common_expression::DataField;
-    use databend_common_expression::DataSchema;
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::NumberDataType;
-
-    pub fn spilled_schema() -> DataSchema {
-        DataSchema::new(vec![
-            DataField::new("bucket", DataType::Number(NumberDataType::Int64)),
-            DataField::new("location", DataType::String),
-            DataField::new("row_group", DataType::Binary),
-        ])
-    }
-
-    pub fn spilled_arrow_schema() -> Schema {
-        let schema = spilled_schema();
-        Schema::from(&schema)
-    }
-}

@@ -35,8 +35,9 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_storage::EndpointPolicyScope;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
 use log::debug;
 
 use crate::BindContext;
@@ -58,6 +59,7 @@ use crate::plans::UndropDatabasePlan;
 
 pub const DEFAULT_STORAGE_CONNECTION: &str = "DEFAULT_STORAGE_CONNECTION";
 pub const DEFAULT_STORAGE_PATH: &str = "DEFAULT_STORAGE_PATH";
+pub const DEFAULT_S3_STORAGE_CLASS: &str = "DEFAULT_S3_STORAGE_CLASS";
 
 impl Binder {
     #[async_backtrace::framed]
@@ -403,15 +405,19 @@ impl Binder {
     /// # Arguments
     /// * `options` - The database options to validate
     /// * `require_both` - If true (CREATE), both options must be present together.
-    ///                    If false (ALTER), allows modifying single option.
+    ///                    If false (ALTER), validate names/values here; the executor
+    ///                    validates merged options and probes the effective location.
     #[async_backtrace::framed]
     async fn validate_database_options(
         &self,
         options: &[SQLProperty],
         require_both: bool,
     ) -> Result<()> {
-        // Validate database options - only allow specific connection-related options
-        const VALID_DATABASE_OPTIONS: &[&str] = &[DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH];
+        const VALID_DATABASE_OPTIONS: &[&str] = &[
+            DEFAULT_STORAGE_CONNECTION,
+            DEFAULT_STORAGE_PATH,
+            DEFAULT_S3_STORAGE_CLASS,
+        ];
 
         // Check for duplicate options
         let mut seen_options = std::collections::HashSet::new();
@@ -431,6 +437,18 @@ impl Binder {
                 )));
             }
         }
+
+        let storage_class = options
+            .iter()
+            .find(|p| p.name == DEFAULT_S3_STORAGE_CLASS)
+            .map(|option| {
+                option.value.parse::<S3StorageClass>().map_err(|e| {
+                    ErrorCode::InvalidArgument(format!(
+                        "Invalid database option {DEFAULT_S3_STORAGE_CLASS}: {e}"
+                    ))
+                })
+            })
+            .transpose()?;
 
         // Validate pairing requirement based on operation type
         let has_connection = options.iter().any(|p| p.name == DEFAULT_STORAGE_CONNECTION);
@@ -452,8 +470,6 @@ impl Binder {
                 )));
             }
         }
-        // For ALTER DATABASE: allow modifying single option (the other one already exists in database)
-
         let stage_resolver = if has_connection {
             Some(StageResolver::from_table_context(
                 self.ctx.clone(),
@@ -487,6 +503,12 @@ impl Binder {
                     )));
                 }
             }
+        }
+
+        // ALTER probes the fully merged state in AlterDatabaseInterpreter. Probing
+        // only the supplied fields here could use the wrong existing storage class.
+        if !require_both {
+            return Ok(());
         }
 
         // Validate storage path accessibility when both connection and path are specified
@@ -559,22 +581,12 @@ impl Binder {
                 ));
             }
 
-            // Verify essential privileges for the external storage location
-            // Similar to table creation, we test basic storage operations
-            let operator = databend_common_storage::init_operator_with_policy_scope(
-                &storage_params,
-                EndpointPolicyScope::External,
-            )
-            .map_err(|e| {
-                ErrorCode::BadArguments(format!(
-                    "Failed to access storage location '{}': {}",
-                    path_prop.value, e
-                ))
-            })?;
-
-            // Test storage accessibility with basic operations
-            // Reuse the existing verify_external_location_privileges function from table.rs
-            crate::binder::verify_external_location_privileges(operator)
+            // Probe using the class selected for tables inheriting these defaults.
+            let storage_class = match storage_class {
+                Some(value) => value,
+                None => self.ctx.get_settings().get_s3_storage_class()?,
+            };
+            crate::binder::verify_external_location_privileges(&storage_params, storage_class)
                 .await
                 .map_err(|e| {
                     ErrorCode::BadArguments(format!(
@@ -585,6 +597,19 @@ impl Binder {
         }
 
         Ok(())
+    }
+
+    /// Copy the database default when creating an external table, without replacing its option.
+    /// Later changes to the database default do not affect existing tables.
+    pub(in crate::planner::binder) fn inherit_database_storage_class(
+        options: &mut BTreeMap<String, String>,
+        database_options: &BTreeMap<String, String>,
+    ) {
+        if !options.contains_key(OPT_KEY_S3_STORAGE_CLASS)
+            && let Some(storage_class) = database_options.get(DEFAULT_S3_STORAGE_CLASS)
+        {
+            options.insert(OPT_KEY_S3_STORAGE_CLASS.to_owned(), storage_class.clone());
+        }
     }
 
     fn database_meta(
@@ -612,5 +637,50 @@ impl Binder {
             options,
             ..Default::default()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
+
+    use super::Binder;
+    use super::DEFAULT_S3_STORAGE_CLASS;
+
+    #[test]
+    fn test_inherit_database_storage_class() {
+        let mut database_options = BTreeMap::from([(
+            DEFAULT_S3_STORAGE_CLASS.to_owned(),
+            "intelligent_tiering".to_owned(),
+        )]);
+        let mut table_options = BTreeMap::new();
+        Binder::inherit_database_storage_class(&mut table_options, &database_options);
+        assert_eq!(
+            table_options[OPT_KEY_S3_STORAGE_CLASS],
+            "intelligent_tiering"
+        );
+
+        // Explicit table options and previously inherited defaults are never overwritten.
+        database_options.insert(DEFAULT_S3_STORAGE_CLASS.to_owned(), "standard".to_owned());
+        Binder::inherit_database_storage_class(&mut table_options, &database_options);
+        assert_eq!(
+            table_options[OPT_KEY_S3_STORAGE_CLASS],
+            "intelligent_tiering"
+        );
+
+        let mut explicit_options =
+            BTreeMap::from([(OPT_KEY_S3_STORAGE_CLASS.to_owned(), "standard".to_owned())]);
+        database_options.insert(
+            DEFAULT_S3_STORAGE_CLASS.to_owned(),
+            "intelligent_tiering".to_owned(),
+        );
+        Binder::inherit_database_storage_class(&mut explicit_options, &database_options);
+        assert_eq!(explicit_options[OPT_KEY_S3_STORAGE_CLASS], "standard");
+
+        let mut no_default_options = BTreeMap::new();
+        Binder::inherit_database_storage_class(&mut no_default_options, &BTreeMap::new());
+        assert!(no_default_options.is_empty());
     }
 }

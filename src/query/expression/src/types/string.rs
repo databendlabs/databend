@@ -39,6 +39,8 @@ use crate::ColumnView;
 use crate::ScalarRef;
 use crate::TakeIndex;
 use crate::property::Domain;
+use crate::types::EncodedColumn;
+use crate::types::EncodedView;
 use crate::types::NullableType;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::values::Column;
@@ -70,9 +72,20 @@ impl AccessType for StringType {
     }
 
     fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        if let Column::Encoded(encoded) = col {
+            // Kernels that do not understand the encoding see the decoded values.
+            return match encoded.decode() {
+                Column::String(c) => Ok(c),
+                _ => Err(column_type_error::<Self>(col)),
+            };
+        }
         col.as_string()
             .cloned()
             .ok_or_else(|| column_type_error::<Self>(col))
+    }
+
+    fn try_downcast_encoded(col: &EncodedColumn) -> Option<EncodedView<Self>> {
+        EncodedView::try_dict(col)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
@@ -412,29 +425,6 @@ impl StringColumnBuilder {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::StringColumn;
-    use super::StringColumnBuilder;
-
-    #[test]
-    fn test_append_column_copies_sparse_string_buffers() {
-        let long = "x".repeat(20_000);
-        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
-        let sparse = source.sliced(7, 1);
-
-        let mut builder = StringColumnBuilder::with_capacity(1);
-        builder.append_column(&sparse);
-        let result = builder.build();
-
-        assert_eq!(result.iter().collect::<Vec<_>>(), vec![format!("7-{long}")]);
-        assert!(
-            result.total_buffer_len() < sparse.total_buffer_len(),
-            "append_column should not retain the full source buffers"
-        );
-    }
-}
-
 impl NullableColumnBuilder<StringType> {
     pub fn take_from_views(
         views: &[ColumnView<NullableType<StringType>>],
@@ -501,4 +491,27 @@ pub struct StringDomain {
     pub min: String,
     // max value is None for full domain
     pub max: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StringColumn;
+    use super::StringColumnBuilder;
+
+    #[test]
+    fn test_append_column_copies_sparse_string_buffers() {
+        let long = "x".repeat(20_000);
+        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
+        let sparse = source.sliced(7, 1);
+
+        let mut builder = StringColumnBuilder::with_capacity(1);
+        builder.append_column(&sparse);
+        let result = builder.build();
+
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![format!("7-{long}")]);
+        assert!(
+            result.total_buffer_len() < sparse.total_buffer_len(),
+            "append_column should not retain the full source buffers"
+        );
+    }
 }

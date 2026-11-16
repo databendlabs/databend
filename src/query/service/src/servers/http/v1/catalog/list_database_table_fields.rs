@@ -95,10 +95,11 @@ async fn resolve_schema(
         None => ctx.session.create_query_context(ctx.version).await?,
     };
     let query = query.clone();
+    let planner = Planner::new(query_ctx).with_stored_definition(table.options());
     GlobalQueryRuntime::instance()
         .runtime()
         .spawn(async move {
-            let mut planner = Planner::new(query_ctx);
+            let mut planner = planner;
             let (plan, _) = planner.plan_sql(&query).await?;
             infer_table_schema(&plan.schema())
         })

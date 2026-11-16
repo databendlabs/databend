@@ -101,6 +101,10 @@ query I
 select row_count from fuse_column('db_09_0006', 't1')
 ----
 
+# A removed table branch suffix must not resolve to the base table.
+statement error 1025
+select * from fuse_snapshot('db_09_0006', 't/removed')
+
 statement error 1025
 select * from fuse_snapshot('db_09_0006', 'not_exist')
 

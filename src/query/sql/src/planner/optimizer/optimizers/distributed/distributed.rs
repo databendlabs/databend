@@ -19,10 +19,10 @@ use databend_common_exception::Result;
 
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::PropertyEnforcer;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
-use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 
 /// DistributedOptimizer optimizes a query plan for distributed execution.
@@ -45,7 +45,7 @@ impl DistributedOptimizer {
     /// Enforce distribution properties without lowering Exchange-sensitive
     /// operators into their partial and final stages.
     #[recursive::recursive]
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: &PExpr) -> Result<PExpr> {
         // Step 1: Set the initial distribution requirement (Any)
         let required = RequiredProperty {
             distribution: Distribution::Any,
@@ -56,7 +56,7 @@ impl DistributedOptimizer {
         let mut result = enforcer.require_property(&required, s_expr)?;
 
         // Step 3: Check if the result satisfies the required distribution property
-        let rel_expr = RelExpr::with_s_expr(&result);
+        let rel_expr = RelExpr::with_p_expr(&result);
         let physical_prop = rel_expr.derive_physical_prop()?;
         let root_required = RequiredProperty {
             distribution: Distribution::Serial,
@@ -65,7 +65,7 @@ impl DistributedOptimizer {
         // Step 4: If not satisfied, manually enforce serial distribution
         if !root_required.satisfied_by(&physical_prop) {
             // Add an Exchange::Merge operator
-            result = SExpr::create_unary(Arc::new(Exchange::Merge.into()), Arc::new(result));
+            result = PExpr::create_unary(Arc::new(Exchange::Merge.into()), Arc::new(result));
         }
 
         Ok(result)

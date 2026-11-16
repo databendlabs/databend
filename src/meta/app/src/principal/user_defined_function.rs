@@ -29,6 +29,7 @@ pub struct LambdaUDF {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDFServer {
+    pub external_access_integrations: Vec<String>,
     pub address: String,
     pub handler: String,
     pub headers: BTreeMap<String, String>,
@@ -41,6 +42,7 @@ pub struct UDFServer {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDFScript {
+    pub external_access_integrations: Vec<String>,
     pub code: String,
     pub imports: Vec<String>,
     pub packages: Vec<String>,
@@ -92,6 +94,7 @@ pub struct ScalarUDF {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDAFScript {
+    pub external_access_integrations: Vec<String>,
     pub code: String,
     pub imports: Vec<String>,
     pub packages: Vec<String>,
@@ -116,6 +119,15 @@ pub enum UDFDefinition {
 }
 
 impl UDFDefinition {
+    pub fn external_access_integrations(&self) -> &[String] {
+        match self {
+            Self::UDFServer(server) => &server.external_access_integrations,
+            Self::UDFScript(script) => &script.external_access_integrations,
+            Self::UDAFScript(script) => &script.external_access_integrations,
+            _ => &[],
+        }
+    }
+
     pub fn category(&self) -> &str {
         match self {
             Self::LambdaUDF(_) => "LambdaUDF",
@@ -199,6 +211,7 @@ impl UserDefinedFunction {
             name: name.to_string(),
             description: description.to_string(),
             definition: UDFDefinition::UDFServer(UDFServer {
+                external_access_integrations: Vec::new(),
                 address: address.to_string(),
                 handler: handler.to_string(),
                 headers: headers.clone(),
@@ -229,6 +242,7 @@ impl UserDefinedFunction {
             name: name.to_string(),
             description: description.to_string(),
             definition: UDFDefinition::UDFScript(UDFScript {
+                external_access_integrations: vec![],
                 code: code.to_string(),
                 handler: handler.to_string(),
                 language: language.to_string(),
@@ -269,6 +283,7 @@ impl Display for UDFDefinition {
                 write!(f, ") -> {definition}")?;
             }
             UDFDefinition::UDFServer(UDFServer {
+                external_access_integrations,
                 address,
                 arg_names,
                 arg_types,
@@ -307,8 +322,16 @@ impl Display for UDFDefinition {
                     write!(f, ")")?;
                 }
                 write!(f, " ADDRESS = {address}")?;
+                if !external_access_integrations.is_empty() {
+                    write!(
+                        f,
+                        " EXTERNAL_ACCESS_INTEGRATIONS = ({})",
+                        external_access_integrations.join(", ")
+                    )?;
+                }
             }
             UDFDefinition::UDFScript(UDFScript {
+                external_access_integrations,
                 code,
                 arg_types,
                 return_type,
@@ -337,8 +360,16 @@ impl Display for UDFDefinition {
                     f,
                     " IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
+                if !external_access_integrations.is_empty() {
+                    write!(
+                        f,
+                        " EXTERNAL_ACCESS_INTEGRATIONS = ({})",
+                        external_access_integrations.join(", ")
+                    )?;
+                }
             }
             UDFDefinition::UDAFScript(UDAFScript {
+                external_access_integrations,
                 code,
                 arg_types,
                 state_fields,
@@ -365,6 +396,13 @@ impl Display for UDFDefinition {
                     f,
                     " }} RETURNS {return_type} LANGUAGE {language} IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} AS $${code}$$"
                 )?;
+                if !external_access_integrations.is_empty() {
+                    write!(
+                        f,
+                        " EXTERNAL_ACCESS_INTEGRATIONS = ({})",
+                        external_access_integrations.join(", ")
+                    )?;
+                }
             }
             UDFDefinition::UDTF(UDTF {
                 arg_types,

@@ -129,7 +129,7 @@ pub trait ValueVisitor: Sized {
         &mut self,
         column: Box<NullableColumn<AnyType>>,
     ) -> Result<Self::U, Self::Error> {
-        let data_type = column.column.data_type().wrap_nullable();
+        let data_type = column.column().data_type().wrap_nullable();
         self.visit_typed_column::<AnyType>(Column::Nullable(column), &data_type)
     }
 
@@ -153,6 +153,14 @@ pub trait ValueVisitor: Sized {
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<Self::U, Self::Error> {
         let data_type = DataType::Opaque(column.size() as _);
         self.visit_typed_column::<AnyType>(Column::Opaque(column), &data_type)
+    }
+
+    /// Encoded columns are decoded by default; visitors that understand an
+    /// encoding can override this to work on the encoded values directly.
+    // Boxed like `Column::Encoded`, so implementations can reuse the box.
+    #[allow(clippy::boxed_local)]
+    fn visit_encoded(&mut self, column: Box<EncodedColumn>) -> Result<Self::U, Self::Error> {
+        self.visit_column(column.decode())
     }
 
     fn visit_typed_column<T: ValueType>(
@@ -199,6 +207,7 @@ pub trait ValueVisitor: Sized {
             Column::Geography(column) => visitor.visit_geography(column),
             Column::Vector(column) => visitor.visit_vector(column),
             Column::Opaque(column) => visitor.visit_opaque(column),
+            Column::Encoded(column) => visitor.visit_encoded(column),
         }
     }
 

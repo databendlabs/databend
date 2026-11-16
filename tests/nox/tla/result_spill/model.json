@@ -1,0 +1,54 @@
+{
+  "module": "ResultSpill",
+  "constants": {"Pages": 3, "MaxInterrupts": 1, "DeadlineReads": false, "KeepUntilRestored": true, "BatchFullPages": false, "QueueFirstAfterTimeout": true},
+  "invariants": ["TypeOK", "NoPageLoss", "OrderedDelivery", "NoDuplicates", "ReadableSpills", "CacheMatchesLast"],
+  "matrix": {"Pages": [2, 3], "DeadlineReads": [false, true]},
+  "cases": {
+    "batch_async": {"constants": {"BatchFullPages": true}},
+    "batch_deadline": {"constants": {"BatchFullPages": true, "DeadlineReads": true}},
+    "mutation_partial_before_queue": {
+      "constants": {"DeadlineReads": true, "BatchFullPages": true, "QueueFirstAfterTimeout": false},
+      "violation": "OrderedDelivery"
+    },
+    "mutation_pop_before_restore": {
+      "constants": {"KeepUntilRestored": false},
+      "violation": "NoPageLoss"
+    },
+    "witness_cancel_then_retry": {"witness": "NeverCancelledRetry"},
+    "witness_spill_during_timeout_fallback": {
+      "constants": {"DeadlineReads": true, "BatchFullPages": true},
+      "witness": "NeverSpillDuringFallback"
+    },
+    "witness_fallback_restore_preserves_tail": {
+      "constants": {"DeadlineReads": true, "BatchFullPages": true},
+      "witness": "NeverFallbackRestoreWithTail"
+    }
+  },
+  "scope": [
+    "Single producer and receiver; 2 or 3 page tokens with unique locations. All but last input are full pages; last input is partial. This is a concrete subset of permitted producer inputs, not a general model of row slicing.",
+    "One full memory page capacity (page_rows=max_rows); spilled pages have zero in-memory row accounting. This matches legal HTTP pagination configuration. BatchFullPages=true makes first two full pages one atomic try_add_block call, matching the native nine-row input reproduction; final partial row appended after spill publication.",
+    "Producer full-page try_add_block is atomic under buffer mutex. Spill write, layout registration and queue publication are split. File writes are assumed successful and persistent; crashes/partial writes, codec corruption and cleanup are not checked.",
+    "Last partial page is current_page until finish or deadline fallback. Empty terminal pages are elided because they contain no result rows. BufferTail abstracts an append smaller than a full page.",
+    "Restore may fail or be cancelled at its await at most MaxInterrupts times in total; retry is allowed. Restore has no destructive side effects (SpillerInner::read_spilled_file).",
+    "Deadline expiry only occurs after recv observes an empty queue. Producer can run on another OS thread between timeout completion and the fallback buffer lock; no invented await is needed.",
+    "Successful memory extraction/restore commit through page-manager cache are collapsed: there is no await on this suffix and a single receiver owns the page_manager mutex. Producer may append independently; this does not change the consumed identity.",
+    "Page order, non-duplication, retained page availability and published spill readability are safety properties. No liveness, end-of-stream signaling, HTTP transport retry policy, spill write failure/abort, close/cleanup race, leak freedom, or memory-byte bound is claimed.",
+    "Close excluded: it intentionally discards results; actual HttpQuery::kill serializes it with get_page using page_manager mutex. No fabricated close/restore race.",
+    "Fixed fallback atomically selects queued memory/spill if present, else partial current_page under one buffer mutex. TakePartialAfterTimeout's empty-queue guard and fallback-enabled TakeMemory/BeginRestore are alternatives of this SAME locked selection, not separate check/use actions. QueueFirstAfterTimeout=false disables this actual protection for mutation control.",
+    "fromFallback is diagnostic history only: it enables a witness that spilled restore occurs from timeout fallback while a later partial page remains. It neither guards safety actions nor prunes schedules.",
+    "Matrix includes DeadlineReads=true to investigate ordering rather than assume fallback FIFO. Any normal-case failure must be triaged against source; do not weaken OrderedDelivery to get a pass."
+  ],
+  "source_map": {
+    "BufferMemory,BufferBatch,DetachForSpill,BufferTail": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannelBuffer::try_add_block; PageBuilder::try_append_block",
+    "SpillWritten": "src/query/service/src/spillers/inner.rs::SpillerInner::write_encodes; spill_unmanage",
+    "RegisterLayout": "src/query/service/src/spillers/inner.rs::SpillerInner::spill; src/query/service/src/spillers/adapter.rs::LiteAdapter::add_spill_file",
+    "PublishSpill": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannelSender::send; SizedChannelBuffer::try_add_page",
+    "Finish": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannelSender::finish",
+    "ObserveEmpty": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannel::recv",
+    "DeadlineExpired,TakePartialAfterTimeout": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannelReceiver::next_page; try_take_page_after_timeout; SizedChannelBuffer::take_current_page",
+    "TakeMemory,BeginRestore": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannelReceiver::try_take_page_after_timeout; SizedChannelBuffer::prepare_page_read; SizedChannelReceiver::deserialize_page",
+    "CancelRestore,FailRestore": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannelReceiver::deserialize_page (restore await); test_spilled_page_survives_cancelled_restore",
+    "RestoreAndCommit": "src/query/service/src/servers/http/v1/query/sized_spsc.rs::SizedChannelReceiver::deserialize_page; SizedChannelBuffer::commit_spilled_page; src/query/service/src/servers/http/v1/query/page_manager.rs::PageManager::get_a_page"
+  },
+  "audit": ["run-02: fixed missing parentheses around PublishSpill history-flag RHS; TLA disjunction precedence had left the primed variable unconstrained when fallback=true. This was a model error, not an implementation bug. Safety properties unchanged.", "2026-11-06 FIFO fix synchronization: updated only fallback selection semantics to match the queue-first same-lock source fix; retained all original safety invariants, producer/timeout interleavings, cancellation and error actions. Added exact ordering-regression mutation and fallback-spill-with-tail witness. The fixed implementation is included in source baseline 825fba57f717f1f2dc0d8b6c1c5bfbb1aae32ed3."]
+}

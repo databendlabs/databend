@@ -186,7 +186,8 @@ impl ColumnsTable {
                 match table.engine() {
                     VIEW_ENGINE => {
                         let fields = if let Some(query) = table.options().get(QUERY) {
-                            let mut planner = Planner::new(ctx.clone());
+                            let mut planner =
+                                Planner::new(ctx.clone()).with_stored_definition(table.options());
                             match planner.plan_sql(query).await {
                                 Ok((plan, _)) => {
                                     infer_table_schema(&plan.schema())?.fields().clone()

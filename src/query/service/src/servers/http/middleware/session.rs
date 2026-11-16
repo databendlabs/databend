@@ -22,6 +22,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
+use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
@@ -34,6 +35,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::NodeInfo;
 use fastrace::func_name;
@@ -62,6 +64,7 @@ use poem::Response;
 use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth::AuthMgr;
@@ -75,6 +78,8 @@ use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::HttpSessionConf;
+use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::login_history::LoginEventType;
 use crate::servers::login_history::LoginHandler;
@@ -403,7 +408,7 @@ impl<E> HTTPSessionEndpoint<E> {
             info!(
                 "got request without session, url={}, headers={:?}",
                 req.uri(),
-                &req.headers()
+                sanitize_request_headers(req.headers())
             );
         }
 
@@ -543,9 +548,84 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
     Ok(poem_resp)
 }
 
-fn get_request_info(mut req: Request) -> String {
-    req.headers_mut().remove(AUTHORIZATION);
-    format!("{req:?}")
+/// The node this request is pinned to is no longer in the cluster, so the
+/// session state it held (temporary tables, transaction) is gone for sure.
+/// Reject the request. For `POST /v1/query`, which carries the client's
+/// session state, hand back a corrected copy so the client stops pinning.
+/// Page and final requests carry no session state; their next
+/// `POST /v1/query` will.
+async fn sticky_node_lost_response(
+    mut req: Request,
+    sticky_node_id: &str,
+    endpoint_kind: EndpointKind,
+) -> Response {
+    let session = match endpoint_kind {
+        EndpointKind::StartQuery => request_body_session_conf(&mut req).await,
+        _ => None,
+    };
+    let msg = format!(
+        "Sticky session state lost: node '{sticky_node_id}' not found in cluster, request={}",
+        get_request_info(req)
+    );
+    warn!("{}", msg);
+    let err = ErrorCode::SessionNodeLost(msg);
+    metrics_incr_http_response_errors_count(err.name(), err.code());
+    // Built here instead of returned as Err: the outer `json_response`
+    // wrapper flattens poem errors to the HTTP status, hiding the error code.
+    match endpoint_kind {
+        // Same body shape as the endpoint would have returned.
+        EndpointKind::StartQuery | EndpointKind::PollQuery => {
+            let session = session.map(|s| s.after_failed_start(true));
+            (
+                StatusCode::BAD_REQUEST,
+                Json(QueryResponse::failed_to_start(session, err)),
+            )
+                .into_response()
+        }
+        _ => HttpErrorCode::bad_request(err).as_response(),
+    }
+}
+
+/// Upper bound on a `POST /v1/query` body read before authentication, only to
+/// recover the session state for a `SessionNodeLost` response. Larger bodies
+/// are not read; the response then carries no session.
+const STICKY_LOST_MAX_BODY_BYTES: usize = 1024 * 1024;
+
+/// Best effort: the session state in the body of a `POST /v1/query`.
+async fn request_body_session_conf(req: &mut Request) -> Option<HttpSessionConf> {
+    if req.method() != Method::POST {
+        return None;
+    }
+    // This runs before authentication: never buffer an unbounded body here.
+    if req
+        .headers()
+        .get(http::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok()?.parse::<usize>().ok())
+        .is_some_and(|len| len > STICKY_LOST_MAX_BODY_BYTES)
+    {
+        return None;
+    }
+    #[derive(Deserialize)]
+    struct SessionOnly {
+        session: Option<HttpSessionConf>,
+    }
+    let body = req
+        .take_body()
+        .into_bytes_limit(STICKY_LOST_MAX_BODY_BYTES)
+        .await
+        .ok()?;
+    serde_json::from_slice::<SessionOnly>(&body)
+        .ok()
+        .and_then(|r| r.session)
+}
+
+fn get_request_info(req: Request) -> String {
+    format!(
+        "method={} uri={} headers={:?}",
+        req.method(),
+        req.uri(),
+        sanitize_request_headers(req.headers())
+    )
 }
 
 impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
@@ -581,14 +661,10 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         );
                         forward_request(req, node).await
                     } else {
-                        let msg = format!(
-                            "Sticky session state lost: node '{sticky_node_id}' not found in cluster, request={}",
-                            get_request_info(req)
-                        );
-                        warn!("{}", msg);
-                        Err(Error::from(HttpErrorCode::bad_request(
-                            ErrorCode::BadArguments(msg),
-                        )))
+                        Ok(
+                            sticky_node_lost_response(req, &sticky_node_id, self.endpoint_kind)
+                                .await,
+                        )
                     };
                 }
             } else if let Some(warehouse) = headers.get(HEADER_WAREHOUSE) {
@@ -712,13 +788,29 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = ["authorization", "cookie", "x-clickhouse-key"];
+    let sensitive_headers = [
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "x-clickhouse-key",
+        // May contain a credential-bearing SQL statement, even when the
+        // endpoint eventually rejects it. Never log its original value.
+        "x-databend-sql",
+    ];
     headers
         .iter()
         .map(|(k, v)| {
             let k = k.as_str().to_lowercase();
             if sensitive_headers.contains(&k.as_str()) {
                 (k, "******".to_string())
+            } else if k.eq_ignore_ascii_case(HEADER_QUERY_CONTEXT) {
+                // Session state: keep its sanitized `Debug` for diagnosis.
+                let conf = v
+                    .to_str()
+                    .ok()
+                    .and_then(|v| serde_json::from_str::<HttpSessionConf>(v.trim()).ok());
+                let value = conf.map_or_else(|| "******".to_string(), |conf| format!("{conf:?}"));
+                (k, value)
             } else {
                 (k, v.to_str().unwrap_or_default().to_string())
             }
@@ -757,7 +849,28 @@ mod tests {
     use poem::http::HeaderMap;
 
     use crate::servers::http::middleware::session::get_client_ip;
+    use crate::servers::http::middleware::session::get_request_info;
     use crate::servers::http::middleware::session::sanitize_request_headers;
+
+    #[test]
+    fn test_request_info_does_not_expose_credentials_or_body() {
+        let req = poem::Request::builder()
+            .uri("/v1/query".parse().unwrap())
+            .header("authorization", "Basic dXNlcjpwYXNzd29yZA==")
+            .header("proxy-authorization", "Basic proxy-secret")
+            .header("cookie", "session=cookie-secret")
+            .header("x-databend-sql", "CREATE USER u IDENTIFIED BY 'sql-secret'")
+            .header(
+                "x-databend-query-context",
+                r#"{"database":"db1","settings":{"enterprise_license":"license-secret"}}"#,
+            )
+            .body("body-secret");
+        let logged = get_request_info(req);
+        assert!(logged.contains("/v1/query"));
+        assert!(logged.contains("db1"), "{logged}");
+        assert!(!logged.contains("secret"));
+        assert!(!logged.contains("dXNlcjpwYXNzd29yZA=="));
+    }
 
     #[test]
     fn test_parse_ip() {

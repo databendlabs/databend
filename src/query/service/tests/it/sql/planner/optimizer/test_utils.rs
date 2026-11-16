@@ -34,7 +34,6 @@ use databend_common_sql::planner::Binder;
 use databend_common_sql::planner::Metadata;
 use databend_common_sql::planner::plans::Filter;
 use databend_common_sql::plans::Aggregate;
-use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ComparisonOp;
 use databend_common_sql::plans::ConstantExpr;
@@ -570,13 +569,11 @@ impl ExprBuilder {
         input: SExpr,
         group_items: Vec<ScalarItem>,
         aggregate_functions: Vec<ScalarItem>,
-        mode: AggregateMode,
     ) -> SExpr {
         let agg = Aggregate {
             aggregate_functions,
             group_items,
             grouping_sets: None,
-            mode,
             from_distinct: false,
             rank_limit: None,
         };

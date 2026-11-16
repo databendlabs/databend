@@ -38,12 +38,14 @@ use databend_common_storages_system::DictionariesTable;
 use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FullStreamsTable;
 use databend_common_storages_system::FunctionsTable;
+use databend_common_storages_system::HistoryEtlTable;
 use databend_common_storages_system::IndexesTable;
 use databend_common_storages_system::LocksTable;
 #[cfg(feature = "jemalloc")]
 use databend_common_storages_system::MallocStatsTable;
 #[cfg(feature = "jemalloc")]
 use databend_common_storages_system::MallocStatsTotalsTable;
+use databend_common_storages_system::MaterializedViewsTable;
 use databend_common_storages_system::MetricsTable;
 use databend_common_storages_system::NotificationHistoryTable;
 use databend_common_storages_system::NotificationsTable;
@@ -152,6 +154,7 @@ impl SystemDatabase {
             ViewsTableWithoutHistory::create(sys_db_meta.next_table_id(), ctl_name),
             ProceduresTable::create(sys_db_meta.next_table_id()),
             StatisticsTable::create(sys_db_meta.next_table_id(), ctl_name),
+            MaterializedViewsTable::create(sys_db_meta.next_table_id(), ctl_name),
         ];
 
         let disable_system_table_load;
@@ -168,6 +171,7 @@ impl SystemDatabase {
                     DATABEND_OPT_LEVEL,
                 ),
                 QueryCacheTable::create(sys_db_meta.next_table_id()),
+                HistoryEtlTable::create(sys_db_meta.next_table_id()),
                 TableFunctionsTable::create(sys_db_meta.next_table_id()),
                 CachesTable::create(sys_db_meta.next_table_id()),
                 IndexesTable::create(sys_db_meta.next_table_id()),

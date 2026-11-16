@@ -23,14 +23,14 @@ PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)
 
 echo "before vacuum, should be 1 index dir"
 
-ls  /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i/ | wc -l
+ls  /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i_v2/ | wc -l
 
 stmt "drop inverted index idx2 on test_vacuum_drop_inverted_index.books"
 
 stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_inverted_index('test_vacuum_drop_inverted_index','books')" > /dev/null
 
 echo "after vacuum, should be 0 index dir"
-find /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i/ -type f | wc -l
+find /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i_v2/ -type f | wc -l
 
 
 ## vacuum from all tables
@@ -49,7 +49,7 @@ PREFIX_1=$(echo "$SNAPSHOT_LOCATION_1" | cut -d'/' -f1-2)
 
 echo "before vacuum, should be 2 index dir"
 
-find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_1"/_i_i/ -type f | wc -l
+find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_1"/_i_i_v2/ -type f | wc -l
 
 stmt "create or replace table test_vacuum_drop_inverted_index.book_2(id int, title string, author string, description string) 'fs:///tmp/test_vacuum_drop_inverted_index/'"
 
@@ -67,14 +67,14 @@ stmt "drop inverted index idx5 on test_vacuum_drop_inverted_index.book_2"
 
 echo "before vacuum, should be 1 index dir"
 
-find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_2"/_i_i/ -type f | wc -l
+find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_2"/_i_i_v2/ -type f | wc -l
 
 stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_inverted_index()" > /dev/null
 
 echo "after vacuum, should be 0 index dir"
 
-find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_1"/_i_i/ -type f | wc -l
-find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_2"/_i_i/ -type f | wc -l
+find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_1"/_i_i_v2/ -type f | wc -l
+find /tmp/test_vacuum_drop_inverted_index/"$PREFIX_2"/_i_i_v2/ -type f | wc -l
 
 
 ### create or replace index
@@ -97,12 +97,12 @@ PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)
 
 echo "before create or replace index, should be 1 index dir"
 
-ls  /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i/ | wc -l
+ls  /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i_v2/ | wc -l
 
 stmt "CREATE OR REPLACE INVERTED INDEX idx2 ON test_vacuum_drop_inverted_index.books(author, description) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'"
 
 stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_inverted_index('test_vacuum_drop_inverted_index','books')" > /dev/null
 
 echo "after vacuum, should be 0 index dir"
-find /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i/ -type f | wc -l
+find /tmp/test_vacuum_drop_inverted_index/"$PREFIX"/_i_i_v2/ -type f | wc -l
 

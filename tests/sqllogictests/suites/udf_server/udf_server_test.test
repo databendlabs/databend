@@ -738,6 +738,17 @@ CREATE OR REPLACE FUNCTION stage_summary_udtf(data_stage STAGE_LOCATION, arg int
 statement ok
 CREATE OR REPLACE FUNCTION multi_stage_process_udtf(input_stage STAGE_LOCATION, output_stage STAGE_LOCATION, arg int) RETURNS TABLE (input_stage varchar, output_stage varchar, input_bucket varchar, output_bucket varchar, input_relative_path varchar, output_relative_path varchar, result int) LANGUAGE python HANDLER = 'multi_stage_process_udtf' HEADERS = ('X-Authorization' = '123') ADDRESS = 'http://0.0.0.0:8815';
 
+# Metadata hides authentication headers for scalar and table UDFs. Calls in
+# this file still check that the original headers are sent to the UDF server.
+query TBB
+SELECT name, definition LIKE '%HEADERS = (X-Authorization = ***)%', definition NOT LIKE '%123%'
+FROM system.user_functions
+WHERE name IN ('success_check_headers', 'stage_summary_udtf')
+ORDER BY name
+----
+stage_summary_udtf 1 1
+success_check_headers 1 1
+
 statement ok
 CREATE OR REPLACE STAGE s3_stage URL = 's3://test/' CONNECTION = ( AWS_KEY_ID = 'minioadmin' AWS_SECRET_KEY = 'minioadmin' ENDPOINT_URL = 'http://127.0.0.1:9900') FILE_FORMAT = (TYPE = CSV);
 

@@ -49,7 +49,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::MaterializedViewChecker;
 use databend_common_sql::Planner;
 use databend_common_sql::parse_materialized_view_query;
-use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::validate_materialized_view_source;
 use databend_common_storages_fuse::FuseTable;
@@ -58,8 +57,9 @@ use databend_enterprise_materialized_view::get_materialized_view_handler;
 use databend_meta_client::types::MatchSeq;
 use databend_query::interpreters::InsertInterpreter;
 use databend_query::interpreters::MutationInterpreter;
+use databend_query::interpreters::PostCommitHooks;
 use databend_query::interpreters::QueryFinishHooks;
-use databend_query::interpreters::execute_commit_statement;
+use databend_query::interpreters::commit_transaction;
 use databend_query::schedulers::ServiceQueryExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
@@ -366,10 +366,10 @@ impl<'a> MaterializedViewRefresh<'a> {
                 self.mv_table.get_id(),
             )?,
             Plan::DataMutation { s_expr, schema, .. } => {
-                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let mutation = s_expr.mutation()?.clone();
                 Arc::new(MutationInterpreter::try_create_materialized_view_refresh(
                     self.ctx.clone(),
-                    *s_expr,
+                    (*s_expr).into_planned()?,
                     schema,
                     mutation.metadata,
                     self.mv_table.get_id(),
@@ -577,7 +577,6 @@ impl<'a> MaterializedViewRefresh<'a> {
                 catalog: Some(Identifier::from_name(None, &self.catalog)),
                 database: Some(Identifier::from_name(None, &self.database)),
                 table: Identifier::from_name(None, &self.view_name),
-                branch: None,
             },
             columns: vec![],
             source: InsertSource::Select {
@@ -711,7 +710,7 @@ impl<'a> MaterializedViewRefresh<'a> {
         ])
     }
 
-    async fn execute_refresh(&self) -> Result<()> {
+    async fn execute_refresh(&self) -> Result<Option<PostCommitHooks>> {
         let strategy = self.plan_refresh_strategy().await?;
         if let Some(statement) = match &strategy {
             RefreshStrategy::CheckpointOnly => None,
@@ -744,11 +743,12 @@ impl<'a> MaterializedViewRefresh<'a> {
                 )
                 .await?;
         }
-        execute_commit_statement(self.ctx.clone()).await?;
-        Ok(())
+        commit_transaction(self.ctx.clone()).await
     }
 
-    pub async fn execute(&self) -> Result<()> {
+    /// Commit the refresh and checkpoint while the handler holds the lifecycle lock.
+    /// The handler dispatches the returned hooks only after releasing that lock.
+    pub async fn execute(&self) -> Result<Option<PostCommitHooks>> {
         let txn_mgr = self.ctx.txn_mgr();
         if txn_mgr.lock().is_active() {
             return Err(ErrorCode::InvalidOperation(
@@ -757,12 +757,14 @@ impl<'a> MaterializedViewRefresh<'a> {
         }
         txn_mgr.lock().begin();
 
-        if let Err(error) = self.execute_refresh().await {
-            // execute_commit_statement() clears the transaction itself once entered. This
-            // explicit clear covers planning and refresh failures before commit starts.
-            txn_mgr.lock().clear();
-            return Err(error);
+        match self.execute_refresh().await {
+            Ok(hooks) => Ok(hooks),
+            Err(error) => {
+                // commit_transaction() clears the transaction itself once entered. This
+                // explicit clear covers planning and refresh failures before commit starts.
+                txn_mgr.lock().clear();
+                Err(error)
+            }
         }
-        Ok(())
     }
 }

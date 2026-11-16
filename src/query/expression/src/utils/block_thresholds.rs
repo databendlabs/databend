@@ -161,6 +161,28 @@ impl BlockThresholds {
         block_num_by_rows.max(block_num_by_bytes).min(total_rows)
     }
 
+    /// Thresholds the ordered compact builder cuts recluster output with.
+    ///
+    /// `rows_per_block` and `bytes_per_block` are the task-scaled targets from
+    /// [`Self::calc_rows_for_recluster`]; the builder cuts a block once it reaches 80% of
+    /// a target. The targets never go below the table's own, so whichever dimension
+    /// triggers the cut also satisfies the table's [`Self::check_large_enough`]. A task may
+    /// grow blocks past the table thresholds to approach the compressed-size target, but
+    /// never shrink them: smaller output is "not full" everywhere else, and a constant-key
+    /// block among it would never become terminal and be reclustered again and again.
+    #[inline]
+    pub fn recluster_output_thresholds(
+        &self,
+        rows_per_block: usize,
+        bytes_per_block: usize,
+    ) -> BlockThresholds {
+        let table_bytes_per_block = self
+            .max_bytes_per_block
+            .div_ceil(MAX_BYTES_PER_BLOCK_FACTOR);
+        self.set_rows_per_block(rows_per_block.max(self.max_rows_per_block))
+            .set_bytes_per_block(bytes_per_block.max(table_bytes_per_block))
+    }
+
     /// Calculates the optimal rows and bytes per block based on total data size and row count.
     ///
     /// # Parameters

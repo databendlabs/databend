@@ -14,6 +14,7 @@
 
 use std::io::Read;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::types::DecimalSize;
@@ -54,6 +55,29 @@ impl SegmentStatistics {
             block_hlls,
             block_top_ns,
         }
+    }
+
+    /// Preserve block positions when reusing persisted statistics. Older writers
+    /// skipped blocks without HLLs, so a short array has unknown positions and
+    /// must be discarded rather than padded at the end.
+    pub fn align_to_blocks(&mut self, block_count: usize) -> Result<()> {
+        if self.block_hlls.len() > block_count || self.block_top_ns.len() > block_count {
+            return Err(ErrorCode::StorageOther(format!(
+                "segment statistics exceed block count {block_count}: {} HLL entries, {} Top-N entries",
+                self.block_hlls.len(),
+                self.block_top_ns.len()
+            )));
+        }
+        if self.block_hlls.len() != block_count {
+            self.block_hlls.clear();
+            self.block_hlls.resize_with(block_count, Vec::new);
+        }
+        if self.block_top_ns.len() != block_count {
+            self.block_top_ns.clear();
+            self.block_top_ns
+                .resize_with(block_count, BlockTopN::default);
+        }
+        Ok(())
     }
 
     pub fn encoding() -> MetaEncoding {
@@ -162,6 +186,20 @@ mod tests {
         bytes.extend_from_slice(&(data.len() as u64).to_le_bytes());
         bytes.extend(data);
         Ok(bytes)
+    }
+
+    #[test]
+    fn aligns_legacy_statistics_without_guessing_block_positions() -> Result<()> {
+        let mut stats = SegmentStatistics::new(vec![vec![1], vec![3]], vec![]);
+        stats.align_to_blocks(3)?;
+        assert_eq!(stats.block_hlls, vec![Vec::<u8>::new(); 3]);
+        assert_eq!(stats.block_top_ns, vec![BlockTopN::default(); 3]);
+
+        stats.block_hlls = vec![vec![1], vec![], vec![3]];
+        stats.align_to_blocks(3)?;
+        assert_eq!(stats.block_hlls, vec![vec![1], vec![], vec![3]]);
+        assert!(stats.align_to_blocks(2).is_err());
+        Ok(())
     }
 
     #[test]

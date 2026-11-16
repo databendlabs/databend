@@ -154,11 +154,14 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
+        ttl: None,
         table_indexes: Some(table_indexes),
         table_constraints: None,
+        clone: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,
+        index_user_dictionaries: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
@@ -654,9 +657,16 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         block0, block1, block2, block3, block4, block5, block6, block7, block8, block9,
     ];
 
+    // Expected results below include physical segment/block indexes. Keep the
+    // fixture write single-threaded so parallel serialization cannot reorder them,
+    // then restore the normal thread count for the pruning under test.
+    let settings = fixture.default_session().get_settings();
+    let max_threads = settings.get_max_threads()?;
+    settings.set_max_threads(1)?;
     fixture
         .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
+    settings.set_max_threads(max_threads)?;
 
     // Define query vectors for testing
     let query_values1 = vec![-0.6886994, 0.594091, 0.90251667, -0.5796461];
@@ -782,7 +792,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
             vector_index: Some(vector_index),
             ..Default::default()
         };
-        extras.push((Some(extra), result));
+        extras.push((Some(extra), result, false));
     }
 
     // Add a filter to test filter pushdown
@@ -999,10 +1009,18 @@ async fn test_block_pruner() -> anyhow::Result<()> {
             vector_index: Some(vector_index),
             ..Default::default()
         };
-        extras.push((Some(extra), result));
+        extras.push((Some(extra), result, true));
     }
 
-    for (extra, expected_results) in extras {
+    for (extra, expected_results, filtered) in extras {
+        // The expected results of filtered queries are the scores of all rows of
+        // the blocks. Once the rows that pass the filter fill the limit, the pruner
+        // keeps only the TopN rows: the 5 lowest scores above 2.0.
+        let expected_results = if filtered {
+            filtered_topn(expected_results, |score| score > 2.0, 5)
+        } else {
+            expected_results
+        };
         let block_metas = apply_block_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
@@ -1017,10 +1035,24 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         for ((block_meta_index, _), expected_scores) in
             block_metas.iter().zip(expected_results.iter())
         {
-            assert!(block_meta_index.vector_scores.is_some());
-            let vector_scores = block_meta_index.vector_scores.clone().unwrap();
+            // The pruner attaches the scored rows; compare them in row order.
+            let matches = block_meta_index
+                .vector_index_matches
+                .as_ref()
+                .expect("missing vector scores");
+            let scores = matches.scores.as_ref().expect("missing vector scores");
+            assert_eq!(scores.len(), matches.rows.len());
+            let mut vector_scores: Vec<(usize, F32)> = matches
+                .rows
+                .iter()
+                .map(|row| *row as usize)
+                .zip(scores.iter().copied())
+                .collect();
+            vector_scores.sort_by_key(|(row, _)| *row);
+            let mut expected_scores = expected_scores.clone();
+            expected_scores.sort_by_key(|expected| expected.vector_idx);
             assert_eq!(vector_scores.len(), expected_scores.len());
-            for (vector_score, expected_score) in vector_scores.iter().zip(expected_scores) {
+            for (vector_score, expected_score) in vector_scores.iter().zip(&expected_scores) {
                 assert_eq!(block_meta_index.segment_idx, expected_score.segment_idx);
                 assert_eq!(block_meta_index.block_idx, expected_score.block_idx);
                 assert_eq!(vector_score.0, expected_score.vector_idx);
@@ -1030,6 +1062,37 @@ async fn test_block_pruner() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// The rows of `blocks` among the `limit` lowest scores that pass `filter`, if
+/// they fill the limit; otherwise `blocks` unchanged. Blocks without such rows
+/// are removed.
+fn filtered_topn(
+    blocks: Vec<Vec<VectorScoreResult>>,
+    filter: impl Fn(f32) -> bool,
+    limit: usize,
+) -> Vec<Vec<VectorScoreResult>> {
+    let mut passed: Vec<f32> = blocks
+        .iter()
+        .flatten()
+        .map(|result| result.score)
+        .filter(|&score| filter(score))
+        .collect();
+    if passed.len() < limit {
+        return blocks;
+    }
+    passed.sort_by(f32::total_cmp);
+    let last = passed[limit - 1];
+    blocks
+        .into_iter()
+        .map(|block| {
+            block
+                .into_iter()
+                .filter(|result| filter(result.score) && result.score <= last)
+                .collect::<Vec<_>>()
+        })
+        .filter(|block| !block.is_empty())
+        .collect()
 }
 
 #[derive(Debug, Clone)]

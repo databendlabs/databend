@@ -21,8 +21,6 @@ mod iterator;
 mod slice_iterator;
 mod zip_validity;
 
-use std::convert::TryInto;
-
 pub use chunk_iterator::BitChunk;
 pub use chunk_iterator::BitChunkIterExact;
 pub use chunk_iterator::BitChunks;
@@ -144,18 +142,17 @@ pub fn count_zeros(slice: &[u8], offset: usize, len: usize) -> usize {
     }
 
     // finally, count any and all bytes in the middle in groups of 8
-    let mut chunks = slice.chunks_exact(8);
+    let (chunks, remainder) = slice.as_chunks::<8>();
     set_count += chunks
-        .by_ref()
+        .iter()
         .map(|chunk| {
-            let a = u64::from_ne_bytes(chunk.try_into().unwrap());
+            let a = u64::from_ne_bytes(*chunk);
             a.count_ones() as usize
         })
         .sum::<usize>();
 
     // and any bytes that do not fit in the group
-    set_count += chunks
-        .remainder()
+    set_count += remainder
         .iter()
         .map(|byte| byte.count_ones() as usize)
         .sum::<usize>();

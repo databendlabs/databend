@@ -14,6 +14,7 @@
 
 use std::cmp;
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -64,12 +65,16 @@ pub(crate) struct ReclusterProperties {
     pub(crate) block_thresholds: BlockThresholds,
     pub(crate) cluster_key_info: ClusterKeyInfo,
     pub(crate) partition_key_count: usize,
+    pub(crate) partition_key_id: Option<u32>,
     pub(crate) memory_threshold: usize,
     /// Split unordered linear inputs before overlap-based merge selection.
     /// Materialized views retain their re-aggregation selection semantics.
     pub(crate) split_sort_tasks: bool,
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
+    /// Blocks of the final full pass of a vector RECLUSTER FINAL, which are
+    /// rewritten once regardless of level; see `ReclusterFinalCarry`.
+    pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
 }
 
 impl ReclusterProperties {
@@ -124,9 +129,11 @@ impl ReclusterProperties {
                 && !is_materialized_view_engine(table.engine()),
             cluster_key_info,
             partition_key_count: table.partition_key_count(),
+            partition_key_id: table.partition_key_id(),
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vector_full_pass: None,
         };
         Ok((properties, strategy))
     }
@@ -170,9 +177,11 @@ impl ReclusterProperties {
             split_sort_tasks: strategy.supports_ordered_merge(),
             cluster_key_info,
             partition_key_count,
+            partition_key_id: (partition_key_count != 0).then_some(0),
             memory_threshold,
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
+            vector_full_pass: None,
         };
         (properties, strategy)
     }
@@ -195,6 +204,17 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
         window_len: usize,
     ) -> Result<Vec<Vec<SelectedReclusterSegment>>>;
+
+    /// The blocks of a group that may be rewritten, before any selection, including
+    /// small-block compaction. All by default.
+    fn eligible_blocks(
+        &self,
+        _properties: &ReclusterProperties,
+        indices: Vec<usize>,
+        _blocks: &[&ReclusterBlock],
+    ) -> Vec<usize> {
+        indices
+    }
 
     fn fetch_task_candidates(
         &self,

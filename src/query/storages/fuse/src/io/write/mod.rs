@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub(crate) mod block_index;
 mod block_statistics_writer;
 mod block_writer;
 mod bloom_index_writer;
+mod inverted_index_merge;
 mod inverted_index_writer;
 mod json_path_statistics_builder;
 mod meta_writer;
@@ -37,7 +39,6 @@ pub use block_writer::write_data;
 pub use bloom_index_writer::BloomIndexRebuilder;
 pub use bloom_index_writer::BloomIndexState;
 pub use inverted_index_writer::InvertedIndexBuilder;
-pub(crate) use inverted_index_writer::InvertedIndexState;
 pub use inverted_index_writer::InvertedIndexWriter;
 pub(crate) use inverted_index_writer::create_index_schema;
 pub(crate) use inverted_index_writer::create_inverted_index_builders;
@@ -50,7 +51,7 @@ pub(crate) use spatial_index_writer::SpatialIndexState;
 pub(crate) use stream::StreamBlockBuilder;
 pub(crate) use stream::StreamBlockProperties;
 pub use vector_index_writer::VectorIndexBuilder;
-pub(crate) use vector_index_writer::VectorIndexState;
+pub use vector_index_writer::VectorIndexSearchOptions;
 pub use virtual_column_builder::VirtualColumnBuildMode;
 pub use virtual_column_builder::VirtualColumnBuilder;
 pub use virtual_column_layout::VirtualColumnLayoutPlanner;
@@ -58,3 +59,5 @@ pub use virtual_column_layout::VirtualColumnLayoutPolicy;
 pub use virtual_segment_schema::build_virtual_segment_schema;
 pub use write_settings::MAX_BLOCK_UNCOMPRESSED_SIZE;
 pub use write_settings::WriteSettings;
+
+pub(crate) use crate::io::write::spatial_index_writer::SpatialIndexResult;

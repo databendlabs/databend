@@ -40,6 +40,7 @@ use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -149,6 +150,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             deduplicated_label: None,
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         });
 
         let build_res =
@@ -292,7 +294,7 @@ pub async fn verify_compact_tasks(
                 compact_segment_indices.extend(extra.removed_segment_indexes.iter());
                 actual_blocks_number += extra.unchanged_blocks.len();
                 for (_, b) in &extra.unchanged_blocks {
-                    actual_block_ids.insert(b.0.location.clone());
+                    actual_block_ids.insert(b.block_meta.location.clone());
                 }
             }
             CompactBlockPartInfo::CompactTaskInfo(task) => {
@@ -317,7 +319,7 @@ pub async fn verify_compact_tasks(
             dal.clone(),
             loc.clone(),
             TestFixture::default_table_schema(),
-            false,
+            CachePolicy::READ_ONLY,
         )
         .await?;
         let segment = SegmentInfo::try_from(compact_segment)?;

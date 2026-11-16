@@ -24,7 +24,6 @@ use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
-use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
@@ -72,7 +71,6 @@ impl SubqueryDecorrelatorOptimizer {
                             correlated_columns,
                             derived_columns,
                         )?,
-                        is_reuse_index: desc.is_reuse_index,
                         nulls_first: desc.nulls_first,
                         asc: desc.asc,
                     });
@@ -108,14 +106,7 @@ impl SubqueryDecorrelatorOptimizer {
                     .iter()
                     .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
-                    span: lambda.span,
-                    func_name: lambda.func_name.clone(),
-                    args,
-                    lambda_expr: lambda.lambda_expr.clone(),
-                    lambda_display: lambda.lambda_display.clone(),
-                    return_type: lambda.return_type.clone(),
-                }))
+                Ok(ScalarExpr::LambdaFunction(lambda.with_args(args)?))
             }
             ScalarExpr::CastExpr(cast_expr) => {
                 let scalar =
@@ -138,6 +129,7 @@ impl SubqueryDecorrelatorOptimizer {
                     name: udf.name.clone(),
                     handler: udf.handler.clone(),
                     headers: udf.headers.clone(),
+                    external_access_integrations: udf.external_access_integrations.clone(),
                     display_name: udf.display_name.clone(),
                     udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),

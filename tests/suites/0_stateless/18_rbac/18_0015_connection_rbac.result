@@ -1,13 +1,5 @@
-=== OLD LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=0 ===
-=== TEST USER A WITH SUPER PRIVILEGES ===
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
-=== NEW LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=1 ===
-=== TEST USER A WITH SUPER PRIVILEGES ===
+=== Connection authorization is always enabled ===
+=== TEST USER A WITH SUPER AND EXPLICIT CREATE CONNECTION PRIVILEGES ===
 --- CREATE 3 CONNECTIONS WILL SUCCESS ---
 c1	azblob	endpoint_url=ht***om
 c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
@@ -16,7 +8,7 @@ c1	azblob	endpoint_url=ht***om
 c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
 c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
 === TEST USER B, C WITH OWNERSHIP OR CREATE/ACCESS PRIVILEGES PRIVILEGES ===
---- USER b failed to create conn c1 because current role is public, can not create ---
+--- USER b cannot create without CREATE CONNECTION ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateConnection] is required on *.* for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 --- success, c1,c2,c3 owner role is role1 ---
 c1	azblob	endpoint_url=ht***om

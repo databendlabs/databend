@@ -65,6 +65,10 @@ pub enum ProfileStatisticsName {
     MemoryUsage,
     ExternalServerRetryCount,
     ExternalServerRequestCount,
+
+    ExchangeSendQueueWaitTime,
+    ExchangeHeldBackTime,
+    ExchangeReceiveQueueWaitTime,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -367,6 +371,27 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 index: ProfileStatisticsName::ExternalServerRequestCount as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
+            }),
+            (ProfileStatisticsName::ExchangeSendQueueWaitTime, ProfileDesc {
+                display_name: "exchange send queue wait time",
+                desc: "The time senders waited for room in the send queue, which fills when the network or the receivers do not keep up",
+                index: ProfileStatisticsName::ExchangeSendQueueWaitTime as usize,
+                unit: StatisticsUnit::NanoSeconds,
+                plain_statistics: false,
+            }),
+            (ProfileStatisticsName::ExchangeHeldBackTime, ProfileDesc {
+                display_name: "exchange held back time",
+                desc: "The time queued data waited because its connection had as many frames or bytes in flight as allowed, summed over connections",
+                index: ProfileStatisticsName::ExchangeHeldBackTime as usize,
+                unit: StatisticsUnit::NanoSeconds,
+                plain_statistics: false,
+            }),
+            (ProfileStatisticsName::ExchangeReceiveQueueWaitTime, ProfileDesc {
+                display_name: "exchange receive queue wait time",
+                desc: "The time received data waited for room in the receive queue, which fills when the downstream operators do not keep up",
+                index: ProfileStatisticsName::ExchangeReceiveQueueWaitTime as usize,
+                unit: StatisticsUnit::NanoSeconds,
+                plain_statistics: false,
             }),
         ]))
     }).clone()

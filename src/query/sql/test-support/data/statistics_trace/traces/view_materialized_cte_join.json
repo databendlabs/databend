@@ -4,7 +4,11 @@
       "catalog": "default",
       "database": "default",
       "view": "statistics_trace_recent_orders",
-      "query": "SELECT o_orderkey, o_custkey, o_total FROM default.statistics_trace_orders WHERE o_total > 10"
+      "query": "SELECT o_orderkey, o_custkey, o_total FROM default.statistics_trace_orders WHERE o_total > 10",
+      "query_namespace": [
+        "default",
+        "default"
+      ]
     }
   ],
   "udfs": [

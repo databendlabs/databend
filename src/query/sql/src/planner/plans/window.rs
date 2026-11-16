@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -21,7 +20,6 @@ use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::function_stat::DomainStatBounds;
@@ -30,7 +28,6 @@ use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -54,6 +51,7 @@ use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
 use crate::plans::NtileFunction;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 
@@ -414,20 +412,13 @@ fn fold_constant_stat(
     expr: &ScalarExpr,
     func_ctx: &FunctionContext,
 ) -> Result<Option<FoldedConstantStat>> {
-    let expr = expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
-    let Ok(constant) = expr.into_owned().into_constant() else {
+    let Some((value, data_type)) = expr.constant_value(func_ctx) else {
         return Ok(None);
     };
-    if constant.scalar == Scalar::Null {
+    if value == Scalar::Null {
         return Ok(Some(FoldedConstantStat::Null));
     }
-    let DomainStatBounds::Bounds(bounds) = constant
-        .scalar
-        .as_ref()
-        .domain(&constant.data_type)
-        .stat_bounds()
-    else {
+    let DomainStatBounds::Bounds(bounds) = value.as_ref().domain(&data_type).stat_bounds() else {
         return Ok(None);
     };
     let stat = ColumnStat::new(bounds, NdvEstimate::exact(1.0), StatCount::exact(0), None)
@@ -497,35 +488,6 @@ impl Operator for WindowGroup {
         Box::new(scalar_items.chain(windows))
     }
 
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
-        match self.required_distribution(rel_expr)? {
-            Distribution::Any => {}
-            distribution => required.distribution = distribution,
-        }
-        Ok(required)
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        match self.required_distribution(rel_expr)? {
-            Distribution::Any => {}
-            distribution => required.distribution = distribution,
-        }
-        Ok(vec![vec![required]])
-    }
-
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
@@ -585,6 +547,37 @@ impl Operator for WindowGroup {
     }
 }
 
+impl PhysicalOperator for WindowGroup {
+    fn compute_required_prop_child(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        _child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        let mut required = required.clone();
+        match self.required_distribution(rel_expr)? {
+            Distribution::Any => {}
+            distribution => required.distribution = distribution,
+        }
+        Ok(required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        match self.required_distribution(rel_expr)? {
+            Distribution::Any => {}
+            distribution => required.distribution = distribution,
+        }
+        Ok(vec![vec![required]])
+    }
+}
+
 impl Operator for Window {
     fn rel_op(&self) -> RelOp {
         RelOp::Window
@@ -605,33 +598,6 @@ impl Operator for Window {
             }
             _ => Box::new(iter),
         }
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
-        if self.partition_by.is_empty() {
-            required.distribution = Distribution::Serial;
-        }
-        Ok(required.clone())
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        if self.partition_by.is_empty() {
-            required.distribution = Distribution::Serial;
-        }
-        Ok(vec![vec![required.clone()]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -677,6 +643,35 @@ impl Operator for Window {
             stat_info = cap_stat_info_by_rows(stat_info, limit);
         }
         Ok(Arc::new(stat_info))
+    }
+}
+
+impl PhysicalOperator for Window {
+    fn compute_required_prop_child(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        let mut required = required.clone();
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
+        Ok(required.clone())
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
+        Ok(vec![vec![required.clone()]])
     }
 }
 
@@ -851,4 +846,16 @@ pub struct WindowPartition {
     pub partition_by: Vec<ScalarItem>,
     pub top: Option<usize>,
     pub func: WindowFuncType,
+}
+
+impl WindowPartition {
+    /// Hash keys for shuffling the sort input. The input has already evaluated
+    /// the partition items, so hash their columns rather than re-evaluating the
+    /// expressions, which would keep the source columns alive across the exchange.
+    pub fn distribution_keys(&self) -> Result<Vec<ScalarExpr>> {
+        self.partition_by
+            .iter()
+            .map(|item| item.bound_column_expr("window_partition_key".to_string()))
+            .collect()
+    }
 }

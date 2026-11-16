@@ -12,71 +12,402 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
-use databend_common_sql::optimizer::ir::StatContext;
+use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::optimizers::operator::PullUpFilterOptimizer;
+use databend_common_sql::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
+use databend_common_sql::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
+use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
-use databend_common_sql::optimizer::optimizers::rule::RuleID;
+use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::plans::Plan;
 
+use crate::framework::LiteTableContext;
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::setup_context;
 use crate::framework::golden::write_case_header;
 
-async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase) -> Result<()> {
+async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) -> Result<()> {
     let ctx = setup_context(case).await?;
-    let raw_plan = ctx.bind_sql(case.sql).await?;
-    let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let Plan::Query {
+        s_expr, metadata, ..
+    } = &plan
+    else {
+        unreachable!("test query should bind to Plan::Query")
+    };
+
+    let settings = ctx.get_settings();
+    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?)
+        .with_settings(&settings)?;
+    let before_expr = optimize_before(opt_ctx.clone(), s_expr.logical()?).await?;
+    let before_plan = plan.replace_query_s_expr(before_expr.clone());
 
     write_case_header(file, case)?;
-    writeln!(file, "raw_plan:")?;
+    writeln!(file, "before_plan:")?;
     writeln!(
         file,
         "{}",
-        raw_plan.format_indent(Default::default(), &StatContext::default())?
+        before_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
-    writeln!(file, "optimized_plan:")?;
-    writeln!(
-        file,
-        "{}",
-        optimized_plan.format_indent(Default::default(), &StatContext::default())?
-    )?;
+    // The logical plan format does not show rank limits, so record their positions.
+    let before_rank_limits = rank_limit_positions(&before_expr);
+    if before_rank_limits != (0, 0) {
+        write_rank_limit_positions(file, before_rank_limits)?;
+    }
+
+    let mut extractor = Extractor {
+        rule: RuleEagerAggregation::new(metadata.clone()),
+        results: TransformResult::new(),
+    };
+    extractor.extract(&before_expr)?;
+    let results = extractor.results.results();
+    for (result_index, result) in results.iter().enumerate() {
+        result.validate_types(metadata)?;
+        result.validate_column_scope(metadata)?;
+        writeln!(file, "apply_plan_{result_index}:")?;
+        let rewritten = plan.replace_query_s_expr(result.clone());
+        writeln!(
+            file,
+            "{}",
+            rewritten.format_indent(Default::default(), &ctx.stat_context()?)?
+        )?;
+        // A rank limit below the join keeps the first groups of one join input, which
+        // may all be filtered out by the join (#20591).
+        if before_rank_limits != (0, 0) {
+            write_rank_limit_positions(file, rank_limit_positions(result))?;
+        }
+    }
     writeln!(file)?;
 
     Ok(())
 }
 
+/// Counts rank-limited aggregates above and below the first join.
+fn rank_limit_positions(expr: &SExpr) -> (usize, usize) {
+    fn walk(expr: &SExpr, below_join: bool, counts: &mut (usize, usize)) {
+        if let Some(aggregate) = expr.plan().as_aggregate()
+            && aggregate.rank_limit.is_some()
+        {
+            if below_join {
+                counts.1 += 1;
+            } else {
+                counts.0 += 1;
+            }
+        }
+        let below_join = below_join || expr.plan().as_join().is_some();
+        for child in expr.children() {
+            walk(child, below_join, counts);
+        }
+    }
+    let mut counts = (0, 0);
+    walk(expr, false, &mut counts);
+    counts
+}
+
+fn write_rank_limit_positions(
+    file: &mut impl std::io::Write,
+    (above_join, below_join): (usize, usize),
+) -> Result<()> {
+    writeln!(
+        file,
+        "rank_limit_aggregates: above_join={above_join} below_join={below_join}"
+    )?;
+    Ok(())
+}
+
+/// Applies the rule at the first matching node and preserves its ancestors in
+/// every candidate, so the golden also checks surrounding Sort/TopN/Limit nodes.
+struct Extractor {
+    rule: RuleEagerAggregation,
+    results: TransformResult,
+}
+
+impl Extractor {
+    fn extract(&mut self, expr: &SExpr) -> Result<()> {
+        self.rule.apply(expr, &mut self.results)?;
+        if !self.results.results().is_empty() {
+            return Ok(());
+        }
+        for (child_index, child) in expr.children().enumerate() {
+            self.extract(child)?;
+            if self.results.results().is_empty() {
+                continue;
+            }
+            let mut results = TransformResult::new();
+            for result in self.results.results() {
+                results.add_result(expr.replace_children(expr.children.iter().enumerate().map(
+                    |(index, child)| {
+                        if index == child_index {
+                            Arc::new(result.clone())
+                        } else {
+                            child.clone()
+                        }
+                    },
+                )));
+            }
+            self.results = results;
+            break;
+        }
+        Ok(())
+    }
+}
+
+/// Mirrors the production pipeline up to the point where `RuleEagerAggregation` runs,
+/// without the cost-based join reordering in between.
+async fn optimize_before(opt_ctx: Arc<OptimizerContext>, s_expr: &SExpr) -> Result<SExpr> {
+    let expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
+        .optimize_async(s_expr.clone())
+        .await?;
+    let expr = RuleNormalizeAggregateOptimizer::new().optimize_sync(expr)?;
+    let expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize_sync(expr)?;
+    RecursiveRuleOptimizer::new(opt_ctx, &DEFAULT_REWRITE_RULES).optimize_sync(expr)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_eager_aggregation_optimizer_outcomes() -> Result<()> {
+async fn test_eager_aggregation_rule_results() -> Result<()> {
     let mut file = open_golden_file("optimizer", "eager_aggregation.txt")?;
 
     let cases = [
         SqlTestCase {
-            name: "count_star_can_preaggregate_build_side",
-            description: "COUNT(*) grouped by the join key should allow eager aggregation on one side.",
+            name: "q0_multi_join",
+            description: "Original pre-#19579 multi-join eager aggregation case.",
+            setup_sqls: &[CUSTOMER_TABLE, ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q0,
+        },
+        SqlTestCase {
+            name: "q1_sum",
+            description: "Original pre-#19579 filtered SUM case.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
-            sql: "SELECT o_orderkey, count(*)
+            sql: Q1,
+        },
+        SqlTestCase {
+            name: "q2_sums_from_both_sides",
+            description: "Original pre-#19579 case with SUM expressions assigned to both join sides.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q2,
+        },
+        SqlTestCase {
+            name: "q3_existing_preaggregation",
+            description: "Original pre-#19579 case with an aggregate already below the join.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q3,
+        },
+        SqlTestCase {
+            name: "q4_count_star",
+            description: "Original pre-#19579 COUNT(*) case.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q4,
+        },
+        SqlTestCase {
+            name: "scalar_counts_preserve_empty_input_semantics",
+            description: "Eager COUNT outputs must map an empty join's NULL SUM to a non-nullable zero, including counts inside scalar expressions.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL)",
+            ],
+            sql: "SELECT count(*), count(l.v), count(l.v) + 1
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "scalar_min_opposite_nullable_count",
+            description: "Every candidate must preserve opposite-side COUNT multiplicity; only the two-sided rewrite can weight a raw nullable COUNT.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT min(l.v), count(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "scalar_nullable_count_opposite_min",
+            description: "A one-sided eager COUNT remains legal when the untouched side only contributes MIN.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT count(l.v), min(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "scalar_nullable_counts_from_both_sides",
+            description: "Both nullable COUNTs must be weighted by the opposite row count and restored to zero on empty input.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT count(l.v), count(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "scalar_min_max_with_count_star_assignments",
+            description: "COUNT(*) can be assigned to either already-bound side; only its left assignment permits a one-sided candidate.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT min(l.v), max(r.v), count(*)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "mixed_sum_count_is_not_eager",
+            description: "A visible SUM and COUNT must trigger the mixed-aggregate guard, independently of DISTINCT or unsupported functions.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT sum(o_totalprice), count(*)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey",
+        },
+        SqlTestCase {
+            name: "q5_sum_plus_constant",
+            description: "Original pre-#19579 SUM output used by a scalar expression.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q5,
+        },
+        SqlTestCase {
+            name: "q6_count_plus_constant",
+            description: "Original pre-#19579 COUNT output used by a scalar expression.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q6,
+        },
+        SqlTestCase {
+            name: "q7_group_and_sum_from_opposite_sides",
+            description: "Temporary join-key groups when the final group and SUM come from opposite sides.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q7,
+        },
+        SqlTestCase {
+            name: "q8_group_and_sum_from_same_side",
+            description: "Q23 shape: the final group and SUM come from the same side while the join key is temporary.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q8,
+        },
+        SqlTestCase {
+            name: "q9_composite_join_keys_absent_from_final_group_by",
+            description: "Every column of a composite equi-join key becomes a temporary group key.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q9,
+        },
+        SqlTestCase {
+            name: "q10_expression_join_key_is_not_rewritten",
+            description: "Expression join keys remain outside the supported temporary-key rewrite.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q10,
+        },
+        SqlTestCase {
+            name: "q11_outer_join_is_not_rewritten",
+            description: "Outer joins must not use the inner-join multiplicity rewrite.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q11,
+        },
+        SqlTestCase {
+            name: "non_equi_join_is_not_eager",
+            description: "Plain equi keys do not make preaggregation safe when a cross-side residual still filters individual joined rows.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, sum(o_totalprice)
+FROM orders JOIN lineitem
+  ON o_orderkey = l_orderkey AND o_totalprice > l_extendedprice
+GROUP BY o_custkey",
+        },
+        SqlTestCase {
+            name: "grouping_sets_are_not_eager",
+            description: "Grouping-set UNION branches must aggregate the materialized join result, not pruned join inputs.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY GROUPING SETS ((o_custkey), ())",
+        },
+        SqlTestCase {
+            name: "rollup_is_not_eager",
+            description: "ROLLUP must aggregate UNION branches above the materialized join.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY ROLLUP (o_custkey)",
+        },
+        SqlTestCase {
+            name: "cube_is_not_eager",
+            description: "CUBE must aggregate UNION branches above the materialized join.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY CUBE (o_custkey)",
+        },
+        SqlTestCase {
+            name: "q12_rank_limit_on_group_key",
+            description: "ORDER BY group key LIMIT pushes a rank limit into the final aggregate; it must stay above the join.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q12,
+        },
+        SqlTestCase {
+            name: "q13_rank_limit_with_filter_on_other_side",
+            description: "#20591 shape: the join side filter can drop the first groups of the other side, so a rank limit below the join returns too few rows.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: Q13,
+        },
+        SqlTestCase {
+            name: "top_n_on_aggregate_expression",
+            description: "Every candidate retains the whole query's descending aggregate ordering, limit and offset.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, sum(l_extendedprice) + 1 AS s
+FROM lineitem JOIN orders ON o_orderkey = l_orderkey
+GROUP BY o_orderkey ORDER BY s DESC LIMIT 5 OFFSET 2",
+        },
+        SqlTestCase {
+            name: "sum_distinct_is_not_eager",
+            description: "Distinct sums cannot combine finalized local sums.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, sum_distinct(l_extendedprice)
 FROM lineitem, orders
 WHERE o_orderkey = l_orderkey
 GROUP BY o_orderkey",
         },
         SqlTestCase {
-            name: "sum_plus_constant_preserves_eager_aggregation",
-            description: "A SUM output used inside a scalar expression should still optimize through eager aggregation.",
+            name: "count_distinct_is_not_eager",
+            description: "Distinct counts cannot combine finalized local counts.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
-            sql: "SELECT o_orderkey, sum(l_extendedprice) + 1
+            sql: "SELECT o_orderkey, count_distinct(l_extendedprice)
 FROM lineitem, orders
 WHERE o_orderkey = l_orderkey
 GROUP BY o_orderkey",
         },
         SqlTestCase {
-            name: "count_plus_constant_preserves_eager_aggregation",
-            description: "A COUNT output used inside a scalar expression should still optimize through eager aggregation.",
+            name: "semantic_distinct_is_not_eager",
+            description: "Semantic DISTINCT must resolve to an unsupported eager strategy.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
-            sql: "SELECT o_orderkey, count(*) + 1
+            sql: "SELECT o_orderkey, sum(DISTINCT l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "stddev_is_not_eager",
+            description: "Mergeable variance state does not make finalized standard deviations composable.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, stddev_pop(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "uniq_is_not_eager",
+            description: "Distinct counts with a dedicated name must not be eager.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, uniq(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey",
+        },
+        SqlTestCase {
+            name: "min_max_can_preaggregate",
+            description: "Extrema combine finalized local extrema without multiplicity compensation.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, min(l_extendedprice), max(l_extendedprice)
 FROM lineitem, orders
 WHERE o_orderkey = l_orderkey
 GROUP BY o_orderkey",
@@ -84,7 +415,7 @@ GROUP BY o_orderkey",
     ];
 
     for case in &cases {
-        write_optimized_case(&mut file, case).await?;
+        write_rule_results(&mut file, case).await?;
     }
 
     Ok(())
@@ -96,8 +427,11 @@ async fn test_eager_aggregation_keeps_decimal_product_types_in_sync() -> Result<
         name: "decimal_sum_multiplied_by_eager_count",
         description: "",
         setup_sqls: &[DECIMAL_SALES_TABLE, DATE_DIM_TABLE],
+        // An equi-join keeps a group column on both sides, so the `sum * eager_count`
+        // rewrite (`SingleCount`) stays eligible. A CROSS JOIN would leave `date_dim`
+        // without a group column and the rule would skip that rewrite (#20483).
         sql: "SELECT ss_store_sk, sum(ss_ext_sales_price)
-FROM store_sales CROSS JOIN date_dim
+FROM store_sales JOIN date_dim ON ss_store_sk = d_date_sk
 GROUP BY ss_store_sk",
     };
     let ctx = setup_context(&case).await?;
@@ -108,14 +442,192 @@ GROUP BY ss_store_sk",
         unreachable!("test query should bind to Plan::Query")
     };
 
-    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-    let split =
-        RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(*s_expr)?;
-    let rewritten = RuleEagerAggregation::new(metadata.clone()).optimize_sync(&split)?;
-    rewritten.validate_types(&metadata)?;
+    let mut extractor = Extractor {
+        rule: RuleEagerAggregation::new(metadata.clone()),
+        results: TransformResult::new(),
+    };
+    extractor.extract(s_expr.logical()?)?;
+    // Check SingleGroupBy, SingleCount and SingleDouble, not just the last
+    // candidate selected by the forced optimizer (or an unchanged original plan).
+    assert_eq!(extractor.results.results().len(), 3);
+    for result in extractor.results.results() {
+        result.validate_types(&metadata)?;
+        result.validate_column_scope(&metadata)?;
+    }
 
     Ok(())
 }
+
+// Exercise candidate generation directly as well as the production-plan goldens:
+// the cost model may discard a legal candidate, hiding an eligibility regression.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_eager_aggregation_strategy_candidates() -> Result<()> {
+    for (aggregate, eligible) in [
+        ("sum", true),
+        ("count", true),
+        ("min", true),
+        ("max", true),
+        ("min_distinct", true),
+        ("sum_distinct", false),
+        ("count_distinct", false),
+        ("uniq", false),
+        ("stddev_pop", false),
+    ] {
+        let sql = format!(
+            "SELECT ss_store_sk, {aggregate}(ss_ext_sales_price) + 1
+FROM store_sales CROSS JOIN date_dim
+GROUP BY ss_store_sk"
+        );
+        let ctx = LiteTableContext::create().await?;
+        ctx.register_setup_sql(DECIMAL_SALES_TABLE).await?;
+        ctx.register_setup_sql(DATE_DIM_TABLE).await?;
+        let Plan::Query {
+            s_expr, metadata, ..
+        } = ctx.bind_sql(&sql).await?
+        else {
+            unreachable!("test query should bind to Plan::Query")
+        };
+        let mut results = TransformResult::new();
+        RuleEagerAggregation::new(metadata.clone()).apply(s_expr.logical()?, &mut results)?;
+        assert_eq!(!results.results().is_empty(), eligible, "{aggregate}");
+        for result in results.results() {
+            result.validate_types(&metadata)?;
+            result.validate_column_scope(&metadata)?;
+        }
+    }
+    Ok(())
+}
+
+// Regression for #20483: an eager aggregate on a side without any GROUP BY column is
+// a scalar aggregate and emits one row for an empty input. Pushing it below a CROSS
+// JOIN would make the join emit rows from the other side, so no candidate is legal.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_eager_aggregation_skips_side_without_group_column() -> Result<()> {
+    for aggregate in ["sum", "count", "min", "max"] {
+        let sql = format!(
+            "SELECT ss_store_sk, {aggregate}(d_date_sk)
+FROM store_sales CROSS JOIN date_dim
+GROUP BY ss_store_sk"
+        );
+        let ctx = LiteTableContext::create().await?;
+        ctx.register_setup_sql(DECIMAL_SALES_TABLE).await?;
+        ctx.register_setup_sql(DATE_DIM_TABLE).await?;
+        let Plan::Query {
+            s_expr, metadata, ..
+        } = ctx.bind_sql(&sql).await?
+        else {
+            unreachable!("test query should bind to Plan::Query")
+        };
+        let mut results = TransformResult::new();
+        RuleEagerAggregation::new(metadata.clone()).apply(s_expr.logical()?, &mut results)?;
+        assert!(results.results().is_empty(), "{aggregate}");
+    }
+    Ok(())
+}
+
+const Q0: &str = "SELECT
+    l_orderkey,
+    sum(l_extendedprice * (1 - l_discount)) AS revenue,
+    o_orderdate,
+    o_shippriority
+FROM
+    orders join customer on c_custkey = o_custkey,
+    lineitem
+WHERE
+    c_mktsegment = 'BUILDING'
+    AND l_orderkey = o_orderkey
+    AND o_orderdate < CAST('1995-03-15' AS date)
+    AND l_shipdate > CAST('1995-03-15' AS date)
+GROUP BY
+    l_orderkey,
+    o_orderdate,
+    o_shippriority
+ORDER BY
+    revenue DESC,
+    o_orderdate";
+
+const Q1: &str = "SELECT o_orderkey, sum(l_extendedprice * (1-l_discount))
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+AND l_returnflag = 'R'
+GROUP BY o_orderkey";
+
+const Q2: &str = "SELECT o_orderkey, sum(l_extendedprice), sum(o_totalprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q3: &str = "SELECT o_orderkey, sum(revenue)
+FROM (SELECT l_orderkey, sum(l_extendedprice * (1-l_discount)) as revenue
+    FROM lineitem WHERE l_returnflag = 'R' GROUP BY l_orderkey) as loss, orders
+WHERE o_orderkey = l_orderkey
+AND o_orderdate BETWEEN CAST('1995-05-01' as date) AND CAST('1995-05-31' as date)
+GROUP BY o_orderkey";
+
+const Q4: &str = "SELECT o_orderkey, count(*)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q5: &str = "SELECT o_orderkey, sum(l_extendedprice) + 1
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q6: &str = "SELECT o_orderkey, count(*) + 1
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+const Q7: &str = "SELECT o_custkey, sum(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_custkey";
+
+const Q8: &str = "SELECT o_custkey, sum(o_totalprice)
+FROM orders, lineitem
+WHERE o_orderkey = l_orderkey
+GROUP BY o_custkey";
+
+const Q9: &str = "SELECT o_shippriority, sum(o_totalprice)
+FROM orders, lineitem
+WHERE o_orderkey = l_orderkey AND o_custkey = l_partkey
+GROUP BY o_shippriority";
+
+const Q10: &str = "SELECT o_custkey, sum(o_totalprice)
+FROM orders, lineitem
+WHERE o_orderkey + 1 = l_orderkey
+GROUP BY o_custkey";
+
+const Q11: &str = "SELECT o_custkey, sum(o_totalprice)
+FROM orders LEFT JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY o_custkey";
+
+const Q12: &str = "SELECT l_orderkey, sum(l_extendedprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY l_orderkey
+ORDER BY l_orderkey
+LIMIT 3";
+
+const Q13: &str = "SELECT sum(l_quantity), l_orderkey, l_quantity
+FROM lineitem JOIN orders ON o_orderkey = l_orderkey
+WHERE o_orderstatus = 'F'
+GROUP BY l_orderkey, l_quantity
+ORDER BY l_orderkey, l_quantity
+LIMIT 3";
+
+const CUSTOMER_TABLE: &str = "CREATE TABLE customer
+(
+    c_custkey     BIGINT not null,
+    c_name        STRING not null,
+    c_address     STRING not null,
+    c_nationkey   INTEGER not null,
+    c_phone       STRING not null,
+    c_acctbal     DECIMAL(15, 2) not null,
+    c_mktsegment  STRING not null,
+    c_comment     STRING not null
+)";
 
 const ORDERS_TABLE: &str = "CREATE TABLE orders
 (
@@ -135,7 +647,7 @@ const LINEITEM_TABLE: &str = "CREATE TABLE lineitem
     l_orderkey    BIGINT not null,
     l_partkey     BIGINT not null,
     l_suppkey     BIGINT not null,
-    l_linenumber  INTEGER not null,
+    l_linenumber  BIGINT not null,
     l_quantity    DECIMAL(15, 2) not null,
     l_extendedprice  DECIMAL(15, 2) not null,
     l_discount    DECIMAL(15, 2) not null,

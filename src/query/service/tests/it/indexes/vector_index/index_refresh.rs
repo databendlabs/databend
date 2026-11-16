@@ -23,16 +23,16 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
-use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::Reader;
 use futures_util::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -235,17 +235,12 @@ async fn check_index_data(
     // Get block metas to check vector index data
     let table_schema = new_fuse_table.schema();
     let segment_reader =
-        MetaReaders::segment_info_reader(new_fuse_table.get_operator(), table_schema.clone());
+        SegmentInfoReader::new(new_fuse_table.get_operator(), table_schema.clone());
 
     let mut block_metas = vec![];
     for (segment_loc, ver) in &new_snapshot.segments {
         let segment_info = segment_reader
-            .read(&LoadParams {
-                location: segment_loc.to_string(),
-                len_hint: None,
-                ver: *ver,
-                put_cache: false,
-            })
+            .read(&(segment_loc.to_string(), *ver), &CachePolicy::BYPASS)
             .await?;
         for block_meta in segment_info.block_metas()? {
             block_metas.push(block_meta);
@@ -253,55 +248,25 @@ async fn check_index_data(
     }
 
     for block_meta in block_metas {
-        assert!(block_meta.vector_index_location.is_some());
+        assert!(block_meta.vector_index_location.is_none());
         assert!(block_meta.vector_index_size.is_some());
-
-        let path = block_meta.vector_index_location.clone().unwrap();
-        let file_size = block_meta.vector_index_size;
-
-        let index_schema = read_parquet_schema_async_rs(dal, &path.0, file_size).await?;
-
-        let mut index_column_names = HashSet::new();
+        let mut locations = HashSet::new();
         for index_name in &index_names {
-            let table_index = table_indexes.get(index_name).unwrap();
-            // check index version in metadata
-            let index_version = index_schema.metadata.get(index_name);
-            assert!(index_version.is_some());
-            let index_version = index_version.unwrap();
-            assert_eq!(index_version, &table_index.version);
-
-            let distances = if let Some(distance_option) = table_index.options.get("distance") {
-                let mut distances: Vec<_> = distance_option.split(',').collect();
-                for distance in distances.iter_mut() {
-                    if *distance == "cosine" {
-                        *distance = "dot";
-                    }
-                }
-                distances
-            } else {
-                vec!["dot", "l1", "l2"]
-            };
-            let names = vec![
-                "graph_links",
-                "graph_data",
-                "encoded_u8_meta",
-                "encoded_u8_data",
-            ];
-            for column_id in &table_index.column_ids {
-                for distance in &distances {
-                    for name in &names {
-                        let index_column_name = format!("{}-{}_{}", column_id, distance, name);
-                        index_column_names.insert(index_column_name);
-                    }
-                }
-            }
+            let table_index = &table_indexes[index_name];
+            let meta = block_meta
+                .vector_index_meta(index_name)
+                .expect("per-index bundle metadata");
+            assert_eq!(meta.index_version, table_index.version);
+            assert!(
+                locations.insert(meta.location.0.clone()),
+                "indexes must not share a file"
+            );
+            let bytes = dal.read(&meta.location.0).await?.to_vec();
+            assert_eq!(meta.size, bytes.len() as u64);
+            let footer = databend_storages_common_index::VectorBundleFooter::from_bundle(&bytes)?;
+            assert_eq!(footer.index_name, *index_name);
+            assert_eq!(footer.index_version, table_index.version);
         }
-
-        // check all the index data columns exist
-        for field in index_schema.fields() {
-            assert!(index_column_names.remove(field.name()));
-        }
-        assert!(index_column_names.is_empty());
     }
 
     Ok(())

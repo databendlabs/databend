@@ -70,10 +70,13 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::LvtUpdate;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -210,6 +213,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// Get the table meta by table id.
     async fn get_table_meta_by_id(&self, table_id: u64) -> Result<Option<SeqV<TableMeta>>>;
 
+    /// Batch get table metadata by table IDs. Missing tables remain `None` in the result.
+    async fn mget_table_metas_by_ids(
+        &self,
+        _table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        Err(ErrorCode::Unimplemented(
+            "'mget_table_metas_by_ids' not implemented",
+        ))
+    }
+
+    /// List lightweight direct-source bindings in a zero-copy clone group.
+    async fn list_clone_group_bindings(&self, _clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        Err(ErrorCode::Unimplemented(
+            "'list_clone_group_bindings' not implemented",
+        ))
+    }
+
     /// Get a materialized-view definition by its table ID.
     async fn get_mv_definition(
         &self,
@@ -244,6 +264,15 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             generation: 0,
             materialized_views: vec![],
         })
+    }
+
+    /// List materialized views for management and system-table consumers.
+    async fn list_materialized_views(
+        &self,
+        _tenant: &Tenant,
+        _filter: &MaterializedViewListFilter,
+    ) -> Result<Vec<ListedMaterializedView>> {
+        Ok(vec![])
     }
 
     /// List the tables name by meta ids. This function should not be used to list temporary tables.
@@ -281,47 +310,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
-
-    async fn get_table_with_branch(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        match branch {
-            Some(branch_name) => {
-                self.get_table_branch(tenant, db_name, table_name, branch_name)
-                    .await
-            }
-            None => self.get_table(tenant, db_name, table_name).await,
-        }
-    }
-
-    async fn get_table_branch(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table_branch_with_expire_ctl(tenant, db_name, table_name, branch_name, false)
-            .await
-    }
-
-    async fn get_table_branch_with_expire_ctl(
-        &self,
-        _tenant: &Tenant,
-        _db_name: &str,
-        _table_name: &str,
-        _branch_name: &str,
-        _include_expired: bool,
-    ) -> Result<Arc<dyn Table>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'get_table_branch_no_expire' not implemented for catalog {}",
-            self.name()
-        )))
-    }
 
     async fn create_table_tag(&self, _req: CreateTableTagReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
@@ -403,7 +391,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_drop_table_infos(
         &self,
         _req: ListDroppedTableReq,
-    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+    ) -> Result<(Vec<TableInfo>, Vec<DroppedId>)> {
         Err(ErrorCode::Unimplemented(
             "'get_drop_table_infos' not implemented",
         ))
@@ -717,10 +705,28 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!()
     }
 
+    /// Batch get per-table LVT values and their sequences.
+    async fn mget_table_lvts(
+        &self,
+        _tenant: &Tenant,
+        _table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<LeastVisibleTime>>)>> {
+        Err(ErrorCode::Unimplemented(
+            "'mget_table_lvts' not implemented",
+        ))
+    }
+
+    /// Atomically advance `(table_id, observed_lvt_seq, candidate_lvt)` entries.
+    /// True confirms the entire batch committed; false means a conflict with no batch writes.
+    /// Errors can have an unknown commit outcome. GC must not sweep on false or error.
+    async fn set_table_lvts(&self, _tenant: &Tenant, _updates: &[LvtUpdate]) -> Result<bool> {
+        unimplemented!()
+    }
+
     async fn get_table_lvt(
         &self,
         _name_ident: &LeastVisibleTimeIdent,
-    ) -> Result<Option<LeastVisibleTime>> {
+    ) -> Result<Option<SeqV<LeastVisibleTime>>> {
         unimplemented!()
     }
 

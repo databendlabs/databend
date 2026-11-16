@@ -44,6 +44,7 @@ use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -56,6 +57,8 @@ use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -77,9 +80,11 @@ use log::error;
 use log::info;
 use log::warn;
 
+use super::data_retention_util::is_drop_time_retainable;
 use super::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
@@ -176,6 +181,14 @@ where
 
 pub const ORPHAN_POSTFIX: &str = "orphan";
 
+/// Returns true if `table_name` is the history name of a CTAS staging table,
+/// i.e. `orphan@<ts>`, created by `create_table` with `as_dropped = true`.
+fn is_orphan_table_name(table_name: &str) -> bool {
+    table_name
+        .strip_prefix(ORPHAN_POSTFIX)
+        .is_some_and(|rest| rest.starts_with('@'))
+}
+
 /// Remove copied files for a dropped table.
 ///
 /// Dropped table can not be accessed by any query,
@@ -250,9 +263,28 @@ async fn remove_copied_files_for_dropped_table(
     unreachable!()
 }
 
+/// Tables of a database that are eligible for garbage collection.
+#[derive(Debug, Default)]
+pub struct HistoryTablesForGc {
+    pub tables: Vec<TableNIV>,
+
+    /// Whether some table meta of the database can not be decoded by this version.
+    ///
+    /// Such tables are skipped, and the database must not be removed,
+    /// otherwise the data and meta of the skipped tables can never be found.
+    pub has_undecodable_table: bool,
+}
+
 /// Lists all dropped and non-dropped tables belonging to a Database,
 /// returns those tables that are eligible for garbage collection,
 /// i.e., whose dropped time is in the specified range.
+///
+/// CTAS staging tables (`orphan@<ts>`) whose `drop_on` is within the default
+/// retention period are always skipped, to protect an in-progress CTAS from
+/// being vacuumed concurrently.
+///
+/// Tables whose meta can not be decoded, e.g., written by a newer version, are skipped
+/// with a warning, instead of failing the whole garbage collection.
 #[logcall::logcall(input = "")]
 #[fastrace::trace]
 pub async fn get_history_tables_for_gc(
@@ -261,7 +293,7 @@ pub async fn get_history_tables_for_gc(
     db_id: u64,
     limit: usize,
     db_is_dropped: bool,
-) -> Result<Vec<TableNIV>, KVAppError> {
+) -> Result<HistoryTablesForGc, KVAppError> {
     info!(
         "get_history_tables_for_gc: db_id {}, limit {}",
         db_id, limit
@@ -305,8 +337,12 @@ pub async fn get_history_tables_for_gc(
     }
 
     let mut filter_tb_infos = vec![];
+    let mut has_undecodable_table = false;
     const BATCH_SIZE: usize = 1000;
+    // Same as `KVPbApi::CHUNK_SIZE`, the number of keys per `get_kv_stream` request.
+    const GET_TABLE_META_CHUNK_SIZE: usize = 256;
 
+    let now = Utc::now();
     let args_len = args.len();
     let mut num_out_of_time_range = 0;
     let mut num_processed = 0;
@@ -318,12 +354,30 @@ pub async fn get_history_tables_for_gc(
 
     // Process in batches to avoid performance issues
     for chunk in args.chunks(BATCH_SIZE) {
-        // Get table metadata for current batch
-        let table_id_idents = chunk.iter().map(|(table_id, _)| table_id.clone());
-        let seq_metas = kv_api.get_pb_values_vec(table_id_idents).await?;
+        // Get table metadata for current batch.
+        // Values are decoded one by one, so that an undecodable one does not fail the others.
+        let mut seq_metas = Vec::with_capacity(chunk.len());
+        for sub_chunk in chunk.chunks(GET_TABLE_META_CHUNK_SIZE) {
+            let table_id_idents = sub_chunk.iter().map(|(table_id, _)| table_id.clone());
+            let strm = kv_api.get_pb_stream_low(table_id_idents).await?;
+            seq_metas.extend(strm.collect::<Vec<_>>().await);
+        }
 
         // Filter by drop_time_range for current batch
-        for (seq_meta, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
+        for (res, (table_id, table_name)) in seq_metas.into_iter().zip(chunk.iter()) {
+            let seq_meta = match res {
+                Ok((_, seq_meta)) => seq_meta,
+                Err(PbApiReadError::PbDecodeError(e)) => {
+                    warn!(
+                        "get_history_tables_for_gc: skip table {:?} of {} in db {}: cannot decode table meta: {}",
+                        table_id, table_name, db_id, e
+                    );
+                    has_undecodable_table = true;
+                    continue;
+                }
+                Err(e) => return Err(MetaError::from(e).into()),
+            };
+
             let Some(seq_meta) = seq_meta else {
                 warn!(
                     "batch_filter_table_info cannot find {:?} table_meta",
@@ -365,6 +419,23 @@ pub async fn get_history_tables_for_gc(
                     num_out_of_time_range += 1;
                     continue;
                 }
+
+                // A CTAS staging table (`orphan@<ts>`) is created with `drop_on = now` and is
+                // only turned into a visible table by `commit_table_meta` after all data is
+                // written. A vacuum with a short retention (e.g. 0 days) must not collect it
+                // while the CTAS may still be running, otherwise the files written afterward
+                // are left without any metadata. Keep such tables for at least the default
+                // retention period, regardless of the requested retention.
+                if is_orphan_table_name(table_name)
+                    && is_drop_time_retainable(seq_meta.drop_on, now)
+                {
+                    info!(
+                        "get_history_tables_for_gc: skip CTAS staging table {} {:?}, drop_on {:?} is within the minimum retention period",
+                        table_name, table_id, seq_meta.drop_on
+                    );
+                    num_out_of_time_range += 1;
+                    continue;
+                }
             }
 
             filter_tb_infos.push(TableNIV::new(
@@ -380,7 +451,10 @@ pub async fn get_history_tables_for_gc(
                     limit,
                     filter_tb_infos.len()
                 );
-                return Ok(filter_tb_infos);
+                return Ok(HistoryTablesForGc {
+                    tables: filter_tb_infos,
+                    has_undecodable_table,
+                });
             }
         }
 
@@ -391,7 +465,10 @@ pub async fn get_history_tables_for_gc(
         );
     }
 
-    Ok(filter_tb_infos)
+    Ok(HistoryTablesForGc {
+        tables: filter_tb_infos,
+        has_undecodable_table,
+    })
 }
 
 /// Permanently remove a dropped database from the meta-service.
@@ -816,6 +893,17 @@ async fn remove_data_for_dropped_table(
         table_id.table_id,
     )));
 
+    if let Some(group_id) = parse_clone_group_id(&seq_meta.data.options).ok().flatten() {
+        txn.if_then.push(txn_del(&TableCloneByGroupIdent::new(
+            group_id,
+            table_id.table_id,
+        )));
+    }
+    txn.if_then.push(txn_del(&LeastVisibleTimeIdent::new(
+        tenant,
+        table_id.table_id,
+    )));
+
     txn_delete_exact(txn, table_id, seq_meta.seq);
 
     // Get id -> name mapping
@@ -856,20 +944,16 @@ async fn remove_data_for_dropped_table(
         };
 
         let table_ownership_key = TenantOwnershipObjectIdent::new(tenant, table_ownership);
-        let table_ownership_seq_meta = {
-            let seq_meta = kv_api.get_pb(&table_ownership_key).await?;
-            let Some(seq_meta) = seq_meta else {
-                let err = format!(
-                    "cannot find OwnershipInfo of object: {:?}, ",
-                    table_ownership_key.to_string_key()
-                );
-                error!("{}", err);
-                return Ok(Err(err));
-            };
-            seq_meta
-        };
-
-        txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
+        if let Some(table_ownership_seq_meta) = kv_api.get_pb(&table_ownership_key).await? {
+            txn_delete_exact(txn, &table_ownership_key, table_ownership_seq_meta.seq);
+        } else {
+            // A staged CTAS/clone table can fail before ownership is granted. Its permanent orphan
+            // GC must still continue through tag, policy, clone-binding and counter cleanup.
+            warn!(
+                ownership_key = table_ownership_key.to_string_key();
+                "GC table has no ownership record; continuing orphan cleanup"
+            );
+        }
     }
 
     // Clean up table ref tags under `__fd_table_tag/<table_id>/...`.

@@ -50,6 +50,12 @@ async fn test_type_check_in_list_subquery_conversion() -> Result<()> {
             setup_sqls: &[],
             sql: "number NOT IN (1, 2, 3, 4)",
         },
+        SqlTestCase {
+            name: "typed_constants_of_common_type_convert_to_subquery",
+            description: "Folded explicit casts that already have the common type are read as values, not rejected.",
+            setup_sqls: &[],
+            sql: "number IN (try_to_int64('1'), try_to_int64('2'), try_to_int64('3'), try_to_int64('4'))",
+        },
     ];
 
     run_type_check_cases_with_settings(

@@ -13,21 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::borrow::Cow;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
+use databend_common_expression::FoldRules;
 use databend_common_expression::RawExpr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::type_check;
@@ -39,12 +35,11 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
-use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::WindowFuncFrame;
 use databend_common_sql::plans::WindowFuncFrameBound;
 use databend_common_sql::plans::WindowFuncType;
@@ -365,6 +360,7 @@ fn apply_window_transform(
                 partition_by.clone(),
                 order_by.clone(),
                 (start_bound, end_bound),
+                builder.func_ctx.clone(),
             )?) as Box<dyn Processor>
         } else {
             let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
@@ -376,6 +372,7 @@ fn apply_window_transform(
                 partition_by.clone(),
                 order_by.clone(),
                 (start_bound, end_bound),
+                builder.func_ctx.clone(),
             )?) as Box<dyn Processor>
         };
         Ok(ProcessorPtr::create(transform))
@@ -515,7 +512,7 @@ fn window_top_n(window: &WindowSpec) -> Option<(usize, WindowPartitionTopNFunc)>
 impl PhysicalPlanBuilder {
     pub async fn build_window_group(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         window_group: &databend_common_sql::plans::WindowGroup,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
@@ -524,32 +521,38 @@ impl PhysicalPlanBuilder {
             required.remove(&window.index);
         }
         for item in &window_group.scalar_items {
-            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         }
         for window in &window_group.windows {
             for item in &window.arguments {
-                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.partition_by {
-                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.order_by {
-                item.order_by_item
-                    .scalar
-                    .collect_used_columns(&mut required);
                 required.insert(item.order_by_item.index);
             }
         }
 
         let child = s_expr.child(0)?;
-        let input = self.build(child, required.clone()).await?;
+        // Sources are needed to evaluate the window inputs, but only the
+        // resulting columns and the parent's outputs need to survive the sort.
+        let mut input_required = required.clone();
+        for item in &window_group.scalar_items {
+            input_required.remove(&item.index);
+        }
+        for item in &window_group.scalar_items {
+            item.scalar.collect_used_columns(&mut input_required);
+        }
+        let input = self.build(child, input_required).await?;
         let input = if window_group.scalar_items.is_empty() {
             input
         } else {
-            let mut projections = required.iter().copied().collect::<Vec<_>>();
+            let mut projections = required
+                .union(self.metadata.read().get_retained_column())
+                .copied()
+                .collect::<Vec<_>>();
             for item in &window_group.scalar_items {
                 projections.push(item.index);
             }
@@ -605,7 +608,7 @@ impl PhysicalPlanBuilder {
 
     pub async fn build_window(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         window: &databend_common_sql::plans::Window,
         mut required: ColumnSet,
         _stat_info: PlanStatsInfo,
@@ -616,20 +619,15 @@ impl PhysicalPlanBuilder {
         // left join ( select dense_rank() over(order by t1.a desc) as rk
         // from (select 'a2' as a) t1 )s2 on s1.rk=s2.rk;
 
-        // The scalar items in window function is not replaced yet.
-        // The will be replaced in physical plan builder.
+        // The child EvalScalar has already evaluated these expressions. Keep
+        // their results across the sort/window, not their source columns.
         window.arguments.iter().for_each(|item| {
-            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         });
         window.partition_by.iter().for_each(|item| {
-            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         });
         window.order_by.iter().for_each(|item| {
-            item.order_by_item
-                .scalar
-                .collect_used_columns(&mut required);
             required.insert(item.order_by_item.index);
         });
 
@@ -659,6 +657,10 @@ impl PhysicalPlanBuilder {
         let mut w = window.clone();
 
         if w.frame.units.is_range() && w.order_by.len() == 1 {
+            let mut common_ty = input_schema
+                .field_with_name(&w.order_by[0].order_by_item.index.to_string())?
+                .data_type()
+                .clone();
             let order_by = &mut w.order_by[0].order_by_item.scalar;
 
             let mut start = match &mut w.frame.start_bound {
@@ -672,7 +674,6 @@ impl PhysicalPlanBuilder {
                 _ => None,
             };
 
-            let mut common_ty = order_by.type_check(input_schema)?.data_type().clone();
             if common_ty.remove_nullable().is_timestamp() {
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let scalar_ty = scalar.as_ref().infer_data_type();
@@ -714,12 +715,15 @@ impl PhysicalPlanBuilder {
                     .ok_or_else(|| {
                         ErrorCode::IllegalDataType(format!(
                             "Cannot find common type for {:?} and {:?}",
-                            &common_ty, &ty
+                            common_ty, ty
                         ))
                     })?;
                 }
                 *order_by = wrap_cast(order_by, &common_ty);
 
+                // Frame offsets are folded with the statement's context, so casts that
+                // depend on session settings (e.g. rounding mode) behave like `SELECT`.
+                let func_ctx = self.ctx.get_function_context()?;
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let raw_expr = RawExpr::<usize>::Cast {
                         span: w.span,
@@ -732,15 +736,8 @@ impl PhysicalPlanBuilder {
                         dest_type: common_ty.clone(),
                     };
                     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                    let (expr, _) = ConstantFolder::fold(
-                        Cow::Owned(expr),
-                        &FunctionContext::default(),
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    let expr = expr.into_owned();
-                    if let Expr::Constant(Constant {
-                        scalar: new_scalar, ..
-                    }) = expr
+                    if let Some(new_scalar) =
+                        FoldRules::eval_constant(&func_ctx, &BUILTIN_FUNCTIONS, &expr)
                     {
                         if new_scalar.is_positive() {
                             **scalar = new_scalar;
@@ -802,11 +799,7 @@ impl PhysicalPlanBuilder {
                             .map(|s| s.data_type().into_owned())
                             .collect(),
                         params: agg.params.clone(),
-                        sort_descs: agg
-                            .sort_descs
-                            .iter()
-                            .map(|d| d.try_into())
-                            .collect::<Result<_>>()?,
+                        order_by: agg.bound_order_by()?,
                     },
                     output_column: w.index,
                     arg_indices: agg
@@ -818,20 +811,6 @@ impl PhysicalPlanBuilder {
                             } else {
                                 Err(ErrorCode::Internal(
                                     "Aggregate function argument must be a BoundColumnRef"
-                                        .to_string(),
-                                ))
-                            }
-                        })
-                        .collect::<Result<_>>()?,
-                    sort_desc_indices: agg
-                        .sort_descs
-                        .iter()
-                        .map(|desc| {
-                            if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
-                                Ok(col.column.index)
-                            } else {
-                                Err(ErrorCode::Internal(
-                                    "Aggregate function sort description must be a BoundColumnRef"
                                         .to_string(),
                                 ))
                             }

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::parser::mask_url;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -31,6 +32,8 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::utils::FromData;
 use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -59,17 +62,12 @@ impl AsyncSystemTable for UserFunctionsTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let enable_experimental_rbac_check =
-            ctx.get_settings().get_enable_experimental_rbac_check()?;
-        let user_functions = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false, Object::UDF).await?;
-            let udfs = UserFunctionsTable::get_udfs(&ctx.get_tenant()).await?;
-            udfs.into_iter()
-                .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
-                .collect::<Vec<_>>()
-        } else {
-            UserFunctionsTable::get_udfs(&ctx.get_tenant()).await?
-        };
+        let visibility_checker = ctx.get_visibility_checker(false, Object::UDF).await?;
+        let user_functions = UserFunctionsTable::get_udfs(&ctx.get_tenant())
+            .await?
+            .into_iter()
+            .filter(|udf| visibility_checker.check_udf_visibility(&udf.name))
+            .collect::<Vec<_>>();
 
         let mut names = Vec::with_capacity(user_functions.len());
         let mut is_aggregate = Vec::with_capacity(user_functions.len());
@@ -171,6 +169,20 @@ impl UserFunctionsTable {
 
         Ok(user_functions_defined
             .into_iter()
+            .map(|mut user_function| {
+                // Calling a function does not require its server credentials.
+                if let UDFDefinition::UDFServer(UDFServer {
+                    headers, address, ..
+                })
+                | UDFDefinition::UDTFServer(UDTFServer {
+                    headers, address, ..
+                }) = &mut user_function.definition
+                {
+                    headers.values_mut().for_each(|v| *v = "***".to_string());
+                    *address = mask_url(address, false);
+                }
+                user_function
+            })
             .map(|user_function| UserFunction {
                 name: user_function.name,
                 is_aggregate: user_function.definition.is_aggregate(),

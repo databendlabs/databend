@@ -23,6 +23,8 @@ use parking_lot::MappedMutexGuard;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use parking_lot::RwLock;
+use prometheus_client::collector::Collector;
+use prometheus_client::encoding::DescriptorEncoder;
 use prometheus_client::registry::Metric as PMetrics;
 use prometheus_client::registry::Registry;
 
@@ -33,6 +35,7 @@ use crate::runtime::metrics::family::FamilyCounterCreator as InnerFamilyCounterC
 use crate::runtime::metrics::family::FamilyGaugeCreator as InnerFamilyGaugeCreator;
 use crate::runtime::metrics::family::FamilyHistogramCreator as InnerFamilyHistogramCreator;
 use crate::runtime::metrics::family::FamilyLabels;
+use crate::runtime::metrics::family::FamilyMember;
 use crate::runtime::metrics::family_metrics::FamilyCounter as InnerFamilyCounter;
 use crate::runtime::metrics::family_metrics::FamilyGauge as InnerFamilyGauge;
 use crate::runtime::metrics::family_metrics::FamilyHistogram as InnerFamilyHistogram;
@@ -72,9 +75,31 @@ struct GlobalMetric {
     pub creator: Box<dyn Fn(usize) -> Box<dyn Metric> + Send>,
 }
 
+/// A collector whose metrics are computed when read, exported both by the Prometheus scrape
+/// (`Collector::encode`) and by `GlobalRegistry::dump_sample`, which serves `system.metrics`.
+/// Both must describe the same samples: counters named with a `_total` suffix, as the scrape
+/// encodes them, and no `databend_` prefix, as the other samples of `dump_sample`.
+///
+/// `encode` runs under the registry's lock, so neither method may touch a metric of the
+/// registry; `sample` runs outside it. Its values are not reset by `GlobalRegistry::reset`.
+pub trait SampleCollector: Collector {
+    fn sample(&self, samples: &mut Vec<MetricSample>);
+}
+
+/// Registers one `SampleCollector` with the Prometheus registry, which takes ownership.
+#[derive(Debug)]
+struct SharedCollector(Arc<dyn SampleCollector>);
+
+impl Collector for SharedCollector {
+    fn encode(&self, encoder: DescriptorEncoder) -> std::result::Result<(), std::fmt::Error> {
+        self.0.encode(encoder)
+    }
+}
+
 struct GlobalRegistryInner {
     registry: Registry,
     metrics: Vec<GlobalMetric>,
+    sample_collectors: Vec<Arc<dyn SampleCollector>>,
 }
 
 pub struct GlobalRegistry {
@@ -89,6 +114,7 @@ impl GlobalRegistry {
             inner: Mutex::new(GlobalRegistryInner {
                 metrics: vec![],
                 registry,
+                sample_collectors: vec![],
             }),
         }
     }
@@ -110,8 +136,19 @@ impl GlobalRegistry {
         metric
     }
 
-    pub fn register_collector(&self, collector: Box<dyn prometheus_client::collector::Collector>) {
+    /// Registers a collector exported by the Prometheus scrape only. A collector whose metrics
+    /// `system.metrics` must also show uses `register_sample_collector`.
+    pub fn register_collector(&self, collector: Box<dyn Collector>) {
         self.inner.lock().registry.register_collector(collector);
+    }
+
+    /// Registers a collector exported by both the Prometheus scrape and `dump_sample`.
+    pub fn register_sample_collector(&self, collector: Arc<dyn SampleCollector>) {
+        let mut inner = self.inner.lock();
+        inner
+            .registry
+            .register_collector(Box::new(SharedCollector(collector.clone())));
+        inner.sample_collectors.push(collector);
     }
 
     pub(crate) fn new_scoped_metric(
@@ -145,12 +182,20 @@ impl GlobalRegistry {
     }
 
     pub fn dump_sample(&self) -> Result<Vec<MetricSample>> {
-        let global_registry = self.inner.lock();
+        let (mut samples, collectors) = {
+            let global_registry = self.inner.lock();
 
-        let mut samples = Vec::with_capacity(global_registry.metrics.len());
+            let mut samples = Vec::with_capacity(global_registry.metrics.len());
 
-        for metric in global_registry.metrics.iter() {
-            metric.metric.sample(&metric.name, &mut samples);
+            for metric in global_registry.metrics.iter() {
+                metric.metric.sample(&metric.name, &mut samples);
+            }
+            (samples, global_registry.sample_collectors.clone())
+        };
+        // Read outside the lock: registering a metric, and the scoped registries of running
+        // queries growing, take it, and must not wait for a collector.
+        for collector in collectors.iter() {
+            collector.sample(&mut samples);
         }
 
         // TODO:
@@ -324,6 +369,8 @@ where T: FamilyLabels {
 
 pub type FamilyGauge<T> = Family<T, InnerFamilyGauge<T>>;
 pub type FamilyCounter<T> = Family<T, InnerFamilyCounter<T>>;
+/// One label set of a `FamilyCounter`, looked up once; see `Family::member`.
+pub type FamilyCounterMember<T> = FamilyMember<T, InnerFamilyCounter<T>>;
 pub type FamilyHistogram<T> = Family<T, InnerFamilyHistogram<T>>;
 
 struct CounterCreator;

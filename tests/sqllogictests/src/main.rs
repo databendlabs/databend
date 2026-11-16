@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::future::Future;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Instant;
 
 use clap::Parser;
@@ -43,20 +43,22 @@ use crate::client::QueryResultFormat;
 use crate::diagnostics::capture_failure_diagnostics;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use crate::hook::Hooks;
 use crate::report::ErrorRecord;
 use crate::report::RunReport;
+use crate::settings_matrix::SettingsGroup;
+use crate::settings_matrix::collect_settings_passes;
 use crate::util::ColumnType;
-use crate::util::collect_files;
-use crate::util::collect_lazy_dir;
-use crate::util::lazy_prepare_data;
-use crate::util::lazy_run_dictionary_containers;
+use crate::util::collect_test_files;
 use crate::util::run_ttc_container;
 
 mod arg;
 mod client;
 mod diagnostics;
 mod error;
+mod hook;
 mod report;
+mod settings_matrix;
 mod util;
 
 const HANDLER_MYSQL: &str = "mysql";
@@ -131,65 +133,119 @@ pub async fn main() -> Result<()> {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
         None => vec![HANDLER_MYSQL, HANDLER_HTTP],
     };
-    let mut containers = vec![];
-    for handler in handlers.iter() {
-        match *handler {
-            HANDLER_MYSQL => {
-                run_mysql_client(args.clone()).await?;
-            }
-            HANDLER_HTTP => {
-                run_http_client(args.clone()).await?;
-            }
-            HANDLER_HYBRID => {
-                run_hybrid_client(args.clone(), &mut containers).await?;
-            }
-            handler if handler.starts_with("ttc") => {
-                if handler != "ttc_dev" {
-                    let image = format!("ghcr.io/databendlabs/{handler}:latest");
-                    run_ttc_container(
-                        &image,
-                        TTC_PORT_START,
-                        args.port,
-                        &mut containers,
-                        QueryResultFormat::Json,
-                    )
-                    .await?;
+    let files = collect_test_files(&args)?;
+    let hooks = Hooks::discover(Path::new(&args.suites), &files)?;
+    let hook_env = vec![(
+        "DATABEND_SQLLOGICTEST_FORCE_LOAD",
+        if args.force_load {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        },
+    )];
+    let prepared_hooks = if args.bench {
+        0
+    } else {
+        hooks.prepare(&hook_env)?
+    };
+
+    // Run every requested handler even if an earlier one fails, so a failure in
+    // `http` does not hide the `hybrid` result when several handlers share one
+    // job. Errors are aggregated and reported together at the end.
+    let test_result = async {
+        let mut containers = vec![];
+        let mut failures: Vec<(String, DSqlLogicTestError)> = vec![];
+        for handler in handlers.iter() {
+            let result = match *handler {
+                HANDLER_MYSQL => run_mysql_client(args.clone(), &files).await,
+                HANDLER_HTTP => run_http_client(args.clone(), &files).await,
+                HANDLER_HYBRID => run_hybrid_client(args.clone(), &files, &mut containers).await,
+                handler if handler.starts_with("ttc") => {
+                    let image_result = if handler != "ttc_dev" {
+                        let image = format!("ghcr.io/databendlabs/{handler}:latest");
+                        run_ttc_container(
+                            &image,
+                            TTC_PORT_START,
+                            args.port,
+                            &mut containers,
+                            QueryResultFormat::Json,
+                        )
+                        .await
+                    } else {
+                        Ok(())
+                    };
+                    match image_result {
+                        Ok(()) => {
+                            run_ttc_client(args.clone(), &files, ClientType::Ttc {
+                                image: handler.to_string(),
+                                port: TTC_PORT_START,
+                                query_result_format: QueryResultFormat::Json,
+                            })
+                            .await
+                        }
+                        Err(e) => Err(e),
+                    }
                 }
-                run_ttc_client(args.clone(), ClientType::Ttc {
-                    image: handler.to_string(),
-                    port: TTC_PORT_START,
-                    query_result_format: QueryResultFormat::Json,
-                })
-                .await?;
-            }
-            _ => {
-                return Err(format!("Unknown test handler: {handler}").into());
+                _ => {
+                    return Err(format!("Unknown test handler: {handler}").into());
+                }
+            };
+            if let Err(e) = result {
+                println!("Handler {handler} failed: {e}");
+                failures.push((handler.to_string(), e));
             }
         }
+        match failures.len() {
+            0 => Ok::<(), DSqlLogicTestError>(()),
+            1 => Err(failures.pop().unwrap().1),
+            _ => Err(DSqlLogicTestError::SelfError(format!(
+                "{} handlers failed: {}",
+                failures.len(),
+                failures
+                    .iter()
+                    .map(|(h, e)| format!("[{h}] {e}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ))),
+        }
     }
+    .await;
 
-    Ok(())
+    let cleanup_result = hooks.cleanup(prepared_hooks, &hook_env);
+    match (test_result, cleanup_result) {
+        (Err(test_error), Err(cleanup_error)) => Err(DSqlLogicTestError::SelfError(format!(
+            "{test_error}; hook cleanup failed: {cleanup_error}"
+        ))),
+        (Err(test_error), Ok(())) => Err(test_error),
+        (Ok(()), Err(cleanup_error)) => Err(cleanup_error),
+        (Ok(()), Ok(())) => Ok(()),
+    }
 }
 
-async fn run_mysql_client(args: SqlLogicTestArgs) -> Result<()> {
+async fn run_mysql_client(args: SqlLogicTestArgs, files: &[PathBuf]) -> Result<()> {
     println!("MySQL client starts to run with: {:?}", args);
-    run_suits(args, ClientType::MySQL).await?;
+    run_suits(args, files, ClientType::MySQL).await?;
     Ok(())
 }
 
-async fn run_http_client(args: SqlLogicTestArgs) -> Result<()> {
+async fn run_http_client(args: SqlLogicTestArgs, files: &[PathBuf]) -> Result<()> {
     println!("Http client starts to run with: {:?}", args);
-    run_suits(args, ClientType::Http).await?;
+    run_suits(args, files, ClientType::Http).await?;
     Ok(())
 }
-async fn run_ttc_client(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
+async fn run_ttc_client(
+    args: SqlLogicTestArgs,
+    files: &[PathBuf],
+    client_type: ClientType,
+) -> Result<()> {
     println!("Http client starts to run with: {:?}", args);
-    run_suits(args, client_type).await?;
+    run_suits(args, files, client_type).await?;
     Ok(())
 }
 
 async fn run_hybrid_client(
     args: SqlLogicTestArgs,
+    files: &[PathBuf],
     cs: &mut Vec<ContainerAsync<GenericImage>>,
 ) -> Result<()> {
     println!("Hybird client starts to run with: {:?}", args);
@@ -208,7 +264,7 @@ async fn run_hybrid_client(
         }
     }
 
-    if let Err(e) = run_suits(args, ClientType::Hybird).await {
+    if let Err(e) = run_suits(args, files, ClientType::Hybird).await {
         for c in cs {
             println!("{}", c.id());
             println!("{}", c.image().name());
@@ -242,6 +298,7 @@ async fn create_databend(
     client_type: &ClientType,
     filename: &str,
     sandbox_name: Option<&str>,
+    settings: Option<&SettingsGroup>,
 ) -> Result<Databend> {
     let mut client: Client;
     let args = SqlLogicTestArgs::parse();
@@ -276,7 +333,7 @@ async fn create_databend(
                 acc += s;
 
                 if acc >= r {
-                    return create_databend(t.as_ref(), filename, sandbox_name).await;
+                    return create_databend(t.as_ref(), filename, sandbox_name, settings).await;
                 }
             }
             unreachable!()
@@ -285,59 +342,63 @@ async fn create_databend(
     if let Some(sandbox_name) = sandbox_name {
         client.init_sandbox(sandbox_name).await?;
     }
+    // Apply the `# run-with-settings:` pass before the first record so that a
+    // test file's own `SET` still wins, while `UNSET` inside the file only
+    // falls back to the server default (not to the pass setting) -- that is
+    // the accepted trade-off of a session-level override.
+    if let Some(settings) = settings {
+        for stmt in settings.set_statements() {
+            client.query(&stmt).await?;
+        }
+    }
     if args.debug {
         client.enable_debug();
     }
 
-    println!("Running {} test for file: {} ...", client_type, filename);
+    match settings {
+        Some(settings) => println!(
+            "Running {} test for file: {} [settings: {}] ...",
+            client_type, filename, settings
+        ),
+        None => println!("Running {} test for file: {} ...", client_type, filename),
+    }
     Ok(Databend::create(client))
 }
 
-async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
+async fn run_suits(
+    args: SqlLogicTestArgs,
+    selected_paths: &[PathBuf],
+    client_type: ClientType,
+) -> Result<()> {
     // Todo: set validator to process regex
     let mut num_of_tests = 0;
-    let mut lazy_dirs = HashSet::new();
     let mut files = vec![];
     let start = Instant::now();
-    for suit_file in collect_files(&args)?.into_iter() {
-        let file_name = suit_file.file_name().unwrap().to_str().unwrap().to_string();
-
-        if !file_name.ends_with(".test") {
-            continue;
-        }
-        if let Some(ref specific_file) = args.file
-            && !specific_file.split(',').any(|f| f.eq(&file_name))
-        {
-            continue;
-        }
-        if let Some(ref skip_file) = args.skipped_file
-            && skip_file.split(',').any(|f| f.eq(&file_name))
-        {
-            continue;
-        }
-        num_of_tests += parse_file::<ColumnType>(&suit_file).unwrap().len();
-
-        collect_lazy_dir(&suit_file, &mut lazy_dirs)?;
-        files.push(suit_file);
+    for suit_file in selected_paths.iter().cloned() {
+        let records_in_file = parse_file::<ColumnType>(&suit_file)
+            .map_err(|error| {
+                DSqlLogicTestError::SelfError(format!(
+                    "failed to parse {}: {error}",
+                    suit_file.display()
+                ))
+            })?
+            .len();
+        // Each `# run-with-settings:` directive reruns the whole file once more.
+        let settings_passes = collect_settings_passes(&suit_file)?;
+        num_of_tests += records_in_file * (1 + settings_passes.len());
+        files.push((suit_file, settings_passes));
     }
     let selected_files = files.len();
 
-    if !args.bench {
-        // lazy load test data
-        lazy_prepare_data(&lazy_dirs, args.force_load)?;
-    }
-    // lazy run dictionaries containers
-    let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
-
     if args.complete {
-        for file in files {
+        for (file, _) in files {
             let file_name = file.file_name().unwrap().to_str().unwrap().to_string();
 
             let col_separator = " ";
             let validator = default_validator;
             let sandbox_name = new_sandbox_name(args.enable_sandbox);
             let mut runner = Runner::new(|| async {
-                create_databend(&client_type, &file_name, sandbox_name.as_deref()).await
+                create_databend(&client_type, &file_name, sandbox_name.as_deref(), None).await
             });
             // todo: The behavior of normalizer for multi line string is incorrect
             runner
@@ -349,13 +410,32 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                     |actual, expected| actual == expected,
                 )
                 .await
-                .unwrap();
+                .map_err(|error| {
+                    DSqlLogicTestError::SelfError(format!(
+                        "failed to update {}: {error}",
+                        file.display()
+                    ))
+                })?;
         }
     } else {
+        // Every file runs once with default settings, plus once per
+        // `# run-with-settings:` directive. Files run in parallel, but the
+        // passes of one file run sequentially: each pass gets its own sandbox
+        // tenant, yet some state (e.g. internal stage storage paths) is not
+        // tenant-scoped, so concurrent passes of the same file could pollute
+        // each other.
         let mut tasks = Vec::with_capacity(files.len());
-        for file in files {
+        for (file, settings_passes) in &files {
             let client_type = client_type.clone();
-            tasks.push(async move { run_file_async(&client_type, args.bench, file).await });
+            tasks.push(async move {
+                let mut error_records = vec![];
+                let passes = std::iter::once(None).chain(settings_passes.iter().map(Some));
+                for settings in passes {
+                    error_records
+                        .extend(run_file_async(&client_type, args.bench, file, settings).await?);
+                }
+                Ok(error_records)
+            });
         }
         let error_records = run_parallel_async(tasks).await;
         let report = RunReport::new(
@@ -436,6 +516,7 @@ async fn run_file_async(
     client_type: &ClientType,
     bench: bool,
     filename: impl AsRef<Path>,
+    settings: Option<&SettingsGroup>,
 ) -> std::result::Result<Vec<ErrorRecord>, ErrorRecord> {
     let start = Instant::now();
 
@@ -445,9 +526,14 @@ async fn run_file_async(
     let sandbox_name = new_sandbox_name(args.enable_sandbox);
     let records = parse_file(&filename).unwrap();
     let filename = filename.as_ref().to_str().unwrap();
+    // Failure reports name the pass so a settings-only failure is attributable.
+    let pass_name = match settings {
+        Some(settings) => format!("{filename} [settings: {settings}]"),
+        None => filename.to_string(),
+    };
 
     let mut runner = Runner::new(|| async {
-        create_databend(client_type, filename, sandbox_name.as_deref()).await
+        create_databend(client_type, filename, sandbox_name.as_deref(), settings).await
     });
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
@@ -483,7 +569,7 @@ async fn run_file_async(
 
                 let diagnostics = capture_failure_diagnostics(&mut runner).await;
                 let error_record = ErrorRecord::new(
-                    filename.to_string(),
+                    pass_name.clone(),
                     e,
                     diagnostics.query_id,
                     diagnostics.non_default_settings,
@@ -507,7 +593,7 @@ async fn run_file_async(
         println!(
             "Completed {} test for file: {} {} ({:?})",
             client_type,
-            filename,
+            pass_name,
             run_file_status,
             start.elapsed(),
         );

@@ -29,6 +29,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
+use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumn;
@@ -128,6 +129,26 @@ impl IEJoinState {
         }
     }
 
+    fn sort_block(&self, block: &DataBlock) -> Result<DataBlock> {
+        // NULL range keys cannot match and would invalidate the bounds used by
+        // intersection and probe_l1. Filter only keys, preserving the tuple IDs
+        // into the original tables (including unmatched rows for outer joins).
+        let mut validity = None;
+        for entry in block.columns().iter().take(2) {
+            let (all_null, column_validity) = entry.as_column().unwrap().validity();
+            if all_null {
+                return Ok(block.slice(0..0));
+            }
+            validity = and_validities(validity, column_validity.cloned());
+        }
+        if let Some(validity) = validity {
+            let block = block.clone().filter_with_bitmap(&validity)?;
+            DataBlock::sort(&block, &self.l1_sort_descriptions, None)
+        } else {
+            DataBlock::sort(block, &self.l1_sort_descriptions, None)
+        }
+    }
+
     fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
         let left_len = left_block.num_rows();
         let right_len = right_block.num_rows();
@@ -199,16 +220,8 @@ impl RangeJoinState {
         let ie_join_state = self.ie_join_state.as_ref().unwrap();
         let left_sorted_blocks = self.left_sorted_blocks.read();
         let right_sorted_blocks = self.right_sorted_blocks.read();
-        let l1_sorted_block = DataBlock::sort(
-            &left_sorted_blocks[left_idx],
-            &ie_join_state.l1_sort_descriptions,
-            None,
-        )?;
-        let right_block = DataBlock::sort(
-            &right_sorted_blocks[right_idx],
-            &ie_join_state.l1_sort_descriptions,
-            None,
-        )?;
+        let l1_sorted_block = ie_join_state.sort_block(&left_sorted_blocks[left_idx])?;
+        let right_block = ie_join_state.sort_block(&right_sorted_blocks[right_idx])?;
         if !ie_join_state.intersection(&l1_sorted_block, &right_block) {
             return Ok(vec![DataBlock::empty()]);
         }
@@ -225,7 +238,8 @@ impl RangeJoinState {
             left_sorted_blocks,
             self.ctx.get_settings().get_enable_fixed_rows_sort()?,
             self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
-        )?;
+        )?
+        .collect::<Result<Vec<_>>>()?;
 
         // Add a column at the end of `left_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
         let mut count: usize = 0;
@@ -254,14 +268,16 @@ impl RangeJoinState {
             )?);
         }
         let settings = self.ctx.get_settings();
-        merged_blocks = DataBlock::concat(&sort_merge(
+        let l2_merged_blocks = sort_merge(
             ie_join_state.data_schema.clone(),
             block_size,
             ie_join_state.l2_sort_descriptions.clone(),
             l2_sorted_blocks,
             settings.get_enable_fixed_rows_sort()?,
             settings.get_enable_loser_tree_merge_sort()?,
-        )?)?;
+        )?
+        .collect::<Result<Vec<_>>>()?;
+        merged_blocks = DataBlock::concat(&l2_merged_blocks)?;
 
         // The pos col of l2 sorted blocks is permutation array
         let mut p_array = Vec::with_capacity(merged_blocks.num_rows());

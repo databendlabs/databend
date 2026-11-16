@@ -39,6 +39,68 @@ def test_text_alias(copy_env, type_name):
     run_all(copy_env.conn, sqls)
 
 
+@pytest.mark.parametrize("type_name", ["tsv", "text"])
+@pytest.mark.parametrize("delimiter", ["|", ",", ";", "#"])
+def test_text_custom_delimiter_roundtrip(copy_env, type_name, delimiter):
+    """Regression for #20794: delimiters and backslashes must round-trip unchanged."""
+    conn = copy_env.conn
+    name = copy_env.uniq_name
+    run_all(conn, [
+        f"create or replace stage {name} "
+        f"file_format=(type={type_name} field_delimiter='{delimiter}')",
+        "create table text_source "
+        "(id int, a string, b string, v variant, arr array(string))",
+        # Derive nested values from the strings to also exercise JSON escaping.
+        r"""insert into text_source
+        select id, a, b, object_construct('a', a, 'b', b), [a, b]
+        from (values
+            (1, 'a|b,c;d#e', 'tail|,;#'),
+            (2, '|,;#', 'tail|,;#'),
+            (3, '\\|\\,\\;\\#', 'tail|,;#'),
+            (4, 'tab\tline\ncr\r', 'tail|,;#'),
+            (5, 'unknown\\q', 'tail|,;#'),
+            (6, 'literal\\x7c', 'tail|,;#'),
+            (7, '\\\\|', 'tail|,;#'),
+            (8, 'quotes\'"`/', 'tail|,;#')
+        ) as input(id, a, b)""",
+        "create table text_copy like text_source",
+    ])
+
+    # Unload the reloaded data again to catch accumulating backslashes.
+    for cycle, source in enumerate(["text_source", "text_copy"]):
+        path = f"@{name}/roundtrip_{cycle}/"
+        run_all(conn, [
+            f"copy into {path} from {source}",
+            (
+                "select count(), count_if(s.a = $2), count_if(s.b = $3), "
+                "count_if(s.v = parse_json($4)), "
+                "count_if(to_variant(s.arr) = parse_json($5)) "
+                f"from {path} join text_source s on s.id = $1::int",
+                (8, 8, 8, 8, 8),
+            ),
+            "truncate table text_copy",
+            f"copy into text_copy from {path}",
+            (
+                "select count(), count_if(s.a = c.a), count_if(s.b = c.b), "
+                "count_if(s.v = c.v), count_if(s.arr = c.arr) "
+                "from text_source s join text_copy c on s.id = c.id",
+                (8, 8, 8, 8, 8),
+            ),
+        ])
+
+
+@pytest.mark.parametrize("type_name", ["tsv", "text"])
+def test_text_unload_rejects_empty_delimiter(copy_env, type_name):
+    with pytest.raises(
+        Exception,
+        match="It is not supported to unload TEXT file when FIELD_DELIMITER is ''",
+    ):
+        copy_env.conn.exec(
+            f"copy into @{copy_env.uniq_name}/empty/ from (select 'a') "
+            f"file_format=(type={type_name} field_delimiter='')"
+        )
+
+
 def _copy_into_table(conn, table, location, file_format_clause, on_error="continue"):
     sql = f"copy into {table} from {location} {file_format_clause} on_error={on_error}"
     return conn.query_row(sql).values()
@@ -114,7 +176,7 @@ def test_text_missing_columns_matrix(
         copy_env,
         path,
         "(select 'alpha' as a)",
-        f"file_format=(type=text)",
+        "file_format=(type=text)",
     )
     assert content == "alpha\n"
 

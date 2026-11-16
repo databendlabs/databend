@@ -51,20 +51,17 @@ impl Binder {
             }
 
             let materialized_cte_info = if cte.materialized {
-                let (s_expr, cte_bind_context) = self.bind_cte_definition(
-                    &cte_name,
-                    &bind_context.cte_context.cte_map,
-                    &cte.query,
-                )?;
+                let (s_expr, cte_bind_context) =
+                    self.bind_cte_definition(&cte_name, bind_context, &cte.query)?;
                 // The physical CTE registry is query-global, while CTE aliases are scoped.
                 // Give each materialized producer a unique execution name.
                 let materialized_cte_id = self.metadata.write().allocate_materialized_cte_id();
                 let materialized_cte_info = MaterializedCTEInfo {
                     cte_name: format!("__materialized_cte_{materialized_cte_id}_{cte_name}"),
                     bound_s_expr: s_expr,
-                    bound_context: cte_bind_context,
+                    bound_columns: cte_bind_context.columns,
                 };
-                Some(materialized_cte_info)
+                Some(Arc::new(materialized_cte_info))
             } else {
                 None
             };
@@ -89,7 +86,7 @@ impl Binder {
                     .virtual_column_outputs
                     .remove(&cte_name)
                     .unwrap_or_default(),
-                query: *cte.query.clone(),
+                query: Arc::new(*cte.query.clone()),
                 recursive: with.recursive,
                 logical_recursive_cte_id,
                 columns: vec![],
@@ -98,7 +95,7 @@ impl Binder {
             };
             // If the CTE is materialized, we'll construct a temp table for it.
             if cte.user_specified_materialized {
-                self.m_cte_to_temp_table(cte, idx, with.clone())?;
+                self.m_cte_to_temp_table(cte, idx, with.clone(), bind_context)?;
             }
             bind_context.cte_context.cte_map.insert(cte_name, cte_info);
         }
@@ -113,11 +110,8 @@ impl Binder {
         cte_info: &CteInfo,
         producer_column_bindings: &[ColumnBinding],
     ) -> Result<(SExpr, BindContext)> {
-        let (s_expr, cte_bind_context) = self.bind_cte_definition(
-            table_name,
-            bind_context.cte_context.cte_map.as_ref(),
-            &cte_info.query,
-        )?;
+        let (s_expr, cte_bind_context) =
+            self.bind_cte_definition(table_name, bind_context, &cte_info.query)?;
 
         let (table_alias, column_alias) = match alias {
             Some(alias) => {
@@ -205,22 +199,25 @@ impl Binder {
     pub fn bind_cte_definition(
         &mut self,
         cte_name: &str,
-        cte_map: &IndexMap<String, CteInfo>,
+        bind_context: &BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         let mut prev_cte_map = Box::new(IndexMap::new());
-        for (name, cte_info) in cte_map.iter() {
+        for (name, cte_info) in bind_context.cte_context.cte_map.iter() {
             if name == cte_name {
                 break;
             }
             prev_cte_map.insert(name.clone(), cte_info.clone());
         }
         let mut cte_bind_context = BindContext {
+            binding_depth: bind_context.next_depth()?,
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,
                 virtual_column_outputs: HashMap::new(),
             },
+            // Keep the view expansion path for loop detection and view scoping.
+            binding_views: bind_context.binding_views.clone(),
             ..Default::default()
         };
         let (s_expr, cte_bind_context) = self.bind_query(&mut cte_bind_context, query)?;

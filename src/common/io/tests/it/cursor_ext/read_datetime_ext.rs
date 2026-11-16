@@ -161,3 +161,45 @@ fn test_read_date_text() -> anyhow::Result<()> {
     assert_eq!(res, expected);
     Ok(())
 }
+
+#[test]
+fn test_extended_timestamp_text_and_unchanged_date_years() -> anyhow::Result<()> {
+    for (text, expected) in [
+        ("0000-12-31", -62_135_683_200_000_000),
+        ("0000-12-31 00:00:00.000001Z", -62_135_683_199_999_999),
+        (
+            "+10000-01-01 07:59:59.999999 +08:00",
+            253_402_300_799_999_999,
+        ),
+        ("0000-12-30 10:00:00 -14:00", -62_135_683_200_000_000),
+    ] {
+        let mut reader = Cursor::new(text.as_bytes());
+        let DateTimeResType::Datetime(micros) = reader.read_timestamp_text(&Tz::UTC)? else {
+            panic!("expected timestamp: {text}");
+        };
+        assert_eq!(micros, expected, "{text}");
+        reader.must_eof()?;
+    }
+    for text in [
+        "0000-12-31",
+        "0000-12-31 00:00:00",
+        "+10000-01-01",
+        "-0001-12-31",
+    ] {
+        assert!(
+            Cursor::new(text.as_bytes())
+                .read_date_text(&Tz::UTC)
+                .is_err(),
+            "{text}"
+        );
+    }
+    for text in ["+9999999-01-01 00:00:00", "+10000-01-01 00:00:00 +08:60"] {
+        assert!(
+            Cursor::new(text.as_bytes())
+                .read_timestamp_text(&Tz::UTC)
+                .is_err(),
+            "{text}"
+        );
+    }
+    Ok(())
+}

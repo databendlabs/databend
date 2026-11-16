@@ -26,6 +26,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -75,6 +76,17 @@ impl Operator for Limit {
         RelOp::Limit
     }
 
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        rel_expr.derive_relational_prop_child(0)
+    }
+
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        self.derive_limit_stats(stat_info)
+    }
+}
+
+impl PhysicalOperator for Limit {
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -96,14 +108,5 @@ impl Operator for Limit {
         Ok(vec![vec![RequiredProperty {
             distribution: Distribution::Serial,
         }]])
-    }
-
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        rel_expr.derive_relational_prop_child(0)
-    }
-
-    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
-        let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        self.derive_limit_stats(stat_info)
     }
 }

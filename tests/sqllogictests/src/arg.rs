@@ -21,17 +21,45 @@ pub struct SqlLogicTestArgs {
         long = "run",
         use_value_delimiter = true,
         value_delimiter = ',',
-        conflicts_with_all = ["dir", "file", "skipped_dir", "skipped_file"],
+        conflicts_with_all = [
+            "run_suite",
+            "dir",
+            "file",
+            "skipped_dir",
+            "skipped_file"
+        ],
         help = "Run sqllogictests by glob patterns."
     )]
     pub run: Option<Vec<String>>,
+
+    #[arg(
+        long = "run_suite",
+        use_value_delimiter = true,
+        value_delimiter = ',',
+        conflicts_with_all = [
+            "run",
+            "skip",
+            "dir",
+            "file",
+            "skipped_dir",
+            "skipped_file"
+        ],
+        help = "Run comma-separated suite paths relative to --suites"
+    )]
+    pub run_suite: Option<Vec<String>>,
 
     #[arg(
         long = "skip",
         use_value_delimiter = true,
         value_delimiter = ',',
         requires = "run",
-        conflicts_with_all = ["dir", "file", "skipped_dir", "skipped_file"],
+        conflicts_with_all = [
+            "run_suite",
+            "dir",
+            "file",
+            "skipped_dir",
+            "skipped_file"
+        ],
         help = "Skip sqllogictests by glob patterns. Requires --run"
     )]
     pub skip: Option<Vec<String>>,
@@ -136,7 +164,7 @@ pub struct SqlLogicTestArgs {
     #[arg(
         long = "force_load",
         default_missing_value = "false",
-        help = "The arg is used to force load test data (tpch/tpcds)"
+        help = "The arg is passed to data-loading hooks that support force reload"
     )]
     pub force_load: bool,
 

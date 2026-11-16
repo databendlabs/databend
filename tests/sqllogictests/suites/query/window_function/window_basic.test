@@ -1,3 +1,6 @@
+# run-with-settings: enable_fixed_rows_sort=0
+# run-with-settings: enable_loser_tree_merge_sort=0
+
 statement ok
 CREATE DATABASE IF NOT EXISTS test_window_basic
 
@@ -60,15 +63,16 @@ SELECT sum(salary) OVER (PARTITION BY depname ORDER BY salary) ss FROM empsalary
 9600
 14600
 
+# UNION ALL branches run in parallel, so order the aggregate explicitly.
 query T
-SELECT array_agg(v) OVER (PARTITION BY k) FROM (SELECT 1 AS k, ['a'] AS v UNION ALL SELECT 1, ['b'] UNION ALL SELECT 1, ['c'])
+SELECT array_agg(v) WITHIN GROUP (ORDER BY v[1]) OVER (PARTITION BY k) FROM (SELECT 1 AS k, ['a'] AS v UNION ALL SELECT 1, ['b'] UNION ALL SELECT 1, ['c'])
 ----
 [["a"],["b"],["c"]]
 [["a"],["b"],["c"]]
 [["a"],["b"],["c"]]
 
 query T rowsort
-SELECT json_array_agg(v) OVER (PARTITION BY k) FROM (SELECT 1 AS k, 'a' AS v UNION ALL SELECT 1, 'b' UNION ALL SELECT 1, 'c')
+SELECT json_array_agg(v) OVER (PARTITION BY k ORDER BY v ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM (SELECT 1 AS k, 'a' AS v UNION ALL SELECT 1, 'b' UNION ALL SELECT 1, 'c')
 ----
 ["a","b","c"]
 ["a","b","c"]

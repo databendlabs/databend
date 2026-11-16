@@ -14,6 +14,7 @@
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::default_server_memory_limit;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
@@ -137,6 +138,18 @@ async fn test_set_settings() {
             let expect =
                 "WrongValueForVariable. Code: 2803, Text = Value 2 is not within the range [0, 1].";
             assert_eq!(expect, format!("{}", result.unwrap_err()));
+        }
+
+        {
+            assert!(settings.get_grouping_sets_to_union().unwrap());
+            assert!(settings.get_enable_cascading_grouping_sets().unwrap());
+            for name in ["grouping_sets_to_union", "enable_cascading_grouping_sets"] {
+                settings
+                    .set_setting(name.to_string(), "0".to_string())
+                    .unwrap();
+            }
+            assert!(!settings.get_grouping_sets_to_union().unwrap());
+            assert!(!settings.get_enable_cascading_grouping_sets().unwrap());
         }
 
         {
@@ -365,6 +378,29 @@ async fn test_flight_keep_alive_settings() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_query_leak_timeout_setting() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+
+    // Default keeps the historical hard-coded 180 seconds.
+    assert_eq!(settings.get_flight_query_leak_timeout_secs().unwrap(), 180);
+
+    settings
+        .set_setting(
+            "flight_query_leak_timeout_secs".to_string(),
+            "1800".to_string(),
+        )
+        .unwrap();
+    assert_eq!(settings.get_flight_query_leak_timeout_secs().unwrap(), 1800);
+
+    // 0 would remove leaked queries immediately, so it is rejected.
+    let result = settings.set_setting(
+        "flight_query_leak_timeout_secs".to_string(),
+        "0".to_string(),
+    );
+    assert!(result.is_err());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_json_result_mode_settings() {
     let settings = Settings::create(Tenant::new_literal("test"));
 
@@ -384,4 +420,19 @@ async fn test_http_json_result_mode_settings() {
     let result = settings.set_setting("http_json_result_mode".to_string(), "invalid".to_string());
     let expect = "WrongValueForVariable. Code: 2803, Text = Value invalid is not within the allowed values [\"display\", \"driver\"].";
     assert_eq!(expect, format!("{}", result.unwrap_err()));
+}
+
+/// With `max_server_memory_usage` 0 the `max_memory_usage` default, from which the spill
+/// thresholds derive, is the limit the allocator enforces: 80% of the machine or the cgroup.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_max_memory_usage_default_is_server_memory_limit() {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
+
+    let settings = Settings::create(Tenant::new_literal("test"));
+    assert_eq!(
+        settings.get_max_memory_usage().unwrap(),
+        default_server_memory_limit()
+    );
 }

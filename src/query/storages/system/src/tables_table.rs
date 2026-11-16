@@ -54,6 +54,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::is_dynamic_table_engine;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_basic::NullTable;
@@ -934,11 +935,35 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             }
                         }
                     } else if WITH_HISTORY {
-                        // Only can call get_table
-                        let mut tables = Vec::new();
+                        // Match the list path: include current tables and dropped history,
+                        // but exclude old table versions superseded by REPLACE with no drop_on.
+                        let mut tables = if default_catalog {
+                            let names: Vec<_> = tables_names.iter().cloned().collect();
+                            match ctl.mget_tables(&tenant, db_name, &names).await {
+                                Ok(t) => t,
+                                Err(err) => {
+                                    let msg = format!(
+                                        "Failed to get current tables in database: {}.{}, {}",
+                                        ctl.name(),
+                                        db_name,
+                                        err
+                                    );
+                                    warn!("{}", msg);
+                                    ctx.push_warning(msg);
+                                    continue;
+                                }
+                            }
+                        } else {
+                            Vec::new()
+                        };
                         for table_name in &tables_names {
                             match ctl.get_table_history(&tenant, db_name, table_name).await {
-                                Ok(t) => tables.extend(t),
+                                Ok(history) => {
+                                    tables.extend(history.into_iter().filter(|table| {
+                                        !default_catalog
+                                            || table.get_table_info().meta.drop_on.is_some()
+                                    }));
+                                }
                                 Err(err) => {
                                     let msg = format!(
                                         "Failed to get_table_history tables in database: {}.{}, {}",
@@ -1092,6 +1117,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     "VIEW".to_string()
                 } else if is_materialized_view_engine(v.engine()) {
                     "MATERIALIZED VIEW".to_string()
+                } else if is_dynamic_table_engine(v.engine()) {
+                    "DYNAMIC TABLE".to_string()
                 } else {
                     "BASE TABLE".to_string()
                 }

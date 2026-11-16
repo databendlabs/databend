@@ -69,12 +69,14 @@ pub trait SessionPrivilegeManager {
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
-    async fn validate_privilege(
+    /// Checks explicit user and role grants, without checking ownership.
+    /// A missing grant is `Ok(false)`; failures to evaluate grants remain errors.
+    async fn has_privilege(
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
-    ) -> Result<()>;
+    ) -> Result<bool>;
 
     async fn has_ownership(
         &self,
@@ -296,17 +298,16 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     }
 
     #[async_backtrace::framed]
-    async fn validate_privilege(
+    async fn has_privilege(
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
-        let user_verified = current_user.grants.verify_privilege(object, privilege);
-        if user_verified {
-            return Ok(());
+        if current_user.grants.verify_privilege(object, privilege) {
+            return Ok(true);
         }
 
         // 2. check the user's roles' privilege set
@@ -324,14 +325,9 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             self.get_all_effective_roles().await?
         };
 
-        let role_verified = &effective_roles
+        Ok(effective_roles
             .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege));
-        if *role_verified {
-            return Ok(());
-        }
-
-        Err(ErrorCode::PermissionDenied("Permission denied"))
+            .any(|r| r.grants.verify_privilege(object, privilege)))
     }
 
     #[async_backtrace::framed]
@@ -402,31 +398,27 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             )));
         }
 
-        // Cache path: only cache the expensive full checker.
-        if matches!(&object, Object::All) {
-            if let Some(shared) = self.session_ctx.get_query_context_shared() {
-                if let Some(checker) = shared.visibility_checker_cache.get() {
-                    return Ok(checker.clone());
-                }
-
-                return shared
-                    .visibility_checker_cache
+        // Cache path: checkers that load ownerships and are requested repeatedly in a query.
+        if let Some(shared) = self.session_ctx.get_query_context_shared() {
+            let cell = match &object {
+                Object::All => Some(&shared.visibility_checker_cache),
+                Object::Sequence => Some(&shared.sequence_visibility_checker_cache),
+                _ => None,
+            };
+            if let Some(cell) = cell {
+                return cell
                     .get_or_try_init(|| async move {
                         let checker = self
-                            .build_visibility_checker_with_roles(roles, false, &Object::All)
+                            .build_visibility_checker_with_roles(roles, false, &object)
                             .await?;
                         Ok(Arc::new(checker))
                     })
                     .await
                     .cloned();
             }
-            // No query context shared available: fallback to uncached build.
-            return Ok(Arc::new(
-                self.build_visibility_checker_with_roles(roles, false, &Object::All)
-                    .await?,
-            ));
         }
 
+        // No query context shared available, or an uncached object: build directly.
         Ok(Arc::new(
             self.build_visibility_checker_with_roles(roles, false, &object)
                 .await?,

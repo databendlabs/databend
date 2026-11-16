@@ -544,6 +544,13 @@ pub fn register_div_arithmetic(registry: &mut FunctionRegistry) {
 }
 
 pub fn register_numeric_basic_arithmetic(registry: &mut FunctionRegistry) {
+    for name in ["plus", "minus", "multiply", "divide", "div", "modulo"] {
+        registry
+            .properties
+            .entry(name.to_string())
+            .or_default()
+            .dictionary_eval = true;
+    }
     register_div_arithmetic(registry);
 
     for left in ALL_INTEGER_TYPES {

@@ -59,7 +59,7 @@ ALTER TABLE t09_0015_0 CLUSTER BY(max(a))
 statement ok
 CREATE FUNCTION a_plus_3 AS (a) -> a+3
 
-statement error 1008
+statement error UDFs are not allowed in persisted or storage-level expressions
 ALTER TABLE t09_0015_0 CLUSTER BY(a_plus_3(a))
 
 statement ok

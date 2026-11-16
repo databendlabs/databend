@@ -122,3 +122,73 @@ drop table t_11882
 
 statement ok
 drop table t_17146
+
+# Rows fetched from many blocks of one segment: each block holds one result row,
+# and the blocks span several row fetch metadata windows. The order key is a
+# table column, so the TopN reads `a` and `b` through RowFetch.
+statement ok
+create or replace table t_row_fetch_segment(k int, a int, b string) row_per_block = 2
+
+statement ok
+insert into t_row_fetch_segment select number % 2 * 30 + number, number, concat('s', number::string) from numbers(30)
+
+query II
+select segment_count, block_count from fuse_snapshot('default', 't_row_fetch_segment')
+----
+1 15
+
+query IIT
+select * from t_row_fetch_segment order by k limit 15
+----
+0 0 s0
+2 2 s2
+4 4 s4
+6 6 s6
+8 8 s8
+10 10 s10
+12 12 s12
+14 14 s14
+16 16 s16
+18 18 s18
+20 20 s20
+22 22 s22
+24 24 s24
+26 26 s26
+28 28 s28
+
+statement ok
+drop table t_row_fetch_segment
+
+# Selecting `_row_id` must reuse it as the row fetcher's row id instead of adding a second one,
+# otherwise the lazy columns are pruned from the scan but never fetched.
+statement ok
+create or replace table t_lazy_row_id (a int, b int, c string)
+
+statement ok
+insert into t_lazy_row_id select number, number, to_string(number) from numbers(10)
+
+query I
+select count(*) from (select _row_id, a from t_lazy_row_id where b > 0 limit 10)
+----
+9
+
+query IT
+select a, c from (select _row_id, a, c from t_lazy_row_id where b > 5 order by a limit 2)
+----
+6 6
+7 7
+
+# `_row_id` bound in a subquery is shared through the metadata, so the outer query must reuse it too.
+query I
+select count(*) from (select _row_id, a from (select _row_id, a, b from t_lazy_row_id) where b > 0 limit 10)
+----
+9
+
+# The reverse: `_row_id` added by the subquery's lazy materialization, bound by the outer query.
+query I
+select count(*) from (select _row_id, a from (select a from t_lazy_row_id where b > 0 limit 10))
+----
+9
+
+statement ok
+drop table t_lazy_row_id

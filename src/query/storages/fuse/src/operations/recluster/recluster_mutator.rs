@@ -24,6 +24,7 @@ use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::plan::ReclusterTaskKind;
+use databend_common_catalog::plan::RetainedBlockMeta;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -35,13 +36,9 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -60,7 +57,8 @@ use crate::FuseTable;
 use crate::MAX_RECLUSTER_DEPTH;
 use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentStatsReader;
 use crate::io::VirtualColumnLayoutPlanner;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
@@ -73,6 +71,7 @@ use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::operations::recluster::SelectedReclusterSegment;
+use crate::operations::recluster::VECTOR_LEVEL_MIXED;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::partition_values;
@@ -193,9 +192,28 @@ pub struct ReclusterFinalCarry {
     pub(crate) cluster_key_id: u32,
     // Reuse block-meta decode workers across rounds of one FINAL statement.
     pub(crate) decode_runtime: Option<Arc<Runtime>>,
+    // The full pass of a vector RECLUSTER FINAL (see `vector_final_plan`): the blocks
+    // present when it starts, rewritten once together regardless of level, so new
+    // data is mixed with older clustered blocks. Blocks written by this pass are not
+    // in the set, which ends it.
+    pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
 }
 
 impl ReclusterFinalCarry {
+    /// Starts the full pass of a vector RECLUSTER FINAL over `blocks`, scanning the
+    /// table again from the start.
+    pub fn start_vector_full_pass(&mut self, blocks: HashSet<String>) {
+        self.reset();
+        self.vector_full_pass = Some(Arc::new(blocks));
+    }
+
+    /// Forgets the scan state, keeping a started vector full pass.
+    pub fn reset(&mut self) {
+        let vector_full_pass = self.vector_full_pass.take();
+        *self = Self::default();
+        self.vector_full_pass = vector_full_pass;
+    }
+
     /// Lazily create or reuse the block-meta decode runtime for FINAL recluster.
     pub(crate) fn decode_runtime(&mut self, workers: usize) -> Result<Arc<Runtime>> {
         if self.decode_runtime.is_none() {
@@ -297,7 +315,7 @@ impl ReclusterMutator {
         let memory_threshold = recluster_memory_threshold(ctx.as_ref())?;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && ctx.get_settings().get_enable_distributed_recluster()? {
+        if !cluster.is_empty() {
             max_tasks = cluster.nodes.len();
         }
 
@@ -328,6 +346,13 @@ impl ReclusterMutator {
             strategy,
             virtual_column_layout_policy: table.virtual_column_layout_policy(),
         })
+    }
+
+    /// Restricts selection to the full pass of a vector RECLUSTER FINAL over
+    /// `blocks`; see `ReclusterFinalCarry`.
+    pub fn with_vector_full_pass(mut self, blocks: Option<Arc<HashSet<String>>>) -> Self {
+        self.properties.vector_full_pass = blocks;
+        self
     }
 
     /// Build a recluster mutator directly for tests.
@@ -505,24 +530,40 @@ impl ReclusterMutator {
         let mut groups = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
             let level = block.stats().level;
-            if !(0..MAX_RECLUSTER_LEVEL).contains(&level) {
+            if level < 0 {
                 continue;
             }
+            let group = if let Some(full_pass) = &self.properties.vector_full_pass {
+                // The full pass rewrites the blocks present when it started, in one
+                // group whose output (the group level + 1) is `VECTOR_LEVEL_MIXED`, so
+                // levels stay bounded. A level group, in every mode: the aggressive
+                // low-maturity group would take the output level from the levels of
+                // the blocks.
+                if !full_pass.contains(&block.meta.location.0) {
+                    continue;
+                }
+                ReclusterGroup::Level(VECTOR_LEVEL_MIXED - 1)
+            } else if level >= MAX_RECLUSTER_LEVEL {
+                // Terminal-level blocks are excluded from further rewrite tasks.
+                continue;
+            } else {
+                ReclusterGroup::assign(level, self.properties.mode)
+            };
             let partition = if self.properties.partition_key_count == 0 {
                 Vec::new()
             } else if let Some(partition) = partition_values(
                 block.meta.partition_stats.as_ref(),
                 self.properties.partition_key_count,
+                self.properties.partition_key_id,
             ) {
                 partition.to_vec()
             } else {
+                // Never rewrite a block with missing or non-constant partition metadata
+                // together with another partition.
                 continue;
             };
             groups
-                .entry((
-                    ReclusterGroup::assign(level, self.properties.mode),
-                    partition,
-                ))
+                .entry((group, partition))
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -940,6 +981,19 @@ impl ReclusterMutator {
                     input_level_stats: candidate.input_level_stats.clone(),
                     kind: candidate.kind,
                     virtual_column_layout,
+                    inverted_index_sources: match self
+                        .ctx
+                        .get_settings()
+                        .get_enable_recluster_inverted_index_merge()?
+                    {
+                        true => block_metas
+                            .iter()
+                            .map(|(_, block)| {
+                                block.inverted_index_metas.clone().unwrap_or_default()
+                            })
+                            .collect(),
+                        false => vec![],
+                    },
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -963,47 +1017,26 @@ impl ReclusterMutator {
             );
         }
 
-        let mut hll_requests = Vec::new();
-        let mut remained_blocks = Vec::new();
-        for (&segment_idx, segment_info) in &removed_segment_infos {
-            let mut hll_block_indices = Vec::new();
-            for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
-                if selected_block_keys.contains(&(segment_idx, block_idx)) {
-                    continue;
-                }
-                // HLL is needed only when a removed segment leaves remained blocks.
-                hll_block_indices.push(block_idx);
-                remained_blocks.push((
-                    BlockIndex {
-                        segment_idx,
-                        block_idx,
-                    },
-                    block_meta.clone(),
-                ));
+        let mut virtual_schemas = Vec::new();
+        let mut retained = Vec::new();
+        for (segment_idx, segment) in removed_segment_infos {
+            let indices = (0..segment.blocks.len())
+                .filter(|block_idx| !selected_block_keys.contains(&(segment_idx, *block_idx)))
+                .collect::<Vec<_>>();
+            if indices.is_empty() {
+                continue;
             }
-            if let Some(stats_meta) = segment_info.summary.additional_stats_meta.as_ref() {
-                if !hll_block_indices.is_empty() {
-                    hll_requests.push((
-                        segment_idx,
-                        stats_meta.location.clone(),
-                        hll_block_indices,
-                    ));
-                }
-            }
+            // Carry the schema index with its segment instead of deriving it from read order.
+            let virtual_schema_index = virtual_schemas.len();
+            virtual_schemas.push(segment.summary.virtual_segment_schema.clone().map(Arc::new));
+            retained.push((virtual_schema_index, segment, indices));
         }
-
-        let mut hlls = self.gather_hlls(hll_requests).await?;
-        let remained_blocks = remained_blocks
-            .into_iter()
-            .map(|(block_index, block_meta)| {
-                let hll = hlls.remove(&block_index);
-                (block_meta, hll)
-            })
-            .collect();
+        let remained_blocks = self.gather_retained_blocks(retained).await?;
 
         Ok((selected_block_count, ReclusterParts {
             tasks,
             remained_blocks,
+            virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
         }))
@@ -1019,11 +1052,19 @@ impl ReclusterMutator {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         debug_assert!(task_budget > 0);
+        let indices = self
+            .strategy
+            .eligible_blocks(&self.properties, indices, blocks);
         let block_count = indices.len();
-        if block_count < 2 && !self.properties.split_sort_tasks {
+        // The full pass of a vector RECLUSTER FINAL rewrites every block it holds
+        // once, whatever their level and also alone, so that new data mixes with all
+        // of them and none stays unmixed (see `VectorReclusterStrategy`).
+        let full_pass = self.properties.vector_full_pass.is_some();
+        if block_count < 2 && !self.properties.split_sort_tasks && !full_pass {
             return Ok(Vec::new());
         }
         if block_count == 2
+            && !full_pass
             && indices
                 .iter()
                 .all(|idx| blocks[*idx].stats().level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS)
@@ -1110,7 +1151,7 @@ impl ReclusterMutator {
             return Ok(candidates);
         }
 
-        if block_count < 2 {
+        if block_count < 2 && !full_pass {
             return Ok(Vec::new());
         }
         self.strategy
@@ -1146,6 +1187,7 @@ impl ReclusterMutator {
                 let Some(partition) = partition_values(
                     segment.summary.partition_stats.as_ref(),
                     self.properties.partition_key_count,
+                    self.properties.partition_key_id,
                 ) else {
                     continue;
                 };
@@ -1198,26 +1240,20 @@ impl ReclusterMutator {
         decode_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<Vec<ReclusterBlock>>> {
         let segment_count = compact_segments.len();
-        let block_metas_cache = CacheManager::instance().get_segment_block_metas_cache();
+        let segment_cache = FuseCaches::instance()
+            .segments
+            .with_policy(self.ctx.cache_policy());
         let tasks = compact_segments
             .into_iter()
             .map(|(segment_idx, location, v)| {
-                let block_metas_cache = block_metas_cache.clone();
+                let segment_cache = segment_cache.clone();
                 move |permit| {
                     async move {
                         let _permit = permit;
                         // Reuse immutable block metas decoded from the same segment path
                         // across probes and queries.
-                        let block_metas = match block_metas_cache
-                            .as_ref()
-                            .and_then(|cache| cache.get(location.0.as_str()))
-                        {
-                            Some(block_metas) => block_metas,
-                            None => match block_metas_cache.as_ref() {
-                                Some(cache) => cache.insert(location.0.clone(), v.block_metas()?),
-                                None => Arc::new(v.block_metas()?),
-                            },
-                        };
+                        let block_metas =
+                            segment_cache.block_metas(&location.0, || v.block_metas())?;
                         Ok::<_, ErrorCode>((segment_idx, block_metas))
                     }
                     .in_span(Span::enter_with_local_parent(func_path!()))
@@ -1264,39 +1300,51 @@ impl ReclusterMutator {
     }
 
     #[async_backtrace::framed]
-    async fn gather_hlls(
+    async fn gather_retained_blocks(
         &self,
-        hlls: Vec<(usize, Location, Vec<usize>)>,
-    ) -> Result<HashMap<BlockIndex, RawBlockHLL>> {
-        if hlls.is_empty() {
-            return Ok(HashMap::new());
+        retained: Vec<(usize, Arc<SegmentInfo>, Vec<usize>)>,
+    ) -> Result<Vec<RetainedBlockMeta>> {
+        if retained.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let tasks = hlls.into_iter().map(|(segment_idx, (loc, ver), blocks)| {
-            let dal = self.operator.clone();
-            async move {
-                let reader = MetaReaders::segment_stats_reader(dal);
-                let load_params = LoadParams {
-                    location: loc,
-                    len_hint: None,
-                    ver,
-                    put_cache: true,
-                };
-                let stats = reader.read(&load_params).await?;
-                Ok(blocks
-                    .into_iter()
-                    .filter_map(|block_idx| {
-                        let hll = stats.block_hlls.get(block_idx)?;
-                        let block_index = BlockIndex {
-                            segment_idx,
-                            block_idx,
-                        };
-                        Some((block_index, hll.clone()))
-                    })
-                    .collect::<Vec<_>>())
-            }
-            .in_span(Span::enter_with_local_parent(func_path!()))
-        });
+        let tasks = retained
+            .into_iter()
+            .map(|(virtual_schema_index, segment, indices)| {
+                let dal = self.operator.clone();
+                let policy = self.ctx.cache_policy();
+                async move {
+                    let stats = if let Some((loc, ver)) = segment.summary.additional_stats_loc() {
+                        let reader = SegmentStatsReader::new(dal);
+                        let stats = FuseCaches::instance()
+                            .segments
+                            .with_policy(policy)
+                            .get_stats(&reader, (loc, ver))
+                            .await?;
+                        let mut stats = Arc::unwrap_or_clone(stats);
+                        stats.align_to_blocks(segment.blocks.len())?;
+                        Some(stats)
+                    } else {
+                        None
+                    };
+                    Ok(indices
+                        .into_iter()
+                        .map(|index| RetainedBlockMeta {
+                            block_meta: segment.blocks[index].clone(),
+                            hll: stats
+                                .as_ref()
+                                .and_then(|stats| stats.block_hlls.get(index))
+                                .cloned(),
+                            top_n: stats
+                                .as_ref()
+                                .and_then(|stats| stats.block_top_ns.get(index))
+                                .cloned(),
+                            virtual_schema_index,
+                        })
+                        .collect::<Vec<_>>())
+                }
+                .in_span(Span::enter_with_local_parent(func_path!()))
+            });
 
         let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
 

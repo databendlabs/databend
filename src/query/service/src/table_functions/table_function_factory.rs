@@ -58,6 +58,7 @@ use super::LicenseInfoTable;
 use super::TenantQuotaTable;
 use super::others::UdfEchoTable;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
+use crate::storages::fuse::table_functions::FuseInvertedIndexTable;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::storages::fuse::table_functions::FuseTagFunc;
@@ -77,6 +78,7 @@ use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::policy_references::PolicyReferencesTable;
+use crate::table_functions::send_notification::SendNotification;
 use crate::table_functions::show_grants::ShowGrants;
 use crate::table_functions::show_roles::ShowRoles;
 use crate::table_functions::show_sequences::ShowSequences;
@@ -489,6 +491,21 @@ impl TableFunctionFactory {
         creators.insert(
             "get_lineage_neighbors".to_string(),
             (next_id(), Arc::new(GetLineageNeighborsTable::create)),
+        );
+        creators.insert(
+            "fuse_inverted_index".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseInvertedIndexTable>::create),
+            ),
+        );
+
+        creators.insert(
+            "send_notification".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<SendNotification>::create),
+            ),
         );
 
         TableFunctionFactory {

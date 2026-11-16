@@ -35,12 +35,13 @@ use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::Matcher;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Filter;
 use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::ProjectSet;
 use databend_common_sql::plans::RelOp;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Visitor;
@@ -208,7 +209,7 @@ impl IPhysicalPlan for EvalScalar {
 impl PhysicalPlanBuilder {
     pub async fn build_eval_scalar(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         eval_scalar: &databend_common_sql::plans::EvalScalar,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
@@ -282,6 +283,11 @@ impl PhysicalPlanBuilder {
 
         let mut projections = BTreeSet::new();
         for column in column_projections.iter() {
+            // An item may redefine a child column under the same symbol, for example
+            // to make a grouping key nullable. Project only the new value, not both.
+            if exprs.iter().any(|(_, index)| index == column) {
+                continue;
+            }
             if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }
@@ -304,8 +310,8 @@ impl PhysicalPlanBuilder {
     fn try_eliminate_flatten_columns(
         &mut self,
         scalar_items: &Vec<ScalarItem>,
-        s_expr: &SExpr,
-    ) -> Result<Option<SExpr>> {
+        s_expr: &PExpr,
+    ) -> Result<Option<PExpr>> {
         // (1) ProjectSet
         //      \
         //       *
@@ -340,7 +346,7 @@ impl PhysicalPlanBuilder {
             return Ok(None);
         }
 
-        if let RelOperator::Filter(filter) = s_expr.plan() {
+        if let PhysicalRelOperator::Filter(filter) = s_expr.plan() {
             let child = s_expr.child(0)?;
             let project_set: ProjectSet = child.plan().clone().try_into()?;
             let Some(new_project_set) =
@@ -351,7 +357,7 @@ impl PhysicalPlanBuilder {
             let mut new_child = child.clone();
             new_child.plan = Arc::new(new_project_set.into());
             let new_filter =
-                SExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(new_child));
+                PExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(new_child));
             Ok(Some(new_filter))
         } else {
             let project_set: ProjectSet = s_expr.plan().clone().try_into()?;
@@ -384,6 +390,7 @@ impl PhysicalPlanBuilder {
                     let mut visitor = FlattenColumnsVisitor {
                         params: BTreeSet::new(),
                         column_index: srf_item.index,
+                        column_referenced: false,
                     };
                     // Collect columns required by the parent plan in params.
                     for item in scalar_items {
@@ -393,6 +400,11 @@ impl PhysicalPlanBuilder {
                         for pred in &filter.predicates {
                             visitor.visit(pred).unwrap();
                         }
+                    }
+                    // The whole tuple is referenced by the parent plan (e.g. `SELECT srf, get(5)(srf)`),
+                    // so every inner column is still needed and nothing can be eliminated.
+                    if visitor.column_referenced || visitor.params.is_empty() {
+                        continue;
                     }
 
                     let function = FunctionCall {
@@ -413,9 +425,19 @@ impl PhysicalPlanBuilder {
 struct FlattenColumnsVisitor {
     params: BTreeSet<Scalar>,
     column_index: Symbol,
+    // Whether the flatten column is referenced other than through `get(N)(col)`,
+    // in which case the whole tuple is required and no inner column can be eliminated.
+    column_referenced: bool,
 }
 
 impl<'a> Visitor<'a> for FlattenColumnsVisitor {
+    fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
+        if col.column.index == self.column_index {
+            self.column_referenced = true;
+        }
+        Ok(())
+    }
+
     // Collect the params in get function which is used to extract the inner column of flatten function.
     fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
         if func.func_name == "get" && !func.arguments.is_empty() {

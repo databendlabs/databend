@@ -46,8 +46,9 @@ use databend_common_exception::Result;
 use databend_common_expression::CHANGE_ROW_ID_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
+use databend_common_meta_app::schema::TableMeta;
 
 use crate::MetadataRef;
 
@@ -67,7 +68,8 @@ pub fn parse_materialized_view_query(sql: &str, error: impl Into<String>) -> Res
     Ok(*query)
 }
 
-/// Require a bound persisted MV definition to resolve to its original single source table.
+/// Require a bound persisted MV definition to resolve to its original single source table
+/// without row access or masking policies.
 pub fn validate_materialized_view_source(
     metadata: &MetadataRef,
     expected_source_table_id: u64,
@@ -80,11 +82,34 @@ pub fn validate_materialized_view_source(
                 "materialized view {materialized_view_name} physical definition must resolve to exactly one source table"
             )));
         };
-        source.table().get_id()
+        let table = source.table();
+        check_materialized_view_source_without_policy(
+            &table.get_table_info().meta,
+            materialized_view_name,
+        )?;
+        table.get_id()
     };
     if actual_source_table_id != expected_source_table_id {
         return Err(ErrorCode::InvalidMaterializedView(format!(
             "materialized view {materialized_view_name} source table changed: expected table id {expected_source_table_id}, resolved table id {actual_source_table_id}"
+        )));
+    }
+    Ok(())
+}
+
+/// Reject creating, reading, or refreshing an MV whose source has a row access or masking policy.
+///
+/// REFRESH computes MV storage under the refreshing role, so the stored rows and values do not
+/// follow the policies of later readers. CREATE and policy DDL keep policies and MVs on the same
+/// source exclusive; reads and refreshes repeat the check to cover combinations created
+/// concurrently or by older versions.
+pub fn check_materialized_view_source_without_policy(
+    source_meta: &TableMeta,
+    materialized_view_name: &str,
+) -> Result<()> {
+    if source_meta.has_security_policy() {
+        return Err(ErrorCode::InvalidMaterializedView(format!(
+            "materialized view {materialized_view_name} is not allowed because its source table has a row access or masking policy"
         )));
     }
     Ok(())
@@ -347,7 +372,10 @@ impl Visitor for AggregateFieldCounter {
 
     fn visit_function_call(&mut self, call: &FunctionCall) -> VisitResult {
         let name = call.name.name.to_ascii_lowercase();
-        if AggregateFunctionFactory::instance().contains_base(&name) {
+        if AGGR_REGISTRY
+            .descriptor(&name)
+            .is_some_and(|descriptor| descriptor.features().supports_state)
+        {
             self.count += if name == "avg" { 2 } else { 1 };
             return Ok(VisitControl::SkipChildren);
         }
@@ -484,7 +512,9 @@ impl VisitorMut for AggregateExprRewriter<'_> {
                     && !func.has_explicit_lambda()
                     && func.order_by.is_empty()
                     && func.params.is_empty()
-                    && AggregateFunctionFactory::instance().contains_base(&func.name.name) =>
+                    && AGGR_REGISTRY
+                        .descriptor(&func.name.name)
+                        .is_some_and(|descriptor| descriptor.features().supports_state) =>
             {
                 let original = expr.clone();
                 let Expr::FunctionCall { func, .. } = &original else {
@@ -630,9 +660,10 @@ impl Visitor for MaterializedViewChecker {
         if call.window.is_some() || call.filter.is_some() || !call.order_by.is_empty() {
             self.not_supported = true;
         }
-        if AggregateFunctionFactory::instance().contains_base(&name) {
+        if let Some(descriptor) = AGGR_REGISTRY.descriptor(&name) {
             self.has_aggregate = true;
-            if call.distinct
+            if !descriptor.features().supports_state
+                || call.distinct
                 || call.filter.is_some()
                 || call.window.is_some()
                 || !call.order_by.is_empty()
@@ -752,6 +783,30 @@ mod tests {
         ] {
             let checker = check_query(sql)?;
             assert!(!checker.is_supported(), "should reject: {sql}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_materialized_view_checker_requires_state_capability() -> Result<()> {
+        for expression in [
+            "sum_if(amount, active)",
+            "sum_state(amount)",
+            "count_distinct(amount)",
+        ] {
+            let sql = format!("SELECT {expression} AS result FROM t");
+            assert!(!check_query(&sql)?.is_supported(), "should reject: {sql}");
+        }
+        for expression in [
+            "sum(amount)",
+            "count(amount)",
+            "avg(amount)",
+            "stddev(amount)",
+        ] {
+            let sql = format!("SELECT {expression} AS result FROM t");
+            assert!(check_query(&sql)?.is_supported(), "should support: {sql}");
+            let (query, _) = rewrite(&sql)?;
+            assert!(query.to_string().contains("_state("));
         }
         Ok(())
     }

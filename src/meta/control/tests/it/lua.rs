@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_control::grpc_client_auth::GrpcClientAuth;
+use databend_common_meta_control::grpc_client_config::GrpcClientConfig;
 use databend_common_meta_control::lua_support::run_lua_script;
 use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::start_metasrv;
@@ -43,7 +43,7 @@ const LUA_TEST_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/it/lua");
 #[tokio::test(flavor = "multi_thread")]
 async fn test_lua_scripts() -> anyhow::Result<()> {
     let (_meta, grpc_address) = start_metasrv::<DatabendRuntime>().await?;
-    let auth = GrpcClientAuth::default();
+    let client_config = GrpcClientConfig::default();
 
     // The single-node cluster may need a moment to elect itself leader; retry
     // the first write until the service accepts it.
@@ -58,7 +58,7 @@ async fn test_lua_scripts() -> anyhow::Result<()> {
         error("meta-service did not become ready for gRPC writes")
         "#
     );
-    run_lua_script(&readiness, &auth).await?;
+    run_lua_script(&readiness, &client_config).await?;
 
     let mut scripts = std::fs::read_dir(LUA_TEST_DIR)?
         .map(|entry| Ok(entry?.path()))
@@ -84,7 +84,7 @@ async fn test_lua_scripts() -> anyhow::Result<()> {
         let banner = format!("--- running Lua test: {name}");
         let script = format!("print({banner:?}) TEST_GRPC_ADDRESS = {grpc_address:?}\n{body}");
 
-        run_lua_script(&script, &auth)
+        run_lua_script(&script, &client_config)
             .await
             .map_err(|e| anyhow::anyhow!("Lua test `{name}` failed: {e}"))?;
 

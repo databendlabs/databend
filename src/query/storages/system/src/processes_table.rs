@@ -109,8 +109,8 @@ impl SyncSystemTable for ProcessesTable {
             processes_time.push(time);
             processes_created_time.push(created_time);
             if let Some(data_metrics) = data_metrics {
-                processes_data_read_bytes.push(data_metrics.get_read_bytes() as u64);
-                processes_data_write_bytes.push(data_metrics.get_write_bytes() as u64);
+                processes_data_read_bytes.push(data_metrics.read_bytes);
+                processes_data_write_bytes.push(data_metrics.write_bytes);
             } else {
                 processes_data_read_bytes.push(0);
                 processes_data_write_bytes.push(0);

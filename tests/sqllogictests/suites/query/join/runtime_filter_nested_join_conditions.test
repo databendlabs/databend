@@ -1,0 +1,88 @@
+# Keep the nested join below the parent's probe side. Its conditions are
+# evaluated inside the join, not in an intervening EvalScalar.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+create or replace table rf_nested_input(k BIGINT,v BIGINT);
+
+statement ok
+create or replace table rf_nested_match(k BIGINT,d BIGINT,z BIGINT);
+
+statement ok
+create or replace table rf_nested_keep(k BIGINT,flag INT);
+
+# One block and ordered values make the retained row's difference 10, not 0.
+statement ok
+insert into rf_nested_input values (0,10),(1,20);
+
+statement ok
+insert into rf_nested_match values (0,0,0),(1,10,0);
+
+# A selective build enables bloom without changing thresholds. Preserve key 0
+# in its unfiltered range so ordinary range pruning cannot erase the setup.
+statement ok
+insert into rf_nested_keep values (1,1),(0,0);
+
+statement ok
+insert into rf_nested_keep select number+2,0 from numbers(20);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+# Stateful left and right equi expressions; the parent RF key is independent.
+query II
+select q.k,q.d from (select p.k,b.d from (select k,v from rf_nested_input order by k) p join rf_nested_match b on running_difference(p.v)=b.d) q join rf_nested_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+query II
+select q.k,q.d from (select p.k,b.d from rf_nested_match b join (select k,v from rf_nested_input order by k) p on b.d=running_difference(p.v)) q join rf_nested_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+# An outer ON residual uses both inputs and stays inside the join: rejecting
+# an ON candidate must still preserve the input row with a NULL-extended d.
+query II
+select q.k,q.d from (select p.k,b.d from (select k,v from rf_nested_input order by k) p left join rf_nested_match b on p.k=b.k and running_difference(p.v+b.z)>5) q join rf_nested_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+query II
+select q.k,q.d from (select p.k,b.d from (select k,v from rf_nested_input order by k) p join rf_nested_match b on running_difference(p.v)=b.d) q join rf_nested_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+query II
+select q.k,q.d from (select p.k,b.d from rf_nested_match b join (select k,v from rf_nested_input order by k) p on b.d=running_difference(p.v)) q join rf_nested_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+query II
+select q.k,q.d from (select p.k,b.d from (select k,v from rf_nested_input order by k) p left join rf_nested_match b on p.k=b.k and running_difference(p.v+b.z)>5) q join rf_nested_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+# A normal row-local join expression remains valid with RF enabled.
+query II
+select q.k,q.d from (select p.k,b.d from (select k,v from rf_nested_input order by k) p join rf_nested_match b on p.v-10=b.d) q join rf_nested_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table rf_nested_input;
+
+statement ok
+drop table rf_nested_match;
+
+statement ok
+drop table rf_nested_keep;

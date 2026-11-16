@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
@@ -19,6 +23,7 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::BATCH_SIZE;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;
@@ -37,6 +42,21 @@ use crate::with_number_type;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
+/// Maps a group hash to one of `n` routing targets, such as the nodes or channels of
+/// a hash shuffle.
+///
+/// Local consumers read raw bits of the same group hash: the aggregate hash index uses
+/// the low bits as the slot and the top 7 bits as the tag, aggregate radix partitions use
+/// bits below 48, and window partitioning uses `hash % num_partitions`. Routing with
+/// `hash % n` would fix the low bits of every row a target receives, so each target
+/// would only see a fraction of the slots and window partitions. Remixing before the
+/// range reduction keeps the routing independent of those bits.
+#[inline(always)]
+pub fn group_hash_route_index(hash: u64, n: u64) -> u64 {
+    let mixed = hash.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    ((mixed as u128 * n as u128) >> 64) as u64
+}
+
 pub fn group_hash_entries(entries: ProjectedBlock, values: &mut [u64]) {
     debug_assert!(!entries.is_empty());
     for (i, entry) in entries.iter().enumerate() {
@@ -53,6 +73,112 @@ pub fn group_hash_entry(entry: &BlockEntry, values: &mut [u64], is_first: bool) 
         combine_group_hash_entry::<true>(entry, values);
     } else {
         combine_group_hash_entry::<false>(entry, values);
+    }
+}
+
+/// The hashes of the dictionary values of the group columns that are dictionaries of strings,
+/// to hash the batches of a block by their keys.
+///
+/// The batches of a block carry its whole dictionary, so hashing the batches one by one hashes
+/// the dictionary again for each, or decodes the batch when the dictionary has more values
+/// than the batch has rows. These hashes are computed once per block and looked up by the keys
+/// of each batch. A fixed size value hashes per row as cheaply as its hash is looked up.
+pub struct DictValueHashes {
+    /// For each group column, the hashes of its dictionary values if it is a dictionary of
+    /// strings.
+    columns: Vec<Option<Vec<u64>>>,
+}
+
+impl DictValueHashes {
+    /// `None` when the block fits in one batch or has no dictionary of strings to hash.
+    pub fn new(entries: ProjectedBlock, row_count: usize) -> Option<Self> {
+        if row_count <= BATCH_SIZE {
+            return None;
+        }
+        let columns = entries
+            .iter()
+            .map(|entry| {
+                let dict = string_dict(entry)?.0;
+                // Hashing more values than the block has rows does not pay.
+                (dict.values.len() <= row_count).then(|| {
+                    let mut hashes = vec![0; dict.values.len()];
+                    group_hash_entry(&BlockEntry::from(dict.values.clone()), &mut hashes, true);
+                    hashes
+                })
+            })
+            .collect::<Vec<_>>();
+        columns
+            .iter()
+            .any(Option::is_some)
+            .then_some(DictValueHashes { columns })
+    }
+
+    /// Hash the rows of `entries`, a slice of the block `self` was built from, into `values`,
+    /// as `group_hash_entries` does.
+    pub fn group_hash_entries(&self, entries: ProjectedBlock, values: &mut [u64]) {
+        debug_assert_eq!(entries.len(), self.columns.len());
+        for (i, (entry, hashes)) in entries.iter().zip(&self.columns).enumerate() {
+            match (hashes, string_dict(entry)) {
+                // A slice keeps the dictionary of its block.
+                (Some(hashes), Some((dict, validity))) if dict.values.len() == hashes.len() => {
+                    combine_dict_hashes(dict, validity, hashes, values, i == 0)
+                }
+                _ => group_hash_entry(entry, values, i == 0),
+            }
+        }
+    }
+}
+
+/// The dictionary of `entry` and its validity, if `entry` is a dictionary of strings.
+fn string_dict(entry: &BlockEntry) -> Option<(&DictColumn, Option<&Bitmap>)> {
+    let BlockEntry::Column(column) = entry else {
+        return None;
+    };
+    let (column, validity) = match column {
+        Column::Nullable(nullable) => (nullable.column(), Some(nullable.validity())),
+        column => (column, None),
+    };
+    let Column::Encoded(encoded) = column else {
+        return None;
+    };
+    let dict = encoded.as_dict()?;
+    matches!(dict.values, Column::String(_)).then_some((dict, validity))
+}
+
+/// Hash the rows of a dictionary column by the `hashes` of its values, as `HashVisitor` does
+/// for the dictionary and the `Nullable` around it.
+fn combine_dict_hashes(
+    dict: &DictColumn,
+    validity: Option<&Bitmap>,
+    hashes: &[u64],
+    values: &mut [u64],
+    is_first: bool,
+) {
+    let key_hash = |key: u64| hashes[key as usize];
+    match (is_first, validity) {
+        (true, None) => {
+            for (val, key) in values.iter_mut().zip(dict.keys.iter()) {
+                *val = key_hash(key);
+            }
+        }
+        (false, None) => {
+            for (val, key) in values.iter_mut().zip(dict.keys.iter()) {
+                *val = merge_hash(*val, key_hash(key));
+            }
+        }
+        (true, Some(validity)) => {
+            for ((val, key), valid) in values.iter_mut().zip(dict.keys.iter()).zip(validity.iter())
+            {
+                *val = if valid { key_hash(key) } else { NULL_HASH_VAL };
+            }
+        }
+        (false, Some(validity)) => {
+            for ((val, key), valid) in values.iter_mut().zip(dict.keys.iter()).zip(validity.iter())
+            {
+                let hash = if valid { key_hash(key) } else { NULL_HASH_VAL };
+                *val = merge_hash(*val, hash);
+            }
+        }
     }
 }
 
@@ -77,7 +203,9 @@ fn combine_group_hash_const<const IS_FIRST: bool>(
     values: &mut [u64],
 ) {
     match data_type {
-        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {}
+        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {
+            apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
+        }
         DataType::Nullable(inner) => {
             if scalar.is_null() {
                 apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
@@ -183,23 +311,24 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
+        let (column, validity) = column.destructure();
         if IS_FIRST {
-            self.visit_column(column.column)?;
-            for (val, ok) in self.values.iter_mut().zip(column.validity.iter()) {
+            self.visit_column(column)?;
+            for (val, ok) in self.values.iter_mut().zip(validity.iter()) {
                 if !ok {
                     *val = NULL_HASH_VAL;
                 }
             }
         } else {
-            let mut values2 = vec![0; column.len()];
+            let mut values2 = vec![0; validity.len()];
             HashVisitor::<true> {
                 values: &mut values2,
             }
-            .visit_column(column.column)?;
+            .visit_column(column)?;
             for ((x, val), ok) in values2
                 .iter()
                 .zip(self.values.iter_mut())
-                .zip(column.validity.iter())
+                .zip(validity.iter())
             {
                 if ok {
                     *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ *x;
@@ -257,9 +386,36 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
         Ok(())
     }
 
+    fn visit_encoded(&mut self, column: Box<EncodedColumn>) -> Result<()> {
+        // Hashing once per dictionary value only pays when there are fewer values than rows:
+        // aggregation hashes batches of a block, and each batch carries the whole dictionary.
+        let EncodedColumn::Dict(dict) = column.as_ref() else {
+            return self.visit_column(column.decode());
+        };
+        if dict.values.len() > dict.len() {
+            return self.visit_column(column.decode());
+        }
+        let mut hashes = vec![0; dict.values.len()];
+        HashVisitor::<true> {
+            values: &mut hashes,
+        }
+        .visit_column(dict.values.clone())?;
+        for (val, key) in self.values.iter_mut().zip(dict.keys.iter()) {
+            let hash = hashes[key as usize];
+            *val = if IS_FIRST {
+                hash
+            } else {
+                (*val).wrapping_mul(NULL_HASH_VAL) ^ hash
+            };
+        }
+        Ok(())
+    }
+
     fn visit_column(&mut self, column: Column) -> Result<()> {
         match column {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => (),
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+                apply_const_hash::<IS_FIRST>(self.values, NULL_HASH_VAL);
+            }
             _ => {
                 Self::default_visit_column(column, self)?;
             }
@@ -337,8 +493,7 @@ where I: Index
 {
     fn visit_scalar(&mut self, scalar: Scalar) -> Result<()> {
         let hash = match scalar {
-            Scalar::EmptyArray | Scalar::EmptyMap => return Ok(()),
-            Scalar::Null => NULL_HASH_VAL,
+            Scalar::Null | Scalar::EmptyArray | Scalar::EmptyMap => NULL_HASH_VAL,
             Scalar::Number(v) => with_number_type!(|NUM_TYPE| match v {
                 NumberScalar::NUM_TYPE(v) => v.agg_hash(),
             }),
@@ -362,15 +517,15 @@ where I: Index
     }
 
     fn visit_null(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_empty_array(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_empty_map(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_any_number(&mut self, column: crate::types::NumberColumn) -> Result<()> {
@@ -444,13 +599,14 @@ where I: Index
     }
 
     fn visit_nullable(&mut self, column: Box<crate::types::NullableColumn<AnyType>>) -> Result<()> {
+        let (column, validity) = column.destructure();
         let indices = self
             .indices
             .iter()
             .cloned()
             .filter(|&i| {
                 let i = i.to_usize();
-                let ok = column.validity.get(i).unwrap();
+                let ok = validity.get(i).unwrap();
                 if !ok {
                     let val = &mut self.target[i];
                     if IS_FIRST {
@@ -464,10 +620,10 @@ where I: Index
             .collect::<Vec<_>>();
         if IS_FIRST {
             let mut v = IndexHashVisitor::<true, _>::new(&indices, self.target);
-            v.visit_column(column.column)
+            v.visit_column(column)
         } else {
             let mut v = IndexHashVisitor::<false, _>::new(&indices, self.target);
-            v.visit_column(column.column)
+            v.visit_column(column)
         }
     }
 
@@ -601,25 +757,20 @@ impl AggHash for i256 {
     }
 }
 
+// Float keys hash the bits of the canonical class representative so that
+// `-0.0`/`+0.0` and every NaN payload share one hash. See
+// `OrderedFloat::canonicalize`.
 impl AggHash for OrderedFloat<f32> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        if self.is_nan() {
-            f32::NAN.to_bits().agg_hash()
-        } else {
-            self.to_bits().agg_hash()
-        }
+        self.canonicalize().to_bits().agg_hash()
     }
 }
 
 impl AggHash for OrderedFloat<f64> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        if self.is_nan() {
-            f64::NAN.to_bits().agg_hash()
-        } else {
-            self.to_bits().agg_hash()
-        }
+        self.canonicalize().to_bits().agg_hash()
     }
 }
 
@@ -632,7 +783,9 @@ impl AggHash for OpaqueScalarRef<'_> {
 impl AggHash for ScalarRef<'_> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        self.to_string().as_bytes().agg_hash()
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
     }
 }
 
@@ -689,6 +842,60 @@ mod tests {
             );
             assert_eq!(const_hashes, col_hashes);
         }
+    }
+
+    #[test]
+    fn test_singleton_group_hash_ignores_previous_hashes() {
+        let num_rows = 3;
+        let block = sample_block(num_rows);
+        let full_block = block.convert_to_full();
+
+        // Null, EmptyArray and EmptyMap have only one possible value. Each must
+        // initialize the first key even when the hash buffer is reused.
+        for singleton in 0..3 {
+            for projection in [vec![singleton], vec![singleton, 6], vec![6, singleton]] {
+                let mut expected = vec![0; num_rows];
+                group_hash_entries(ProjectedBlock::project(&projection, &block), &mut expected);
+
+                for input in [&block, &full_block] {
+                    let entries = ProjectedBlock::project(&projection, input);
+                    let mut hashes = vec![u64::MAX; num_rows];
+                    group_hash_entries(entries, &mut hashes);
+                    assert_eq!(hashes, expected, "projection: {projection:?}");
+                    group_hash_entries(entries, &mut hashes);
+                    assert_eq!(hashes, expected, "reused buffer: {projection:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_singleton_group_hash_value_spread_matches_entries() -> Result<()> {
+        let num_rows = 3;
+        let block = sample_block(num_rows);
+        let full_block = block.convert_to_full();
+        let indices = [0_u32, 2];
+
+        for singleton in 0..3 {
+            for projection in [vec![singleton], vec![singleton, 6], vec![6, singleton]] {
+                let mut expected = vec![0; num_rows];
+                group_hash_entries(ProjectedBlock::project(&projection, &block), &mut expected);
+
+                for input in [&block, &full_block] {
+                    let mut hashes = vec![u64::MAX; num_rows];
+                    for (i, entry) in ProjectedBlock::project(&projection, input)
+                        .iter()
+                        .enumerate()
+                    {
+                        group_hash_value_spread(&indices, entry.value(), i == 0, &mut hashes)?;
+                    }
+                    assert_eq!(hashes[0], expected[0], "projection: {projection:?}");
+                    assert_eq!(hashes[1], u64::MAX, "unselected row must be unchanged");
+                    assert_eq!(hashes[2], expected[2], "projection: {projection:?}");
+                }
+            }
+        }
+        Ok(())
     }
 
     #[test]
@@ -926,5 +1133,54 @@ mod tests {
         // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
         assert_eq!(hashes[0], hashes[1]);
         Ok(())
+    }
+
+    #[test]
+    fn test_dict_value_hashes_match_group_hash_entries() {
+        const ROWS: usize = 5000;
+        let dict = |ndv: usize| {
+            let values =
+                StringType::from_data((0..ndv).map(|i| format!("v{i}")).collect::<Vec<_>>());
+            let keys =
+                NarrowBuffer::pack((0..ROWS).map(|i| ((i * 7) % ndv) as u64), ndv as u64 - 1);
+            Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(keys, values))))
+        };
+        let validity = (0..ROWS).map(|i| i % 5 != 0).collect::<Bitmap>();
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::from(Int32Type::from_data(
+                    (0..ROWS as i32).map(|i| i % 13).collect(),
+                )),
+                BlockEntry::from(dict(300)),
+                BlockEntry::from(dict(4000).wrap_nullable(Some(validity))),
+                BlockEntry::from(dict(ROWS + 1)),
+            ],
+            ROWS,
+        );
+        for projection in [vec![0, 1, 2, 3], vec![2, 0], vec![1], vec![3, 1]] {
+            let entries = ProjectedBlock::project(&projection, &block);
+            let dict_hashes = DictValueHashes::new(entries, ROWS).unwrap();
+            for range in [0..2048, 2048..4096, 4096..ROWS, 100..3000] {
+                let slice = entries
+                    .iter()
+                    .map(|e| e.slice(range.clone()))
+                    .collect::<Vec<_>>();
+                let decoded = slice
+                    .iter()
+                    .map(|e| BlockEntry::from(e.to_column().decode_owned()))
+                    .collect::<Vec<_>>();
+                let mut expected = vec![0; range.len()];
+                group_hash_entries((&decoded).into(), &mut expected);
+                let mut actual = vec![u64::MAX; range.len()];
+                dict_hashes.group_hash_entries((&slice).into(), &mut actual);
+                assert_eq!(
+                    actual, expected,
+                    "projection {projection:?}, rows {range:?}"
+                );
+            }
+        }
+        // One batch, or no dictionary of strings: nothing to hash ahead.
+        assert!(DictValueHashes::new(ProjectedBlock::project(&[1], &block), BATCH_SIZE).is_none());
+        assert!(DictValueHashes::new(ProjectedBlock::project(&[0, 3], &block), ROWS).is_none());
     }
 }

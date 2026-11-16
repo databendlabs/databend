@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
@@ -38,7 +39,10 @@ pub struct TransformRangeJoinLeft {
     output_port: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     output_data_blocks: VecDeque<DataBlock>,
-    state: Arc<RangeJoinState>,
+    // Released once this processor finishes so the buffered tables are freed
+    // when the last range join processor is done, not when the query ends.
+    state: Option<Arc<RangeJoinState>>,
+    is_ie_join: bool,
     step: RangeJoinStep,
     execute_finished: bool,
 }
@@ -50,22 +54,36 @@ impl TransformRangeJoinLeft {
         ie_join_state: Arc<RangeJoinState>,
     ) -> Box<dyn Processor> {
         ie_join_state.left_attach();
+        let is_ie_join = ie_join_state.ie_join_state.is_some();
         Box::new(TransformRangeJoinLeft {
             input_port,
             output_port,
             input_data: None,
             output_data_blocks: Default::default(),
-            state: ie_join_state,
+            state: Some(ie_join_state),
+            is_ie_join,
             step: RangeJoinStep::Sink,
             execute_finished: false,
         })
+    }
+
+    fn state(&self) -> Result<&Arc<RangeJoinState>> {
+        self.state
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("Range join state is already released"))
+    }
+
+    fn finish(&mut self) -> Event {
+        self.output_data_blocks.clear();
+        self.state = None;
+        Event::Finished
     }
 }
 
 #[async_trait::async_trait]
 impl Processor for TransformRangeJoinLeft {
     fn name(&self) -> String {
-        if self.state.ie_join_state.is_some() {
+        if self.is_ie_join {
             "TransformIEJoinLeft".to_string()
         } else {
             "TransformMergeJoinLeft".to_string()
@@ -83,7 +101,7 @@ impl Processor for TransformRangeJoinLeft {
                     return Ok(Event::Sync);
                 }
                 if self.input_port.is_finished() {
-                    self.state.left_detach()?;
+                    self.state()?.left_detach()?;
                     self.step = RangeJoinStep::Merging;
                     return Ok(Event::Async);
                 }
@@ -100,7 +118,7 @@ impl Processor for TransformRangeJoinLeft {
             }
             RangeJoinStep::Execute => {
                 if self.output_port.is_finished() {
-                    return Ok(Event::Finished);
+                    return Ok(self.finish());
                 }
 
                 if !self.output_port.can_push() {
@@ -117,7 +135,7 @@ impl Processor for TransformRangeJoinLeft {
                     Ok(Event::Sync)
                 } else {
                     self.output_port.finish();
-                    Ok(Event::Finished)
+                    Ok(self.finish())
                 }
             }
             _ => unreachable!(),
@@ -128,15 +146,16 @@ impl Processor for TransformRangeJoinLeft {
         match self.step {
             RangeJoinStep::Sink => {
                 if let Some(data_block) = self.input_data.take() {
-                    self.state.sink_left(data_block)?;
+                    self.state()?.sink_left(data_block)?;
                 }
             }
             RangeJoinStep::Execute => {
-                let task_id = self.state.task_id();
+                let state = self.state()?;
+                let task_id = state.task_id();
                 if let Some(task_id) = task_id {
-                    let res = match self.state.ie_join_state {
-                        Some(ref _ie_join_state) => self.state.ie_join(task_id)?,
-                        None => self.state.range_join(task_id)?,
+                    let res = match state.ie_join_state {
+                        Some(ref _ie_join_state) => state.ie_join(task_id)?,
+                        None => state.range_join(task_id)?,
                     };
                     for block in res {
                         if !block.is_empty() {
@@ -155,7 +174,7 @@ impl Processor for TransformRangeJoinLeft {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let RangeJoinStep::Merging = self.step {
-            self.state.wait_merge_finish().await?;
+            self.state()?.wait_merge_finish().await?;
             self.step = RangeJoinStep::Execute;
         }
         Ok(())
@@ -163,15 +182,22 @@ impl Processor for TransformRangeJoinLeft {
 }
 
 pub struct TransformRangeJoinRight {
-    state: Arc<RangeJoinState>,
+    // Released once the sink finishes; see `TransformRangeJoinLeft::state`.
+    state: Option<Arc<RangeJoinState>>,
 }
 
 impl TransformRangeJoinRight {
     pub fn create(ie_join_state: Arc<RangeJoinState>) -> Self {
         ie_join_state.right_attach();
         TransformRangeJoinRight {
-            state: ie_join_state,
+            state: Some(ie_join_state),
         }
+    }
+
+    fn state(&self) -> Result<&Arc<RangeJoinState>> {
+        self.state
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("Range join state is already released"))
     }
 }
 
@@ -179,11 +205,13 @@ impl Sink for TransformRangeJoinRight {
     const NAME: &'static str = "TransformRangeJoinRight";
 
     fn on_finish(&mut self) -> Result<()> {
-        self.state.right_detach()?;
+        if let Some(state) = self.state.take() {
+            state.right_detach()?;
+        }
         Ok(())
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.state.sink_right(data_block)
+        self.state()?.sink_right(data_block)
     }
 }

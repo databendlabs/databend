@@ -44,6 +44,8 @@ pub struct ReplayView {
     pub database: String,
     pub view: String,
     pub query: String,
+    #[serde(default)]
+    pub query_namespace: Option<(String, String)>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -585,6 +585,34 @@ impl Pipeline {
         chain
     }
 
+    /// Run `build` on the output ports in `range` only. The ports before and after the
+    /// range are left untouched and keep their positions.
+    ///
+    /// Pipeline operations (`add_transform`, `resize`, `exchange`, ...) act on every pending
+    /// output port. To limit them to one group of ports, the pending ports are split into
+    /// `prefix | selected | suffix`, only `selected` is exposed to `build`, and afterwards the
+    /// ports are put back as `prefix | build's outputs | suffix`.
+    ///
+    /// This only rearranges the port list while the pipeline is being built and adds no
+    /// processor. If `build` changes the number of ports (e.g. `resize`), the ports after
+    /// the range shift accordingly, so callers must account for the new width.
+    pub fn build_on_outputs<F>(&mut self, range: std::ops::Range<usize>, build: F) -> Result<()>
+    where F: FnOnce(&mut Pipeline) -> Result<()> {
+        if range.start >= range.end || range.end > self.output_len() {
+            return Err(ErrorCode::Internal("Invalid pipeline output range"));
+        }
+        let mut prefix = self.take_sinks();
+        let suffix = prefix.split_off(range.end);
+        let selected = prefix.split_off(range.start);
+        self.extend_sinks(selected);
+        let result = build(self);
+        let outputs = self.take_sinks();
+        self.extend_sinks(prefix);
+        self.extend_sinks(outputs);
+        self.extend_sinks(suffix);
+        result
+    }
+
     pub fn take_sinks(&mut self) -> VecDeque<(NodeIndex, usize)> {
         std::mem::take(&mut self.sinks)
     }
@@ -661,6 +689,21 @@ mod tests {
 
     use super::*;
     use crate::core::waker::WakeCallback;
+
+    #[test]
+    fn test_build_on_outputs_keeps_other_branches() -> Result<()> {
+        let mut pipeline = Pipeline::create();
+        pipeline.add_source(crate::sources::EmptySource::create, 4)?;
+        let initial = pipeline.take_sinks();
+        pipeline.extend_sinks(initial.iter().copied());
+        pipeline.build_on_outputs(1..3, |branch| branch.try_resize(1))?;
+        let outputs = pipeline.take_sinks();
+        assert_eq!(outputs.len(), 3);
+        assert_eq!(outputs[0], initial[0]);
+        assert_eq!(outputs[2], initial[3]);
+        pipeline.extend_sinks(outputs);
+        Ok(())
+    }
 
     #[test]
     fn test_merge_pipeline_waker_proxy() -> Result<()> {

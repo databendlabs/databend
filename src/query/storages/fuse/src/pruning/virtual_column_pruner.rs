@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::format_runtime_keypaths;
 use databend_common_expression::types::DataType;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnIdWithMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
@@ -47,7 +48,9 @@ use crate::io::read::load_virtual_column_file_meta;
 
 pub struct VirtualColumnPruner {
     dal: Operator,
-    source_column_ids: HashSet<ColumnId>,
+    cache_policy: CachePolicy,
+    // Source columns that the scan does not need for their own values.
+    ignorable_source_column_ids: HashSet<ColumnId>,
     // Cache path matching info once to avoid repeated parsing per block.
     virtual_column_fields: Vec<VirtualColumnFieldMatch>,
     // Query-time column ID of the typed virtual field used by single-column ORDER BY ... LIMIT.
@@ -63,6 +66,7 @@ struct VirtualColumnFieldMatch {
 impl VirtualColumnPruner {
     pub fn try_create(
         dal: Operator,
+        cache_policy: CachePolicy,
         push_down: &Option<PushDownInfo>,
     ) -> Result<Option<Arc<VirtualColumnPruner>>> {
         let Some(push_down) = push_down.as_ref() else {
@@ -86,7 +90,8 @@ impl VirtualColumnPruner {
         }
         Ok(Some(Arc::new(VirtualColumnPruner {
             dal,
-            source_column_ids: virtual_column.source_column_ids.clone(),
+            cache_policy,
+            ignorable_source_column_ids: virtual_column.ignorable_source_column_ids.clone(),
             virtual_column_fields,
             top_n_query_column_id,
         })))
@@ -116,9 +121,12 @@ impl VirtualColumnPruner {
             return Ok(Some(index));
         }
 
-        let Ok(virtual_meta) =
-            load_virtual_column_file_meta(self.dal.clone(), &virtual_block_meta.virtual_location.0)
-                .await
+        let Ok(virtual_meta) = load_virtual_column_file_meta(
+            self.dal.clone(),
+            &virtual_block_meta.virtual_location.0,
+            self.cache_policy,
+        )
+        .await
         else {
             // Read planning can still fall back to the authoritative source column.
             return Ok(None);
@@ -251,7 +259,7 @@ impl VirtualColumnPruner {
         // Source columns are ignored only when every requested virtual path from the source has a
         // virtual read plan. Unresolved indexed paths keep the source column for fallback.
         let ignored_source_column_ids = self
-            .source_column_ids
+            .ignorable_source_column_ids
             .difference(&fallback_source_column_ids)
             .copied()
             .collect();
@@ -325,7 +333,7 @@ impl VirtualColumnPruner {
             virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
             fields,
             read_slots: slot_builder.into_slots(),
-            ignored_source_column_ids: self.source_column_ids.clone(),
+            ignored_source_column_ids: self.ignorable_source_column_ids.clone(),
             virtual_column_stats,
         })
     }

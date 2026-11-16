@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -60,7 +61,7 @@ use databend_common_sql::binder::MutationType;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::parse_computed_field_index_expr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
@@ -271,7 +272,7 @@ fn add_matched_mutation_workers(
 impl PhysicalPlanBuilder {
     pub async fn build_mutation(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         mutation: &databend_common_sql::plans::Mutation,
         mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
@@ -363,6 +364,7 @@ impl PhysicalPlanBuilder {
                 recluster_info: None,
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
@@ -456,6 +458,7 @@ impl PhysicalPlanBuilder {
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 recluster_info: None,
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
 
             plan.adjust_plan_id(&mut 0);
@@ -697,6 +700,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+            expected_ttl: mutation.expected_ttl.clone(),
         });
 
         physical_plan.adjust_plan_id(&mut 0);
@@ -842,7 +846,8 @@ fn build_mutation_row_fetch(
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
-        populate_cache: false,
+        // Rows fetched to mutate them are not read again soon.
+        cache_policy: CachePolicy::READ_ONLY,
         enable_block_id_repartition: true,
         stat_info: None,
         meta: PhysicalPlanMeta::new("RowFetch"),
@@ -1057,7 +1062,7 @@ pub fn generate_stored_computed_list(
             // If related column has updated, the stored computed column need to regenerate.
             let mut need_update = false;
             let field_indices = expr.column_refs();
-            for (field_index, _) in field_indices.iter() {
+            for field_index in field_indices.keys() {
                 if update_list.contains_key(field_index) {
                     need_update = true;
                     break;

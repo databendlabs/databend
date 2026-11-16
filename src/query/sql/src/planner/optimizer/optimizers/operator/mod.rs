@@ -22,8 +22,11 @@ pub use aggregate::RuleNormalizeAggregateOptimizer;
 pub use aggregate::RuleStatsAggregateOptimizer;
 pub use cte::CleanupUnusedCTEOptimizer;
 pub use decorrelate::FlattenInfo;
+pub(crate) use decorrelate::ScalarAggregateMatch;
 pub use decorrelate::SubqueryDecorrelatorOptimizer;
 pub use decorrelate::UnnestResult;
+pub(crate) use decorrelate::function_call;
+pub(crate) use decorrelate::match_scalar_aggregate;
 pub use filter::DeduplicateJoinConditionOptimizer;
 pub use filter::EquivalentConstantsVisitor;
 pub use filter::InferFilterOptimizer;
@@ -32,3 +35,6 @@ pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use filter::PullUpFilterOptimizer;
 pub use join::FinalizeSpatialJoinOptimizer;
 pub use join::SingleToInnerOptimizer;
+
+mod eliminate_eval_scalar;
+pub use eliminate_eval_scalar::EliminateEvalScalarOptimizer;

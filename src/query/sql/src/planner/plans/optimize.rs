@@ -15,6 +15,7 @@
 use databend_common_catalog::table::CompactionLimits;
 
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug)]
@@ -30,6 +31,8 @@ pub struct OptimizeCompactBlock {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    /// Automatic maintenance must not follow a name reused by another table.
+    pub expected_table_id: Option<u64>,
     pub limit: CompactionLimits,
 }
 
@@ -42,3 +45,5 @@ impl Operator for OptimizeCompactBlock {
         0
     }
 }
+
+impl PhysicalOperator for OptimizeCompactBlock {}

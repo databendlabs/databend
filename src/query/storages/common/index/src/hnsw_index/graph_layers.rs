@@ -189,6 +189,16 @@ impl GraphLayersBase for GraphLayers {
 ///
 /// Assume all scores are similarities. Larger score = closer points
 impl GraphLayers {
+    pub(crate) fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.links.memory_size() - std::mem::size_of::<GraphLinks>()
+            + self.entry_points.memory_size()
+            - std::mem::size_of::<EntryPoints>()
+            + self
+                .visited_pool
+                .retained_memory_size(self.links.num_points())
+            - std::mem::size_of::<VisitedPool>()
+    }
+
     /// Returns the highest level this point is included in
     pub fn point_level(&self, point_id: PointOffsetType) -> usize {
         self.links.point_level(point_id)

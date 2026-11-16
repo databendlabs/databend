@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(duration_constructors)]
 #![allow(clippy::uninlined_format_args)]
 
+mod owned_object_ownership;
 mod quota;
 mod role;
 mod setting;

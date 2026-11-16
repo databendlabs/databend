@@ -61,6 +61,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
         RuleID::PushDownSortFilterScan, // PushDownSortFilterScan should be after PushDownFilterScan
+        RuleID::PushDownTopNUnionScan,
         RuleID::PushDownLimitFilterScan,
         RuleID::HierarchicalGroupingSetsToUnion, // Hierarchical grouping sets optimization
         RuleID::GroupingSetsToUnion,             // Fall back to union approach
@@ -118,6 +119,7 @@ pub enum RuleID {
     PushDownSortEvalScalar,
     PushDownSortScan,
     PushDownSortFilterScan,
+    PushDownTopNUnionScan,
     PushDownLimitFilterScan,
     SemiToInnerJoin,
     EliminateEvalScalar,
@@ -128,7 +130,6 @@ pub enum RuleID {
     MergeFilter,
     GroupingSetsToUnion,
     HierarchicalGroupingSetsToUnion,
-    SplitAggregate,
     FoldCountAggregate,
     PushDownPrewhere,
     TryApplyMaterializedView,
@@ -165,6 +166,7 @@ impl Display for RuleID {
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::PushDownSortFilterScan => write!(f, "PushDownSortFilterScan"),
+            RuleID::PushDownTopNUnionScan => write!(f, "PushDownTopNUnionScan"),
             RuleID::PushDownLimitFilterScan => write!(f, "PushDownLimitFilterScan"),
             RuleID::PushDownSortEvalScalar => write!(f, "PushDownSortEvalScalar"),
             RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
@@ -179,7 +181,6 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::GroupingSetsToUnion => write!(f, "GroupingSetsToUnion"),
             RuleID::HierarchicalGroupingSetsToUnion => write!(f, "HierarchicalGroupingSetsToUnion"),
-            RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
             RuleID::EliminateSelfJoin => write!(f, "EliminateSelfJoin"),

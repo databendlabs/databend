@@ -88,10 +88,6 @@ impl IPhysicalPlan for ExchangeSource {
         let plan_scope = PlanScope::get_plan_scope();
         let build_pipeline = build_res.main_pipeline.finalize(plan_scope);
 
-        // add sharing data
-        builder.join_state = build_res.builder_data.input_join_state;
-        builder.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;
-
         // Merge pipeline
         assert_eq!(builder.main_pipeline.output_len(), 0);
         let sinks = builder.main_pipeline.merge(build_pipeline)?;

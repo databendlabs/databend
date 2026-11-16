@@ -24,6 +24,17 @@ impl Walk for UDFDefinition {
         &self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
+        if let UDFDefinition::UDFScript {
+            external_access_integrations,
+            ..
+        }
+        | UDFDefinition::UDAFScript {
+            external_access_integrations,
+            ..
+        } = self
+        {
+            try_walk!(external_access_integrations.walk(visitor));
+        }
         match self {
             UDFDefinition::LambdaUDF {
                 parameters,
@@ -42,11 +53,16 @@ impl Walk for UDFDefinition {
                 try_walk!(definition.walk(visitor));
             }
             UDFDefinition::UDFServer {
+                external_access_integrations,
                 arg_types,
                 return_type,
                 ..
+            } => {
+                try_walk!(external_access_integrations.walk(visitor));
+                try_walk!(arg_types.walk(visitor));
+                try_walk!(return_type.walk(visitor));
             }
-            | UDFDefinition::UDFScript {
+            UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
                 ..
@@ -104,6 +120,17 @@ impl WalkMut for UDFDefinition {
         &mut self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
+        if let UDFDefinition::UDFScript {
+            external_access_integrations,
+            ..
+        }
+        | UDFDefinition::UDAFScript {
+            external_access_integrations,
+            ..
+        } = self
+        {
+            try_walk!(external_access_integrations.walk_mut(visitor));
+        }
         match self {
             UDFDefinition::LambdaUDF {
                 parameters,
@@ -122,11 +149,16 @@ impl WalkMut for UDFDefinition {
                 try_walk!(definition.walk_mut(visitor));
             }
             UDFDefinition::UDFServer {
+                external_access_integrations,
                 arg_types,
                 return_type,
                 ..
+            } => {
+                try_walk!(external_access_integrations.walk_mut(visitor));
+                try_walk!(arg_types.walk_mut(visitor));
+                try_walk!(return_type.walk_mut(visitor));
             }
-            | UDFDefinition::UDFScript {
+            UDFDefinition::UDFScript {
                 arg_types,
                 return_type,
                 ..

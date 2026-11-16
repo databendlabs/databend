@@ -8,9 +8,6 @@ statement ok
 USE test_virtual_column
 
 statement ok
-set enable_experimental_virtual_column = 1;
-
-statement ok
 drop table if exists t1
 
 statement ok
@@ -252,6 +249,13 @@ SELECT r.id, r.val['a'], r.val['b'], r.nval:a, r.nval:b FROM ( SELECT r.id, r.va
 4 44 4 44 4
 5 55 5 55 5
 6 NULL NULL NULL NULL
+
+# The CTE and the query reading it bind the same virtual column of one scan.
+query IT
+WITH h AS (SELECT id, val FROM t2 WHERE val['a'] IS NOT NULL QUALIFY row_number() OVER (ORDER BY val['c']::STRING DESC) = 1)
+SELECT h.id, h.val['c']::STRING FROM h
+----
+4 value
 
 statement ok
 REFRESH VIRTUAL COLUMN FOR t2;
@@ -903,9 +907,6 @@ select id from t_empty_prewhere where id % 2 = 1 and val['d']['e'] > 20 order by
 
 statement ok
 drop table t_empty_prewhere
-
-statement ok
-set enable_experimental_virtual_column = 0;
 
 statement ok
 DROP DATABASE test_virtual_column

@@ -16,3 +16,65 @@ SELECT timezone()
 ----
 UTC
 
+
+# current_tenant_id() returns the tenant of the authenticated session.
+# The sqllogictest runner assigns each file its own sandbox tenant, so the
+# concrete value is not fixed; capture it once and compare against it.
+statement ok
+SET VARIABLE tenant_fn_id = (SELECT current_tenant_id())
+
+query BB
+SELECT typeof(current_tenant_id()) = 'VARCHAR', length(current_tenant_id()) > 0
+----
+1 1
+
+# Case-insensitive, and stable within the session.
+query B
+SELECT CURRENT_TENANT_ID() = getvariable('tenant_fn_id')
+----
+1
+
+# It takes no arguments and cannot be used to look up other tenants.
+statement error 1065
+SELECT current_tenant_id('other_tenant')
+
+# The tenant id is a share identifier, not a display name: it must round-trip
+# through identifier quoting so it can be used in
+# `CREATE DATABASE ... FROM SHARE <tenant>.<share>` and `ALTER SHARE ... ADD ACCOUNTS`.
+query B
+SELECT concat('`', current_tenant_id(), '`.`my_share`') = concat('`', getvariable('tenant_fn_id'), '`.`my_share`')
+----
+1
+
+# Switching role or database must not change the session tenant.
+statement ok
+CREATE ROLE IF NOT EXISTS tenant_fn_role
+
+statement ok
+CREATE DATABASE IF NOT EXISTS tenant_fn_db
+
+statement ok
+SET ROLE tenant_fn_role
+
+statement ok
+USE tenant_fn_db
+
+query B
+SELECT current_tenant_id() = getvariable('tenant_fn_id')
+----
+1
+
+statement ok
+USE default
+
+statement ok
+SET ROLE public
+
+statement ok
+DROP DATABASE IF EXISTS tenant_fn_db
+
+statement ok
+DROP ROLE IF EXISTS tenant_fn_role
+
+statement ok
+UNSET VARIABLE tenant_fn_id

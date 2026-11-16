@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -177,7 +178,7 @@ impl Table for RandomTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let mut output_schema = self.table_info.schema();
         let push_downs = plan.push_downs.clone();
@@ -196,9 +197,9 @@ impl Table for RandomTable {
 
         let mut builder = SourcePipeBuilder::create();
 
-        for index in 0..plan.parts.len() {
+        for part in &plan.parts.partitions {
             let output = OutputPort::create();
-            let parts = RandomPartInfo::from_part(&plan.parts.partitions[index])?;
+            let parts = RandomPartInfo::from_part(part)?;
             builder.add_source(
                 output.clone(),
                 RandomSource::create(

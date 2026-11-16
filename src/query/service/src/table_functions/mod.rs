@@ -28,6 +28,7 @@ mod policy_references;
 mod private_task_cancel;
 #[cfg(feature = "task-support")]
 mod private_task_history;
+mod send_notification;
 mod show_grants;
 mod show_roles;
 mod show_sequences;

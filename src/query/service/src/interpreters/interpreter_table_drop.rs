@@ -99,18 +99,18 @@ impl Interpreter for DropTableInterpreter {
             if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {}, use `DROP {} {}.{}` instead",
-                    &self.plan.database,
-                    &self.plan.table,
+                    self.plan.database,
+                    self.plan.table,
                     engine,
                     engine,
-                    &self.plan.database,
-                    &self.plan.table
+                    self.plan.database,
+                    self.plan.table
                 )));
             }
             if is_materialized_view_engine(tbl.engine()) {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} is a MATERIALIZED VIEW, use `DROP MATERIALIZED VIEW {}.{}` instead",
-                    &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table, self.plan.database, self.plan.table
                 )));
             }
             if tbl.get_table_info().is_shared() {

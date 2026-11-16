@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 query I
 select min(number) from numbers_mt (10) where 1 = 2
 ----

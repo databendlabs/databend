@@ -1225,3 +1225,93 @@ settings (timezone='America/New_York') select try_to_timestamp('2024-11-03 05:30
 ----
 2024-11-03 05:30:00.000000 2024-11-03 05:30:00.000000 -0500
 
+## Rounding a column inside the repeated hour of a DST fallback resolves the
+## ambiguous local time to its earlier instant, as for a single value: in Paris
+## 2024-10-27 01:30:30 UTC is the second 02:30:30, and its minute 02:30 is
+## taken as 00:30 UTC.
+statement ok
+create or replace table fold_t (ts timestamp);
+
+statement ok
+settings (timezone='UTC') insert into fold_t values ('2024-10-27 01:30:30'), ('2024-10-27 01:31:30');
+
+query II
+settings (timezone='Europe/Paris') select to_int64(ts), to_int64(to_start_of_minute(ts)) from fold_t order by ts;
+----
+1729992630000000 1729989000000000
+1729992690000000 1729989060000000
+
+query I
+settings (timezone='Europe/Paris') select to_int64(to_start_of_minute(to_timestamp(1729992630000000)));
+----
+1729989000000000
+
+statement ok
+drop table fold_t;
+
+## Day-level functions on a column take a fixed UTC offset when it cannot
+## change across the column, and the per-row path otherwise; both must agree.
+## Non-whole-hour offsets, on a nullable column with NULL rows.
+statement ok
+create or replace table fixed_offset_t (ts timestamp);
+
+statement ok
+settings (timezone='UTC') insert into fixed_offset_t values ('2024-09-01 00:00:00'), (NULL), ('2024-09-01 18:14:59.999999'), ('2024-09-02 03:59:30'), (NULL), ('2024-09-03 23:59:59');
+
+query ??????
+settings (timezone='Asia/Kathmandu') select ts, to_date(ts), to_yyyymmdd(ts), to_start_of_fifteen_minutes(ts), to_start_of_hour(ts), to_start_of_day(ts) from fixed_offset_t order by ts nulls last;
+----
+2024-09-01 05:45:00.000000 2024-09-01 20240901 2024-09-01 05:45:00.000000 2024-09-01 05:00:00.000000 2024-09-01 00:00:00.000000
+2024-09-01 23:59:59.999999 2024-09-01 20240901 2024-09-01 23:45:00.000000 2024-09-01 23:00:00.000000 2024-09-01 00:00:00.000000
+2024-09-02 09:44:30.000000 2024-09-02 20240902 2024-09-02 09:30:00.000000 2024-09-02 09:00:00.000000 2024-09-02 00:00:00.000000
+2024-09-04 05:44:59.000000 2024-09-04 20240904 2024-09-04 05:30:00.000000 2024-09-04 05:00:00.000000 2024-09-04 00:00:00.000000
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+query ??????
+settings (timezone='America/St_Johns') select ts, to_date(ts), to_yyyymmdd(ts), to_start_of_fifteen_minutes(ts), to_start_of_hour(ts), date_trunc(day, ts) from fixed_offset_t order by ts nulls last;
+----
+2024-08-31 21:30:00.000000 2024-08-31 20240831 2024-08-31 21:30:00.000000 2024-08-31 21:00:00.000000 2024-08-31 00:00:00.000000
+2024-09-01 15:44:59.999999 2024-09-01 20240901 2024-09-01 15:30:00.000000 2024-09-01 15:00:00.000000 2024-09-01 00:00:00.000000
+2024-09-02 01:29:30.000000 2024-09-02 20240902 2024-09-02 01:15:00.000000 2024-09-02 01:00:00.000000 2024-09-02 00:00:00.000000
+2024-09-03 21:29:59.000000 2024-09-03 20240903 2024-09-03 21:15:00.000000 2024-09-03 21:00:00.000000 2024-09-03 00:00:00.000000
+NULL NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL NULL
+
+statement ok
+drop table fixed_offset_t;
+
+## A column across the Paris DST change (2024-10-27 01:00 UTC); 01:30 UTC is
+## in the repeated hour, whose local 02:00 resolves to its earlier instant.
+statement ok
+create or replace table dst_t (ts timestamp);
+
+statement ok
+settings (timezone='UTC') insert into dst_t values ('2024-10-26 22:30:00'), ('2024-10-27 00:30:00'), ('2024-10-27 01:30:00'), ('2024-10-27 02:30:00');
+
+query I?II
+settings (timezone='Europe/Paris') select to_int64(ts), to_date(ts), to_int64(to_start_of_hour(ts)), to_int64(to_start_of_day(ts)) from dst_t order by ts;
+----
+1729981800000000 2024-10-27 1729980000000000 1729980000000000
+1729989000000000 2024-10-27 1729987200000000 1729980000000000
+1729992600000000 2024-10-27 1729987200000000 1729980000000000
+1729996200000000 2024-10-27 1729994400000000 1729980000000000
+
+statement ok
+drop table dst_t;
+
+## A column after the change whose local midnight was before it.
+statement ok
+create or replace table after_dst_t (ts timestamp);
+
+statement ok
+settings (timezone='UTC') insert into after_dst_t values ('2024-10-27 03:00:00'), ('2024-10-27 03:59:00');
+
+query IIII
+settings (timezone='Europe/Paris') select to_int64(ts), to_int64(to_start_of_hour(ts)), to_int64(to_start_of_day(ts)), to_int64(date_trunc(day, ts)) from after_dst_t order by ts;
+----
+1729998000000000 1729998000000000 1729980000000000 1729980000000000
+1730001540000000 1729998000000000 1729980000000000 1729980000000000
+
+statement ok
+drop table after_dst_t;

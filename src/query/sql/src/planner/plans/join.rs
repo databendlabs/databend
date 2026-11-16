@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -35,6 +37,7 @@ use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SpatialJoinCandidate;
@@ -331,9 +334,6 @@ pub struct Join {
     // marker_index is for MarkJoin only.
     pub marker_index: Option<Symbol>,
     pub from_correlated_subquery: bool,
-    // if we execute distributed merge into, we need to hold the
-    // hash table to get not match data from source.
-    pub need_hold_hash_table: bool,
     pub is_lateral: bool,
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
@@ -353,7 +353,6 @@ impl Default for Join {
             join_type: JoinType::Cross,
             marker_index: None,
             from_correlated_subquery: false,
-            need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
@@ -381,6 +380,23 @@ impl Join {
             .any(|condition| condition.is_null_equal)
     }
 
+    fn nullable_mark_join_distributions(&self) -> Option<(Distribution, Distribution)> {
+        if !self.join_type.is_mark_join()
+            || self.equi_conditions.len() != 1
+            || !self.has_null_equi_condition()
+        {
+            return None;
+        }
+
+        // LeftMark emits build rows; RightMark emits probe rows. Replicate only
+        // the subquery, so each output row is marked once with global NULL knowledge.
+        Some(match self.join_type {
+            JoinType::LeftMark => (Distribution::Broadcast, Distribution::NonBroadcast),
+            JoinType::RightMark => (Distribution::NonBroadcast, Distribution::Broadcast),
+            _ => unreachable!(),
+        })
+    }
+
     pub fn derive_join_stats(
         &self,
         left_stat_info: Arc<StatInfo>,
@@ -389,7 +405,7 @@ impl Join {
     ) -> Result<Arc<StatInfo>> {
         let mut estimator =
             JoinStatsEstimator::new(self.join_type, left_stat_info, right_stat_info);
-        estimator.evaluate_join(self, &stat_ctx.function_context)?;
+        estimator.evaluate_join(self, stat_ctx)?;
         estimator.finish()
     }
 
@@ -458,7 +474,7 @@ impl Join {
             return Ok(false);
         }
 
-        let stat_ctx = StatContext::new(ctx.get_function_context()?);
+        let stat_ctx = StatContext::new(ctx.get_function_context()?, &settings);
         let left_cardinality = rel_expr.derive_cardinality_child(0, &stat_ctx)?.cardinality;
         let right_cardinality = rel_expr.derive_cardinality_child(1, &stat_ctx)?.cardinality;
         let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
@@ -498,12 +514,24 @@ impl Operator for Join {
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
-        // Derive output columns
-        let mut output_columns = left_prop.output_columns.clone();
-        if let Some(mark_index) = self.marker_index {
+        let mut input_columns = left_prop.output_columns.clone();
+        input_columns.extend(right_prop.output_columns.iter().copied());
+        // Semi/anti joins only produce rows from the retained side. The other side is
+        // available to join conditions, but not to operators above the join. A mark join
+        // likewise only carries the side its marker is computed against plus the marker
+        // itself, as `PhysicalHashJoin::create_output_schema` builds it.
+        let mut output_columns = match self.join_type {
+            JoinType::LeftSemi | JoinType::LeftAnti => left_prop.output_columns.clone(),
+            JoinType::RightSemi | JoinType::RightAnti => right_prop.output_columns.clone(),
+            JoinType::LeftMark => right_prop.output_columns.clone(),
+            JoinType::RightMark => left_prop.output_columns.clone(),
+            _ => input_columns.clone(),
+        };
+        if self.join_type.is_mark_join()
+            && let Some(mark_index) = self.marker_index
+        {
             output_columns.insert(mark_index);
         }
-        output_columns.extend(right_prop.output_columns.iter().copied());
 
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();
@@ -516,7 +544,10 @@ impl Operator for Join {
         for condition in &self.non_equi_conditions {
             condition.collect_used_columns(&mut outer_columns);
         }
-        outer_columns.retain(|column| !output_columns.contains(column));
+        // The discarded side of a semi/anti or mark join is local to its conditions and
+        // its marker, not outer.
+        outer_columns
+            .retain(|column| !input_columns.contains(column) && !output_columns.contains(column));
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
@@ -532,6 +563,15 @@ impl Operator for Join {
         }))
     }
 
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
+        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info, stat_ctx)?;
+        Ok(stat_info)
+    }
+}
+
+impl PhysicalOperator for Join {
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let probe_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_prop = rel_expr.derive_physical_prop_child(1)?;
@@ -585,13 +625,6 @@ impl Operator for Join {
         }
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
-        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
-        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info, stat_ctx)?;
-        Ok(stat_info)
-    }
-
     fn compute_required_prop_child(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -616,7 +649,7 @@ impl Operator for Join {
                 return Ok(required);
             }
 
-            let stat_ctx = StatContext::new(ctx.get_function_context()?);
+            let stat_ctx = StatContext::new(ctx.get_function_context()?, &ctx.get_settings());
             let left_cardinality = rel_expr.derive_cardinality_child(0, &stat_ctx)?.cardinality;
             let right_cardinality = rel_expr.derive_cardinality_child(1, &stat_ctx)?.cardinality;
             let broadcast_child = if left_cardinality <= right_cardinality {
@@ -660,6 +693,8 @@ impl Operator for Join {
         {
             required.distribution = if child_index == 1 {
                 Distribution::Broadcast
+            } else if let Some((probe_distribution, _)) = self.nullable_mark_join_distributions() {
+                probe_distribution
             } else {
                 Distribution::Any
             };
@@ -673,6 +708,14 @@ impl Operator for Join {
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
+            return Ok(required);
+        }
+
+        // Every worker must observe the complete nullable subquery, including NULL
+        // and empty input. The output side needs no particular partitioning, but
+        // must not be replicated. Keep the Serial fallback above unchanged.
+        if let Some((left, right)) = self.nullable_mark_join_distributions() {
+            required.distribution = if child_index == 0 { left } else { right };
             return Ok(required);
         }
 
@@ -701,22 +744,9 @@ impl Operator for Join {
             return Ok(required);
         }
 
-        // Otherwise, use hash shuffle
-        if child_index == 0 {
-            let left_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.left.clone())
-                .collect();
-            required.distribution = Distribution::GlobalHash(left_conditions);
-        } else {
-            let right_conditions = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.right.clone())
-                .collect();
-            required.distribution = Distribution::GlobalHash(right_conditions);
-        }
+        // Otherwise, use the same paired hash keys as Cascades exploration.
+        let (left, right) = hash_join_distributions(&self.equi_conditions);
+        required.distribution = if child_index == 0 { left } else { right };
 
         Ok(required)
     }
@@ -774,68 +804,24 @@ impl Operator for Join {
             ]);
         }
 
-        // For mark join with nullable eq comparison, ensure to use broadcast for subquery side
-        if self.join_type.is_mark_join()
-            && self.equi_conditions.len() == 1
-            && self.has_null_equi_condition()
-        {
-            // subquery as left probe side
-            if matches!(self.join_type, JoinType::LeftMark) {
-                let conditions = self
-                    .equi_conditions
-                    .iter()
-                    .map(|condition| condition.right.clone())
-                    .collect();
-
-                children_required.push(vec![
-                    RequiredProperty {
-                        distribution: Distribution::Broadcast,
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::GlobalHash(conditions),
-                    },
-                ]);
-            } else {
-                // subquery as right build side
-                let conditions = self
-                    .equi_conditions
-                    .iter()
-                    .map(|condition| condition.left.clone())
-                    .collect();
-
-                children_required.push(vec![
-                    RequiredProperty {
-                        distribution: Distribution::GlobalHash(conditions),
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::Broadcast,
-                    },
-                ]);
-            }
-            return Ok(children_required);
+        if let Some((left, right)) = self.nullable_mark_join_distributions() {
+            return Ok(vec![vec![
+                RequiredProperty { distribution: left },
+                RequiredProperty {
+                    distribution: right,
+                },
+            ]]);
         }
 
         let settings = ctx.get_settings();
         if !matches!(self.join_type, JoinType::Cross) && !settings.get_enforce_broadcast_join()? {
-            // (Hash, Hash) – use full equi-join key set to avoid single-column hash shuffle
-            let left_keys: Vec<_> = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.left.clone())
-                .collect();
-            let right_keys: Vec<_> = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.right.clone())
-                .collect();
-
-            if !left_keys.is_empty() {
+            // (Hash, Hash): omit only paired, covered derived keys.
+            if !self.equi_conditions.is_empty() {
+                let (left, right) = hash_join_distributions(&self.equi_conditions);
                 children_required.push(vec![
+                    RequiredProperty { distribution: left },
                     RequiredProperty {
-                        distribution: Distribution::GlobalHash(left_keys),
-                    },
-                    RequiredProperty {
-                        distribution: Distribution::GlobalHash(right_keys),
+                        distribution: right,
                     },
                 ]);
             }
@@ -887,6 +873,142 @@ impl Operator for Join {
     }
 }
 
+/// Select condition pairs, never independent left/right subsets. Join predicates are unchanged.
+fn hash_join_distributions(conditions: &[JoinEquiCondition]) -> (Distribution, Distribution) {
+    let direct = conditions
+        .iter()
+        .filter(|condition| {
+            matches!(
+                (&condition.left, &condition.right),
+                (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right))
+                    if left.column.data_type == right.column.data_type
+                        && shuffle_key_has_exact_equality(&left.column.data_type)
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut retained = vec![true; conditions.len()];
+    let mut remaining = conditions.len();
+    for (index, condition) in conditions.iter().enumerate() {
+        // Keep the existing multi-key protection against skew, even if all extra keys depend
+        // on one direct key. Retain original condition order on both sides.
+        if remaining <= 2 {
+            break;
+        }
+        if derived_shuffle_key_is_covered(&condition.left, &direct, Side::Left)
+            && derived_shuffle_key_is_covered(&condition.right, &direct, Side::Right)
+        {
+            retained[index] = false;
+            remaining -= 1;
+        }
+    }
+    let keys = |side: Side| {
+        conditions
+            .iter()
+            .zip(&retained)
+            .filter(|(_, retain)| **retain)
+            .map(|(condition, _)| side.join_condition(condition).clone())
+            .collect()
+    };
+    (
+        Distribution::GlobalHash(keys(Side::Left)),
+        Distribution::GlobalHash(keys(Side::Right)),
+    )
+}
+
+// Equal values must have identical representations for arbitrary derived functions. In
+// particular, floating point and timestamp-with-offset equality are not such a guarantee.
+fn shuffle_key_has_exact_equality(data_type: &DataType) -> bool {
+    match data_type.remove_nullable() {
+        DataType::Boolean
+        | DataType::String
+        | DataType::Decimal(_)
+        | DataType::Date
+        | DataType::Timestamp => true,
+        DataType::Number(number) => number.is_integer(),
+        _ => false,
+    }
+}
+
+fn derived_shuffle_key_is_covered(
+    scalar: &ScalarExpr,
+    direct: &[&JoinEquiCondition],
+    side: Side,
+) -> bool {
+    if direct.is_empty()
+        || matches!(scalar, ScalarExpr::BoundColumnRef(_))
+        || scalar.used_columns().len() != 1
+        || !shuffle_key_casts_are_safe(scalar)
+    {
+        return false;
+    }
+    // Resolve overloads, including implicit casts, to inspect function-context dependencies.
+    // Failure to resolve an expression is not evidence that its shuffle key is redundant.
+    scalar
+        .as_symbol_expr()
+        .is_ok_and(|expr| shuffle_expr_is_covered(&expr, direct, side))
+}
+
+fn shuffle_key_casts_are_safe(expr: &ScalarExpr) -> bool {
+    match expr {
+        ScalarExpr::BoundColumnRef(_)
+        | ScalarExpr::ConstantExpr(_)
+        | ScalarExpr::TypedConstantExpr(_, _) => true,
+        ScalarExpr::CastExpr(cast) => {
+            shuffle_cast_is_safe(&cast.argument.data_type(), &cast.target_type, cast.is_try)
+                && shuffle_key_casts_are_safe(&cast.argument)
+        }
+        ScalarExpr::FunctionCall(function) => {
+            function.arguments.iter().all(shuffle_key_casts_are_safe)
+        }
+        // Do not infer dependencies through UDFs, subqueries, lambdas, aggregates or windows.
+        _ => false,
+    }
+}
+
+// Only identity/nullability changes and lossless integer widening are context independent here.
+// Other casts (including temporal, string parsing and decimal rounding) keep their shuffle key.
+fn shuffle_cast_is_safe(source: &DataType, target: &DataType, is_try: bool) -> bool {
+    !is_try
+        && shuffle_key_has_exact_equality(target)
+        && classify_conversion(source, target).is_lossless_injective()
+        && (source.remove_nullable() == target.remove_nullable()
+            || matches!(
+                (source.remove_nullable(), target.remove_nullable()),
+                (DataType::Number(source), DataType::Number(target))
+                    if source.is_integer() && target.is_integer()
+            ))
+}
+
+fn shuffle_expr_is_covered(expr: &Expr<Symbol>, direct: &[&JoinEquiCondition], side: Side) -> bool {
+    match expr {
+        Expr::Constant(_) => true,
+        Expr::ColumnRef(column) => direct.iter().any(|condition| {
+            matches!(
+                side.join_condition(condition),
+                ScalarExpr::BoundColumnRef(key)
+                    if key.column.index == column.id && *key.column.data_type == column.data_type
+            )
+        }),
+        Expr::Cast(cast) => {
+            shuffle_cast_is_safe(cast.expr.data_type(), &cast.dest_type, cast.is_try)
+                && shuffle_expr_is_covered(&cast.expr, direct, side)
+        }
+        Expr::FunctionCall(function) => {
+            BUILTIN_FUNCTIONS
+                .get_property(&function.function.signature.name)
+                .is_some_and(|property| {
+                    property.kind == FunctionKind::Scalar && !property.non_deterministic
+                })
+                && !BUILTIN_FUNCTIONS.is_context_dependent(&function.id)
+                && function
+                    .args
+                    .iter()
+                    .all(|arg| shuffle_expr_is_covered(arg, direct, side))
+        }
+        Expr::LambdaFunctionCall(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::DataType;
@@ -895,6 +1017,7 @@ mod tests {
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+    use crate::optimizer::ir::PExpr;
     use crate::optimizer::ir::SExpr;
     use crate::plans::BoundColumnRef;
     use crate::plans::Exchange;
@@ -932,10 +1055,10 @@ mod tests {
         indices.iter().copied().map(Symbol::new).collect()
     }
 
-    fn exchanged_scan(exchange: Exchange, columns: &[usize]) -> SExpr {
-        SExpr::create_unary(
+    fn exchanged_scan(exchange: Exchange, columns: &[usize]) -> PExpr {
+        PExpr::create_unary(
             exchange,
-            SExpr::create_leaf(Scan {
+            PExpr::create_leaf(Scan {
                 columns: column_set(columns),
                 ..Default::default()
             }),
@@ -955,7 +1078,7 @@ mod tests {
             join_type: JoinType::Inner,
             ..Default::default()
         };
-        let s_expr = SExpr::create_binary(
+        let p_expr = PExpr::create_binary(
             join,
             exchanged_scan(Exchange::Broadcast, &[0]),
             exchanged_scan(
@@ -963,8 +1086,7 @@ mod tests {
                 &[1, 2],
             ),
         );
-
-        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
+        let physical_prop = RelExpr::with_p_expr(&p_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, right_distribution);
         Ok(())
@@ -1014,7 +1136,7 @@ mod tests {
             join_type: JoinType::Inner,
             ..Default::default()
         };
-        let s_expr = SExpr::create_binary(
+        let p_expr = PExpr::create_binary(
             join,
             exchanged_scan(Exchange::Broadcast, &[0, 1]),
             exchanged_scan(
@@ -1022,8 +1144,7 @@ mod tests {
                 &[2],
             ),
         );
-
-        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
+        let physical_prop = RelExpr::with_p_expr(&p_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
         Ok(())

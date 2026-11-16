@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -26,6 +25,7 @@ use databend_common_statistics::Histogram;
 
 use super::ColumnStat;
 use super::Selectivity;
+use super::StatContext;
 use super::join_column::JoinColumnStats;
 use super::join_column::aggregate_column_stats;
 use super::join_condition::CompleteStats;
@@ -354,7 +354,8 @@ impl JoinStatsEstimator {
         }
     }
 
-    pub(crate) fn evaluate_join(&mut self, join: &Join, func_ctx: &FunctionContext) -> Result<()> {
+    pub(crate) fn evaluate_join(&mut self, join: &Join, stat_ctx: &StatContext) -> Result<()> {
+        let func_ctx = &stat_ctx.function_context;
         let left_stat_cardinality = self
             .left_input
             .statistics
@@ -409,6 +410,7 @@ impl JoinStatsEstimator {
                     input_cardinality,
                     &column_row_scales,
                     func_ctx,
+                    stat_ctx.filter_and_strategy,
                 )?;
                 self.contributions
                     .push(JoinConditionContribution::from_non_equi(&evaluated));
@@ -418,6 +420,17 @@ impl JoinStatsEstimator {
     }
 
     pub(crate) fn finish(self) -> Result<Arc<StatInfo>> {
+        if self.output_is_proven_empty() {
+            return Ok(Arc::new(StatInfo {
+                cardinality: 0.0,
+                statistics: Statistics {
+                    precise_cardinality: Some(0),
+                    column_stats: HashMap::new(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
+                },
+            }));
+        }
         let mut stats = self.finish_join_stats()?;
         let output_rows = stats.output_rows;
         let column_stats = if output_rows == 0.0 {
@@ -439,6 +452,36 @@ impl JoinStatsEstimator {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+
+    /// Returns true when an input that is proven empty (`precise_cardinality =
+    /// Some(0)`) forces the join output to be empty.
+    fn output_is_proven_empty(&self) -> bool {
+        let left = self.left_input.statistics.precise_cardinality == Some(0);
+        let right = self.right_input.statistics.precise_cardinality == Some(0);
+        match self.join_type {
+            JoinType::Inner
+            | JoinType::InnerAny
+            | JoinType::Cross
+            | JoinType::Asof
+            | JoinType::LeftSemi
+            | JoinType::RightSemi => left || right,
+            JoinType::Left
+            | JoinType::LeftAny
+            | JoinType::LeftAnti
+            | JoinType::LeftSingle
+            | JoinType::RightMark => left,
+            JoinType::Right
+            | JoinType::RightAny
+            | JoinType::RightAnti
+            | JoinType::RightSingle
+            | JoinType::LeftMark => right,
+            // Outer ASOF joins swap their logical children while planning, so
+            // only rely on the case where both inputs are empty.
+            JoinType::Full | JoinType::FullAsof | JoinType::LeftAsof | JoinType::RightAsof => {
+                left && right
+            }
+        }
     }
 
     fn finish_join_stats(&self) -> Result<JoinStats> {

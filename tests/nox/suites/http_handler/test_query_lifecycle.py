@@ -388,7 +388,11 @@ def test_query_lifecycle_timeout(rows):
         assert resp.get("state") == "Succeeded"
     else:
         assert "page" in resp.get("next_uri")
-        assert resp.get("state") == "Running"
+        if rows == 11:
+            # Execution can finish while the last row is still waiting to be fetched.
+            assert resp.get("state") in ("Running", "Succeeded")
+        else:
+            assert resp.get("state") == "Running"
 
     time.sleep(timeout + wait_time_secs + 1)
 

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(iter_advance_by)]
 #![feature(portable_simd)]
 #![allow(clippy::unconditional_recursion)]
 #![allow(clippy::non_canonical_partial_ord_impl)]
@@ -20,7 +19,6 @@
 #![allow(dead_code)]
 #![feature(trusted_len)]
 #![feature(try_blocks)]
-#![feature(debug_closure_helpers)]
 
 pub mod binary;
 pub mod binview;

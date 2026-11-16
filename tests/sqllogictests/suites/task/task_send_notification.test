@@ -1,0 +1,175 @@
+# Requires tests/cloud_control_server/simple_server.py.
+# The mock records accepted deliveries in history; it does not send HTTP.
+
+statement ok
+DROP NOTIFICATION INTEGRATION IF EXISTS send_notify;
+
+statement ok
+CREATE NOTIFICATION INTEGRATION send_notify TYPE = WEBHOOK ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
+
+statement ok
+EXPLAIN SELECT * FROM send_notification('send_notify', 'must not send');
+
+statement ok
+EXPLAIN PIPELINE SELECT * FROM send_notification('send_notify', 'must not send');
+
+query I
+SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
+----
+0
+
+# CALL uses the normal table-function result shape: one string column, zero rows.
+query T
+CALL system$send_notification('send_notify', 'accepted');
+----
+
+query I
+SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
+----
+1
+
+statement ok
+SET enable_query_result_cache = 1;
+
+query T
+SELECT * FROM send_notification('send_notify', 'repeat');
+----
+
+query T
+SELECT * FROM send_notification('send_notify', 'repeat');
+----
+
+statement ok
+SET enable_query_result_cache = 0;
+
+query I
+SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
+----
+3
+
+statement ok
+EXECUTE IMMEDIATE $$
+BEGIN
+    IF FALSE THEN
+        SELECT * FROM send_notification('send_notify', 'must not send');
+    END IF;
+    IF TRUE THEN
+        LET message := 'conditional';
+        SELECT * FROM send_notification('send_notify', :message);
+    END IF;
+END;
+$$;
+
+query IT
+SELECT count(*), max(message) FROM system.notification_history
+WHERE integration_name = 'send_notify' AND message = 'conditional';
+----
+1 conditional
+
+query I
+SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
+----
+4
+
+statement error 1006
+SELECT * FROM send_notification('', 'alert');
+
+statement error 1006
+SELECT * FROM send_notification(NULL, 'alert');
+
+statement error 1006
+SELECT * FROM send_notification(1, 'alert');
+
+statement error 1006
+SELECT * FROM send_notification('send_notify', 1);
+
+statement error 1006
+SELECT * FROM send_notification('send_notify', '');
+
+statement error 1006
+SELECT * FROM send_notification('send_notify', repeat('x', 262145));
+
+statement error 1006
+SELECT * FROM send_notification('send_notify', repeat('é', 131073));
+
+statement error 1006
+SELECT * FROM send_notification('send_notify', NULL);
+
+statement error
+CALL system$send_notification();
+
+statement error
+CALL system$send_notification('send_notify');
+
+statement error
+CALL system$send_notification('send_notify', 'alert', 'extra');
+
+statement error
+CALL system$send_notification('missing_send_notify', 'alert');
+
+statement error 1704
+CALL system$send_notification('send_rejected', 'alert');
+
+statement error Cloud Control does not support active notifications
+CALL system$send_notification('send_unimplemented', 'alert');
+
+# The mock records each attempt, then always returns UNAVAILABLE without timing
+# or randomness. An automatic retry creates duplicate histories and fails count=1.
+statement ok
+DROP NOTIFICATION INTEGRATION IF EXISTS send_lost_response;
+
+statement ok
+CREATE NOTIFICATION INTEGRATION send_lost_response TYPE = WEBHOOK ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
+
+statement error simulated response loss after acceptance
+CALL system$send_notification('send_lost_response', 'accepted_before_error');
+
+query ITT
+SELECT count(*), max(message), max(message_source) FROM system.notification_history
+WHERE integration_name = 'send_lost_response';
+----
+1 accepted_before_error USER
+
+statement ok
+DROP NOTIFICATION INTEGRATION send_lost_response;
+
+statement ok
+ALTER NOTIFICATION INTEGRATION send_notify SET ENABLED = FALSE;
+
+statement error
+CALL system$send_notification('send_notify', 'disabled');
+
+query I
+SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
+----
+4
+
+statement ok
+DROP NOTIFICATION INTEGRATION send_notify;
+
+query I
+SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
+----
+0
+
+# The limit is 262144 UTF-8 bytes, not characters.
+statement ok
+DROP NOTIFICATION INTEGRATION IF EXISTS send_boundary;
+
+statement ok
+CREATE NOTIFICATION INTEGRATION send_boundary TYPE = WEBHOOK ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
+
+statement ok
+SELECT * FROM send_notification('send_boundary', repeat('é', 131072));
+
+query II
+SELECT count(*), max(octet_length(message)) FROM system.notification_history
+WHERE integration_name = 'send_boundary';
+----
+1 262144
+
+statement ok
+DROP NOTIFICATION INTEGRATION send_boundary;

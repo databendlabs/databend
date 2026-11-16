@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -219,7 +220,7 @@ impl Table for UDTFTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let semaphore = UdtfServerSource::init_semaphore(ctx.clone())?;
         let endpoints = UdtfServerSource::init_endpoints(ctx.clone(), &self.desc)?;

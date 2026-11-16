@@ -49,6 +49,31 @@ fn test_explain_fragments_insert_multi_table_does_not_record_txn_timestamp() -> 
                     .execute_command("create table mti_even(a int)")
                     .await?;
 
+                // WHEN decorrelation must run before source planning: the scalar
+                // aggregate needs Partial/Final lowering, and the mark-join symbol
+                // must survive source projection for branch evaluation.
+                fixture
+                    .execute_command("create table mti_lookup(a int)")
+                    .await?;
+                fixture
+                    .execute_command("insert into mti_lookup values (1)")
+                    .await?;
+                fixture
+                    .execute_command("create table mti_subquery(a int, b int)")
+                    .await?;
+                fixture
+                    .execute_command(
+                        "INSERT FIRST
+                     WHEN a IN (SELECT a FROM mti_lookup) THEN INTO mti_subquery
+                     WHEN a > (SELECT max(a) FROM mti_lookup) THEN INTO mti_subquery
+                     SELECT a, b FROM mti_src",
+                    )
+                    .await?;
+                let count = fixture
+                    .execute_query("SELECT count(*) FROM mti_subquery")
+                    .await?;
+                assert_eq!(databend_query::test_kits::query_count(count).await?, 2);
+
                 let session = fixture.default_session();
                 let begin_ctx = fixture.new_query_ctx().await?;
                 execute_command(begin_ctx, "begin transaction").await?;

@@ -350,11 +350,13 @@ impl Processor for AvroFileWriter {
 fn avro_codec(compression: StageFileCompression) -> Result<Codec> {
     match compression {
         StageFileCompression::None | StageFileCompression::Auto => Ok(Codec::Null),
-        StageFileCompression::Deflate | StageFileCompression::RawDeflate => Ok(Codec::Deflate),
+        StageFileCompression::Deflate | StageFileCompression::RawDeflate => {
+            Ok(Codec::Deflate(Default::default()))
+        }
         StageFileCompression::Snappy => Ok(Codec::Snappy),
-        StageFileCompression::Zstd => Ok(Codec::Zstandard),
-        StageFileCompression::Bz2 => Ok(Codec::Bzip2),
-        StageFileCompression::Xz => Ok(Codec::Xz),
+        StageFileCompression::Zstd => Ok(Codec::Zstandard(Default::default())),
+        StageFileCompression::Bz2 => Ok(Codec::Bzip2(Default::default())),
+        StageFileCompression::Xz => Ok(Codec::Xz(Default::default())),
         _ => Err(ErrorCode::InvalidArgument(format!(
             "Unsupported Avro compression: {compression}"
         ))),

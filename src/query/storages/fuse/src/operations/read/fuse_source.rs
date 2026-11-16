@@ -61,10 +61,43 @@ pub fn build_fuse_source_pipeline(
     let original_max_io_requests = max_io_requests;
     (max_threads, max_io_requests) = adjust_threads_and_request(max_threads, max_io_requests, plan);
 
-    let waker = pipeline.get_waker();
     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+    let source_batch_size = if receiver.is_some() { 1 } else { batch_size };
+    build_fuse_partitions_source_pipeline(
+        ctx.clone(),
+        pipeline,
+        plan,
+        max_io_requests,
+        receiver,
+        source_batch_size,
+    )?;
+
+    build_fuse_read_transform_pipeline(
+        ctx,
+        storage_format,
+        table_schema,
+        pipeline,
+        block_reader,
+        max_threads,
+        max_io_requests,
+        original_max_io_requests,
+        plan,
+        virtual_reader,
+        false,
+    )
+}
+
+pub(crate) fn build_fuse_partitions_source_pipeline(
+    ctx: Arc<dyn TableContext>,
+    pipeline: &mut Pipeline,
+    plan: &DataSourcePlan,
+    max_io_requests: usize,
+    receiver: Option<Receiver<Result<PartInfoPtr>>>,
+    batch_size: usize,
+) -> Result<()> {
+    let waker = pipeline.get_waker();
     let stream: Arc<dyn PartitionStream> = match receiver {
-        Some(rx) => Arc::new(ReceiverPartitionStream::new(rx)),
+        Some(rx) => Arc::new(ReceiverPartitionStream::with_batch_size(rx, batch_size)),
         None => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
@@ -90,6 +123,25 @@ pub fn build_fuse_source_pipeline(
     }
     pipeline.add_pipe(source_builder.finalize());
 
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_fuse_read_transform_pipeline(
+    ctx: Arc<dyn TableContext>,
+    storage_format: FuseStorageFormat,
+    table_schema: Arc<TableSchema>,
+    pipeline: &mut Pipeline,
+    block_reader: Arc<BlockReader>,
+    max_threads: usize,
+    max_io_requests: usize,
+    original_max_io_requests: usize,
+    plan: &DataSourcePlan,
+    virtual_reader: Arc<Option<VirtualColumnReader>>,
+    record_partitions: bool,
+) -> Result<()> {
+    pipeline.try_resize(max_io_requests)?;
+
     let block_format = match storage_format {
         FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(),
         FuseStorageFormat::Unsupported => {
@@ -112,6 +164,7 @@ pub fn build_fuse_source_pipeline(
             table_schema.clone(),
             block_reader.clone(),
             read_block_context.clone(),
+            record_partitions,
             input,
             output,
         )
@@ -253,6 +306,7 @@ pub fn adjust_threads_and_request(
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
     use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
     use databend_common_expression::ColumnId;
     use databend_common_expression::Scalar;
@@ -263,6 +317,11 @@ mod tests {
     use databend_storages_common_table_meta::meta::Compression;
 
     use super::*;
+
+    fn top_n_filter(column_id: u32, asc: bool, nulls_first: bool) -> Arc<RuntimeTopNFilter> {
+        let boundary = Arc::new(RuntimeTopNBoundary::new(asc, nulls_first));
+        Arc::new(RuntimeTopNFilter::new(column_id, boundary))
+    }
 
     fn int64(value: i64) -> Scalar {
         Scalar::Number(NumberScalar::Int64(value))
@@ -349,14 +408,14 @@ mod tests {
         ]);
 
         let mut asc = RuntimeScanFilters::default();
-        asc.push(Arc::new(RuntimeTopNFilter::new(3, true, false)));
+        asc.push(top_n_filter(3, true, false));
         front_load_parts_for_runtime_top_n(&mut parts, &asc, 1024);
         assert_eq!(part_locations(&parts), vec![
             "low", "mid", "high", "no_stats"
         ]);
 
         let mut desc = RuntimeScanFilters::default();
-        desc.push(Arc::new(RuntimeTopNFilter::new(3, false, false)));
+        desc.push(top_n_filter(3, false, false));
         front_load_parts_for_runtime_top_n(&mut parts, &desc, 1024);
         assert_eq!(part_locations(&parts), vec![
             "high", "mid", "low", "no_stats"
@@ -373,11 +432,7 @@ mod tests {
     fn test_front_load_parts_uses_virtual_column_statistics() {
         let query_column_id = 3_000_000_000;
         let mut filters = RuntimeScanFilters::default();
-        filters.push(Arc::new(RuntimeTopNFilter::new(
-            query_column_id,
-            true,
-            false,
-        )));
+        filters.push(top_n_filter(query_column_id, true, false));
         let mut parts = vec![
             part_with_virtual_stats("high", query_column_id, 30, 39),
             part_with_stats("no_virtual_stats", Some((1, 2))),
@@ -395,7 +450,7 @@ mod tests {
     #[test]
     fn test_front_load_ranks_null_bearing_blocks_best_under_nulls_first() {
         let mut nulls_first = RuntimeScanFilters::default();
-        nulls_first.push(Arc::new(RuntimeTopNFilter::new(3, true, true)));
+        nulls_first.push(top_n_filter(3, true, true));
         let mut parts = vec![
             part_with_stats("low", Some((1, 10))),
             part_with_nullable_stats("with_nulls", Some((50, 60, 2))),
@@ -410,7 +465,7 @@ mod tests {
         ]);
 
         let mut nulls_last = RuntimeScanFilters::default();
-        nulls_last.push(Arc::new(RuntimeTopNFilter::new(3, true, false)));
+        nulls_last.push(top_n_filter(3, true, false));
         front_load_parts_for_runtime_top_n(&mut parts, &nulls_last, 1024);
         assert_eq!(part_locations(&parts), vec![
             "low",

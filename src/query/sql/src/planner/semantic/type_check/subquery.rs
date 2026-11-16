@@ -25,8 +25,8 @@ use databend_common_ast::ast::SubqueryModifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use smallvec::smallvec;
@@ -158,7 +158,8 @@ impl FullTypeCheckAdapter {
             self.dependencies.catalog_manager.clone(),
             name_resolution_ctx.clone(),
             metadata,
-        );
+        )
+        .with_definition_scope(parent_context.definition_scope.clone());
 
         // Use the current bind context as the parent so the subquery can resolve outer columns.
         let mut bind_context = BindContext::with_parent(parent_context.clone())?;
@@ -381,14 +382,43 @@ where A: super::TypeCheckAdapter
             .cte_context
             .set_cte_context_and_name(output_context.cte_context);
 
+        // IN and = ANY compare row values positionally; other subquery
+        // comparisons retain their existing single-column requirement.
+        let tuple_arity = child_expr.as_ref().and_then(|(_, ty)| {
+            match (typ, &compare_op, ty.remove_nullable()) {
+                (SubqueryType::Any, Some(SubqueryComparisonOp::Equal), DataType::Tuple(fields)) => {
+                    Some(fields.len())
+                }
+                _ => None,
+            }
+        });
+        let output_arity = output_context.columns.len();
+        let tuple_column = tuple_arity.is_some_and(|arity| {
+            output_arity == 1
+                && matches!(output_context.columns[0].data_type.as_ref().remove_nullable(), DataType::Tuple(fields) if fields.len() == arity)
+        });
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
-            && output_context.columns.len() > 1
+            && match tuple_arity {
+                Some(arity) => output_arity != arity && !tuple_column,
+                None => output_arity > 1,
+            }
         {
+            let expected = tuple_arity
+                .map_or_else(|| "only one column".to_string(), |n| format!("{n} columns"));
             return Err(ErrorCode::SemanticError(format!(
-                "Subquery must return only one column, but got {} columns",
-                output_context.columns.len()
-            )));
+                "Subquery must return {expected}, but got {output_arity} columns"
+            ))
+            .set_span(span));
         }
+
+        let output_column = output_context.columns[0].clone();
+        // Separate columns are compared field by field by the decorrelator,
+        // which keeps SQL three-valued semantics for NULL fields.
+        let row_columns = if tuple_arity.is_some() && output_arity > 1 {
+            output_context.columns.clone()
+        } else {
+            vec![]
+        };
 
         let mut contain_agg = None;
         if let SetExpr::Select(select_stmt) = &subquery.body {
@@ -400,14 +430,14 @@ where A: super::TypeCheckAdapter
                     #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
-                        aggregate_function_factory: &'static AggregateFunctionFactory,
+                        aggregate_function_registry: &'static AggregateRegistry,
                     }
                     impl AggFuncVisitor {
                         fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
                             self.contain_agg = self.contain_agg
                                 || self
-                                    .aggregate_function_factory
-                                    .contains(func.name.to_string());
+                                    .aggregate_function_registry
+                                    .contains(&func.name.to_string());
                         }
                         fn enter_expr(&mut self, expr: &Expr) {
                             self.contain_agg = self.contain_agg
@@ -416,7 +446,7 @@ where A: super::TypeCheckAdapter
                     }
                     let mut visitor = AggFuncVisitor {
                         contain_agg: false,
-                        aggregate_function_factory: self.adapter.aggregate_function_factory(),
+                        aggregate_function_registry: self.adapter.aggregate_function_registry(),
                     };
                     select.drive(&mut visitor);
                     contain_agg = Some(visitor.contain_agg);
@@ -424,7 +454,7 @@ where A: super::TypeCheckAdapter
             }
         }
 
-        let deref!(mut data_type) = output_context.columns[0].data_type.clone();
+        let deref!(mut data_type) = output_column.data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
@@ -447,7 +477,6 @@ where A: super::TypeCheckAdapter
 
         let mut child_scalar = None;
         if let Some((scalar, expr_ty)) = child_expr {
-            assert_eq!(output_context.columns.len(), 1);
             child_scalar = Some(Box::new(scalar));
             // wrap nullable to make sure expr and list values have common type.
             if expr_ty.is_nullable() {
@@ -463,7 +492,8 @@ where A: super::TypeCheckAdapter
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
-            output_column: output_context.columns[0].clone(),
+            output_column,
+            row_columns,
             projection_index: None,
             data_type: Box::new(data_type),
             typ,

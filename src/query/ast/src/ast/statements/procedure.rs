@@ -95,7 +95,7 @@ impl Display for ProcedureIdentity {
         write!(
             f,
             "{}({})",
-            &self.name,
+            self.name,
             self.args_type
                 .iter()
                 .map(|t| t.to_string())

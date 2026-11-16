@@ -38,15 +38,12 @@ impl SortSpillParams {
         bytes: ByteSize,
         rows: usize,
         spill_unit_size: ByteSize,
-        max_block_rows: usize,
         prefetch: bool,
         stream_regroup: bool,
     ) -> Self {
-        // We use the first memory calculation to estimate the batch size and the number of merge.
-        let block = usize::max(
-            (bytes.0).div_ceil(spill_unit_size.0) as _,
-            rows.div_ceil(max_block_rows),
-        );
+        // Size spill files by bytes, independently of pipeline blocks. A row cap
+        // would turn narrow rows into many small files even with a large spill budget.
+        let block = bytes.0.div_ceil(spill_unit_size.0).max(1) as usize;
         let batch_rows = (rows / block).max(1);
 
         /// The memory will be doubled during merging.

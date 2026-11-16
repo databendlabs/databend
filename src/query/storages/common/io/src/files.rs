@@ -146,7 +146,7 @@ impl Files {
     #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
         let start = Instant::now();
-        info!("deleting files {:?}", &locations);
+        info!("deleting files {:?}", locations);
         let num_of_files = locations.len();
 
         op.delete_iter(locations).await?;

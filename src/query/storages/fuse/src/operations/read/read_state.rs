@@ -28,10 +28,14 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::SelectExpr;
+use databend_common_expression::SelectExprBuilder;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
@@ -51,10 +55,77 @@ pub struct BloomRuntimeFilterRef {
     pub stats: Arc<RuntimeFilterStats>,
 }
 
+/// Build a selector executor for a prewhere predicate, or `None` to keep the evaluator.
+///
+/// The selector evaluates each AND/OR child only on the rows earlier children left
+/// undecided, and works on row indexes instead of a boolean column. A single comparison has
+/// nothing to short-circuit and keeps the evaluator.
+fn prewhere_selector(
+    filter: &Expr,
+    func_ctx: &FunctionContext,
+    max_block_size: usize,
+) -> Option<FilterExecutor> {
+    if !func_ctx.enable_selector_executor {
+        return None;
+    }
+    let (select_expr, _) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+        .build(filter)
+        .into();
+    if matches!(select_expr, SelectExpr::Compare(_)) {
+        return None;
+    }
+    Some(FilterExecutor::new(
+        filter.clone(),
+        func_ctx.clone(),
+        max_block_size,
+        None,
+        &BUILTIN_FUNCTIONS,
+        false,
+    ))
+}
+
+/// Scan workload of one block, measured before prewhere and runtime filters
+/// drop rows. This is what `scan_progress` and the `ScanBytes` profile report,
+/// so filtering inside the scan must not shrink it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BlockScanStats {
+    /// Number of rows in the block, regardless of how many survive the filters.
+    pub rows: usize,
+    /// Uncompressed size of all projected columns for the whole block. When
+    /// row selection pushdown skips rows of the remaining columns, their
+    /// contribution is estimated from the rows that were decoded.
+    pub bytes: usize,
+}
+
+impl BlockScanStats {
+    /// Account for columns that were materialized after `deserialize_and_filter`
+    /// (e.g. virtual columns). `decoded_bytes` is the size of those columns as
+    /// decoded for `decoded_rows` rows; when row selection pushdown left fewer
+    /// rows than the block holds, the size is estimated for the whole block.
+    pub fn add_decoded_bytes(&mut self, decoded_bytes: usize, decoded_rows: usize) {
+        if decoded_bytes == 0 {
+            return;
+        }
+        self.bytes += estimate_block_bytes(decoded_bytes, decoded_rows, self.rows, decoded_bytes);
+    }
+}
+
+/// Result of [`ReadState::deserialize_and_filter`]: the block after prewhere
+/// and runtime filters, the selection still to be applied by the caller, and
+/// the scan statistics measured before any row was filtered out.
+pub struct ReadStateOutput {
+    pub block: DataBlock,
+    /// Callers that need a Parquet [`RowSelection`] build it from the bitmap: it is
+    /// costly for fragmented bitmaps and most blocks never use it.
+    pub bitmap_selection: Option<Bitmap>,
+    pub scan_stats: BlockScanStats,
+}
+
 pub struct ReadState {
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
     pub filters: Option<Expr>,
+    prewhere_selector: Option<FilterExecutor>,
     pub runtime_filters: Vec<BloomRuntimeFilterRef>,
     pub pre_column_ids: HashSet<ColumnId>,
     pub remain_column_ids: HashSet<ColumnId>,
@@ -147,22 +218,45 @@ impl ReadState {
             None
         };
 
+        let func_ctx = ctx.get_function_context()?;
+        let max_block_size = (ctx.get_settings().get_max_block_size()? as usize).max(1);
+        let prewhere_selector = prewhere_filter
+            .as_ref()
+            .and_then(|filter| prewhere_selector(filter, &func_ctx, max_block_size));
+
         Ok(Self {
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
+            prewhere_selector,
             runtime_filters,
             pre_column_ids,
             remain_column_ids,
-            func_ctx: ctx.get_function_context()?,
+            func_ctx,
             output_schema: block_reader.data_schema(),
             prewhere_selectivity_threshold,
             use_single_prewhere_reader,
         })
     }
 
-    pub fn filter(&self, block: &DataBlock, num_rows: usize) -> Result<Option<MutableBitmap>> {
+    pub fn filter(&mut self, block: &DataBlock, num_rows: usize) -> Result<Option<MutableBitmap>> {
         if let Some(ref f) = self.filters {
+            if let Some(selector) = self.prewhere_selector.as_mut() {
+                // The block is selected in slices of `max_block_size` rows, as the `Filter`
+                // operator does. The selected indexes are not sorted when the predicate
+                // contains OR.
+                let max_block_size = selector.max_block_size();
+                let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
+                for offset in (0..num_rows).step_by(max_block_size) {
+                    let end = (offset + max_block_size).min(num_rows);
+                    let selected = selector.select(&block.slice(offset..end))?;
+                    for index in &selector.true_selection()[..selected] {
+                        bitmap.set(offset + *index as usize, true);
+                    }
+                }
+                return Ok(Some(bitmap));
+            }
+
             let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let filter_result = evaluator.run(f)?.try_downcast::<BooleanType>().unwrap();
             Ok(Some(FilterHelpers::filter_to_bitmap(
@@ -185,9 +279,12 @@ impl ReadState {
         let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for runtime_filter in &self.runtime_filters {
             let filter_start = Instant::now();
+            // The bloom filter hashes encoded columns without decoding them.
+            let probe_expr = &runtime_filter.probe_expr;
             let probe_column = evaluator
-                .run(&runtime_filter.probe_expr)?
-                .convert_to_full_column(runtime_filter.probe_expr.data_type(), num_rows);
+                .partial_run(probe_expr, None, &mut EvaluateOptions::default(), true)
+                .map_err(|err| Evaluator::map_err(err, probe_expr))?
+                .convert_to_full_column(probe_expr.data_type(), num_rows);
             let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
             runtime_filter.stats.record_bloom(
                 filter_start.elapsed().as_nanos() as u64,
@@ -211,14 +308,18 @@ impl ReadState {
     }
 
     pub fn deserialize_and_filter(
-        &self,
+        &mut self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
-    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+    ) -> Result<ReadStateOutput> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
         let mut preread_block = self
             .pre_reader
             .deserialize_part(part, pre_columns_chunks, None)?;
+        let mut scan_stats = BlockScanStats {
+            rows: part.nums_rows,
+            bytes: preread_block.memory_size(),
+        };
 
         let filter_bitmap = self.filter(&preread_block, part.nums_rows)?;
         // Expensive probe expressions are evaluated only for rows surviving
@@ -246,31 +347,53 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
-
-        let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
+        let bitmap_selection = match (bitmap_selection, selected_rows(part)) {
+            (Some(selection), Some(rows)) => Some(&selection & &rows),
+            (selection, rows) => selection.or(rows),
+        };
 
         if let Some(ref bitmap) = bitmap_selection {
             preread_block = preread_block.filter_with_bitmap(bitmap)?;
         }
 
         if self.use_single_prewhere_reader {
-            return Ok((preread_block, row_selection, bitmap_selection));
+            return Ok(ReadStateOutput {
+                block: preread_block,
+                bitmap_selection,
+                scan_stats,
+            });
         }
 
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
-        let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
-            should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
-        });
+        // Only built when pushed down to the remaining reader.
+        let row_selection = bitmap_selection
+            .as_ref()
+            .filter(|bitmap| {
+                should_push_down_row_selection(bitmap, self.prewhere_selectivity_threshold)
+            })
+            .map(RowSelection::from);
+        let push_down_row_selection = row_selection.is_some();
+        let remain_raw_bytes = if push_down_row_selection {
+            raw_bytes_of_chunks(&remain_columns_chunks)
+        } else {
+            0
+        };
 
         let mut remain_block = self.remain_reader.deserialize_part(
             part,
             remain_columns_chunks,
-            push_down_row_selection
-                .then_some(row_selection.as_ref())
-                .flatten(),
+            row_selection.as_ref(),
         )?;
-        if !push_down_row_selection {
+        if push_down_row_selection {
+            scan_stats.bytes += estimate_block_bytes(
+                remain_block.memory_size(),
+                remain_block.num_rows(),
+                part.nums_rows,
+                remain_raw_bytes,
+            );
+        } else {
+            scan_stats.bytes += remain_block.memory_size();
             if let Some(bitmap) = bitmap_selection.as_ref() {
                 remain_block = remain_block.filter_with_bitmap(bitmap)?;
             }
@@ -284,7 +407,11 @@ impl ReadState {
 
         let data_block = preread_block.resort(&merged_schema, &self.output_schema)?;
 
-        Ok((data_block, row_selection, bitmap_selection))
+        Ok(ReadStateOutput {
+            block: data_block,
+            bitmap_selection,
+            scan_stats,
+        })
     }
 
     fn filter_column_chunks<'a>(
@@ -308,6 +435,12 @@ fn runtime_filter_column_is_projectable(
     Projection::from_column_names(schema, &[name]).is_ok()
 }
 
+/// The rows of the block that index pruning selected for output (see
+/// `BlockMetaIndex::selected_rows`). `None` when every row is output.
+fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
+    part.block_meta_index()?.selected_rows(part.nums_rows)
+}
+
 fn expand_runtime_filter_bitmap(
     prewhere_bitmap: &Bitmap,
     runtime_filter_bitmap: &MutableBitmap,
@@ -326,13 +459,46 @@ fn expand_runtime_filter_bitmap(
     expanded
 }
 
-fn should_push_down_row_selection(row_selection: &RowSelection, threshold: u64) -> bool {
-    let total_rows = row_selection.bitmap.len();
+/// Size of the column chunks as they were read, before decoding.
+fn raw_bytes_of_chunks(columns_chunks: &HashMap<ColumnId, DataItem>) -> usize {
+    columns_chunks
+        .values()
+        .map(|item| match item {
+            DataItem::RawData(buffer) => buffer.len(),
+            DataItem::ColumnArray(array) => array.1,
+        })
+        .sum()
+}
+
+/// Estimate the uncompressed size of some columns for the whole block when
+/// only `decoded_rows` of them were materialized, by scaling `decoded_bytes`
+/// up to `total_rows`.
+///
+/// Falls back to `raw_bytes` (the size of the column chunks that were read)
+/// when nothing was decoded, so blocks whose rows are all filtered out still
+/// account for the data that was read for them.
+fn estimate_block_bytes(
+    decoded_bytes: usize,
+    decoded_rows: usize,
+    total_rows: usize,
+    raw_bytes: usize,
+) -> usize {
+    if decoded_rows == 0 || total_rows == 0 {
+        return raw_bytes;
+    }
+    if decoded_rows >= total_rows {
+        return decoded_bytes;
+    }
+    ((decoded_bytes as u128 * total_rows as u128) / decoded_rows as u128) as usize
+}
+
+fn should_push_down_row_selection(bitmap: &Bitmap, threshold: u64) -> bool {
+    let total_rows = bitmap.len();
     if threshold == 0 || total_rows == 0 {
         return false;
     }
-
-    (row_selection.selected_rows as u128) * 100 < (total_rows as u128) * (threshold as u128)
+    let selected_rows = total_rows - bitmap.null_count();
+    (selected_rows as u128) * 100 < (total_rows as u128) * (threshold as u128)
 }
 
 #[cfg(test)]
@@ -352,15 +518,50 @@ mod tests {
         let mut sparse_bitmap = MutableBitmap::from_len_zeroed(5);
         sparse_bitmap.set(2, true);
         let sparse_bitmap: Bitmap = sparse_bitmap.into();
-        let sparse_selection = RowSelection::from(&sparse_bitmap);
 
-        assert!(should_push_down_row_selection(&sparse_selection, 50));
-        assert!(!should_push_down_row_selection(&sparse_selection, 20));
-        assert!(!should_push_down_row_selection(&sparse_selection, 0));
+        assert!(should_push_down_row_selection(&sparse_bitmap, 50));
+        assert!(!should_push_down_row_selection(&sparse_bitmap, 20));
+        assert!(!should_push_down_row_selection(&sparse_bitmap, 0));
 
         let dense_bitmap: Bitmap = MutableBitmap::from_len_set(5).into();
-        let dense_selection = RowSelection::from(&dense_bitmap);
-        assert!(!should_push_down_row_selection(&dense_selection, 100));
+        assert!(!should_push_down_row_selection(&dense_bitmap, 100));
+    }
+
+    #[test]
+    fn test_estimate_block_bytes() {
+        // Scales decoded bytes up to the whole block.
+        assert_eq!(estimate_block_bytes(40, 2, 10, 7), 200);
+        // Fully decoded block is reported as is.
+        assert_eq!(estimate_block_bytes(40, 10, 10, 7), 40);
+        assert_eq!(estimate_block_bytes(40, 12, 10, 7), 40);
+        // Nothing decoded: fall back to the raw chunk sizes that were read.
+        assert_eq!(estimate_block_bytes(0, 0, 10, 7), 7);
+    }
+
+    #[test]
+    fn test_add_decoded_bytes() {
+        let mut stats = BlockScanStats {
+            rows: 10,
+            bytes: 100,
+        };
+        // Fully decoded columns are added as is.
+        stats.add_decoded_bytes(50, 10);
+        assert_eq!(stats.bytes, 150);
+        // Columns decoded for a subset of rows are scaled to the block.
+        stats.add_decoded_bytes(10, 2);
+        assert_eq!(stats.bytes, 200);
+        // Nothing decoded leaves the stats untouched.
+        stats.add_decoded_bytes(0, 0);
+        assert_eq!(stats.bytes, 200);
+    }
+
+    #[test]
+    fn test_raw_bytes_of_chunks() {
+        let mut chunks = HashMap::new();
+        chunks.insert(0, DataItem::RawData(opendal::Buffer::from(vec![0u8; 16])));
+        chunks.insert(1, DataItem::RawData(opendal::Buffer::from(vec![0u8; 8])));
+        assert_eq!(raw_bytes_of_chunks(&chunks), 24);
+        assert_eq!(raw_bytes_of_chunks(&HashMap::new()), 0);
     }
 
     #[test]
@@ -368,9 +569,8 @@ mod tests {
         let mut sparse_bitmap = MutableBitmap::from_len_zeroed(5);
         sparse_bitmap.set(2, true);
         let sparse_bitmap: Bitmap = sparse_bitmap.into();
-        let sparse_selection = RowSelection::from(&sparse_bitmap);
 
-        assert!(!should_push_down_row_selection(&sparse_selection, 0));
+        assert!(!should_push_down_row_selection(&sparse_bitmap, 0));
     }
 
     #[test]

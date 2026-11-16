@@ -28,7 +28,15 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------+
 
 
-error: quantile_tdigest just support numeric type, but got 'Null'
+ast: quantile_tdigest(0.8)(NULL)
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Int64([4, 3, 2, 1])) |
+| Output | Null { len: 1 }             |
++--------+-----------------------------+
+
 
 ast: quantile_tdigest(0.8)(x_null)
 evaluation (internal):

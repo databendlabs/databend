@@ -125,8 +125,8 @@ pub struct InternalColumnMeta {
     pub matched_rows: Option<Vec<usize>>,
     // Optional scores for the matched rows.
     pub matched_scores: Option<Vec<F32>>,
-    // The vector topn rows and scores in the block.
-    pub vector_scores: Option<Vec<(usize, F32)>>,
+    /// The vector scores of the output rows, in order.
+    pub vector_scores: Option<Vec<F32>>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
@@ -385,19 +385,16 @@ impl InternalColumn {
                 Float32Type::from_data(scores).into()
             }
             InternalColumnType::VectorScore => {
-                assert!(meta.vector_scores.is_some());
-                let vector_scores = meta.vector_scores.as_ref().unwrap();
-
-                // The smaller the score, the closer the distance.
-                // Fill other rows with the maximum value and they will be filtered out.
-                let mut scores = vec![F32::from(f32::MAX); num_rows];
-                for (idx, score) in vector_scores.iter() {
-                    debug_assert!(*idx < scores.len());
-                    if let Some(val) = scores.get_mut(*idx) {
-                        *val = *score;
-                    }
-                }
-                Float32Type::from_data(scores).into()
+                let scores = meta
+                    .vector_scores
+                    .as_ref()
+                    .filter(|scores| scores.len() == num_rows)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(
+                            "vector scores are missing or do not match the block rows",
+                        )
+                    })?;
+                Float32Type::from_data(scores.clone()).into()
             }
             InternalColumnType::FileName
             | InternalColumnType::FileRowNumber

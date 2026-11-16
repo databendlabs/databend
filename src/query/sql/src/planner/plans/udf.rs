@@ -25,6 +25,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 
@@ -91,7 +92,9 @@ impl Operator for Udf {
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0, stat_ctx)
     }
+}
 
+impl PhysicalOperator for Udf {
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,

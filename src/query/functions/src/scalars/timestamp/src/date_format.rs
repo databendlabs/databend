@@ -92,7 +92,7 @@ static PG_STRFTIME_MAPPINGS: LazyLock<Vec<(&'static str, &'static str)>> = LazyL
 
     // Critical: Sort by descending key length to ensure longest possible matches are found first
     // This prevents shorter patterns from incorrectly matching parts of longer patterns
-    mappings.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    mappings.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
     mappings
 });
 
@@ -178,7 +178,7 @@ pub(super) fn pg_format_to_strftime(pg_format_string: &str) -> String {
     result
 }
 
-// Keep locale-dependent formats stable across datetime backends.
+// Keep locale-dependent formats and fractional precision stable across datetime backends.
 fn replace_time_format(format: &str) -> Cow<'_, str> {
     let normalized = if ["%c", "x", "X"].iter().any(|f| format.contains(f)) {
         Cow::Owned(
@@ -191,7 +191,7 @@ fn replace_time_format(format: &str) -> Cow<'_, str> {
         Cow::Borrowed(format)
     };
 
-    if !normalized.contains("%C") {
+    if !normalized.contains("%C") && !normalized.contains("%f") {
         return normalized;
     }
 
@@ -205,6 +205,8 @@ fn replace_time_format(format: &str) -> Cow<'_, str> {
         match chars.next() {
             Some('%') => result.push_str("%%"),
             Some('C') => result.push_str("%-C"),
+            // Chrono's bare %f uses nanoseconds; Databend formats microseconds.
+            Some('f') => result.push_str("%6f"),
             Some(next) => {
                 result.push('%');
                 result.push(next);

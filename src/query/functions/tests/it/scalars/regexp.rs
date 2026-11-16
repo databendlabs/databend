@@ -14,11 +14,23 @@
 
 use std::io::Write;
 
+use databend_common_exception::Result;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Value;
+use databend_common_expression::type_check;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::number::Int64Type;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 
+use super::parser;
 use super::run_ast;
 
 #[test]
@@ -29,6 +41,7 @@ fn test_string() {
     test_regexp_instr(regexp_file);
     test_regexp_like(regexp_file);
     test_regexp_replace(regexp_file);
+    test_regexp_replace_anchored_prefix(regexp_file);
     test_regexp_substr(regexp_file);
     test_glob(regexp_file);
     test_regexp_extract(regexp_file);
@@ -575,6 +588,76 @@ fn test_regexp_replace(file: &mut impl Write) {
     );
 }
 
+fn test_regexp_replace_anchored_prefix(file: &mut impl Write) {
+    // Patterns `^P.*$` resolve their captures on `^P` when the input has no newline.
+    let source = &[(
+        "source",
+        StringType::from_data(vec![
+            "https://www.google.com/search?q=1",
+            "HTTP://WWW.Example.COM/a",
+            "https://no-slash.com",
+            "http://a.com/x\ny",
+            "ftp://a.com/b",
+            "",
+        ]),
+    )];
+    let pat = r"'^https?://(?:www\.)?([^/]+)/.*$'";
+    for repl in [
+        "'$1'",
+        "'[$1]'",
+        "'$0'",
+        "'$00'",
+        "'${0}'",
+        "'${000}'",
+        "'${+0}'",
+        "'[${+000}]'",
+        "'${+1}'",
+        "'$${+0}'",
+        "'X'",
+    ] {
+        run_ast(
+            file,
+            format!("regexp_replace(source, {pat}, {repl})"),
+            source,
+        );
+    }
+    // A prefix may match the empty string, but capture zero still names the whole input.
+    run_ast(file, "regexp_replace('abc', '^.*$', '${+0}')", &[]);
+    run_ast(
+        file,
+        "regexp_replace('https://example.com/path', '^https?://([^/]+)/.*$', '[${+000}]')",
+        &[],
+    );
+    // A specific occurrence uses the replacement literally, without expanding captures.
+    run_ast(
+        file,
+        format!("regexp_replace(source, {pat}, '${{+0}}', 1, 1)"),
+        source,
+    );
+    for (pos, occur) in [(1, 1), (1, 2), (2, 0)] {
+        run_ast(
+            file,
+            format!("regexp_replace(source, {pat}, '$1', {pos}, {occur})"),
+            source,
+        );
+    }
+    // Case sensitive, multi line and dot-matches-newline match types.
+    for mt in ["'c'", "'m'", "'n'"] {
+        run_ast(
+            file,
+            format!("regexp_replace(source, {pat}, '$1', 1, 0, {mt})"),
+            source,
+        );
+    }
+    // Not of the form `^P.*$`: an escaped dot, a lazy `.*?`, an alternation.
+    for pat in [r"'^a\.*$'", "'^(a).*?$'", "'^h.*$|^a.*$'"] {
+        run_ast(file, format!("regexp_replace(source, {pat}, 'X')"), &[(
+            "source",
+            StringType::from_data(vec!["a", "a...", "ab", "h\nb"]),
+        )]);
+    }
+}
+
 fn test_regexp_substr(file: &mut impl Write) {
     run_ast(file, "regexp_substr('abc def ghi', '[a-z]+')", &[]);
     run_ast(file, "regexp_substr('abc def ghi', '[a-z]+', 1, 3)", &[]);
@@ -798,4 +881,147 @@ fn test_regexp_extract(file: &mut impl Write) {
         "regexp_extract(null, '([A-Za-z]+) ([A-Za-z]+), Age: (\\d+)', 3)",
         &[],
     );
+}
+
+fn evaluate(text: &str, columns: &[(&str, Column)]) -> Result<Value<AnyType>> {
+    let raw_expr = parser::parse_raw_expr(
+        text,
+        &columns
+            .iter()
+            .map(|(name, column)| (*name, column.data_type()))
+            .collect::<Vec<_>>(),
+        &BUILTIN_FUNCTIONS,
+    );
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+    let num_rows = columns.first().map_or(1, |(_, column)| column.len());
+    let block = DataBlock::new(
+        columns
+            .iter()
+            .map(|(_, column)| column.clone().into())
+            .collect(),
+        num_rows,
+    );
+    let func_ctx = FunctionContext::default();
+    Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS).run(&expr)
+}
+
+fn assert_column_result(text: &str, columns: &[(&str, Column)], expected: &Column) {
+    let Value::Column(result) = evaluate(text, columns).unwrap() else {
+        panic!("expected a column result for {text}");
+    };
+    assert_eq!(result.len(), expected.len(), "{text}");
+    for row in 0..expected.len() {
+        assert_eq!(result.index(row), expected.index(row), "{text}, row {row}");
+    }
+}
+
+#[test]
+fn test_regexp_partial_eval_preserves_results_and_nulls() {
+    let columns = [
+        (
+            "enabled",
+            BooleanType::from_data(vec![true, false, true, true, true]),
+        ),
+        (
+            "source",
+            StringType::from_data_with_validity(
+                vec!["dog cat", "dog cat", "cat", "dog cat", "dog cat"],
+                vec![true, true, true, false, true],
+            ),
+        ),
+        (
+            "pat",
+            StringType::from_data_with_validity(vec!["dog", "[", "dog", "[", "["], vec![
+                true, true, true, true, false,
+            ]),
+        ),
+        (
+            "mt",
+            StringType::from_data(vec!["c", "invalid", "c", "invalid", "invalid"]),
+        ),
+        ("pos", Int64Type::from_data(vec![1, 0, 1, 0, 0])),
+    ];
+    let validity = vec![true, true, true, false, false];
+    let cases = [
+        (
+            "source regexp pat",
+            "false",
+            BooleanType::from_data_with_validity(
+                vec![true, false, false, false, false],
+                validity.clone(),
+            ),
+        ),
+        (
+            "regexp_like(source, pat, mt)",
+            "false",
+            BooleanType::from_data_with_validity(
+                vec![true, false, false, false, false],
+                validity.clone(),
+            ),
+        ),
+        (
+            "regexp_instr(source, pat, pos, 1, 0, mt)",
+            "to_uint64(99)",
+            UInt64Type::from_data_with_validity(vec![1, 99, 0, 0, 0], validity.clone()),
+        ),
+        (
+            "regexp_replace(source, pat, 'fox', pos, 0, mt)",
+            "'skipped'",
+            StringType::from_data_with_validity(
+                vec!["fox cat", "skipped", "cat", "", ""],
+                validity,
+            ),
+        ),
+        (
+            "regexp_substr(source, pat, pos, 1, mt)",
+            "'skipped'",
+            StringType::from_data_with_validity(vec!["dog", "skipped", "", "", ""], vec![
+                true, true, false, false, false,
+            ]),
+        ),
+    ];
+    for (call, fallback, expected) in cases {
+        for expression in [
+            format!("if(enabled, {call}, {fallback})"),
+            format!("if(not(enabled), {fallback}, enabled, {call}, {fallback})"),
+        ] {
+            assert_column_result(&expression, &columns, &expected);
+        }
+    }
+}
+
+#[test]
+fn test_regexp_partial_eval_preserves_active_errors() {
+    // Row zero is inactive: errors on row one must not be lost, including scalar calls.
+    let columns = [
+        ("enabled", BooleanType::from_data(vec![false, true])),
+        ("source", StringType::from_data(vec!["dog", "dog"])),
+        ("pat", StringType::from_data(vec!["dog", "["])),
+        ("mt", StringType::from_data(vec!["c", "invalid"])),
+        ("pos", Int64Type::from_data(vec![1, 0])),
+    ];
+    for (call, fallback) in [
+        ("source regexp pat", "false"),
+        ("regexp_like(source, pat)", "false"),
+        ("regexp_like(source, 'dog', mt)", "false"),
+        ("regexp_instr(source, pat)", "to_uint64(0)"),
+        ("regexp_instr(source, 'dog', pos)", "to_uint64(0)"),
+        ("regexp_replace(source, pat, 'cat')", "''"),
+        ("regexp_replace(source, 'dog', 'cat', pos)", "''"),
+        ("regexp_substr(source, pat)", "''"),
+        ("regexp_substr(source, 'dog', pos)", "''"),
+        ("'dog' regexp '['", "false"),
+        ("regexp_like('dog', '[')", "false"),
+        ("regexp_instr('dog', '[')", "to_uint64(0)"),
+        ("regexp_replace('dog', '[', 'cat')", "''"),
+        ("regexp_substr('dog', '[')", "''"),
+    ] {
+        let expression = format!("if(enabled, {call}, {fallback})");
+        assert!(evaluate(&expression, &columns).is_err(), "{expression}");
+        assert_column_result(
+            &format!("is_not_error({expression})"),
+            &columns,
+            &BooleanType::from_data(vec![true, false]),
+        );
+    }
 }

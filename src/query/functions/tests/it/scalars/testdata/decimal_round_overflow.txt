@@ -1,0 +1,266 @@
+ast            : round(-1)('0.5'::DECIMAL(18,18))
+raw expr       : round(-1)(CAST('0.5' AS Decimal(18, 18)))
+checked expr   : round<Decimal(18, 18)>(-1)(CAST<String>("0.5" AS Decimal(18, 18)))
+optimized expr : 0_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : round(-1)('95'::DECIMAL(18,0))
+raw expr       : round(-1)(CAST('95' AS Decimal(18, 0)))
+checked expr   : round<Decimal(18, 0)>(-1)(CAST<String>("95" AS Decimal(18, 0)))
+optimized expr : 100_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {100..=100}
+output         : 100
+
+
+ast            : round(-1)('-95'::DECIMAL(18,0))
+raw expr       : round(-1)(CAST('-95' AS Decimal(18, 0)))
+checked expr   : round<Decimal(18, 0)>(-1)(CAST<String>("-95" AS Decimal(18, 0)))
+optimized expr : -100_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {-100..=-100}
+output         : -100
+
+
+ast            : round(-9223372036854775808)('95'::DECIMAL(18,0))
+raw expr       : round(-9223372036854775808)(CAST('95' AS Decimal(18, 0)))
+checked expr   : round<Decimal(18, 0)>(-9223372036854775808)(CAST<String>("95" AS Decimal(18, 0)))
+optimized expr : 0_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : truncate(-1)('0.5'::DECIMAL(18,18))
+raw expr       : truncate(-1)(CAST('0.5' AS Decimal(18, 18)))
+checked expr   : truncate<Decimal(18, 18)>(-1)(CAST<String>("0.5" AS Decimal(18, 18)))
+optimized expr : 0_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : truncate(-1)('95'::DECIMAL(18,0))
+raw expr       : truncate(-1)(CAST('95' AS Decimal(18, 0)))
+checked expr   : truncate<Decimal(18, 0)>(-1)(CAST<String>("95" AS Decimal(18, 0)))
+optimized expr : 90_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {90..=90}
+output         : 90
+
+
+ast            : truncate(-1)('-95'::DECIMAL(18,0))
+raw expr       : truncate(-1)(CAST('-95' AS Decimal(18, 0)))
+checked expr   : truncate<Decimal(18, 0)>(-1)(CAST<String>("-95" AS Decimal(18, 0)))
+optimized expr : -90_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {-90..=-90}
+output         : -90
+
+
+ast            : truncate(-9223372036854775808)('95'::DECIMAL(18,0))
+raw expr       : truncate(-9223372036854775808)(CAST('95' AS Decimal(18, 0)))
+checked expr   : truncate<Decimal(18, 0)>(-9223372036854775808)(CAST<String>("95" AS Decimal(18, 0)))
+optimized expr : 0_d64(18,0)
+output type    : Decimal(18, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : round(-1)('0.5'::DECIMAL(38,38))
+raw expr       : round(-1)(CAST('0.5' AS Decimal(38, 38)))
+checked expr   : round<Decimal(38, 38)>(-1)(CAST<String>("0.5" AS Decimal(38, 38)))
+optimized expr : 0_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : round(-1)('95'::DECIMAL(38,0))
+raw expr       : round(-1)(CAST('95' AS Decimal(38, 0)))
+checked expr   : round<Decimal(38, 0)>(-1)(CAST<String>("95" AS Decimal(38, 0)))
+optimized expr : 100_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {100..=100}
+output         : 100
+
+
+ast            : round(-1)('-95'::DECIMAL(38,0))
+raw expr       : round(-1)(CAST('-95' AS Decimal(38, 0)))
+checked expr   : round<Decimal(38, 0)>(-1)(CAST<String>("-95" AS Decimal(38, 0)))
+optimized expr : -100_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {-100..=-100}
+output         : -100
+
+
+ast            : round(-9223372036854775808)('95'::DECIMAL(38,0))
+raw expr       : round(-9223372036854775808)(CAST('95' AS Decimal(38, 0)))
+checked expr   : round<Decimal(38, 0)>(-9223372036854775808)(CAST<String>("95" AS Decimal(38, 0)))
+optimized expr : 0_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : truncate(-1)('0.5'::DECIMAL(38,38))
+raw expr       : truncate(-1)(CAST('0.5' AS Decimal(38, 38)))
+checked expr   : truncate<Decimal(38, 38)>(-1)(CAST<String>("0.5" AS Decimal(38, 38)))
+optimized expr : 0_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : truncate(-1)('95'::DECIMAL(38,0))
+raw expr       : truncate(-1)(CAST('95' AS Decimal(38, 0)))
+checked expr   : truncate<Decimal(38, 0)>(-1)(CAST<String>("95" AS Decimal(38, 0)))
+optimized expr : 90_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {90..=90}
+output         : 90
+
+
+ast            : truncate(-1)('-95'::DECIMAL(38,0))
+raw expr       : truncate(-1)(CAST('-95' AS Decimal(38, 0)))
+checked expr   : truncate<Decimal(38, 0)>(-1)(CAST<String>("-95" AS Decimal(38, 0)))
+optimized expr : -90_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {-90..=-90}
+output         : -90
+
+
+ast            : truncate(-9223372036854775808)('95'::DECIMAL(38,0))
+raw expr       : truncate(-9223372036854775808)(CAST('95' AS Decimal(38, 0)))
+checked expr   : truncate<Decimal(38, 0)>(-9223372036854775808)(CAST<String>("95" AS Decimal(38, 0)))
+optimized expr : 0_d128(38,0)
+output type    : Decimal(38, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : round(-1)('0.5'::DECIMAL(76,76))
+raw expr       : round(-1)(CAST('0.5' AS Decimal(76, 76)))
+checked expr   : round<Decimal(76, 76)>(-1)(CAST<String>("0.5" AS Decimal(76, 76)))
+optimized expr : 0_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : round(-1)('95'::DECIMAL(76,0))
+raw expr       : round(-1)(CAST('95' AS Decimal(76, 0)))
+checked expr   : round<Decimal(76, 0)>(-1)(CAST<String>("95" AS Decimal(76, 0)))
+optimized expr : 100_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {100..=100}
+output         : 100
+
+
+ast            : round(-1)('-95'::DECIMAL(76,0))
+raw expr       : round(-1)(CAST('-95' AS Decimal(76, 0)))
+checked expr   : round<Decimal(76, 0)>(-1)(CAST<String>("-95" AS Decimal(76, 0)))
+optimized expr : -100_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {-100..=-100}
+output         : -100
+
+
+ast            : round(-9223372036854775808)('95'::DECIMAL(76,0))
+raw expr       : round(-9223372036854775808)(CAST('95' AS Decimal(76, 0)))
+checked expr   : round<Decimal(76, 0)>(-9223372036854775808)(CAST<String>("95" AS Decimal(76, 0)))
+optimized expr : 0_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : truncate(-1)('0.5'::DECIMAL(76,76))
+raw expr       : truncate(-1)(CAST('0.5' AS Decimal(76, 76)))
+checked expr   : truncate<Decimal(76, 76)>(-1)(CAST<String>("0.5" AS Decimal(76, 76)))
+optimized expr : 0_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : truncate(-1)('95'::DECIMAL(76,0))
+raw expr       : truncate(-1)(CAST('95' AS Decimal(76, 0)))
+checked expr   : truncate<Decimal(76, 0)>(-1)(CAST<String>("95" AS Decimal(76, 0)))
+optimized expr : 90_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {90..=90}
+output         : 90
+
+
+ast            : truncate(-1)('-95'::DECIMAL(76,0))
+raw expr       : truncate(-1)(CAST('-95' AS Decimal(76, 0)))
+checked expr   : truncate<Decimal(76, 0)>(-1)(CAST<String>("-95" AS Decimal(76, 0)))
+optimized expr : -90_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {-90..=-90}
+output         : -90
+
+
+ast            : truncate(-9223372036854775808)('95'::DECIMAL(76,0))
+raw expr       : truncate(-9223372036854775808)(CAST('95' AS Decimal(76, 0)))
+checked expr   : truncate<Decimal(76, 0)>(-9223372036854775808)(CAST<String>("95" AS Decimal(76, 0)))
+optimized expr : 0_d256(76,0)
+output type    : Decimal(76, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | round(-2)(99::DECIMAL(2,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal round overflow while evaluating function `round(-2)(99)` in expr `round(-2)(CAST(99 AS Decimal(2, 0)))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | round(-2)(-99::DECIMAL(2,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal round overflow while evaluating function `round(-2)(-99)` in expr `round(-2)(- CAST(99 AS Decimal(2, 0)))`
+
+
+
+ast            : truncate(-2)(99::DECIMAL(2,0))
+raw expr       : truncate(-2)(CAST(99 AS Decimal(2, 0)))
+checked expr   : truncate<Decimal(2, 0)>(-2)(CAST<UInt8>(99_u8 AS Decimal(2, 0)))
+optimized expr : 0_d64(2,0)
+output type    : Decimal(2, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | round(-1)('99999999999999999999999999999999999999'::DECIMAL(38,0))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal round overflow while evaluating function `round(-1)(99999999999999999999999999999999999999)` in expr `round(-1)(CAST('99999999999999999999999999999999999999' AS Decimal(38, 0)))`
+
+
+
+ast            : round(9223372036854775807)(95::DECIMAL(3,0))
+raw expr       : round(9223372036854775807)(CAST(95 AS Decimal(3, 0)))
+checked expr   : round<Decimal(3, 0)>(9223372036854775807)(CAST<UInt8>(95_u8 AS Decimal(3, 0)))
+optimized expr : 95_d64(3,0)
+output type    : Decimal(3, 0)
+output domain  : {95..=95}
+output         : 95
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | if(active, round(-2)(99::DECIMAL(2,0)), NULL)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal round overflow while evaluating function `round(-2)(99)` in expr `round(-2)(CAST(99 AS Decimal(2, 0)))`, during run expr: `if(CAST(active AS Boolean NULL), CAST(round(-2)(CAST(99 AS Decimal(2, 0))) AS Decimal(2, 0) NULL), CAST(NULL AS Decimal(2, 0) NULL))`
+
+
+

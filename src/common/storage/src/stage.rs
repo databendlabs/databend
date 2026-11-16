@@ -110,13 +110,21 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
             EndpointPolicyScope::External,
         )?)
     } else {
-        let stage_prefix = stage_info.stage_prefix();
-        let param = DataOperator::instance()
-            .params()
-            .map_root(|path| format!("{path}/{stage_prefix}"));
-
-        Ok(init_operator(&param)?)
+        Ok(init_operator(&stage_root_params(stage_info))?)
     }
+}
+
+/// Storage params backing an internal or user stage, rooted at the stage
+/// prefix. Returns `None` for external stages.
+pub fn internal_stage_storage_params(stage_info: &StageInfo) -> Option<StorageParams> {
+    (stage_info.stage_type != StageType::External).then(|| stage_root_params(stage_info))
+}
+
+fn stage_root_params(stage_info: &StageInfo) -> StorageParams {
+    let stage_prefix = stage_info.stage_prefix();
+    DataOperator::instance()
+        .params()
+        .map_root(|path| format!("{path}/{stage_prefix}"))
 }
 
 pub fn is_stage_path_traversal(path: &str) -> bool {
@@ -392,7 +400,20 @@ fn stdin_stage_info() -> StageFileInfo {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_meta_app::principal::StageInfo;
+    use databend_common_meta_app::storage::StorageFsConfig;
+    use databend_common_meta_app::storage::StorageParams;
+
+    use super::internal_stage_storage_params;
     use super::is_stage_path_traversal;
+
+    #[test]
+    fn external_stage_has_no_internal_storage_params() {
+        // Must not touch the global DataOperator for external stages.
+        let stage =
+            StageInfo::new_external_stage(StorageParams::Fs(StorageFsConfig::default()), false);
+        assert!(internal_stage_storage_params(&stage).is_none());
+    }
 
     #[test]
     fn test_is_stage_path_traversal() {

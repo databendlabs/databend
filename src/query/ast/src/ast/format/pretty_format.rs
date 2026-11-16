@@ -46,7 +46,7 @@ where T: Display + Clone
         child_prefix: String,
         f: &mut String,
     ) -> Result<()> {
-        writeln!(f, "{}{}", prefix, &self.payload).unwrap();
+        writeln!(f, "{}{}", prefix, self.payload).unwrap();
         if let Some((last_child, children)) = self.children.split_last() {
             for child in children {
                 child.format_pretty_impl(

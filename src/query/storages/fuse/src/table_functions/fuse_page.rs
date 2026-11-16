@@ -33,6 +33,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
@@ -138,7 +139,7 @@ impl TableMetaFunc for FusePage {
 
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for segment in segments {
                 let segment = segment?;

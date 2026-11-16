@@ -94,11 +94,7 @@ where
     #[inline(always)]
     pub fn entry(&self, key: &K) -> Option<&Entry<K, V>> {
         if unlikely(K::equals_zero(key)) {
-            if let Some(entry) = self.zero.as_ref() {
-                return Some(entry);
-            } else {
-                return None;
-            }
+            return self.zero.as_ref();
         }
         unsafe { self.table.get(key) }
     }
@@ -109,11 +105,7 @@ where
     #[inline(always)]
     pub fn entry_mut(&mut self, key: &K) -> Option<&mut Entry<K, V>> {
         if unlikely(K::equals_zero(key)) {
-            if let Some(entry) = self.zero.as_mut() {
-                return Some(entry);
-            } else {
-                return None;
-            }
+            return self.zero.as_mut();
         }
         unsafe { self.table.get_mut(key) }
     }

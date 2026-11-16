@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod clone;
 mod computed_columns;
+mod disk_cache;
 mod vacuum;
 mod vacuum2;
 mod vacuum_temporary_files;

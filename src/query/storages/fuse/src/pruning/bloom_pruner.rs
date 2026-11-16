@@ -28,6 +28,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::NgramArgs;
@@ -65,6 +66,7 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
     func_ctx: &FunctionContext,
     dal: &Operator,
     settings: &ReadSettings,
+    cache_policy: CachePolicy,
     data_schema: &TableSchemaRef,
     expr: &Expr<String>,
     part: &FuseBlockPartInfo,
@@ -107,6 +109,7 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
             settings,
             &index_columns,
             part.bloom_filter_index_size,
+            cache_policy,
         )
         .await?;
 
@@ -153,6 +156,9 @@ pub struct BloomPrunerCreator {
 
     settings: ReadSettings,
 
+    /// How the index files are read: the policy of the statement.
+    cache_policy: CachePolicy,
+
     /// the schema of data being indexed
     data_schema: TableSchemaRef,
 
@@ -168,6 +174,7 @@ impl BloomPrunerCreator {
         schema: &TableSchemaRef,
         dal: Operator,
         settings: ReadSettings,
+        cache_policy: CachePolicy,
         filter_expr: Option<&Expr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
@@ -227,6 +234,7 @@ impl BloomPrunerCreator {
             ngram_args,
             dal,
             settings,
+            cache_policy,
             data_schema: schema.clone(),
             bloom_index_builder,
             pruning_cost,
@@ -274,6 +282,7 @@ impl BloomPrunerCreator {
                     &self.settings,
                     &index_columns,
                     index_length,
+                    self.cache_policy,
                 ),
             )
             .await;

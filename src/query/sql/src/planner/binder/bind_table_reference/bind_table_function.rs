@@ -252,7 +252,7 @@ impl Binder {
                             }
                             .into(),
                         ),
-                        s_expr,
+                        (*s_expr).into_logical()?,
                     );
 
                     return Ok(Some((s_expr, *bind_context)));
@@ -279,6 +279,10 @@ impl Binder {
             return Ok(result);
         }
 
+        if func_name.name.eq_ignore_ascii_case("send_notification") {
+            // A cached result must never suppress a notification's side effect.
+            self.ctx.result_cache_state().set_cacheable(false);
+        }
         if func_name.name.eq_ignore_ascii_case("result_scan") {
             self.bind_result_scan(bind_context, span, alias, &table_args)
         } else {
@@ -307,7 +311,6 @@ impl Binder {
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
             table.as_table(),
-            None,
             table_alias_name,
             false,
             false,
@@ -367,7 +370,6 @@ impl Binder {
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
                 table.clone(),
-                None,
                 table_alias_name,
                 false,
                 false,
@@ -507,6 +509,10 @@ impl Binder {
                 ..
             } => {
                 let mut bind_context = BindContext::with_parent(parent_context.clone())?;
+                // The virtual columns bound by the left side, e.g. by the argument of
+                // an earlier lateral function, are added to the scans only from the
+                // final FROM context: carry them over, and reuse them for equal paths.
+                bind_context.bound_virtual_columns = parent_context.bound_virtual_columns.clone();
                 let func_name = normalize_identifier(name, &self.name_resolution_ctx);
 
                 if BUILTIN_FUNCTIONS

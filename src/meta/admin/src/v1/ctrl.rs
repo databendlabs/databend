@@ -71,7 +71,7 @@ impl<SP: SpawnApi> HttpService<SP> {
         info!(
             "id={} Received trigger_transfer_leader request: {:?}, \
             this node: current_leader={:?} voter_ids={:?}",
-            id, &query, current_leader, voter_ids
+            id, query, current_leader, voter_ids
         );
 
         let to = query.and_then(|q| q.to);

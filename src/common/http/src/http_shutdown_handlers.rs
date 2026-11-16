@@ -24,14 +24,14 @@ use log::info;
 use poem::Endpoint;
 use poem::listener::Acceptor;
 use poem::listener::AcceptorExt;
-use poem::listener::IntoTlsConfigStream;
 use poem::listener::Listener;
-use poem::listener::OpensslTlsConfig;
 use poem::listener::TcpListener;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 use crate::HttpError;
+use crate::TlsConfig;
+use crate::tls::TlsAcceptor;
 
 pub struct HttpShutdownHandler {
     service_name: String,
@@ -51,7 +51,7 @@ impl HttpShutdownHandler {
     pub async fn start_service(
         &mut self,
         listening: SocketAddr,
-        tls_config: Option<OpensslTlsConfig>,
+        tls_config: Option<TlsConfig>,
         ep: impl Endpoint + 'static,
         graceful_shutdown_timeout: Option<Duration>,
     ) -> Result<SocketAddr, HttpError> {
@@ -71,11 +71,11 @@ impl HttpShutdownHandler {
             .expect("socket addr");
 
         if let Some(tls_config) = tls_config {
-            let conf_stream = tls_config
-                .into_stream()
+            let server_config = tls_config
+                .server_config()
                 .map_err(|err| HttpError::TlsConfigError(AnyError::new(&err)))?;
 
-            acceptor = acceptor.openssl_tls(conf_stream).boxed();
+            acceptor = TlsAcceptor::new(acceptor, server_config).boxed();
         }
 
         let (tx, rx) = oneshot::channel();

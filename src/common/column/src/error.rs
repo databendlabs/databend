@@ -99,10 +99,10 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Error::NotYetImplemented(source) => {
-                write!(f, "Not yet implemented: {}", &source)
+                write!(f, "Not yet implemented: {}", source)
             }
             Error::External(message, source) => {
-                write!(f, "External error{}: {}", message, &source)
+                write!(f, "External error{}: {}", message, source)
             }
             Error::Io(desc) => write!(f, "Io error: {desc}"),
             Error::InvalidArgumentError(desc) => {

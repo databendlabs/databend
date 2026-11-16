@@ -168,3 +168,35 @@ select sum(amount1)a ,  sum(amount2) b , a  +  b, a - b, a * b, a / b from test3
 statement ok
 drop table test3
 
+# Decimal64 multiplication must widen before rescaling even when the output
+# precision is below 18. The unscaled product here needs more than 64 bits.
+query RRRR
+SELECT a * a, -a * a, a * -a, -a * -a FROM (SELECT '0.99999999999999999'::DECIMAL(17,17) AS a)
+----
+0.99999999999999998 -0.99999999999999998 -0.99999999999999998 0.99999999999999998
+
+query RRR
+SELECT a * a, a * '0.99999999999999999'::DECIMAL(17,17), -a * a FROM (SELECT if(number = 0, '0.99999999999999999', '-0.99999999999999999')::DECIMAL(17,17) AS a FROM numbers(2))
+----
+0.99999999999999998 0.99999999999999998 -0.99999999999999998
+0.99999999999999998 -0.99999999999999998 -0.99999999999999998
+
+# A 37-digit result can require a 74-digit intermediate. Machine-width failure
+# must widen rather than report final decimal overflow.
+query RR
+SELECT a * a, -a * a FROM (SELECT '0.9999999999999999999999999999999999999'::DECIMAL(37,37) AS a)
+----
+0.9999999999999999999999999999999999998 -0.9999999999999999999999999999999999998
+
+# Scale-zero multiplication also goes through the checked arithmetic entry point.
+query RRR
+SELECT 7::DECIMAL(8,0) * 3::DECIMAL(8,0), 7::DECIMAL(19,0) * 3::DECIMAL(19,0), 7::DECIMAL(39,0) * 3::DECIMAL(39,0)
+----
+21 21 21
+
+statement error Decimal multiply overflow
+SELECT '99999999999999999999999999999999999999'::DECIMAL(38,0) * '99999999999999999999999999999999999999'::DECIMAL(38,0)
+
+statement error Decimal multiply overflow
+SELECT '9999999999999999999999999999999999999999999999999999999999999999999999999999'::DECIMAL(76,0) * 10::DECIMAL(76,0)
+

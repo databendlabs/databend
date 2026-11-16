@@ -1,0 +1,102 @@
+# The prune cache must not reuse the block list of a query whose filter only
+# looks the same: float constants that differ beyond 10 fractional digits, or a
+# filter that depends on the session time zone.
+# Each INSERT writes one block, so a wrong cache hit drops whole blocks.
+statement ok
+SET enable_prune_cache = 1
+
+statement ok
+CREATE OR REPLACE TABLE issue_20774_ft (id INT, f DOUBLE)
+
+statement ok
+INSERT INTO issue_20774_ft VALUES (1, 0.0)
+
+statement ok
+INSERT INTO issue_20774_ft VALUES (2, 1.5)
+
+statement ok
+INSERT INTO issue_20774_ft VALUES (3, 0.25)
+
+query I
+SELECT id FROM issue_20774_ft WHERE f >= 0.00000000001 ORDER BY id
+----
+2
+3
+
+query I
+SELECT id FROM issue_20774_ft WHERE f >= 0 ORDER BY id
+----
+1
+2
+3
+
+query I
+SELECT id FROM issue_20774_ft WHERE f >= 1e-300 ORDER BY id
+----
+2
+3
+
+statement ok
+CREATE OR REPLACE TABLE issue_20774_pr (id INT, price DOUBLE)
+
+statement ok
+INSERT INTO issue_20774_pr VALUES (1, 10.12345678905)
+
+statement ok
+INSERT INTO issue_20774_pr VALUES (2, 20)
+
+query I
+SELECT id FROM issue_20774_pr WHERE price > 10.123456789055 ORDER BY id
+----
+2
+
+query I
+SELECT id FROM issue_20774_pr WHERE price > 10.12345678901 ORDER BY id
+----
+1
+2
+
+statement ok
+CREATE OR REPLACE TABLE issue_20774_tz (id INT, ts TIMESTAMP)
+
+statement ok
+INSERT INTO issue_20774_tz VALUES (1, '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO issue_20774_tz VALUES (2, '2024-01-01 10:00:00')
+
+statement ok
+INSERT INTO issue_20774_tz VALUES (3, '2024-01-02 03:00:00')
+
+statement ok
+SET timezone = 'UTC'
+
+query I
+SELECT id FROM issue_20774_tz WHERE to_date(ts) = '2024-01-01' ORDER BY id
+----
+1
+2
+
+statement ok
+SET timezone = 'America/Los_Angeles'
+
+query I
+SELECT id FROM issue_20774_tz WHERE to_date(ts) = '2024-01-01' ORDER BY id
+----
+2
+3
+
+statement ok
+UNSET timezone
+
+statement ok
+UNSET enable_prune_cache
+
+statement ok
+DROP TABLE issue_20774_ft
+
+statement ok
+DROP TABLE issue_20774_pr
+
+statement ok
+DROP TABLE issue_20774_tz

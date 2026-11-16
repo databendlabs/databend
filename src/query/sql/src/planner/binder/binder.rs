@@ -19,6 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_ast::ast::ExternalAccessStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
@@ -43,6 +44,7 @@ use databend_storages_common_table_meta::table::is_stream_name;
 use super::Any;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::DefinitionScope;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -99,6 +101,10 @@ pub struct Binder {
     /// Binder-local table instances that take precedence over catalog resolution.
     pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
+    /// Where the SQL being bound was written. Authoritative: `BindContext` only
+    /// carries a copy for binders created without access to this one.
+    pub(crate) definition_scope: DefinitionScope,
+
     pub enable_result_cache: bool,
 
     pub enable_materialized_view_rewrite: bool,
@@ -132,10 +138,27 @@ impl Binder {
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
             pre_resolved_tables: HashMap::new(),
+            definition_scope: DefinitionScope::session(),
             enable_result_cache,
             enable_materialized_view_rewrite,
             subquery_executor: None,
         }
+    }
+
+    pub fn with_definition_scope(mut self, scope: DefinitionScope) -> Self {
+        self.definition_scope = scope;
+        self
+    }
+
+    /// Checks that `bind_context` carries this binder's definition scope. A
+    /// mismatch means some `BindContext` was built without copying it, and binders
+    /// created from that context (e.g. for scalar subqueries) would fall back to
+    /// another scope.
+    pub(crate) fn debug_assert_definition_scope(&self, bind_context: &BindContext) {
+        debug_assert_eq!(
+            bind_context.definition_scope, self.definition_scope,
+            "BindContext definition scope diverged from the binder's"
+        );
     }
 
     pub fn with_materialized_view_rewrite(mut self, enable: bool) -> Self {
@@ -182,13 +205,17 @@ impl Binder {
 
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-                let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
+                // A stored definition scope can change the meaning of identical SQL
+                // text, so do not share ordinary result-cache keys.
+                let formatted_ast = if self.definition_scope.is_session()
+                    && self.ctx.get_settings().get_enable_query_result_cache()?
+                {
                     Some(stmt.to_string())
                 } else {
                     None
                 };
                 Plan::Query {
-                    s_expr: Box::new(s_expr),
+                    s_expr: Box::new(s_expr.into()),
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
                     rewrite_kind: None,
@@ -528,7 +555,7 @@ impl Binder {
             }
             Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
             Statement::MergeInto(stmt) => self.bind_merge_into(bind_context, stmt).await?,
-            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt).await?,
+            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt, None).await?,
             Statement::Update(stmt) => self.bind_update(bind_context, stmt).await?,
 
             // Permissions
@@ -579,6 +606,30 @@ impl Binder {
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // Connections
+            Statement::ExternalAccess(stmt) => {
+                use ExternalAccessStmt::*;
+                let mut stmt = stmt.clone();
+                let name = match &mut stmt {
+                    CreateNetworkRule { name, .. }
+                    | AlterNetworkRule { name, .. }
+                    | DropNetworkRule { name, .. }
+                    | CreateIntegration { name, .. }
+                    | AlterIntegration { name, .. }
+                    | DropIntegration { name, .. } => name,
+                };
+                *name = self.normalize_identifier(name);
+                let rules = match &mut stmt {
+                    CreateIntegration { rules, .. } => Some(rules),
+                    AlterIntegration { rules, .. } => rules.as_mut(),
+                    _ => None,
+                };
+                if let Some(rules) = rules {
+                    for rule in rules {
+                        *rule = self.normalize_identifier(rule);
+                    }
+                }
+                Plan::ExternalAccess(Box::new(stmt))
+            }
             Statement::CreateConnection(stmt) => self.bind_create_connection(stmt).await?,
             Statement::DropConnection(stmt) => Plan::DropConnection(Box::new(DropConnectionPlan {
                 if_exists: stmt.if_exists,
@@ -718,6 +769,19 @@ impl Binder {
 
             // Dynamic Table
             Statement::CreateDynamicTable(stmt) => self.bind_create_dynamic_table(stmt).await?,
+            Statement::RefreshDynamicTable(stmt) => {
+                let (catalog, database, table) = self.normalize_object_identifier_triple(
+                    &stmt.catalog,
+                    &stmt.database,
+                    &stmt.table,
+                );
+                Plan::RefreshDynamicTable(Box::new(crate::plans::RefreshDynamicTablePlan {
+                    tenant: self.ctx.get_tenant(),
+                    catalog,
+                    database,
+                    table,
+                }))
+            }
 
             Statement::CreatePipe(_) => {
                 todo!()

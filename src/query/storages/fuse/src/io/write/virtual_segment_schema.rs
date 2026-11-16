@@ -186,7 +186,7 @@ pub fn build_virtual_segment_schema(
                 drafts.push(Some(draft));
             }
             VirtualBlockInput::Existing { schema } => {
-                input_schemas.push(schema.map(Arc::unwrap_or_clone));
+                input_schemas.push(schema);
                 drafts.push(None);
             }
         }
@@ -407,14 +407,17 @@ mod tests {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             inverted_index_size: None,
+            inverted_index_metas: None,
             ngram_filter_index_size: None,
             vector_index_size: None,
             vector_index_location: None,
+            vector_index_metas: None,
             spatial_index_size: None,
             spatial_index_location: None,
             spatial_stats: None,
             vector_stats: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta: Some(meta),
             compression: Compression::Lz4,
             create_on: None,

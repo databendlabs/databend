@@ -14,6 +14,7 @@
 
 #![allow(clippy::too_many_arguments)]
 mod bloom_index_meta_size;
+mod cache_policy;
 mod conflict;
 mod io;
 mod meta;

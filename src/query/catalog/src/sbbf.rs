@@ -161,6 +161,23 @@ impl Block {
         true
     }
 
+    /// Returns the bitwise OR of two blocks.
+    #[inline]
+    fn union(&self, other: &Block) -> Block {
+        Block(std::array::from_fn(|i| self.0[i] | other.0[i]))
+    }
+
+    /// Probability that a uniformly random hash which maps to this block is reported as present.
+    ///
+    /// A check tests one bit per word, and the bit position in each word is uniform over 32 bits.
+    #[inline]
+    fn fpp(&self) -> f64 {
+        self.0
+            .iter()
+            .map(|word| word.count_ones() as f64 / u32::BITS as f64)
+            .product()
+    }
+
     #[inline(always)]
     fn mask_simd(x: u32) -> U32x8 {
         let hash_vec = U32x8::splat(x);
@@ -349,6 +366,60 @@ impl Sbbf {
             for i in 0..8 {
                 self_block[i] |= other_block[i];
             }
+        }
+    }
+
+    /// Shrink the filter in place while its estimated FPP stays within `target_fpp`.
+    ///
+    /// The filter is sized from an upper bound of inserted items. When many inserted hashes are
+    /// duplicates, most blocks stay sparse and the filter is larger than it needs to be. Folding
+    /// halves the number of blocks one level at a time, until the next level would exceed
+    /// `target_fpp` or only one block remains. Freed memory is returned to the allocator.
+    ///
+    /// ## Why adjacent blocks
+    ///
+    /// The block index is `((hash >> 32) * num_blocks) >> 32`. When `num_blocks` is halved, the
+    /// new index is `floor(old_index / 2)`, so blocks `2i` and `2i + 1` merge into block `i`.
+    /// The result is bit-for-bit equal to a filter of half the size with the same hashes inserted.
+    ///
+    /// ## Correctness
+    ///
+    /// Folding only ORs blocks together, so every bit set before folding is still set after it.
+    /// Folding never introduces false negatives.
+    ///
+    /// ## FPP estimate
+    ///
+    /// Before each level is applied, the FPP of the candidate result is computed as the mean of
+    /// `prod_w(popcount(w) / 32)` over all candidate blocks. This is the expected FPP for
+    /// uniformly random probe hashes. An estimate from the average fill rate alone is lower
+    /// than this value when blocks are unevenly loaded, and can fold past the target.
+    pub fn fold_to_target_fpp(&mut self, target_fpp: f64) {
+        let mut len = self.0.len();
+        // Halving preserves block indices only when every level divides evenly.
+        if !len.is_power_of_two() {
+            return;
+        }
+
+        while len >= 2 {
+            let half = len / 2;
+            let estimated_fpp = (0..half)
+                .map(|i| self.0[2 * i].union(&self.0[2 * i + 1]).fpp())
+                .sum::<f64>()
+                / half as f64;
+            if estimated_fpp > target_fpp {
+                break;
+            }
+
+            // Writing index `i` only reads indices `2i` and `2i + 1`, which are not yet overwritten.
+            for i in 0..half {
+                self.0[i] = self.0[2 * i].union(&self.0[2 * i + 1]);
+            }
+            len = half;
+        }
+
+        if len < self.0.len() {
+            self.0.truncate(len);
+            self.0.shrink_to_fit();
         }
     }
 
@@ -596,6 +667,112 @@ mod tests {
         for hash in &hashes {
             assert_eq!(serial.check_hash(*hash), atomic.check_hash(*hash));
         }
+    }
+
+    fn blocks(sbbf: &Sbbf) -> Vec<[u32; 8]> {
+        sbbf.0.iter().map(|block| block.0).collect()
+    }
+
+    fn measured_fpp(sbbf: &Sbbf, num_probes: u64) -> f64 {
+        // Probe values are disjoint from inserted values, and mix_hash is a bijection.
+        let false_positives = (0..num_probes)
+            .filter(|i| sbbf.check_hash(mix_hash((1 << 40) + i)))
+            .count();
+        false_positives as f64 / num_probes as f64
+    }
+
+    #[test]
+    fn test_sbbf_fold_has_no_false_negative() {
+        let hashes = (0..10_000).map(mix_hash).collect::<Vec<_>>();
+        let mut sbbf = Sbbf::new_with_ndv_fpp(3_000_000, 0.01).unwrap();
+        sbbf.insert_hash_batch(&hashes);
+        sbbf.fold_to_target_fpp(0.01);
+
+        assert!(sbbf.0.len() < 131_072);
+        assert!(hashes.iter().all(|hash| sbbf.check_hash(*hash)));
+    }
+
+    #[test]
+    fn test_sbbf_fold_equals_rebuild_at_folded_size() {
+        let hashes = (0..500).map(mix_hash).collect::<Vec<_>>();
+        let mut folded = Sbbf::new_with_num_of_bytes(1024 * size_of::<Block>());
+        folded.insert_hash_batch(&hashes);
+        folded.fold_to_target_fpp(0.01);
+        assert!(folded.0.len() < 1024);
+
+        let mut rebuilt = Sbbf::new_with_num_of_bytes(folded.0.len() * size_of::<Block>());
+        rebuilt.insert_hash_batch(&hashes);
+
+        assert_eq!(blocks(&folded), blocks(&rebuilt));
+    }
+
+    #[test]
+    fn test_sbbf_fold_keeps_measured_fpp_within_target() {
+        for ndv in [1_000, 10_000, 100_000, 1_000_000] {
+            let mut sbbf = Sbbf::new_with_ndv_fpp(3_000_000, 0.01).unwrap();
+            let original_blocks = sbbf.0.len();
+            for i in 0..ndv {
+                sbbf.insert_hash(mix_hash(i));
+            }
+            sbbf.fold_to_target_fpp(0.01);
+
+            assert!(sbbf.0.len() < original_blocks, "ndv {ndv} did not fold");
+            let fpp = measured_fpp(&sbbf, 200_000);
+            assert!(fpp < 0.012, "ndv {ndv} measured fpp {fpp}");
+        }
+    }
+
+    #[test]
+    fn test_sbbf_fold_keeps_fully_loaded_filter() {
+        // 216_647 items fill 8192 blocks to the sizing formula's limit with no rounding slack.
+        let mut sbbf = Sbbf::new_with_num_of_bytes(8192 * size_of::<Block>());
+        for i in 0..216_647 {
+            sbbf.insert_hash(mix_hash(i));
+        }
+        let before = blocks(&sbbf);
+        sbbf.fold_to_target_fpp(0.01);
+
+        assert_eq!(blocks(&sbbf), before);
+    }
+
+    #[test]
+    fn test_sbbf_fold_empty_filter_to_one_block() {
+        let mut sbbf = Sbbf::new_with_ndv_fpp(3_000_000, 0.01).unwrap();
+        sbbf.fold_to_target_fpp(0.01);
+
+        assert_eq!(sbbf.0.len(), 1);
+        assert!(!sbbf.check_hash(mix_hash(1)));
+    }
+
+    #[test]
+    fn test_sbbf_fold_releases_memory() {
+        let mut sbbf = Sbbf::new_with_ndv_fpp(3_000_000, 0.01).unwrap();
+        for i in 0..1_000 {
+            sbbf.insert_hash(mix_hash(i));
+        }
+        sbbf.fold_to_target_fpp(0.01);
+
+        assert_eq!(
+            sbbf.estimated_memory_size(),
+            sbbf.0.len() * size_of::<Block>()
+        );
+    }
+
+    #[test]
+    fn test_sbbf_atomic_fold_matches_serial_fold() {
+        let hashes = (0..5_000).map(mix_hash).collect::<Vec<_>>();
+
+        let mut serial = Sbbf::new_with_ndv_fpp(100_000, 0.01).unwrap();
+        serial.insert_hash_batch(&hashes);
+        serial.fold_to_target_fpp(0.01);
+
+        let mut atomic = SbbfAtomic::new_with_ndv_fpp(100_000, 0.01)
+            .unwrap()
+            .insert_hash_batch_parallel(hashes, 8)
+            .finish();
+        atomic.fold_to_target_fpp(0.01);
+
+        assert_eq!(blocks(&atomic), blocks(&serial));
     }
 
     #[test]

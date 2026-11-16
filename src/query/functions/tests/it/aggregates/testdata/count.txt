@@ -74,7 +74,7 @@ evaluation (internal):
 | Column | Data                        |
 +--------+-----------------------------+
 | a      | Column(Int64([4, 3, 2, 1])) |
-| Output | UInt64([0])                 |
+| Output | Tuple([UInt64([0])])        |
 +--------+-----------------------------+
 
 
@@ -96,5 +96,26 @@ evaluation (internal):
 | all_null | Column(NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____0000] }) |
 | Output   | UInt64([0])                                                                     |
 +----------+---------------------------------------------------------------------------------+
+
+
+ast: count_if(cond)
+evaluation (internal):
++--------+-------------------------------+
+| Column | Data                          |
++--------+-------------------------------+
+| cond   | Column(Boolean([0b____1011])) |
+| Output | UInt64([3])                   |
++--------+-------------------------------+
+
+
+ast: count_if(a, cond)
+evaluation (internal):
++--------+-------------------------------+
+| Column | Data                          |
++--------+-------------------------------+
+| a      | Column(Int64([4, 3, 2, 1]))   |
+| cond   | Column(Boolean([0b____1011])) |
+| Output | UInt64([3])                   |
++--------+-------------------------------+
 
 

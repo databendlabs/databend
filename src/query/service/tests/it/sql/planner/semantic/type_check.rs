@@ -198,7 +198,9 @@ async fn test_grouping_sets_to_union_keeps_grouping_id_for_qualify_windows() -> 
     };
 
     let mut builder = PhysicalPlanBuilder::new(metadata, ctx, false);
-    builder.build(&s_expr, bind_context.column_set()).await?;
+    builder
+        .build_query(s_expr.planned()?, bind_context.column_set())
+        .await?;
 
     Ok(())
 }

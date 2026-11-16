@@ -1,0 +1,53 @@
+# A projected expression may depend on other rows even when the RF key does
+# not. Keep running_difference on the probe side; default reordering can swap
+# it to the build side and hide this placement bug.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+create or replace table rf_eval_input(k BIGINT, v BIGINT);
+
+statement ok
+create or replace table rf_eval_keep(k BIGINT, flag INT);
+
+# One INSERT keeps [10,20] in one block: the second row's difference is 10.
+statement ok
+insert into rf_eval_input values (0,10),(1,20);
+
+# Only key 1 survives flag=1. The other rows make the build selective enough
+# for row-level bloom filtering, without changing a bloom threshold setting.
+# Key 0 keeps the unfiltered key range from ruling out the earlier input row.
+statement ok
+insert into rf_eval_keep values (1,1),(0,0);
+
+statement ok
+insert into rf_eval_keep select number+2,0 from numbers(20);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+query II
+select q.k,q.d from (select k,running_difference(v) as d from (select k,v from rf_eval_input order by k) o) q join rf_eval_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+# Before the fix RF removes key 0 before running_difference, returning 1 0.
+query II
+select q.k,q.d from (select k,running_difference(v) as d from (select k,v from rf_eval_input order by k) o) q join rf_eval_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table rf_eval_input;
+
+statement ok
+drop table rf_eval_keep;

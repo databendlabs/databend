@@ -19,13 +19,11 @@ use arrow_array::RecordBatch;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -35,10 +33,12 @@ use parquet::arrow::ProjectionMask;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::schema::types::SchemaDescriptor;
 
-use super::utils::FieldPaths;
+use super::utils::BatchReadPlan;
 use super::utils::bitmap_to_boolean_array;
 use super::utils::transform_record_batch;
-use crate::parquet_reader::utils::compute_output_field_paths;
+use crate::parquet_reader::utils::compute_output_read_plan;
+use crate::read_schema::ParquetReadSchema;
+use crate::read_schema::project_schema;
 
 #[derive(Debug)]
 pub struct ParquetPredicate {
@@ -50,9 +50,10 @@ pub struct ParquetPredicate {
 
     /// Predicate filter expression.
     filter: Expr,
-    field_paths: Option<FieldPaths>,
+    read_plan: Option<BatchReadPlan>,
 
     schema: TableSchema,
+    inner_projection: bool,
 }
 
 impl ParquetPredicate {
@@ -64,8 +65,12 @@ impl ParquetPredicate {
         &self.field_levels
     }
 
-    pub fn field_paths(&self) -> &Option<FieldPaths> {
-        &self.field_paths
+    pub fn read_plan(&self) -> &Option<BatchReadPlan> {
+        &self.read_plan
+    }
+
+    pub fn is_inner_projection(&self) -> bool {
+        self.inner_projection
     }
 
     pub fn evaluate_block(&self, block: &DataBlock) -> Result<Bitmap> {
@@ -79,27 +84,9 @@ impl ParquetPredicate {
         Ok(res)
     }
 
-    pub fn evaluate(
-        &self,
-        batch: &RecordBatch,
-        partition_block_scalars: Arc<[(DataType, Scalar)]>,
-    ) -> Result<BooleanArray> {
+    pub fn evaluate(&self, batch: &RecordBatch) -> Result<BooleanArray> {
         let data_schema = DataSchema::from(&self.schema);
-        let block = transform_record_batch(&data_schema, batch, &self.field_paths)?;
-        let block = if partition_block_scalars.is_empty() {
-            block
-        } else {
-            let num_rows = block.num_rows();
-            let entries = block.take_columns().into_iter().chain(
-                partition_block_scalars
-                    .iter()
-                    .cloned()
-                    .map(|(data_type, scalar)| {
-                        BlockEntry::new_const_column(data_type, scalar, num_rows)
-                    }),
-            );
-            DataBlock::from_iter(entries, num_rows)
-        };
+        let block = transform_record_batch(&data_schema, batch, &self.read_plan)?;
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
     }
@@ -115,23 +102,29 @@ pub fn build_predicate(
     prewhere: &PrewhereInfo,
     table_schema: &TableSchema,
     schema_desc: &SchemaDescriptor,
-    partition_columns: &[String],
     arrow_schema: Option<&arrow_schema::Schema>,
+    read_schema: Option<&ParquetReadSchema>,
 ) -> Result<(Arc<ParquetPredicate>, Vec<usize>)> {
     let inner_projection = matches!(prewhere.output_columns, Projection::InnerColumns(_));
     let schema = prewhere.prewhere_columns.project_schema(table_schema);
     let filter = prewhere
         .filter
         .as_expr(&BUILTIN_FUNCTIONS)
-        .project_column_ref(
-            |name| match partition_columns.iter().position(|x| x == name) {
-                Some(i) => Ok(i + schema.fields.len()),
-                None => schema.index_of(name),
-            },
-        )?;
-    let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
-    let field_paths =
-        compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;
+        .project_column_ref(|name| schema.index_of(name))?;
+    let (projection, leaves) = project_schema(
+        &prewhere.prewhere_columns,
+        table_schema,
+        schema_desc,
+        read_schema,
+    )?;
+    let read_plan = compute_output_read_plan(
+        schema_desc,
+        &projection,
+        &schema,
+        matches!(prewhere.prewhere_columns, Projection::InnerColumns(_)),
+        read_schema,
+        arrow_schema,
+    )?;
     let field_levels = parquet_to_arrow_field_levels(
         schema_desc,
         projection.clone(),
@@ -144,8 +137,9 @@ pub fn build_predicate(
             projection,
             filter,
             field_levels,
-            field_paths,
+            read_plan,
             schema,
+            inner_projection,
         }),
         leaves,
     ))

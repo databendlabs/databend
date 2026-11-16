@@ -1,0 +1,153 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+drop database if exists materialized_view_view_scope
+
+statement ok
+create database materialized_view_view_scope
+
+statement ok
+use materialized_view_view_scope
+
+statement ok
+create table foo(x int)
+
+statement ok
+insert into foo values (1)
+
+statement ok
+create table src(x int) change_tracking = true
+
+statement ok
+insert into src values (1)
+
+# The regular view's scalar subquery must stay independent of the caller's CTE.
+# A fresh non-aggregating MV exercises the final-projection output context.
+statement ok
+create materialized view mv_detail as select x from src
+
+statement ok
+refresh materialized view mv_detail
+
+statement ok
+create view v as select (select max(x) from foo) as x from mv_detail
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v, foo
+----
+1 99
+
+# A fresh aggregating MV also exercises the state-merge output context.
+statement ok
+create materialized view mv_aggregate as select sum(x) as x from src
+
+statement ok
+refresh materialized view mv_aggregate
+
+statement ok
+create view v_aggregate as select (select max(x) from foo) as x from mv_aggregate
+
+query II
+with foo as (select 99 as x) select v_aggregate.x, foo.x from v_aggregate, foo
+----
+1 99
+
+# Every FROM item, including an MV, must hand the view's definition scope to later
+# lateral items. The nested CTE keeps the physical `arr` reference unqualified in the
+# stored SQL, so it must still bind in the view's database, not the session's.
+statement ok
+drop database if exists materialized_view_view_scope_caller
+
+statement ok
+create database materialized_view_view_scope_caller
+
+statement ok
+create table arr(xs array(int))
+
+statement ok
+insert into arr values ([22])
+
+statement ok
+create table materialized_view_view_scope_caller.arr(xs array(int))
+
+statement ok
+insert into materialized_view_view_scope_caller.arr values ([11])
+
+statement ok
+use materialized_view_view_scope_caller
+
+statement ok
+create view materialized_view_view_scope.v_mv_lateral as select * from materialized_view_view_scope.mv_detail t, lateral (select 2::int as m) l
+
+statement ok
+create view materialized_view_view_scope.v_mv_unnest as select * from materialized_view_view_scope.mv_detail t, lateral unnest((select xs from arr)) u where exists (with arr as (select 1 as k) select * from arr)
+
+statement ok
+create view materialized_view_view_scope.v_mv_aggregate_unnest as select * from materialized_view_view_scope.mv_aggregate t, lateral unnest((select xs from arr)) u where exists (with arr as (select 1 as k) select * from arr)
+
+query II
+select * from materialized_view_view_scope.v_mv_lateral
+----
+1 2
+
+query II
+select * from materialized_view_view_scope.v_mv_unnest
+----
+1 22
+
+query II
+select * from materialized_view_view_scope.v_mv_aggregate_unnest
+----
+1 22
+
+statement ok
+use materialized_view_view_scope
+
+query II
+select * from v_mv_unnest
+----
+1 22
+
+query II
+select * from v_mv_aggregate_unnest
+----
+1 22
+
+# A stale MV is read through the hybrid MV-plus-delta path.
+statement ok
+insert into src values (2)
+
+statement ok
+use materialized_view_view_scope_caller
+
+query II
+select * from materialized_view_view_scope.v_mv_unnest order by 1
+----
+1 22
+2 22
+
+query II
+select * from materialized_view_view_scope.v_mv_aggregate_unnest
+----
+3 22
+
+statement ok
+use materialized_view_view_scope
+
+statement ok
+drop database materialized_view_view_scope_caller
+
+statement ok
+drop database materialized_view_view_scope

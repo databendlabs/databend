@@ -47,6 +47,10 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
         "RefreshVirtualColumnInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         false
     }

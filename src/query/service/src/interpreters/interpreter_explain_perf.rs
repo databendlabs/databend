@@ -14,24 +14,21 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_base::base::convert_number_size;
+use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::PerfValue;
+use databend_common_base::runtime::ProfileScope;
 use databend_common_base::runtime::QueryPerf;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
-use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
-use databend_meta_plugin_semaphore::acquirer::Permit;
-use databend_meta_runtime::DatabendRuntime;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::Interpreter;
@@ -94,20 +91,20 @@ impl ExplainPerfInterpreter {
             ));
         }
 
-        let _permit = self.acquire_semaphore().await?;
         let config = PerfConfig {
             profiler_enabled: true,
             event_groups: self.event_groups.clone(),
             frequency: 99,
         };
         self.ctx.set_perf_config(config.clone());
-        let perf_guard = QueryPerf::start(config.frequency)?;
-        ThreadTracker::tracking_future(self.simulate_execute()).await?;
-
-        let (_flag_guard, profiler_guard) = perf_guard;
+        // This statement and the query it runs share `self.ctx`, so the threads
+        // of the query carry its `perf_query_token`.
+        let profile_scope = ProfileScope::Query(self.ctx.get_perf_query_token());
+        let profiler = CpuProfiler::start(profile_scope, config.frequency)?;
+        self.simulate_execute().await?;
 
         let node_id = GlobalConfig::instance().query.node_id.clone();
-        let dumped = QueryPerf::dump(&profiler_guard)?;
+        let dumped = profiler.dump_svg()?;
         let other_nodes = self.ctx.get_nodes_perf().lock().clone();
         let mut html = QueryPerf::pretty_display(node_id, dumped, other_nodes.into_iter());
 
@@ -119,25 +116,6 @@ impl ExplainPerfInterpreter {
 
         let html = StringType::from_data(vec![html]);
         Ok(vec![DataBlock::new_from_columns(vec![html])])
-    }
-
-    pub async fn acquire_semaphore(&self) -> Result<Permit> {
-        let config = GlobalConfig::instance();
-        let meta_conf = config.meta.to_meta_grpc_client_conf();
-        let meta_store = MetaStoreProvider::new(meta_conf)
-            .create_meta_store::<DatabendRuntime>()
-            .await
-            .map_err(|_e| ErrorCode::Internal("Failed to get meta store for explain perf"))?;
-        let meta_key = "__fd_explain_perf";
-        meta_store
-            .new_acquired(
-                meta_key,
-                1,
-                config.query.node_id.clone(),
-                Duration::from_secs(3),
-            )
-            .await
-            .map_err(|_e| ErrorCode::Internal("Failed to acquire semaphore for explain perf"))
     }
 
     pub async fn simulate_execute(&self) -> Result<()> {

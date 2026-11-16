@@ -43,6 +43,7 @@ fn test_decode_v152_external_udf() -> anyhow::Result<()> {
         name: "test_udf".to_string(),
         description: "is a external udf".to_string(),
         definition: UDFDefinition::UDFServer(UDFServer {
+            external_access_integrations: vec![],
             address: "http://127.0.0.1:8888".to_string(),
             handler: "isempty".to_string(),
             headers: BTreeMap::from([

@@ -64,13 +64,13 @@ impl Interpreter for DropTableConstraintInterpreter {
             let fuse_table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
                 ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
+                    self.plan.database, self.plan.table, engine
                 ))
             })?;
             if table_info.db_type != DatabaseType::NormalDB {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
+                    self.plan.database, self.plan.table
                 )));
             }
 
@@ -78,7 +78,14 @@ impl Interpreter for DropTableConstraintInterpreter {
             new_table_meta.drop_constraint(&self.plan.constraint_name)?;
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            update_table_meta(fuse_table, &new_table_meta, catalog, self.ctx.get_tenant()).await?;
+            update_table_meta(
+                fuse_table,
+                &new_table_meta,
+                catalog,
+                self.ctx.get_tenant(),
+                None,
+            )
+            .await?;
             Ok(PipelineBuildResult::create())
         })
     }

@@ -1,3 +1,5 @@
+# run-with-settings: enable_experimental_new_join=0
+
 # Correlated references in a subquery JOIN ON condition must be materialized
 # before decorrelation.
 

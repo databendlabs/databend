@@ -25,6 +25,7 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -79,6 +80,13 @@ impl RulePushDownFilterEvalScalar {
                     self.visit(argument)?;
                 }
                 function.refresh_return_type()
+            }
+
+            fn visit_lambda_function(&mut self, lambda: &mut LambdaFunc) -> Result<()> {
+                for argument in &mut lambda.args {
+                    self.visit(argument)?;
+                }
+                lambda.refresh_return_type()
             }
         }
 

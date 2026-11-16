@@ -34,7 +34,6 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::arrow::and_validities;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::Interval;
@@ -75,6 +74,10 @@ pub struct HashJoinProbeState {
     /// When the counter is 0, it means all processors have finished their work.
     pub(crate) wait_probe_counter: AtomicUsize,
     pub(crate) next_round_counter: AtomicUsize,
+    /// Probe processors that have not finished yet, so the last one to finish
+    /// releases the hash table. Kept apart from `wait_probe_counter`, which a
+    /// final scan already counts down to zero before the processors finish.
+    pub(crate) unfinished_counter: AtomicUsize,
     /// The barrier is used to synchronize probe side processors.
     pub(crate) barrier: Barrier,
     /// The schema of probe side.
@@ -135,6 +138,7 @@ impl HashJoinProbeState {
             processor_count,
             wait_probe_counter: AtomicUsize::new(0),
             next_round_counter: AtomicUsize::new(0),
+            unfinished_counter: AtomicUsize::new(0),
             barrier,
             probe_schema,
             probe_projections: probe_projections.clone(),
@@ -397,6 +401,7 @@ impl HashJoinProbeState {
     pub fn probe_attach(&self) {
         self.wait_probe_counter.fetch_add(1, Ordering::AcqRel);
         self.next_round_counter.fetch_add(1, Ordering::AcqRel);
+        self.unfinished_counter.fetch_add(1, Ordering::AcqRel);
     }
 
     pub fn probe_done(&self) -> Result<()> {
@@ -711,7 +716,7 @@ impl HashJoinProbeState {
             check_interrupt()?;
 
             let boolean_column = Column::Boolean(boolean_bit_map.into());
-            let marker_column = NullableColumn::new_column(boolean_column, validity.into());
+            let marker_column = boolean_column.wrap_nullable(Some(validity.into()));
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],

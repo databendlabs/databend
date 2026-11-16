@@ -1,0 +1,132 @@
+# A result's precision does not bound intermediate products or aligned inputs.
+# All rounding is half away from zero; errors must not be native integer panics.
+
+query RR
+SELECT a * a, -a * a FROM (SELECT (concat('0.', repeat('9', 75)))::DECIMAL(75,75) AS a)
+----
+0.999999999999999999999999999999999999999999999999999999999999999999999999998 -0.999999999999999999999999999999999999999999999999999999999999999999999999998
+
+# The quotient is Decimal64, but the divisor needs Decimal128. Do not truncate it.
+query RRRR
+SELECT 1::DECIMAL(1,0) / '18446744073709551616'::DECIMAL(20,0), -1::DECIMAL(1,0) / '18446744073709551616'::DECIMAL(20,0), 1::DECIMAL(1,0) / '-18446744073709551616'::DECIMAL(20,0), -1::DECIMAL(1,0) / '-18446744073709551616'::DECIMAL(20,0)
+----
+0.000000 0.000000 0.000000 0.000000
+
+# Scaling fits i256, but the old numerator + divisor/2 rounding overflowed.
+query RR
+SELECT '5.5'::DECIMAL(76,75) / (concat(repeat('9', 75), '.9'))::DECIMAL(76,1), '-5.5'::DECIMAL(76,75) / (concat(repeat('9', 75), '.9'))::DECIMAL(76,1)
+----
+0.000000000000000000000000000000000000000000000000000000000000000000000000006 -0.000000000000000000000000000000000000000000000000000000000000000000000000006
+
+# Aligning 1 at scale 76 needs 77 digits, but the cancellation fits one unit.
+query RRR
+SELECT 1::DECIMAL(76,0) - (concat('0.', repeat('9', 76)))::DECIMAL(76,76), 1::DECIMAL(76,0) + (concat('-0.', repeat('9', 76)))::DECIMAL(76,76), 1::DECIMAL(76,0) % (concat('0.', repeat('9', 76)))::DECIMAL(76,76)
+----
+0.0000000000000000000000000000000000000000000000000000000000000000000000000001 0.0000000000000000000000000000000000000000000000000000000000000000000000000001 0.0000000000000000000000000000000000000000000000000000000000000000000000000001
+
+query R
+SELECT '0.1'::DECIMAL(76,76) % 1::DECIMAL(76,0)
+----
+0.1000000000000000000000000000000000000000000000000000000000000000000000000000
+
+# Column, scalar and null paths must use the same arithmetic rules.
+query RRR
+SELECT a * a, a * '0.99999999999999999'::DECIMAL(17,17), '0.99999999999999999'::DECIMAL(17,17) * a FROM (SELECT try_to_decimal(17,17)(if(number = 0, 'bad', if(number = 1, '0.99999999999999999', '-0.99999999999999999'))) AS a FROM numbers(3))
+----
+NULL NULL NULL
+0.99999999999999998 0.99999999999999998 0.99999999999999998
+0.99999999999999998 -0.99999999999999998 -0.99999999999999998
+
+# Multiplication domains must include scale reduction, not the raw product.
+query BB
+SELECT a * a = 0, a * a <= 0 FROM (SELECT if(number = 0, '0.0000000000001', '0.0000000000002')::DECIMAL(13,13) AS a FROM numbers(2))
+----
+1 1
+1 1
+
+statement error Decimal overflow
+SELECT '99999999999999999999999999999999999999'::DECIMAL(38,0) + '99999999999999999999999999999999999999'::DECIMAL(38,0)
+
+statement error Decimal overflow
+SELECT '-99999999999999999999999999999999999999'::DECIMAL(38,0) - '99999999999999999999999999999999999999'::DECIMAL(38,0)
+
+statement error Decimal div overflow
+SELECT '99999999999999999999999999999999999999'::DECIMAL(38,0) / '0.1'::DECIMAL(1,1)
+
+statement error divided by zero
+SELECT 1::DECIMAL(38,0) / 0::DECIMAL(38,0)
+
+statement error divided by zero
+SELECT 1::UInt64 / 0::DECIMAL(38,0)
+
+# A negative scale can exceed the native pow table; the correct result is zero.
+query IIII
+SELECT round('0.5'::DECIMAL(76,76), -1), truncate('0.5'::DECIMAL(76,76), -1), round(95::DECIMAL(38,0), -9223372036854775808), round(95::DECIMAL(38,0), 9223372036854775807)
+----
+0 0 0 95
+
+query III
+SELECT round(95::DECIMAL(3,0), -1), round('-95'::DECIMAL(3,0), -1), truncate(99::DECIMAL(2,0), -2)
+----
+100 -100 0
+
+statement error Decimal round overflow
+SELECT round(99::DECIMAL(2,0), -2)
+
+# Partial evaluation skips expensive arithmetic without swallowing active errors.
+# The first product exceeds Decimal128 precision but belongs to an inactive row.
+query RRR
+SELECT if(number = 0, NULL, a * 2::DECIMAL(1,0)), if(number = 0, NULL, a / a), if(number = 0, NULL, a % 2::DECIMAL(1,0)) FROM (SELECT number, if(number = 0, repeat('9', 38), '1')::DECIMAL(38,0) AS a FROM numbers(2))
+----
+NULL NULL NULL
+2 1.000000 1
+
+# Scalar errors in a masked branch must be attributed to an active row, even
+# when row zero is excluded. An entirely inactive branch must not execute it.
+query R
+SELECT if(number >= 0, 1::DECIMAL(1,0), 1::DECIMAL(1,0) / 0::DECIMAL(1,0)) FROM numbers(2)
+----
+1.000000
+1.000000
+
+statement error divided by zero
+SELECT if(number = 0, NULL, 1::DECIMAL(1,0) / 0::DECIMAL(1,0)) FROM numbers(2)
+
+# Integer casts must enforce precision even with scale zero, otherwise native
+# arithmetic's valid-decimal bounds are violated before it starts.
+query RR
+SELECT CAST(9::Int64 AS DECIMAL(1,0)), TRY_CAST(10::Int64 AS DECIMAL(1,0))
+----
+9 NULL
+
+statement error Decimal overflow
+SELECT CAST(10::Int64 AS DECIMAL(1,0))
+
+statement error Decimal overflow
+SELECT CAST(18446744073709551615::UInt64 AS DECIMAL(1,0))
+
+statement error Decimal overflow
+SELECT if(number = 0, NULL, CAST(10::Int64 AS DECIMAL(1,0))) FROM numbers(2)
+
+# All ordinary cast sources must preserve active scalar failures.
+statement error Decimal overflow
+SELECT if(number = 0, NULL, CAST(1e30::Float64 AS DECIMAL(1,0))) FROM numbers(2)
+
+statement error Decimal overflow
+SELECT CAST(TRUE AS DECIMAL(1,1))
+
+statement error Decimal overflow
+SELECT CAST(parse_json('true') AS DECIMAL(1,1))
+
+query R
+SELECT if(number = 0, NULL, CAST(parse_json('7') AS DECIMAL(1,0))) FROM numbers(2)
+----
+NULL
+7
+
+# A lexicographic string interval is not a numeric interval: 100 must not be
+# optimized away because the string bounds are "10" and "2".
+query I
+SELECT count_if(CAST(s AS DECIMAL(3,0)) <= 10) FROM (VALUES ('10'), ('100'), ('2')) AS t(s)
+----
+2

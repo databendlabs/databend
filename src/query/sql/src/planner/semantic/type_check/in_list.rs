@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
@@ -35,10 +32,8 @@ use super::TypeChecker;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::Visibility;
-use crate::binder::wrap_cast;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::ConstantTableScan;
@@ -78,7 +73,7 @@ where A: super::TypeCheckAdapter
         list: &CoreExprArgs,
         not: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let inlist_to_join_threshold = self.adapter.settings().get_inlist_to_join_threshold()?;
+        let inlist_to_join_threshold = self.adapter.inlist_to_join_threshold()?;
         if list.len() >= inlist_to_join_threshold {
             let deref!((expr_scalar, expr_ty)) = self.resolve_core(arena, expr)?;
             let deref!((subquery, data_type)) =
@@ -91,7 +86,7 @@ where A: super::TypeCheckAdapter
         }
 
         let deref!((expr_scalar, _)) = self.resolve_core(arena, expr)?;
-        let max_inlist_to_or = self.adapter.settings().get_max_inlist_to_or()? as usize;
+        let max_inlist_to_or = self.adapter.max_inlist_to_or()? as usize;
 
         if list.len() > max_inlist_to_or
             && list
@@ -164,16 +159,17 @@ where A: super::TypeCheckAdapter
         let mut builder = ColumnBuilder::with_capacity(&common_type, num_rows);
         for (scalar, data_type) in list_scalars.into_iter().zip(list_types.iter()) {
             let scalar = if *data_type != common_type {
-                let cast = wrap_cast(&scalar, &common_type);
-                let expr = cast.as_expr()?;
-                let (expr, _) =
-                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-                match expr.into_owned().into_constant() {
-                    Ok(constant) => ScalarExpr::ConstantExpr(ConstantExpr {
+                let value = scalar
+                    .constant_value(&self.func_ctx)
+                    .and_then(|(value, from)| {
+                        self.cast_constant(scalar.span(), value, from, &common_type)
+                    });
+                match value {
+                    Some(value) => ScalarExpr::ConstantExpr(ConstantExpr {
                         span: scalar.span(),
-                        value: constant.scalar,
+                        value,
                     }),
-                    Err(_) => {
+                    None => {
                         return Err(ErrorCode::SemanticError(
                             "Values can't contain subquery, aggregate functions, window functions, or UDFs",
                         ).set_span(span));
@@ -182,7 +178,9 @@ where A: super::TypeCheckAdapter
             } else {
                 scalar
             };
-            let ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) = scalar else {
+            let (ScalarExpr::ConstantExpr(ConstantExpr { value, .. })
+            | ScalarExpr::TypedConstantExpr(ConstantExpr { value, .. }, _)) = scalar
+            else {
                 return Err(ErrorCode::SemanticError(
                     "Values can't contain subquery, aggregate functions, window functions, or UDFs",
                 )
@@ -212,7 +210,6 @@ where A: super::TypeCheckAdapter
             columns: ColumnSet::from_iter([value_index]),
         })
         .build_unary(Aggregate {
-            mode: AggregateMode::Initial,
             group_items: vec![ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
@@ -230,6 +227,7 @@ where A: super::TypeCheckAdapter
             child_expr: Some(Box::new(child_scalar)),
             compare_op: Some(SubqueryComparisonOp::Equal),
             output_column: value_column,
+            row_columns: vec![],
             projection_index: None,
             data_type: Box::new(if child_type.is_nullable() {
                 common_type.wrap_nullable()

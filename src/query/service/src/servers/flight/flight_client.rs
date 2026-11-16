@@ -49,6 +49,8 @@ pub struct DoExchangeParams {
     pub query_id: String,
     pub exchange_id: String,
     pub num_threads: usize,
+    /// Receive queue quota of this connection on the target node, in bytes.
+    pub max_bytes_per_connection: usize,
 }
 
 pub struct FlightClient {

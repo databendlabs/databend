@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_sql::planner::UDFValidator;
 use databend_common_sql::plans::AlterUDFPlan;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -57,6 +59,22 @@ impl Interpreter for AlterUserUDFScript {
             let plan = self.plan.clone();
 
             let tenant = self.ctx.get_tenant();
+            if let UDFDefinition::UDFServer(server) = &plan.udf.definition
+                && !server.external_access_integrations.is_empty()
+            {
+                UDFValidator::verify_server(self.ctx.as_ref(), &plan.udf.name, server).await?;
+            }
+            let integrations = plan.udf.definition.external_access_integrations();
+            if !integrations.is_empty()
+                && matches!(
+                    &plan.udf.definition,
+                    UDFDefinition::UDFScript(_) | UDFDefinition::UDAFScript(_)
+                )
+            {
+                UserApiProvider::instance()
+                    .validate_external_access_bindings(&tenant, integrations)
+                    .await?;
+            }
             UserApiProvider::instance()
                 .update_udf(&tenant, plan.udf)
                 .await?;

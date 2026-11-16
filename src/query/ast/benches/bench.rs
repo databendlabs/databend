@@ -82,6 +82,44 @@ mod dummy {
 }
 
 #[divan::bench_group(max_time = 0.5)]
+mod trailing_vector_argument {
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::parse_sql;
+    use databend_common_ast::parser::tokenize_sql;
+
+    fn vector_cast() -> String {
+        let values = ["0.1973208636045456", "-0.2610067129135132"];
+        format!("CAST([{}] AS VECTOR(768))", values.repeat(384).join(", "))
+    }
+
+    // Isolate parsing from tokenization and check that nesting a final
+    // argument does not multiply the work required to parse its vector.
+    #[divan::bench(args = [0, 1, 2, 4])]
+    fn nested_expression(bencher: divan::Bencher, depth: usize) {
+        let mut sql = vector_cast();
+        for _ in 0..depth {
+            sql = format!("cosine_distance(embedding, {sql})");
+        }
+        let tokens = tokenize_sql(&sql).unwrap();
+        bencher.bench_local(|| parse_expr(divan::black_box(&tokens), Dialect::PostgreSQL).unwrap());
+    }
+
+    #[divan::bench]
+    fn order_by_query(bencher: divan::Bencher) {
+        let sql = format!(
+            "SELECT id FROM vdb_lake_km.t512 ORDER BY COSINE_DISTANCE(embedding, {}) ASC LIMIT 100",
+            vector_cast()
+        );
+        let tokens = tokenize_sql(&sql).unwrap();
+        // parse_sql also performs a round-trip check with debug assertions
+        // enabled. Use CARGO_PROFILE_BENCH_DEBUG_ASSERTIONS=false for timings
+        // representative of a release build.
+        bencher.bench_local(|| parse_sql(divan::black_box(&tokens), Dialect::PostgreSQL).unwrap());
+    }
+}
+
+#[divan::bench_group(max_time = 0.5)]
 mod comment_heavy {
     use std::sync::OnceLock;
 

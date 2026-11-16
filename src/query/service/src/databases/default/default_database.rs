@@ -51,6 +51,7 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDatabaseOptionsReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use log::warn;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -70,12 +71,24 @@ impl DefaultDatabase {
         Ok(Box::new(Self { ctx, db_info }))
     }
 
-    fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
-        table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.get_table_by_info(item.as_ref())?;
-            acc.push(tbl);
-            Ok(acc)
-        })
+    fn load_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Vec<Arc<dyn Table>> {
+        table_infos
+            .iter()
+            .filter_map(|info| match self.get_table_by_info(info) {
+                Ok(table) => Some(table),
+                Err(err) => {
+                    warn!(
+                        "load_tables: skip table {}.{} (tenant={}, table_id={}): {}",
+                        self.get_db_name(),
+                        info.name,
+                        self.get_tenant().tenant_name(),
+                        info.ident.table_id,
+                        err
+                    );
+                    None
+                }
+            })
+            .collect()
     }
 
     async fn list_table_infos(&self) -> Result<Vec<Arc<TableInfo>>> {
@@ -193,14 +206,17 @@ impl Database for DefaultDatabase {
             })
             .collect();
 
-        // disable refresh in history table
-        self.load_tables(table_infos)
+        // An explicitly requested table history must still report load failures.
+        table_infos
+            .iter()
+            .map(|info| self.get_table_by_info(info))
+            .collect()
     }
 
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self.list_table_infos().await?;
-        self.load_tables(table_infos)
+        Ok(self.load_tables(table_infos))
     }
 
     #[async_backtrace::framed]
@@ -215,7 +231,11 @@ impl Database for DefaultDatabase {
             .mget_tables(db_id, db_name, table_names)
             .await?;
 
-        self.load_tables(table_infos)
+        // Explicit lookups must still report a table that cannot be loaded.
+        table_infos
+            .iter()
+            .map(|info| self.get_table_by_info(info))
+            .collect()
     }
 
     #[async_backtrace::framed]
@@ -254,7 +274,7 @@ impl Database for DefaultDatabase {
 
         table_infos.append(&mut dropped);
 
-        self.load_tables(table_infos)
+        Ok(self.load_tables(table_infos))
     }
 
     #[async_backtrace::framed]

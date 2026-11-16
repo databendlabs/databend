@@ -19,5 +19,6 @@ pub use perf_counters::PerfConfig;
 pub use perf_counters::PerfCounters;
 pub use perf_counters::PerfEvent;
 pub use perf_counters::PerfValue;
+pub use query_perf::CpuProfiler;
+pub use query_perf::ProfileScope;
 pub use query_perf::QueryPerf;
-pub use query_perf::QueryPerfGuard;

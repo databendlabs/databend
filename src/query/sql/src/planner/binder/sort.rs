@@ -34,7 +34,6 @@ use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
-use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
@@ -326,14 +325,7 @@ impl Binder {
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
-                    span: lambda_func.span,
-                    func_name: lambda_func.func_name.clone(),
-                    args,
-                    lambda_expr: lambda_func.lambda_expr.clone(),
-                    lambda_display: lambda_func.lambda_display.clone(),
-                    return_type: lambda_func.return_type.clone(),
-                }))
+                Ok(ScalarExpr::LambdaFunction(lambda_func.with_args(args)?))
             }
             window @ ScalarExpr::WindowFunction(_) => {
                 if !rewrite_flags.needs_window_rewrite {
@@ -402,6 +394,7 @@ impl Binder {
                     name: udf.name.clone(),
                     handler: udf.handler.clone(),
                     headers: udf.headers.clone(),
+                    external_access_integrations: udf.external_access_integrations.clone(),
                     display_name: udf.display_name.clone(),
                     udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),

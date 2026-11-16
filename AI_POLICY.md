@@ -169,6 +169,7 @@ If maintainer guidance for a specific PR conflicts with this document, follow th
 ## Enforcement
 
 - Maintainers may request changes, ask for human clarification, require more tests, or close PRs that violate this policy
+- An automated gate enforces the description bar on every issue and PR: the PR Assistant `quality` job (`.github/workflows/pr.yml`) fails on bloated or template-placeholder PR descriptions, and `issue-gate` labels and closes issues from non-members until the description is fixed. Both reject empty or template-placeholder text, oversized bodies, pasted log/stack dumps, and repeated boilerplate
 - Repeated low-effort or unattended agent spam may result in blocked contributions
 - Good-faith AI-assisted work that is well explained, tested, and reviewable is welcome
 

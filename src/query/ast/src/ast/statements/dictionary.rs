@@ -70,7 +70,7 @@ impl Display for CreateDictionaryStmt {
             write_comma_separated_list(f, &self.primary_keys)?;
         }
         write!(f, " SOURCE(")?;
-        write!(f, "{}( ", &self.source_name)?;
+        write!(f, "{}( ", self.source_name)?;
         if !self.source_options.is_empty() {
             write_space_separated_string_map(f, &self.source_options)?;
         }

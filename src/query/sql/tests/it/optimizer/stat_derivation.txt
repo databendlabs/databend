@@ -1,3 +1,21 @@
+=== date_synthetic_spacing_unit ===
+description: Date synthesis uses the same temporal reference as Timestamp, in days.
+sql: SELECT d FROM temporal WHERE d < to_date('1991-11-27')
+operator: Scan
+cardinality: 99.999
+precise_cardinality: None
+column_stat: temporal.d (#0) min=0, max=7999, ndv=99.99875001562482, null_count=0, histogram=some
+column_stat: temporal.ts (#1) min=0, max=6912000000000000, ndv=99.99875001562482, null_count=0, histogram=none
+
+=== timestamp_synthetic_spacing_unit ===
+description: Microsecond bounds must not cause an equivalent Timestamp distribution to lose its histogram.
+sql: SELECT ts FROM temporal WHERE ts < to_timestamp('1991-11-27 00:00:00')
+operator: Scan
+cardinality: 100.000
+precise_cardinality: None
+column_stat: temporal.d (#0) min=0, max=80000, ndv=100.00000000000004, null_count=0, histogram=none
+column_stat: temporal.ts (#1) min=0, max=691199999999999, ndv=99.99999999999999, null_count=0, histogram=some
+
 === sort_top_n_caps_statistics ===
 description: Top-N sort caps row-count statistics without discarding value bounds.
 sql: SELECT k FROM t ORDER BY k LIMIT 10

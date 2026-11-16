@@ -27,15 +27,11 @@ use crate::optimizer::cost::CostContext;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::DistributionEnforcer;
 use crate::optimizer::ir::Enforcer;
-use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::PatternExtractor;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
-use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::plans::RelOperator;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeExprState {
@@ -188,7 +184,7 @@ impl OptimizeExprTask {
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
 
-        if matches!(m_expr.plan.as_ref(), RelOperator::Exchange(_),)
+        if m_expr.plan.physical().is_some_and(|op| op.is_exchange())
             && matches!(self.required_prop.distribution, Distribution::Any)
         {
             return Ok(OptimizeExprEvent::OptimizedSelf);
@@ -239,14 +235,37 @@ impl OptimizeExprTask {
 
             let group = optimizer.memo.group(m_expr.children[child_index])?;
             if group.best_prop(&required_prop).is_none() {
-                let task = OptimizeGroupTask::new(
-                    self.ctx.clone(),
-                    Some((self.group_index, self.m_expr_index)),
-                    group.group_index,
-                    required_prop.clone(),
-                )
-                .with_parent(self.ref_count.clone());
-                scheduler.add_task(Task::OptimizeGroup(task));
+                let child_group_index = group.group_index;
+                // An in-flight task for the same `(group, required_prop)` computes exactly
+                // the result we need, so wait for it instead of scheduling a duplicate.
+                //
+                // Enforcer expressions (e.g. `Exchange`) have their own group as child and
+                // rely on `owner_expr` to skip themselves; those requests keep a private
+                // task so that the skip stays tied to the requesting expression.
+                let shareable = child_group_index != self.group_index;
+                let attached = shareable
+                    && scheduler.attach_optimize_group_waiter(
+                        child_group_index,
+                        &required_prop,
+                        &self.ref_count,
+                    );
+                if !attached {
+                    let task = OptimizeGroupTask::new(
+                        self.ctx.clone(),
+                        Some((self.group_index, self.m_expr_index)),
+                        child_group_index,
+                        required_prop.clone(),
+                    )
+                    .with_parent(self.ref_count.clone());
+                    if shareable {
+                        scheduler.register_optimize_group(
+                            child_group_index,
+                            required_prop.clone(),
+                            task.waiters.clone(),
+                        );
+                    }
+                    scheduler.add_task(Task::OptimizeGroup(task));
+                }
             }
 
             self.last_optimized_child_index = Some(child_index + 1);
@@ -354,6 +373,15 @@ impl OptimizeExprTask {
         let rel_expr = RelExpr::with_opt_context(m_expr, &optimizer.memo, &children_best_props);
         let physical_prop = rel_expr.derive_physical_prop()?;
 
+        // Exchanges repartition copies; they cannot turn replicated output into
+        // single-production output. Reject this candidate and let the group search
+        // select an implementation with a concrete non-broadcast distribution.
+        if self.required_prop.distribution == Distribution::NonBroadcast
+            && !self.required_prop.satisfied_by(&physical_prop)
+        {
+            return Ok(OptimizeExprEvent::OptimizedSelf);
+        }
+
         let should_enforce = {
             let mut should_enforce = true;
 
@@ -361,7 +389,7 @@ impl OptimizeExprTask {
                 && physical_prop.distribution == Distribution::Serial
                 && !matches!(
                     self.required_prop.distribution,
-                    Distribution::Serial | Distribution::Any
+                    Distribution::Serial | Distribution::Any | Distribution::NonBroadcast
                 )
             {
                 should_enforce = false;
@@ -400,20 +428,12 @@ impl OptimizeExprTask {
             return Ok(OptimizeExprEvent::OptimizingSelf);
         }
 
-        let mut extractor = PatternExtractor::new();
-        let enforcer_child = Arc::new(
-            extractor
-                .extract(&optimizer.memo, m_expr, &Matcher::Leaf)?
-                .pop()
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!("Cannot find child of m_expr: {:?}", m_expr.plan))
-                })?,
-        );
-
         for enforcer in enforcers.iter() {
-            let operator = enforcer.enforce()?;
-            let s_expr = SExpr::create_unary(Arc::new(operator), enforcer_child.clone());
-            optimizer.memo.insert(Some(self.group_index), s_expr)?;
+            optimizer
+                .memo
+                .insert_physical(self.group_index, enforcer.enforce()?, vec![
+                    self.group_index,
+                ])?;
         }
 
         Ok(OptimizeExprEvent::OptimizedSelf)
@@ -421,5 +441,105 @@ impl OptimizeExprTask {
 
     fn finish(&mut self, _optimizer: &mut CascadesOptimizer) -> Result<OptimizeExprEvent> {
         Ok(OptimizeExprEvent::Finish)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::table_context::TableContextSettings;
+    use databend_common_sql_test_support::LiteTableContext;
+
+    use super::*;
+    use crate::MetadataRef;
+    use crate::optimizer::OptimizerContext;
+    use crate::optimizer::ir::SExpr;
+    use crate::plans::DummyTableScan;
+    use crate::plans::Exchange;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn non_broadcast_search_rejects_replicated_candidate() -> Result<()> {
+        // Isolate LiteTableContext's process-wide singleton initialization, as in
+        // the other scheduler tests. This tests candidate selection, not a rewrite.
+        const CHILD_PROCESS: &str = "DATABEND_NON_BROADCAST_SCHEDULER_TEST";
+        if std::env::var_os(CHILD_PROCESS).is_none() {
+            let name = concat!(
+                module_path!(),
+                "::non_broadcast_search_rejects_replicated_candidate"
+            );
+            let output = std::process::Command::new(std::env::current_exe()?)
+                .env(CHILD_PROCESS, "1")
+                .args(["--exact", name.split_once("::").unwrap().1, "--nocapture"])
+                .output()?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            assert!(
+                output.status.success() && stdout.contains("1 passed"),
+                "isolated distribution test failed:\n{stdout}\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return Ok(());
+        }
+
+        let ctx = LiteTableContext::create().await?;
+        ctx.set_cluster_node_num(2);
+        let opt_ctx = OptimizerContext::new(
+            ctx.clone(),
+            MetadataRef::default(),
+            ctx.get_function_context()?,
+        );
+        opt_ctx.set_enable_distributed_optimization(true);
+        let mut optimizer = CascadesOptimizer::new(opt_ctx)?;
+        optimizer
+            .memo
+            .init(SExpr::create_leaf(DummyTableScan::new()))?;
+        let group = optimizer.memo.root().unwrap().group_index;
+        let required = RequiredProperty {
+            distribution: Distribution::NonBroadcast,
+        };
+        // Schedule both choices normally: NonBroadcast must accept the Serial
+        // scan, and Any supplies the Broadcast candidate's child cost below.
+        let mut scheduler = TaskManager::new();
+        let any = RequiredProperty::default();
+        for property in [&required, &any] {
+            scheduler.add_task(Task::OptimizeGroup(OptimizeGroupTask::new(
+                ctx.clone(),
+                None,
+                group,
+                property.clone(),
+            )));
+            scheduler.run(&mut optimizer)?;
+        }
+        let selected = optimizer
+            .memo
+            .group(group)?
+            .best_prop(&required)
+            .unwrap()
+            .clone();
+        assert_eq!(selected.physical_prop.distribution, Distribution::Serial);
+        assert!(optimizer.memo.group(group)?.best_prop(&any).is_some());
+        optimizer
+            .memo
+            .insert_physical(group, Exchange::Broadcast, vec![group])?;
+        let broadcast_index = optimizer.memo.group(group)?.num_exprs() - 1;
+        // Exercise rejection with a valid child choice, so missing child costs
+        // cannot short-circuit add_enforcers before its NonBroadcast check.
+        let mut task = OptimizeExprTask::new(
+            ctx,
+            &optimizer,
+            group,
+            broadcast_index,
+            required.clone(),
+            vec![any],
+        )?;
+        let before = optimizer.memo.group(group)?.num_exprs();
+        assert!(matches!(
+            task.add_enforcers(&mut optimizer)?,
+            OptimizeExprEvent::OptimizedSelf
+        ));
+        assert_eq!(optimizer.memo.group(group)?.num_exprs(), before);
+        let best = optimizer.memo.group(group)?.best_prop(&required).unwrap();
+        assert_eq!(best.expr_index, selected.expr_index);
+        assert_eq!(best.cost, selected.cost);
+        assert_eq!(best.physical_prop.distribution, Distribution::Serial);
+        Ok(())
     }
 }

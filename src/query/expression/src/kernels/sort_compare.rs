@@ -325,10 +325,10 @@ impl ValueVisitor for SortCompare {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        if column.validity.null_count() > 0 {
-            self.validity = Some(column.validity.clone());
+        if column.validity().null_count() > 0 {
+            self.validity = Some(column.validity().clone());
         }
-        self.visit_column(column.column.clone())
+        self.visit_column(column.column().clone())
     }
 }
 
@@ -378,7 +378,7 @@ mod tests {
         let mut offsets = Vec::with_capacity(rows.len() + 1);
         offsets.push(0_u64);
         for row in rows {
-            values.extend(row.into_iter());
+            values.extend(row);
             offsets.push(values.len() as u64);
         }
         let col = ArrayColumn::<Int64Type>::new(Buffer::from(values), Buffer::from(offsets));

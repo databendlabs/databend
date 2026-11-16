@@ -18,16 +18,17 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::BlockMetaWithHLL;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::RetainedBlockMeta;
 use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_cache::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::BlockIndex;
@@ -115,7 +116,9 @@ impl CompactBlockPartInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CompactExtraInfo {
     pub segment_index: SegmentIndex,
-    pub unchanged_blocks: Vec<(BlockIndex, BlockMetaWithHLL)>,
+    pub unchanged_blocks: Vec<(BlockIndex, RetainedBlockMeta)>,
+    /// Source schemas shared by unchanged blocks; indexes are local to this extras entry.
+    pub virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
     pub removed_segment_indexes: Vec<SegmentIndex>,
     pub removed_segment_summary: Statistics,
 }
@@ -123,13 +126,15 @@ pub struct CompactExtraInfo {
 impl CompactExtraInfo {
     pub fn create(
         segment_index: SegmentIndex,
-        unchanged_blocks: Vec<(BlockIndex, BlockMetaWithHLL)>,
+        unchanged_blocks: Vec<(BlockIndex, RetainedBlockMeta)>,
+        virtual_schemas: Vec<Option<Arc<VirtualSegmentSchema>>>,
         removed_segment_indexes: Vec<SegmentIndex>,
         removed_segment_summary: Statistics,
     ) -> Self {
         CompactExtraInfo {
             segment_index,
             unchanged_blocks,
+            virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
         }

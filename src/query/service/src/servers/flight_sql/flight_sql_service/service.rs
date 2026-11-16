@@ -64,6 +64,7 @@ use arrow_flight::sql::TicketStatementQuery;
 use arrow_flight::sql::server::FlightSqlService;
 use arrow_flight::sql::server::PeekableFlightDataStream;
 use arrow_ipc::writer::IpcWriteOptions;
+use databend_common_ast::parser::mask_log_sql_secrets;
 use databend_common_expression::DataSchema;
 use futures::Stream;
 use log::info;
@@ -189,17 +190,20 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let fetch_results: FetchResults = try_unpack_any(message)?;
 
         let handle = Uuid::try_parse(&fetch_results.handle).map_err(|e| {
-            Status::internal(format!(
-                "do_get_fallback Error decoding handle: {e} {:?}",
-                fetch_results.handle
-            ))
+            Status::invalid_argument(format!("Invalid prepared statement ticket handle: {e}"))
         })?;
 
         info!("do_get_fallback with handle={handle}");
 
-        let handle_plan = self.statements.get(&handle).unwrap();
+        // Own the execution plan without holding the cache read lock across await, so Close can
+        // remove the statement without releasing resources still used by this execution.
+        let (plan, extras) = self
+            .statements
+            .get(&handle)
+            .map(|entry| entry.value().clone())
+            .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
         let stream = self
-            .execute_query(session, &handle_plan.value().0, &handle_plan.value().1)
+            .execute_query(session, &plan, &extras)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         let resp = Response::new(stream);
@@ -212,7 +216,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
         query: CommandStatementQuery,
         request: Request<FlightDescriptor>,
     ) -> std::result::Result<Response<FlightInfo>, Status> {
-        info!("get_flight_info_sql_info(query={})", query.query);
+        info!(
+            "get_flight_info_sql_info(query={})",
+            mask_log_sql_secrets(&query.query)
+        );
         let _session = self.get_session(&request)?;
         Ok(simple_flight_info(query))
     }
@@ -223,13 +230,17 @@ impl FlightSqlService for FlightSqlServiceImpl {
         cmd: CommandPreparedStatementQuery,
         request: Request<FlightDescriptor>,
     ) -> std::result::Result<Response<FlightInfo>, Status> {
-        let _session = self.get_session(&request);
-        let handle = Uuid::from_slice(cmd.prepared_statement_handle.as_ref())
-            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+        let _session = self.get_session(&request)?;
+        let handle = Uuid::from_slice(cmd.prepared_statement_handle.as_ref()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid prepared statement handle: {e}"))
+        })?;
 
         info!("get_flight_info_prepared_statement with handle={handle}");
 
-        let handle_plan_ref = self.statements.get(&handle).unwrap();
+        let handle_plan_ref = self
+            .statements
+            .get(&handle)
+            .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
         let schema = handle_plan_ref.value().0.schema().as_ref().into();
         let loc = Location {
             uri: "grpc+tcp://127.0.0.1".to_string(),
@@ -509,7 +520,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
     ) -> std::result::Result<i64, Status> {
         let session = self.get_session(&request)?;
         let query = ticket.query;
-        info!("do_put_statement_update with query = {query}");
+        info!(
+            "do_put_statement_update with query = {}",
+            mask_log_sql_secrets(&query)
+        );
 
         let (plan, plan_extras) = self
             .plan_sql(&session, &query)
@@ -529,14 +543,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
         request: Request<PeekableFlightDataStream>,
     ) -> std::result::Result<DoPutPreparedStatementResult, Status> {
         let session = self.get_session(&request)?;
-        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
-            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid prepared statement handle: {e}"))
+        })?;
 
         info!("do_put_prepared_statement_query with handle={handle}");
 
-        let handle_plan = self.statements.get(&handle).unwrap();
+        let (plan, extras) = self
+            .statements
+            .get(&handle)
+            .map(|entry| entry.value().clone())
+            .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
         let record_count = self
-            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .execute_update(session, &plan, &extras)
             .await
             .map_err(|e| status!("fail to execute", e))?;
         let result = DoPutUpdateResult { record_count };
@@ -557,14 +576,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
         request: Request<PeekableFlightDataStream>,
     ) -> std::result::Result<i64, Status> {
         let session = self.get_session(&request)?;
-        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
-            .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
+        let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref()).map_err(|e| {
+            Status::invalid_argument(format!("Invalid prepared statement handle: {e}"))
+        })?;
 
         info!("do_put_prepared_statement_update with handle={handle}");
 
-        let handle_plan = self.statements.get(&handle).unwrap();
+        let (plan, extras) = self
+            .statements
+            .get(&handle)
+            .map(|entry| entry.value().clone())
+            .ok_or_else(|| Status::not_found("Prepared statement not found"))?;
         let res = self
-            .execute_update(session, &handle_plan.value().0, &handle_plan.value().1)
+            .execute_update(session, &plan, &extras)
             .await
             .map_err(|e| status!("fail to execute", e))?;
 
@@ -587,7 +611,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             .map_err(|e| status!("Error getting result schema", e))?;
         info!(
             "do_action_create_prepared_statement with handler={handle} query={:?}",
-            query.query
+            mask_log_sql_secrets(&query.query)
         );
         // JDBC client use call put when schema.fields == 0
         let data_schema = if plan.0.has_result_set() {
@@ -597,7 +621,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         };
         info!(
             "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={data_schema:?}",
-            query.query
+            mask_log_sql_secrets(&query.query)
         );
         let schema = (&*data_schema).into();
         self.statements.insert(handle, plan);
@@ -619,25 +643,12 @@ impl FlightSqlService for FlightSqlServiceImpl {
         query: ActionClosePreparedStatementRequest,
         request: Request<Action>,
     ) -> std::result::Result<(), Status> {
-        let handle = query.prepared_statement_handle.as_ref();
-        if let Ok(handle) = std::str::from_utf8(handle) {
-            info!(
-                "do_action_close_prepared_statement with handle {:?}",
-                handle
-            );
-            match Uuid::try_parse(handle) {
-                Ok(handle) => {
-                    if self.get_session(&request).is_ok() {
-                        self.statements.remove(&handle);
-                    }
-                }
-                Err(e) => {
-                    return Err(Status::internal(format!(
-                        "do_action_close_prepared_statement Error decoding handle: {e} {handle:?}"
-                    )));
-                }
-            }
-        }
+        self.get_session(&request)?;
+        let handle = Uuid::from_slice(&query.prepared_statement_handle).map_err(|e| {
+            Status::invalid_argument(format!("Invalid prepared statement handle: {e}"))
+        })?;
+        info!("do_action_close_prepared_statement with handle={handle}");
+        self.statements.remove(&handle);
         Ok(())
     }
 

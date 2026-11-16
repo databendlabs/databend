@@ -67,6 +67,21 @@ impl<'a> RowGroupImplBuilder<'a> {
         self.column_chunks.insert(dfs_id, column_chunk);
     }
 
+    /// Whether the added column chunk starts with a dictionary page, i.e. it is dictionary
+    /// encoded. Reads only the first page header; `false` if it cannot be read.
+    pub fn starts_with_dictionary_page(&self, dfs_id: usize) -> bool {
+        let (Some(chunk), Some(meta)) = (
+            self.column_chunks.get(&dfs_id),
+            self.column_chunk_metadatas.get(&dfs_id),
+        ) else {
+            return false;
+        };
+        let reader = Arc::new(BufferReader(chunk.clone()));
+        SerializedPageReader::new(reader, meta, self.num_rows, None)
+            .and_then(|mut pages| pages.peek_next_page())
+            .is_ok_and(|page| page.is_some_and(|page| page.is_dict))
+    }
+
     pub fn build(self) -> RowGroupImpl {
         let schema_descriptor = Arc::new(self.schema_descriptor.clone());
         let column_metadata = (0..schema_descriptor.num_columns())

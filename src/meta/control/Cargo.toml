@@ -14,6 +14,7 @@ databend-meta = { workspace = true }
 databend-meta-admin = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
+log = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true }

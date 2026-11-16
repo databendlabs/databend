@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// System tables can invoke deeply nested async query planning futures.
+#![recursion_limit = "256"]
 #![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 #![allow(clippy::useless_asref)]
-#![feature(type_alias_impl_trait)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(variant_count)]
 
 extern crate core;
 
@@ -35,6 +34,7 @@ mod databases_table;
 mod dictionaries_table;
 mod engines_table;
 mod functions_table;
+mod history_etl_table;
 mod indexes_table;
 mod locks_table;
 mod log_queue;
@@ -42,6 +42,7 @@ mod log_queue;
 mod malloc_stats_table;
 #[cfg(feature = "jemalloc")]
 mod malloc_stats_totals_table;
+mod materialized_views_table;
 mod metrics_table;
 mod notification_history_table;
 mod notifications_table;
@@ -87,6 +88,8 @@ pub use databases_table::DatabasesTableWithoutHistory;
 pub use dictionaries_table::DictionariesTable;
 pub use engines_table::EnginesTable;
 pub use functions_table::FunctionsTable;
+pub use history_etl_table::HistoryEtlError;
+pub use history_etl_table::HistoryEtlTable;
 pub use indexes_table::IndexesTable;
 pub use locks_table::LocksTable;
 pub use log_queue::SystemLogElement;
@@ -96,6 +99,7 @@ pub use log_queue::SystemLogTable;
 pub use malloc_stats_table::MallocStatsTable;
 #[cfg(feature = "jemalloc")]
 pub use malloc_stats_totals_table::MallocStatsTotalsTable;
+pub use materialized_views_table::MaterializedViewsTable;
 pub use metrics_table::MetricsTable;
 pub use notification_history_table::NotificationHistoryTable;
 pub use notifications_table::NotificationsTable;

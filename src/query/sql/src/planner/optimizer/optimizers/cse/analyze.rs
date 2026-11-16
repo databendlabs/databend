@@ -219,7 +219,6 @@ mod tests {
             "default".to_string(),
             table,
             None,
-            None,
             false,
             false,
             None,

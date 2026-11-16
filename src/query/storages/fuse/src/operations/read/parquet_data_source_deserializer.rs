@@ -38,13 +38,15 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
 use super::read_state::ReadState;
+use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
+use super::util::selected_row_offsets;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
+use crate::io::RowSelection;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
@@ -203,13 +205,20 @@ impl Processor for DeserializeDataTransform {
                 )?);
             }
 
-            let (mut data_block, row_selection, bitmap_selection) = self
+            let ReadStateOutput {
+                block: mut data_block,
+                bitmap_selection,
+                mut scan_stats,
+            } = self
                 .read_state
-                .as_ref()
+                .as_mut()
                 .unwrap()
                 .deserialize_and_filter(columns_chunks, part)?;
 
+            // Virtual columns are read in addition to the columns `ReadState`
+            // accounted for, so add them to the scan statistics.
             if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                let bytes_before = data_block.memory_size();
                 let virtual_block_location = read_res
                     .virtual_data
                     .as_ref()
@@ -218,7 +227,9 @@ impl Processor for DeserializeDataTransform {
                     .deserialize_virtual_columns(
                         data_block,
                         read_res.virtual_data,
-                        row_selection.as_ref().map(|s| s.selection.clone()),
+                        bitmap_selection
+                            .as_ref()
+                            .map(|bitmap| RowSelection::from(bitmap).selection),
                     )
                     .inspect_err(|error| {
                         log::warn!(
@@ -228,6 +239,10 @@ impl Processor for DeserializeDataTransform {
                             error
                         );
                     })?;
+                scan_stats.add_decoded_bytes(
+                    data_block.memory_size().saturating_sub(bytes_before),
+                    data_block.num_rows(),
+                );
             }
 
             // Perf.
@@ -235,29 +250,24 @@ impl Processor for DeserializeDataTransform {
                 metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
             }
 
+            // Report the rows and bytes the scan actually processed, not what
+            // survived prewhere / runtime filters: scan progress drives
+            // `system.processes`, `system_history.query_history` and the
+            // `ScanBytes` profile, which measure scan workload rather than
+            // filter output.
             let progress_values = ProgressValues {
-                rows: data_block.num_rows(),
-                bytes: data_block.memory_size(),
+                rows: scan_stats.rows,
+                bytes: scan_stats.bytes,
             };
             self.scan_progress.incr(&progress_values);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::ScanBytes,
-                data_block.memory_size(),
-            );
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, scan_stats.bytes);
 
             let mut data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
 
             // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
             // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
             let offsets = if self.block_meta_options.query_internal_columns {
-                bitmap_selection.as_ref().map(|bitmap| {
-                    RoaringTreemap::from_sorted_iter(
-                        (0..bitmap.len())
-                            .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                            .map(|i| i as u64),
-                    )
-                    .unwrap()
-                })
+                bitmap_selection.as_ref().map(selected_row_offsets)
             } else {
                 None
             };

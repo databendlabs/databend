@@ -231,6 +231,7 @@ impl UserApiProvider {
         if matches!(
             object,
             GrantObject::Warehouse(_)
+                | GrantObject::Integration(_)
                 | GrantObject::Connection(_)
                 | GrantObject::Sequence(_)
                 | GrantObject::Procedure(_)

@@ -21,6 +21,9 @@ use crate::optimizer::ir::Group;
 use crate::optimizer::ir::MExpr;
 use crate::optimizer::ir::Memo;
 use crate::plans::Exchange;
+use crate::plans::MemoOperator;
+use crate::plans::Operator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::RelOperator;
 
 impl Memo {
@@ -43,57 +46,48 @@ impl Memo {
     }
 }
 
-fn display_rel_op(rel_op: &RelOperator) -> String {
-    match rel_op {
-        RelOperator::Scan(_) => "Scan".to_string(),
-        RelOperator::Join(_) => "Join".to_string(),
-        RelOperator::EvalScalar(_) => "EvalScalar".to_string(),
-        RelOperator::Filter(_) => "Filter".to_string(),
-        RelOperator::Aggregate(_) => "Aggregate".to_string(),
-        RelOperator::Sort(_) => "Sort".to_string(),
-        RelOperator::Limit(_) => "Limit".to_string(),
-        RelOperator::TopN(_) => "TopN".to_string(),
-        RelOperator::UnionAll(_) => "UnionAll".to_string(),
-        RelOperator::Exchange(op) => {
-            format!("Exchange: ({})", match op {
-                Exchange::NodeToNodeHash(scalars) => format!(
-                    "Hash({})",
-                    scalars
-                        .iter()
-                        .map(|s| s.as_raw_expr().to_string())
-                        .collect::<Vec<_>>()
-                        .join(",")
-                ),
-                Exchange::GlobalHash(scalars) => format!(
-                    "Hash({})",
-                    scalars
-                        .iter()
-                        .map(|s| s.as_raw_expr().to_string())
-                        .collect::<Vec<_>>()
-                        .join(",")
-                ),
-                Exchange::Broadcast => "Broadcast".to_string(),
-                Exchange::Merge => "Merge".to_string(),
-                Exchange::MergeSort => "MergeSort".to_string(),
-            })
-        }
-        RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
-        RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
-        RelOperator::Window(_) => "WindowFunc".to_string(),
-        RelOperator::WindowGroup(_) => "WindowGroup".to_string(),
-        RelOperator::ConstantTableScan(s) => s.name().to_string(),
-        RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
-        RelOperator::CacheScan(_) => "CacheScan".to_string(),
-        RelOperator::Udf(_) => "Udf".to_string(),
-        RelOperator::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
-        RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
-        RelOperator::Mutation(_) => "MergeInto".to_string(),
-        RelOperator::MutationSource(_) => "MutationSource".to_string(),
-        RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
-        RelOperator::MaterializedCTE(_) => "MaterializedCTE".to_string(),
-        RelOperator::MaterializedCTERef(_) => "MaterializeCTERef".to_string(),
-        RelOperator::Sequence(_) => "Sequence".to_string(),
+fn display_rel_op(op: &MemoOperator) -> String {
+    // Memo stores both stages, but formatting dispatches without a payload union.
+    // Logical expressions only serve exploration, so they carry a `~` prefix;
+    // physical expressions are the ones costed and referenced by best properties.
+    match op {
+        MemoOperator::Logical(op) => match op.as_ref() {
+            RelOperator::ConstantTableScan(scan) => format!("~{}", scan.name()),
+            RelOperator::Window(_) => "~WindowFunc".to_string(),
+            _ => {
+                format!("~{:?}", op.rel_op())
+            }
+        },
+        MemoOperator::Physical(op) => match op.as_ref() {
+            PhysicalRelOperator::Exchange(exchange) => display_exchange(exchange),
+            PhysicalRelOperator::Aggregate(aggregate) => {
+                format!("Aggregate({:?})", aggregate.mode)
+            }
+            PhysicalRelOperator::ConstantTableScan(scan) => scan.name().to_string(),
+            PhysicalRelOperator::Window(_) => "WindowFunc".to_string(),
+            _ => {
+                format!("{:?}", op.rel_op())
+            }
+        },
     }
+}
+
+fn display_exchange(exchange: &Exchange) -> String {
+    let name = match exchange {
+        Exchange::NodeToNodeHash(scalars) | Exchange::GlobalHash(scalars) => {
+            format!(
+                "Hash({})",
+                scalars
+                    .iter()
+                    .map(|s| s.as_raw_expr().to_string())
+                    .join(",")
+            )
+        }
+        Exchange::Broadcast => "Broadcast".to_string(),
+        Exchange::Merge => "Merge".to_string(),
+        Exchange::MergeSort => "MergeSort".to_string(),
+    };
+    format!("Exchange: ({name})")
 }
 
 fn group_to_format_tree(group: &Group) -> FormatTreeNode<String> {

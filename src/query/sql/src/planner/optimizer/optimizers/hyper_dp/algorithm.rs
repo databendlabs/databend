@@ -394,11 +394,7 @@ impl<'a, M: JoinOrderModel> HyperDp<'a, M> {
         }
 
         let forbidden_nodes = (0..idx).collect();
-        if !self.enumerate_csg_rec(&node, &forbidden_nodes)? {
-            return Ok(false);
-        }
-
-        Ok(true)
+        self.enumerate_csg_rec(&node, &forbidden_nodes)
     }
 
     fn join_reorder_by_dphyp(&mut self) -> Result<bool> {

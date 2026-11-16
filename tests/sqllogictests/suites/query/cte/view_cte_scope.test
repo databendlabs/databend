@@ -1,0 +1,189 @@
+# View definitions have independent name scopes. Issue #20651.
+# Alias-reuse and multiple-CTE cases adapted from DuckDB test/sql/cte/test_cte.test
+# and test/sql/cte/materialized/test_cte_materialized.test.
+
+statement ok
+drop database if exists view_cte_scope
+
+statement ok
+create database view_cte_scope
+
+statement ok
+use view_cte_scope
+
+statement ok
+create table foo(x int)
+
+statement ok
+insert into foo values (1)
+
+statement ok
+create view v as with t as (select * from view_cte_scope.foo) select * from t
+
+# The issue's false view loop, and silent capture by an unrelated outer CTE.
+query I
+with foo as (select * from v) select * from foo
+----
+1
+
+query I
+with foo as (select 99 as x) select * from v
+----
+1
+
+# A view without WITH must not inherit the outer cte_name either.
+statement ok
+create view v_plain as select * from foo
+
+query I
+with foo as (select * from v_plain) select * from foo
+----
+1
+
+# DuckDB: nested CTE views that re-use CTE aliases, also with MATERIALIZED.
+query I
+with t as (select * from v) select * from t
+----
+1
+
+query I
+with t as materialized (select * from v) select * from t
+----
+1
+
+# Restore outer CTEs on return, without exporting the view's internal CTEs.
+query II
+with t as (select 99 as x) select v.x, t.x from v, t
+----
+1 99
+
+statement error 1025
+select (select sum(x) from t) from v
+
+# The same view in sibling branches is not a loop.
+query II
+select a.x, b.x from v a, v b
+----
+1 1
+
+# The misleading-name check must not compare different view scopes.
+statement ok
+create view v_inner_foo as with foo as (select 7 as x) select * from foo
+
+query II
+select b.x, v.x from foo b, v_inner_foo v
+----
+1 7
+
+statement ok
+create view parent_view as select * from v
+
+query II
+with v as (select 99 as x) select p.x, v.x from parent_view p, v
+----
+1 99
+
+statement ok
+create view function_view as select number as x from numbers(1) foo
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from function_view v, foo
+----
+0 99
+
+# Derived SELECT outputs must preserve the view path for later subqueries.
+statement ok
+create view v_scalar_derived as select (select max(x) from view_cte_scope.foo) as x from (select 1 as d) a
+
+statement ok
+create view v_lateral_derived as select p.x from (select 1 as d) a, lateral (select x from view_cte_scope.foo) p
+
+# Repeated consumers exercise inline and auto-materialized binding separately.
+statement ok
+set enable_auto_materialize_cte = 0
+
+query I
+with foo as (select * from v) select * from foo union all select * from foo
+----
+1
+1
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_scalar_derived v, foo
+----
+1 99
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_lateral_derived v, foo
+----
+1 99
+
+statement ok
+set enable_auto_materialize_cte = 1
+
+query I
+with foo as (select * from v) select * from foo union all select * from foo
+----
+1
+1
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_scalar_derived v, foo
+----
+1 99
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_lateral_derived v, foo
+----
+1 99
+
+# DuckDB: multiple CTEs in a view definition.
+statement ok
+create view v_multi as with cte1 as (select x as j from foo), cte2 as (select j + 1 as k from cte1) select * from cte2
+
+query I
+select * from v_multi
+----
+2
+
+# A missing base table must not fall back to the caller's CTE.
+statement ok
+drop table foo
+
+statement error 1025
+with foo as (select 99 as x) select * from v
+
+# CREATE VIEW rejects loops. Use renames to create runtime loops, first through
+# a derived subquery inside a view, then through an auto-materialized CTE.
+statement ok
+create table loop_base(x int)
+
+statement ok
+create view loop_derived as select * from (select * from loop_base) d
+
+statement ok
+create view loop_cte as with t as (select * from loop_base) select t.x from t, t t2
+
+statement ok
+alter table loop_base rename to loop_saved
+
+statement ok
+alter table loop_derived rename to loop_base
+
+statement error 1029
+select * from loop_base
+
+statement ok
+alter table loop_base rename to loop_derived
+
+statement ok
+alter table loop_cte rename to loop_base
+
+statement error 1029
+select * from loop_base
+
+statement ok
+unset enable_auto_materialize_cte
+
+statement ok
+drop database view_cte_scope

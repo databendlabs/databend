@@ -16,11 +16,13 @@ databend_common_tracing::register_module_tag!("[OPTIMIZER]");
 
 mod cost;
 pub mod ir;
+mod mutation;
 #[allow(clippy::module_inception)]
 mod optimizer;
 mod optimizer_api;
 mod optimizer_context;
 pub mod optimizers;
+mod physical_planner;
 pub mod pipeline;
 mod statistics;
 
@@ -28,5 +30,6 @@ pub use optimizer::optimize;
 pub use optimizer::optimize_query;
 pub use optimizer_api::Optimizer;
 pub use optimizer_context::OptimizerContext;
+pub use physical_planner::PhysicalPlanner;
 pub use statistics::collect_statistics::CollectStatisticsOptimizer;
 pub use statistics::collect_statistics::StatisticsTraceCollector;

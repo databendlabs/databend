@@ -16,7 +16,6 @@ endpoint_url = '${STORAGE_S3_ENDPOINT_URL:-http://127.0.0.1:9900}'"
 fi
 
 bendsql_connect_root_null <<SQL
-set global enable_experimental_connection_privilege_check=1;
 set sandbox_tenant = 'tls_share_provider';
 drop share if exists tls_inbound_share;
 drop database if exists tls_inbound_db;
@@ -163,5 +162,4 @@ revoke usage on database tls_share_db from share tls_share;
 drop share tls_share;
 drop database tls_share_db;
 drop connection tls_share_conn;
-unset global enable_experimental_connection_privilege_check;
 SQL

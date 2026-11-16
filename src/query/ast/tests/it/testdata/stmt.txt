@@ -925,7 +925,6 @@ Replace(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -1042,7 +1041,6 @@ Explain {
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -1190,7 +1188,6 @@ Explain {
                                             quote: None,
                                             ident_type: None,
                                         },
-                                        branch: None,
                                     },
                                     alias: None,
                                     temporal: None,
@@ -1308,7 +1305,6 @@ Explain {
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -1393,7 +1389,6 @@ Explain {
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -1520,7 +1515,6 @@ Explain {
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -1620,7 +1614,6 @@ Explain {
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -1721,7 +1714,6 @@ Explain {
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -1797,7 +1789,6 @@ ExplainAnalyze {
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -2019,6 +2010,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2076,6 +2068,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2148,6 +2141,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: Some(
             [
@@ -2251,6 +2245,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2305,6 +2300,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2374,6 +2370,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2487,6 +2484,7 @@ CreateTable(
                 ],
             },
         ),
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2578,6 +2576,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2669,6 +2668,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -2714,7 +2714,6 @@ CreateTable(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -2927,6 +2926,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3036,6 +3036,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3119,6 +3120,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3284,6 +3286,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3424,6 +3427,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3538,6 +3542,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3652,6 +3657,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3714,6 +3720,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3760,6 +3767,146 @@ CreateTable(
         ),
         uri_location: None,
         cluster_by: None,
+        ttl: None,
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table a.b_clone clone c.d;
+---------- Output ---------
+CREATE TABLE a.b_clone CLONE c.d
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..14,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                15..22,
+            ),
+            name: "b_clone",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Clone {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            29..30,
+                        ),
+                        name: "c",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
+                    span: Some(
+                        31..32,
+                    ),
+                    name: "d",
+                    quote: None,
+                    ident_type: None,
+                },
+                travel_point: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: None,
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table a.b_clone clone c.d at (snapshot => '0123456789abcdef');
+---------- Output ---------
+CREATE TABLE a.b_clone CLONE c.d AT (SNAPSHOT => '0123456789abcdef')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    13..14,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                15..22,
+            ),
+            name: "b_clone",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Clone {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            29..30,
+                        ),
+                        name: "c",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
+                    span: Some(
+                        31..32,
+                    ),
+                    name: "d",
+                    quote: None,
+                    ident_type: None,
+                },
+                travel_point: Some(
+                    Snapshot(
+                        Literal {
+                            span: Some(
+                                49..67,
+                            ),
+                            value: String(
+                                "0123456789abcdef",
+                            ),
+                        },
+                    ),
+                ),
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -3837,6 +3984,7 @@ CreateTable(
             },
         ),
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -5209,6 +5357,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {
             "bloom_index_columns": "a,b,c",
             "compression": "zstd",
@@ -5445,6 +5594,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7139,6 +7289,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7229,6 +7380,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7298,6 +7450,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7363,6 +7516,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7394,6 +7548,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7439,7 +7594,6 @@ CreateTable(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -7536,6 +7690,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -7605,6 +7760,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -8269,7 +8425,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [
             Identifier {
@@ -8391,7 +8546,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -8492,7 +8646,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -8720,7 +8873,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -8794,7 +8946,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -8875,7 +9026,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -8956,7 +9106,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9037,7 +9186,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9109,7 +9257,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9133,7 +9280,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9157,7 +9303,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9229,7 +9374,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9253,7 +9397,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9277,7 +9420,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -9467,7 +9609,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -9491,7 +9632,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -9635,7 +9775,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -9659,7 +9798,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -9803,7 +9941,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -9827,7 +9964,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -9971,7 +10107,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -9995,7 +10130,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10139,7 +10273,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10163,7 +10296,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10307,7 +10439,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10331,7 +10462,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10475,7 +10605,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10499,7 +10628,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10764,7 +10892,6 @@ StatementWithSettings {
                                             quote: None,
                                             ident_type: None,
                                         },
-                                        branch: None,
                                     },
                                     alias: None,
                                     temporal: None,
@@ -10788,7 +10915,6 @@ StatementWithSettings {
                                             quote: None,
                                             ident_type: None,
                                         },
-                                        branch: None,
                                     },
                                     alias: None,
                                     temporal: None,
@@ -10933,7 +11059,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -10957,7 +11082,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11101,7 +11225,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11125,7 +11248,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11269,7 +11391,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11293,7 +11414,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11367,7 +11487,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -11509,7 +11628,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11533,7 +11651,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11625,7 +11742,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11649,7 +11765,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11741,7 +11856,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11765,7 +11879,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11857,7 +11970,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11881,7 +11993,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11973,7 +12084,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -11997,7 +12107,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -12071,7 +12180,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -12184,7 +12292,6 @@ Query(
                                                         quote: None,
                                                         ident_type: None,
                                                     },
-                                                    branch: None,
                                                 },
                                                 alias: None,
                                                 temporal: None,
@@ -12270,7 +12377,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -12383,7 +12489,6 @@ Query(
                                                         quote: None,
                                                         ident_type: None,
                                                     },
-                                                    branch: None,
                                                 },
                                                 alias: None,
                                                 temporal: None,
@@ -12469,7 +12574,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -12582,7 +12686,6 @@ Query(
                                                         quote: None,
                                                         ident_type: None,
                                                     },
-                                                    branch: None,
                                                 },
                                                 alias: None,
                                                 temporal: None,
@@ -12668,7 +12771,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -12779,7 +12881,6 @@ Query(
                                                         quote: None,
                                                         ident_type: None,
                                                     },
-                                                    branch: None,
                                                 },
                                                 alias: None,
                                                 temporal: None,
@@ -13319,7 +13420,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -13411,7 +13511,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -14000,7 +14099,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -14081,7 +14179,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -14160,7 +14257,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -14636,7 +14732,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [
             Identifier {
@@ -14721,7 +14816,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [
             Identifier {
@@ -14788,7 +14882,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [],
         source: Select {
@@ -14833,7 +14926,6 @@ Insert(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -14881,7 +14973,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [],
         source: Select {
@@ -14926,7 +15017,6 @@ Insert(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -14974,7 +15064,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [],
         source: Select {
@@ -15019,7 +15108,6 @@ Insert(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -15166,7 +15254,6 @@ Insert(
                 quote: None,
                 ident_type: None,
             },
-            branch: None,
         },
         columns: [
             Identifier {
@@ -15232,7 +15319,6 @@ Insert(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -15421,7 +15507,6 @@ InsertMultiTable(
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -15608,7 +15693,6 @@ InsertMultiTable(
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -16352,17 +16436,35 @@ DropRole {
 
 
 ---------- Input ----------
-OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+OPTIMIZE TABLE catalog.db.t COMPACT SEGMENT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
-        catalog: None,
-        database: None,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    15..22,
+                ),
+                name: "catalog",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    23..25,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
         table: Identifier {
             span: Some(
-                15..16,
+                26..27,
             ),
             name: "t",
             quote: None,
@@ -16477,7 +16579,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16539,7 +16640,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16623,7 +16723,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16669,7 +16768,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16706,7 +16804,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16718,6 +16815,87 @@ AlterTable(
         action: ModifyTableComment {
             new_comment: "t1-commnet",
         },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t DROP PARTITION KEY;
+---------- Output ---------
+ALTER TABLE t DROP PARTITION KEY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: DropTablePartitionKey,
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE IF EXISTS db.t DROP PARTITION KEY;
+---------- Output ---------
+ALTER TABLE IF EXISTS db.t DROP PARTITION KEY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: true,
+        table_reference: Table {
+            span: Some(
+                22..26,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            22..24,
+                        ),
+                        name: "db",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
+                    span: Some(
+                        25..26,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: DropTablePartitionKey,
     },
 )
 
@@ -16745,7 +16923,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16760,9 +16937,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
+ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
+ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -16782,7 +16959,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16791,7 +16967,627 @@ AlterTable(
             unpivot: None,
             sample: None,
         },
-        action: ReclusterTable {
+        action: SetTableTtl {
+            ttl: BinaryOp {
+                span: Some(
+                    33..34,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        22..32,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    22..32,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        35..50,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            44..46,
+                        ),
+                        value: UInt64(
+                            30,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;
+---------- Output ---------
+ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: SetTableTtl {
+            ttl: BinaryOp {
+                span: Some(
+                    33..34,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        22..32,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    22..32,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        35..49,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            44..45,
+                        ),
+                        value: UInt64(
+                            7,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t SET TTL expire_at;
+---------- Output ---------
+ALTER TABLE t SET TTL expire_at
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: SetTableTtl {
+            ttl: ColumnRef {
+                span: Some(
+                    22..31,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                22..31,
+                            ),
+                            name: "expire_at",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t REMOVE TTL;
+---------- Output ---------
+ALTER TABLE t REMOVE TTL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: RemoveTableTtl,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a int, event_time timestamp) TTL event_time + INTERVAL 30 DAY;
+---------- Output ---------
+CREATE TABLE t (a Int32, event_time TIMESTAMP) TTL event_time + INTERVAL 30 DAY
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                23..33,
+                            ),
+                            name: "event_time",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Timestamp,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: Some(
+            BinaryOp {
+                span: Some(
+                    60..61,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        49..59,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    49..59,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        62..77,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            71..73,
+                        ),
+                        value: UInt64(
+                            30,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        ),
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a int, expire_at timestamp) TTL expire_at;
+---------- Output ---------
+CREATE TABLE t (a Int32, expire_at TIMESTAMP) TTL expire_at
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                23..32,
+                            ),
+                            name: "expire_at",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Timestamp,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: Some(
+            ColumnRef {
+                span: Some(
+                    48..57,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                48..57,
+                            ),
+                            name: "expire_at",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ),
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (a int, event_time timestamp) CLUSTER BY (a) TTL event_time + INTERVAL 1 DAY;
+---------- Output ---------
+CREATE TABLE t (a Int32, event_time TIMESTAMP) CLUSTER BY (a) TTL event_time + INTERVAL 1 DAY
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                23..33,
+                            ),
+                            name: "event_time",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Timestamp,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: Some(
+            ClusterOption {
+                cluster_type: Linear,
+                cluster_exprs: [
+                    ColumnRef {
+                        span: Some(
+                            57..58,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        57..58,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                ],
+            },
+        ),
+        ttl: Some(
+            BinaryOp {
+                span: Some(
+                    75..76,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        64..74,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    64..74,
+                                ),
+                                name: "event_time",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                right: Interval {
+                    span: Some(
+                        77..91,
+                    ),
+                    expr: Literal {
+                        span: Some(
+                            86..87,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                    unit: Day,
+                },
+            },
+        ),
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+CREATE TABLE t (ttl int);
+---------- Output ---------
+CREATE TABLE t (ttl Int32)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..19,
+                            ),
+                            name: "ttl",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        ttl: None,
+        table_options: {},
+        partition_by: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                12..13,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        action: Recluster {
             is_final: true,
             selection: Some(
                 BinaryOp {
@@ -16828,10 +17624,10 @@ AlterTable(
                     },
                 },
             ),
-            limit: Some(
-                10,
-            ),
         },
+        limit: Some(
+            10,
+        ),
     },
 )
 
@@ -16859,7 +17655,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16916,7 +17711,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -16973,7 +17767,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17030,7 +17823,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17100,7 +17892,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17175,7 +17966,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17229,7 +18019,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17275,7 +18064,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17321,7 +18109,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17341,6 +18128,7 @@ AlterTable(
                     ident_type: None,
                 },
                 "mask",
+                None,
                 None,
             ),
         },
@@ -17371,7 +18159,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17411,6 +18198,7 @@ AlterTable(
                         },
                     ],
                 ),
+                None,
             ),
         },
     },
@@ -17440,7 +18228,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17488,7 +18275,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17544,7 +18330,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17616,7 +18401,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17662,7 +18446,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17699,7 +18482,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17782,7 +18564,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17869,7 +18650,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -17958,7 +18738,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18049,7 +18828,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18113,7 +18891,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18170,7 +18947,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18227,7 +19003,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18275,7 +19050,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18317,7 +19091,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18373,7 +19146,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18458,7 +19230,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18534,7 +19305,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18580,7 +19350,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18600,69 +19369,6 @@ AlterTable(
                     ),
                 },
             ),
-        },
-    },
-)
-
-
----------- Input ----------
-ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS;
----------- Output ---------
-ALTER TABLE t CREATE BRANCH b1 AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') RETAIN 7 DAYS
----------- AST ------------
-AlterTable(
-    AlterTableStmt {
-        if_exists: false,
-        table_reference: Table {
-            span: Some(
-                12..13,
-            ),
-            table: TableRef {
-                catalog: None,
-                database: None,
-                table: Identifier {
-                    span: Some(
-                        12..13,
-                    ),
-                    name: "t",
-                    quote: None,
-                    ident_type: None,
-                },
-                branch: None,
-            },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-        action: CreateTableBranch {
-            spec: CreateTableRefSpec {
-                name: Identifier {
-                    span: Some(
-                        28..30,
-                    ),
-                    name: "b1",
-                    quote: None,
-                    ident_type: None,
-                },
-                travel_point: Some(
-                    Snapshot(
-                        Literal {
-                            span: Some(
-                                47..81,
-                            ),
-                            value: String(
-                                "9828b23f74664ff3806f44bbc1925ea5",
-                            ),
-                        },
-                    ),
-                ),
-                retain: Some(
-                    604800s,
-                ),
-            },
         },
     },
 )
@@ -18691,7 +19397,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -18739,52 +19444,6 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t DROP BRANCH b1;
----------- Output ---------
-ALTER TABLE t DROP BRANCH b1
----------- AST ------------
-AlterTable(
-    AlterTableStmt {
-        if_exists: false,
-        table_reference: Table {
-            span: Some(
-                12..13,
-            ),
-            table: TableRef {
-                catalog: None,
-                database: None,
-                table: Identifier {
-                    span: Some(
-                        12..13,
-                    ),
-                    name: "t",
-                    quote: None,
-                    ident_type: None,
-                },
-                branch: None,
-            },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-        action: DropTableBranch {
-            branch_name: Identifier {
-                span: Some(
-                    26..28,
-                ),
-                name: "b1",
-                quote: None,
-                ident_type: None,
-            },
-        },
-    },
-)
-
-
----------- Input ----------
 ALTER TABLE t DROP TAG tag1;
 ---------- Output ---------
 ALTER TABLE t DROP TAG tag1
@@ -18807,7 +19466,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -20076,7 +20734,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -20148,6 +20805,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {
             "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
@@ -20182,7 +20840,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -20221,7 +20878,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -20347,6 +21003,7 @@ CreateTable(
         engine: None,
         uri_location: None,
         cluster_by: None,
+        ttl: None,
         table_options: {},
         partition_by: None,
         table_properties: None,
@@ -22803,7 +23460,6 @@ CopyIntoLocation(
                                                     quote: None,
                                                     ident_type: None,
                                                 },
-                                                branch: None,
                                             },
                                             alias: None,
                                             temporal: None,
@@ -22907,7 +23563,6 @@ CopyIntoLocation(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -26276,7 +26931,6 @@ Query(
                                         quote: None,
                                         ident_type: None,
                                     },
-                                    branch: None,
                                 },
                                 alias: None,
                                 temporal: None,
@@ -26552,7 +27206,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -26626,7 +27279,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -26779,7 +27431,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -26940,7 +27591,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -27099,7 +27749,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -27277,7 +27926,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -27435,7 +28083,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -27569,7 +28216,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -27703,7 +28349,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -27845,7 +28490,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -28251,16 +28895,814 @@ ShowPasswordPolicies {
 
 
 ---------- Input ----------
+CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` BIGINT) AS SELECT id FROM src
+---------- Output ---------
+CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` Int64) AS SELECT id FROM src
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    21..31,
+                ),
+                name: "db`name",
+                quote: Some(
+                    '`',
+                ),
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                32..45,
+            ),
+            name: "table`name",
+            quote: Some(
+                '`',
+            ),
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                47..58,
+                            ),
+                            name: "col`name",
+                            quote: Some(
+                                '`',
+                            ),
+                            ident_type: None,
+                        },
+                        data_type: Int64,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                70..88,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        70..88,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    77..79,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                77..79,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                85..88,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        85..88,
+                                    ),
+                                    name: "src",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+REFRESH DYNAMIC TABLE db.dt
+---------- Output ---------
+REFRESH DYNAMIC TABLE db.dt
+---------- AST ------------
+RefreshDynamicTable(
+    RefreshDynamicTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    22..24,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                25..27,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a JOIN b ON a.id = b.id
+---------- Output ---------
+CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a INNER JOIN b ON a.id = b.id
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                27..67,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        27..67,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: Some(
+                                        Identifier {
+                                            span: Some(
+                                                34..35,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                36..38,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Join {
+                            span: Some(
+                                46..50,
+                            ),
+                            join: Join {
+                                op: Inner,
+                                condition: On(
+                                    BinaryOp {
+                                        span: Some(
+                                            61..62,
+                                        ),
+                                        op: Eq,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                56..57,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            56..57,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            58..60,
+                                                        ),
+                                                        name: "id",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: ColumnRef {
+                                            span: Some(
+                                                63..64,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            63..64,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            65..67,
+                                                        ),
+                                                        name: "id",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                ),
+                                left: Table {
+                                    span: Some(
+                                        44..45,
+                                    ),
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                44..45,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                                right: Table {
+                                    span: Some(
+                                        51..52,
+                                    ),
+                                    table: TableRef {
+                                        catalog: None,
+                                        database: None,
+                                        table: Identifier {
+                                            span: Some(
+                                                51..52,
+                                            ),
+                                            name: "b",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            },
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                27..43,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        27..43,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    34..36,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                34..36,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                42..43,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        42..43,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt TARGET_LAG = 600 SECOND AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: IntervalSecs(
+            600,
+        ),
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                50..66,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        50..66,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    57..59,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                57..59,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                65..66,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        65..66,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Downstream,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {},
+        as_query: Query {
+            span: Some(
+                51..67,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        51..67,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    58..60,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                58..60,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                66..67,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        66..67,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE DYNAMIC TABLE dt INITIALIZE = ON_CREATE AS SELECT id FROM a
+---------- Output ---------
+CREATE DYNAMIC TABLE dt initialize = 'ON_CREATE' AS SELECT id FROM a
+---------- AST ------------
+CreateDynamicTable(
+    CreateDynamicTableStmt {
+        create_option: Create,
+        transient: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                21..23,
+            ),
+            name: "dt",
+            quote: None,
+            ident_type: None,
+        },
+        source: None,
+        cluster_by: None,
+        target_lag: Manual,
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        table_options: {
+            "initialize": "ON_CREATE",
+        },
+        as_query: Query {
+            span: Some(
+                50..66,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        50..66,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: ColumnRef {
+                                span: Some(
+                                    57..59,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                57..59,
+                                            ),
+                                            name: "id",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [
+                        Table {
+                            span: Some(
+                                65..66,
+                            ),
+                            table: TableRef {
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        65..66,
+                                    ),
+                                    name: "a",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            },
+                            alias: None,
+                            temporal: None,
+                            with_options: None,
+                            pivot: None,
+                            unpivot: None,
+                            sample: None,
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
     TARGET_LAG = 10 SECOND
     WAREHOUSE = 'MyWarehouse'
-    REFRESH_MODE = FULL
-    INITIALIZE = ON_CREATE
     COMMENT = 'This is test dynamic table'
 AS
     SELECT * FROM t
 ---------- Output ---------
-CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t TARGET_LAG = 10 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = FULL INITIALIZE = ON_CREATE comment = 'This is test dynamic table' AS SELECT * FROM t
+CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t TARGET_LAG = 10 SECOND WAREHOUSE = 'MyWarehouse' comment = 'This is test dynamic table' AS SELECT * FROM t
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28308,20 +29750,18 @@ CreateDynamicTable(
                 "MyWarehouse",
             ),
         },
-        refresh_mode: Full,
-        initialize: OnCreate,
         table_options: {
             "comment": "This is test dynamic table",
         },
         as_query: Query {
             span: Some(
-                210..225,
+                159..174,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        210..225,
+                        159..174,
                     ),
                     hints: None,
                     distinct: false,
@@ -28331,7 +29771,7 @@ CreateDynamicTable(
                             qualified: [
                                 Star(
                                     Some(
-                                        217..218,
+                                        166..167,
                                     ),
                                 ),
                             ],
@@ -28341,20 +29781,19 @@ CreateDynamicTable(
                     from: [
                         Table {
                             span: Some(
-                                224..225,
+                                173..174,
                             ),
                             table: TableRef {
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
                                     span: Some(
-                                        224..225,
+                                        173..174,
                                     ),
                                     name: "t",
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -28384,13 +29823,11 @@ CreateDynamicTable(
 CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
     TARGET_LAG = 10 MINUTE
     WAREHOUSE = 'MyWarehouse'
-    REFRESH_MODE = INCREMENTAL
-    INITIALIZE = ON_SCHEDULE
     COMMENT = 'This is test dynamic table'
 AS
     SELECT * FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a Int32, b STRING) TARGET_LAG = 600 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = INCREMENTAL INITIALIZE = ON_SCHEDULE comment = 'This is test dynamic table' AS SELECT * FROM t
+CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a Int32, b STRING) TARGET_LAG = 600 SECOND WAREHOUSE = 'MyWarehouse' comment = 'This is test dynamic table' AS SELECT * FROM t
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28463,20 +29900,18 @@ CreateDynamicTable(
                 "MyWarehouse",
             ),
         },
-        refresh_mode: Incremental,
-        initialize: OnSchedule,
         table_options: {
             "comment": "This is test dynamic table",
         },
         as_query: Query {
             span: Some(
-                233..248,
+                173..188,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        233..248,
+                        173..188,
                     ),
                     hints: None,
                     distinct: false,
@@ -28486,7 +29921,7 @@ CreateDynamicTable(
                             qualified: [
                                 Star(
                                     Some(
-                                        240..241,
+                                        180..181,
                                     ),
                                 ),
                             ],
@@ -28496,20 +29931,19 @@ CreateDynamicTable(
                     from: [
                         Table {
                             span: Some(
-                                247..248,
+                                187..188,
                             ),
                             table: TableRef {
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
                                     span: Some(
-                                        247..248,
+                                        187..188,
                                     ),
                                     name: "t",
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -28539,13 +29973,12 @@ CreateDynamicTable(
 CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
     CLUSTER BY (a)
     TARGET_LAG = 10 HOUR
-    REFRESH_MODE = AUTO
     COMMENT = 'This is test dynamic table'
     STORAGE_FORMAT = 'native'
 AS
     SELECT c, d FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
+CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 36000 SECOND comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28641,21 +30074,19 @@ CreateDynamicTable(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        refresh_mode: Auto,
-        initialize: OnCreate,
         table_options: {
             "comment": "This is test dynamic table",
             "storage_format": "native",
         },
         as_query: Query {
             span: Some(
-                200..218,
+                176..194,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        200..218,
+                        176..194,
                     ),
                     hints: None,
                     distinct: false,
@@ -28664,7 +30095,7 @@ CreateDynamicTable(
                         AliasedExpr {
                             expr: ColumnRef {
                                 span: Some(
-                                    207..208,
+                                    183..184,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -28672,7 +30103,7 @@ CreateDynamicTable(
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                207..208,
+                                                183..184,
                                             ),
                                             name: "c",
                                             quote: None,
@@ -28686,7 +30117,7 @@ CreateDynamicTable(
                         AliasedExpr {
                             expr: ColumnRef {
                                 span: Some(
-                                    210..211,
+                                    186..187,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -28694,7 +30125,7 @@ CreateDynamicTable(
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                210..211,
+                                                186..187,
                                             ),
                                             name: "d",
                                             quote: None,
@@ -28709,20 +30140,19 @@ CreateDynamicTable(
                     from: [
                         Table {
                             span: Some(
-                                217..218,
+                                193..194,
                             ),
                             table: TableRef {
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
                                     span: Some(
-                                        217..218,
+                                        193..194,
                                     ),
                                     name: "t",
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -28755,7 +30185,7 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = 864000 SECOND AS SELECT avg(a), d FROM t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -28842,8 +30272,6 @@ CreateDynamicTable(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        refresh_mode: Auto,
-        initialize: OnCreate,
         table_options: {},
         as_query: Query {
             span: Some(
@@ -28943,7 +30371,6 @@ CreateDynamicTable(
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -28996,12 +30423,11 @@ CreateDynamicTable(
 ---------- Input ----------
 CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
     CLUSTER BY (a)
-    REFRESH_MODE = INCREMENTAL
     TARGET_LAG = DOWNSTREAM
 AS
     SELECT avg(a), d FROM db.t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
+CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY (a) TARGET_LAG = DOWNSTREAM AS SELECT avg(a), d FROM db.t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
     CreateDynamicTableStmt {
@@ -29086,18 +30512,16 @@ CreateDynamicTable(
         warehouse_opts: WarehouseOptions {
             warehouse: None,
         },
-        refresh_mode: Incremental,
-        initialize: OnCreate,
         table_options: {},
         as_query: Query {
             span: Some(
-                158..195,
+                127..164,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        158..195,
+                        127..164,
                     ),
                     hints: None,
                     distinct: false,
@@ -29106,13 +30530,13 @@ CreateDynamicTable(
                         AliasedExpr {
                             expr: FunctionCall {
                                 span: Some(
-                                    165..171,
+                                    134..140,
                                 ),
                                 func: FunctionCall {
                                     distinct: false,
                                     name: Identifier {
                                         span: Some(
-                                            165..168,
+                                            134..137,
                                         ),
                                         name: "avg",
                                         quote: None,
@@ -29121,7 +30545,7 @@ CreateDynamicTable(
                                     args: [
                                         ColumnRef {
                                             span: Some(
-                                                169..170,
+                                                138..139,
                                             ),
                                             column: ColumnRef {
                                                 database: None,
@@ -29129,7 +30553,7 @@ CreateDynamicTable(
                                                 column: Name(
                                                     Identifier {
                                                         span: Some(
-                                                            169..170,
+                                                            138..139,
                                                         ),
                                                         name: "a",
                                                         quote: None,
@@ -29151,7 +30575,7 @@ CreateDynamicTable(
                         AliasedExpr {
                             expr: ColumnRef {
                                 span: Some(
-                                    173..174,
+                                    142..143,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -29159,7 +30583,7 @@ CreateDynamicTable(
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                173..174,
+                                                142..143,
                                             ),
                                             name: "d",
                                             quote: None,
@@ -29174,14 +30598,14 @@ CreateDynamicTable(
                     from: [
                         Table {
                             span: Some(
-                                180..184,
+                                149..153,
                             ),
                             table: TableRef {
                                 catalog: None,
                                 database: Some(
                                     Identifier {
                                         span: Some(
-                                            180..182,
+                                            149..151,
                                         ),
                                         name: "db",
                                         quote: None,
@@ -29190,13 +30614,12 @@ CreateDynamicTable(
                                 ),
                                 table: Identifier {
                                     span: Some(
-                                        183..184,
+                                        152..153,
                                     ),
                                     name: "t",
                                     quote: None,
                                     ident_type: None,
                                 },
-                                branch: None,
                             },
                             alias: None,
                             temporal: None,
@@ -29212,7 +30635,7 @@ CreateDynamicTable(
                             [
                                 ColumnRef {
                                     span: Some(
-                                        194..195,
+                                        163..164,
                                     ),
                                     column: ColumnRef {
                                         database: None,
@@ -29220,7 +30643,7 @@ CreateDynamicTable(
                                         column: Name(
                                             Identifier {
                                                 span: Some(
-                                                    194..195,
+                                                    163..164,
                                                 ),
                                                 name: "d",
                                                 quote: None,
@@ -31089,6 +32512,7 @@ CreateNotification(
                 ),
             },
         ),
+        webhook_body_template: None,
         comments: None,
     },
 )
@@ -31114,6 +32538,7 @@ CreateNotification(
                 authorization_header: None,
             },
         ),
+        webhook_body_template: None,
         comments: Some(
             "notify",
         ),
@@ -31136,6 +32561,7 @@ AlterNotification(
                     true,
                 ),
                 webhook_opts: None,
+                webhook_body_template: None,
                 comments: None,
             },
         ),
@@ -31164,6 +32590,7 @@ AlterNotification(
                         authorization_header: None,
                     },
                 ),
+                webhook_body_template: None,
                 comments: None,
             },
         ),
@@ -31184,9 +32611,106 @@ AlterNotification(
             AlterNotificationSetOptions {
                 enabled: None,
                 webhook_opts: None,
+                webhook_body_template: None,
                 comments: Some(
                     "1",
                 ),
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'POST') webhook_body_template = '{"msg_type":"text","content":{"text":"DATABEND_WEBHOOK_MESSAGE"}}' COMMENT = 'notify'
+---------- Output ---------
+CREATE NOTIFICATION INTEGRATION SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' METHOD = 'POST' ) WEBHOOK_BODY_TEMPLATE = '{"msg_type":"text","content":{"text":"DATABEND_WEBHOOK_MESSAGE"}}' COMMENTS = 'notify'
+---------- AST ------------
+CreateNotification(
+    CreateNotificationStmt {
+        if_not_exists: false,
+        name: "SampleNotification",
+        notification_type: "webhook",
+        enabled: true,
+        webhook_opts: Some(
+            NotificationWebhookOptions {
+                url: Some(
+                    "https://example.com",
+                ),
+                method: Some(
+                    "POST",
+                ),
+                authorization_header: None,
+            },
+        ),
+        webhook_body_template: Some(
+            "{\"msg_type\":\"text\",\"content\":{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}}",
+        ),
+        comments: Some(
+            "notify",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE"}'
+---------- Output ---------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE"}'
+---------- AST ------------
+AlterNotification(
+    AlterNotificationStmt {
+        if_exists: false,
+        name: "SampleNotification",
+        options: Set(
+            AlterNotificationSetOptions {
+                enabled: None,
+                webhook_opts: None,
+                webhook_body_template: Some(
+                    "{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}",
+                ),
+                comments: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"it\'s DATABEND_WEBHOOK_MESSAGE","path":"C:\\tmp"}'
+---------- Output ---------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"it\'s DATABEND_WEBHOOK_MESSAGE","path":"C:\\tmp"}'
+---------- AST ------------
+AlterNotification(
+    AlterNotificationStmt {
+        if_exists: false,
+        name: "SampleNotification",
+        options: Set(
+            AlterNotificationSetOptions {
+                enabled: None,
+                webhook_opts: None,
+                webhook_body_template: Some(
+                    "{\"text\":\"it's DATABEND_WEBHOOK_MESSAGE\",\"path\":\"C:\\tmp\"}",
+                ),
+                comments: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NOTIFICATION INTEGRATION SampleNotification UNSET WEBHOOK_BODY_TEMPLATE
+---------- Output ---------
+ALTER NOTIFICATION INTEGRATION SampleNotification UNSET WEBHOOK_BODY_TEMPLATE
+---------- AST ------------
+AlterNotification(
+    AlterNotificationStmt {
+        if_exists: false,
+        name: "SampleNotification",
+        options: Unset(
+            AlterNotificationUnsetOptions {
+                webhook_body_template: true,
             },
         ),
     },
@@ -31671,7 +33195,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -31799,7 +33322,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -31929,7 +33451,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -32059,7 +33580,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -32189,7 +33709,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -32312,7 +33831,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -33157,6 +34675,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -33191,6 +34710,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: NameWithTypes(
                 [
                     (
@@ -33235,6 +34755,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -33310,6 +34831,7 @@ AlterUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -33344,6 +34866,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Binary,
@@ -33474,6 +34997,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -33518,6 +35042,7 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -33642,6 +35167,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -33759,6 +35285,7 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: NameWithTypes(
                 [
                     (
@@ -33830,6 +35357,7 @@ AlterUDF(
         },
         description: None,
         definition: UDAFScript {
+            external_access_integrations: [],
             arg_types: Types(
                 [
                     Int32,
@@ -34132,7 +35660,6 @@ Query(
                                                                         quote: None,
                                                                         ident_type: None,
                                                                     },
-                                                                    branch: None,
                                                                 },
                                                                 alias: None,
                                                                 temporal: None,
@@ -34368,7 +35895,6 @@ Query(
                                 quote: None,
                                 ident_type: None,
                             },
-                            branch: None,
                         },
                         alias: None,
                         temporal: None,
@@ -35084,7 +36610,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -35125,7 +36650,6 @@ AlterTable(
                     quote: None,
                     ident_type: None,
                 },
-                branch: None,
             },
             alias: None,
             temporal: None,
@@ -35360,7 +36884,6 @@ CreateRowAccessPolicy(
                                                 quote: None,
                                                 ident_type: None,
                                             },
-                                            branch: None,
                                         },
                                         alias: None,
                                         temporal: None,

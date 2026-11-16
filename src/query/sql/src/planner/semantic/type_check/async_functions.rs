@@ -39,7 +39,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::ReadFileFunctionArgument;
 use crate::plans::ScalarExpr;
 
-struct CoreAsyncFunctionArg {
+pub(super) struct CoreAsyncFunctionArg {
     expr: CoreExprId,
     display: String,
 }
@@ -59,6 +59,7 @@ pub(super) enum CoreAsyncFunction<'a> {
     NextVal { sequence: &'a ColumnRef },
     DictGet(CoreDictGetFunction<'a>),
     ReadFile(CoreReadFileFunction),
+    Sleep(CoreAsyncFunctionArg),
 }
 
 impl<'a> CoreExprArena<'a> {
@@ -86,6 +87,14 @@ impl<'a> CoreExprArena<'a> {
         };
 
         let function = match func_name {
+            "sleep" => {
+                let [duration] = func.args.as_slice() else {
+                    return Err(
+                        ErrorCode::SemanticError("sleep requires one argument").set_span(span)
+                    );
+                };
+                CoreAsyncFunction::Sleep(self.lower_async_function_arg(duration)?)
+            }
             "nextval" => {
                 let [Expr::ColumnRef { column, .. }] = func.args.as_slice() else {
                     return Err(ErrorCode::SemanticError(
@@ -154,6 +163,25 @@ where A: TypeCheckAdapter
             .bind_context
             .replace_expr_context(ExprContext::InAsyncFunction);
         let result = match function {
+            CoreAsyncFunction::Sleep(argument) => {
+                let (scalar, _) = *self.resolve_core(arena, argument.expr)?;
+                let return_type = DataType::Number(NumberDataType::UInt8);
+                Box::new((
+                    AsyncFunctionCall {
+                        span,
+                        func_name: "sleep".to_string(),
+                        display_name: format!("sleep({})", argument.display),
+                        return_type: Box::new(return_type.clone()),
+                        arguments: vec![wrap_cast(
+                            &scalar,
+                            &DataType::Number(NumberDataType::Float64),
+                        )],
+                        func_arg: AsyncFunctionArgument::Sleep,
+                    }
+                    .into(),
+                    return_type,
+                ))
+            }
             CoreAsyncFunction::NextVal { sequence } => {
                 self.resolve_nextval_async_function(span, sequence)?
             }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Duration;
@@ -28,11 +29,14 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use log::info;
 
 use super::string_literal;
 use super::string_value;
+use crate::FuseTable;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::TableArgs;
@@ -110,11 +114,97 @@ impl SimpleTableFunc for FuseVacuumDropInvertedIndex {
         );
 
         for (table_id, indexes) in reply.table_indexes {
+            let mut indexes_to_be_vacuumed = indexes
+                .into_iter()
+                .filter(|(_, _, index_meta)| index_meta.dropped_on < retention_time)
+                .map(|(index_name, index_version, _)| (index_name, index_version))
+                .collect::<Vec<_>>();
+            if indexes_to_be_vacuumed.is_empty() {
+                continue;
+            }
             let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? else {
                 // Skip vacuuming indexes of dropped tables - this will be handled by the vacuum drop table operation
                 info!("skip vacuuming indexes of dropped table: {}", table_id);
                 continue;
             };
+            // Protect index definitions, not every surviving clone. Historical reads and
+            // FLASHBACK use the table's current definitions, so dropping/replacing an index on
+            // every descendant releases the old version even if segment metadata still lists it.
+            // Like the existing cleanup, retention is measured from the owner's DROP, not from
+            // the last descendant DROP; this does not provide a lease for in-flight queries.
+            let mut used_indexes = table_meta
+                .data
+                .indexes
+                .values()
+                .filter(|index| index.index_type == TableIndexType::Inverted)
+                .map(|index| (index.name.clone(), index.version.clone()))
+                .collect::<HashSet<_>>();
+            let group_id = parse_clone_group_id(&table_meta.data.options)?;
+            let mut descendants = HashSet::new();
+            if let Some(group_id) = group_id {
+                let bindings = catalog.list_clone_group_bindings(group_id).await?;
+                descendants = FuseTable::clone_descendant_ids(group_id, table_id, &bindings)?;
+                if !descendants.is_empty() {
+                    let ids = descendants.iter().copied().collect::<Vec<_>>();
+                    let metas = catalog.mget_table_metas_by_ids(&ids).await?;
+                    // Consume each requested member exactly once. Missing or unexpected metadata
+                    // cannot prove that a version is unused, even if a member might have been GCed.
+                    let mut unread_ids = descendants.clone();
+                    let complete = metas.into_iter().all(|(id, meta)| {
+                        let Some(meta) = meta else {
+                            return false;
+                        };
+                        if !unread_ids.remove(&id) {
+                            return false;
+                        }
+                        used_indexes.extend(
+                            meta.data
+                                .indexes
+                                .into_values()
+                                .filter(|index| index.index_type == TableIndexType::Inverted)
+                                .map(|index| (index.name, index.version)),
+                        );
+                        true
+                    });
+                    if !complete || !unread_ids.is_empty() {
+                        info!(
+                            "defer dropped inverted indexes of table {table_id}: incomplete clone metadata"
+                        );
+                        continue;
+                    }
+                }
+            }
+            // V2 uses the full version; V1 directories use the index name and seven version
+            // characters. Keep both layouts if either physical prefix has an active definition.
+            let (used_versions, used_legacy_prefixes): (HashSet<_>, HashSet<_>) = used_indexes
+                .into_iter()
+                .map(|(name, version)| {
+                    let short_version = version.chars().take(7).collect::<String>();
+                    (version, (name, short_version))
+                })
+                .unzip();
+            indexes_to_be_vacuumed.retain(|(name, version)| {
+                !used_versions.contains(version)
+                    && !used_legacy_prefixes
+                        .contains(&(name.clone(), version.chars().take(7).collect::<String>()))
+            });
+            if indexes_to_be_vacuumed.is_empty() {
+                continue;
+            }
+            if let Some(group_id) = group_id {
+                // A descendant may clone V, then DROP V before its metadata is read above. The
+                // first list misses the new child, so recheck before deleting any candidate.
+                // After this point a new clone cannot inherit V from a scanned source that no
+                // longer defines V: publishing pre-DROP metadata fails the source sequence CAS.
+                let bindings = catalog.list_clone_group_bindings(group_id).await?;
+                let current = FuseTable::clone_descendant_ids(group_id, table_id, &bindings)?;
+                if !current.is_subset(&descendants) {
+                    info!(
+                        "defer dropped inverted indexes of table {table_id}: new clone descendants"
+                    );
+                    continue;
+                }
+            }
             let table_info = TableInfo::new(
                 Default::default(),
                 Default::default(),
@@ -122,11 +212,6 @@ impl SimpleTableFunc for FuseVacuumDropInvertedIndex {
                 table_meta.data,
             );
             let table = catalog.get_table_by_info(&table_info)?;
-            let indexes_to_be_vacuumed = indexes
-                .into_iter()
-                .filter(|(_, _, index_meta)| index_meta.dropped_on < retention_time)
-                .map(|(index_name, index_version, _)| (index_name, index_version))
-                .collect::<Vec<_>>();
             info!(
                 "indexes_to_be_vacuumed for table: {:?}, indexes: {:?}",
                 table_id, indexes_to_be_vacuumed

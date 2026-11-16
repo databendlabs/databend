@@ -240,6 +240,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
                 connection,
             }) => Ok(mt::principal::GrantObject::Connection(connection)),
+            pb::grant_object::Object::Integration(name) => {
+                Ok(mt::principal::GrantObject::Integration(name))
+            }
             pb::grant_object::Object::Sequence(pb::grant_object::GrantSequenceObject {
                 sequence,
             }) => Ok(mt::principal::GrantObject::Sequence(sequence)),
@@ -299,6 +302,9 @@ impl FromToProto for mt::principal::GrantObject {
                     warehouse: w.clone(),
                 },
             )),
+            mt::principal::GrantObject::Integration(name) => {
+                Some(pb::grant_object::Object::Integration(name.clone()))
+            }
             mt::principal::GrantObject::Connection(c) => Some(
                 pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
                     connection: c.clone(),
@@ -329,7 +335,11 @@ impl FromToProto for mt::principal::GrantObject {
         };
         pb::GrantObject {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            min_reader_ver: if matches!(self, mt::principal::GrantObject::Integration(_)) {
+                190
+            } else {
+                MIN_READER_VER
+            },
             object,
         }
     }
@@ -380,15 +390,16 @@ impl FromToProto for mt::principal::UserGrantSet {
 
         let mut entries = Vec::new();
         for entry in p.entries.into_iter() {
-            // If we add new GrantObject in new version
-            // Rollback to old version, GrantEntry.object will be None
-            // GrantEntry::from_pb will return err so user can not login in old version.
-            // Silently dropping unrecognized grant entries and logging the error is
-            // intentional: the node must still start and serve other users even when
-            // some grant entries are unrecognizable (e.g. during a version rollback).
+            // If we add a new GrantObject in a newer version, after rollback its protobuf
+            // oneof variant is unknown and GrantEntry.object will be None.
+            // GrantEntry::from_pb will return an error. Dropping only that entry and logging
+            // a warning is intentional: the principal remains usable, while all other grants
+            // and role memberships are preserved.
             match mt::principal::GrantEntry::from_pb(entry) {
                 Ok(entry) => entries.push(entry),
-                Err(e) => log::error!("GrantEntry::from_pb with error : {e}"),
+                Err(error) => log::warn!(
+                    "Skipped one incompatible grant entry while decoding grants for a user or role: {error}. Impact: only this grant entry is ignored; all other grants and role memberships are preserved, and this incompatibility does not by itself block login"
+                ),
             }
         }
         let mut roles = HashSet::new();
@@ -434,17 +445,17 @@ impl FromToProto for mt::principal::UserInfo {
             auth_info: mt::principal::AuthInfo::from_pb(p.auth_info.ok_or_else(|| {
                 Incompatible::new(format!(
                     "USER {}: UserInfo.auth_info cannot be None",
-                    &p.name
+                    p.name
                 ))
             })?)?,
             grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
-                Incompatible::new(format!("user {}: UserInfo.grants cannot be None", &p.name))
+                Incompatible::new(format!("user {}: UserInfo.grants cannot be None", p.name))
             })?)?,
             quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| {
-                Incompatible::new(format!("user {}: UserInfo.quota cannot be None", &p.name))
+                Incompatible::new(format!("user {}: UserInfo.quota cannot be None", p.name))
             })?)?,
             option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| {
-                Incompatible::new(format!("user {}: UserInfo.option cannot be None", &p.name))
+                Incompatible::new(format!("user {}: UserInfo.option cannot be None", p.name))
             })?)?,
             history_auth_infos: p
                 .history_auth_infos

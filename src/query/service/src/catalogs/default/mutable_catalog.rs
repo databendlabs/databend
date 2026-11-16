@@ -95,10 +95,13 @@ use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::LvtUpdate;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -136,7 +139,6 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
-use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -190,12 +192,9 @@ impl MutableCatalog {
         let meta = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider
-                .create_meta_store::<DatabendRuntime>()
-                .await
-                .map_err(|e| {
-                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-                })?
+            provider.create_default_meta_store().await.map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?
         };
 
         let tenant = conf.query.tenant_id.clone();
@@ -355,7 +354,7 @@ impl Catalog for MutableCatalog {
         info!(
             "[CATALOG] Creating database: name={}, engine={}",
             req.name_ident.database_name(),
-            &req.meta.engine
+            req.meta.engine
         );
 
         // Initial the database after creating.
@@ -432,6 +431,25 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn mget_table_metas_by_ids(
+        &self,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        self.ctx
+            .meta
+            .mget_table_metas_by_ids(table_ids)
+            .await
+            .map_err(ErrorCode::from)
+    }
+
+    async fn list_clone_group_bindings(&self, clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        self.ctx
+            .meta
+            .list_clone_group_bindings(clone_group_id)
+            .await
+            .map_err(ErrorCode::from)
+    }
+
     async fn get_mv_definition(
         &self,
         tenant: &Tenant,
@@ -484,6 +502,18 @@ impl Catalog for MutableCatalog {
         self.ctx
             .meta
             .get_mv_source_binding_snapshot(tenant, source_table_id)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    async fn list_materialized_views(
+        &self,
+        tenant: &Tenant,
+        filter: &MaterializedViewListFilter,
+    ) -> Result<Vec<ListedMaterializedView>> {
+        self.ctx
+            .meta
+            .list_materialized_views(tenant, filter)
             .await
             .map_err(meta_service_error)
     }
@@ -662,20 +692,8 @@ impl Catalog for MutableCatalog {
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
-    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
-        let ctx = DatabaseContext {
-            meta: self.ctx.meta.clone(),
-            storage_factory: self.ctx.storage_factory.clone(),
-            tenant: self.tenant.clone(),
-            disable_table_info_refresh: true,
-        };
-
-        let resp = ctx.meta.get_drop_table_infos(req).await?;
-
-        let drop_ids = resp.drop_ids.clone();
-
-        let storage = ctx.storage_factory;
-
+    ) -> Result<(Vec<TableInfo>, Vec<DroppedId>)> {
+        let resp = self.ctx.meta.get_drop_table_infos(req).await?;
         let mut tables = vec![];
         for (db_name_ident, niv) in resp.vacuum_tables {
             let table_info = TableInfo::new_full(
@@ -686,9 +704,9 @@ impl Catalog for MutableCatalog {
                 self.info(),
                 DatabaseType::NormalDB,
             );
-            tables.push(storage.get_table(&table_info, ctx.disable_table_info_refresh)?);
+            tables.push(table_info);
         }
-        Ok((tables, drop_ids))
+        Ok((tables, resp.drop_ids))
     }
 
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize> {
@@ -1045,10 +1063,22 @@ impl Catalog for MutableCatalog {
         Ok(self.ctx.meta.set_table_lvt(name_ident, value).await?)
     }
 
+    async fn mget_table_lvts(
+        &self,
+        tenant: &Tenant,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<LeastVisibleTime>>)>> {
+        Ok(self.ctx.meta.mget_table_lvts(tenant, table_ids).await?)
+    }
+
+    async fn set_table_lvts(&self, tenant: &Tenant, updates: &[LvtUpdate]) -> Result<bool> {
+        Ok(self.ctx.meta.set_table_lvts(tenant, updates).await?)
+    }
+
     async fn get_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
-    ) -> Result<Option<LeastVisibleTime>> {
+    ) -> Result<Option<SeqV<LeastVisibleTime>>> {
         Ok(self.ctx.meta.get_table_lvt(name_ident).await?)
     }
 

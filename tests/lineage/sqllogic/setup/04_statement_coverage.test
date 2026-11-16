@@ -68,6 +68,33 @@ statement ok
 EXPLAIN PIPELINE INSERT INTO lineage_history_statements.explain_pipeline_dst
 SELECT a, b FROM lineage_history_statements.src
 
+# Lineage is captured from the bound plan. The optimizer answers max/count over a bare Fuse table
+# from table statistics, leaving a DummyTableScan that never mentions src.
+query T
+EXPLAIN SELECT max(a), count(*) FROM lineage_history_statements.src
+----
+EvalScalar
+├── output columns: [max(a) (#3), COUNT(*) (#4)]
+├── expressions: [1, 1]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+statement ok
+CREATE TABLE lineage_history_statements.folded_agg_dst(m INT, c BIGINT)
+
+statement ok
+INSERT INTO lineage_history_statements.folded_agg_dst
+SELECT max(a), count(*) FROM lineage_history_statements.src
+
+# A projected IN subquery is decorrelated into a mark join whose marker column has no scalar
+# definition in the optimized plan.
+statement ok
+CREATE TABLE lineage_history_statements.in_projection_dst(x BOOLEAN)
+
+statement ok
+INSERT INTO lineage_history_statements.in_projection_dst
+SELECT a IN (SELECT b FROM lineage_history_statements.src) FROM lineage_history_statements.src
+
 statement ok
 CREATE TABLE lineage_history_statements.multi_a(x INT, y INT)
 

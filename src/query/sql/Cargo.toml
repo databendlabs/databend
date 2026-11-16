@@ -26,6 +26,7 @@ databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline = { workspace = true }
+databend-common-script = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-statistics = { workspace = true }
 databend-common-storage = { workspace = true }
@@ -83,20 +84,18 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression-test-support = { workspace = true }
-databend-common-grpc = { workspace = true }
-databend-common-io = { workspace = true }
-databend-common-meta-store = { workspace = true }
 databend-common-sql-test-support = { workspace = true }
-databend-meta-runtime = { workspace = true }
-databend-storages-common-session = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
-jwt-simple = { workspace = true }
 proptest = { workspace = true }
 serde_yaml = { workspace = true }
 
 [[bench]]
 name = "type_check"
+harness = false
+
+[[bench]]
+name = "cse"
 harness = false
 
 [lints]

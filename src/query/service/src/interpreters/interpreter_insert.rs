@@ -35,6 +35,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::Constraint;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 #[cfg(feature = "storage-stage")]
@@ -66,8 +67,9 @@ use crate::clusters::ClusterHelper;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
+use crate::physical_plans::AggregateFinal;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::EvalScalar;
@@ -296,6 +298,14 @@ impl InsertInterpreter {
         plan: Insert,
         target_table_id: u64,
     ) -> Result<InterpreterPtr> {
+        Self::try_create_refresh(ctx, plan, target_table_id)
+    }
+
+    pub fn try_create_refresh(
+        ctx: Arc<QueryContext>,
+        plan: Insert,
+        target_table_id: u64,
+    ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertInterpreter {
             ctx,
             plan,
@@ -414,12 +424,7 @@ impl Interpreter for InsertInterpreter {
                     .get_table_by_info(table_info)?
             } else {
                 self.ctx
-                    .get_table_with_branch(
-                        &self.plan.catalog,
-                        &self.plan.database,
-                        &self.plan.table,
-                        self.plan.branch.as_deref(),
-                    )
+                    .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
                     .await?
             };
 
@@ -510,17 +515,15 @@ impl Interpreter for InsertInterpreter {
                             table_meta_timestamps,
                         )?;
 
-                        if self.plan.branch.is_none() {
-                            let hook_operator = HookOperator::create(
-                                self.ctx.clone(),
-                                self.plan.catalog.clone(),
-                                self.plan.database.clone(),
-                                self.plan.table.clone(),
-                                MutationKind::Insert,
-                                hook_lock_opt.clone(),
-                            );
-                            hook_operator.execute(&mut build_res.main_pipeline).await;
-                        }
+                        let hook_operator = HookOperator::create(
+                            self.ctx.clone(),
+                            self.plan.catalog.clone(),
+                            self.plan.database.clone(),
+                            self.plan.table.clone(),
+                            MutationKind::Insert,
+                            hook_lock_opt.clone(),
+                        );
+                        hook_operator.execute(&mut build_res.main_pipeline).await;
 
                         return Ok(build_res);
                     }
@@ -554,7 +557,7 @@ impl Interpreter for InsertInterpreter {
                 }
                 InsertInputSource::SelectPlan(plan) => {
                     let table1 = table.clone();
-                    let (select_plan, select_column_bindings, metadata) = match plan.as_ref() {
+                    let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
                         Plan::Query {
                             s_expr,
                             metadata,
@@ -564,13 +567,26 @@ impl Interpreter for InsertInterpreter {
                             let mut builder1 =
                                 PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                             (
-                                builder1.build(s_expr, bind_context.column_set()).await?,
+                                builder1
+                                    .build_query(s_expr.planned()?, bind_context.column_set())
+                                    .await?,
                                 bind_context.columns.clone(),
                                 metadata,
                             )
                         }
                         _ => unreachable!(),
                     };
+                    // The physical query of an aggregating materialized view stores aggregate
+                    // states; reads merge them per group and compaction re-aggregates them. The
+                    // refresh may thus write a group as several state rows, which lets the final
+                    // aggregate output on memory pressure instead of spilling all the states.
+                    // `materialized_view_refresh_target` is also set by dynamic table refreshes,
+                    // whose rows are read as they are.
+                    if self.materialized_view_refresh_target == Some(table.get_id())
+                        && is_materialized_view_engine(table.engine())
+                    {
+                        AggregateFinal::allow_duplicate_groups(&mut select_plan);
+                    }
 
                     let explain_plan = {
                         let metadata = metadata.read();
@@ -581,7 +597,7 @@ impl Interpreter for InsertInterpreter {
 
                     info!("Insert select plan: \n{}", explain_plan);
 
-                    let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
+                    let update_stream_meta = build_update_stream_reqs(&self.ctx, false).await?;
 
                     let select_schema = plan.schema();
                     let insert_schema = self.plan.dest_schema();
@@ -646,17 +662,15 @@ impl Interpreter for InsertInterpreter {
                     )?;
 
                     //  Execute the hook operator.
-                    if self.plan.branch.is_none() {
-                        let hook_operator = HookOperator::create(
-                            self.ctx.clone(),
-                            self.plan.catalog.clone(),
-                            self.plan.database.clone(),
-                            self.plan.table.clone(),
-                            MutationKind::Insert,
-                            hook_lock_opt.clone(),
-                        );
-                        hook_operator.execute(&mut build_res.main_pipeline).await;
-                    }
+                    let hook_operator = HookOperator::create(
+                        self.ctx.clone(),
+                        self.plan.catalog.clone(),
+                        self.plan.database.clone(),
+                        self.plan.table.clone(),
+                        MutationKind::Insert,
+                        hook_lock_opt.clone(),
+                    );
+                    hook_operator.execute(&mut build_res.main_pipeline).await;
 
                     return Ok(build_res);
                 }
@@ -716,17 +730,15 @@ impl Interpreter for InsertInterpreter {
             )?;
 
             //  Execute the hook operator.
-            if self.plan.branch.is_none() {
-                let hook_operator = HookOperator::create(
-                    self.ctx.clone(),
-                    self.plan.catalog.clone(),
-                    self.plan.database.clone(),
-                    self.plan.table.clone(),
-                    MutationKind::Insert,
-                    hook_lock_opt,
-                );
-                hook_operator.execute(&mut build_res.main_pipeline).await;
-            }
+            let hook_operator = HookOperator::create(
+                self.ctx.clone(),
+                self.plan.catalog.clone(),
+                self.plan.database.clone(),
+                self.plan.table.clone(),
+                MutationKind::Insert,
+                hook_lock_opt,
+            );
+            hook_operator.execute(&mut build_res.main_pipeline).await;
 
             Ok(build_res)
         })

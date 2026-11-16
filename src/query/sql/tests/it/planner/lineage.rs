@@ -38,6 +38,59 @@ use databend_common_sql_test_support::init_testing_globals_with_config;
 use crate::framework::LiteTableContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_planned_lineage_requires_bound_snapshot() -> Result<()> {
+    use databend_common_sql::optimizer::OptimizerContext;
+    use databend_common_sql::optimizer::optimize;
+
+    for sql in [
+        "INSERT INTO dst SELECT a FROM src",
+        "CREATE TABLE copied ENGINE=NULL AS SELECT a FROM src",
+        "INSERT ALL WHEN a > 0 THEN INTO dst VALUES(a) SELECT a FROM src",
+        "UPDATE src SET a = b WHERE a > 0",
+        "DELETE FROM src WHERE a > 0",
+    ] {
+        for capture in [false, true] {
+            let ctx = lineage_test_context().await?;
+            ctx.register_setup_sql("CREATE TABLE src(a INT, b INT)")
+                .await?;
+            ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+            let raw = ctx.bind_sql(sql).await?;
+            let expected = raw.query_lineage()?.expect("bound SQL has lineage");
+            if capture {
+                raw.capture_bound_query_lineage();
+            }
+            let metadata = match &raw {
+                Plan::Insert(plan) => match &plan.source {
+                    databend_common_sql::InsertInputSource::SelectPlan(query) => {
+                        match query.as_ref() {
+                            Plan::Query { metadata, .. } => metadata.clone(),
+                            _ => unreachable!(),
+                        }
+                    }
+                    _ => unreachable!(),
+                },
+                Plan::CreateTable(plan) => match plan.as_select.as_deref().unwrap() {
+                    Plan::Query { metadata, .. } => metadata.clone(),
+                    _ => unreachable!(),
+                },
+                Plan::InsertMultiTable(plan) => plan.meta_data.clone(),
+                Plan::DataMutation { metadata, .. } => metadata.clone(),
+                _ => unreachable!(),
+            };
+            let context = OptimizerContext::new(ctx.clone(), metadata, ctx.get_function_context()?)
+                .with_settings(&ctx.get_settings())?;
+            let planned = optimize(context, raw).await?;
+            assert_eq!(
+                planned.query_lineage()?,
+                capture.then_some(expected),
+                "{sql}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_query_lineage_insert_select_from_sql() -> Result<()> {
     let ctx = lineage_test_context().await?;
     ctx.register_setup_sql("CREATE TABLE src(a INT, b INT, c INT)")

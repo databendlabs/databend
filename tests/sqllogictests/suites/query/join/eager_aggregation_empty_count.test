@@ -1,0 +1,161 @@
+# Check both the default cost-based plan and forced eager aggregation.
+# run-with-settings: force_eager_aggregate=1
+
+# The CI regression: both inputs contain rows, but NULL join keys never match.
+statement ok
+CREATE TABLE eager_empty_null (k BOOLEAN NULL);
+
+statement ok
+INSERT INTO eager_empty_null
+SELECT IF(true, NULL, ((number % 2) = 0)) FROM numbers(60);
+
+query I
+SELECT count(*)
+FROM eager_empty_null a JOIN eager_empty_null b ON a.k = b.k;
+----
+0
+
+query II
+SELECT count(*), count(*) + 1
+FROM eager_empty_null a JOIN eager_empty_null b ON a.k = b.k;
+----
+0 1
+
+statement ok
+DROP TABLE eager_empty_null;
+
+statement ok
+CREATE TABLE eager_empty_l (k INT, v INT);
+
+statement ok
+CREATE TABLE eager_empty_r (k INT, g INT);
+
+statement ok
+INSERT INTO eager_empty_l VALUES (1, NULL), (1, NULL), (NULL, NULL);
+
+statement ok
+INSERT INTO eager_empty_r VALUES (2, 0), (2, 0), (NULL, 0);
+
+# Nonempty inputs with no matching keys (NULL does not match NULL).
+# Only COUNT should default to zero: SUM must remain NULL.
+query IIII
+SELECT count(*), count(l.v), count(*) + 1, sum(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+----
+0 0 1 NULL
+
+# MIN/nullable-COUNT must preserve join multiplicity, including when COUNT
+# belongs to the right join input (PR #20667).
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
+FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
+----
+NULL 0 1
+
+query I
+SELECT count(*) FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k
+HAVING count(*) = 0;
+----
+0
+
+# An empty grouped aggregate must not invent a group with count zero.
+query III rowsort
+SELECT r.g, count(*), count(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k
+GROUP BY r.g;
+----
+
+# Matching rows with an all-NULL COUNT argument still yield zero.
+statement ok
+INSERT INTO eager_empty_r VALUES (1, 0), (1, 0);
+
+query IIII
+SELECT count(*), count(l.v), count(l.v) + 1, sum(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+----
+4 0 1 NULL
+
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
+FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
+----
+0 0 1
+
+query III rowsort
+SELECT r.g, count(*), count(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k
+GROUP BY r.g;
+----
+0 4 0
+
+# Nonzero counts and join multiplicity must remain unchanged.
+statement ok
+INSERT INTO eager_empty_l VALUES (1, 5);
+
+query IIII
+SELECT count(*), count(l.v), count(l.v) + 1, sum(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+----
+6 2 3 10
+
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
+FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
+----
+0 2 3
+
+query III rowsort
+SELECT r.g, count(*), count(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k
+GROUP BY r.g;
+----
+0 6 2
+
+# An actually empty input on either side must have the same semantics.
+statement ok
+TRUNCATE TABLE eager_empty_l;
+
+query IIII
+SELECT count(*), count(l.v), count(*) + 1, sum(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+----
+0 0 1 NULL
+
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
+FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
+----
+NULL 0 1
+
+statement ok
+INSERT INTO eager_empty_l VALUES (1, 5);
+
+statement ok
+TRUNCATE TABLE eager_empty_r;
+
+query IIII
+SELECT count(*), count(l.v), count(*) + 1, sum(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+----
+0 0 1 NULL
+
+statement ok
+TRUNCATE TABLE eager_empty_l;
+
+query IIII
+SELECT count(*), count(l.v), count(*) + 1, sum(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+----
+0 0 1 NULL
+
+query III rowsort
+SELECT r.g, count(*), count(l.v)
+FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k
+GROUP BY r.g;
+----
+
+statement ok
+DROP TABLE eager_empty_l;
+
+statement ok
+DROP TABLE eager_empty_r;

@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod inverted_index_loader;
+mod inverted_index_bundle_loader;
 mod inverted_index_reader;
+mod inverted_index_warmup;
 
+pub use inverted_index_reader::InvertedIndexFilterResult;
 pub use inverted_index_reader::InvertedIndexReader;
+pub use inverted_index_warmup::InvertedIndexWarmupInfo;

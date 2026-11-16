@@ -431,13 +431,7 @@ pub fn passthrough_nullable_1_arg<I1: AccessType, O: ReturnType>(
         match arg1.value() {
             Some(arg1) => {
                 let out = func(arg1, ctx);
-
-                match out {
-                    Value::Column(out) => {
-                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
-                    }
-                    Value::Scalar(out) => Value::Scalar(Some(out)),
-                }
+                NullableType::<O>::wrap_value(out, args_validity, ctx.generics)
             }
             _ => Value::Scalar(None),
         }
@@ -458,13 +452,7 @@ pub fn passthrough_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>
         match (arg1.value(), arg2.value()) {
             (Some(arg1), Some(arg2)) => {
                 let out = func(arg1, arg2, ctx);
-
-                match out {
-                    Value::Column(out) => {
-                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
-                    }
-                    Value::Scalar(out) => Value::Scalar(Some(out)),
-                }
+                NullableType::<O>::wrap_value(out, args_validity, ctx.generics)
             }
             _ => Value::Scalar(None),
         }
@@ -485,13 +473,7 @@ pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: AccessType
         match (arg1.value(), arg2.value(), arg3.value()) {
             (Some(arg1), Some(arg2), Some(arg3)) => {
                 let out = func(arg1, arg2, arg3, ctx);
-
-                match out {
-                    Value::Column(out) => {
-                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
-                    }
-                    Value::Scalar(out) => Value::Scalar(Some(out)),
-                }
+                NullableType::<O>::wrap_value(out, args_validity, ctx.generics)
             }
             _ => Value::Scalar(None),
         }
@@ -525,13 +507,7 @@ pub fn passthrough_nullable_4_arg<
         match (arg1.value(), arg2.value(), arg3.value(), arg4.value()) {
             (Some(arg1), Some(arg2), Some(arg3), Some(arg4)) => {
                 let out = func(arg1, arg2, arg3, arg4, ctx);
-
-                match out {
-                    Value::Column(out) => {
-                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
-                    }
-                    Value::Scalar(out) => Value::Scalar(Some(out)),
-                }
+                NullableType::<O>::wrap_value(out, args_validity, ctx.generics)
             }
             _ => Value::Scalar(None),
         }
@@ -550,14 +526,7 @@ pub fn combine_nullable_1_arg<I1: AccessType, O: ReturnType>(
         match arg1.value() {
             Some(arg1) => {
                 let out = func(arg1, ctx);
-
-                match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new_unchecked(
-                        out.column,
-                        &args_validity & &out.validity,
-                    )),
-                    Value::Scalar(out) => Value::Scalar(out),
-                }
+                NullableType::<O>::apply_validity(out, args_validity, ctx.generics)
             }
             _ => Value::Scalar(None),
         }
@@ -577,14 +546,7 @@ pub fn combine_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
         match (arg1.value(), arg2.value()) {
             (Some(arg1), Some(arg2)) => {
                 let out = func(arg1, arg2, ctx);
-
-                match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new_unchecked(
-                        out.column,
-                        &args_validity & &out.validity,
-                    )),
-                    Value::Scalar(out) => Value::Scalar(out),
-                }
+                NullableType::<O>::apply_validity(out, args_validity, ctx.generics)
             }
             _ => Value::Scalar(None),
         }

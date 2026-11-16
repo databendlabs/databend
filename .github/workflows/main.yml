@@ -49,12 +49,18 @@ jobs:
       license_type: enterprise
       telemetry_source: "ci-main"
 
-  # macos:
-  #   needs: linux
-  #   uses: ./.github/workflows/reuse.macos.yml
-  #   secrets: inherit
-  #   with:
-  #     build_profile: release
+  # macOS safety net: PRs only run this for platform-sensitive paths, so
+  # every merge is checked here. Not a gate; failures surface as a red Main run.
+  mac_check:
+    needs: changes
+    if: needs.changes.outputs.any_src_changed == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/check_macos
+        timeout-minutes: 60
 
   ready:
     if: always()

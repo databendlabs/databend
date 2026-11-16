@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
@@ -38,10 +39,22 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::plans::IndexUserDictionary;
 use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 
 pub type TableOptions = BTreeMap<String, String>;
+
+pub const CLONE_EXPERIMENTAL_DISABLED_MESSAGE: &str = "CREATE TABLE ... CLONE is experimental and disabled. Set enable_experimental_clone_table=1 to enable it. Clone table data integrity and safety are not guaranteed in mixed-version deployments.";
+
+#[derive(Clone, Debug)]
+pub struct CloneTableSource {
+    pub table_info: TableInfo,
+    /// Database in which the source was resolved, not the database in its storage prefix.
+    pub source_database: String,
+    pub source_database_id: u64,
+    pub navigation: Option<NavigationPoint>,
+}
 
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
@@ -61,11 +74,16 @@ pub struct CreateTablePlan {
     pub field_comments: Vec<String>,
     pub field_stats_truncate_len: Vec<Option<u64>>,
     pub cluster_key: Option<String>,
+    /// Row-level TTL expression text, already validated and normalized.
+    pub ttl: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
 
+    pub clone: Option<CloneTableSource>,
     pub attached_columns: Option<Vec<Identifier>>,
+    /// The `user_dictionary` option of each inline inverted index, keyed by index name.
+    pub index_user_dictionaries: Option<BTreeMap<String, IndexUserDictionary>>,
 }
 
 impl CreateTablePlan {
@@ -295,7 +313,6 @@ pub struct AddTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub branch: Option<String>,
     pub if_not_exists: bool,
     pub field: TableField,
     pub comment: String,
@@ -325,7 +342,6 @@ pub struct RenameTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub branch: Option<String>,
     pub schema: TableSchema,
     pub old_column: String,
     pub new_column: String,
@@ -343,7 +359,6 @@ pub struct DropTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub branch: Option<String>,
     pub column: String,
 }
 
@@ -357,7 +372,7 @@ impl DropTableColumnPlan {
 #[derive(Debug, Clone)]
 pub enum ModifyColumnAction {
     // (masking policy name, using columns)
-    SetMaskingPolicy(String, Vec<String>),
+    SetMaskingPolicy(String, Vec<String>, bool),
     // column name
     UnsetMaskingPolicy(String),
     // modify column table field, field comments
@@ -374,7 +389,6 @@ pub struct ModifyTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub branch: Option<String>,
     pub action: ModifyColumnAction,
     pub lock_guard: Option<SharedLockGuard>,
 }
@@ -391,7 +405,6 @@ impl std::fmt::Debug for ModifyTableColumnPlan {
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
-            .field("branch", &self.branch)
             .field("action", &self.action)
             .finish()
     }
@@ -495,7 +508,6 @@ pub struct AlterTableClusterKeyPlan {
     pub database: String,
     pub table: String,
     pub target: MaintenanceTarget,
-    pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
     pub cluster_type: ClusterType,
 }
@@ -524,16 +536,53 @@ impl AlterTablePartitionByPlan {
 }
 
 #[derive(Clone, Debug)]
+pub struct DropTablePartitionKeyPlan {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    /// `None` when `IF EXISTS` resolves a missing table during binding.
+    pub table_id: Option<u64>,
+}
+
+impl DropTablePartitionKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct DropTableClusterKeyPlan {
     pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub target: MaintenanceTarget,
-    pub branch: Option<String>,
 }
 
 impl DropTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Row-level TTL: `ALTER TABLE ... SET TTL <expr>` and `... REMOVE TTL`.
+///
+/// Removing a TTL is just setting it to nothing, so one plan covers both rather
+/// than duplicating the surrounding plumbing for a single `Option`.
+#[derive(Clone, Debug)]
+pub struct AlterTableTtlPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub if_exists: bool,
+    /// `None` when IF EXISTS resolves a missing table during binding.
+    pub table_id: Option<u64>,
+    /// Validated and normalized TTL expression text; `None` means `REMOVE TTL`.
+    pub ttl: Option<String>,
+}
+
+impl AlterTableTtlPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
@@ -581,18 +630,6 @@ pub struct DropAllTableRowAccessPoliciesPlan {
 }
 
 #[derive(Clone, Debug)]
-pub struct CreateTableBranchPlan {
-    pub tenant: Tenant,
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-
-    pub name: String,
-    pub navigation: Option<NavigationPoint>,
-    pub retain: Option<Duration>,
-}
-
-#[derive(Clone, Debug)]
 pub struct CreateTableTagPlan {
     pub tenant: Tenant,
     pub catalog: String,
@@ -602,15 +639,6 @@ pub struct CreateTableTagPlan {
     pub name: String,
     pub navigation: Option<NavigationPoint>,
     pub retain: Option<Duration>,
-}
-
-#[derive(Clone, Debug)]
-pub struct DropTableBranchPlan {
-    pub tenant: Tenant,
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub name: String,
 }
 
 #[derive(Clone, Debug)]

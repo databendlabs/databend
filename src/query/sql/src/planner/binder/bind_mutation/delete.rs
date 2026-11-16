@@ -32,7 +32,8 @@ impl Binder {
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
         bind_context: &mut BindContext,
-        stamt: &DeleteStmt,
+        stmt: &DeleteStmt,
+        expected_ttl: Option<String>,
     ) -> Result<Plan> {
         let DeleteStmt {
             catalog,
@@ -42,12 +43,12 @@ impl Binder {
             selection,
             with,
             ..
-        } = stamt;
+        } = stmt;
 
         self.init_cte(bind_context, with)?;
 
         let target_table_identifier =
-            TableIdentifier::new(self, catalog, database, table, &None, table_alias);
+            TableIdentifier::new(self, catalog, database, table, table_alias);
 
         let target_table_reference = TableReference::Table {
             span: None,
@@ -55,7 +56,6 @@ impl Binder {
                 catalog: catalog.clone(),
                 database: database.clone(),
                 table: table.clone(),
-                branch: None,
             },
             alias: table_alias.clone(),
             temporal: None,
@@ -80,6 +80,7 @@ impl Binder {
             strategy: MutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
+            expected_ttl,
         };
 
         self.bind_mutation(bind_context, mutation).await

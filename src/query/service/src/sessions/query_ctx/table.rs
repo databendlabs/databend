@@ -68,12 +68,11 @@ impl TableContextTableAccess for QueryContext {
         Ok(self.shared.data_operator.clone())
     }
 
-    async fn get_table_with_branch(
+    async fn get_table(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
         if database.eq_ignore_ascii_case("system_history")
             && ThreadTracker::capture_log_settings().is_none()
@@ -89,7 +88,7 @@ impl TableContextTableAccess for QueryContext {
             }
         }
 
-        self.get_table_from_shared(catalog, database, table, branch, None)
+        self.get_table_from_shared(catalog, database, table, None)
             .await
     }
 
@@ -99,7 +98,6 @@ impl TableContextTableAccess for QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         let final_batch_size = match max_batch_size {
@@ -115,7 +113,7 @@ impl TableContextTableAccess for QueryContext {
         };
 
         let table = self
-            .get_table_from_shared(catalog, database, table, branch, final_batch_size)
+            .get_table_from_shared(catalog, database, table, final_batch_size)
             .await?;
 
         if table.is_stream() {
@@ -474,23 +472,6 @@ impl TableContextTableManagement for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         self.get_table_meta_timestamps_impl(table, previous_snapshot, true)
-    }
-
-    #[async_backtrace::framed]
-    async fn load_datalake_schema(
-        &self,
-        kind: &str,
-        sp: &StorageParams,
-    ) -> Result<(TableSchema, String)> {
-        match kind {
-            "delta" => {
-                let table = DeltaTable::load(sp).await?;
-                DeltaTable::get_meta(&table).await
-            }
-            _ => Err(ErrorCode::Internal(
-                "Unsupported datalake type for schema loading",
-            )),
-        }
     }
 
     #[cfg(feature = "storage-stage")]

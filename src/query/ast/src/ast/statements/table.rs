@@ -180,6 +180,8 @@ pub struct CreateTableStmt {
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Option<ClusterOption>,
+    /// Row-level TTL expression, e.g. `TTL event_time + INTERVAL 30 DAY`.
+    pub ttl: Option<Expr>,
     pub table_options: BTreeMap<String, String>,
     pub partition_by: Option<Vec<Expr>>,
     pub table_properties: Option<BTreeMap<String, String>>,
@@ -238,6 +240,10 @@ impl Display for CreateTableStmt {
 
         if let Some(cluster_by) = &self.cluster_by {
             write!(f, " {cluster_by}")?;
+        }
+
+        if let Some(ttl) = &self.ttl {
+            write!(f, " TTL {ttl}")?;
         }
 
         // Format table options
@@ -305,6 +311,12 @@ pub enum CreateTableSource {
         database: Option<Identifier>,
         table: Identifier,
     },
+    Clone {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        travel_point: Option<TimeTravelPoint>,
+    },
 }
 
 impl Display for CreateTableSource {
@@ -336,6 +348,19 @@ impl Display for CreateTableSource {
             } => {
                 write!(f, "LIKE ")?;
                 write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+            }
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                write!(f, "CLONE ")?;
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(point) = travel_point {
+                    write!(f, " AT {point}")?;
+                }
+                Ok(())
             }
         }
     }
@@ -476,12 +501,19 @@ pub enum AlterTableAction {
     AlterTablePartitionBy {
         partition_by: Vec<Expr>,
     },
+    DropTablePartitionKey,
     DropTableClusterKey,
-    ReclusterTable {
-        is_final: bool,
-        selection: Option<Expr>,
-        limit: Option<u64>,
+    /// `ALTER TABLE ... SET TTL <expr>` sets or replaces the TTL definition.
+    SetTableTtl {
+        ttl: Expr,
     },
+    /// `ALTER TABLE ... REMOVE TTL`.
+    ///
+    /// `DROP TTL` is intentionally not accepted: `DROP <ident>` already means
+    /// dropping a column, so it would be ambiguous with a column named `ttl`.
+    RemoveTableTtl,
+    /// Apply the current TTL definition to existing rows.
+    MaterializeTableTtl,
     FlashbackTo {
         point: TimeTravelPoint,
     },
@@ -495,14 +527,8 @@ pub enum AlterTableAction {
     ModifyConnection {
         new_connection: BTreeMap<String, String>,
     },
-    CreateTableBranch {
-        spec: CreateTableRefSpec,
-    },
     CreateTableTag {
         spec: CreateTableRefSpec,
-    },
-    DropTableBranch {
-        branch_name: Identifier,
     },
     DropTableTag {
         tag_name: Identifier,
@@ -563,24 +589,20 @@ impl Display for AlterTableAction {
                 write_comma_separated_list(f, partition_by)?;
                 write!(f, ")")?;
             }
+            AlterTableAction::DropTablePartitionKey => {
+                write!(f, "DROP PARTITION KEY")?;
+            }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
             }
-            AlterTableAction::ReclusterTable {
-                is_final,
-                selection,
-                limit,
-            } => {
-                write!(f, "RECLUSTER")?;
-                if *is_final {
-                    write!(f, " FINAL")?;
-                }
-                if let Some(conditions) = selection {
-                    write!(f, " WHERE {conditions}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
-                }
+            AlterTableAction::SetTableTtl { ttl } => {
+                write!(f, "SET TTL {ttl}")?;
+            }
+            AlterTableAction::RemoveTableTtl => {
+                write!(f, "REMOVE TTL")?;
+            }
+            AlterTableAction::MaterializeTableTtl => {
+                write!(f, "MATERIALIZE TTL")?;
             }
             AlterTableAction::FlashbackTo { point } => {
                 write!(f, "FLASHBACK TO {}", point)?;
@@ -616,14 +638,8 @@ impl Display for AlterTableAction {
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
-            AlterTableAction::CreateTableBranch { spec } => {
-                write!(f, "CREATE BRANCH {spec}")?;
-            }
             AlterTableAction::CreateTableTag { spec } => {
                 write!(f, "CREATE TAG {spec}")?;
-            }
-            AlterTableAction::DropTableBranch { branch_name } => {
-                write!(f, "DROP BRANCH {branch_name}")?;
             }
             AlterTableAction::DropTableTag { tag_name } => {
                 write!(f, "DROP TAG {tag_name}")?;
@@ -840,7 +856,7 @@ impl OptimizeTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        write!(f, " {}", &self.action)?;
+        write!(f, " {}", self.action)?;
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
         }
@@ -920,10 +936,10 @@ pub enum Engine {
     Memory,
     Fuse,
     MaterializedView,
+    DynamicTable,
     View,
     Random,
     Iceberg,
-    Delta,
     Paimon,
 }
 
@@ -934,10 +950,10 @@ impl Display for Engine {
             Engine::Memory => write!(f, "MEMORY"),
             Engine::Fuse => write!(f, "FUSE"),
             Engine::MaterializedView => write!(f, "MATERIALIZED_VIEW"),
+            Engine::DynamicTable => write!(f, "DYNAMIC_TABLE"),
             Engine::View => write!(f, "VIEW"),
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
-            Engine::Delta => write!(f, "DELTA"),
             Engine::Paimon => write!(f, "PAIMON"),
         }
     }
@@ -950,10 +966,10 @@ impl From<&str> for Engine {
             "memory" => Engine::Memory,
             "fuse" => Engine::Fuse,
             "materialized_view" => Engine::MaterializedView,
+            "dynamic_table" => Engine::DynamicTable,
             "view" => Engine::View,
             "random" => Engine::Random,
             "iceberg" => Engine::Iceberg,
-            "delta" => Engine::Delta,
             "paimon" => Engine::Paimon,
             _ => unreachable!("invalid engine: {}", s),
         }
@@ -968,7 +984,13 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
-    Compact { target: CompactTarget },
+    Compact {
+        target: CompactTarget,
+    },
+    Recluster {
+        is_final: bool,
+        selection: Option<Box<Expr>>,
+    },
 }
 
 impl Display for OptimizeTableAction {
@@ -978,6 +1000,19 @@ impl Display for OptimizeTableAction {
                 CompactTarget::Block => write!(f, "COMPACT"),
                 CompactTarget::Segment => write!(f, "COMPACT SEGMENT"),
             },
+            OptimizeTableAction::Recluster {
+                is_final,
+                selection,
+            } => {
+                write!(f, "RECLUSTER")?;
+                if *is_final {
+                    write!(f, " FINAL")?;
+                }
+                if let Some(selection) = selection {
+                    write!(f, " WHERE {selection}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -1153,12 +1188,13 @@ pub enum ModifyColumnAction {
     // - Identifier: The column name to apply the masking policy to
     // - String: The masking policy name
     // - Option<Vec<Identifier>>: Optional USING clause columns
+    // - Option<bool>: Optional authorization to inspect original values in SELECT WHERE
     //
     // USING clause behavior (follows Snowflake semantics):
     // - First column: The column to mask/tokenize (must match the target column)
     // - Additional columns: Condition columns to evaluate for conditional masking
     // - If USING is omitted: Treats as normal (non-conditional) masking policy
-    SetMaskingPolicy(Identifier, String, Option<Vec<Identifier>>),
+    SetMaskingPolicy(Identifier, String, Option<Vec<Identifier>>, Option<bool>),
     // Unset masking policy from a column
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>
@@ -1172,13 +1208,21 @@ pub enum ModifyColumnAction {
 impl Display for ModifyColumnAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
-            ModifyColumnAction::SetMaskingPolicy(column, name, using_columns) => {
+            ModifyColumnAction::SetMaskingPolicy(
+                column,
+                name,
+                using_columns,
+                where_use_unmasked_value,
+            ) => {
                 if let Some(using_columns) = using_columns {
                     write!(f, "{} SET MASKING POLICY {} USING (", column, name)?;
                     write_comma_separated_list(f, using_columns)?;
                     write!(f, ")")?
                 } else {
                     write!(f, "{} SET MASKING POLICY {}", column, name)?
+                }
+                if let Some(value) = where_use_unmasked_value {
+                    write!(f, " OPTIONS (where_use_unmasked_value = {})", value)?;
                 }
             }
             ModifyColumnAction::UnsetMaskingPolicy(column) => {

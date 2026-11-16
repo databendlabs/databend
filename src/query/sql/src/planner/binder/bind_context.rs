@@ -51,6 +51,7 @@ use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::ColumnEntry;
 use crate::ColumnSet;
+use crate::DefinitionScope;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -254,6 +255,10 @@ pub struct ViewIdent {
 pub struct BindContext {
     pub parent: Option<Box<BindContext>>,
 
+    /// Depth of the binding path, independent of the name-resolution parent.
+    /// View definitions hide the caller's names but still count toward the limit.
+    pub binding_depth: usize,
+
     pub columns: Vec<ColumnBinding>,
 
     // map internal column: (table_index, column_id) -> column_index
@@ -270,6 +275,12 @@ pub struct BindContext {
     pub srf_info: SetReturningInfo,
 
     pub cte_context: CteContext,
+
+    /// A copy of the binder's definition scope, for binders that the type checker
+    /// creates from this context (scalar subqueries) without access to the binder.
+    /// Every `BindContext` built during binding must copy it; the binder checks this
+    /// with `Binder::debug_assert_definition_scope`. Restored on return from a view.
+    pub definition_scope: DefinitionScope,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -347,15 +358,19 @@ impl CteContext {
     }
 }
 
+/// `CteInfo` is cloned whenever a `CteContext` is cloned, which happens for every
+/// nested `BindContext` and every table reference. Keep the heavy payloads
+/// (`query`, `materialized_cte_info`) behind `Arc` so that cloning the map is
+/// cheap and does not deep-copy previously bound CTE definitions.
 #[derive(Clone, Debug)]
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub virtual_column_outputs: BTreeSet<String>,
-    pub query: Query,
+    pub query: Arc<Query>,
     pub recursive: bool,
     pub logical_recursive_cte_id: Option<u32>,
     pub columns: Vec<ColumnBinding>,
-    pub materialized_cte_info: Option<MaterializedCTEInfo>,
+    pub materialized_cte_info: Option<Arc<MaterializedCTEInfo>>,
     pub user_specified_materialized: bool,
 }
 
@@ -363,13 +378,20 @@ pub struct CteInfo {
 pub struct MaterializedCTEInfo {
     pub cte_name: String,
     pub bound_s_expr: SExpr,
-    pub bound_context: BindContext,
+    /// Output column bindings of the producer side of this CTE.
+    ///
+    /// Only the columns are kept here. Storing the whole producer `BindContext`
+    /// would embed its `cte_map` (and therefore every previously bound CTE)
+    /// into this entry, making the size of `CteInfo` grow exponentially with
+    /// the number of materialized CTEs.
+    pub bound_columns: Vec<ColumnBinding>,
 }
 
 impl BindContext {
     pub fn new() -> Self {
         Self {
             parent: None,
+            binding_depth: 1,
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -377,6 +399,7 @@ impl BindContext {
             windows: WindowInfo::default(),
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
+            definition_scope: DefinitionScope::session(),
             in_grouping: false,
             binding_views: HashSet::new(),
             have_async_func: false,
@@ -392,11 +415,19 @@ impl BindContext {
         }
     }
 
+    const MAX_DEPTH: usize = 4096;
+
     pub fn depth(&self) -> usize {
-        if let Some(ref p) = self.parent {
-            return p.depth() + 1;
+        self.binding_depth
+    }
+
+    pub fn next_depth(&self) -> Result<usize> {
+        if self.depth() >= Self::MAX_DEPTH {
+            return Err(ErrorCode::Internal(
+                "Query binder exceeds the maximum iterations",
+            ));
         }
-        1
+        Ok(self.depth() + 1)
     }
 
     pub fn with_opt_parent(parent: Option<&BindContext>) -> Result<Self> {
@@ -408,15 +439,10 @@ impl BindContext {
     }
 
     pub fn with_parent(parent: BindContext) -> Result<Self> {
-        const MAX_DEPTH: usize = 4096;
-        if parent.depth() >= MAX_DEPTH {
-            return Err(ErrorCode::Internal(
-                "Query binder exceeds the maximum iterations",
-            ));
-        }
-
+        let binding_depth = parent.next_depth()?;
         Ok(BindContext {
             parent: Some(Box::new(parent.clone())),
+            binding_depth,
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -424,6 +450,7 @@ impl BindContext {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
+            definition_scope: parent.definition_scope.clone(),
             in_grouping: false,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,
@@ -443,10 +470,28 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
+        bind_context.binding_depth = self.depth();
         bind_context.cte_context = self.cte_context.clone();
+        bind_context.definition_scope = self.definition_scope.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
         bind_context
+    }
+
+    /// Create the root context for binding the definition of `view`.
+    ///
+    /// A view definition is an independent name scope: it must not resolve the
+    /// caller's CTEs or columns, so the new context has no parent and an empty
+    /// CTE context. Carry over the binding depth to limit acyclic expansion,
+    /// and the view expansion path to detect cycles.
+    pub fn new_view_scope(&self, view: ViewIdent) -> Result<Self> {
+        let mut bind_context = BindContext::new();
+        bind_context.binding_depth = self.next_depth()?;
+        bind_context.binding_views = self.binding_views.clone();
+        bind_context.binding_views.insert(view);
+        bind_context.udf_cache = self.udf_cache.clone();
+        bind_context.planning_materialized_view_rewrite = self.planning_materialized_view_rewrite;
+        Ok(bind_context)
     }
 
     pub fn check_view_loop(&self, ident: &ViewIdent) -> Result<()> {
@@ -969,20 +1014,29 @@ impl BindContext {
             self.get_internal_column_table_index(column_binding)?
         };
 
-        let (column_index, is_new) =
-            match self.bound_internal_columns.entry((table_index, column_id)) {
-                btree_map::Entry::Vacant(e) => {
-                    let mut metadata = metadata.write();
-                    let column_index = metadata
-                        .add_internal_column(table_index, column_binding.internal_column.clone());
-                    e.insert(column_index);
-                    (column_index, true)
-                }
-                btree_map::Entry::Occupied(e) => {
-                    let column_index = e.get();
-                    (*column_index, false)
-                }
-            };
+        let (column_index, is_new) = match self
+            .bound_internal_columns
+            .entry((table_index, column_id))
+        {
+            btree_map::Entry::Vacant(e) => {
+                let mut metadata = metadata.write();
+                // The column may already be in the metadata without a binding in this
+                // context: lazy materialization of a subquery adds `_row_id` to the metadata
+                // directly. The scan keeps one column per internal column name, so reuse it
+                // instead of adding a second one that would never be read.
+                let column_index = match metadata.internal_column_index(table_index, column_id) {
+                    Some(index) => index,
+                    None => metadata
+                        .add_internal_column(table_index, column_binding.internal_column.clone()),
+                };
+                e.insert(column_index);
+                (column_index, true)
+            }
+            btree_map::Entry::Occupied(e) => {
+                let column_index = e.get();
+                (*column_index, false)
+            }
+        };
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
@@ -1036,22 +1090,6 @@ impl BindContext {
         {
             btree_map::Entry::Vacant(e) => {
                 let mut metadata = metadata.write();
-                // Allocate a query-time temporary virtual column id. This is not
-                // a persisted segment-local column id: every segment resolves the
-                // canonical path to its own physical column id during pruning/read.
-                let column_id = metadata
-                    .virtual_columns_by_table_index(table_index)
-                    .filter_map(|column| match column {
-                        ColumnEntry::VirtualColumn(VirtualColumn {
-                            query_column_id, ..
-                        }) => Some(*query_column_id),
-                        _ => None,
-                    })
-                    .max()
-                    .map_or(VIRTUAL_COLUMN_ID_START, |column_id| {
-                        column_id.saturating_add(1)
-                    });
-
                 let source_column_id = virtual_column_name.source_column_id;
 
                 // If a target type is provided, the virtual column is cast to that type at the storage layer.
@@ -1072,16 +1110,55 @@ impl BindContext {
                     virtual_column_name.target_cast.as_ref(),
                 );
 
-                let column_index = metadata.add_virtual_column(
-                    table_index,
-                    source_column_name.to_string(),
-                    source_column_id,
-                    column_id,
-                    column_name,
-                    key_paths,
-                    table_data_type,
-                    is_try,
-                );
+                // Another bind context may have bound the same virtual column of the
+                // same scan, e.g. a CTE or subquery and the query reading its output.
+                // Reuse it: two entries with one name collapse into one field in
+                // `TableScan.name_mapping`, and the scan loses the other one.
+                let existing = metadata
+                    .virtual_columns_by_table_index(table_index)
+                    .find_map(|column| match column {
+                        ColumnEntry::VirtualColumn(column)
+                            if column.source_column_id == source_column_id
+                                && column.column_name == column_name
+                                && column.data_type == table_data_type
+                                && column.is_try == is_try =>
+                        {
+                            Some((column.query_column_id, column.column_index))
+                        }
+                        _ => None,
+                    });
+                let (column_id, column_index) = match existing {
+                    Some(existing) => existing,
+                    None => {
+                        // Allocate a query-time temporary virtual column id. This is not
+                        // a persisted segment-local column id: every segment resolves the
+                        // canonical path to its own physical column id during pruning/read.
+                        let column_id = metadata
+                            .virtual_columns_by_table_index(table_index)
+                            .filter_map(|column| match column {
+                                ColumnEntry::VirtualColumn(VirtualColumn {
+                                    query_column_id,
+                                    ..
+                                }) => Some(*query_column_id),
+                                _ => None,
+                            })
+                            .max()
+                            .map_or(VIRTUAL_COLUMN_ID_START, |column_id| {
+                                column_id.saturating_add(1)
+                            });
+                        let column_index = metadata.add_virtual_column(
+                            table_index,
+                            source_column_name.to_string(),
+                            source_column_id,
+                            column_id,
+                            column_name,
+                            key_paths,
+                            table_data_type,
+                            is_try,
+                        );
+                        (column_id, column_index)
+                    }
+                };
 
                 e.insert((column_id, column_index));
                 (column_index, true)
@@ -1107,8 +1184,9 @@ impl BindContext {
         .table_index(Some(table_index))
         .build();
 
-        if is_new {
-            debug_assert!(!self.columns.iter().any(|c| c == &column_binding));
+        // A virtual column reused from another bind context is new to this one,
+        // but may already be visible here through that context's output columns.
+        if is_new && !self.columns.iter().any(|c| c.index == column_index) {
             self.columns.push(column_binding.clone());
         }
 

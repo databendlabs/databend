@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -19,6 +20,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_vacuum_handler::VacuumHandler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
@@ -43,10 +45,10 @@ impl VacuumHandler for RealVacuumHandler {
     async fn do_vacuum_drop_tables(
         &self,
         threads_nums: usize,
-        tables: Vec<Arc<dyn Table>>,
-        dry_run_limit: Option<usize>,
+        tables: Vec<TableInfo>,
+        safe_clone_table_ids: HashSet<u64>,
     ) -> VacuumDropTablesResult {
-        vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
+        vacuum_drop_tables(threads_nums, tables, safe_clone_table_ids).await
     }
 
     async fn do_vacuum_temporary_files(

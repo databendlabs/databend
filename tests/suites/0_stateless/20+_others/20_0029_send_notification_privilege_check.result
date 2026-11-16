@@ -1,0 +1,30 @@
+=== ordinary table send_notification ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'notification_privilege_check'.'send_notification' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Alter] is required on 'default'.'notification_privilege_check'.'send_notification' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'notification_privilege_check'.'send_notification' for user 'notification_sender'@'%' with roles [public]
+42
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [send_notification] for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [send_notification] for user 'notification_sender'@'%' with roles [public]
+remaining send_notification tables: 0
+=== ordinary table fuse_amend ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'notification_privilege_check'.'fuse_amend' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Alter] is required on 'default'.'notification_privilege_check'.'fuse_amend' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'notification_privilege_check'.'fuse_amend' for user 'notification_sender'@'%' with roles [public]
+42
+remaining fuse_amend tables: 0
+=== ordinary table set_cache_capacity ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'notification_privilege_check'.'set_cache_capacity' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Alter] is required on 'default'.'notification_privilege_check'.'set_cache_capacity' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'notification_privilege_check'.'set_cache_capacity' for user 'notification_sender'@'%' with roles [public]
+42
+remaining set_cache_capacity tables: 0
+=== ordinary table numbers ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'notification_privilege_check'.'numbers' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Alter] is required on 'default'.'notification_privilege_check'.'numbers' for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Drop] is required on 'default'.'notification_privilege_check'.'numbers' for user 'notification_sender'@'%' with roles [public]
+42
+remaining numbers tables: 0
+=== actual table functions ===
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [fuse_amend] for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [set_cache_capacity] for user 'notification_sender'@'%' with roles [public]
+3

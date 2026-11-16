@@ -14,6 +14,7 @@
 
 use std::io::Write;
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnRef as ExprColumnRef;
 use databend_common_expression::Expr;
@@ -29,6 +30,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
+use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleNormalizeScalarFilter;
@@ -41,7 +43,10 @@ use databend_common_sql::plans::Filter;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Scan;
 
+use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
+use crate::framework::golden::setup_context;
+use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_title;
 
 #[derive(Clone, Copy)]
@@ -219,8 +224,8 @@ fn write_case(file: &mut impl Write, case: &Case, columns: &[(&str, DataType)]) 
     Ok(())
 }
 
-#[test]
-fn test_normalize_scalar_filter_rule_outcomes() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_normalize_scalar_filter_rule_outcomes() -> Result<()> {
     let mut file = open_golden_file("optimizer", "normalize_scalar.txt")?;
 
     let columns = &[
@@ -332,5 +337,187 @@ fn test_normalize_scalar_filter_rule_outcomes() -> Result<()> {
         write_case(&mut file, case, columns)?;
     }
 
+    write_infer_filter_cases(&mut file).await?;
+    Ok(())
+}
+
+// Exercise constraint normalization through SQL and the complete optimizer pipeline,
+// in addition to the local boolean normalization cases above.
+async fn write_infer_filter_cases(file: &mut impl Write) -> Result<()> {
+    let setup_sqls = &[
+        "CREATE TABLE infer_bounds(x BIGINT, y INT, f FLOAT32, d DECIMAL(18, 2), d38 DECIMAL(38, 2), d76 DECIMAL(76, 2), e DECIMAL(38, 3))",
+        "CREATE TABLE infer_right(x BIGINT)",
+        "CREATE TABLE infer_decimal_chain(a DECIMAL(37,0), b DECIMAL(1,0), c DECIMAL(38,2))",
+    ];
+    let cases = [
+        (
+            "redundant_upper_1",
+            "Only the tightest upper bound remains.",
+            "SELECT x FROM infer_bounds WHERE x > 0 AND x < 10 AND x < 5",
+        ),
+        (
+            "redundant_upper_2",
+            "Reordering bounds must not affect the optimized filter.",
+            "SELECT x FROM infer_bounds WHERE x < 10 AND x < 5 AND x > 0",
+        ),
+        (
+            "redundant_upper_3",
+            "Reordering bounds must not affect the optimized filter.",
+            "SELECT x FROM infer_bounds WHERE x < 5 AND x > 0 AND x < 10",
+        ),
+        (
+            "contradiction_1",
+            "The tightest bounds contradict, even with an earlier weaker bound.",
+            "SELECT x FROM infer_bounds WHERE x > 0 AND x < 5 AND x >= 5",
+        ),
+        (
+            "contradiction_2",
+            "Reordering contradictory bounds still eliminates the scan.",
+            "SELECT x FROM infer_bounds WHERE x < 5 AND x >= 5 AND x > 0",
+        ),
+        (
+            "contradiction_3",
+            "Reordering contradictory bounds still eliminates the scan.",
+            "SELECT x FROM infer_bounds WHERE x >= 5 AND x > 0 AND x < 5",
+        ),
+        (
+            "excluded_endpoints",
+            "Endpoint exclusions open both bounds; irrelevant and duplicate exclusions disappear.",
+            "SELECT x FROM infer_bounds WHERE x >= 0 AND x <= 10 AND x != 0 AND x != 10 AND x != 5 AND x != 5 AND x != 20",
+        ),
+        (
+            "excluded_singleton",
+            "Closed coincident bounds plus an exclusion are contradictory.",
+            "SELECT x FROM infer_bounds WHERE x != 5 AND x >= 5 AND x <= 5",
+        ),
+        (
+            "equality",
+            "An equality absorbs compatible bounds and exclusions.",
+            "SELECT x FROM infer_bounds WHERE x > 0 AND x < 10 AND x != 1 AND x = 5",
+        ),
+        (
+            "equivalent_columns",
+            "Contradictory bounds are merged across a lossless Int32/Int64 equality.",
+            "SELECT x FROM infer_bounds WHERE x = y AND x > 0 AND x < 5 AND y >= 5",
+        ),
+        (
+            "join_and_aggregate",
+            "A propagated contradiction eliminates the join inputs but preserves COUNT on empty input.",
+            "SELECT count(*) FROM infer_bounds AS l JOIN infer_right AS r ON l.x = r.x WHERE l.x > 0 AND l.x < 5 AND r.x >= 5",
+        ),
+        (
+            "nullable_singleton",
+            "Collapsing bounds to equality must still reject NULL rows.",
+            "SELECT x FROM infer_bounds WHERE x >= 5 AND x <= 5",
+        ),
+        (
+            "null_comparison",
+            "Comparison with NULL cannot be true in a WHERE clause.",
+            "SELECT x FROM infer_bounds WHERE x > 0 AND x != NULL",
+        ),
+        (
+            "null_typed_equivalence_bridge",
+            "A NULL-typed expression cannot connect exact and floating numeric equivalence classes.",
+            "SELECT x FROM infer_bounds CROSS JOIN (SELECT NULL AS n) AS nulls WHERE x = nulls.n AND nulls.n = f AND x > 0 AND f > 0",
+        ),
+        (
+            "nullable_reflexive",
+            "Reflexive equality is retained to reject NULL rows.",
+            "SELECT x FROM infer_bounds WHERE x = x",
+        ),
+        (
+            "lossless_cast",
+            "Integer widening allows constraint inference.",
+            "SELECT y FROM infer_bounds WHERE CAST(y AS BIGINT) > 0 AND y < 5 AND y >= 5",
+        ),
+        (
+            "lossy_integer_float_cast",
+            "Integer-to-float equality must not propagate a rounded constant to the integer column.",
+            "SELECT x FROM infer_bounds WHERE CAST(x AS FLOAT64) = 9007199254740992::FLOAT64 AND x = 9007199254740993",
+        ),
+        (
+            "mixed_integer_float_equality",
+            "Equal widened Float64 values must not make different exact integer constants contradictory.",
+            "SELECT l.x FROM infer_bounds AS l JOIN infer_right AS r ON CAST(l.x AS FLOAT64) = CAST(r.x AS FLOAT64) WHERE l.x = 9007199254740993 AND r.x = 9007199254740992",
+        ),
+        (
+            "float32_narrowing",
+            "A Float64 endpoint that is not exactly Float32 must not be rounded while removing a cast.",
+            "SELECT f FROM infer_bounds WHERE CAST(f AS FLOAT64) > 0.1::FLOAT64 AND CAST(f AS FLOAT64) < 0.100000002::FLOAT64",
+        ),
+        (
+            "float_signed_zero",
+            "Signed zeros compare equal; excluding that singleton is contradictory.",
+            "SELECT f FROM infer_bounds WHERE f >= (-0.0)::FLOAT32 AND f <= 0.0::FLOAT32 AND f != 0.0::FLOAT32",
+        ),
+        (
+            "float_nonfinite",
+            "Non-finite constants retain their SQL comparison semantics.",
+            "SELECT f FROM infer_bounds WHERE f > '-inf'::FLOAT32 AND f < 'nan'::FLOAT32",
+        ),
+        (
+            "decimal64",
+            "Exact Decimal64 bounds collapse to equality.",
+            "SELECT d FROM infer_bounds WHERE d >= 9999999999999999.99::DECIMAL(18,2) AND d <= 9999999999999999.99::DECIMAL(18,2)",
+        ),
+        (
+            "decimal128",
+            "An excluded Decimal128 boundary is contradictory without floating-point conversion.",
+            "SELECT d38 FROM infer_bounds WHERE d38 >= 999999999999999999999999999999999999.99::DECIMAL(38,2) AND d38 <= 999999999999999999999999999999999999.99::DECIMAL(38,2) AND d38 != 999999999999999999999999999999999999.99::DECIMAL(38,2)",
+        ),
+        (
+            "decimal256",
+            "An excluded Decimal256 singleton is contradictory at full precision.",
+            "SELECT d76 FROM infer_bounds WHERE d76 >= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)) AND d76 <= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)) AND d76 != CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2))",
+        ),
+        (
+            "decimal_equivalent_scales",
+            "Exact comparison across losslessly comparable Decimal types catches propagated contradictions.",
+            "SELECT d FROM infer_bounds WHERE d = e AND d < 5.00::DECIMAL(18,2) AND e >= 5.000::DECIMAL(38,3)",
+        ),
+        (
+            "decimal_transitive_unsafe_common_type",
+            "A safe equality chain must not introduce direct comparisons whose common Decimal precision would overflow.",
+            "SELECT a FROM infer_decimal_chain WHERE a = b AND b = c AND c >= 5.00::DECIMAL(38,2) AND a < 8::DECIMAL(37,0)",
+        ),
+        (
+            "integer_out_of_range",
+            "An out-of-range constant is retained rather than truncated to the column type.",
+            "SELECT y FROM infer_bounds WHERE y > 0 AND y < 10 AND y < 2147483648",
+        ),
+        (
+            "decimal_rounding_cast",
+            "Constraints on differently scaled casts cannot be applied to the uncast column.",
+            "SELECT d FROM infer_bounds WHERE CAST(d AS DECIMAL(18,1)) = 1.0::DECIMAL(18,1) AND d > 1.0::DECIMAL(18,2)",
+        ),
+    ];
+    for (name, description, sql) in cases {
+        let case = SqlTestCase {
+            name,
+            description,
+            setup_sqls,
+            sql,
+        };
+        let ctx = setup_context(&case).await?;
+        let raw_plan = ctx.bind_sql(sql).await?;
+        let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
+        let opt_ctx =
+            OptimizerContext::new(ctx.clone(), Default::default(), ctx.get_function_context()?);
+        let stat_ctx = opt_ctx.get_stat_context();
+        write_case_header(file, &case)?;
+        writeln!(file, "raw_plan:")?;
+        writeln!(
+            file,
+            "{}",
+            raw_plan.format_indent(Default::default(), stat_ctx)?
+        )?;
+        writeln!(file, "optimized_plan:")?;
+        writeln!(
+            file,
+            "{}",
+            optimized_plan.format_indent(Default::default(), stat_ctx)?
+        )?;
+        writeln!(file)?;
+    }
     Ok(())
 }

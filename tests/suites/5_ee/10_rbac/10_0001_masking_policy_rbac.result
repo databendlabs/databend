@@ -8,13 +8,13 @@
 >>>> DROP ROLE IF EXISTS role_mask_apply
 >>>> DROP ROLE IF EXISTS role_mask_create
 >>>> CREATE TABLE mp_rbac(id INT, phone STRING, email STRING)
+>>>> CREATE ROLE role_mask_apply
+>>>> CREATE ROLE role_mask_create
 >>>> CREATE USER mask_create IDENTIFIED BY '123' with default_role='role_mask_create'
 >>>> CREATE USER mask_apply IDENTIFIED BY '123' with default_role='role_mask_apply'
->>>> CREATE ROLE role_mask_apply
 >>>> GRANT ROLE role_mask_apply TO mask_apply
->>>> CREATE ROLE role_mask_create
 >>>> GRANT ROLE role_mask_create TO mask_create
->>>> CREATE USER mask_desc IDENTIFIED BY '123' with default_role='mask_desc'
+>>>> CREATE USER mask_desc IDENTIFIED BY '123'
 #### create privilege requires CREATE MASKING POLICY
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateMaskingPolicy] is required on *.* for user 'mask_create'@'%' with roles [role_mask_create]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 >>>> GRANT CREATE MASKING POLICY ON *.* TO role role_mask_create

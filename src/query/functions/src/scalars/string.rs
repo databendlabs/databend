@@ -169,6 +169,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry
         .scalar_builder("octet_length")
+        .property(FunctionProperty::default().dictionary_eval())
         .function()
         .typed_1_arg::<StringType, NumberType<u64>>()
         .passthrough_nullable()
@@ -179,6 +180,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "length",
         |_, _| FunctionDomain::Full,
         |val, _ctx| val.chars().count() as u64,
+    );
+
+    registry.properties.insert(
+        "length".to_string(),
+        FunctionProperty::default().dictionary_eval(),
     );
 
     const MAX_PADDING_LENGTH: usize = 1000000;

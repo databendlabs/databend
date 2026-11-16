@@ -17,3 +17,4 @@ mod hybrid_state;
 
 pub use hybrid_join::HybridHashJoin;
 pub use hybrid_state::HybridHashJoinState;
+pub use hybrid_state::HybridLevelStates;

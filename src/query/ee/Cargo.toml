@@ -46,6 +46,7 @@ databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+databend-storages-common-index = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
@@ -55,21 +56,19 @@ jsonwebtoken = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-serde = { workspace = true }
 siphasher = { workspace = true }
 tempfile = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-common-settings = { workspace = true }
-databend-storages-common-pruner = { workspace = true }
-jsonb = { workspace = true }
+http = { workspace = true }
+parking_lot = { workspace = true }
+reqsign = { workspace = true }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
-
-[package.metadata.cargo-machete]
-ignored = ["serde"]
 
 [lints]
 workspace = true

@@ -67,7 +67,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<A, S> HookTransform for TransformSortRestore<A, S>
 where
     A: SortAlgorithm + 'static,
@@ -92,14 +91,13 @@ where
 
     fn need_process(&self, input_finished: bool) -> Option<Event> {
         if input_finished && (self.inner.is_some() || !self.input.is_empty()) {
-            Some(Event::Async)
+            Some(Event::Sync)
         } else {
             None
         }
     }
 
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
+    fn process(&mut self) -> Result<()> {
         let spill_sort = match &mut self.inner {
             Some(inner) => inner,
             None => {
@@ -124,9 +122,7 @@ where
             block,
             bound: (bound_index, _),
             finish,
-        } = spill_sort
-            .on_restore(self.base.spiller.memory_settings())
-            .await?;
+        } = spill_sort.on_restore(self.base.spiller.memory_settings())?;
         if let Some(block) = block {
             let mut block =
                 block.add_meta(Some(SortBound::create(bound_index, SortBoundNext::More)))?;

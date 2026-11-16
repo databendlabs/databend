@@ -26,4 +26,11 @@ pub trait FlightScatter: Sync + Send {
     fn scatter_indices(&self, _data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
         Ok(None)
     }
+
+    /// Route a block that carries its data in its meta and has no rows, such as the states of
+    /// a partial aggregate, whole to the partitions of a hash shuffle: returns the block of each
+    /// partition. Returns None if this scatter does not route such blocks; they are dropped.
+    fn route_meta_block(&self, _data_block: DataBlock) -> Result<Option<Vec<DataBlock>>> {
+        Ok(None)
+    }
 }

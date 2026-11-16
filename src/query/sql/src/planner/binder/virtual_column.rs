@@ -45,6 +45,7 @@ use databend_common_exception::Result;
 use log::debug;
 
 use crate::BindContext;
+use crate::CteResolution;
 use crate::NameResolutionContext;
 use crate::SelectBuilder;
 use crate::binder::Binder;
@@ -320,6 +321,7 @@ impl Binder {
             requirements: HashMap::new(),
             next_id: 0,
             name_resolution_ctx: self.name_resolution_ctx.clone(),
+            cte_resolution: self.definition_scope.cte_resolution(),
         };
 
         for (consumer_index, consumer_cte) in with.ctes.iter_mut().enumerate() {
@@ -500,6 +502,7 @@ impl Binder {
             aliases: HashMap::new(),
             source_count: 0,
             name_resolution_ctx,
+            cte_resolution: rewriter.cte_resolution,
         };
         if select.from.walk(&mut alias_collector).is_err() || alias_collector.aliases.is_empty() {
             return false;
@@ -527,6 +530,7 @@ struct MaterializedCteAliasCollector<'a> {
     aliases: HashMap<String, String>,
     source_count: usize,
     name_resolution_ctx: NameResolutionContext,
+    cte_resolution: CteResolution,
 }
 
 impl Visitor for MaterializedCteAliasCollector<'_> {
@@ -538,7 +542,11 @@ impl Visitor for MaterializedCteAliasCollector<'_> {
             TableReference::Table { table, alias, .. } => {
                 self.source_count += 1;
                 let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
-                if self.cte_names.contains(&table_name) {
+                if self
+                    .cte_resolution
+                    .may_reference_cte(table.database.is_some())
+                    && self.cte_names.contains(&table_name)
+                {
                     let alias_name = alias
                         .as_ref()
                         .map(|alias| {
@@ -615,6 +623,7 @@ struct MaterializedCteVirtualColumnRewriter {
     requirements: HashMap<String, BTreeMap<String, MaterializedCteRequirement>>,
     next_id: usize,
     name_resolution_ctx: NameResolutionContext,
+    cte_resolution: CteResolution,
 }
 
 impl VisitorMut for MaterializedCteVirtualColumnRewriter {

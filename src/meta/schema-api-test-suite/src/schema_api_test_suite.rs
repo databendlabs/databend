@@ -25,6 +25,7 @@ use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -38,6 +39,7 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
 use databend_common_meta_api::LockApi2;
 use databend_common_meta_api::MaterializedViewApi;
+use databend_common_meta_api::RefApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -53,15 +55,22 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TableEngineMismatch;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
+use databend_common_meta_app::data_mask::DataMaskId;
+use databend_common_meta_app::data_mask::DataMaskIdIdent;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
+use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -75,6 +84,7 @@ use databend_common_meta_app::schema::CreateMaterializedViewMeta;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableCloneMeta;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -122,6 +132,8 @@ use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
+use databend_common_meta_app::schema::MaterializedViewListFilter;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -134,6 +146,8 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableCloneBinding;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
@@ -169,6 +183,12 @@ use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
+use databend_common_meta_app::value_id::ValueId;
+use databend_common_proto_conv::FromToProto;
+use databend_common_proto_conv::MIN_READER_VER;
+use databend_common_proto_conv::VER;
+use databend_common_protos::pb;
+use databend_common_protos::prost::Message;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::StructKey;
@@ -314,9 +334,16 @@ impl SchemaApiTestSuite {
             + TableApi
             + GarbageCollectionApi
             + MaterializedViewApi
+            + RefApi
             + 'static,
     {
         self.table_commit_table_meta(&b.build().await).await?;
+        self.vacuum_skips_recent_ctas_orphan(&b.build().await)
+            .await?;
+        self.vacuum_skips_undecodable_table(&b.build().await)
+            .await?;
+        self.vacuum_dropped_database_with_limit(&b.build().await)
+            .await?;
         self.table_commit_after_drop_different_engine(&b.build().await)
             .await?;
         self.table_commit_table_meta_engine_mismatch(&b.build().await)
@@ -327,6 +354,7 @@ impl SchemaApiTestSuite {
         self.table_create_get_drop(&b.build().await).await?;
         self.table_create_with_source_option_atomicity(&b.build().await)
             .await?;
+        self.table_clone_atomicity(&b.build().await).await?;
         self.materialized_view_lifecycle(&b.build().await).await?;
         self.table_drop_without_db_id_to_name(&b.build().await)
             .await?;
@@ -1564,19 +1592,68 @@ impl SchemaApiTestSuite {
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_big).await?;
             assert_eq!(res.time, time_big);
             let res = mt.get_table_lvt(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().time, time_big);
+            assert_eq!(res.unwrap().data.time, time_big);
 
             // test lvt never fall back
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_small).await?;
             assert_eq!(res.time, time_big);
             let res = mt.get_table_lvt(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().time, time_big);
+            assert_eq!(res.unwrap().data.time, time_big);
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_bigger).await?;
             assert_eq!(res.time, time_bigger);
             let res = mt.get_table_lvt(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().time, time_bigger);
+            assert_eq!(res.unwrap().data.time, time_bigger);
+
+            // A batch must remain monotonic even if one table appears more than once.
+            let before = mt.get_table_lvt(&lvt_name_ident).await?.unwrap();
+            assert!(
+                mt.set_table_lvts(&tenant, &[
+                    (
+                        table_id,
+                        before.seq,
+                        LeastVisibleTime::new(time_bigger + Duration::seconds(10))
+                    ),
+                    (table_id, before.seq, lvt_small.clone()),
+                ])
+                .await?
+            );
+            let after = mt.get_table_lvt(&lvt_name_ident).await?.unwrap();
+            assert_eq!(after.data.time, time_bigger + Duration::seconds(10));
+            assert!(after.seq > before.seq);
+            assert!(
+                !mt.set_table_lvts(&tenant, &[
+                    (table_id, after.seq, lvt_big.clone()),
+                    (table_id, before.seq, lvt_small),
+                ])
+                .await?
+            );
+            assert_eq!(mt.get_table_lvt(&lvt_name_ident).await?, Some(after));
+
+            // A conflict on one table ID must abort updates for every other table ID.
+            let other_table_id = table_id + 1;
+            let other_ident = LeastVisibleTimeIdent::new(&tenant, other_table_id);
+            mt.set_table_lvt(&other_ident, &lvt_big).await?;
+            let other_before = mt.get_table_lvt(&other_ident).await?.unwrap();
+            let first_before = mt.get_table_lvt(&lvt_name_ident).await?.unwrap();
+            assert!(
+                !mt.set_table_lvts(&tenant, &[
+                    (
+                        table_id,
+                        first_before.seq,
+                        LeastVisibleTime::new(first_before.data.time + Duration::seconds(1)),
+                    ),
+                    (
+                        other_table_id,
+                        other_before.seq - 1,
+                        LeastVisibleTime::new(other_before.data.time + Duration::seconds(1)),
+                    ),
+                ])
+                .await?
+            );
+            assert_eq!(mt.get_table_lvt(&lvt_name_ident).await?, Some(first_before));
+            assert_eq!(mt.get_table_lvt(&other_ident).await?, Some(other_before));
         }
 
         Ok(())
@@ -1688,6 +1765,7 @@ impl SchemaApiTestSuite {
                 },
                 source_table_option,
                 as_dropped: false,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -1794,6 +1872,462 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    async fn table_clone_atomicity<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + RefApi + TableApi {
+        let mut source = DbTableHarness::new(mt, "table_clone_atomicity", "db", "source", "FUSE");
+        source.create_db().await?;
+        let tenant = source.tenant();
+        let mask_policy_id = 101;
+        let row_policy_id = 102;
+        mt.upsert_pb(&UpsertPB::insert(
+            DataMaskIdIdent::new_generic(&tenant, DataMaskId::new(mask_policy_id)),
+            DatamaskMeta {
+                args: vec![("value".to_string(), "UInt64".to_string())],
+                return_type: "UInt64".to_string(),
+                body: "value".to_string(),
+                comment: None,
+                create_on: Utc::now(),
+                update_on: None,
+            },
+        ))
+        .await?;
+        mt.upsert_pb(&UpsertPB::insert(
+            RowAccessPolicyIdIdent::new_generic(&tenant, RowAccessPolicyId::new(row_policy_id)),
+            RowAccessPolicyMeta {
+                args: vec![("value".to_string(), "UInt64".to_string())],
+                body: "true".to_string(),
+                comment: None,
+                create_on: Utc::now(),
+                update_on: None,
+            },
+        ))
+        .await?;
+
+        let (source_id, source_meta) = source
+            .create_table_with(
+                |mut meta| {
+                    meta.schema = Arc::new(TableSchema::new(vec![
+                        TableField::new("number", TableDataType::Number(NumberDataType::UInt64))
+                            .with_auto_increment_expr(Some(AutoIncrementExpr {
+                                column_id: 0,
+                                start: 10,
+                                step: 1,
+                                is_ordered: true,
+                            })),
+                    ]));
+                    meta.column_mask_policy_columns_ids
+                        .insert(0, SecurityPolicyColumnMap::new(mask_policy_id, vec![0]));
+                    meta.row_access_policy_columns_ids =
+                        Some(SecurityPolicyColumnMap::new(row_policy_id, vec![0]));
+                    meta
+                },
+                |req| req,
+            )
+            .await?;
+        let source_auto_increment =
+            AutoIncrementStorageIdent::new_generic(&tenant, AutoIncrementKey::new(source_id, 0));
+        mt.upsert_pb(&UpsertPB::update(
+            source_auto_increment.clone(),
+            ValueId::<AutoIncrementStorageValue>::new(42),
+        ))
+        .await?;
+
+        let db_name = source.db_name();
+        let snapshot_time = Utc::now();
+        let clone_table_meta = source_meta.clone();
+
+        let clone_req = |name: &str,
+                         source_table_id: u64,
+                         source_table_seq: MatchSeq,
+                         clone_group_id: u64,
+                         snapshot_timestamp: DateTime<Utc>| {
+            let mut table_meta = clone_table_meta.clone();
+            table_meta.drop_on = Some(Utc::now());
+            table_meta.options.insert(
+                OPT_KEY_CLONE_GROUP_ID.to_string(),
+                clone_group_id.to_string(),
+            );
+            CreateTableReq {
+                create_option: CreateOption::Create,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, &db_name, name),
+                table_meta,
+                source_table_option: None,
+                as_dropped: true,
+                clone: Some(CreateTableCloneMeta {
+                    source_table_id,
+                    source_table_seq,
+                    snapshot_timestamp,
+                }),
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            }
+        };
+        let commit_clone = |reply: &CreateTableReply, name: &str| CommitTableMetaReq {
+            name_ident: TableNameIdent::new(&tenant, &db_name, name),
+            db_id: reply.db_id,
+            table_id: reply.table_id,
+            prev_table_id: reply.prev_table_id,
+            orphan_table_name: reply.orphan_table_name.clone(),
+        };
+
+        // A clone request cannot also mutate source options. Reject it before changing either
+        // source metadata or target visibility.
+        let source_before = source.get_table().await?;
+        let mut invalid_req = clone_req(
+            "clone_with_source_update",
+            source_id,
+            MatchSeq::Exact(source_before.ident.seq),
+            source_id,
+            snapshot_time,
+        );
+        invalid_req.source_table_option = Some(UpsertTableOptionReq {
+            table_id: source_id,
+            seq: MatchSeq::Exact(source_before.ident.seq),
+            options: HashMap::from([("change_tracking".to_string(), Some("true".to_string()))]),
+        });
+        let err = mt.create_table(invalid_req).await.unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::InvalidTableClone(_))
+        ));
+        assert_eq!(source.get_table().await?, source_before);
+        assert!(
+            mt.get_table(GetTableReq::new(
+                &tenant,
+                &db_name,
+                "clone_with_source_update"
+            ))
+            .await
+            .is_err()
+        );
+
+        // Creating the first clone atomically initializes the source group and target binding.
+        let source_before = source.get_table().await?;
+        let first = mt
+            .create_table(clone_req(
+                "clone_1",
+                source_id,
+                MatchSeq::Exact(source_before.ident.seq),
+                source_id,
+                snapshot_time,
+            ))
+            .await?;
+        let first_auto_increment = AutoIncrementStorageIdent::new_generic(
+            &tenant,
+            AutoIncrementKey::new(first.table_id, 0),
+        );
+        assert_eq!(
+            mt.get_pb(&first_auto_increment).await?.unwrap().data,
+            ValueId::<AutoIncrementStorageValue>::new(42)
+        );
+        mt.upsert_pb(&UpsertPB::update(
+            source_auto_increment.clone(),
+            ValueId::<AutoIncrementStorageValue>::new(43),
+        ))
+        .await?;
+        assert_eq!(
+            mt.get_pb(&first_auto_increment).await?.unwrap().data,
+            ValueId::<AutoIncrementStorageValue>::new(42),
+            "clone auto-increment counter must advance independently"
+        );
+        let first_binding = TableCloneByGroupIdent::new(source_id, first.table_id);
+        assert_eq!(
+            mt.get_pb(&first_binding).await?.unwrap().data,
+            TableCloneBinding {
+                source_table_id: source_id,
+            }
+        );
+        let source_after = source.get_table().await?;
+        assert!(source_after.ident.seq > source_before.ident.seq);
+        assert_eq!(
+            source_after.meta.options.get(OPT_KEY_CLONE_GROUP_ID),
+            Some(&source_id.to_string())
+        );
+        assert!(
+            mt.get_pb(&MaskPolicyTableIdIdent::new_generic(
+                &tenant,
+                MaskPolicyIdTableId {
+                    policy_id: mask_policy_id,
+                    table_id: first.table_id,
+                },
+            ))
+            .await?
+            .is_some()
+        );
+        assert!(
+            mt.get_pb(&RowAccessPolicyTableIdIdent::new_generic(
+                &tenant,
+                RowAccessPolicyIdTableId {
+                    policy_id: row_policy_id,
+                    table_id: first.table_id,
+                },
+            ))
+            .await?
+            .is_some()
+        );
+        mt.commit_table_meta(commit_clone(&first, "clone_1"))
+            .await?;
+        let first_info = source.get_table_by_name("clone_1").await?;
+
+        // Clone-of-clone keeps the stable group and requires the source clone binding.
+        let second = mt
+            .create_table(clone_req(
+                "clone_2",
+                first.table_id,
+                MatchSeq::Exact(first_info.ident.seq),
+                source_id,
+                snapshot_time,
+            ))
+            .await?;
+        let second_binding = TableCloneByGroupIdent::new(source_id, second.table_id);
+        assert_eq!(
+            mt.get_pb(&second_binding).await?.unwrap().data,
+            TableCloneBinding {
+                source_table_id: first.table_id,
+            }
+        );
+        assert!(
+            mt.get_pb(&MaskPolicyTableIdIdent::new_generic(
+                &tenant,
+                MaskPolicyIdTableId {
+                    policy_id: mask_policy_id,
+                    table_id: second.table_id,
+                },
+            ))
+            .await?
+            .is_some()
+        );
+        assert!(
+            mt.get_pb(&RowAccessPolicyTableIdIdent::new_generic(
+                &tenant,
+                RowAccessPolicyIdTableId {
+                    policy_id: row_policy_id,
+                    table_id: second.table_id,
+                },
+            ))
+            .await?
+            .is_some()
+        );
+        mt.commit_table_meta(commit_clone(&second, "clone_2"))
+            .await?;
+
+        let bindings = mt.list_clone_group_bindings(source_id).await?;
+        assert_eq!(
+            bindings.iter().copied().collect::<BTreeMap<_, _>>(),
+            BTreeMap::from([
+                (first.table_id, source_id),
+                (second.table_id, first.table_id),
+            ])
+        );
+        let descendant_metas = mt.mget_table_metas_by_ids(&[second.table_id]).await?;
+        assert_eq!(descendant_metas.len(), 1);
+        assert_eq!(descendant_metas[0].0, second.table_id);
+        assert!(descendant_metas[0].1.is_some());
+
+        // A missing source counter is metadata corruption: do not guess the schema start and
+        // reopen the sequence. Reject the clone without publishing target metadata or lineage.
+        mt.upsert_pb(&UpsertPB::delete(source_auto_increment.clone()))
+            .await?;
+        let bindings_before_failure = mt.list_clone_group_bindings(source_id).await?;
+        let current_source = source.get_table().await?;
+        let err = mt
+            .create_table(clone_req(
+                "missing_auto_increment_clone",
+                source_id,
+                MatchSeq::Exact(current_source.ident.seq),
+                source_id,
+                snapshot_time,
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::InvalidTableClone(_))
+        ));
+        assert!(
+            mt.get_table(GetTableReq::new(
+                &tenant,
+                &db_name,
+                "missing_auto_increment_clone"
+            ))
+            .await
+            .is_err()
+        );
+        assert_eq!(
+            mt.list_clone_group_bindings(source_id).await?,
+            bindings_before_failure
+        );
+        mt.upsert_pb(&UpsertPB::insert(
+            source_auto_increment.clone(),
+            ValueId::<AutoIncrementStorageValue>::new(43),
+        ))
+        .await?;
+
+        // A stale source sequence rejects the transaction before any target metadata or binding
+        // becomes visible.
+        let bindings_before_failure = mt.list_clone_group_bindings(source_id).await?;
+        let err = mt
+            .create_table(clone_req(
+                "stale_clone",
+                source_id,
+                MatchSeq::Exact(source_after.ident.seq + 100),
+                source_id,
+                snapshot_time,
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableVersionMismatched(_))
+        ));
+        assert!(
+            mt.get_table(GetTableReq::new(&tenant, &db_name, "stale_clone"))
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            mt.list_clone_group_bindings(source_id).await?,
+            bindings_before_failure
+        );
+
+        // The source table's LVT rejects a historical clone, also without partial metadata.
+        let lvt = snapshot_time + Duration::seconds(1);
+        mt.set_table_lvt(
+            &LeastVisibleTimeIdent::new(&tenant, source_id),
+            &LeastVisibleTime::new(lvt),
+        )
+        .await?;
+        let current_source = source.get_table().await?;
+        let err = mt
+            .create_table(clone_req(
+                "expired_clone",
+                source_id,
+                MatchSeq::Exact(current_source.ident.seq),
+                source_id,
+                snapshot_time,
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableSnapshotExpired(_))
+        ));
+        assert!(
+            mt.get_table(GetTableReq::new(&tenant, &db_name, "expired_clone"))
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            mt.list_clone_group_bindings(source_id).await?,
+            bindings_before_failure
+        );
+
+        // A clone created after LVT publication inherits the source fence. This keeps subsequent
+        // clone-of-clone operations from reopening history that the source already made invisible.
+        let current_source = source.get_table().await?;
+        let inherited = mt
+            .create_table(clone_req(
+                "inherited_lvt_clone",
+                source_id,
+                MatchSeq::Exact(current_source.ident.seq),
+                source_id,
+                lvt,
+            ))
+            .await?;
+        assert_eq!(
+            mt.get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, inherited.table_id))
+                .await?
+                .map(|v| v.data),
+            Some(LeastVisibleTime::new(lvt))
+        );
+        mt.commit_table_meta(commit_clone(&inherited, "inherited_lvt_clone"))
+            .await?;
+        let inherited_info = source.get_table_by_name("inherited_lvt_clone").await?;
+        let err = mt
+            .create_table(clone_req(
+                "expired_nested_clone",
+                inherited.table_id,
+                MatchSeq::Exact(inherited_info.ident.seq),
+                source_id,
+                snapshot_time,
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::TableSnapshotExpired(_))
+        ));
+
+        // A staged replacement leaves the old TableMeta unchanged but unbinds its name, making it
+        // eligible for VACUUM DROP. A clone bound before the replacement must not revive it.
+        let mut replacement_meta = source_meta.clone();
+        replacement_meta.drop_on = Some(Utc::now());
+        let replacement = mt
+            .create_table(CreateTableReq {
+                create_option: CreateOption::CreateOrReplace,
+                catalog_name: None,
+                name_ident: TableNameIdent::new(&tenant, &db_name, "inherited_lvt_clone"),
+                table_meta: replacement_meta,
+                source_table_option: None,
+                as_dropped: true,
+                clone: None,
+                materialized_view: None,
+                table_properties: None,
+                table_partition: None,
+            })
+            .await?;
+        mt.commit_table_meta(commit_clone(&replacement, "inherited_lvt_clone"))
+            .await?;
+        let err = mt
+            .create_table(clone_req(
+                "replaced_source_clone",
+                inherited.table_id,
+                MatchSeq::Exact(inherited_info.ident.seq),
+                source_id,
+                lvt,
+            ))
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::UnknownTableId(_))
+        ));
+        assert!(
+            mt.get_table(GetTableReq::new(&tenant, &db_name, "replaced_source_clone"))
+                .await
+                .is_err()
+        );
+
+        // DROP DATABASE also leaves member TableMetas untouched while making them eligible for
+        // VACUUM DROP. A clone of the current source version must be rejected afterwards.
+        let mut target =
+            DbTableHarness::new(mt, "table_clone_atomicity", "target_db", "clone", "FUSE");
+        target.create_db().await?;
+        let current_source = source.get_table().await?;
+        mt.drop_database(DropDatabaseReq {
+            if_exists: false,
+            name_ident: DatabaseNameIdent::new(&tenant, &db_name),
+        })
+        .await?;
+        let mut req = clone_req(
+            "dropped_database_clone",
+            source_id,
+            MatchSeq::Exact(current_source.ident.seq),
+            source_id,
+            lvt,
+        );
+        req.name_ident = TableNameIdent::new(&tenant, target.db_name(), "dropped_database_clone");
+        let err = mt.create_table(req).await.unwrap_err();
+        assert!(matches!(
+            err,
+            KVAppError::AppError(AppError::UnknownTableId(_))
+        ));
+
+        Ok(())
+    }
+
     async fn materialized_view_lifecycle<
         MT: kvapi::KVApi<Error = MetaError>
             + DatabaseApi
@@ -1865,6 +2399,7 @@ impl SchemaApiTestSuite {
                 table_meta,
                 source_table_option: None,
                 as_dropped: false,
+                clone: None,
                 materialized_view: Some(CreateMaterializedViewMeta {
                     definition: definition.clone(),
                     expected_source_generation: source_binding_generation,
@@ -1880,24 +2415,33 @@ impl SchemaApiTestSuite {
             )
         };
 
-        // A missing source rejects CREATE.
+        // A missing MV source must not reuse an option update for a different source.
         {
             let missing_source_id = u64::MAX;
             let invalid_definition = new_definition("missing_source");
-            let err = mt
-                .create_table(new_mv_req(
+            let source_before = util.get_table().await?;
+            for source_table_option in [
+                None,
+                Some(enable_change_tracking(
+                    source_table_id,
+                    source_before.ident.seq,
+                )),
+            ] {
+                let mut req = new_mv_req(
                     "mv_missing_source",
                     CreateOption::Create,
                     missing_source_id,
                     0,
                     &invalid_definition,
-                ))
-                .await
-                .unwrap_err();
-            assert!(matches!(
-                err,
-                KVAppError::AppError(AppError::InvalidMaterializedView(_))
-            ));
+                );
+                req.source_table_option = source_table_option;
+                let err = mt.create_table(req).await.unwrap_err();
+                assert!(matches!(
+                    err,
+                    KVAppError::AppError(AppError::InvalidMaterializedView(_))
+                ));
+                assert_eq!(util.get_table().await?, source_before);
+            }
         }
 
         // The legacy hidden-table CREATE path is not valid for an MV.
@@ -1973,6 +2517,100 @@ impl SchemaApiTestSuite {
             created
         };
         let mv_id = created.table_id;
+
+        // Definition-first listing returns complete target/source facts and applies exact hints.
+        {
+            let listed = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter::default())
+                .await?;
+            let [listed_mv] = listed.as_slice() else {
+                panic!("one materialized view must be listed");
+            };
+            assert_eq!(listed_mv.mv.mv_id, mv_id);
+            assert_eq!(listed_mv.database_name, db_name);
+            assert_eq!(listed_mv.name, mv_name);
+            assert_eq!(listed_mv.source.table_id, source_table_id);
+            assert_eq!(listed_mv.source.database_id, Some(*util.db_id()));
+            assert_eq!(
+                listed_mv.source.database_name.as_deref(),
+                Some(db_name.as_str())
+            );
+            assert_eq!(
+                listed_mv.source.table_name.as_deref(),
+                Some(source_table_name.as_str())
+            );
+            assert!(listed_mv.source.is_active);
+            assert_eq!(listed_mv.source.bound_source_generation, Some(0));
+            assert_eq!(listed_mv.source.current_source_generation, Some(0));
+
+            let renamed_db_name = format!("{db_name}_renamed");
+            mt.rename_database(RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent::new(&tenant, &db_name),
+                new_db_name: renamed_db_name.clone(),
+            })
+            .await?;
+            let renamed = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([mv_id])),
+                    ..Default::default()
+                })
+                .await?;
+            let [renamed] = renamed.as_slice() else {
+                panic!("one materialized view must remain listed after database rename");
+            };
+            assert_eq!(renamed.database_name, renamed_db_name);
+            assert_eq!(renamed.source.database_id, Some(*util.db_id()));
+            assert_eq!(
+                renamed.source.database_name.as_deref(),
+                Some(renamed_db_name.as_str())
+            );
+            mt.rename_database(RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent::new(&tenant, &renamed_db_name),
+                new_db_name: db_name.clone(),
+            })
+            .await?;
+
+            let exact = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([mv_id])),
+                    database_names: Some(BTreeSet::from([db_name.clone()])),
+                    ..Default::default()
+                })
+                .await?;
+            assert_eq!(exact.len(), 1);
+            let missing_id = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([u64::MAX])),
+                    ..Default::default()
+                })
+                .await?;
+            assert!(missing_id.is_empty());
+            let excluded = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    names: Some(BTreeSet::from(["other_mv".to_string()])),
+                    ..Default::default()
+                })
+                .await?;
+            assert!(excluded.is_empty());
+
+            let by_source = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    source_table_ids: Some(BTreeSet::from([source_table_id])),
+                    ..Default::default()
+                })
+                .await?;
+            assert_eq!(by_source.len(), 1);
+
+            let wrong_database = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    database_names: Some(BTreeSet::from(["unknown_database".to_string()])),
+                    ..Default::default()
+                })
+                .await?;
+            assert!(wrong_database.is_empty());
+        }
 
         // ADD COLUMN and ordinary metadata changes preserve existing MV bindings.
         {
@@ -2214,6 +2852,47 @@ impl SchemaApiTestSuite {
             assert!(mt.get_pb(&relationship_ident).await?.is_some());
             assert!(mt.get_pb(&binding_generation_ident).await?.is_some());
 
+            let dropped = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([replacement.table_id])),
+                    ..Default::default()
+                })
+                .await?;
+            let [dropped] = dropped.as_slice() else {
+                panic!("the MV must remain listed while its source is soft-dropped");
+            };
+            assert_eq!(dropped.source.database_id, Some(replacement.db_id));
+            assert_eq!(
+                dropped.source.database_name.as_deref(),
+                Some(db_name.as_str())
+            );
+            assert_eq!(
+                dropped.source.table_name.as_deref(),
+                Some(replacement_source_name)
+            );
+            assert!(!dropped.source.is_active);
+
+            // Reusing the source-option read must still reject a dropped MV source.
+            let source_ident = TableId::new(replacement_source_table_id);
+            let source_before = mt.get_pb(&source_ident).await?.unwrap();
+            let mut req = new_mv_req(
+                "mv_dropped_source",
+                CreateOption::Create,
+                replacement_source_table_id,
+                0,
+                &replacement_definition,
+            );
+            req.source_table_option = Some(enable_change_tracking(
+                replacement_source_table_id,
+                source_before.seq,
+            ));
+            let err = mt.create_table(req).await.unwrap_err();
+            assert!(matches!(
+                err,
+                KVAppError::AppError(AppError::InvalidMaterializedView(_))
+            ));
+            assert_eq!(mt.get_pb(&source_ident).await?.unwrap(), source_before);
+
             mt.gc_drop_tables(GcDroppedTableReq {
                 tenant: tenant.clone(),
                 catalog: "default".to_string(),
@@ -2226,6 +2905,23 @@ impl SchemaApiTestSuite {
             .await?;
             assert!(mt.get_pb(&relationship_ident).await?.is_none());
             assert!(mt.get_pb(&binding_generation_ident).await?.is_none());
+
+            let orphan = mt
+                .list_materialized_views(&tenant, &MaterializedViewListFilter {
+                    materialized_view_ids: Some(BTreeSet::from([replacement.table_id])),
+                    ..Default::default()
+                })
+                .await?;
+            let [orphan] = orphan.as_slice() else {
+                panic!("definition-first listing must retain an MV after source GC");
+            };
+            assert_eq!(orphan.source.table_id, replacement_source_table_id);
+            assert!(orphan.source.database_id.is_none());
+            assert!(orphan.source.database_name.is_none());
+            assert!(orphan.source.table_name.is_none());
+            assert!(!orphan.source.is_active);
+            assert!(orphan.source.bound_source_generation.is_none());
+            assert!(orphan.source.current_source_generation.is_none());
         }
 
         Ok(())
@@ -2278,6 +2974,7 @@ impl SchemaApiTestSuite {
                 table_meta: table_meta(created_on),
                 source_table_option: None,
                 as_dropped: false,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -2397,6 +3094,7 @@ impl SchemaApiTestSuite {
                 table_meta: table_meta(created_on),
                 source_table_option: None,
                 as_dropped: false,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -2671,6 +3369,7 @@ impl SchemaApiTestSuite {
                 },
                 source_table_option: None,
                 as_dropped: false,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -2717,6 +3416,7 @@ impl SchemaApiTestSuite {
                 table_meta: tbl_meta,
                 source_table_option: None,
                 as_dropped: true,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -3728,8 +4428,8 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
                         time: small_ts,
+                        touch: false,
                     }),
                 };
                 let result = mt
@@ -3755,8 +4455,8 @@ impl SchemaApiTestSuite {
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
                         time: small_ts,
+                        touch: false,
                     }),
                 };
                 let result = mt
@@ -3777,8 +4477,8 @@ impl SchemaApiTestSuite {
                     new_table_meta: ok_table_meta.clone(),
                     base_snapshot_location: None,
                     lvt_check: Some(TableLvtCheck {
-                        tenant: tenant.clone(),
                         time: big_time,
+                        touch: false,
                     }),
                 };
                 mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
@@ -3916,6 +4616,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
+                where_use_unmasked_value: true,
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -3976,6 +4677,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
+                where_use_unmasked_value: false,
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -4033,6 +4735,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 action: SetSecurityPolicyAction::Set(mask2_id, vec![column_id]),
+                where_use_unmasked_value: false,
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -4044,6 +4747,7 @@ impl SchemaApiTestSuite {
                 },
             };
             let res = mt.get_table(req).await?;
+            assert_eq!(res.meta.masking_where_use_unmasked_value, [0].into());
             assert_eq!(res.meta.column_mask_policy_columns_ids, {
                 let mut map = BTreeMap::new();
                 map.insert(1, SecurityPolicyColumnMap {
@@ -4083,7 +4787,8 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
-                action: SetSecurityPolicyAction::Unset(mask2_id),
+                action: SetSecurityPolicyAction::Unset(1),
+                where_use_unmasked_value: false,
             };
             mt.set_table_column_mask_policy(req).await?;
 
@@ -4128,6 +4833,76 @@ impl SchemaApiTestSuite {
             assert!(res.is_none());
         }
 
+        // Two independent bindings of one policy must not share WHERE authorization
+        // or be removed together. Replacing the last binding cleans reverse references.
+        for action in [
+            SetSecurityPolicyAction::Set(mask1_id, vec![1]),
+            SetSecurityPolicyAction::Unset(0),
+        ] {
+            let table = mt
+                .get_pb(&TableId {
+                    table_id: table_id_1,
+                })
+                .await?
+                .unwrap();
+            mt.set_table_column_mask_policy(SetTableColumnMaskPolicyReq {
+                tenant: tenant.clone(),
+                table_id: table_id_1,
+                seq: MatchSeq::Exact(table.seq),
+                action,
+                where_use_unmasked_value: true,
+            })
+            .await?;
+        }
+        let table = mt
+            .get_pb(&TableId {
+                table_id: table_id_1,
+            })
+            .await?
+            .unwrap();
+        assert_eq!(table.data.masking_where_use_unmasked_value, [1].into());
+        assert_eq!(table.data.column_mask_policy_columns_ids.len(), 1);
+        let reference = |policy_id| {
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id,
+                table_id: table_id_1,
+            })
+        };
+        assert!(mt.get_pb(&reference(mask1_id)).await?.is_some());
+        mt.set_table_column_mask_policy(SetTableColumnMaskPolicyReq {
+            tenant: tenant.clone(),
+            table_id: table_id_1,
+            seq: MatchSeq::Exact(table.seq),
+            action: SetSecurityPolicyAction::Set(mask2_id, vec![1]),
+            where_use_unmasked_value: false,
+        })
+        .await?;
+        let table = mt
+            .get_pb(&TableId {
+                table_id: table_id_1,
+            })
+            .await?
+            .unwrap();
+        assert!(table.data.masking_where_use_unmasked_value.is_empty());
+        assert!(mt.get_pb(&reference(mask1_id)).await?.is_none());
+        assert!(mt.get_pb(&reference(mask2_id)).await?.is_some());
+        mt.set_table_column_mask_policy(SetTableColumnMaskPolicyReq {
+            tenant: tenant.clone(),
+            table_id: table_id_1,
+            seq: MatchSeq::Exact(table.seq),
+            action: SetSecurityPolicyAction::Unset(1),
+            where_use_unmasked_value: false,
+        })
+        .await?;
+        let table = mt
+            .get_pb(&TableId {
+                table_id: table_id_1,
+            })
+            .await?
+            .unwrap();
+        assert!(table.data.column_mask_policy_columns_ids.is_empty());
+        assert!(table.data.masking_where_use_unmasked_value.is_empty());
+        assert!(mt.get_pb(&reference(mask2_id)).await?.is_none());
         Ok(())
     }
 
@@ -4520,6 +5295,7 @@ impl SchemaApiTestSuite {
             seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
             action: SetSecurityPolicyAction::Set(mask_cleanup_id, vec![number_column_id]),
+            where_use_unmasked_value: true,
         };
         mt.set_table_column_mask_policy(set_req).await?;
         table_info = util.get_table().await?;
@@ -4585,6 +5361,7 @@ impl SchemaApiTestSuite {
             seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
             action: SetSecurityPolicyAction::Set(mask_guard_id, vec![number_column_id]),
+            where_use_unmasked_value: false,
         };
         mt.set_table_column_mask_policy(set_req).await?;
         table_info = util.get_table().await?;
@@ -5027,6 +5804,7 @@ impl SchemaApiTestSuite {
             table_meta: create_table_meta.clone(),
             source_table_option: None,
             as_dropped: false,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
@@ -5749,7 +6527,7 @@ impl SchemaApiTestSuite {
                     format!(
                         "'{}'.'{}'",
                         db_name_ident.database_name(),
-                        &table_niv.name().table_name
+                        table_niv.name().table_name
                     )
                 })
                 .collect();
@@ -5792,7 +6570,7 @@ impl SchemaApiTestSuite {
                     format!(
                         "'{}'.'{}'",
                         db_name_ident.database_name(),
-                        &table_niv.name().table_name
+                        table_niv.name().table_name
                     )
                 })
                 .collect();
@@ -5856,6 +6634,7 @@ impl SchemaApiTestSuite {
                     table_meta: table_meta(created_on),
                     source_table_option: None,
                     as_dropped: false,
+                    clone: None,
                     materialized_view: None,
                     table_properties: None,
                     table_partition: None,
@@ -6346,6 +7125,7 @@ impl SchemaApiTestSuite {
             table_meta: drop_table_meta(created_on),
             source_table_option: None,
             as_dropped: true,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
@@ -6468,6 +7248,7 @@ impl SchemaApiTestSuite {
                 table_meta: table_meta(created_on),
                 source_table_option: None,
                 as_dropped: true,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -6490,6 +7271,7 @@ impl SchemaApiTestSuite {
                 table_meta: drop_table_meta(created_on),
                 source_table_option: None,
                 as_dropped: true,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -6517,6 +7299,10 @@ impl SchemaApiTestSuite {
             let db_id = orphan_util.db_id();
             let tenant = orphan_util.tenant();
 
+            // CTAS staging tables are protected from vacuum for the default retention
+            // period (1 day), so create it as if it were dropped 2 days ago.
+            let orphan_created_on = Utc::now() - Duration::days(2);
+
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,
                 catalog_name: Some("default".to_string()),
@@ -6525,9 +7311,10 @@ impl SchemaApiTestSuite {
                     db_name: db_name.to_string(),
                     table_name: tbl_name.to_string(),
                 },
-                table_meta: drop_table_meta(created_on),
+                table_meta: drop_table_meta(orphan_created_on),
                 source_table_option: None,
                 as_dropped: true,
+                clone: None,
                 materialized_view: None,
                 table_properties: None,
                 table_partition: None,
@@ -6577,6 +7364,446 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    /// A vacuum with retention 0 must not collect the staging table of an in-progress CTAS,
+    /// otherwise its data is removed while the CTAS is still writing.
+    async fn vacuum_skips_recent_ctas_orphan<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "vacuum_skips_recent_ctas_orphan_tenant";
+        let db_name = "db1";
+        let tbl_name = "t1";
+
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
+        util.create_db().await?;
+        let tenant = util.tenant();
+
+        let staging_table_req = |drop_on: DateTime<Utc>| CreateTableReq {
+            create_option: CreateOption::CreateOrReplace,
+            catalog_name: Some("default".to_string()),
+            name_ident: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
+            },
+            table_meta: TableMeta {
+                schema: Arc::new(TableSchema::new(vec![TableField::new(
+                    "number",
+                    TableDataType::Number(NumberDataType::UInt64),
+                )])),
+                engine: "JSON".to_string(),
+                created_on: drop_on,
+                drop_on: Some(drop_on),
+                ..TableMeta::default()
+            },
+            source_table_option: None,
+            as_dropped: true,
+            clone: None,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+
+        let dropped_table_ids = |drop_ids: &[DroppedId]| -> Vec<u64> {
+            drop_ids
+                .iter()
+                .filter_map(|id| match id {
+                    DroppedId::Table { id, .. } => Some(id.table_id),
+                    DroppedId::Db { .. } => None,
+                })
+                .collect()
+        };
+
+        info!("--- a just created CTAS staging table is not collected with retention 0");
+        {
+            let req = staging_table_req(Utc::now());
+            let resp = mt.create_table(req.clone()).await?;
+
+            let list_req =
+                ListDroppedTableReq::new4(&tenant, None::<String>, Some(Utc::now()), None);
+            let list_resp = mt.get_drop_table_infos(list_req).await?;
+            assert!(
+                !dropped_table_ids(&list_resp.drop_ids).contains(&resp.table_id),
+                "in-progress CTAS staging table must not be vacuumed"
+            );
+
+            // the CTAS can still be committed
+            mt.commit_table_meta(CommitTableMetaReq {
+                name_ident: req.name_ident.clone(),
+                db_id: resp.db_id,
+                table_id: resp.table_id,
+                prev_table_id: resp.prev_table_id,
+                orphan_table_name: resp.orphan_table_name.clone(),
+            })
+            .await?;
+
+            let table_key = TableId::new(resp.table_id);
+            let seqv = mt.get_pb(&table_key).await?.unwrap();
+            assert!(seqv.data.drop_on.is_none());
+        }
+
+        Ok(())
+    }
+
+    /// A table meta that can not be decoded, e.g., with an unknown index type written by a newer
+    /// version, must not fail the whole vacuum. It is skipped, and its database is kept, otherwise
+    /// the skipped table can never be found again.
+    ///
+    /// Covers both an individually dropped table in a live database and a table with no drop_on
+    /// in a dropped database. Without a limit, healthy tables are collected, but the bad tables
+    /// and dropped database are kept. After repairing the metadata, both tables must still be
+    /// discoverable and eligible for GC, and only the dropped database may be removed.
+    /// This metadata API test checks cleanup candidates and metadata GC, not physical file deletion.
+    async fn vacuum_skips_undecodable_table<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "vacuum_skips_undecodable_table_tenant";
+        let tenant = Tenant::new_literal(tenant_name);
+        let drop_on = Some(Utc::now() - Duration::days(1));
+
+        // Inject an unknown index type while preserving the requested drop state. Keep the
+        // decodable metadata so recovery can repair the same table without recreating its history.
+        let create_undecodable_table =
+            |db_name: &'static str, tbl_name: &'static str, drop_on: Option<DateTime<Utc>>| async move {
+                let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
+                let (table_id, table_meta) = util.create_table().await?;
+
+                let table_meta = TableMeta {
+                    drop_on,
+                    ..table_meta
+                };
+                let mut table_pb = table_meta.to_pb();
+                table_pb.indexes.insert("idx".to_string(), pb::TableIndex {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    name: "idx".to_string(),
+                    index_type: 4,
+                    ..Default::default()
+                });
+                let table_key = TableId::new(table_id);
+                upsert_test_data(mt, &table_key, table_pb.encode_to_vec()).await?;
+
+                assert!(
+                    mt.get_pb(&table_key).await.is_err(),
+                    "the table meta must be undecodable"
+                );
+
+                anyhow::Ok((table_id, table_meta))
+            };
+
+        let vacuum = || async {
+            let req = ListDroppedTableReq::new(&tenant);
+            let resp = mt.get_drop_table_infos(req).await?;
+
+            // Physical cleanup candidates and table metadata GC tasks must select the same tables.
+            // Converting these lists to ID sets discards duplicate entries. Also check the original
+            // list lengths to ensure each table appears only once.
+            let vacuum_table_ids: BTreeSet<u64> = resp
+                .vacuum_tables
+                .iter()
+                .map(|(_, table)| table.id().table_id)
+                .collect();
+            let gc_table_ids: BTreeSet<u64> = resp
+                .drop_ids
+                .iter()
+                .filter_map(|id| match id {
+                    DroppedId::Table { id, .. } => Some(id.table_id),
+                    DroppedId::Db { .. } => None,
+                })
+                .collect();
+            assert_eq!(vacuum_table_ids, gc_table_ids);
+            assert_eq!(
+                resp.vacuum_tables.len(),
+                vacuum_table_ids.len(),
+                "physical cleanup candidates must not contain duplicate tables"
+            );
+            let gc_table_count = resp
+                .drop_ids
+                .iter()
+                .filter(|id| matches!(id, DroppedId::Table { .. }))
+                .count();
+            assert_eq!(
+                gc_table_count,
+                gc_table_ids.len(),
+                "metadata GC tasks must not contain duplicate tables"
+            );
+
+            mt.gc_drop_tables(GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: "default".to_string(),
+                drop_ids: resp.drop_ids.clone(),
+            })
+            .await?;
+
+            anyhow::Ok(resp.drop_ids)
+        };
+
+        // db1 stays live, so both tables need their own drop_on to be eligible. t1 has an
+        // undecodable index; t2 is healthy and must still be collected.
+        let db1_name = "db1";
+        let mut db1 = DbTableHarness::new(mt, tenant_name, db1_name, "", "");
+        db1.create_db().await?;
+        let (undecodable_db1_t1, db1_t1_meta) =
+            create_undecodable_table(db1_name, "t1", drop_on).await?;
+        let mut db1_t2 = DbTableHarness::new(mt, tenant_name, db1_name, "t2", "JSON");
+        let (dropped_db1_t2, _) = db1_t2.create_table().await?;
+        mt.drop_table_by_id(DropTableByIdReq {
+            if_exists: false,
+            tenant: tenant.clone(),
+            tb_id: dropped_db1_t2,
+            table_name: "t2".to_string(),
+            db_id: *db1.db_id(),
+            db_name: db1_name.to_string(),
+            engine: "JSON".to_string(),
+            temp_prefix: "".to_string(),
+        })
+        .await?;
+
+        // Only db2 is dropped: neither table has its own drop_on. Database-level eligibility
+        // must allow healthy t2 to be collected now and repaired t1 to be collected later.
+        let db2_name = "db2";
+        let mut db2 = DbTableHarness::new(mt, tenant_name, db2_name, "", "");
+        db2.create_db().await?;
+        let db2_id = *db2.db_id();
+        let (undecodable_db2_t1, db2_t1_meta) =
+            create_undecodable_table(db2_name, "t1", None).await?;
+        let mut db2_t2 = DbTableHarness::new(mt, tenant_name, db2_name, "t2", "JSON");
+        let (db2_t2, _) = db2_t2.create_table().await?;
+        db2.drop_db().await?;
+
+        info!("--- vacuum must not fail because of the undecodable tables");
+        let drop_ids = vacuum().await?;
+
+        let table_ids: BTreeSet<u64> = drop_ids
+            .iter()
+            .filter_map(|id| match id {
+                DroppedId::Table { id, .. } => Some(id.table_id),
+                DroppedId::Db { .. } => None,
+            })
+            .collect();
+        assert_eq!(table_ids, BTreeSet::from([dropped_db1_t2, db2_t2]));
+
+        assert!(
+            !drop_ids.iter().any(|id| matches!(id, DroppedId::Db { .. })),
+            "a dropped db with undecodable tables must not be removed, got: {:?}",
+            drop_ids
+        );
+
+        info!("--- decodable tables are removed");
+        for table_id in [dropped_db1_t2, db2_t2] {
+            let got = mt.get_kv(&TableId::new(table_id).to_string_key()).await?;
+            assert!(got.is_none(), "table {} should be removed", table_id);
+        }
+
+        info!("--- undecodable tables and the dropped db are kept");
+        for table_id in [undecodable_db1_t1, undecodable_db2_t1] {
+            let got = mt.get_kv(&TableId::new(table_id).to_string_key()).await?;
+            assert!(got.is_some(), "table {} should be kept", table_id);
+        }
+
+        let got = mt.get_kv(&DatabaseId::new(db2_id).to_string_key()).await?;
+        assert!(got.is_some(), "db2 should be kept");
+
+        info!("--- vacuum again does not fail either");
+        let drop_ids = vacuum().await?;
+        assert!(drop_ids.is_empty(), "got: {:?}", drop_ids);
+
+        // Once the skipped metadata becomes decodable, vacuum must finish cleaning up the
+        // remaining tables and the dropped database. This could follow a metadata repair or
+        // a reader upgrade; this test simulates recovery by restoring decodable metadata.
+        // db2.t1 still has no drop_on, so it is eligible only because its database was dropped.
+        info!("--- repaired tables remain discoverable and can be garbage collected");
+        for (table_id, table_meta) in [
+            (undecodable_db1_t1, db1_t1_meta),
+            (undecodable_db2_t1, db2_t1_meta),
+        ] {
+            upsert_test_data(mt, &TableId::new(table_id), serialize_struct(&table_meta)).await?;
+        }
+
+        let drop_ids = vacuum().await?;
+        let table_ids: BTreeSet<u64> = drop_ids
+            .iter()
+            .filter_map(|id| match id {
+                DroppedId::Table { id, .. } => Some(id.table_id),
+                DroppedId::Db { .. } => None,
+            })
+            .collect();
+        assert_eq!(
+            table_ids,
+            BTreeSet::from([undecodable_db1_t1, undecodable_db2_t1])
+        );
+        let db_ids: Vec<u64> = drop_ids
+            .iter()
+            .filter_map(|id| match id {
+                DroppedId::Db { db_id, .. } => Some(*db_id),
+                DroppedId::Table { .. } => None,
+            })
+            .collect();
+        assert_eq!(db_ids, vec![db2_id]);
+
+        for table_id in [undecodable_db1_t1, undecodable_db2_t1] {
+            assert!(
+                mt.get_kv(&TableId::new(table_id).to_string_key())
+                    .await?
+                    .is_none()
+            );
+        }
+        assert!(
+            mt.get_kv(&DatabaseId::new(db2_id).to_string_key())
+                .await?
+                .is_none()
+        );
+        assert!(mt.get_pb(&DatabaseId::new(*db1.db_id())).await?.is_some());
+        assert!(vacuum().await?.is_empty());
+
+        Ok(())
+    }
+
+    /// Reaching the limit does not prove that all tables of a dropped database were processed.
+    /// All tables start without drop_on; they are eligible only because their database is dropped.
+    /// With two healthy tables and limit=2, cover three histories:
+    /// - healthy_only: equality conservatively keeps the database until the next request.
+    /// - bad_before_limit: skipping a bad table must not consume a healthy table's quota.
+    /// - bad_after_limit: the limit keeps the database even before the bad table is processed.
+    ///
+    /// A second request removes an empty healthy database, but keeps one with a bad table.
+    /// Like the recovery test, this checks metadata APIs and cleanup lists, not physical files.
+    async fn vacuum_dropped_database_with_limit<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        for (scenario, bad_table_name) in [
+            ("healthy_only", None),
+            ("bad_before_limit", Some("a_bad")),
+            ("bad_after_limit", Some("z_bad")),
+        ] {
+            let tenant_name = format!("vacuum_dropped_database_with_limit_{scenario}");
+            let tenant = Tenant::new_literal(&tenant_name);
+            let db_name = "db";
+            let mut db = DbTableHarness::new(mt, &tenant_name, db_name, "", "");
+            db.create_db().await?;
+            let db_id = *db.db_id();
+
+            // History keys are ordered by table name. The bad table is either before or after
+            // both healthy tables, independently of table creation order.
+            let mut healthy_ids = BTreeSet::new();
+            for table_name in ["m_good_1", "m_good_2"] {
+                let mut table = DbTableHarness::new(mt, &tenant_name, db_name, table_name, "JSON");
+                let (table_id, _) = table.create_table().await?;
+                healthy_ids.insert(table_id);
+            }
+
+            let bad_table_id = if let Some(table_name) = bad_table_name {
+                let mut table = DbTableHarness::new(mt, &tenant_name, db_name, table_name, "JSON");
+                let (table_id, table_meta) = table.create_table().await?;
+                let mut table_pb = table_meta.to_pb();
+                // Fail metadata decoding, rather than a later storage-engine initialization.
+                table_pb.indexes.insert("idx".to_string(), pb::TableIndex {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    name: "idx".to_string(),
+                    index_type: 4,
+                    ..Default::default()
+                });
+                upsert_test_data(mt, &TableId::new(table_id), table_pb.encode_to_vec()).await?;
+                assert!(mt.get_pb(&TableId::new(table_id)).await.is_err());
+                Some(table_id)
+            } else {
+                None
+            };
+            db.drop_db().await?;
+
+            let vacuum = || async {
+                let resp = mt
+                    .get_drop_table_infos(ListDroppedTableReq::new(&tenant).with_limit(2))
+                    .await?;
+                let table_ids: BTreeSet<u64> = resp
+                    .vacuum_tables
+                    .iter()
+                    .map(|(_, table)| table.id().table_id)
+                    .collect();
+                // Converting the candidate list to an ID set discards duplicate entries. Compare
+                // its original length and the table GC task count with the number of distinct IDs
+                // to ensure each selected table appears exactly once in each list. Database GC
+                // tasks are excluded: the quota and candidate list count tables, not databases.
+                assert_eq!(
+                    resp.vacuum_tables.len(),
+                    table_ids.len(),
+                    "duplicate physical cleanup candidates in scenario: {scenario}"
+                );
+                let gc_table_count = resp
+                    .drop_ids
+                    .iter()
+                    .filter(|id| matches!(id, DroppedId::Table { .. }))
+                    .count();
+                assert_eq!(
+                    gc_table_count,
+                    table_ids.len(),
+                    "metadata GC must select each candidate exactly once in scenario: {scenario}"
+                );
+                mt.gc_drop_tables(GcDroppedTableReq {
+                    tenant: tenant.clone(),
+                    catalog: "default".to_string(),
+                    drop_ids: resp.drop_ids.clone(),
+                })
+                .await?;
+                anyhow::Ok((table_ids, resp.drop_ids))
+            };
+
+            // Every scenario must collect exactly the two healthy tables and no database task.
+            // If the bad table is last, its protection flag has not been set when the limit is hit.
+            let (table_ids, drop_ids) = vacuum().await?;
+            assert_eq!(table_ids, healthy_ids, "scenario: {scenario}");
+            let gc_table_ids: BTreeSet<u64> = drop_ids
+                .iter()
+                .filter_map(|id| match id {
+                    DroppedId::Table { id, .. } => Some(id.table_id),
+                    DroppedId::Db { .. } => None,
+                })
+                .collect();
+            assert_eq!(gc_table_ids, healthy_ids, "scenario: {scenario}");
+            assert!(
+                !drop_ids.iter().any(|id| matches!(id, DroppedId::Db { .. })),
+                "the database must be kept when the limit is reached: {scenario}"
+            );
+            for table_id in healthy_ids {
+                assert!(mt.get_pb(&TableId::new(table_id)).await?.is_none());
+            }
+            assert!(mt.get_pb(&DatabaseId::new(db_id)).await?.is_some());
+
+            // The first request reached the table limit, so it could not establish that every
+            // table had been collected and had to keep the database metadata. A subsequent vacuum
+            // request can remove that metadata after confirming no tables remain; if an
+            // undecodable table remains, it must keep both the table and the database metadata.
+            let (table_ids, drop_ids) = vacuum().await?;
+            assert!(table_ids.is_empty(), "scenario: {scenario}");
+            if let Some(table_id) = bad_table_id {
+                assert!(drop_ids.is_empty(), "scenario: {scenario}");
+                assert!(
+                    mt.get_kv(&TableId::new(table_id).to_string_key())
+                        .await?
+                        .is_some()
+                );
+                assert!(mt.get_pb(&DatabaseId::new(db_id)).await?.is_some());
+            } else {
+                assert!(matches!(
+                    drop_ids.as_slice(),
+                    [DroppedId::Db { db_id: got_id, .. }] if *got_id == db_id
+                ));
+                assert!(mt.get_pb(&DatabaseId::new(db_id)).await?.is_none());
+            }
+        }
+
+        Ok(())
+    }
+
     async fn table_commit_after_drop_different_engine<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi {
         let tenant_name = "table_commit_after_drop_different_engine";
@@ -6601,6 +7828,7 @@ impl SchemaApiTestSuite {
             table_meta: replacement_meta,
             source_table_option: None,
             as_dropped: true,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
@@ -6646,6 +7874,7 @@ impl SchemaApiTestSuite {
             table_meta: replacement_meta,
             source_table_option: None,
             as_dropped: true,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
@@ -6755,6 +7984,7 @@ impl SchemaApiTestSuite {
             table_meta: drop_table_meta(created_on),
             source_table_option: None,
             as_dropped: true,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
@@ -7075,6 +8305,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -7091,6 +8322,7 @@ impl SchemaApiTestSuite {
                 increment: 2,
                 comment: Some("seq2".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -7116,6 +8348,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -7168,6 +8401,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -7484,6 +8718,28 @@ impl SchemaApiTestSuite {
             assert_eq!(tb_ids[0], res[0].1.table_id);
             assert_eq!(tb_ids[1], res[1].1.table_id);
         }
+
+        // A table with an unknown index type must not hide its healthy neighbors.
+        let mut bad = DbTableHarness::new(mt, tenant_name, db_name, "tb1_future", "JSON");
+        let (bad_id, meta) = bad.create_table().await?;
+        let mut table_pb = meta.to_pb();
+        table_pb
+            .indexes
+            .insert("future_index".to_string(), pb::TableIndex {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                index_type: i32::MAX,
+                ..Default::default()
+            });
+        upsert_test_data(mt, &TableId::new(bad_id), table_pb.encode_to_vec()).await?;
+        let tables = mt.list_tables(ListTableReq::new(&tenant, db_id)).await?;
+        assert_eq!(
+            vec![("tb1", tb_ids[0]), ("tb2", tb_ids[1])],
+            tables
+                .iter()
+                .map(|(name, id, _)| (name.as_str(), id.table_id))
+                .collect::<Vec<_>>()
+        );
 
         Ok(())
     }

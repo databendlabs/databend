@@ -62,7 +62,7 @@ pub struct Pipe {
 
 impl Debug for Pipe {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", &self.items)
+        write!(f, "{:?}", self.items)
     }
 }
 

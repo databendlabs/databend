@@ -26,7 +26,7 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::Scan;
 
 #[derive(Default)]
@@ -77,25 +77,30 @@ impl DefaultCostModel {
     }
 
     fn compute_cost_impl(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-        match m_expr.plan.as_ref() {
-            RelOperator::Scan(plan) => self.compute_cost_scan(memo, m_expr, plan),
-            RelOperator::ConstantTableScan(plan) => self.compute_cost_constant_scan(plan),
-            RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
-            RelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
-            RelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
-            RelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),
+        match m_expr
+            .plan
+            .physical()
+            .ok_or_else(|| ErrorCode::Internal("Cannot cost a logical Memo candidate"))?
+            .as_ref()
+        {
+            PhysicalRelOperator::Scan(plan) => self.compute_cost_scan(memo, m_expr, plan),
+            PhysicalRelOperator::ConstantTableScan(plan) => self.compute_cost_constant_scan(plan),
+            PhysicalRelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
+            PhysicalRelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
+            PhysicalRelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
+            PhysicalRelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),
 
-            RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_)
-            | RelOperator::Window(_)
-            | RelOperator::WindowGroup(_)
-            | RelOperator::Sort(_)
-            | RelOperator::ProjectSet(_)
-            | RelOperator::Udf(_)
-            | RelOperator::Limit(_)
-            | RelOperator::TopN(_) => self.compute_cost_unary_common_operator(memo, m_expr),
+            PhysicalRelOperator::EvalScalar(_)
+            | PhysicalRelOperator::Filter(_)
+            | PhysicalRelOperator::Window(_)
+            | PhysicalRelOperator::WindowGroup(_)
+            | PhysicalRelOperator::Sort(_)
+            | PhysicalRelOperator::ProjectSet(_)
+            | PhysicalRelOperator::Udf(_)
+            | PhysicalRelOperator::Limit(_)
+            | PhysicalRelOperator::TopN(_) => self.compute_cost_unary_common_operator(memo, m_expr),
 
-            RelOperator::Exchange(_) => self.compute_cost_exchange(memo, m_expr),
+            PhysicalRelOperator::Exchange(_) => self.compute_cost_exchange(memo, m_expr),
 
             _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),
         }
@@ -157,7 +162,13 @@ impl DefaultCostModel {
     }
 
     fn compute_cost_exchange(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-        let exchange: Exchange = (*m_expr.plan.clone()).clone().try_into()?;
+        let exchange: Exchange = m_expr
+            .plan
+            .physical()
+            .unwrap()
+            .as_ref()
+            .clone()
+            .try_into()?;
         let group = memo.group(m_expr.group_index)?;
         let cost = match exchange {
             Exchange::NodeToNodeHash(_) | Exchange::GlobalHash(_) => {

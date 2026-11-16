@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use databend_common_exception::ErrorCode;
 use parquet::basic::Compression as ParquetCompression;
 use parquet::basic::GzipLevel;
@@ -28,11 +30,10 @@ pub enum TableCompression {
     Zstd,
 }
 
-/// Convert from str.
-impl TryFrom<&str> for TableCompression {
-    type Error = ErrorCode;
+impl FromStr for TableCompression {
+    type Err = ErrorCode;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_lowercase().as_str() {
             "" => Ok(TableCompression::default()),
             "none" => Ok(TableCompression::None),
@@ -44,6 +45,15 @@ impl TryFrom<&str> for TableCompression {
                 other
             ))),
         }
+    }
+}
+
+/// Convert from str.
+impl TryFrom<&str> for TableCompression {
+    type Error = ErrorCode;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
     }
 }
 
@@ -99,6 +109,40 @@ impl From<meta::Compression> for ParquetCompression {
             meta::Compression::None => ParquetCompression::UNCOMPRESSED,
             meta::Compression::Lz4 => ParquetCompression::LZ4_RAW,
             meta::Compression::Gzip => ParquetCompression::GZIP(GzipLevel::default()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_exception::ErrorCode;
+
+    use super::TableCompression;
+    use crate::meta::Compression;
+
+    #[test]
+    fn parse_table_compression() {
+        for (input, expected) in [
+            ("", Compression::Zstd),
+            ("none", Compression::None),
+            ("ZSTD", Compression::Zstd),
+            ("lz4", Compression::Lz4Raw),
+            ("SnApPy", Compression::Snappy),
+        ] {
+            let parsed = input.parse::<TableCompression>().unwrap();
+            let converted = TableCompression::try_from(input).unwrap();
+            assert_eq!(Compression::from(parsed), expected);
+            assert_eq!(Compression::from(converted), expected);
+        }
+    }
+
+    #[test]
+    fn reject_invalid_table_compression() {
+        for input in ["gzip", " zstd", "unknown"] {
+            let parsed = input.parse::<TableCompression>().unwrap_err();
+            let converted = TableCompression::try_from(input).unwrap_err();
+            assert_eq!(parsed.code(), ErrorCode::UNKNOWN_COMPRESSION_TYPE);
+            assert_eq!(parsed.to_string(), converted.to_string());
         }
     }
 }

@@ -14,7 +14,6 @@
 
 #![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 #![feature(box_into_inner)]
-#![feature(iter_order_by)]
 
 pub mod meta;
 pub mod readers;

@@ -19,4 +19,5 @@
 mod bloom_pruner;
 mod eliminate_cast;
 mod range_pruner;
+mod vector_bundle;
 mod xor8;

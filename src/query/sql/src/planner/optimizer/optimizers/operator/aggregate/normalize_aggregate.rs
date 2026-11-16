@@ -24,7 +24,6 @@ use crate::Visibility;
 use crate::optimizer::Optimizer;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
@@ -176,7 +175,6 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         let new_aggregate = Aggregate {
-            mode: aggregate.mode,
             group_items: aggregate.group_items,
             aggregate_functions: new_aggregate_functions,
             from_distinct: aggregate.from_distinct,
@@ -239,8 +237,7 @@ impl RuleNormalizeAggregateOptimizer {
         aggregate: &Aggregate,
         s_expr: &SExpr,
     ) -> Result<Option<SExpr>> {
-        if aggregate.mode != AggregateMode::Initial
-            || aggregate.grouping_sets.is_some()
+        if aggregate.grouping_sets.is_some()
             || aggregate.aggregate_functions.len() != 1
             || s_expr.arity() != 1
             || !aggregate.group_items.is_empty()
@@ -287,7 +284,6 @@ impl RuleNormalizeAggregateOptimizer {
         }
 
         let inner_aggregate = Aggregate {
-            mode: AggregateMode::Initial,
             group_items: new_group_items,
             aggregate_functions: vec![],
             from_distinct: aggregate.from_distinct,
@@ -302,7 +298,6 @@ impl RuleNormalizeAggregateOptimizer {
         new_function.sort_descs = vec![];
 
         let outer_aggregate = Aggregate {
-            mode: aggregate.mode,
             group_items: aggregate.group_items.clone(),
             aggregate_functions: vec![ScalarItem {
                 index: agg_item.index,

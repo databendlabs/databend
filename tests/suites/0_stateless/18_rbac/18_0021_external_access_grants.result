@@ -1,0 +1,6 @@
+ALL	unquoted_access	NULL	ROLE	integration_grants	GRANT ALL ON INTEGRATION "unquoted_access" TO ROLE `integration_grants`
+ALL	QuotedAccess	NULL	ROLE	integration_grants	GRANT ALL ON INTEGRATION "QuotedAccess" TO ROLE `integration_grants`
+ALL	access with space	NULL	ROLE	integration_grants	GRANT ALL ON INTEGRATION "access with space" TO ROLE `integration_grants`
+ALL	access/r	NULL	ROLE	integration_grants	GRANT ALL ON INTEGRATION "access/r" TO ROLE `integration_grants`
+ALL	access"r	NULL	ROLE	integration_grants	GRANT ALL ON INTEGRATION "access""r" TO ROLE `integration_grants`
+ALL	select	NULL	ROLE	integration_grants	GRANT ALL ON INTEGRATION "select" TO ROLE `integration_grants`

@@ -14,8 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::BUILTIN_ROLE_PUBLIC;
 use databend_common_sql::plans::AlterUserPlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -53,10 +56,33 @@ impl Interpreter for AlterUserInterpreter {
         Box::pin(async move {
             debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_execute");
 
-            let plan = self.plan.clone();
+            let plan = &self.plan;
             let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
+            if let Some(role) = &plan.default_role {
+                user_mgr.get_role(&tenant, role.clone()).await?;
+                // Match login and SET ROLE: inherited roles are available too.
+                // PUBLIC is implicit; changing the default never adds a grant.
+                // Check direct grants from the freshly read user first. The role
+                // cache may lag behind roles created on other nodes.
+                if role != BUILTIN_ROLE_PUBLIC && !plan.user_info.grants.roles().contains(role) {
+                    let available_roles = RoleCacheManager::instance()
+                        .find_related_roles(&tenant, &plan.user_info.grants.roles_vec())
+                        .await?;
+                    if !available_roles
+                        .iter()
+                        .any(|available| available.name == *role)
+                    {
+                        return Err(ErrorCode::InvalidRole(format!(
+                            "Role '{}' is not available to user {}",
+                            role,
+                            plan.user_info.identity().display()
+                        )));
+                    }
+                }
+            }
             if plan.change_auth || plan.change_user_option {
-                UserApiProvider::instance()
+                user_mgr
                     .alter_user(&tenant, &plan.user_info, plan.seq)
                     .await?;
             }

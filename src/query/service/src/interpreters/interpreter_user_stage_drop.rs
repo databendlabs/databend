@@ -98,15 +98,15 @@ impl Interpreter for DropUserStageInterpreter {
             }
 
             // 2. Drop the stage
-            user_mgr
+            let dropped = user_mgr
                 .drop_stage(&tenant, &plan.name, plan.if_exists)
                 .await?;
 
-            // 3. Revoke ownership (after drop succeeds to prevent permission leak)
-            if let Ok(ref stage) = stage {
+            // 3. Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner
+            if dropped {
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 let owner_object = OwnershipObject::Stage {
-                    name: stage.stage_name.clone(),
+                    name: plan.name.clone(),
                 };
                 role_api.revoke_ownership(&owner_object).await?;
                 RoleCacheManager::instance().invalidate_cache(&tenant);

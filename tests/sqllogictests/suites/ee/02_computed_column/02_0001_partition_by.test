@@ -45,5 +45,72 @@ EXPLAIN SELECT id FROM computed_partitioned WHERE p = 0
 ----
 <slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
 
+# MERGE INTO and INSERT ALL also generate the stored partition column before the
+# hash write layout.
+statement ok
+MERGE INTO computed_partitioned t USING (SELECT (number + 10)::INT id FROM numbers(4)) s ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)
+
+statement ok
+INSERT ALL INTO computed_partitioned(id) VALUES (id) SELECT (number + 20)::INT id FROM numbers(4)
+
+query IIII
+SELECT count(*), min(p), max(p), count_if(p != id % 2) FROM computed_partitioned
+----
+12 0 1 0
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT p) AS partition_values
+    FROM computed_partitioned
+    GROUP BY _block_name
+)
+----
+0
+
+# Virtual columns are not present in the physical MERGE blocks. Stream columns
+# must still be retained in the layout when change tracking is enabled.
+statement ok
+CREATE TABLE virtual_partitioned(
+    id INT,
+    p INT,
+    v BIGINT AS (id + 1) VIRTUAL
+)
+PARTITION BY (p)
+WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+MERGE INTO virtual_partitioned t USING (SELECT 1 AS id, 2 AS p) s ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id, p) VALUES (s.id, s.p)
+
+query III
+SELECT id, p, v FROM virtual_partitioned
+----
+1 2 2
+
+statement ok
+ALTER TABLE virtual_partitioned SET OPTIONS(change_tracking=true)
+
+statement ok
+MERGE INTO virtual_partitioned t USING (SELECT number::INT id, (number % 2)::INT p FROM numbers(20)) s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET p = s.p
+WHEN NOT MATCHED THEN INSERT (id, p) VALUES (s.id, s.p)
+
+query III
+SELECT count(*), count_if(v = id + 1), count_if(p = id % 2) FROM virtual_partitioned
+----
+20 20 20
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT p) AS partition_values
+    FROM virtual_partitioned
+    GROUP BY _block_name
+)
+----
+0
+
 statement ok
 DROP DATABASE computed_partition_by

@@ -47,7 +47,6 @@ impl Binder {
             &stmt.catalog,
             &stmt.database,
             &stmt.table_ident,
-            &None,
             &stmt.target_alias,
         );
 
@@ -57,7 +56,6 @@ impl Binder {
                 catalog: stmt.catalog.clone(),
                 database: stmt.database.clone(),
                 table: stmt.table_ident.clone(),
-                branch: None,
             },
             alias: stmt.target_alias.clone(),
             temporal: None,
@@ -84,6 +82,7 @@ impl Binder {
             strategy: mutation_strategy,
             matched_clauses,
             unmatched_clauses,
+            expected_ttl: None,
         };
 
         self.bind_mutation(bind_context, mutation).await

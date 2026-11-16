@@ -9,7 +9,9 @@ This file is the top-level guide for repository-specific working rules. Start by
 - When guidance, lower-level docs, and repository practice conflict or are ambiguous, identify the specific conflict that affects the current decision instead of assuming one source is automatically correct.
 - Validate incrementally. Run the smallest relevant checks early, and scale verification to the parts that will remain in the branch and enter review.
 - Treat tests as part of the change. Planner, executor, storage, and behavior changes should come with regression coverage.
+- Rust unit tests live in one `#[cfg(test)] mod tests` block at the end of the file, never interleaved with the implementation. Prefer the crate's existing `tests/it/` directory when it has one. See [`agents/coding-style.md`](agents/coding-style.md).
 - Keep contributions reviewable. Commits should stay scoped, and pull requests should follow the repository's expected collaboration workflow.
+- PR descriptions keep the template structure unchanged: write all content (motivation, changes, test details) under `## Summary`; in other sections only tick checkboxes and fill the existing placeholders. See [`agents/commit-and-pr.md`](agents/commit-and-pr.md).
 
 ## Submission Intent
 - Judge the quality bar by what will remain in the branch and enter review, not by an abstract task label.

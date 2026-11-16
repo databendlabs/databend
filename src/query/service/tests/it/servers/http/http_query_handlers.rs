@@ -300,7 +300,7 @@ impl TestHttpQueryRequest {
             .header(header::CONTENT_TYPE, content_type)
             .header(header::AUTHORIZATION, self.auth_header.clone())
             .body(body);
-        req.headers_mut().extend(self.headers.clone().into_iter());
+        req.headers_mut().extend(self.headers.clone());
 
         let resp = self
             .ep
@@ -420,6 +420,32 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_error_is_returned_unscrubbed() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    // Errors go back to the client that sent the SQL, as is, so that a
+    // value or column named like a credential does not garble them. Only
+    // logs and query history scrub them.
+    for (sql, kept) in [
+        (
+            "CREATE USER u IDNETIFIED BY 'client_visible'",
+            "client_visible",
+        ),
+        (
+            "SELECT * FROM numbers(1) WHERE customer_key = customer_id",
+            "customer_id",
+        ),
+    ] {
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
+        let message = result.error.map(|e| e.message).unwrap_or_default();
+        assert!(message.contains(kept), "{sql}: {message}");
+    }
     Ok(())
 }
 
@@ -1073,7 +1099,7 @@ async fn check_response(response: Response) -> Result<(StatusCode, TestQueryResp
     assert!(
         result.is_ok(),
         "body ='{}', result='{:?}'",
-        &body,
+        body,
         result.err()
     );
     Ok((status, result?))
@@ -1099,7 +1125,7 @@ async fn get_uri_with_headers(ep: &EndpointType, uri: &str, headers: HeaderMap) 
         .method(Method::GET)
         .typed_header(basic)
         .finish();
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     ep.call(req).await.unwrap_or_else(|err| err.into_response())
 }
@@ -1115,7 +1141,7 @@ async fn get_arrow_uri(
         .method(Method::GET)
         .typed_header(basic)
         .finish();
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     let response = ep.call(req).await?;
     assert_eq!(
@@ -1144,7 +1170,7 @@ async fn post_uri(
         .header(header::CONTENT_TYPE, content_type)
         .typed_header(basic)
         .body(body);
-    req.headers_mut().extend(headers.into_iter());
+    req.headers_mut().extend(headers);
 
     let response = ep
         .call(req)
@@ -2376,6 +2402,51 @@ async fn test_arrow_query_retry_rejects_unnegotiated_version_switch() -> anyhow:
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_login_with_catalog() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+
+    let login = |body: serde_json::Value| {
+        let ep = &ep;
+        async move {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                HEADER_CLIENT_CAPABILITIES,
+                HeaderValue::from_static("session_header"),
+            );
+            let response = post_uri(ep, "/v1/session/login", &body, headers).await?;
+            let status = response.status();
+            let body = response.into_body().into_string().await?;
+            anyhow::Ok((status, body))
+        }
+    };
+
+    let (status, body) = login(serde_json::json!({"catalog": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "default", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // An empty catalog falls back to the current catalog.
+    let (status, body) = login(serde_json::json!({"catalog": "", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "default", "database": "not_exists"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let (status, body) = login(serde_json::json!({"catalog": "not_exists"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let (status, body) =
+        login(serde_json::json!({"catalog": "not_exists", "database": "default"})).await?;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_login_returns_server_max_arrow_result_version() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
@@ -2548,6 +2619,206 @@ async fn test_arrow_query_page_keeps_disabled_decimal64_feature() -> anyhow::Res
         None
     );
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_owner_with_sandbox_settings() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.internal_enable_sandbox_tenant = true;
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+    let mut owner = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "select * from numbers(10)",
+        "pagination": {"wait_time_secs": 1, "max_rows_per_page": 1},
+        "session": {"settings": {"sandbox_tenant": "sandbox"}},
+    }));
+    let (status, query, _) = owner.fetch_begin().await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(query.error.is_none(), "{query:?}");
+    // Query settings do not change the authenticated owner of later requests.
+    for uri in [
+        format!("/v1/query/{}", query.id),
+        make_page_uri(&query.id, 0),
+        query.final_uri.unwrap(),
+    ] {
+        let response = owner.do_request_raw(Method::GET, &uri).await?;
+        assert_eq!(response.status(), StatusCode::OK, "{uri}");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_client_query_id_retry_checks_tenant_owner() -> anyhow::Result<()> {
+    let config = ConfigBuilder::create().with_management_mode().config();
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert("x-databend-tenant", "owner-tenant".parse()?);
+    headers.insert("x-databend-query-id", "owner-retry-query".parse()?);
+    headers.insert(
+        header::COOKIE,
+        "cookie_enabled=true; session_id=owner-session".parse()?,
+    );
+    let mut owner = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "show settings",
+        "pagination": {"wait_time_secs": 1, "max_rows_per_page": 1},
+    }))
+    .with_headers(headers.clone());
+    let (status, query, _) = owner.fetch_begin().await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(query.error.is_none(), "{query:?}");
+    assert_eq!(query.id, "owner-retry-query");
+    assert_eq!(query.data.len(), 1);
+
+    // Matching usernames and session IDs must not allow a cross-tenant retry.
+    headers.insert("x-databend-tenant", "other-tenant".parse()?);
+    let other = TestHttpQueryRequest::new(owner.json.clone()).with_headers(headers.clone());
+    let response = other.do_request_raw(Method::POST, "/v1/query").await?;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let body = response.into_body().into_string().await?;
+    for secret in ["owner-tenant", "owner-session", "root"] {
+        assert!(!body.contains(secret), "{body}");
+    }
+
+    // The owner can still retry, with either its original or a separate session.
+    headers.insert("x-databend-tenant", "owner-tenant".parse()?);
+    for cookie in [
+        Some("cookie_enabled=true; session_id=owner-session"),
+        None,
+        Some("cookie_enabled=true; session_id=other-session"),
+    ] {
+        headers.remove(header::COOKIE);
+        if let Some(cookie) = cookie {
+            headers.insert(header::COOKIE, cookie.parse()?);
+        }
+        let retry = TestHttpQueryRequest::new(owner.json.clone()).with_headers(headers.clone());
+        let response = retry.do_request_raw(Method::POST, "/v1/query").await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let response: TestQueryResponse = response.into_body().into_json().await?;
+        assert!(response.error.is_none(), "{response:?}");
+        assert_eq!(response.id, query.id);
+        assert_eq!(response.data, query.data);
+    }
+    let response = owner
+        .do_request_raw(Method::POST, query.final_uri.as_ref().unwrap())
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_owner_tenant_and_token() -> anyhow::Result<()> {
+    let config = ConfigBuilder::create().with_management_mode().config();
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+
+    let cookie = "cookie_enabled=true; session_id=owner-session";
+    let mut headers = HeaderMap::new();
+    headers.insert("x-databend-tenant", "owner-tenant".parse()?);
+    headers.insert(header::COOKIE, cookie.parse()?);
+    let mut owner = TestHttpQueryRequest::new(serde_json::json!({})).with_headers(headers.clone());
+    let login = owner
+        .do_request_raw(Method::POST, "/v1/session/login")
+        .await?;
+    assert_eq!(login.status(), StatusCode::OK);
+    let login: serde_json::Value = login.into_body().into_json().await?;
+    let token = login["tokens"]["session_token"].as_str().unwrap();
+
+    owner.json = serde_json::json!({
+        "sql": "show settings",
+        "pagination": {"wait_time_secs": 1, "max_rows_per_page": 1},
+    });
+    let (status, query, _) = owner.fetch_begin().await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(query.error.is_none(), "{query:?}");
+
+    // A token polling request must use the claim's tenant without looking up
+    // user info, even if no tenant header is supplied (or it is misleading).
+    let mut token_owner = TestHttpQueryRequest::new(serde_json::json!({}));
+    token_owner.auth_header = format!("Bearer {token}").parse()?;
+    token_owner.headers.insert(header::COOKIE, cookie.parse()?);
+    for tenant in [None, Some("other-tenant")] {
+        if let Some(tenant) = tenant {
+            token_owner
+                .headers
+                .insert("x-databend-tenant", tenant.parse()?);
+        }
+        let response = token_owner
+            .do_request_raw(Method::GET, &format!("/v1/query/{}", query.id))
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // Same username and same client session ID, but a different tenant.
+    headers.insert("x-databend-tenant", "other-tenant".parse()?);
+    let mut other = TestHttpQueryRequest::new(serde_json::json!({})).with_headers(headers);
+    for (method, suffix) in [
+        (Method::GET, ""),
+        (Method::GET, "/page/0"),
+        (Method::GET, "/kill"),
+        (Method::POST, "/kill"),
+        (Method::GET, "/final"),
+        (Method::POST, "/final"),
+    ] {
+        let response = other
+            .do_request_raw(method, &format!("/v1/query/{}{suffix}", query.id))
+            .await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = response.into_body().into_string().await?;
+        for secret in ["owner-tenant", "owner-session", "root"] {
+            assert!(!body.contains(secret), "{body}");
+        }
+    }
+    other.json =
+        serde_json::json!({"node_to_queries": {query.node_id.clone(): [query.id.clone()]}});
+    let response = other
+        .do_request_raw(Method::POST, "/v1/session/heartbeat")
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: serde_json::Value = response.into_body().into_json().await?;
+    assert_eq!(body["queries_to_remove"], serde_json::json!([query.id]));
+
+    // The denied close requests did not close the original query.
+    let response = token_owner
+        .do_request_raw(Method::GET, &make_page_uri(&query.id, 0))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Side-channel access needs the same tenant and user, not the same session.
+    let mut side_channel = TestHttpQueryRequest::new(serde_json::json!({}));
+    side_channel
+        .headers
+        .insert("x-databend-tenant", "owner-tenant".parse()?);
+    for cookie in [None, Some("cookie_enabled=true; session_id=other-session")] {
+        if let Some(cookie) = cookie {
+            side_channel.headers.insert(header::COOKIE, cookie.parse()?);
+        }
+        let response = side_channel
+            .do_request_raw(Method::GET, &format!("/v1/query/{}", query.id))
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        side_channel.json =
+            serde_json::json!({"node_to_queries": {query.node_id.clone(): [query.id.clone()]}});
+        let response = side_channel
+            .do_request_raw(Method::POST, "/v1/session/heartbeat")
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value = response.into_body().into_json().await?;
+        assert_eq!(body["queries_to_remove"], serde_json::json!([]));
+        for suffix in ["/page/0", "/final"] {
+            let response = side_channel
+                .do_request_raw(Method::GET, &format!("/v1/query/{}{suffix}", query.id))
+                .await?;
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+    }
+    let response = side_channel
+        .do_request_raw(Method::POST, &format!("/v1/query/{}/kill", query.id))
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = token_owner
+        .do_request_raw(Method::POST, query.final_uri.as_ref().unwrap())
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
     Ok(())
 }
 

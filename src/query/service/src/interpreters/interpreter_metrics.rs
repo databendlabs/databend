@@ -55,17 +55,18 @@ impl InterpreterMetrics {
             .map(|d| d.as_micros() as f64 / 1000.0)
             .unwrap_or(0.0);
 
+        let io_stats = ctx.get_io_stats();
         let data_metrics = ctx.get_data_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
         let written_bytes = ctx.get_write_progress_value().bytes as u64;
-        let written_io_bytes = data_metrics.get_write_bytes() as u64;
-        let written_io_bytes_cost_ms = data_metrics.get_write_bytes_cost();
+        let written_io_bytes = io_stats.write_bytes;
+        let written_io_bytes_cost_ms = io_stats.write_duration_ms;
 
         let scan_rows = ctx.get_scan_progress_value().rows as u64;
         let scan_bytes = ctx.get_scan_progress_value().bytes as u64;
-        let scan_io_bytes = data_metrics.get_read_bytes() as u64;
-        let scan_io_bytes_cost_ms = data_metrics.get_read_bytes_cost();
+        let scan_io_bytes = io_stats.read_bytes;
+        let scan_io_bytes_cost_ms = io_stats.read_duration_ms;
 
         let scan_partitions = data_metrics.get_partitions_scanned();
         let total_partitions = data_metrics.get_partitions_total();

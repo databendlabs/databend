@@ -30,7 +30,9 @@ use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::StorageConfig;
+use databend_common_storage::auto_detect_storage_params;
 use databend_common_tracing::Config as LogConfig;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::RpcClientConf;
@@ -98,7 +100,8 @@ impl InnerConfig {
         cfg.query.node_secret = GlobalUniq::unique();
 
         // Handle auto detect for storage params.
-        cfg.storage.params = cfg.storage.params.auto_detect().await?;
+        cfg.storage.params =
+            auto_detect_storage_params(cfg.storage.params, EndpointPolicyScope::Trusted).await?;
 
         // Set default allow_credential_chain to true for config storage params.
         if let StorageParams::S3(s3) = &mut cfg.storage.params
@@ -123,6 +126,16 @@ impl InnerConfig {
     /// This function is served for tests only.
     pub fn load_for_test() -> Result<Self> {
         Config::load_with_config_file("")?.try_into()
+    }
+
+    /// The server memory limit in bytes: `max_server_memory_usage`, or when that is 0,
+    /// [`default_server_memory_limit`]. The allocator limit, the cache pools and the
+    /// `max_memory_usage` setting, from which the spill thresholds derive, all use it.
+    pub fn server_memory_limit(&self) -> u64 {
+        match self.query.common.max_server_memory_usage {
+            0 => default_server_memory_limit(),
+            limit => limit,
+        }
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {
@@ -165,6 +178,16 @@ impl InnerConfig {
     pub fn into_config(self) -> Config {
         Config::from(self)
     }
+}
+
+/// 80% of the memory of the machine, or of the cgroup the process runs in.
+pub fn default_server_memory_limit() -> u64 {
+    let mut system = sysinfo::System::new();
+    system.refresh_memory();
+    let total = system
+        .cgroup_limits()
+        .map_or(system.total_memory(), |limits| limits.total_memory);
+    total / 10 * 8
 }
 
 impl Debug for InnerConfig {

@@ -40,7 +40,7 @@ pub(crate) async fn vacuum_table(
         ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
     })?;
 
-    table.check_mutable()?;
+    table.check_mutable_for_maintenance()?;
     get_vacuum_handler()
         .do_vacuum2(table, ctx.clone(), respect_flash_back)
         .await
@@ -104,7 +104,7 @@ async fn vacuum_database(
             continue;
         };
 
-        if table.is_read_only() {
+        if table.is_read_only_for_maintenance() {
             info!("Bypass read only table {}.{}", database_name, table_name);
             continue;
         }
@@ -132,11 +132,13 @@ async fn vacuum_database(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
     use std::sync::Mutex;
     use std::time::Duration;
 
     use databend_common_base::base::GlobalInstance;
     use databend_common_catalog::table_context::AbortChecker;
+    use databend_common_meta_app::schema::TableInfo;
     use databend_enterprise_vacuum_handler::VacuumHandler;
     use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
     use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
@@ -178,8 +180,8 @@ mod tests {
         async fn do_vacuum_drop_tables(
             &self,
             _threads_nums: usize,
-            _tables: Vec<Arc<dyn Table>>,
-            _dry_run_limit: Option<usize>,
+            _tables: Vec<TableInfo>,
+            _safe_clone_table_ids: HashSet<u64>,
         ) -> VacuumDropTablesResult {
             unreachable!("batch vacuum must not vacuum dropped tables")
         }

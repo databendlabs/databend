@@ -312,7 +312,7 @@ impl Acquirer {
                     e,
                     format!(
                         "insert semaphore (seq={} entry={}) in transaction",
-                        &permit_key, &permit_entry
+                        permit_key, permit_entry
                     ),
                 )
                 .context(&self.name)
@@ -388,7 +388,7 @@ impl Acquirer {
                     e,
                     format!(
                         "insert semaphore (seq={} entry={}) in transaction",
-                        &permit_key, &permit_entry
+                        permit_key, permit_entry
                     ),
                 )
                 .context(&self.name)

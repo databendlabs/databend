@@ -1,0 +1,764 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::alloc::Layout;
+use std::cmp::Ordering;
+use std::marker::PhantomData;
+
+use argminmax::ArgMinMax;
+use argminmax::ArgMinMaxMasked;
+use argminmax::NaNArgMinMax;
+use argminmax::NaNArgMinMaxMasked;
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
+use databend_common_exception::Result;
+use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::ColumnView;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AnyNumberType;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::BuilderExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::EmptyArrayType;
+use databend_common_expression::types::EmptyMapType;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
+use databend_common_expression::types::NullType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::with_number_mapped_type;
+use num_traits::Float;
+
+use super::AggregateRegistration;
+use super::adaptors::*;
+use super::min_max_any::TYPE_MAX;
+use super::min_max_any::TYPE_MIN;
+use super::serialized_scalar_at;
+
+struct ArgMinMaxBuilder;
+
+impl ArgMinMaxBuilder {
+    fn register(registry: &mut AggregateRegistry) {
+        NameRoute::new(
+            &["arg_min"],
+            ArgMinMaxBuilder::arg_min_max_arguments(),
+            ArgMinMaxBuilder::ARG_MIN_METADATA,
+            NullInput::Filter,
+        )
+        .then(MergeRoute::multi_arg(false, Self::create::<TYPE_MIN>))
+        .then(MergeRoute::multi_arg(true, Self::create::<TYPE_MIN>))
+        .then(PlainRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .then(IfRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .then(StateRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .then(DistinctAliasRoute::multi_arg(Self::create::<TYPE_MIN>))
+        .register(registry);
+        NameRoute::new(
+            &["arg_max"],
+            ArgMinMaxBuilder::arg_min_max_arguments(),
+            ArgMinMaxBuilder::ARG_MAX_METADATA,
+            NullInput::Filter,
+        )
+        .then(MergeRoute::multi_arg(false, Self::create::<TYPE_MAX>))
+        .then(MergeRoute::multi_arg(true, Self::create::<TYPE_MAX>))
+        .then(PlainRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .then(IfRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .then(StateRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .then(DistinctAliasRoute::multi_arg(Self::create::<TYPE_MAX>))
+        .register(registry);
+    }
+}
+
+inventory::submit! {
+    AggregateRegistration {
+        register: ArgMinMaxBuilder::register,
+    }
+}
+
+impl ArgMinMaxBuilder {
+    fn arg_min_max_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any(), ArgumentPattern::any()])
+    }
+
+    const ARG_MIN_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the argument associated with the minimum value",
+            definition: "arg_min(arg, value)",
+            example: "select arg_min(name, score) from t",
+        },
+    };
+
+    const ARG_MAX_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the argument associated with the maximum value",
+            definition: "arg_max(arg, value)",
+            example: "select arg_max(name, score) from t",
+        },
+    };
+}
+
+pub(super) struct ArgMinMaxState<A, V, const CMP_TYPE: u8>
+where
+    A: ValueType,
+    V: ValueType,
+{
+    data: Option<(V::Scalar, A::Scalar)>,
+}
+
+impl<A, V, const CMP_TYPE: u8> Default for ArgMinMaxState<A, V, CMP_TYPE>
+where
+    A: ValueType,
+    V: ValueType,
+{
+    fn default() -> Self {
+        Self { data: None }
+    }
+}
+
+impl<A, V, const CMP_TYPE: u8> ArgMinMaxState<A, V, CMP_TYPE>
+where
+    A: ValueType,
+    V: ArgMinMaxValue,
+    A::Scalar: BorshSerialize + BorshDeserialize,
+    V::Scalar: BorshSerialize + BorshDeserialize,
+    for<'a, 'b> V::ScalarRef<'a>: PartialOrd<V::ScalarRef<'b>>,
+{
+    pub fn state_description(
+        arg_type: DataType,
+        value_type: DataType,
+    ) -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(BooleanType::data_type()),
+            StateSerdeItem::DataType(value_type),
+            StateSerdeItem::DataType(arg_type),
+        ])
+        .with_manual_drop(true)
+    }
+
+    fn add(&mut self, value: V::ScalarRef<'_>, arg: A::ScalarRef<'_>) {
+        if self.should_change(&value) {
+            self.data = Some((V::to_owned_scalar(value), A::to_owned_scalar(arg)));
+        }
+    }
+
+    fn add_batch(&mut self, args: ColumnView<A>, values: ColumnView<V>, validity: Option<&Bitmap>) {
+        let candidate = match (simd_extreme_row::<V, CMP_TYPE>(&values, validity), validity) {
+            (Some(row), _) => Some((row, values.index(row).unwrap())),
+            (None, Some(validity)) => values
+                .iter()
+                .enumerate()
+                .zip(validity.iter())
+                .filter_map(|(item, valid)| valid.then_some(item))
+                .reduce(|current, (row, value)| {
+                    if should_change::<V, CMP_TYPE>(&current.1, &value) {
+                        (row, value)
+                    } else {
+                        current
+                    }
+                }),
+            (None, None) => values.iter().enumerate().reduce(|current, (row, value)| {
+                if should_change::<V, CMP_TYPE>(&current.1, &value) {
+                    (row, value)
+                } else {
+                    current
+                }
+            }),
+        };
+        // Read and copy the argument only for the batch winner, and retain the
+        // existing argument on ties, just as in the row and merge paths.
+        if let Some((row, value)) = candidate
+            && self.should_change(&value)
+        {
+            self.data = Some((
+                V::to_owned_scalar(value),
+                A::to_owned_scalar(args.index(row).unwrap()),
+            ));
+        }
+    }
+
+    fn should_change(&self, value: &V::ScalarRef<'_>) -> bool {
+        match &self.data {
+            Some((current, _)) => should_change::<V, CMP_TYPE>(&V::to_scalar_ref(current), value),
+            None => true,
+        }
+    }
+
+    fn merge(&mut self, rhs: &Self) {
+        if let Some((value, arg)) = &rhs.data
+            && self.should_change(&V::to_scalar_ref(value))
+        {
+            self.data = Some((value.to_owned(), arg.to_owned()));
+        }
+    }
+
+    fn merge_result(&self, mut builder: A::ColumnBuilderMut<'_>) {
+        match &self.data {
+            Some((_, arg)) => builder.push_item(A::to_scalar_ref(arg)),
+            None => builder.push_default(),
+        }
+    }
+}
+
+fn should_change<V, const CMP_TYPE: u8>(
+    current: &V::ScalarRef<'_>,
+    value: &V::ScalarRef<'_>,
+) -> bool
+where
+    V: ValueType,
+    for<'a, 'b> V::ScalarRef<'a>: PartialOrd<V::ScalarRef<'b>>,
+{
+    match CMP_TYPE {
+        TYPE_MIN => matches!(current.partial_cmp(value), Some(Ordering::Greater)),
+        TYPE_MAX => matches!(current.partial_cmp(value), Some(Ordering::Less)),
+        _ => unreachable!(),
+    }
+}
+
+/// Batch extreme-row selection for the value types chosen by the builder.
+/// Types without a SIMD implementation leave the batch to the generic loop.
+pub(super) trait ArgMinMaxValue: ValueType {
+    fn simd_extreme_row(
+        _values: &Self::Column,
+        _validity: Option<&Bitmap>,
+        _max: bool,
+    ) -> Option<usize> {
+        None
+    }
+}
+
+impl ArgMinMaxValue for StringType {}
+impl ArgMinMaxValue for BooleanType {}
+impl ArgMinMaxValue for NullType {}
+impl ArgMinMaxValue for EmptyArrayType {}
+impl ArgMinMaxValue for EmptyMapType {}
+impl ArgMinMaxValue for AnyType {}
+
+macro_rules! impl_int_extreme_row {
+    ($($t:ty),* $(,)?) => {$(
+        impl ArgMinMaxValue for $t {
+            fn simd_extreme_row(
+                values: &Self::Column,
+                validity: Option<&Bitmap>,
+                max: bool,
+            ) -> Option<usize> {
+                int_extreme_row(values.as_slice(), validity, max)
+            }
+        }
+    )*};
+}
+
+impl_int_extreme_row!(
+    NumberType<i8>,
+    NumberType<i16>,
+    NumberType<i32>,
+    NumberType<i64>,
+    NumberType<u8>,
+    NumberType<u16>,
+    NumberType<u32>,
+    NumberType<u64>,
+    DateType,
+    TimestampType,
+);
+
+macro_rules! impl_float_extreme_row {
+    ($($ordered:ty => $float:ty),* $(,)?) => {$(
+        impl ArgMinMaxValue for NumberType<$ordered> {
+            fn simd_extreme_row(
+                values: &Self::Column,
+                validity: Option<&Bitmap>,
+                max: bool,
+            ) -> Option<usize> {
+                // SAFETY: OrderedFloat is #[repr(transparent)].
+                let values = unsafe {
+                    std::mem::transmute::<&[$ordered], &[$float]>(values.as_slice())
+                };
+                float_extreme_row(values, validity, max)
+            }
+        }
+    )*};
+}
+
+impl_float_extreme_row!(F32 => f32, F64 => f64);
+
+/// The row of the first minimum (`TYPE_MIN`) or maximum, if SIMD can select it.
+/// Constants, encoded columns and empty batches use the generic loop.
+fn simd_extreme_row<V: ArgMinMaxValue, const CMP_TYPE: u8>(
+    values: &ColumnView<V>,
+    validity: Option<&Bitmap>,
+) -> Option<usize> {
+    match values {
+        ColumnView::Column(col) if !values.is_empty() => {
+            V::simd_extreme_row(col, validity, CMP_TYPE == TYPE_MAX)
+        }
+        _ => None,
+    }
+}
+
+fn int_extreme_row<T>(values: &[T], validity: Option<&Bitmap>, max: bool) -> Option<usize>
+where for<'a> &'a [T]: ArgMinMax + ArgMinMaxMasked {
+    match (validity.map(Bitmap::as_slice), max) {
+        (None, false) => Some(values.argmin()),
+        (None, true) => Some(values.argmax()),
+        (Some((bytes, offset, _)), false) => values.argmin_masked(bytes, offset),
+        (Some((bytes, offset, _)), true) => values.argmax_masked(bytes, offset),
+    }
+}
+
+/// F32 and F64 treat -0.0 as equal to 0.0, as argminmax does, and put NaN above every
+/// number. So the minimum skips NaN (`argmin`), and the maximum is a NaN when there
+/// is one (`nanargmax`). A NaN row goes to the generic loop: with NaNs of different
+/// bits, `nanargmax` can return a NaN after the first one.
+fn float_extreme_row<T: Float>(
+    values: &[T],
+    validity: Option<&Bitmap>,
+    max: bool,
+) -> Option<usize>
+where
+    for<'a> &'a [T]: ArgMinMax + ArgMinMaxMasked + NaNArgMinMax + NaNArgMinMaxMasked,
+{
+    let row = match (validity.map(Bitmap::as_slice), max) {
+        (None, false) => values.argmin(),
+        (None, true) => values.nanargmax(),
+        (Some((bytes, offset, _)), false) => values.argmin_masked(bytes, offset)?,
+        (Some((bytes, offset, _)), true) => values.nanargmax_masked(bytes, offset)?,
+    };
+    (!values[row].is_nan()).then_some(row)
+}
+
+impl ArgMinMaxBuilder {
+    fn create<const CMP_TYPE: u8>(
+        build: MultiArgBuildContext<'_, impl Combinator>,
+    ) -> Result<AggregateCallRef> {
+        let arg_type = build.args_type()[0].clone();
+        let value_type = build.args_type()[1].clone();
+        Self::create_for_arg::<CMP_TYPE>(build, arg_type, value_type)
+    }
+
+    fn create_for_arg<const CMP_TYPE: u8>(
+        build: MultiArgBuildContext<'_, impl Combinator>,
+        arg_type: DataType,
+        value_type: DataType,
+    ) -> Result<AggregateCallRef> {
+        match &arg_type {
+            DataType::String => {
+                Self::create_for_value::<StringType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Boolean => {
+                Self::create_for_value::<BooleanType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Timestamp => {
+                Self::create_for_value::<TimestampType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Date => {
+                Self::create_for_value::<DateType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Null => {
+                Self::create_for_value::<NullType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::EmptyArray => {
+                Self::create_for_value::<EmptyArrayType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::EmptyMap => {
+                Self::create_for_value::<EmptyMapType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Number(_) => {
+                Self::create_for_value::<AnyNumberType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            _ => Self::create_for_value::<AnyType, CMP_TYPE>(build, arg_type, value_type),
+        }
+    }
+
+    fn create_for_value<A, const CMP_TYPE: u8>(
+        build: MultiArgBuildContext<'_, impl Combinator>,
+        arg_type: DataType,
+        value_type: DataType,
+    ) -> Result<AggregateCallRef>
+    where
+        A: ValueType,
+        A::Scalar: BorshSerialize + BorshDeserialize,
+    {
+        match &value_type {
+            DataType::String => {
+                Self::create_instance::<A, StringType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Boolean => {
+                Self::create_instance::<A, BooleanType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Timestamp => {
+                Self::create_instance::<A, TimestampType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Date => {
+                Self::create_instance::<A, DateType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Null => {
+                Self::create_instance::<A, NullType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::EmptyArray => {
+                Self::create_instance::<A, EmptyArrayType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::EmptyMap => {
+                Self::create_instance::<A, EmptyMapType, CMP_TYPE>(build, arg_type, value_type)
+            }
+            DataType::Number(_) => {
+                with_number_mapped_type!(|NUM| match &value_type {
+                    DataType::Number(NumberDataType::NUM) => {
+                        Self::create_instance::<A, NumberType<NUM>, CMP_TYPE>(
+                            build, arg_type, value_type,
+                        )
+                    }
+                    _ => unreachable!(),
+                })
+            }
+            _ => Self::create_instance::<A, AnyType, CMP_TYPE>(build, arg_type, value_type),
+        }
+    }
+
+    fn create_instance<A, V, const CMP_TYPE: u8>(
+        build: MultiArgBuildContext<'_, impl Combinator>,
+        arg_type: DataType,
+        value_type: DataType,
+    ) -> Result<AggregateCallRef>
+    where
+        A: ValueType,
+        A::Scalar: BorshSerialize + BorshDeserialize,
+        V: ArgMinMaxValue,
+        V::Scalar: BorshSerialize + BorshDeserialize,
+        for<'a, 'b> V::ScalarRef<'a>: PartialOrd<V::ScalarRef<'b>>,
+    {
+        let state =
+            ArgMinMaxState::<A, V, CMP_TYPE>::state_description(arg_type.clone(), value_type);
+        let eval = ArgMinMaxEval::<A, V, CMP_TYPE>::new();
+        build.create_multi_arg_or_null(arg_type.wrap_nullable(), state, eval)
+    }
+}
+
+struct ArgMinMaxEval<A, V, const CMP_TYPE: u8>
+where
+    A: ValueType,
+    V: ValueType,
+{
+    _p: PhantomData<fn(A, V)>,
+}
+
+impl<A, V, const CMP_TYPE: u8> ArgMinMaxEval<A, V, CMP_TYPE>
+where
+    A: ValueType,
+    V: ValueType,
+{
+    fn new() -> Self {
+        Self { _p: PhantomData }
+    }
+}
+
+impl<A, V, const CMP_TYPE: u8> AggregateEval for ArgMinMaxEval<A, V, CMP_TYPE>
+where
+    A: ValueType,
+    A::Scalar: BorshSerialize + BorshDeserialize,
+    V: ArgMinMaxValue,
+    V::Scalar: BorshSerialize + BorshDeserialize,
+    for<'a, 'b> V::ScalarRef<'a>: PartialOrd<V::ScalarRef<'b>>,
+{
+    fn init_state(&self, state: AggrState<'_>) {
+        state.write(ArgMinMaxState::<A, V, CMP_TYPE>::default);
+    }
+
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
+        let args = input.columns[0].downcast::<A>().unwrap();
+        let values = input.columns[1].downcast::<V>().unwrap();
+        input
+            .state
+            .get::<ArgMinMaxState<A, V, CMP_TYPE>>()
+            .add_batch(args, values, input.validity);
+        Ok(())
+    }
+
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
+        let args = input.columns[0].downcast::<A>().unwrap();
+        let values = input.columns[1].downcast::<V>().unwrap();
+        input
+            .states
+            .for_each_state_value::<ArgMinMaxState<A, V, CMP_TYPE>, _>(
+                args.iter().zip(values.iter()),
+                input.validity,
+                |state, (arg, value)| {
+                    state.add(value, arg);
+                },
+            )
+    }
+
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
+        let args = input.columns[0].downcast::<A>().unwrap();
+        let values = input.columns[1].downcast::<V>().unwrap();
+        let arg = args.index(input.row).unwrap();
+        let value = values.index(input.row).unwrap();
+        input
+            .state
+            .get::<ArgMinMaxState<A, V, CMP_TYPE>>()
+            .add(value, arg);
+        Ok(())
+    }
+
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+        let (flag_builders, builders) = input.builders.split_at_mut(1);
+        let (value_builders, arg_builders) = builders.split_at_mut(1);
+        let mut flag_builder = BooleanType::downcast_builder(&mut flag_builders[0]);
+        let mut value_builder = V::downcast_builder(&mut value_builders[0]);
+        let mut arg_builder = A::downcast_builder(&mut arg_builders[0]);
+        input
+            .states
+            .try_for_each_state::<ArgMinMaxState<A, V, CMP_TYPE>>(None, |state| {
+                match &state.data {
+                    Some((value, arg)) => {
+                        flag_builder.push_item(true);
+                        value_builder.push_item(V::to_scalar_ref(value));
+                        arg_builder.push_item(A::to_scalar_ref(arg));
+                    }
+                    None => {
+                        flag_builder.push_item(false);
+                        value_builder.push_default();
+                        arg_builder.push_default();
+                    }
+                }
+                Ok(())
+            })
+    }
+
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
+        input.try_for_each_state::<ArgMinMaxState<A, V, CMP_TYPE>>(|state, row| {
+            let ScalarRef::Boolean(flag) = serialized_scalar_at(input.state, row, 0) else {
+                unreachable!()
+            };
+            if !flag {
+                return Ok(());
+            }
+            let value = serialized_scalar_at(input.state, row, 1);
+            let arg = serialized_scalar_at(input.state, row, 2);
+            let value = V::try_downcast_scalar(&value)?;
+            let arg = A::try_downcast_scalar(&arg)?;
+            state.add(value, arg);
+            Ok(())
+        })
+    }
+
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
+        let state = input.state.get::<ArgMinMaxState<A, V, CMP_TYPE>>();
+        let rhs = input.rhs.get::<ArgMinMaxState<A, V, CMP_TYPE>>();
+        state.merge(rhs);
+        Ok(())
+    }
+
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
+        let builder = A::downcast_builder(input.builder);
+        input
+            .state
+            .get::<ArgMinMaxState<A, V, CMP_TYPE>>()
+            .merge_result(builder);
+        Ok(())
+    }
+
+    unsafe fn drop_state(&self, state: AggrState<'_>) {
+        let state = state.get::<ArgMinMaxState<A, V, CMP_TYPE>>();
+        unsafe { std::ptr::drop_in_place(state) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::Number;
+    use databend_common_expression::types::ReturnType;
+
+    use super::*;
+
+    fn check_batch<const CMP: u8>(values: Vec<i64>) {
+        let mut state = ArgMinMaxState::<StringType, Int64Type, CMP>::default();
+        let args = StringType::column_from_iter(
+            ["filtered", "first", "tie", "worse"]
+                .into_iter()
+                .map(str::to_owned),
+            &[],
+        );
+        let validity: Bitmap = [false, true, true, true].into_iter().collect();
+        state.add_batch(
+            ColumnView::Column(args),
+            ColumnView::Column(values.into()),
+            Some(&validity),
+        );
+        assert_eq!(state.data.as_ref().unwrap().1, "first");
+        let winner = state.data.as_ref().unwrap().0;
+        state.add_batch(
+            ColumnView::Const("later tie".to_owned(), 2),
+            ColumnView::Const(winner, 2),
+            None,
+        );
+        assert_eq!(state.data.as_ref().unwrap().1, "first");
+        let invalid: Bitmap = [false, false].into_iter().collect();
+        state.add_batch(
+            ColumnView::Const("invalid".to_owned(), 2),
+            ColumnView::Const(if CMP == TYPE_MIN { i64::MIN } else { i64::MAX }, 2),
+            Some(&invalid),
+        );
+        assert_eq!(state.data.as_ref().unwrap().1, "first");
+        state.add_batch(
+            ColumnView::Const("empty".to_owned(), 0),
+            ColumnView::Const(0, 0),
+            None,
+        );
+        assert_eq!(state.data.as_ref().unwrap().1, "first");
+    }
+
+    #[test]
+    fn batch_winner_and_ties() {
+        check_batch::<TYPE_MIN>(vec![-100, 1, 1, 2]);
+        check_batch::<TYPE_MAX>(vec![100, 2, 2, 1]);
+    }
+
+    /// The row that the generic loop of `add_batch` picks.
+    fn generic_extreme_row<T: Number, const CMP: u8>(
+        values: &[T],
+        validity: Option<&Bitmap>,
+    ) -> Option<usize> {
+        (0..values.len())
+            .filter(|&row| validity.is_none_or(|v| v.get_bit(row)))
+            .reduce(|best, row| {
+                match should_change::<NumberType<T>, CMP>(&values[best], &values[row]) {
+                    true => row,
+                    false => best,
+                }
+            })
+    }
+
+    /// Compatibility with the old loop, including the final result after NaN fallback.
+    /// Hand-computed semantic cases live in tests/it/aggregates/arg_min_max.rs.
+    fn check_batch_matches_generic<T, const CMP: u8>(values: &[T], validity: Option<&Bitmap>)
+    where
+        T: Number + BorshSerialize + BorshDeserialize,
+        for<'a> NumberType<T>: ArgMinMaxValue<Column = Buffer<T>, Scalar = T, ScalarRef<'a> = T>,
+    {
+        let expected = generic_extreme_row::<T, CMP>(values, validity).map(|row| row as i64);
+        let args = ColumnView::Column((0..values.len() as i64).collect::<Vec<_>>().into());
+        let view = ColumnView::<NumberType<T>>::Column(values.to_vec().into());
+        let mut state = ArgMinMaxState::<Int64Type, NumberType<T>, CMP>::default();
+        state.add_batch(args, view, validity);
+        assert_eq!(
+            state.data.map(|(_, arg)| arg),
+            expected,
+            "CMP {CMP} {values:?} {validity:?}",
+        );
+    }
+
+    /// Wiring checks only: these do not establish which CPU instructions the library uses.
+    #[test]
+    fn numeric_plain_columns_have_fast_path() {
+        macro_rules! check_integer {
+            ($($t:ty),* $(,)?) => {$(
+                let values = ColumnView::<$t>::Column(vec![1, 3, 3].into());
+                assert_eq!(simd_extreme_row::<_, TYPE_MIN>(&values, None), Some(0));
+                assert_eq!(simd_extreme_row::<_, TYPE_MAX>(&values, None), Some(1));
+            )*};
+        }
+        check_integer!(
+            NumberType<i8>,
+            NumberType<i16>,
+            NumberType<i32>,
+            NumberType<i64>,
+            NumberType<u8>,
+            NumberType<u16>,
+            NumberType<u32>,
+            NumberType<u64>,
+            DateType,
+            TimestampType,
+        );
+        let f32s =
+            ColumnView::<NumberType<F32>>::Column(vec![F32::from(1.0), F32::from(3.0)].into());
+        assert_eq!(simd_extreme_row::<_, TYPE_MIN>(&f32s, None), Some(0));
+        assert_eq!(simd_extreme_row::<_, TYPE_MAX>(&f32s, None), Some(1));
+        let f64s =
+            ColumnView::<NumberType<F64>>::Column(vec![F64::from(1.0), F64::from(3.0)].into());
+        assert_eq!(simd_extreme_row::<_, TYPE_MIN>(&f64s, None), Some(0));
+        assert_eq!(simd_extreme_row::<_, TYPE_MAX>(&f64s, None), Some(1));
+    }
+
+    #[test]
+    fn seeded_batches_match_generic_loop() {
+        use rand::Rng;
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+
+        let mut rng = StdRng::seed_from_u64(0x5EED);
+        let specials = [
+            f64::NAN,
+            -f64::NAN,
+            f64::from_bits(f64::NAN.to_bits() | 1),
+            0.0,
+            -0.0,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        for case in 0..3000 {
+            let len = rng.gen_range(1..300);
+            // Only values <= 0 or >= 0 in two of three cases: then -0.0 and 0.0 are
+            // often the maximum or minimum.
+            let (low, high) = [(-3, 4), (-3, 1), (0, 4)][case % 3];
+            let ints: Vec<i64> = (0..len).map(|_| rng.gen_range(low..high)).collect();
+            let mut floats: Vec<f64> = ints
+                .iter()
+                .map(|&v| match v {
+                    0 if rng.gen_bool(0.5) => -0.0,
+                    v => v as f64,
+                })
+                .collect();
+            if case % 2 == 0 {
+                for _ in 0..rng.gen_range(1..4) {
+                    floats[rng.gen_range(0..len)] = specials[rng.gen_range(0..specials.len())];
+                }
+            }
+            let offset = rng.gen_range(0..9);
+            let validity: Option<Bitmap> = rng.gen_bool(0.4).then(|| {
+                let bits: Bitmap = (0..offset + len).map(|_| rng.gen_bool(0.7)).collect();
+                bits.sliced(offset, len)
+            });
+            let validity = validity.as_ref();
+            // 125..=131: across the sign bit, which unsigned SIMD compares must handle.
+            let bytes: Vec<u8> = ints.iter().map(|&v| (v + 128) as u8).collect();
+            let floats32: Vec<F32> = floats.iter().map(|&v| F32::from(v as f32)).collect();
+            let floats: Vec<F64> = floats.into_iter().map(F64::from).collect();
+            check_batch_matches_generic::<i64, TYPE_MIN>(&ints, validity);
+            check_batch_matches_generic::<i64, TYPE_MAX>(&ints, validity);
+            check_batch_matches_generic::<u8, TYPE_MIN>(&bytes, validity);
+            check_batch_matches_generic::<u8, TYPE_MAX>(&bytes, validity);
+            check_batch_matches_generic::<F64, TYPE_MIN>(&floats, validity);
+            check_batch_matches_generic::<F64, TYPE_MAX>(&floats, validity);
+            check_batch_matches_generic::<F32, TYPE_MIN>(&floats32, validity);
+            check_batch_matches_generic::<F32, TYPE_MAX>(&floats32, validity);
+        }
+    }
+}

@@ -26,7 +26,7 @@ use std::time::Instant;
 use anyhow::Result;
 use anyhow::bail;
 use clap::Parser;
-use databend_common_meta_control::grpc_client_auth::GrpcClientAuthArgs;
+use databend_common_meta_control::grpc_client_config::GrpcClientConfigArgs;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
 use databend_common_tracing::StderrConfig;
@@ -75,13 +75,13 @@ struct Config {
     pub grpc_api_address: String,
 
     #[clap(flatten)]
-    pub grpc_auth: GrpcClientAuthArgs,
+    pub client_config: GrpcClientConfigArgs,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = Config::parse();
-    let grpc_auth = config.grpc_auth.load()?;
+    let client_config = config.client_config.load()?;
 
     let log_config = databend_common_tracing::Config {
         file: FileConfig {
@@ -130,17 +130,17 @@ async fn main() -> Result<()> {
             .split(',')
             .map(|addr| addr.to_string())
             .collect();
-        let grpc_auth = grpc_auth.clone();
+        let client_config = client_config.clone();
 
         let handle = DatabendRuntime::spawn(
             async move {
                 let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                     addrs.clone(),
-                    grpc_auth.username(),
-                    grpc_auth.expose_password(),
+                    client_config.auth.username(),
+                    client_config.auth.expose_password(),
                     None,
                     None,
-                    None,
+                    client_config.tls.clone(),
                     DEFAULT_GRPC_MESSAGE_SIZE,
                 );
 

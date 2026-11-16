@@ -40,6 +40,7 @@ use super::ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
+use crate::BlockEntry;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
@@ -56,7 +57,6 @@ use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
 use crate::types::DecimalSize;
 use crate::types::GeographyColumn;
-use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::VectorColumn;
@@ -244,6 +244,26 @@ impl TryFrom<&Schema> for TableSchema {
 
 impl DataBlock {
     pub fn from_record_batch(schema: &DataSchema, batch: &RecordBatch) -> Result<Self> {
+        Self::from_record_batch_impl(schema, batch, false)
+    }
+
+    /// Like [`Self::from_record_batch`], but reads columns with
+    /// [`Value::from_arrow_rs`] as table reads do, so a column whose values are
+    /// all NULL is read back as a constant NULL. Arrow has no constant column,
+    /// so a constant NULL column is written out in full; reading it back as a
+    /// full column would keep it at full width in memory.
+    pub fn from_record_batch_keep_null_const(
+        schema: &DataSchema,
+        batch: &RecordBatch,
+    ) -> Result<Self> {
+        Self::from_record_batch_impl(schema, batch, true)
+    }
+
+    fn from_record_batch_impl(
+        schema: &DataSchema,
+        batch: &RecordBatch,
+        keep_null_const: bool,
+    ) -> Result<Self> {
         assert_eq!(
             schema.num_fields(),
             batch.num_columns(),
@@ -264,12 +284,22 @@ impl DataBlock {
             return Ok(DataBlock::new(vec![], batch.num_rows()));
         }
 
-        let mut columns = Vec::with_capacity(batch.columns().len());
+        let num_rows = batch.num_rows();
+        // Value::from_arrow_rs takes an array of no rows as all NULL.
+        let keep_null_const = keep_null_const && num_rows > 0;
+        let mut entries = Vec::with_capacity(batch.columns().len());
         for (array, field) in batch.columns().iter().zip(schema.fields()) {
-            columns.push(Column::from_arrow_rs(array.clone(), field.data_type())?)
+            let data_type = field.data_type();
+            let entry = if keep_null_const {
+                let value = Value::from_arrow_rs(array.clone(), data_type)?;
+                BlockEntry::new(value, || (data_type.clone(), num_rows))
+            } else {
+                Column::from_arrow_rs(array.clone(), data_type)?.into()
+            };
+            entries.push(entry);
         }
 
-        Ok(DataBlock::new_from_columns(columns))
+        Ok(DataBlock::new(entries, num_rows))
     }
 }
 
@@ -331,13 +361,18 @@ impl Column {
                     array.to_data().buffers()[0].clone().into();
                 Column::Interval(buffer)
             }
-            DataType::Nullable(_) => {
+            DataType::Nullable(inner) => {
+                if inner.is_nullable_or_null() {
+                    return Err(ErrorCode::Internal(format!(
+                        "invalid nullable inner type: {inner}"
+                    )));
+                }
                 let validity = match array.nulls() {
                     Some(nulls) => Bitmap::from_null_buffer(nulls.clone()),
                     None => Bitmap::new_constant(true, array.len()),
                 };
-                let column = Column::from_arrow_rs(array, &data_type.remove_nullable())?;
-                NullableColumn::new_column(column, validity)
+                let column = Column::from_arrow_rs(array, inner)?;
+                column.wrap_nullable(Some(validity))
             }
             DataType::Array(inner) => {
                 let f = DataField::new("DUMMY", *inner.clone());

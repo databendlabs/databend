@@ -25,7 +25,7 @@ pub struct ProcedureIdentity {
 }
 
 impl ProcedureIdentity {
-    const ESCAPE_CHARS: [u8; 1] = [b'\''];
+    const ESCAPE_CHARS: [u8; 1] = *b"'";
 
     pub fn new(name: impl ToString, args: impl ToString) -> Self {
         Self {

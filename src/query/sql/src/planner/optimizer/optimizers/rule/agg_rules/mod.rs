@@ -20,15 +20,15 @@ mod rule_grouping_sets_to_union;
 mod rule_hierarchical_grouping_sets;
 mod rule_push_down_filter_aggregate;
 mod rule_push_down_limit_aggregate;
-mod rule_split_aggregate;
 mod rule_try_apply_materialized_view;
 pub(crate) mod view_rewrite;
 
+pub use rule_eager_aggregation::EagerAggregationOptimizer;
+pub use rule_eager_aggregation::EagerAggregationRewriter;
 pub use rule_eager_aggregation::RuleEagerAggregation;
 pub use rule_fold_count_aggregate::RuleFoldCountAggregate;
 pub use rule_grouping_sets_to_union::RuleGroupingSetsToUnion;
 pub use rule_hierarchical_grouping_sets::RuleHierarchicalGroupingSetsToUnion;
 pub use rule_push_down_filter_aggregate::RulePushDownFilterAggregate;
 pub use rule_push_down_limit_aggregate::RulePushDownRankLimitAggregate;
-pub use rule_split_aggregate::RuleSplitAggregate;
 pub use rule_try_apply_materialized_view::RuleTryApplyMaterializedView;

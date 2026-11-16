@@ -264,6 +264,11 @@ pub fn take_boolean_from_views(
                             builder.push(column.get_bit(row));
                         }
                     }
+                    ColumnView::Encoded(view) => {
+                        for row in TakeIndex::iter(rows) {
+                            builder.push(unsafe { view.index_unchecked(row) });
+                        }
+                    }
                 }
             }
             Chunk::Repeat { block, rows } => {
@@ -276,6 +281,10 @@ pub fn take_boolean_from_views(
                         let value = column.get_bit(rows.row as usize);
                         builder.extend_constant(rows.count as usize, value);
                     }
+                    ColumnView::Encoded(view) => {
+                        let value = unsafe { view.index_unchecked(rows.row as usize) };
+                        builder.extend_constant(rows.count as usize, value);
+                    }
                 }
             }
             Chunk::Range { block, row, len } => {
@@ -286,6 +295,11 @@ pub fn take_boolean_from_views(
                     }
                     ColumnView::Column(column) => {
                         builder.extend_from_bitmap(&column.clone().sliced(row as _, len as _))
+                    }
+                    ColumnView::Encoded(view) => {
+                        for row in row..row + len {
+                            builder.push(unsafe { view.index_unchecked(row as usize) });
+                        }
                     }
                 }
             }
@@ -372,6 +386,16 @@ impl ColumnView<BooleanType> {
                 } else {
                     Column(merge)
                 }
+            }
+            (Encoded(view), rhs) => {
+                let merge = match rhs {
+                    // SAFETY: `i < view.len()`.
+                    Some(rhs) => Bitmap::collect_bool(view.len(), |i| {
+                        (unsafe { view.index_unchecked(i) }) && rhs.get_bit(i)
+                    }),
+                    None => view.iter().collect(),
+                };
+                Column(merge).and_bitmap(None)
             }
         }
     }

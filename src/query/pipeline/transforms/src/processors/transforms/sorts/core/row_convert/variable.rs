@@ -44,7 +44,6 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::with_decimal_mapped_type;
@@ -221,10 +220,7 @@ impl VariableRowConverter {
                     builder.commit_row();
                 }
                 if data_type.is_nullable() {
-                    NullableColumn::new_column(
-                        Column::Variant(builder.build()),
-                        validity.unwrap().clone(),
-                    )
+                    Column::Variant(builder.build()).wrap_nullable(Some(validity.unwrap().clone()))
                 } else {
                     Column::Variant(builder.build())
                 }
@@ -472,6 +468,13 @@ impl ValueVisitor for LengthCalculatorVisitor<'_> {
 
     fn visit_variant(&mut self, column: BinaryColumn) -> Result<()> {
         self.visit_variable_length_data(column.iter(), encoded_len)
+    }
+
+    fn visit_timestamp_tz(&mut self, _column: Buffer<timestamp_tz>) -> Result<()> {
+        for length in self.lengths.iter_mut() {
+            *length += timestamp_tz::ENCODED_LEN;
+        }
+        Ok(())
     }
 
     fn visit_typed_column<T: ValueType>(
@@ -790,6 +793,19 @@ impl ValueVisitor for EncodeVisitor<'_> {
         Ok(())
     }
 
+    fn visit_timestamp_tz(&mut self, column: Buffer<timestamp_tz>) -> Result<()> {
+        // FixedLengthEncoding uses the instant without changing the source column.
+        fixed_encode(
+            &mut self.out.data,
+            &mut self.out.offsets,
+            column.iter().copied(),
+            self.validity,
+            self.field.asc,
+            self.field.nulls_first,
+        );
+        Ok(())
+    }
+
     fn visit_typed_column<T: ValueType>(
         &mut self,
         _column: T::Column,
@@ -839,6 +855,51 @@ mod tests {
         };
         VariableRowConverter::new(SortKeyDescription::new(column_desc, schema, true).unwrap())
             .unwrap()
+    }
+
+    #[test]
+    fn test_timezone_sort_keys_use_instant() {
+        use databend_common_column::types::timestamp_tz;
+
+        let values = vec![
+            Some(timestamp_tz::new(-6, 1800)),
+            Some(timestamp_tz::new(-6, -7200)),
+            Some(timestamp_tz::new(3, 0)),
+            None,
+        ];
+        let column = TimestampTzType::from_opt_data(values);
+        for asc in [false, true] {
+            for nulls_first in [false, true] {
+                let converter = create_variable_converter(vec![SortField::new_with_options(
+                    DataType::TimestampTz.wrap_nullable(),
+                    asc,
+                    nulls_first,
+                )]);
+                let rows = converter.convert_columns(&[column.clone().into()], 4);
+                assert_eq!(rows.index(0), rows.index(1));
+                assert_eq!(rows.index(0).unwrap() < rows.index(2).unwrap(), asc);
+                assert_eq!(rows.index(3).unwrap() < rows.index(0).unwrap(), nulls_first);
+
+                for row in 0..4 {
+                    let constant = BlockEntry::new_const_column(
+                        column.data_type(),
+                        column.index(row).unwrap().to_owned(),
+                        1,
+                    );
+                    let constant_rows = converter.convert_columns(&[constant], 1);
+                    assert_eq!(constant_rows.index(0), rows.index(row));
+                }
+            }
+        }
+        let Column::Nullable(nullable) = column else {
+            unreachable!()
+        };
+        let (source, _) = nullable.destructure();
+        let Column::TimestampTz(source) = source else {
+            unreachable!()
+        };
+        assert_eq!(source[0].seconds_offset(), 1800);
+        assert_eq!(source[1].seconds_offset(), -7200);
     }
 
     #[test]

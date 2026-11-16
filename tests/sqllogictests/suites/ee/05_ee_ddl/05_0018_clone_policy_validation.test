@@ -1,0 +1,151 @@
+# Historical CLONE must validate current policy definitions against the selected schema.
+statement ok
+SET enable_experimental_clone_table = 1
+
+statement ok
+SET enable_experimental_row_access_policy = 1
+
+statement ok
+CREATE DATABASE db_clone_policy_validation
+
+statement ok
+USE db_clone_policy_validation
+
+statement ok
+CREATE TABLE source(id INT, secured INT)
+
+statement ok
+INSERT INTO source VALUES (1, 10)
+
+statement ok
+SET VARIABLE int_snapshot = (
+    SELECT snapshot_id FROM fuse_snapshot('db_clone_policy_validation', 'source')
+    ORDER BY timestamp LIMIT 1
+)
+
+statement ok
+ALTER TABLE source MODIFY COLUMN secured STRING
+
+statement ok
+CREATE MASKING POLICY clone_string_mask AS (val STRING) RETURNS STRING -> val
+
+statement ok
+ALTER TABLE source MODIFY COLUMN secured SET MASKING POLICY clone_string_mask
+
+statement error masking policy
+CREATE TABLE invalid_mask CLONE source AT (SNAPSHOT => $int_snapshot)
+
+statement ok
+ALTER TABLE source MODIFY COLUMN secured UNSET MASKING POLICY
+
+statement ok
+DROP MASKING POLICY clone_string_mask
+
+statement ok
+CREATE ROW ACCESS POLICY clone_string_row AS (val STRING) RETURNS BOOLEAN -> true
+
+statement ok
+ALTER TABLE source ADD ROW ACCESS POLICY clone_string_row ON (secured)
+
+statement error row access policy
+CREATE TABLE invalid_row CLONE source AT (SNAPSHOT => $int_snapshot)
+
+# Neither failure may publish a target table.
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_clone_policy_validation' AND name IN ('invalid_mask', 'invalid_row')
+----
+0
+
+statement ok
+ALTER TABLE source DROP ROW ACCESS POLICY clone_string_row
+
+statement ok
+DROP ROW ACCESS POLICY clone_string_row
+
+statement ok
+UNSET VARIABLE int_snapshot
+
+# SQLLogic uses the admin connection. The companion EE integration test covers latest and
+# historical clones under a restricted owner. Here keep one historical clone to verify the
+# SQL-visible results and policy reverse references across rename and source-policy removal.
+statement ok
+CREATE TABLE secured_source(id INT, secret STRING)
+
+statement ok
+INSERT INTO secured_source VALUES (1, 'raw-one'), (3, 'raw-three')
+
+statement ok
+SET VARIABLE secured_snapshot = (
+    SELECT snapshot_id FROM fuse_snapshot('db_clone_policy_validation', 'secured_source')
+    ORDER BY timestamp DESC LIMIT 1
+)
+
+statement ok
+INSERT INTO secured_source VALUES (2, 'raw-two')
+
+statement ok
+CREATE MASKING POLICY clone_secret_mask AS (val STRING) RETURNS STRING -> '***'
+
+statement ok
+CREATE ROW ACCESS POLICY clone_visible_rows AS (id INT) RETURNS BOOLEAN -> id < 3
+
+statement ok
+ALTER TABLE secured_source MODIFY COLUMN secret SET MASKING POLICY clone_secret_mask
+
+statement ok
+ALTER TABLE secured_source ADD ROW ACCESS POLICY clone_visible_rows ON (id)
+
+statement ok
+CREATE TABLE secured_history CLONE secured_source AT (SNAPSHOT => $secured_snapshot)
+
+query IT
+SELECT id, secret FROM secured_history
+----
+1 ***
+
+# Both policies follow stable ColumnIds, including after a rename on the clone.
+statement ok
+ALTER TABLE secured_history RENAME COLUMN secret TO redacted
+
+query IT
+SELECT id, redacted FROM secured_history
+----
+1 ***
+
+# Source policy removal must not remove definitions or reverse references on the clone.
+statement ok
+ALTER TABLE secured_source MODIFY COLUMN secret UNSET MASKING POLICY
+
+statement ok
+ALTER TABLE secured_source DROP ROW ACCESS POLICY clone_visible_rows
+
+query I
+SELECT count(*) FROM policy_references(POLICY_NAME => 'clone_secret_mask')
+----
+1
+
+query I
+SELECT count(*) FROM policy_references(POLICY_NAME => 'clone_visible_rows')
+----
+1
+
+query IT
+SELECT id, redacted FROM secured_history
+----
+1 ***
+
+statement ok
+DROP TABLE secured_history
+
+statement ok
+DROP MASKING POLICY clone_secret_mask
+
+statement ok
+DROP ROW ACCESS POLICY clone_visible_rows
+
+statement ok
+UNSET VARIABLE secured_snapshot
+
+statement ok
+DROP DATABASE db_clone_policy_validation

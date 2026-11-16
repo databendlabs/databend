@@ -39,10 +39,12 @@ use crate::statistics::partition_values;
 #[derive(Clone)]
 pub struct PartitionPruningInfo {
     pub partition_keys: Vec<RemoteExpr<String>>,
+    pub partition_key_id: Option<u32>,
 }
 
 pub struct PartitionPruner {
     partition_keys: Vec<Expr<String>>,
+    partition_key_id: Option<u32>,
     filter: Expr<String>,
     func_ctx: FunctionContext,
 }
@@ -75,13 +77,16 @@ impl PartitionPruner {
 
         Some(Self {
             partition_keys,
+            partition_key_id: info.partition_key_id,
             filter,
             func_ctx,
         })
     }
 
     pub fn should_keep(&self, stats: Option<&PartitionStatistics>) -> bool {
-        let Some(values) = partition_values(stats, self.partition_keys.len()) else {
+        let Some(values) =
+            partition_values(stats, self.partition_keys.len(), self.partition_key_id)
+        else {
             return true;
         };
 
@@ -292,6 +297,9 @@ impl ExprVisitor<String> for PartitionPredicateRewriter<'_> {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::DecimalScalar::Decimal64;
+    use databend_common_expression::types::DecimalScalar::Decimal128;
+    use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
 
     use super::*;
@@ -505,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_should_keep_returns_true_for_segment_without_partition_metadata() {
-        // Segments written before PARTITION BY was added have no cluster statistics.
+        // Segments written before PARTITION BY was added have no partition statistics.
         // The pruner must keep them conservatively rather than silently dropping rows.
         let partition_expr = column_ref("p", DataType::Number(NumberDataType::Int64));
         let filter = call("eq", vec![partition_expr.clone(), {
@@ -518,11 +526,69 @@ mod tests {
 
         let pruner = PartitionPruner {
             partition_keys: vec![partition_expr],
+            partition_key_id: Some(1),
             filter,
             func_ctx: FunctionContext::default(),
         };
 
         // No partition stats at all — must keep the segment.
         assert!(pruner.should_keep(None));
+
+        let old_key = PartitionStatistics::new(0, vec![Scalar::Number(2_i64.into())]);
+        assert!(pruner.should_keep(Some(&old_key)));
+        let legacy = PartitionStatistics {
+            values: old_key.values.clone(),
+            partition_key_id: None,
+        };
+        assert!(pruner.should_keep(Some(&legacy)));
+        let current_key = PartitionStatistics::new(1, old_key.values);
+        assert!(!pruner.should_keep(Some(&current_key)));
+    }
+
+    #[test]
+    fn test_decimal_range_keeps_partition_at_bound() {
+        let narrow = DecimalSize::new(1, 1).unwrap();
+        let wide = DecimalSize::new(38, 10).unwrap();
+        let wide_value = 123456789012345678901234567;
+        // Range bounds pass through f64 statistics: 0.3 and -0.7 become floats
+        // just inside the decimal, and the 27-digit value is finer than an f64
+        // can hold. They must stay possible while 0.4 is still pruned.
+        for (partition, bound, possible) in [
+            (Decimal64(3, narrow), Decimal64(3, narrow), true),
+            (Decimal64(-7, narrow), Decimal64(-7, narrow), true),
+            (Decimal64(4, narrow), Decimal64(3, narrow), false),
+            (
+                Decimal128(wide_value, wide),
+                Decimal128(wide_value, wide),
+                true,
+            ),
+        ] {
+            let column = column_ref("p", DataType::Decimal(partition.size()));
+            let partition = Scalar::Decimal(partition);
+            let bound = Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::Decimal(bound),
+                data_type: DataType::Decimal(bound.size()),
+            });
+            let func_ctx = FunctionContext::default();
+            let rewriter = PartitionPredicateRewriter {
+                replacements: vec![(&column, &partition)],
+                func_ctx: &func_ctx,
+            };
+            for filter in [
+                call("lte", vec![column.clone(), bound.clone()]),
+                call("and_filters", vec![
+                    call("gte", vec![column.clone(), bound.clone()]),
+                    call("lte", vec![column.clone(), bound.clone()]),
+                ]),
+            ] {
+                assert_eq!(
+                    rewriter.conjunctive_predicate_possible(&filter),
+                    possible,
+                    "{partition} with {}",
+                    filter.sql_display()
+                );
+            }
+        }
     }
 }

@@ -30,7 +30,7 @@ where T: Display + Clone
     }
 
     fn format_indent_impl(&self, indent: usize, f: &mut String) -> Result<()> {
-        writeln!(f, "{}{}", " ".repeat(indent), &self.payload).unwrap();
+        writeln!(f, "{}{}", " ".repeat(indent), self.payload).unwrap();
         for child in self.children.iter() {
             child.format_indent_impl(indent + INDENT_SIZE, f)?;
         }

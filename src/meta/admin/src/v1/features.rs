@@ -79,7 +79,7 @@ impl<SP: SpawnApi> HttpService<SP> {
         info!(
             "id={} Received set_feature request: {:?}, \
             current_leader={:?}",
-            id, &query, current_leader
+            id, query, current_leader
         );
 
         let Some(query) = query else {

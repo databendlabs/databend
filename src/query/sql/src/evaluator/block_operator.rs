@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
@@ -45,7 +46,10 @@ impl BlockOperator {
             BlockOperator::Map { exprs, projections } => {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(expr)?;
+                    // The result is stored into the block, so it may stay encoded.
+                    let result = evaluator
+                        .partial_run(expr, None, &mut EvaluateOptions::default(), true)
+                        .map_err(|err| Evaluator::map_err(err, expr))?;
                     input.add_value(result, expr.data_type().clone());
                 }
                 match projections {

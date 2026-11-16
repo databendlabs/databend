@@ -80,6 +80,14 @@ impl FuseTable {
                 TransformBlockBuilder::try_create(input, output, properties.clone())
             })?;
 
+            // The builder emits complete serialized blocks. Redistribute only
+            // after it so IO concurrency does not change block accumulation or
+            // create additional tail fragments in the builders.
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            if pipeline.output_len() < max_threads {
+                pipeline.try_resize(max_threads)?;
+            }
+
             pipeline.add_async_accumulating_transformer(|| {
                 TransformBlockWriter::create(ctx.clone(), MutationKind::Insert, self, false)
             });
@@ -96,6 +104,17 @@ impl FuseTable {
             let schema = DataSchema::from(self.schema()).into();
             let cluster_stats_gen =
                 self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;
+
+            if !self.use_hash_write_distribution() {
+                // Resize after compaction and layout preparation: whole blocks
+                // retain their partition boundaries and in-block cluster order.
+                // Serialization and IO need not inherit the source's width.
+                // Keep hash-distributed write lanes unchanged.
+                let max_threads = ctx.get_settings().get_max_threads()? as usize;
+                if pipeline.output_len() < max_threads {
+                    pipeline.try_resize(max_threads)?;
+                }
+            }
             pipeline.add_transform(|input, output| {
                 let proc = TransformSerializeBlock::try_create(
                     ctx.clone(),
@@ -297,6 +316,13 @@ impl FuseTable {
     ///
     /// Pure Hilbert keys are evaluated for two-dimensional MBR statistics but are not used as
     /// ordinary lexicographic sort keys.
+    ///
+    /// The layout of the result is relied on by the hash write layout
+    /// (`PipelineBuilder::build_table_write_layout_with_schema`):
+    /// - `eval_operators` is empty or a single `BlockOperator::Map` whose expressions are the
+    ///   evaluated partition expressions followed by the evaluated cluster expressions;
+    /// - `out_fields` is the input schema, then one field per evaluated expression in that
+    ///   order, then the vector cluster sort key when vector clustering is active.
     pub fn get_cluster_stats_gen(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -452,6 +478,7 @@ impl FuseTable {
             ctx.get_function_context()?,
         );
         generator.partition_key_index = partition_key_index;
+        generator.partition_key_id = self.partition_key_id();
         Ok(generator)
     }
 

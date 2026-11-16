@@ -64,14 +64,16 @@ impl AccumulatingTransform for Separator {
             .into_iter()
             .filter(|b| b.data.rows() > 0 || b.data.size() > 0)
             .collect::<Vec<_>>();
+        // Errors tolerated by the separator (e.g. column count mismatch) are only reported
+        // in the status of the batch that contains them; `add_chunk` merges per file.
+        if file_status.error.is_some() {
+            self.ctx
+                .table_context
+                .copy_state()
+                .copy_status()
+                .add_chunk(&batch_meta.path, file_status);
+        }
         if batch_meta.is_eof {
-            if file_status.error.is_some() {
-                self.ctx
-                    .table_context
-                    .copy_state()
-                    .copy_status()
-                    .add_chunk(&batch_meta.path, file_status);
-            }
             self.state = None;
         }
         if row_batches.is_empty() {

@@ -96,6 +96,8 @@ pub enum UserPrivilegeType {
     ApplyRowAccessPolicy = 1 << 30,
     // Privilege to Create Row Access Policy.
     CreateRowAccessPolicy = 1 << 31,
+    // Privilege to attach existing storage data as a table. CREATE is also required.
+    AttachTable = 1 << 32,
     // Discard Privilege Type
     Set = 1 << 4,
     CreateDataMask = 1 << 16,
@@ -106,6 +108,7 @@ impl Display for UserPrivilegeType {
         write!(f, "{}", match self {
             UserPrivilegeType::Usage => "USAGE",
             UserPrivilegeType::Create => "CREATE",
+            UserPrivilegeType::AttachTable => "ATTACH TABLE",
             UserPrivilegeType::Update => "UPDATE",
             UserPrivilegeType::Select => "SELECT",
             UserPrivilegeType::Insert => "INSERT",
@@ -149,6 +152,9 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             databend_common_ast::ast::UserPrivilegeType::Update => UserPrivilegeType::Update,
             databend_common_ast::ast::UserPrivilegeType::Delete => UserPrivilegeType::Delete,
             databend_common_ast::ast::UserPrivilegeType::Create => UserPrivilegeType::Create,
+            databend_common_ast::ast::UserPrivilegeType::AttachTable => {
+                UserPrivilegeType::AttachTable
+            }
             databend_common_ast::ast::UserPrivilegeType::Drop => UserPrivilegeType::Drop,
             databend_common_ast::ast::UserPrivilegeType::Alter => UserPrivilegeType::Alter,
             databend_common_ast::ast::UserPrivilegeType::Super => UserPrivilegeType::Super,
@@ -256,12 +262,10 @@ impl UserPrivilegeSet {
             .into()
     }
 
-    /// The available privileges on database object contains ALL the available privileges to a table.
-    /// Currently the privileges available to a database and a table are the same, it might becomes
-    /// some differences in the future.
+    /// Database privileges include table privileges and database-only privileges.
     pub fn available_privileges_on_database(available_ownership: bool) -> Self {
         (UserPrivilegeSet::available_privileges_on_table(available_ownership).privileges
-            | make_bitflags!(UserPrivilegeType::{  Usage }))
+            | make_bitflags!(UserPrivilegeType::{ Usage | AttachTable }))
         .into()
     }
 

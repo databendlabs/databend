@@ -82,11 +82,9 @@ impl DimensionBounds {
             (fine * ((1 << FINE_BITS) - 1) + range.len() as u32 / 2) / range.len() as u32
         };
         let coarse_ranges = self.coarse.len() as u32;
-        let coarse = if coarse_ranges == 0 {
-            0
-        } else {
-            ((coarse * self.max_coarse_rank + coarse_ranges / 2) / coarse_ranges) as u16
-        };
+        let coarse = (coarse * self.max_coarse_rank + coarse_ranges / 2)
+            .checked_div(coarse_ranges)
+            .unwrap_or(0) as u16;
         (coarse << FINE_BITS) | fine as u16
     }
 

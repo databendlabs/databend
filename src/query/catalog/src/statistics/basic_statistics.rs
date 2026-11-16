@@ -66,37 +66,29 @@ impl BasicColumnStatistics {
         self.in_memory_size += other.in_memory_size;
     }
 
-    // If the data type is int and max - min + 1 < ndv, then adjust ndv to max - min + 1.
-    fn adjust_ndv_by_min_max(ndv: Option<u64>, mut min: Datum, mut max: Datum) -> Option<u64> {
-        let mut range = match (&mut min, &mut max) {
-            (Datum::Bytes(min), Datum::Bytes(max)) => {
-                // There are 128 characters in ASCII code and 128^4 = 268435456 < 2^32 < 128^5.
-                if min.is_empty() || max.is_empty() || min.len() > 4 || max.len() > 4 {
-                    return ndv;
-                }
-                let mut min_value: u32 = 0;
-                let mut max_value: u32 = 0;
-                while min.len() != max.len() {
-                    if min.len() < max.len() {
-                        min.push(0);
-                    } else {
-                        max.push(0);
-                    }
-                }
-                for idx in 0..min.len() {
-                    min_value = min_value * 128 + min[idx] as u32;
-                    max_value = max_value * 128 + max[idx] as u32;
-                }
-                (max_value - min_value) as u64
+    // Only exactly computed discrete domains are valid NDV upper bounds.
+    // Float also represents Decimal here; interval width does not bound its
+    // cardinality. Variable-length byte strings have no such bound either.
+    fn domain_size(min: Datum, max: Datum) -> Option<u64> {
+        match (min, max) {
+            (Datum::Int(min), Datum::Int(max)) if min <= max => {
+                u64::try_from(i128::from(max) - i128::from(min) + 1).ok()
             }
-            _ => {
-                // Safe to unwrap: min and max are either both Datum::Bytes or neither
-                let min = min.as_double().unwrap();
-                let max = max.as_double().unwrap();
-                (max - min) as u64
+            (Datum::UInt(min), Datum::UInt(max)) => max.checked_sub(min)?.checked_add(1),
+            (Datum::Bool(min), Datum::Bool(max)) if min <= max => {
+                Some(u64::from(max) - u64::from(min) + 1)
             }
+            // A domain containing 2^64 values cannot be represented by u64.
+            // Falling back to the row count is already tighter in that case.
+            _ => None,
+        }
+    }
+
+    // Apply an exact discrete-domain bound when one is available.
+    fn adjust_ndv_by_min_max(ndv: Option<u64>, min: Datum, max: Datum) -> Option<u64> {
+        let Some(range) = Self::domain_size(min, max) else {
+            return ndv;
         };
-        range = range.saturating_add(1);
         let ndv = match ndv {
             Some(ndv) if range > ndv && ndv != 0 => ndv,
             _ => range,
@@ -113,19 +105,23 @@ impl BasicColumnStatistics {
         if self.min.as_ref().unwrap().is_bytes() ^ self.max.as_ref().unwrap().is_bytes() {
             return None;
         }
-        let ndv = Self::adjust_ndv_by_min_max(
-            self.ndv,
-            self.min.clone().unwrap(),
-            self.max.clone().unwrap(),
-        );
+        let min = self.min.clone().unwrap();
+        let max = self.max.clone().unwrap();
+        let ndv = Self::adjust_ndv_by_min_max(self.ndv, min.clone(), max.clone());
         let ndv = match ndv {
-            None => Some(num_rows),
-            Some(v) => Some(Self::estimate_ndv(v, stats_row_count, num_rows)),
+            None => num_rows,
+            Some(v) => Self::estimate_ndv(v, stats_row_count, num_rows),
+        };
+        // Extrapolation (or the unknown-sample row-count fallback) can exceed
+        // the exact discrete-domain bound. Apply it at the provider boundary.
+        let ndv = match Self::domain_size(min, max) {
+            Some(range) => ndv.min(range),
+            None => ndv,
         };
         Some(Self {
             min: self.min.clone(),
             max: self.max.clone(),
-            ndv,
+            ndv: Some(ndv),
             null_count: self.null_count,
             in_memory_size: self.in_memory_size,
         })
@@ -133,6 +129,8 @@ impl BasicColumnStatistics {
 
     // Inspired by duckdb (https://github.com/duckdb/duckdb/blob/main/src/storage/statistics/distinct_statistics.cpp#L55-L69)
     fn estimate_ndv(ndv: u64, stats_row_count: u64, num_rows: u64) -> u64 {
+        // Zero also means an unknown sample size in upgraded legacy HLL
+        // metadata. Do not assume that its NDV covers the current rows.
         if stats_row_count == 0 || ndv == 0 {
             return num_rows;
         }
@@ -156,6 +154,7 @@ impl BasicColumnStatistics {
 #[cfg(test)]
 mod tests {
     use super::BasicColumnStatistics;
+    use super::Datum;
 
     #[test]
     fn test_estimate_ndv() {
@@ -166,5 +165,76 @@ mod tests {
             BasicColumnStatistics::estimate_ndv(6000, 10000, 1000000),
             219840
         );
+    }
+
+    #[test]
+    fn test_domain_bound_after_estimation() {
+        // Zero coverage also represents old HLL metadata, not a fresh NDV.
+        for (ndv, sampled_rows, rows, max, expected) in [
+            (Some(1_000_000), 0, 1_000_000, 8, 9),
+            (Some(3), 100, 1_000_000, 8, 9),
+            (None, 0, 1_000_000, 8, 9),
+            (Some(0), 0, 1_000_000, 8, 9),
+            (Some(3), 0, 1_000, 999, 1_000),
+        ] {
+            let stat = BasicColumnStatistics {
+                min: Some(Datum::Int(0)),
+                max: Some(Datum::Int(max)),
+                ndv,
+                ..Default::default()
+            };
+            assert_eq!(
+                stat.get_useful_stat(rows, sampled_rows).unwrap().ndv,
+                Some(expected),
+                "ndv={ndv:?}, sampled_rows={sampled_rows}, rows={rows}, max={max}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_exact_domain_size() {
+        for (min, max, expected) in [
+            (Datum::Int(-4), Datum::Int(4), Some(9)),
+            (Datum::Int(i64::MAX - 1), Datum::Int(i64::MAX), Some(2)),
+            (
+                Datum::UInt(1_u64 << 53),
+                Datum::UInt((1_u64 << 53) + 1),
+                Some(2),
+            ),
+            (Datum::Bool(false), Datum::Bool(true), Some(2)),
+            (Datum::Bool(true), Datum::Bool(true), Some(1)),
+            (Datum::Int(i64::MIN), Datum::Int(i64::MAX), None),
+            (Datum::UInt(0), Datum::UInt(u64::MAX), None),
+            (Datum::Int(1), Datum::Int(0), None),
+        ] {
+            assert_eq!(BasicColumnStatistics::domain_size(min, max), expected);
+        }
+    }
+
+    #[test]
+    fn test_fractional_and_string_domains_are_not_capped() {
+        // Datum::Float also stores Decimal statistics. Neither fractional
+        // interval width nor a short-string encoding bounds cardinality.
+        for (min, max) in [
+            (Datum::Float(0.0.into()), Datum::Float(2.5.into())),
+            (Datum::Bytes(b"a".to_vec()), Datum::Bytes(b"b".to_vec())),
+        ] {
+            assert_eq!(
+                BasicColumnStatistics::domain_size(min.clone(), max.clone()),
+                None
+            );
+            let stat = BasicColumnStatistics {
+                min: Some(min),
+                max: Some(max),
+                ndv: Some(80),
+                ..Default::default()
+            };
+            for (sampled_rows, expected) in [(0, 1_000), (100, 541), (1_000, 80)] {
+                assert_eq!(
+                    stat.get_useful_stat(1_000, sampled_rows).unwrap().ndv,
+                    Some(expected)
+                );
+            }
+        }
     }
 }

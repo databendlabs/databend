@@ -20,12 +20,12 @@ use databend_common_sql::ColumnEntry;
 use databend_common_sql::Metadata;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::ColumnStat;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::plans::JoinType;
-use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_statistics::Histogram;
 
 fn column_label(metadata: &Metadata, column: Symbol) -> String {
@@ -146,17 +146,18 @@ pub(super) fn write_join_stat_info(
 pub(super) fn collect_join_cardinalities(
     file: &mut impl Write,
     metadata: &Metadata,
-    expr: &SExpr,
+    expr: &PExpr,
     expected_join_type: JoinType,
     case_name: &str,
+    stat_context: &StatContext,
 ) -> Result<usize> {
     let mut joins = 0;
-    if let RelOperator::Join(join) = expr.plan() {
+    if let PhysicalRelOperator::Join(join) = expr.plan() {
         assert_eq!(
             join.join_type, expected_join_type,
             "unexpected join type for {case_name}"
         );
-        let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
+        let stat_info = RelExpr::with_p_expr(expr).derive_cardinality(stat_context)?;
         writeln!(
             file,
             "join          : {:<11} cardinality={:.3}",
@@ -167,7 +168,14 @@ pub(super) fn collect_join_cardinalities(
     }
 
     for child in expr.children() {
-        joins += collect_join_cardinalities(file, metadata, child, expected_join_type, case_name)?;
+        joins += collect_join_cardinalities(
+            file,
+            metadata,
+            child,
+            expected_join_type,
+            case_name,
+            stat_context,
+        )?;
     }
 
     Ok(joins)

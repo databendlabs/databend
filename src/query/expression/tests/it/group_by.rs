@@ -12,12 +12,156 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
+
+use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::VectorColumn;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::*;
 use ethnum::u256;
+
+/// Every key boundary must map `-0.0`/`+0.0` and every NaN payload to the same
+/// key while keeping other values distinct. Rows 0 and 1 of each column hold
+/// two members of one equality class; row 2 holds an unrelated value.
+#[test]
+fn test_float_equality_class_keys() -> anyhow::Result<()> {
+    let classes = [
+        (
+            Float32Type::from_data(vec![0.0f32, -0.0, 1.0]),
+            Float64Type::from_data(vec![0.0f64, -0.0, 1.0]),
+        ),
+        (
+            Float32Type::from_data(vec![f32::NAN, f32::from_bits(0xffc0_0001), 1.0]),
+            Float64Type::from_data(vec![f64::NAN, f64::from_bits(0xfff8_0000_0000_0001), 1.0]),
+        ),
+        (
+            Float32Type::from_data(vec![f32::NAN, -f32::NAN, 0.0]),
+            Float64Type::from_data(vec![f64::NAN, (-1.0f64).sqrt(), -0.0]),
+        ),
+    ];
+    for floats in classes.into_iter().flat_map(|(f32s, f64s)| [f32s, f64s]) {
+        let nullable = floats.clone().wrap_nullable(None);
+        let array = Column::Array(Box::new(ArrayColumn::new(
+            floats.clone(),
+            vec![0, 1, 2, 3].into(),
+        )));
+        let map = Column::Map(Box::new(ArrayColumn::new(
+            Column::Tuple(vec![StringType::from_data(vec!["k"; 3]), floats.clone()]),
+            vec![0, 1, 2, 3].into(),
+        )));
+        let tuple = Column::Tuple(vec![array.clone(), nullable.clone()]);
+
+        let mut columns = vec![floats.clone(), nullable, array, map, tuple];
+        if let Column::Number(NumberColumn::Float32(values)) = &floats {
+            columns.push(Column::Vector(VectorColumn::Float32((values.clone(), 1))));
+        }
+        for column in columns {
+            let scalar_hashes = column
+                .iter()
+                .map(|value| {
+                    let mut hasher = DefaultHasher::new();
+                    value.hash(&mut hasher);
+                    hasher.finish()
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(scalar_hashes[0], scalar_hashes[1], "{column:?}");
+            assert_ne!(scalar_hashes[0], scalar_hashes[2], "{column:?}");
+
+            let block = DataBlock::new_from_columns(vec![
+                column.clone(),
+                Int8Type::from_data(vec![1; 3]),
+                StringType::from_data(vec!["k"; 3]),
+            ]);
+            for projection in [vec![0], vec![0, 1], vec![0, 2]] {
+                let entries = ProjectedBlock::project(&projection, &block);
+                let method = DataBlock::choose_hash_method(&block, &projection)?;
+                with_hash_method!(|M| match &method {
+                    HashMethodKind::M(method) => {
+                        let state = method.build_keys_state(entries, 3)?;
+                        let keys = method.build_keys_iter(&state)?.collect::<Vec<_>>();
+                        assert_eq!(keys[0], keys[1], "{column:?} {projection:?}");
+                        assert_ne!(keys[0], keys[2], "{column:?} {projection:?}");
+                    }
+                });
+
+                let mut hashes = vec![0; 3];
+                group_hash_entries(entries, &mut hashes);
+                assert_eq!(hashes[0], hashes[1], "{column:?} {projection:?}");
+                assert_ne!(hashes[0], hashes[2], "{column:?} {projection:?}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_timezone_equality_keys_keep_source_offsets() -> anyhow::Result<()> {
+    use databend_common_column::types::timestamp_tz;
+
+    let timestamps = Column::TimestampTz(
+        vec![
+            timestamp_tz::new(-4, -1800),
+            timestamp_tz::new(-4, 7200),
+            timestamp_tz::new(9, 0),
+        ]
+        .into(),
+    );
+    let arrays = Column::Array(Box::new(ArrayColumn::new(
+        timestamps.clone(),
+        vec![0, 1, 2, 3].into(),
+    )));
+    let maps = Column::Map(Box::new(ArrayColumn::new(
+        Column::Tuple(vec![
+            StringType::from_data(vec!["key"; 3]),
+            timestamps.clone(),
+        ]),
+        vec![0, 1, 2, 3].into(),
+    )));
+    for column in [
+        timestamps.clone(),
+        timestamps
+            .clone()
+            .wrap_nullable(Some(Bitmap::from([true; 3]))),
+        arrays.clone(),
+        maps,
+        Column::Tuple(vec![arrays]),
+    ] {
+        let block = DataBlock::new_from_columns(vec![column, Int8Type::from_data(vec![2; 3])]);
+        for projection in [vec![0], vec![0, 1]] {
+            let entries = ProjectedBlock::project(&projection, &block);
+            let method = HashMethodSerializer::default();
+            let state = method.build_keys_state(entries, 3)?;
+            let keys = method.build_keys_iter(&state)?.collect::<Vec<_>>();
+            assert_eq!(keys[0], keys[1]);
+            assert_ne!(keys[0], keys[2]);
+
+            let mut hashes = vec![0; 3];
+            group_hash_entries(entries, &mut hashes);
+            assert_eq!(hashes[0], hashes[1]);
+        }
+        let column = block.get_by_offset(0).to_column();
+        let mut column_hashes = vec![0; 3];
+        group_hash_entry(block.get_by_offset(0), &mut column_hashes, true);
+        for (value, expected_hash) in column.iter().zip(column_hashes) {
+            let constant = BlockEntry::new_const_column(column.data_type(), value.to_owned(), 1);
+            let mut constant_hash = [0];
+            group_hash_entry(&constant, &mut constant_hash, true);
+            assert_eq!(constant_hash[0], expected_hash);
+        }
+    }
+    let Column::TimestampTz(source) = timestamps else {
+        unreachable!()
+    };
+    assert_eq!(source[0].seconds_offset(), -1800);
+    assert_eq!(source[1].seconds_offset(), 7200);
+    Ok(())
+}
 
 #[test]
 fn test_group_by_hash() -> anyhow::Result<()> {

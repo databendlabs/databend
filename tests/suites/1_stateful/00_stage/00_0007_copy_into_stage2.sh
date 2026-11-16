@@ -31,7 +31,7 @@ check_csv() {
   cat "$STAGE_DIR"/${1}/* | wc -l | sed 's/ //g'
 }
 
-# each block create a CSV chunk of size 16
+# each block creates a CSV chunk of size 24 (all non-NULL values are quoted)
 echo "copy into @s1/csv from test_table FILE_FORMAT = (type = CSV);" | bendsql_connect_root
 check_csv "csv"
 echo "copy into @s1/csv_single from test_table FILE_FORMAT = (type = CSV) single=true;" | bendsql_connect_root

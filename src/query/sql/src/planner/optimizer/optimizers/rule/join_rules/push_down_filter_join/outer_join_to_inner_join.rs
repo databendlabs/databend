@@ -22,6 +22,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -40,7 +41,11 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 
-pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(SExpr, bool)> {
+pub fn outer_join_to_inner_join(
+    s_expr: &SExpr,
+    metadata: MetadataRef,
+    func_ctx: &FunctionContext,
+) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     if !join.join_type.is_outer_join() {
         return Ok((s_expr.clone(), false));
@@ -54,44 +59,62 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
     let mut can_filter_right_null = false;
     let left_prop = join_rel_expr.derive_relational_prop_child(0)?;
     let right_prop = join_rel_expr.derive_relational_prop_child(1)?;
+    // Only a null-supplying side can be filtered. Checking the preserved side would evaluate
+    // its predicates, such as `t1.ts > now()`, and keep the plan out of the planner cache.
+    let (left_supplies_null, right_supplies_null) = match join.join_type {
+        JoinType::Left | JoinType::LeftSingle => (false, true),
+        JoinType::Right | JoinType::RightSingle => (true, false),
+        JoinType::Full | JoinType::FullAsof => (true, true),
+        _ => (false, false),
+    };
     for predicate in &filter.predicates {
         let pred = JoinPredicate::new(predicate, &left_prop, &right_prop);
         match pred {
             JoinPredicate::Left(_)
-                if can_filter_null(
-                    predicate,
-                    &left_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? =>
+                if left_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )? =>
             {
                 can_filter_left_null = true;
             }
             JoinPredicate::Right(_)
-                if can_filter_null(
-                    predicate,
-                    &right_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? =>
+                if right_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )? =>
             {
                 can_filter_right_null = true;
             }
             JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
-                if can_filter_null(
-                    predicate,
-                    &left_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? {
+                if left_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )?
+                {
                     can_filter_left_null = true;
                 }
-                if can_filter_null(
-                    predicate,
-                    &right_prop.output_columns,
-                    &join.join_type,
-                    metadata.clone(),
-                )? {
+                if right_supplies_null
+                    && can_filter_null(
+                        predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )?
+                {
                     can_filter_right_null = true;
                 }
             }
@@ -155,6 +178,7 @@ pub fn can_filter_null(
     columns_can_be_replaced: &ColumnSet,
     join_type: &JoinType,
     metadata: MetadataRef,
+    func_ctx: &FunctionContext,
 ) -> Result<bool> {
     // Single joins are outer joins for correlated scalar subqueries: the unmatched side is
     // null-supplying, so `IS NULL` predicates must keep their original outer-join semantics.
@@ -219,7 +243,7 @@ pub fn can_filter_null(
                     Ok(())
                 }
                 ScalarExpr::CastExpr(cast) => self.replace(&mut cast.argument),
-                ScalarExpr::ConstantExpr(_) => Ok(()),
+                ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _) => Ok(()),
                 _ => {
                     self.can_replace = false;
                     Ok(())
@@ -238,8 +262,7 @@ pub fn can_filter_null(
     if replace.can_replace {
         let columns = null_scalar_expr.columns_and_data_types(metadata);
         let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
-        let (expr, _) =
-            ConstantFolder::fold_context_independent(Cow::Owned(expr), &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
         if let Expr::Constant(Constant { scalar, .. }) = expr.as_ref()
             && matches!(scalar, Scalar::Boolean(false) | Scalar::Null)
         {

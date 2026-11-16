@@ -1,0 +1,100 @@
+# A materialized view refresh lets the final aggregate output a group more than once under
+# memory pressure instead of spilling: the MV storage holds aggregate states that reads merge
+# per group and that compaction re-aggregates.
+statement ok
+drop database if exists mv_refresh_duplicate_groups
+
+statement ok
+create database mv_refresh_duplicate_groups
+
+statement ok
+use mv_refresh_duplicate_groups
+
+statement ok
+create table base(k int, v int, s string)
+
+# Two blocks sharing the same group keys.
+statement ok
+insert into base values (1, 10, 'a'), (2, 20, 'b')
+
+statement ok
+insert into base values (1, 30, 'c'), (2, 5, 'd')
+
+statement ok
+create materialized view mv_agg as
+select k, max(v) as max_v, count(*) as cnt, arg_max(s, v) as top_s from base group by k
+
+# Every memory check reports pressure and the partial aggregate forwards each block as it is,
+# so the final aggregate of the refresh outputs the groups of each block as soon as it holds them.
+statement ok
+set force_aggregate_data_spill = 1
+
+statement ok
+set partial_aggregate_mode = 'bypass'
+
+statement ok
+set max_threads = 1
+
+statement ok
+refresh materialized view mv_agg
+
+statement ok
+unset force_aggregate_data_spill
+
+statement ok
+unset partial_aggregate_mode
+
+statement ok
+unset max_threads
+
+# Reads merge the state rows of a group.
+query IIIT
+select k, max_v, cnt, top_s from mv_agg order by k
+----
+1 30 2 c
+2 20 2 b
+
+query IIIT
+select k, max(v), count(*), arg_max(s, v) from base group by k order by k
+----
+1 30 2 c
+2 20 2 b
+
+# The storage holds a group as several state rows, one per block the refresh output.
+query B
+select sum(row_count) > 2 from fuse_block('mv_refresh_duplicate_groups', 'mv_agg')
+----
+1
+
+# An incremental refresh appends the states of the new rows.
+statement ok
+insert into base values (1, 40, 'e'), (3, 1, 'f')
+
+statement ok
+refresh materialized view mv_agg
+
+query IIIT
+select k, max_v, cnt, top_s from mv_agg order by k
+----
+1 40 3 e
+2 20 2 b
+3 1 1 f
+
+# Compaction merges the state rows of a group back into one.
+statement ok
+optimize table mv_agg compact
+
+query I
+select sum(row_count) from fuse_block('mv_refresh_duplicate_groups', 'mv_agg')
+----
+3
+
+query IIIT
+select k, max_v, cnt, top_s from mv_agg order by k
+----
+1 40 3 e
+2 20 2 b
+3 1 1 f
+
+statement ok
+drop database mv_refresh_duplicate_groups

@@ -20,7 +20,10 @@ use databend_common_expression::ColumnIndex;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::FoldRules;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -300,6 +303,30 @@ impl ScalarExpr {
 
     pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
         type_check::check(&self.as_raw_expr(), &BUILTIN_FUNCTIONS)
+    }
+
+    /// The value of an expression that must be a constant, such as a function
+    /// parameter or a statement option. Bind-time folding has already turned
+    /// most such expressions into constants. A column-free remainder is
+    /// evaluated, e.g. a lambda UDF over constants, or an expression built
+    /// after binding by replacing columns with values. Expressions that
+    /// reference columns, including the dummy columns that aggregates,
+    /// subqueries and UDFs lower to, are not constants.
+    pub fn constant_value(&self, func_ctx: &FunctionContext) -> Option<(Scalar, DataType)> {
+        match self {
+            ScalarExpr::ConstantExpr(constant) => Some((
+                constant.value.clone(),
+                constant.value.as_ref().infer_data_type(),
+            )),
+            ScalarExpr::TypedConstantExpr(constant, data_type) => {
+                Some((constant.value.clone(), data_type.clone()))
+            }
+            _ => {
+                let expr = self.as_expr().ok()?;
+                let value = FoldRules::eval_constant(func_ctx, &BUILTIN_FUNCTIONS, &expr)?;
+                Some((value, expr.into_data_type()))
+            }
+        }
     }
 
     pub fn as_symbol_expr(&self) -> Result<Expr<Symbol>> {

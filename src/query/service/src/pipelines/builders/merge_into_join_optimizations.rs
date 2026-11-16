@@ -14,6 +14,7 @@
 
 use databend_common_storages_fuse::operations::need_reserve_block_info;
 
+use crate::physical_plans::FuseBlockRead;
 use crate::physical_plans::HashJoin;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::TableScan;
@@ -22,10 +23,15 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn merge_into_get_optimization_flag(&self, join: &HashJoin) -> (bool, bool) {
         // for merge into target table as build side.
-        if let Some(scan) = TableScan::from_physical_plan(&join.build) {
-            return match scan.table_index {
-                None | Some(databend_common_sql::DUMMY_TABLE_INDEX) => (false, false),
-                Some(table_index) => match need_reserve_block_info(self.ctx.clone(), table_index) {
+        let table_index = TableScan::from_physical_plan(&join.build)
+            .and_then(|scan| scan.table_index)
+            .or_else(|| {
+                FuseBlockRead::from_physical_plan(&join.build).and_then(|read| read.table_index)
+            });
+        if let Some(table_index) = table_index {
+            return match table_index {
+                databend_common_sql::DUMMY_TABLE_INDEX => (false, false),
+                table_index => match need_reserve_block_info(self.ctx.clone(), table_index) {
                     // due to issue https://github.com/datafuselabs/databend/issues/15643,
                     // target build optimization of merge-into is disabled
 

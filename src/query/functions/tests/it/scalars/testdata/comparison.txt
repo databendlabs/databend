@@ -2100,7 +2100,7 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------+
 | cond   | Column(Boolean([0b__010101]))                                                                         |
 | lhs    | Column(NullableColumn { column: StringColumn[alpha, , beta, zeta, , omega], validity: [0b__101101] }) |
-| Output | NullableColumn { column: Boolean([0b__000101]), validity: [0b__101101] }                              |
+| Output | NullableColumn { column: Boolean([0b__000111]), validity: [0b__101101] }                              |
 +--------+-------------------------------------------------------------------------------------------------------+
 
 
@@ -2127,7 +2127,7 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------+
 | cond   | Column(Boolean([0b__010101]))                                                                         |
 | lhs    | Column(NullableColumn { column: StringColumn[alpha, , beta, zeta, , omega], validity: [0b__101101] }) |
-| Output | NullableColumn { column: Boolean([0b__111010]), validity: [0b__101101] }                              |
+| Output | NullableColumn { column: Boolean([0b__111000]), validity: [0b__101101] }                              |
 +--------+-------------------------------------------------------------------------------------------------------+
 
 

@@ -1,0 +1,102 @@
+statement ok
+drop stage if exists csv_unload_escape
+
+# TEXT decodes backslash escapes. Use unused CSV quote/delimiter characters
+# with escaping disabled to inspect each physical line without altering it.
+statement ok
+create stage csv_unload_escape file_format = (type = csv, field_delimiter = '|', quote = '`', escape = '')
+
+statement ok
+drop table if exists t_csv_unload_escape
+
+statement ok
+create table t_csv_unload_escape(id int, value string)
+
+statement ok
+insert into t_csv_unload_escape values
+(1, 'C:\\temp\\new'),
+(2, 'tail\\'),
+(3, 'a,b\\'),
+(4, 'say "hi"\\'),
+(5, 'line\nbreak\\'),
+(6, '\\N')
+
+# ESCAPE is ignored on unload: it neither changes contents nor triggers quoting.
+statement ok
+copy into @csv_unload_escape/with_escape.csv
+from (select * from t_csv_unload_escape order by id)
+file_format = (type = csv, quote_style = 'quote_minimal', escape = '\\', null_display = 'null')
+single = true include_query_id = false use_raw_path = true overwrite = true
+
+query T
+select $1 from @csv_unload_escape/with_escape.csv order by metadata$file_row_number
+----
+1,C:\temp\new
+2,tail\
+3,"a,b\"
+4,"say ""hi""\"
+5,"line
+break\"
+6,\N
+
+statement ok
+copy into @csv_unload_escape/without_escape.csv
+from (select * from t_csv_unload_escape order by id)
+file_format = (type = csv, quote_style = 'quote_minimal', escape = '', null_display = 'null')
+single = true include_query_id = false use_raw_path = true overwrite = true
+
+query T
+select $1 from @csv_unload_escape/without_escape.csv order by metadata$file_row_number
+----
+1,C:\temp\new
+2,tail\
+3,"a,b\"
+4,"say ""hi""\"
+5,"line
+break\"
+6,\N
+
+statement ok
+drop table if exists t_csv_unload_escape_copy
+
+statement ok
+create table t_csv_unload_escape_copy like t_csv_unload_escape
+
+# Read quote-doubled output without enabling the backslash input dialect.
+# A distinct NULL marker keeps the literal backslash-N string unambiguous.
+statement ok
+copy into t_csv_unload_escape_copy
+from @csv_unload_escape/with_escape.csv
+file_format = (type = csv, escape = '', null_display = 'null')
+
+query I
+select count(*) from t_csv_unload_escape_copy
+----
+6
+
+query I
+select count(*) from (
+    select * from t_csv_unload_escape
+    except
+    select * from t_csv_unload_escape_copy
+)
+----
+0
+
+query I
+select count(*) from (
+    select * from t_csv_unload_escape_copy
+    except
+    select * from t_csv_unload_escape
+)
+----
+0
+
+statement ok
+drop stage csv_unload_escape
+
+statement ok
+drop table t_csv_unload_escape
+
+statement ok
+drop table t_csv_unload_escape_copy

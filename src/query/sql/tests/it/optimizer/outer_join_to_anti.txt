@@ -372,6 +372,96 @@ Filter
         └── limit: NONE
 
 
+=== left_expression_key_is_not_anti_join ===
+description: IF returns 0 on an unmatched right side, so its NULL test must not become a left anti join.
+sql: SELECT l.k
+FROM outer_to_anti_left AS l
+LEFT JOIN outer_to_anti_right AS r ON l.k = IF(r.k IS NULL, 0, r.payload)
+WHERE IF(r.k IS NULL, 0, r.payload) IS NULL
+raw_plan:
+EvalScalar
+├── scalars: [outer_to_anti_left.k (#0) AS (#0)]
+└── Filter
+    ├── filters: [not(is_not_null(if(not(is_not_null(outer_to_anti_right.k (#3))), 0, outer_to_anti_right.payload (#5))))]
+    └── Join(Left)
+        ├── build keys: [if(not(is_not_null(outer_to_anti_right.k (#3))), 0, outer_to_anti_right.payload (#5))]
+        ├── probe keys: [outer_to_anti_left.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.outer_to_anti_right (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.outer_to_anti_left (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [outer_to_anti_left.k (#0) AS (#0), outer_to_anti_right.k (#3) AS (#6), outer_to_anti_right.payload (#5) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [if(not(is_not_null(outer_to_anti_right.k (#3))), 0, outer_to_anti_right.payload (#5))]
+    ├── probe keys: [outer_to_anti_left.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.outer_to_anti_right (#1)
+    │   ├── filters: [not(is_not_null(if(not(is_not_null(outer_to_anti_right.k (#3))), 0, outer_to_anti_right.payload (#5))))]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.outer_to_anti_left (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== right_expression_key_is_not_anti_join ===
+description: The RIGHT JOIN mirror must also avoid the expression-key anti rewrite; later valid simplifications are allowed.
+sql: SELECT l.k
+FROM outer_to_anti_right AS r
+RIGHT JOIN outer_to_anti_left AS l ON IF(r.k IS NULL, 0, r.payload) = l.k
+WHERE IF(r.k IS NULL, 0, r.payload) IS NULL
+raw_plan:
+EvalScalar
+├── scalars: [outer_to_anti_left.k (#3) AS (#3)]
+└── Filter
+    ├── filters: [not(is_not_null(if(not(is_not_null(outer_to_anti_right.k (#0))), 0, outer_to_anti_right.payload (#2))))]
+    └── Join(Right)
+        ├── build keys: [outer_to_anti_left.k (#3)]
+        ├── probe keys: [if(not(is_not_null(outer_to_anti_right.k (#0))), 0, outer_to_anti_right.payload (#2))]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.outer_to_anti_left (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.outer_to_anti_right (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [outer_to_anti_left.k (#3) AS (#3), outer_to_anti_right.k (#0) AS (#6), outer_to_anti_right.payload (#2) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [outer_to_anti_left.k (#3)]
+    ├── probe keys: [if(not(is_not_null(outer_to_anti_right.k (#0))), 0, outer_to_anti_right.payload (#2))]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.outer_to_anti_left (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.outer_to_anti_right (#0)
+        ├── filters: [not(is_not_null(if(not(is_not_null(outer_to_anti_right.k (#0))), 0, outer_to_anti_right.payload (#2))))]
+        ├── order by: []
+        └── limit: NONE
+
+
 === null_safe_condition_keeps_left_outer ===
 description: A null-safe condition is not a regular equi-key in the raw plan and must remain a left outer join.
 sql: SELECT l.k, r.k

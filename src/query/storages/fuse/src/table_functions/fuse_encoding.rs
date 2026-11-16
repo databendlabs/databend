@@ -48,6 +48,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::stream;
@@ -417,7 +418,7 @@ impl<'a> FuseEncodingImpl<'a> {
 
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, false)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::READ_ONLY)
                 .await?;
             let mut block_locations = Vec::new();
             for segment in segments {

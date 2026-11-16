@@ -218,7 +218,7 @@ impl SnapshotGenerator for AppendGenerator {
             }
         }
         new_summary.additional_stats_meta = table_stats_gen.additional_stats_meta();
-        TableSnapshot::try_new(
+        let mut snapshot = TableSnapshot::try_new(
             Some(table_info.ident.seq),
             previous.clone(),
             table_schema.clone(),
@@ -227,7 +227,12 @@ impl SnapshotGenerator for AppendGenerator {
             cluster_key_info,
             table_statistics_location,
             table_meta_timestamps,
-        )
+        )?;
+        if self.overwrite {
+            // No previous segment survives an overwrite.
+            snapshot.segment_zone_map = None;
+        }
+        Ok(snapshot)
     }
 }
 

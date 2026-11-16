@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_vector::angular_distance;
 use databend_common_vector::l1_distance;
 use databend_common_vector::l2_distance;
 use databend_common_vector::vector_norm;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use half::f16;
+
+use crate::DistanceType;
+use crate::ScoredPointOffset;
 
 pub fn vector_stat_distance(
     left: &[f32],
@@ -379,4 +384,87 @@ unsafe fn impl_f32_l1_neon(left: &[f32], right: &[f32]) -> f32 {
             .zip(right[m..].iter())
             .map(|(left, right)| (*left - *right).abs())
             .sum::<f32>()
+}
+
+// FP16 refine scoring: an FP32 query against fixed-width little-endian FP16 rows
+// (one per block row; NULL rows keep their slot and are never scored). Each value is
+// converted to FP32 while accumulating, so the query is not rounded to FP16 and no
+// full-vector conversion buffer is needed.
+
+pub struct Fp16QueryScorer {
+    query: Vec<f32>,
+    distance: DistanceType,
+    query_norm: f32,
+}
+
+impl Fp16QueryScorer {
+    pub fn new(query: Vec<f32>, distance: DistanceType) -> Self {
+        let query_norm = query.iter().map(|value| value * value).sum::<f32>().sqrt();
+        Self {
+            query,
+            distance,
+            query_norm,
+        }
+    }
+
+    pub fn dimension(&self) -> usize {
+        self.query.len()
+    }
+
+    /// Scores `rows` (valid block rows) of one FP16 page holding rows
+    /// `page_start..` as fixed-width little-endian vectors.
+    pub fn score_page(
+        &self,
+        page: &[u8],
+        page_start: usize,
+        rows: &[u32],
+    ) -> Result<Vec<ScoredPointOffset>> {
+        let row_bytes = self.query.len() * 2;
+        if row_bytes == 0 || !page.len().is_multiple_of(row_bytes) {
+            return Err(ErrorCode::StorageOther("Invalid FP16 page"));
+        }
+        rows.iter()
+            .map(|&row| {
+                let vector = (row as usize)
+                    .checked_sub(page_start)
+                    .and_then(|local| page.get(local * row_bytes..(local + 1) * row_bytes))
+                    .ok_or_else(|| ErrorCode::StorageOther("FP16 row outside page"))?;
+                Ok(ScoredPointOffset {
+                    idx: row,
+                    score: self.score(vector),
+                })
+            })
+            .collect()
+    }
+
+    /// `vector` is exactly one row (`dimension * 2` bytes).
+    fn score(&self, vector: &[u8]) -> f32 {
+        let values = vector
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|bytes| f16::from_bits(u16::from_le_bytes([bytes[0], bytes[1]])).to_f32());
+        let score = match self.distance {
+            DistanceType::Dot => {
+                let (mut dot, mut norm) = (0.0f32, 0.0f32);
+                for (value, query) in values.zip(&self.query) {
+                    dot += value * query;
+                    norm += value * value;
+                }
+                1.0 - dot / (norm.sqrt() * self.query_norm)
+            }
+            DistanceType::L1 => values
+                .zip(&self.query)
+                .map(|(value, query)| (value - query).abs())
+                .sum(),
+            DistanceType::L2 => values
+                .zip(&self.query)
+                .map(|(value, query)| (value - query) * (value - query))
+                .sum::<f32>()
+                .sqrt(),
+        };
+        // Undefined cosine, non-finite query and +-Inf/NaN stored values all map
+        // to the sentinel (ranked last) instead of failing the query.
+        if score.is_finite() { score } else { f32::MAX }
+    }
 }

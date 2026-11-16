@@ -19,18 +19,21 @@
 #![allow(clippy::collapsible_if)]
 #![allow(incomplete_features)]
 #![feature(deref_patterns)]
-#![feature(type_ascription)]
 #![feature(try_blocks)]
-#![feature(downcast_unchecked)]
 #![feature(likely_unlikely)]
 
 mod arithmetic;
 mod cast;
 mod cast_from_jsonb;
 mod comparison;
+mod decimal;
 mod hash;
 mod math;
 mod uuid;
+mod vectorize;
+
+#[cfg(test)]
+mod testing;
 
 pub use arithmetic::*;
 pub use cast::*;

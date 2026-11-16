@@ -1,0 +1,961 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::alloc::Layout;
+
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::TrueIdxIter;
+use databend_common_column::types::months_days_micros;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
+use databend_common_expression::aggregate_function::AggregateStateSettings;
+use databend_common_expression::aggregate_function::AggregateStateSettingsSelector;
+use databend_common_expression::aggregate_function::AggregateStateWritePolicy;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BuilderExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataKind;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::DecimalType;
+use databend_common_expression::types::IntervalType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::number::Number;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_column_view_iter;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
+use num_traits::AsPrimitive;
+
+use super::AggregateRegistration;
+use super::adaptors::*;
+
+pub struct AggregateNumberSumState<R>
+where R: ArgType
+{
+    value: R::Scalar,
+}
+
+impl<R> Default for AggregateNumberSumState<R>
+where
+    R: ArgType,
+    R::Scalar: Default,
+{
+    fn default() -> Self {
+        Self {
+            value: R::Scalar::default(),
+        }
+    }
+}
+
+pub type AggregateSumUInt64State = AggregateNumberSumState<NumberType<u64>>;
+
+struct SumBuilder;
+
+struct SumStateSettings;
+
+impl SumStateSettings {
+    fn fixed_null_state(request: &RawAggregateCall<'_>) -> bool {
+        match request.args_type {
+            [DataType::Null] => true,
+            [state_type] => matches!(
+                state_type.remove_nullable(),
+                DataType::AggregateState(state)
+                    if matches!(state.argument_types.as_slice(), [DataType::Null])
+            ),
+            _ => false,
+        }
+    }
+
+    fn compact() -> AggregateStateSettings {
+        AggregateStateSettings {
+            state_version: 1,
+            preserve_nullable_input_rows_flag: false,
+            input_nullable_input_rows_flag: false,
+        }
+    }
+
+    /// SUM's persisted format map: v0 retains the nullable input-rows flag,
+    /// v1 is compact. Ordinary execution uses the compact layout without
+    /// assigning it a persisted version; production writes select v0.
+    fn versioned(request: &RawAggregateCall<'_>, version: u64) -> Result<AggregateStateSettings> {
+        match version {
+            0 => Ok(AggregateStateSettings::v0_compatibility()),
+            1 => Ok(Self::compact()),
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "Aggregate state version {version} is not supported by {} (expected version 0 or 1)",
+                request.name
+            ))),
+        }
+    }
+}
+
+impl AggregateStateSettingsSelector for SumStateSettings {
+    fn execution(&self, request: &RawAggregateCall<'_>) -> Result<AggregateStateSettings> {
+        Ok(AggregateStateSettings {
+            state_version: EXECUTION_ONLY_STATE_VERSION,
+            preserve_nullable_input_rows_flag: request.distinct,
+            input_nullable_input_rows_flag: request.distinct,
+        })
+    }
+
+    fn read(
+        &self,
+        request: &RawAggregateCall<'_>,
+        input_version: Option<u64>,
+    ) -> Result<AggregateStateSettings> {
+        let Some(input_version) = input_version else {
+            // Legacy physical states use the v0 layout without an output format version.
+            return Ok(AggregateStateSettings {
+                state_version: EXECUTION_ONLY_STATE_VERSION,
+                preserve_nullable_input_rows_flag: true,
+                input_nullable_input_rows_flag: true,
+            });
+        };
+        let input = Self::versioned(request, input_version)?;
+        let mut settings = self.execution(request)?;
+        settings.input_nullable_input_rows_flag = input.preserve_nullable_input_rows_flag;
+        Ok(settings)
+    }
+
+    fn write(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+    ) -> Result<AggregateStateSettings> {
+        // SUM(NULL) uses the same fixed state in both layouts, including
+        // _merge_state; no new persisted format version is needed.
+        let version = match policy {
+            AggregateStateWritePolicy::Compatible => 0,
+            AggregateStateWritePolicy::Latest if Self::fixed_null_state(request) => 0,
+            AggregateStateWritePolicy::Latest => 1,
+        };
+        Self::versioned(request, version)
+    }
+
+    fn rewrite(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+        input_version: Option<u64>,
+    ) -> Result<AggregateStateSettings> {
+        let mut settings = self.write(request, policy)?;
+        if let Some(input_version) = input_version {
+            let input = Self::versioned(request, input_version)?;
+            if input_version > settings.state_version && !Self::fixed_null_state(request) {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Cannot write aggregate state version {} from input version {input_version}",
+                    settings.state_version
+                )));
+            }
+            settings.input_nullable_input_rows_flag = input.preserve_nullable_input_rows_flag;
+        }
+        Ok(settings)
+    }
+}
+
+impl SumBuilder {
+    fn legacy_signatures(_params: &[Scalar], state_type: &DataType) -> Vec<Vec<DataType>> {
+        let DataType::Tuple(fields) = state_type else {
+            return Vec::new();
+        };
+        let Some(accumulator_type) = fields.first() else {
+            return Vec::new();
+        };
+        match accumulator_type {
+            DataType::Number(NumberDataType::UInt64)
+            | DataType::Number(NumberDataType::Int64)
+            | DataType::Number(NumberDataType::Float64)
+            | DataType::Interval => vec![vec![accumulator_type.clone()]],
+            _ => Vec::new(),
+        }
+    }
+
+    fn register(registry: &mut AggregateRegistry) {
+        Self::sum_route().register(registry);
+        Self::sum_distinct_route().register(registry);
+        Self::sum0_route().register(registry);
+    }
+}
+
+inventory::submit! {
+    AggregateRegistration {
+        register: SumBuilder::register,
+    }
+}
+
+impl SumBuilder {
+    fn sum_route() -> NameRoute {
+        NameRoute::new(
+            &["sum"],
+            Self::sum_arguments(),
+            Self::SUM_METADATA,
+            NullInput::Filter,
+        )
+        .with_distinct_target("sum_distinct")
+        .with_state_settings(SumStateSettings)
+        .then(
+            MergeRoute::unary(false, Self::create)
+                .with_legacy_signature_resolver(Self::legacy_signatures),
+        )
+        .then(
+            MergeRoute::unary(true, Self::create)
+                .with_legacy_signature_resolver(Self::legacy_signatures),
+        )
+        .then(PlainRoute::unary(Self::create))
+        .then(IfRoute::unary(Self::create).with_metadata(Self::SUM_IF_METADATA))
+        .then(StateRoute::unary(Self::create).with_metadata(Self::STATE_METADATA))
+    }
+
+    fn sum0_route() -> NameRoute {
+        NameRoute::new(
+            &["sum0", "sum_zero"],
+            Self::sum_zero_arguments(),
+            Self::SUM_ZERO_METADATA,
+            NullInput::Filter,
+        )
+        .then(
+            MergeRoute::unary(false, Self::create_zero)
+                .with_legacy_signature_resolver(Self::legacy_signatures),
+        )
+        .then(
+            MergeRoute::unary(true, Self::create_zero)
+                .with_legacy_signature_resolver(Self::legacy_signatures),
+        )
+        .then(PlainRoute::unary(Self::create_zero).with_validator(Self::validate_sum0_plain))
+        .then(
+            StateRoute::unary(Self::create_zero).with_metadata(AggregateMetadata {
+                null_argument_result: NullArgumentResult::UInt64Zero,
+                ..Self::STATE_METADATA
+            }),
+        )
+        .then(DistinctRoute::<true>::unary(Self::create_zero))
+    }
+
+    fn sum_distinct_route() -> NameRoute {
+        NameRoute::new(
+            &["sum_distinct"],
+            Self::sum_distinct_arguments(),
+            Self::SUM_DISTINCT_METADATA,
+            NullInput::Filter,
+        )
+        .then(PlainRoute::unary(Self::create_distinct).hidden())
+    }
+
+    fn validate_sum0_plain(request: &RawAggregateCall<'_>) -> Result<()> {
+        if request.args_type.iter().any(DataType::is_null) {
+            Err(ErrorCode::InvalidArgument(format!(
+                "Invalid argument type for {}, must be uint64",
+                request.name
+            )))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn sum_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::one_of(vec![
+            ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+            ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Interval)]),
+        ])
+    }
+
+    fn sum_zero_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::fixed(vec![ArgumentPattern::exact(NumberType::<u64>::data_type())])
+    }
+
+    fn sum_distinct_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::one_of(vec![
+            ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+            ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Interval)]),
+        ])
+    }
+
+    const SUM_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Sum,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums non-null numeric or interval values",
+            definition: "sum(expr)",
+            example: "select sum(number) from numbers(10)",
+        },
+    };
+
+    const SUM_DISTINCT_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums distinct non-null numeric or interval values",
+            definition: "sum_distinct(expr)",
+            example: "select sum_distinct(number) from numbers(10)",
+        },
+    };
+
+    const SUM_ZERO_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::UInt64Zero,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums UInt64 values and returns zero when no values are aggregated",
+            definition: "sum0(expr)",
+            example: "select sum0(number) from numbers(10)",
+        },
+    };
+
+    const SUM_IF_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "sums input values matching a boolean condition",
+            definition: "sum_if(expr, cond)",
+            example: "select sum_if(number, number > 0) from numbers(10)",
+        },
+    };
+
+    const STATE_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the serialized aggregate state",
+            definition: "aggregate_state(args...)",
+            example: "select sum_state(number) from numbers(10)",
+        },
+    };
+}
+
+impl<R> AggregateNumberSumState<R>
+where R: ArgType
+{
+    pub fn state_description(data_type: DataType) -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(data_type),
+        ])
+    }
+}
+
+fn sum_selected<T, R>(
+    values: impl Iterator<Item = T>,
+    value_at: impl Fn(usize) -> T,
+    validity: Option<&Bitmap>,
+) -> R
+where
+    T: AsPrimitive<R>,
+    R: Number + std::ops::AddAssign,
+{
+    let mut sum = R::default();
+    match validity {
+        Some(validity)
+            if (validity.true_count() as f64 / validity.len() as f64) < SELECTIVITY_THRESHOLD =>
+        {
+            for index in TrueIdxIter::new(validity.len(), Some(validity)) {
+                sum += value_at(index).as_();
+            }
+        }
+        Some(validity) => {
+            for (value, valid) in values.zip(validity.iter()) {
+                if valid {
+                    sum += value.as_();
+                }
+            }
+        }
+        None => {
+            sum = values.fold(sum, |mut sum, value| {
+                sum += value.as_();
+                sum
+            });
+        }
+    }
+    sum
+}
+
+impl<T, R> UnaryState<NumberType<T>, NumberType<R>> for AggregateNumberSumState<NumberType<R>>
+where
+    T: Number + AsPrimitive<R>,
+    R: Number + AsPrimitive<f64> + std::ops::AddAssign,
+{
+    type FunctionInfo = ();
+
+    fn init(_function_info: &Self::FunctionInfo) -> Self {
+        Self::default()
+    }
+
+    fn add(&mut self, value: T, _function_info: &Self::FunctionInfo) -> Result<()> {
+        self.value += value.as_();
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        column: ColumnView<NumberType<T>>,
+        validity: Option<&Bitmap>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        match column {
+            ColumnView::Const(value, rows) => {
+                let value: R = value.as_();
+                let count = validity.map_or(rows, Bitmap::true_count);
+                for _ in 0..count {
+                    self.value += value;
+                }
+            }
+            ColumnView::Column(buffer) => {
+                self.value += sum_selected(
+                    buffer.iter().copied(),
+                    // SAFETY: called with the indices of `validity`, which has the length of the column.
+                    |i| unsafe { *buffer.get_unchecked(i) },
+                    validity,
+                );
+            }
+            // Keep validity-aware iteration on the original path below.
+            column @ ColumnView::Encoded(_) if validity.is_none() => {
+                with_column_view_iter!(NumberType<T>, &column, |values| {
+                    self.value +=
+                        sum_selected(values, |i| unsafe { column.index_unchecked(i) }, None);
+                });
+            }
+            ColumnView::Encoded(view) => {
+                self.value += sum_selected(
+                    view.iter(),
+                    // SAFETY: as above.
+                    |i| unsafe { view.index_unchecked(i) },
+                    validity,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.value += rhs.value;
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        mut builder: <NumberType<R> as ValueType>::ColumnBuilderMut<'_>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        builder.push_item(NumberType::<R>::to_scalar_ref(&self.value));
+        Ok(())
+    }
+
+    fn serialize(
+        &self,
+        builder: &mut ColumnBuilder,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let mut builder = NumberType::<R>::downcast_builder(builder);
+        builder.push_item(NumberType::<R>::to_scalar_ref(&self.value));
+        Ok(())
+    }
+
+    fn merge_serialized(
+        &mut self,
+        value: ScalarRef<'_>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let value = NumberType::<R>::try_downcast_scalar(&value)?;
+        self.value += NumberType::<R>::to_owned_scalar(value);
+        Ok(())
+    }
+}
+
+pub struct AggregateDecimalSumState<const SHOULD_CHECK_OVERFLOW: bool, T>
+where T: Decimal
+{
+    value: T::U64Array,
+}
+
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> Default
+    for AggregateDecimalSumState<SHOULD_CHECK_OVERFLOW, T>
+where T: Decimal
+{
+    fn default() -> Self {
+        Self {
+            value: T::U64Array::default(),
+        }
+    }
+}
+
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> AggregateDecimalSumState<SHOULD_CHECK_OVERFLOW, T>
+where T: Decimal
+{
+    pub fn state_description(data_type: DataType) -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(data_type),
+        ])
+    }
+}
+
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalType<T>>
+    for AggregateDecimalSumState<SHOULD_CHECK_OVERFLOW, T>
+where T: Decimal + std::ops::AddAssign
+{
+    type FunctionInfo = ();
+
+    fn init(_function_info: &Self::FunctionInfo) -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    fn add(&mut self, value: T, _function_info: &Self::FunctionInfo) -> Result<()> {
+        let mut sum = T::from_u64_array(self.value);
+        sum += value;
+
+        if SHOULD_CHECK_OVERFLOW && (sum > T::DECIMAL_MAX || sum < T::DECIMAL_MIN) {
+            return Err(decimal_sum_overflow(sum));
+        }
+
+        self.value = sum.to_u64_array();
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        column: ColumnView<DecimalType<T>>,
+        validity: Option<&Bitmap>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let validity = validity.filter(|validity| validity.null_count() > 0);
+        let mut sum = T::from_u64_array(self.value);
+        let result: Result<()>;
+        with_column_view_iter!(DecimalType<T>, &column, |values| {
+            let mut add = |value: T| {
+                let mut next = sum;
+                next += value;
+                // Check every intermediate sum, even if later values would cancel it.
+                if SHOULD_CHECK_OVERFLOW && (next > T::DECIMAL_MAX || next < T::DECIMAL_MIN) {
+                    return Err(decimal_sum_overflow(next));
+                }
+                sum = next;
+                Ok(())
+            };
+            result = (|| {
+                match validity {
+                    Some(validity) => {
+                        for (value, valid) in values.zip(validity.iter()) {
+                            if valid {
+                                add(value)?;
+                            }
+                        }
+                    }
+                    None => {
+                        for value in values {
+                            add(value)?;
+                        }
+                    }
+                }
+                Ok(())
+            })();
+        });
+        // Like `add`, an overflow keeps the last sum that did not overflow.
+        self.value = sum.to_u64_array();
+        result
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.add(T::from_u64_array(rhs.value), &())
+    }
+
+    fn merge_result(
+        &mut self,
+        mut builder: <DecimalType<T> as ValueType>::ColumnBuilderMut<'_>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let value = T::from_u64_array(self.value);
+        builder.push_item(DecimalType::<T>::to_scalar_ref(&value));
+        Ok(())
+    }
+
+    fn serialize(
+        &self,
+        builder: &mut ColumnBuilder,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let value = T::from_u64_array(self.value);
+        let mut builder = DecimalType::<T>::downcast_builder(builder);
+        builder.push_item(DecimalType::<T>::to_scalar_ref(&value));
+        Ok(())
+    }
+
+    fn merge_serialized(
+        &mut self,
+        value: ScalarRef<'_>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let value = DecimalType::<T>::try_downcast_scalar(&value)?;
+        self.add(value, &())
+    }
+}
+
+/// Kept out of line: building the error is never on the hot path.
+#[cold]
+#[inline(never)]
+fn decimal_sum_overflow<T: Decimal>(sum: T) -> ErrorCode {
+    ErrorCode::Overflow(format!(
+        "Decimal overflow: {:?} not in [{}, {}]",
+        sum,
+        T::DECIMAL_MIN,
+        T::DECIMAL_MAX,
+    ))
+}
+
+#[derive(Default)]
+pub struct AggregateIntervalSumState {
+    value: months_days_micros,
+}
+
+impl AggregateIntervalSumState {
+    pub fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
+            StateSerdeItem::DataType(DataType::Interval),
+        ])
+    }
+}
+
+impl UnaryState<IntervalType, IntervalType> for AggregateIntervalSumState {
+    type FunctionInfo = ();
+
+    fn init(_function_info: &Self::FunctionInfo) -> Self {
+        Self::default()
+    }
+
+    fn add(
+        &mut self,
+        value: months_days_micros,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        // Intervals keep months, days and microseconds as separate components: a
+        // month is not a fixed number of days, so folding through `total_micros`
+        // would normalise 1 month to 30 days and lose the calendar semantics.
+        self.value += value;
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        // Asymmetric with `add` on purpose: merging two already-accumulated
+        // states folds the components into a single microsecond total, matching
+        // the v1 `IntervalSumState` behaviour the goldenfiles encode.
+        let res = self.value.total_micros() + rhs.value.total_micros();
+        self.value = months_days_micros(res as i128);
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        mut builder: <IntervalType as ValueType>::ColumnBuilderMut<'_>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        builder.push_item(IntervalType::to_scalar_ref(&self.value));
+        Ok(())
+    }
+
+    fn serialize(
+        &self,
+        builder: &mut ColumnBuilder,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let mut builder = IntervalType::downcast_builder(builder);
+        builder.push_item(IntervalType::to_scalar_ref(&self.value));
+        Ok(())
+    }
+
+    fn merge_serialized(
+        &mut self,
+        value: ScalarRef<'_>,
+        _function_info: &Self::FunctionInfo,
+    ) -> Result<()> {
+        let value = IntervalType::try_downcast_scalar(&value)?;
+        // Deserialising yields a peer state, so this goes through `merge` rather
+        // than `add`, mirroring v1's `batch_merge`.
+        self.merge(&Self { value })
+    }
+}
+
+impl SumBuilder {
+    fn create(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
+        let data_type = build.arg_type().clone();
+
+        #[rustfmt::skip]
+        let function = with_number_mapped_type!(|NUM| match &data_type {
+            DataType::Number(NumberDataType::NUM) => {
+                type ResultNumber = <NUM as ResultTypeOfUnary>::Sum;
+                type State = AggregateNumberSumState<NumberType<ResultNumber>>;
+                build.create_unary_or_null::<
+                    State,
+                    NumberType<NUM>,
+                    NumberType<ResultNumber>,
+                >(
+                    NumberType::<ResultNumber>::data_type().wrap_nullable(),
+                    State::state_description(NumberType::<ResultNumber>::data_type()),
+                    (),
+                )
+            }
+            DataType::Interval => build.create_unary_or_null::<
+                AggregateIntervalSumState,
+                IntervalType,
+                IntervalType,
+            >(
+                DataType::Interval.wrap_nullable(),
+                AggregateIntervalSumState::state_description(),
+                (),
+            ),
+            DataType::Decimal(size) => {
+                with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                    DecimalDataKind::DECIMAL => {
+                        let decimal_size =
+                            DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, size.scale());
+                        let return_type = DataType::Decimal(decimal_size);
+                        let should_check_overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
+                            && size.precision() > i64::MAX_PRECISION;
+
+                        if should_check_overflow {
+                            build.create_unary_or_null::<
+                                AggregateDecimalSumState<true, DECIMAL>,
+                                DecimalType<DECIMAL>,
+                                DecimalType<DECIMAL>,
+                            >(
+                                return_type.wrap_nullable(),
+                                AggregateDecimalSumState::<true, DECIMAL>::state_description(
+                                    return_type,
+                                ),
+                                (),
+                            )
+                        } else {
+                            build.create_unary_or_null::<
+                                AggregateDecimalSumState<false, DECIMAL>,
+                                DecimalType<DECIMAL>,
+                                DecimalType<DECIMAL>,
+                            >(
+                                return_type.wrap_nullable(),
+                                AggregateDecimalSumState::<false, DECIMAL>::state_description(
+                                    return_type,
+                                ),
+                                (),
+                            )
+                        }
+                    }
+                })
+            }
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "sum does not support type '{:?}'",
+                data_type
+            ))),
+        });
+        function
+    }
+
+    fn create_distinct(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
+        let data_type = build.arg_type().clone();
+
+        #[rustfmt::skip]
+        let function = with_number_mapped_type!(|NUM| match &data_type {
+            DataType::Number(NumberDataType::NUM) => {
+                type ResultNumber = <NUM as ResultTypeOfUnary>::Sum;
+                type State = AggregateNumberSumState<NumberType<ResultNumber>>;
+                build.create_unary_distinct_or_null::<
+                    State,
+                    NumberType<NUM>,
+                    NumberType<ResultNumber>,
+                >(
+                    NumberType::<ResultNumber>::data_type().wrap_nullable(),
+                    State::state_description(NumberType::<ResultNumber>::data_type()),
+                    (),
+                )
+            }
+            DataType::Interval => build.create_unary_distinct_or_null::<
+                AggregateIntervalSumState,
+                IntervalType,
+                IntervalType,
+            >(
+                DataType::Interval.wrap_nullable(),
+                AggregateIntervalSumState::state_description(),
+                (),
+            ),
+            DataType::Decimal(size) => {
+                with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                    DecimalDataKind::DECIMAL => {
+                        let decimal_size =
+                            DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, size.scale());
+                        let return_type = DataType::Decimal(decimal_size);
+                        let should_check_overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
+                            && size.precision() > i64::MAX_PRECISION;
+
+                        if should_check_overflow {
+                            build.create_unary_distinct_or_null::<
+                                AggregateDecimalSumState<true, DECIMAL>,
+                                DecimalType<DECIMAL>,
+                                DecimalType<DECIMAL>,
+                            >(
+                                return_type.wrap_nullable(),
+                                AggregateDecimalSumState::<true, DECIMAL>::state_description(
+                                    return_type,
+                                ),
+                                (),
+                            )
+                        } else {
+                            build.create_unary_distinct_or_null::<
+                                AggregateDecimalSumState<false, DECIMAL>,
+                                DecimalType<DECIMAL>,
+                                DecimalType<DECIMAL>,
+                            >(
+                                return_type.wrap_nullable(),
+                                AggregateDecimalSumState::<false, DECIMAL>::state_description(
+                                    return_type,
+                                ),
+                                (),
+                            )
+                        }
+                    }
+                })
+            }
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "sum_distinct does not support type '{:?}'",
+                data_type
+            ))),
+        });
+        function
+    }
+
+    fn create_zero(build: UnaryBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
+        if build.arg_type().remove_nullable() != NumberType::<u64>::data_type() {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Invalid argument type for {}, must be uint64",
+                build.name()
+            )));
+        }
+
+        build.create_unary::<AggregateSumUInt64State, NumberType<u64>, NumberType<u64>>(
+            NumberType::<u64>::data_type(),
+            AggregateSumUInt64State::state_description(NumberType::<u64>::data_type()),
+            (),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::Float64Type;
+    use databend_common_expression::types::Int64Type;
+
+    use super::*;
+
+    #[test]
+    fn numeric_batch_accumulation_order() -> Result<()> {
+        let mut state = AggregateNumberSumState::<Float64Type>::default();
+        state.add_batch(
+            ColumnView::<Float64Type>::Column(vec![1e16.into()].into()),
+            None,
+            &(),
+        )?;
+        state.add_batch(
+            ColumnView::<Float64Type>::Column(vec![(-1e16).into(), 1.0.into()].into()),
+            None,
+            &(),
+        )?;
+        assert_eq!(state.value, 0.0);
+
+        state.value = 1e16.into();
+        state.add_batch(ColumnView::<Float64Type>::Const(1.0.into(), 2), None, &())?;
+        assert_eq!(state.value, 1e16);
+        Ok(())
+    }
+
+    #[test]
+    fn numeric_batch_validity() -> Result<()> {
+        for bits in [
+            vec![true; 10],
+            vec![true, true, true, true, true, true, true, true, false, true],
+            vec![
+                false, false, true, false, false, false, false, false, true, false,
+            ],
+            vec![false; 10],
+            vec![],
+        ] {
+            let values: Vec<i64> = (1..=bits.len() as i64).collect();
+            let expected: i64 = values
+                .iter()
+                .zip(&bits)
+                .filter(|(_, b)| **b)
+                .map(|(v, _)| v)
+                .sum();
+            let validity: Bitmap = bits.into_iter().collect();
+            let mut state = AggregateNumberSumState::<Int64Type> { value: 7 };
+            state.add_batch(
+                ColumnView::<Int64Type>::Column(values.into()),
+                Some(&validity),
+                &(),
+            )?;
+            assert_eq!(state.value, 7 + expected);
+            state.add_batch(
+                ColumnView::<Int64Type>::Const(3, validity.len()),
+                Some(&validity),
+                &(),
+            )?;
+            assert_eq!(state.value, 7 + expected + 3 * validity.true_count() as i64);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn decimal_batch_intermediate_overflow() -> Result<()> {
+        let max = <i128 as Decimal>::DECIMAL_MAX;
+        let mut checked = AggregateDecimalSumState::<true, i128>::default();
+        assert!(
+            checked
+                .add_batch(ColumnView::Column(vec![max, 1, -1].into()), None, &())
+                .is_err()
+        );
+        assert_eq!(i128::from_u64_array(checked.value), max);
+
+        let validity: Bitmap = [true, false, true].into_iter().collect();
+        let mut checked = AggregateDecimalSumState::<true, i128>::default();
+        checked.add_batch(
+            ColumnView::Column(vec![max, 1, -1].into()),
+            Some(&validity),
+            &(),
+        )?;
+        assert_eq!(i128::from_u64_array(checked.value), max - 1);
+
+        let mut unchecked = AggregateDecimalSumState::<false, i128>::default();
+        unchecked.add_batch(
+            ColumnView::Column(vec![10, 100, -3].into()),
+            Some(&validity),
+            &(),
+        )?;
+        unchecked.add_batch(ColumnView::Const(2, 3), None, &())?;
+        assert_eq!(i128::from_u64_array(unchecked.value), 13);
+        Ok(())
+    }
+}

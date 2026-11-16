@@ -79,7 +79,11 @@ pub struct ColumnHLLAccumulator {
 }
 
 impl ColumnHLLAccumulator {
-    pub fn add_hll(&mut self, hll: BlockHLLState) -> Result<()> {
+    pub fn add_hll(&mut self, hll: Option<BlockHLLState>) -> Result<()> {
+        let Some(hll) = hll else {
+            self.hlls.push(Vec::new());
+            return Ok(());
+        };
         match hll {
             BlockHLLState::Deserialized(v) => {
                 let data = encode_column_hll(&v)?;
@@ -96,10 +100,29 @@ impl ColumnHLLAccumulator {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.hlls.is_empty()
+        self.hlls.iter().all(Vec::is_empty)
     }
 
     pub fn take_summary(&mut self) -> BlockHLL {
         std::mem::take(&mut self.summary)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hll_accumulator_preserves_missing_block_positions() -> Result<()> {
+        let mut accumulator = ColumnHLLAccumulator::default();
+        accumulator.add_hll(None)?;
+        assert!(accumulator.is_empty());
+        accumulator.add_hll(Some(BlockHLLState::Serialized(vec![1])))?;
+        accumulator.add_hll(None)?;
+        accumulator.add_hll(Some(BlockHLLState::Serialized(vec![3])))?;
+        assert!(!accumulator.is_empty());
+        let stats = accumulator.build_segment_statistics(Vec::new());
+        assert_eq!(stats.block_hlls, vec![vec![], vec![1], vec![], vec![3]]);
+        Ok(())
     }
 }

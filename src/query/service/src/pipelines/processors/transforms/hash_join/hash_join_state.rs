@@ -37,6 +37,7 @@ use databend_common_hashtable::HashtableKeyable;
 use databend_common_sql::Symbol;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -99,6 +100,9 @@ pub enum HashJoinHashTable {
 pub struct HashJoinState {
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: SyncUnsafeCell<HashJoinHashTable>,
+    /// Entry nodes the current `hash_table` points into. Cleared whenever the
+    /// table is replaced or released.
+    pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     /// After HashTable is built, send message to notify all probe processors.
     /// There are three types of messages:
     /// 1. FirstRound: it is the first time the hash table is constructed.
@@ -185,6 +189,7 @@ impl HashJoinState {
         let build_schema = DataSchemaRefExt::create(projected_build_fields);
         Ok(Arc::new(HashJoinState {
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
+            raw_entry_spaces: Default::default(),
             build_watcher,
             _build_done_dummy_receiver,
             hash_join_desc,

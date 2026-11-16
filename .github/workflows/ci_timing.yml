@@ -1,0 +1,32 @@
+name: CI Timing
+
+on:
+  workflow_run:
+    workflows:
+      - Dev
+      - Cloud
+    types:
+      - completed
+
+permissions:
+  pull-requests: write
+  issues: write
+  actions: read
+  contents: read
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request' || github.event.workflow_run.event == 'pull_request_target'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Post CI timing comment
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ github.token }}
+          retries: 3
+          script: |
+            const script = require('./.github/scripts/ci_timing_comment.js');
+            await script({ github, context, core });

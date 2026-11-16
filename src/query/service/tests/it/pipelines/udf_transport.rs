@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::pin::Pin;
+use std::slice::from_ref;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arrow_array::RecordBatch;
 use arrow_array::StringArray;
@@ -37,14 +39,38 @@ use arrow_flight::flight_service_server::FlightServiceServer;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::spawn;
+use databend_common_catalog::table_context::TableContextTableAccess;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::Symbol;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_sql::plans::UDFType;
+use databend_common_users::UserApiProvider;
+use databend_meta_client::types::MatchSeq;
+use databend_query::interpreters::InterpreterFactory;
+use databend_query::physical_plans::UdfFunctionDesc;
+use databend_query::pipelines::processors::transforms::TransformUdfServer;
+use databend_query::sql::Planner;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestFixture;
 use futures::Stream;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use futures::stream;
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
+use tokio::sync::oneshot;
+use tokio::time::sleep;
 use tokio::time::timeout;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::Request;
@@ -54,6 +80,7 @@ use tonic::transport::Server;
 
 #[derive(Clone)]
 enum MockMode {
+    EchoString,
     Transport,
     ServerStatus(String),
     MalformedData,
@@ -90,10 +117,19 @@ impl FlightService for MockFlightService {
         &self,
         request: Request<FlightDescriptor>,
     ) -> std::result::Result<Response<FlightInfo>, Status> {
-        if matches!(self.mode, MockMode::SchemaMismatch) {
+        if matches!(self.mode, MockMode::SchemaMismatch | MockMode::EchoString) {
+            let echo = matches!(self.mode, MockMode::EchoString);
             let schema = Schema::new(vec![
-                Field::new("arg1", ArrowDataType::Null, true),
-                Field::new("result", ArrowDataType::Utf8, false),
+                Field::new(
+                    "arg1",
+                    if echo {
+                        ArrowDataType::Utf8
+                    } else {
+                        ArrowDataType::Null
+                    },
+                    true,
+                ),
+                Field::new("result", ArrowDataType::Utf8, echo),
             ]);
             let descriptor = request.into_inner();
             let info = FlightInfo::new()
@@ -167,11 +203,11 @@ impl FlightService for MockFlightService {
                 let invalid = FlightData::default();
                 Box::pin(stream::iter(vec![Ok(invalid)]))
             }
-            MockMode::SchemaMismatch => {
+            MockMode::SchemaMismatch | MockMode::EchoString => {
                 let schema = Arc::new(Schema::new(vec![Field::new(
                     "result",
                     ArrowDataType::Utf8,
-                    false,
+                    matches!(self.mode, MockMode::EchoString),
                 )]));
                 let batch =
                     RecordBatch::try_new(schema.clone(), vec![Arc::new(StringArray::from(vec![
@@ -248,6 +284,427 @@ async fn schema_mismatch_returns_schema_hint() -> Result<()> {
         message.contains("return incorrect type"),
         "unexpected schema mismatch message: {message}"
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn external_access_creation_authorization_and_schema() -> Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.enable_udf_server = true;
+    config.query.common.udf_server_allow_insecure = true;
+    config.query.common.udf_server_allow_list = vec!["http://127.0.0.1".into()];
+    assert!(!config.query.common.management_mode);
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server = spawn(async move {
+        Server::builder()
+            .add_service(FlightServiceServer::new(MockFlightService {
+                mode: MockMode::EchoString,
+            }))
+            .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async move {
+                let _ = shutdown_rx.await;
+            })
+            .await
+    });
+    let session = fixture.default_session();
+    let mut admin = session.get_current_user()?;
+    admin.grants.grant_role("account_admin".into());
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    for sql in [
+        format!("CREATE NETWORK RULE auth_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('{address}', 'localhost:{}')", address.port()),
+        "CREATE EXTERNAL ACCESS INTEGRATION auth_access ALLOWED_NETWORK_RULES = (auth_rule) ENABLED = TRUE".into(),
+        "CREATE ROLE udf_developer".into(),
+        "GRANT CREATE ON *.* TO ROLE udf_developer".into(),
+    ] { fixture.execute_command(&sql).await?; }
+    let mut developer = UserInfo::new("udf_developer", "%", AuthInfo::None);
+    developer.grants.grant_role("udf_developer".into());
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("udf_developer").await?;
+    session.set_secondary_roles_checked(Some(vec![])).await?;
+    let create = format!(
+        "CREATE FUNCTION managed_echo(STRING) RETURNS STRING LANGUAGE python IMMUTABLE HANDLER = 'echo' ADDRESS = 'http://{address}' EXTERNAL_ACCESS_INTEGRATIONS = (auth_access)"
+    );
+    // Wrong schema makes an early remote check fail differently from authorization.
+    let denied_schema = create.replace("managed_echo(STRING)", "managed_echo(INT)");
+    assert_eq!(
+        fixture
+            .execute_command(&denied_schema)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("GRANT USAGE ON INTEGRATION auth_access TO ROLE udf_developer")
+        .await?;
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("udf_developer").await?;
+    // Integration USAGE does not replace the existing SUPER requirement.
+    assert_eq!(
+        fixture
+            .execute_command(&denied_schema)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
+    // CREATE and integration USAGE do not authorize policy management.
+    for sql in [
+        "CREATE NETWORK RULE denied_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('denied.example.com:443')",
+        "ALTER NETWORK RULE auth_rule SET VALUE_LIST = ('denied.example.com:443')",
+        "DROP NETWORK RULE auth_rule",
+        "CREATE EXTERNAL ACCESS INTEGRATION denied_access ALLOWED_NETWORK_RULES = (auth_rule) ENABLED = TRUE",
+        "ALTER EXTERNAL ACCESS INTEGRATION auth_access SET ENABLED = FALSE",
+        "DROP EXTERNAL ACCESS INTEGRATION auth_access",
+        "CREATE OR REPLACE NETWORK RULE auth_rule TYPE = HOST_PORT VALUE_LIST = ('denied.example.com:443') MODE = EGRESS",
+        "CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION auth_access ALLOWED_NETWORK_RULES = (auth_rule) ENABLED = TRUE",
+        "ALTER NETWORK RULE IF EXISTS missing_rule SET VALUE_LIST = ('example.com:443')",
+        "ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS missing_access SET ENABLED = TRUE",
+        "DROP INTEGRATION IF EXISTS auth_access",
+    ] {
+        assert_eq!(
+            fixture.execute_command(sql).await.unwrap_err().code(),
+            ErrorCode::PERMISSION_DENIED,
+            "{sql}",
+        );
+    }
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("GRANT SUPER ON *.* TO ROLE udf_developer")
+        .await?;
+    fixture
+        .execute_command("REVOKE USAGE ON INTEGRATION auth_access FROM ROLE udf_developer")
+        .await?;
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("udf_developer").await?;
+    // SUPER alone does not bypass integration USAGE, even before schema validation.
+    assert_eq!(
+        fixture
+            .execute_command(&denied_schema)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("GRANT USAGE ON INTEGRATION auth_access TO ROLE udf_developer")
+        .await?;
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("udf_developer").await?;
+    // Even SUPER + USAGE cannot escape a nonempty operator host allow list.
+    let blocked_address = format!("http://localhost:{}", address.port());
+    let denied = create
+        .replace("managed_echo", "operator_denied_echo")
+        .replace(&format!("http://{address}"), &blocked_address);
+    assert!(
+        fixture
+            .execute_command(&denied)
+            .await
+            .unwrap_err()
+            .message()
+            .contains("udf_server_allow_list")
+    );
+    fixture.execute_command(&create).await?;
+    // An already stored function must pass the same bound during SELECT binding.
+    let tenant = fixture.new_query_ctx().await?.get_tenant();
+    let api = UserApiProvider::instance();
+    let original = api.get_udf(&tenant, "managed_echo").await?.unwrap();
+    let mut blocked = original.clone();
+    let UDFDefinition::UDFServer(definition) = &mut blocked.definition else {
+        unreachable!()
+    };
+    definition.address = blocked_address.clone();
+    api.update_udf(&tenant, blocked).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    assert!(
+        Planner::new(ctx)
+            .plan_sql("SELECT managed_echo('hello')")
+            .await
+            .unwrap_err()
+            .message()
+            .contains("udf_server_allow_list")
+    );
+    api.update_udf(&tenant, original).await?;
+    // SQL-managed policies do not skip the original Flight schema check.
+    let bad_schema = create.replace("managed_echo(STRING)", "bad_schema(INT)");
+    assert!(
+        fixture
+            .execute_command(&bad_schema)
+            .await
+            .unwrap_err()
+            .message()
+            .contains("arg types mismatch")
+    );
+    // The legacy path also obeys the operator host allow list.
+    let legacy = create
+        .replace("managed_echo", "legacy_echo")
+        .replace(&format!("http://{address}"), &blocked_address)
+        .replace(" EXTERNAL_ACCESS_INTEGRATIONS = (auth_access)", "");
+    assert!(
+        fixture
+            .execute_command(&legacy)
+            .await
+            .unwrap_err()
+            .message()
+            .contains("udf_server_allow_list")
+    );
+    let alter = create.replacen("CREATE FUNCTION", "ALTER FUNCTION", 1);
+    let denied_alter_schema = denied_schema.replacen("CREATE FUNCTION", "ALTER FUNCTION", 1);
+    // ALTER retains its own privilege; SUPER alone is not a substitute for it.
+    assert_eq!(
+        fixture
+            .execute_command(&denied_alter_schema)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("GRANT ALTER ON *.* TO ROLE udf_developer")
+        .await?;
+    fixture
+        .execute_command("REVOKE SUPER ON *.* FROM ROLE udf_developer")
+        .await?;
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("udf_developer").await?;
+    fixture.execute_command(&alter).await?;
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("REVOKE USAGE ON INTEGRATION auth_access FROM ROLE udf_developer")
+        .await?;
+    session.set_authed_user(developer, None).await?;
+    session.set_current_role_checked("udf_developer").await?;
+    assert_eq!(
+        fixture
+            .execute_command(&denied_alter_schema)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
+    // Invocation requires neither SUPER nor integration USAGE.
+    fixture
+        .execute_command("SELECT managed_echo('hello')")
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql("SELECT managed_echo('hello')")
+        .await?;
+    session.set_authed_user(admin, None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("ALTER EXTERNAL ACCESS INTEGRATION auth_access SET ENABLED = FALSE")
+        .await?;
+    sleep(Duration::from_millis(500)).await;
+    // Even IMMUTABLE calls with constant arguments must not be folded away.
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let result = async {
+        interpreter
+            .execute(ctx)
+            .await?
+            .try_collect::<Vec<DataBlock>>()
+            .await
+    }
+    .await;
+    assert!(result.unwrap_err().message().contains("disabled"));
+    let _ = shutdown_tx.send(());
+    server.await.unwrap().unwrap();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn external_access_snowflake_ddl() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let tenant = fixture.new_query_ctx().await?.get_tenant();
+    let provider = UserApiProvider::instance();
+    let rules = provider.network_rule_api(&tenant);
+    let integrations = provider.external_access_integration_api(&tenant);
+    fixture.execute_command("CREATE NETWORK RULE quoted_rule MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('example.com:443')").await?;
+    fixture.execute_command("CREATE OR REPLACE NETWORK RULE quoted_rule TYPE = HOST_PORT VALUE_LIST = ('example.com:8443') MODE = EGRESS").await?;
+    assert_eq!(
+        rules
+            .get("quoted_rule", MatchSeq::GE(1))
+            .await?
+            .data
+            .value_list,
+        vec!["example.com:8443"]
+    );
+    fixture.execute_command("CREATE NETWORK RULE IF NOT EXISTS quoted_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('ignored.example.com')").await?;
+    assert_eq!(
+        rules
+            .get("quoted_rule", MatchSeq::GE(1))
+            .await?
+            .data
+            .value_list,
+        vec!["example.com:8443"]
+    );
+    for (name, quoted) in [
+        ("QuotedAccess", r#""QuotedAccess""#),
+        ("access with space", r#""access with space""#),
+        ("access/r", r#""access/r""#),
+        ("access\"r", r#""access""r""#),
+        ("select", r#""select""#),
+    ] {
+        fixture.execute_command(&format!("CREATE EXTERNAL ACCESS INTEGRATION {quoted} ALLOWED_NETWORK_RULES = (quoted_rule) ENABLED = TRUE")).await?;
+        fixture.execute_command(&format!("CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION {quoted} ENABLED = FALSE ALLOWED_NETWORK_RULES = (quoted_rule)")).await?;
+        assert!(!integrations.get(name, MatchSeq::GE(1)).await?.data.enabled);
+        fixture.execute_command(&format!("CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS {quoted} ALLOWED_NETWORK_RULES = (quoted_rule) ENABLED = TRUE")).await?;
+        assert!(!integrations.get(name, MatchSeq::GE(1)).await?.data.enabled);
+        fixture.execute_command(&format!("ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS {quoted} SET ENABLED = TRUE ALLOWED_NETWORK_RULES = (quoted_rule)")).await?;
+        assert!(integrations.get(name, MatchSeq::GE(1)).await?.data.enabled);
+        fixture
+            .execute_command(&format!("DROP INTEGRATION {quoted}"))
+            .await?;
+        assert!(integrations.get(name, MatchSeq::GE(1)).await.is_err());
+        fixture
+            .execute_command(&format!(
+                "DROP EXTERNAL ACCESS INTEGRATION IF EXISTS {quoted}"
+            ))
+            .await?;
+    }
+    fixture
+        .execute_command(
+            "ALTER NETWORK RULE IF EXISTS quoted_rule SET VALUE_LIST = ('example.com:443')",
+        )
+        .await?;
+    assert_eq!(
+        rules
+            .get("quoted_rule", MatchSeq::GE(1))
+            .await?
+            .data
+            .value_list,
+        vec!["example.com:443"]
+    );
+    fixture
+        .execute_command(
+            "ALTER NETWORK RULE IF EXISTS missing_rule SET VALUE_LIST = ('example.com:443')",
+        )
+        .await?;
+    fixture.execute_command("ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS missing_access SET ALLOWED_NETWORK_RULES = (missing_rule) ENABLED = FALSE").await?;
+    fixture
+        .execute_command("DROP INTEGRATION IF EXISTS missing_access")
+        .await?;
+    assert!(
+        fixture
+            .execute_command("ALTER EXTERNAL ACCESS INTEGRATION missing_access SET ENABLED = FALSE")
+            .await
+            .is_err()
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn external_access_rechecks_already_built_transform() -> Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.enable_udf_server = true;
+    config.query.common.udf_server_allow_insecure = true;
+    config.query.common.udf_server_allow_list = vec!["http://127.0.0.1".into()];
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server = spawn(async move {
+        Server::builder()
+            .add_service(FlightServiceServer::new(MockFlightService {
+                mode: MockMode::SchemaMismatch,
+            }))
+            .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async move {
+                let _ = shutdown_rx.await;
+            })
+            .await
+    });
+    fixture.execute_command(&format!("CREATE NETWORK RULE live_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('{address}')")).await?;
+    fixture.execute_command("CREATE EXTERNAL ACCESS INTEGRATION live_access ALLOWED_NETWORK_RULES = (live_rule) ENABLED = TRUE").await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let func = UdfFunctionDesc {
+        external_access_integrations: vec!["live_access".into()],
+        name: "policy_udf".into(),
+        func_name: "mock_handler".into(),
+        output_column: Symbol::new(1),
+        arg_indices: vec![0],
+        arg_exprs: vec!["NULL".into()],
+        data_type: Box::new(DataType::String),
+        headers: Default::default(),
+        udf_type: UDFType::Server(format!("http://{address}")),
+    };
+    let endpoints = TransformUdfServer::init_endpoints(ctx.clone(), from_ref(&func))?;
+    let semaphore = TransformUdfServer::init_semaphore(ctx.clone())?;
+    // A received physical plan is checked against the worker's own config too.
+    let mut blocked = func.clone();
+    blocked.udf_type = UDFType::Server(format!("http://localhost:{}", address.port()));
+    let blocked_endpoints = TransformUdfServer::init_endpoints(ctx.clone(), from_ref(&blocked))?;
+    let err = TransformUdfServer::new(
+        ctx.clone(),
+        vec![blocked],
+        semaphore.clone(),
+        blocked_endpoints,
+    )
+    .err()
+    .unwrap();
+    assert!(err.message().contains("udf_server_allow_list"));
+    let transform = Arc::new(Mutex::new(TransformUdfServer::new(
+        ctx.clone(),
+        vec![func],
+        semaphore,
+        endpoints,
+    )?));
+    // Use Databend's runtime: unlike plain Tokio worker threads, its workers
+    // carry the fixture's named global registry (also needed by QueryContext).
+    let runtime = GlobalIORuntime::instance();
+    let run = || {
+        let transform = transform.clone();
+        runtime.spawn(async move {
+            let input = DataBlock::new(vec![BlockEntry::from(Column::Null { len: 1 })], 1);
+            transform.lock().await.transform(input).await
+        })
+    };
+    assert_eq!(run().await??.num_columns(), 2);
+
+    // Reuse exactly the same transform/endpoints: binding-time checks cannot
+    // protect a plan that is already built when an administrator changes policy.
+    fixture
+        .execute_command("CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION live_access ALLOWED_NETWORK_RULES = (live_rule) ENABLED = FALSE")
+        .await?;
+    sleep(Duration::from_millis(500)).await;
+    let err = run().await?.unwrap_err();
+    assert!(err.message().contains("disabled"), "{err}");
+    fixture
+        .execute_command("ALTER EXTERNAL ACCESS INTEGRATION live_access SET ENABLED = TRUE")
+        .await?;
+    fixture
+        .execute_command("ALTER NETWORK RULE live_rule SET VALUE_LIST = ('denied.example.com:443')")
+        .await?;
+    sleep(Duration::from_millis(500)).await;
+    let err = run().await?.unwrap_err();
+    assert!(err.message().contains("not allowed"), "{err}");
+    fixture
+        .execute_command(&format!(
+            "CREATE OR REPLACE NETWORK RULE live_rule TYPE = HOST_PORT VALUE_LIST = ('{address}') MODE = EGRESS"
+        ))
+        .await?;
+    sleep(Duration::from_millis(500)).await;
+    assert_eq!(run().await??.num_columns(), 2);
+    // Removing metadata is fail-closed as well.
+    let tenant = ctx.get_tenant();
+    UserApiProvider::instance()
+        .external_access_integration_api(&tenant)
+        .remove("live_access", MatchSeq::GE(1))
+        .await?;
+    sleep(Duration::from_millis(500)).await;
+    assert!(run().await?.is_err());
+    let _ = shutdown_tx.send(());
+    server.await.unwrap().unwrap();
     Ok(())
 }
 

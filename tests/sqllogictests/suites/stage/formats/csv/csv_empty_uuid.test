@@ -10,7 +10,7 @@ remove @data/csv/unload/uuid
 query III
 copy into @data/csv/unload/uuid/ from (select NULL,1 )  file_format = (type = CSV null_display='')
 ----
-1 3 3
+1 5 5
 
 
 query TIITI
@@ -35,7 +35,7 @@ NULL 1
 query III
 copy into @data/csv/unload/uuid/ from (select NULL,1 )  file_format = (type = CSV null_display='')
 ----
-1 3 3
+1 5 5
 
 statement ok
 truncate table t_uuid

@@ -74,6 +74,9 @@ impl FieldEncoderToString {
 
     pub fn encode<'a>(&self, column: &'a Column, row_index: usize) -> Result<Cow<'a, str>> {
         match column {
+            Column::Encoded(c) => c.with_row(row_index, |column, row| {
+                Ok(Cow::Owned(self.encode(column, row)?.into_owned()))
+            }),
             Column::Null { .. } => Ok(Cow::Borrowed(NULL_BYTES_UPPER)),
             Column::EmptyArray { .. } => Ok(Cow::Borrowed("[]")),
             Column::EmptyMap { .. } => Ok(Cow::Borrowed("{}")),
@@ -96,10 +99,10 @@ impl FieldEncoderToString {
             )),
             Column::Bitmap(_) => Ok(Cow::Borrowed(self.bitmap_text())),
             Column::Nullable(c) => {
-                if !c.validity.get_bit(row_index) {
+                if !c.validity().get_bit(row_index) {
                     Ok(Cow::Borrowed(NULL_BYTES_UPPER))
                 } else {
-                    self.encode(&c.column, row_index)
+                    self.encode(c.column(), row_index)
                 }
             }
             Column::Variant(c) => Ok(Cow::Owned(
@@ -135,15 +138,18 @@ impl FieldEncoderToString {
 
     fn write_nested_to(&self, column: &Column, row_index: usize, out: &mut String) -> Result<()> {
         match column {
+            Column::Encoded(c) => c.with_row(row_index, |column, row| {
+                self.write_nested_to(column, row, out)
+            })?,
             // simple
             Column::Null { .. } => out.push_str(NULL_BYTES_UPPER),
             Column::EmptyArray { .. } => out.push_str("[]"),
             Column::EmptyMap { .. } => out.push_str("{}"),
             Column::Nullable(c) => {
-                if !c.validity.get_bit(row_index) {
+                if !c.validity().get_bit(row_index) {
                     out.push_str(NULL_BYTES_UPPER);
                 } else {
-                    self.write_nested_to(&c.column, row_index, out)?;
+                    self.write_nested_to(c.column(), row_index, out)?;
                 }
             }
             Column::Boolean(c) => out.push_str(self.bool_text(c.get_bit(row_index))),

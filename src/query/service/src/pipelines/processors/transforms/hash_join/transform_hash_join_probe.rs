@@ -514,7 +514,7 @@ impl TransformHashJoinProbe {
     fn finish_build(&self) -> Result<()> {
         let old_count = self
             .join_probe_state
-            .wait_probe_counter
+            .unfinished_counter
             .fetch_sub(1, Ordering::AcqRel);
         if old_count == 1 {
             self.join_probe_state
@@ -530,6 +530,11 @@ impl TransformHashJoinProbe {
             self.join_probe_state.hash_join_state.reset();
             let hashtable = unsafe { &mut *self.join_probe_state.hash_join_state.hash_table.get() };
             *hashtable = HashJoinHashTable::Null;
+            self.join_probe_state
+                .hash_join_state
+                .raw_entry_spaces
+                .lock()
+                .clear();
         }
         Ok(())
     }

@@ -45,6 +45,9 @@ fn test_decode_v152_table_meta() -> anyhow::Result<()> {
         cluster_key: None,
         cluster_key_v2: None,
         cluster_key_seq: 0,
+        partition_key_seq: 0,
+        partition_key_id: None,
+        ttl: None,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s(""),
@@ -54,6 +57,7 @@ fn test_decode_v152_table_meta() -> anyhow::Result<()> {
         drop_on: None,
         statistics: Default::default(),
         column_mask_policy: None,
+        masking_where_use_unmasked_value: Default::default(),
         column_mask_policy_columns_ids: {
             let mut map = BTreeMap::new();
             map.insert(2, mt::SecurityPolicyColumnMap {

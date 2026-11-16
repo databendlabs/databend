@@ -27,6 +27,7 @@ use crate::runtime::metrics::MetricValue;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyLabels;
+use crate::runtime::metrics::family::FamilyMember;
 use crate::runtime::metrics::family::FamilyMetric;
 use crate::runtime::metrics::registry::DatabendMetric;
 
@@ -82,6 +83,16 @@ impl<Labels: FamilyLabels> FamilyCounter<Labels> {
 
     pub fn reset(&self) {
         self.value.store(0, Ordering::Release)
+    }
+}
+
+impl<Labels: FamilyLabels> FamilyMember<Labels, FamilyCounter<Labels>> {
+    pub fn inc_by(&self, v: u64) {
+        self.with(|counter| counter.inc_by(v));
+    }
+
+    pub fn get(&self) -> u64 {
+        self.with(|counter| counter.get())
     }
 }
 

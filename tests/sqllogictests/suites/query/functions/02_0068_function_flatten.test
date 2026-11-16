@@ -47,3 +47,10 @@ select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'
 query ITTI??
 select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'), recursive => true, mode => 'array')
 ----
+
+
+query TI
+SELECT srf, get(5)(srf) AS val FROM (SELECT flatten(parse_json('{"a":1}')) AS srf) AS t;
+----
+(1,"a","a",NULL,1,{"a":1}) 1
+

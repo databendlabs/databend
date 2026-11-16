@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_settings::FlightCompression;
 
@@ -40,6 +41,11 @@ pub trait ExchangeInjector: Send + Sync + 'static {
     ) -> Result<Arc<Box<dyn FlightScatter>>>;
 
     fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>>;
+
+    /// Schema of the blocks without a schema of their own sent through a global shuffle.
+    fn global_shuffle_schema(&self, schema: &DataSchemaRef) -> DataSchemaRef {
+        schema.clone()
+    }
 
     fn apply_merge_serializer(
         &self,
@@ -84,7 +90,6 @@ impl ExchangeInjector for DefaultExchangeInjector {
     ) -> Result<Arc<Box<dyn FlightScatter>>> {
         Ok(Arc::new(match exchange {
             DataExchange::Merge(_) => unreachable!(),
-            DataExchange::GlobalShuffleExchange(_) => unreachable!(),
             DataExchange::Broadcast(exchange) => Box::new(BroadcastFlightScatter::try_create(
                 exchange.destination_ids.len(),
             )?),
@@ -99,6 +104,24 @@ impl ExchangeInjector for DefaultExchangeInjector {
                     ctx.get_function_context()?,
                     exchange.shuffle_keys.clone(),
                     exchange.destination_ids.len(),
+                    local_pos,
+                )?
+            }
+            DataExchange::GlobalShuffleExchange(exchange) => {
+                // Partitions are the threads of all nodes, in the order of the destinations.
+                let local_id = &ctx.get_cluster().local_id;
+                let mut partitions = 0;
+                let mut local_pos = 0;
+                for (destination, channels) in &exchange.destination_channels {
+                    if destination == local_id {
+                        local_pos = partitions;
+                    }
+                    partitions += channels.len();
+                }
+                HashFlightScatter::try_create(
+                    ctx.get_function_context()?,
+                    exchange.shuffle_keys.clone(),
+                    partitions,
                     local_pos,
                 )?
             }

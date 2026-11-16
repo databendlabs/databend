@@ -214,7 +214,7 @@ impl CopyIntoTablePlan {
             }
             info!(
                 "[COPY-PLANNER] Force mode enabled, skipping file filtering for table {}.{}",
-                &self.database_name, &self.table_name
+                self.database_name, self.table_name
             );
             (all_source_file_infos, vec![])
         } else {

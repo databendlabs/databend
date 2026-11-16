@@ -359,9 +359,7 @@ impl MergeIntoBlockInfoIndex {
                 if self.intervals[left].0 == start as u32 {
                     res.push(self.prefixs[left]);
                 }
-                for idx in left + 1..right {
-                    res.push(self.prefixs[idx]);
-                }
+                res.extend_from_slice(&self.prefixs[left + 1..right]);
                 // 2. right most side.
                 if self.intervals[right].1 == (end - 1) as u32 {
                     res.push(self.prefixs[right]);

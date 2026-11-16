@@ -10,9 +10,8 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 cargo_metadata = { workspace = true }
-gix = { workspace = true }
 log = { workspace = true }
-vergen-gix = { workspace = true }
+vergen-gitcl = { workspace = true }
 
 [lints]
 workspace = true

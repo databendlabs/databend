@@ -101,6 +101,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_version_without_nightly() {
+        assert!(!DATABEND_GIT_SEMVER.ends_with("-nightly"));
+        assert_ne!(DATABEND_SEMVER.pre.as_str(), "nightly");
+
+        let prefix = format!("{DATABEND_GIT_SEMVER}-{VERGEN_GIT_SHA}");
+        assert!(DATABEND_COMMIT_VERSION.starts_with(&prefix));
+        assert!(METASRV_COMMIT_VERSION.starts_with(&prefix));
+    }
+
+    #[test]
     fn test_basic_version() -> Result<(), regex::Error> {
         assert_eq!(VERGEN_GIT_SHA.len(), 10);
 

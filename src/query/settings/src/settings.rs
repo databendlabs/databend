@@ -150,7 +150,7 @@ impl<'de> serde::Deserialize<'de> for Settings {
         #[derive(serde::Deserialize)]
         struct DeserializeSettings {
             tenant: String,
-            changes: DashMap<String, ChangeValue>,
+            changes: HashMap<String, ChangeValue>,
         }
 
         let deserialize_settings =
@@ -160,10 +160,14 @@ impl<'de> serde::Deserialize<'de> for Settings {
             Some(config) => config.query.settings.clone(),
         };
 
+        // As few shards as in `Settings::create`.
+        let mut changes = DashMap::with_shard_amount(4);
+        changes.extend(deserialize_settings.changes);
+
         Ok(Settings {
             configs,
             tenant: Tenant::new_literal(&deserialize_settings.tenant),
-            changes: Arc::new(deserialize_settings.changes),
+            changes: Arc::new(changes),
             query_level_change: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -177,7 +181,9 @@ impl Settings {
         };
         Arc::new(Settings {
             tenant,
-            changes: Arc::new(DashMap::new()),
+            // A handful of entries, read on every `get_settings`: few shards keep
+            // `is_empty` and iteration from locking `4 * cores` shards each time.
+            changes: Arc::new(DashMap::with_shard_amount(4)),
             configs,
             query_level_change: Arc::new(AtomicBool::new(false)),
         })
@@ -342,6 +348,41 @@ mod tests {
     use crate::DefaultSettings;
     use crate::ScopeLevel;
     use crate::Settings;
+
+    #[test]
+    fn test_recluster_inverted_index_merge_setting() -> Result<()> {
+        let settings = Settings::create(Tenant::new_literal("test"));
+        assert!(settings.get_enable_recluster_inverted_index_merge()?);
+        settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
+        let remote: Settings = serde_json::from_str(&serde_json::to_string(&settings)?)?;
+        assert!(remote.get_enable_recluster_inverted_index_merge()?);
+        assert!(
+            settings
+                .set_setting("enable_recluster_inverted_index_merge".into(), "2".into())
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_recluster_multiway_merge_setting() -> Result<()> {
+        let settings = Settings::create(Tenant::new_literal("test_tenant"));
+        // Disabled by default; users opt in per session or globally.
+        assert!(!settings.get_enable_recluster_multiway_merge()?);
+        settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+        assert!(settings.get_enable_recluster_multiway_merge()?);
+        // Flight's QueryEnv transports Settings by serde, including session changes.
+        let remote: Settings = serde_json::from_str(&serde_json::to_string(&settings)?)?;
+        assert!(remote.get_enable_recluster_multiway_merge()?);
+        assert!(
+            settings
+                .set_setting("enable_recluster_multiway_merge".into(), "2".into())
+                .is_err()
+        );
+        settings.set_setting("enable_recluster_multiway_merge".into(), "0".into())?;
+        assert!(!settings.get_enable_recluster_multiway_merge()?);
+        Ok(())
+    }
 
     #[test]
     fn test_serialize_and_deserialize_settings() -> Result<()> {

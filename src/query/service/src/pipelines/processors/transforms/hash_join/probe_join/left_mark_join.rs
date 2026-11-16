@@ -339,8 +339,8 @@ impl HashJoinProbeState {
 
         let filter_viewer =
             self.get_nullable_filter_column(&result_block, other_predicate, &self.func_ctx)?;
-        let validity = &filter_viewer.validity;
-        let data = &filter_viewer.column;
+        let validity = filter_viewer.validity();
+        let data = filter_viewer.column();
 
         for (idx, build_index) in build_indexes[0..matched_idx].iter().enumerate() {
             unsafe {

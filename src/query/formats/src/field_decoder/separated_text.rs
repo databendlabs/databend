@@ -33,6 +33,7 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::variant::JSONB_NULL;
 use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
@@ -47,12 +48,12 @@ use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TextFileFormatParams;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
-use num_traits::NumCast;
 
 use crate::InputCommonSettings;
 use crate::NestedValues;
 use crate::binary::decode_binary;
 use crate::field_decoder::FieldDecoder;
+use crate::field_decoder::common::read_int_from_decimal_text;
 use crate::field_decoder::common::read_timestamp;
 use crate::field_decoder::common::read_timestamp_tz;
 
@@ -189,7 +190,7 @@ impl SeparatedTextDecoder {
     fn read_int<T>(&self, column: &mut Vec<T>, data: &[u8]) -> Result<()>
     where
         T: Number + From<T::Native>,
-        T::Native: FromLexical + NumCast,
+        T::Native: FromLexical,
     {
         // can not use read_num_text_exact directly, because we need to allow int like '1.0'
         let (n_in, effective) = collect_number(data);
@@ -198,23 +199,15 @@ impl SeparatedTextDecoder {
         }
         let val: Result<T::Native> = read_num_text_exact(&data[..effective]);
         let v = match val {
-            Ok(v) => v,
-            Err(_) => {
-                // cast float value to integer value
-                let val: f64 = read_num_text_exact(&data[..effective])?;
-                let new_val: Option<T::Native> = if self.common_settings.settings.is_rounding_mode {
-                    num_traits::cast::cast(val.round())
-                } else {
-                    num_traits::cast::cast(val)
-                };
-                if let Some(v) = new_val {
-                    v
-                } else {
-                    return Err(ErrorCode::BadBytes(format!("number {} is overflowed", val)));
-                }
-            }
+            Ok(v) => v.into(),
+            // Not a plain integer (e.g. '1.5', '1.76e18' or out of range):
+            // parse it as an exact decimal so no precision is lost via f64.
+            Err(_) => read_int_from_decimal_text(
+                &data[..effective],
+                self.common_settings.settings.is_rounding_mode,
+            )?,
         };
-        column.push(v.into());
+        column.push(v);
         Ok(())
     }
 
@@ -234,7 +227,12 @@ impl SeparatedTextDecoder {
         size: DecimalSize,
         data: &[u8],
     ) -> Result<()> {
-        let (n, n_read) = read_decimal_with_size(data, size, false, true)?;
+        let (n, n_read) = read_decimal_with_size(
+            data,
+            size,
+            false,
+            self.common_settings.settings.is_rounding_mode,
+        )?;
         if n_read != data.len() {
             return Err(ErrorCode::BadBytes(
                 "unexpected remaining bytes".to_string(),
@@ -282,6 +280,8 @@ impl SeparatedTextDecoder {
             }
             Err(e) => {
                 if self.common_settings.settings.disable_variant_check {
+                    // Store an unparsable value as JSON null: empty bytes are not valid JSONB.
+                    column.put_slice(JSONB_NULL);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(e.to_string()));

@@ -1,0 +1,77 @@
+# Read definitions written by 1.2.833, not definitions recreated with current code.
+# Current-only name resolution is covered by query/cte/name_conflict.test.
+
+statement ok
+create database compat_view_cte_other
+
+statement ok
+use compat_view_cte_other
+
+statement ok
+set enable_auto_materialize_cte = 1
+
+query I
+select * from compat_view_cte.v_shadow
+----
+99
+
+query I
+select * from compat_view_cte.v_missing
+----
+98
+
+query I
+select * from compat_view_cte.v_chain
+----
+6
+
+query I
+select * from compat_view_cte.v_scalar
+----
+97
+
+query II
+select * from compat_view_cte.v_repeated
+----
+99 99
+
+query I
+select * from compat_view_cte.v_recursive order by n
+----
+1
+2
+3
+
+# Also exercise a direct definition reader on actual old metadata.
+query I
+select count(*) from system.columns where database = 'compat_view_cte' and table = 'v_missing'
+----
+1
+
+# One assertion covers legacy lookup, restoration to strict lookup, and a scalar binder.
+query III
+with t as (select 77::int as n) select v.n, r.n, (select n from compat_view_cte.t) from compat_view_cte.v_shadow v, compat_view_cte.t r
+----
+99 1 1
+
+# Rebuild once after the real upgrade to adopt strict table semantics. To retain
+# CTE intent instead, the user must supply the original unqualified CTE SQL.
+statement ok
+create or replace view compat_view_cte.v_shadow as with t as (select 99::int as n) select * from compat_view_cte.t
+
+query I
+select * from compat_view_cte.v_shadow
+----
+1
+
+statement ok
+unset enable_auto_materialize_cte
+
+statement ok
+use default
+
+statement ok
+drop database compat_view_cte_other
+
+statement ok
+drop database compat_view_cte

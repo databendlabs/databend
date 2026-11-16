@@ -175,3 +175,66 @@ select to_char(123,'0099');
 
 statement ok
 DROP TABLE IF EXISTS INT64_TBL;
+
+# A scalar format is reused across rows for all three numeric overloads.
+query TTT
+SELECT to_char(number::Int64, 'FM999.00'), to_char(number::Float32, 'FM999.00'), to_string(number::Float64, 'FM999.00') FROM numbers(3) ORDER BY number;
+----
+.00 .00 .00
+1.00 1.00 1.00
+2.00 2.00 2.00
+
+# Column formats retain per-row behavior.
+query TTT
+SELECT to_char(number::Int64, if(number = 1, 'FM000', 'FM999.00')), to_char(number::Float32, if(number = 1, 'FM000', 'FM999.00')), to_char(number::Float64, if(number = 1, 'FM000', 'FM999.00')) FROM numbers(3) ORDER BY number;
+----
+.00 .00 .00
+001 001 001
+2.00 2.00 2.00
+
+# Invalid formats in unselected branches must not report errors.
+query TTT
+SELECT if(number < 3, 'skipped', to_char(number::Int64, '9.9.9')), if(number < 3, 'skipped', to_char(number::Float32, '9.9.9')), if(number < 3, 'skipped', to_char(number::Float64, '9.9.9')) FROM numbers(3) ORDER BY number;
+----
+skipped skipped skipped
+skipped skipped skipped
+skipped skipped skipped
+
+# NULL numeric inputs suppress cached parse errors, even in partially selected branches.
+query TTT
+SELECT if(number != 1, 'skipped', to_char(if(number = 1, NULL, number::Int64), '9.9.9')), if(number != 1, 'skipped', to_char(if(number = 1, NULL, number::Float32), '9.9.9')), if(number != 1, 'skipped', to_char(if(number = 1, NULL, number::Float64), '9.9.9')) FROM numbers(3) ORDER BY number;
+----
+skipped skipped skipped
+NULL NULL NULL
+skipped skipped skipped
+
+query TTT
+SELECT to_char(number::Int64, NULL), to_char(number::Float32, NULL), to_char(number::Float64, NULL) FROM numbers(3) ORDER BY number;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+# Invalid column formats on NULL rows are also ignored.
+query T
+SELECT to_char(number::Int64, if(number = 1, NULL, 'FM999.00')) FROM numbers(3) ORDER BY number;
+----
+.00
+NULL
+2.00
+
+statement error multiple decimal points
+SELECT to_char(number::Int64, '9.9.9') FROM numbers(3);
+
+statement error multiple decimal points
+SELECT to_char(number::Float32, '9.9.9') FROM numbers(3);
+
+statement error multiple decimal points
+SELECT to_char(number::Float64, '9.9.9') FROM numbers(3);
+
+statement error multiple decimal points
+SELECT if(number = 0, 'skipped', to_char(number::Int64, '9.9.9')) FROM numbers(3);
+
+statement error multiple decimal points
+SELECT to_char(number::Int64, if(number = 1, '9.9.9', 'FM999.00')) FROM numbers(3);
+

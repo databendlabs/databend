@@ -76,35 +76,6 @@ fn test_unescape_string() {
 }
 
 #[test]
-fn test_mask_connection_info() {
-    let sql = r#"COPY INTO table1
-        FROM 's3://xx/yy
-        CONNECTION = (
-            ACCESS_KEY_ID = 'aaa' ,
-            SECRET_ACCESS_KEY = 'sss' ,
-            REGION = 'us-east-2'
-        )
-        PATTERN = '.*[.]csv'
-            FILE_FORMAT = (
-            TYPE = CSV,
-            FIELD_DELIMITER = '\t',
-            RECORD_DELIMITER = '\n',
-            SKIP_HEADER = 1
-        );"#;
-
-    let actual = mask_connection_info(sql);
-    // ACCESS_KEY_ID and SECRET_ACCESS_KEY are sensitive keys, their values get masked
-    // 'aaa' and 'sss' are <= 4 chars so fully masked
-    assert!(actual.contains("ACCESS_KEY_ID = '***'"));
-    assert!(actual.contains("SECRET_ACCESS_KEY = '***'"));
-    // REGION is not a sensitive key, should remain unchanged
-    assert!(actual.contains("REGION = 'us-east-2'"));
-    // Original secrets should not appear
-    assert!(!actual.contains("= 'aaa'"));
-    assert!(!actual.contains("= 'sss'"));
-}
-
-#[test]
 fn test_short_sql() {
     let max_length: u64 = 128;
     // Test case 1: SQL query shorter than 128 characters
@@ -124,7 +95,7 @@ fn test_short_sql() {
         expected_result_insert
     );
 
-    // Test case 3: SQL query longer than 128 characters but does not start with "INSERT"
+    // Test case 3: SQL query longer than 128 characters but not an INSERT or REPLACE
     let long_sql_update =
         "UPDATE users SET name = 'John' WHERE id = 1;".to_string() + &"id = 1 OR ".repeat(20); // Make sure this creates a string longer than 128 characters
     assert_eq!(
@@ -159,4 +130,37 @@ fn test_short_sql() {
         short_sql(emoji_sql.clone(), max_length),
         expected_emoji_result
     );
+
+    // Test case 7: the keyword matches in any case
+    let lower_sql_insert = long_sql_insert.replacen("INSERT", "insert", 1);
+    assert!(short_sql(lower_sql_insert, max_length).ends_with("more characters]"));
+
+    // Test case 8: more bytes than `max_length`, but not more graphemes
+    let multibyte_sql = "INSERT INTO t VALUES ('".to_string() + &"😊".repeat(100) + "')";
+    assert!(multibyte_sql.len() > 128 && multibyte_sql.graphemes(true).count() <= 128);
+    assert_eq!(short_sql(multibyte_sql.clone(), max_length), multibyte_sql);
+}
+
+#[test]
+fn test_short_sql_replace() {
+    for keyword in ["REPLACE", "replace", "RePlAcE"] {
+        let sql = format!(
+            "{keyword} INTO t ON (id) VALUES (1, '{}')",
+            "😊".repeat(128)
+        );
+        let original_length = sql.graphemes(true).count();
+        for max_length in [128, original_length, original_length + 1] {
+            let expected = if original_length > max_length {
+                let prefix: String = sql.graphemes(true).take(max_length).collect();
+                format!(
+                    "{prefix}...[{} more characters]",
+                    original_length - max_length
+                )
+            } else {
+                sql.clone()
+            };
+            assert_eq!(short_sql(sql.clone(), max_length as u64), expected);
+            assert_eq!(short_sql(format!(" \n {sql}"), max_length as u64), expected);
+        }
+    }
 }

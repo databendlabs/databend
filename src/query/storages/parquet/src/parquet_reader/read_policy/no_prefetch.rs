@@ -31,16 +31,15 @@ use super::policy::ReadPolicyImpl;
 use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::read_policy::utils::read_all;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
-use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::utils::BatchReadPlan;
 use crate::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_reader::utils::transform_record_batch;
-use crate::transformer::RecordBatchTransformer;
 
 pub struct NoPretchPolicyBuilder {
     projection: ProjectionMask,
     data_schema: DataSchema,
     field_levels: FieldLevels,
-    field_paths: Arc<Option<FieldPaths>>,
+    read_plan: Arc<Option<BatchReadPlan>>,
 }
 
 #[async_trait::async_trait]
@@ -50,7 +49,6 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
         mut row_group: InMemoryRowGroup<'_>,
         mut row_selection: Option<RowSelection>,
         _sorter: &mut Option<TopKSorter>,
-        transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
         filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
@@ -69,7 +67,7 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
                 &row_group,
                 predicate.field_levels(),
                 row_selection.clone(),
-                predicate.field_paths(),
+                predicate.read_plan(),
                 num_rows,
             )?;
             let filter = predicate.evaluate_block(&block)?;
@@ -97,10 +95,9 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
             row_selection,
         )?;
         Ok(Some(Box::new(NoPrefetchPolicy {
-            field_paths: self.field_paths.clone(),
+            read_plan: self.read_plan.clone(),
             data_schema: self.data_schema.clone(),
             reader,
-            transformer,
         })))
     }
 }
@@ -111,7 +108,7 @@ impl NoPretchPolicyBuilder {
         arrow_schema: Option<&arrow_schema::Schema>,
         data_schema: DataSchema,
         projection: ProjectionMask,
-        field_paths: Arc<Option<FieldPaths>>,
+        read_plan: Arc<Option<BatchReadPlan>>,
     ) -> Result<Box<dyn ReadPolicyBuilder>> {
         let field_levels = parquet_to_arrow_field_levels(
             schema,
@@ -122,7 +119,7 @@ impl NoPretchPolicyBuilder {
             field_levels,
             data_schema,
             projection,
-            field_paths,
+            read_plan,
         }))
     }
 }
@@ -130,29 +127,18 @@ impl NoPretchPolicyBuilder {
 /// This policy is for the case that predicate and topk are both [None].
 /// We can only read all the output columns and don't do any evaluation.
 pub struct NoPrefetchPolicy {
-    /// Field paths helping to traverse columns.
-    ///
-    /// If we use [`ProjectionMask`] to get inner columns of a struct,
-    /// the columns will be contains in a struct array in the read [`arrow_array::RecordBatch`].
-    ///
-    /// Therefore, if `field_paths` is [Some],
-    /// we should extract inner columns from the struct manually by traversing the nested column;
-    /// if `field_paths` is [None], we can skip the traversing.
-    field_paths: Arc<Option<FieldPaths>>,
+    /// Cached conversion for this projection, independent of the table engine.
+    read_plan: Arc<Option<BatchReadPlan>>,
     data_schema: DataSchema,
 
     reader: ParquetRecordBatchReader,
-    transformer: Option<RecordBatchTransformer>,
 }
 
 impl ReadPolicy for NoPrefetchPolicy {
     fn read_block(&mut self) -> Result<Option<DataBlock>> {
         let batch = self.reader.next().transpose()?;
-        if let Some(mut batch) = batch {
-            if let Some(transformer) = &mut self.transformer {
-                batch = transformer.process_record_batch(batch)?;
-            }
-            let block = transform_record_batch(&self.data_schema, &batch, &self.field_paths)?;
+        if let Some(batch) = batch {
+            let block = transform_record_batch(&self.data_schema, &batch, &self.read_plan)?;
             Ok(Some(block))
         } else {
             Ok(None)

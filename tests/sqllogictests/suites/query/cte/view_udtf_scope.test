@@ -1,0 +1,76 @@
+# SQL UDTF bodies bind independently, but their output must restore the caller's
+# definition scope before subsequent lateral FROM items are bound.
+
+statement ok
+create or replace database cte_udtf_caller
+
+statement ok
+create or replace database cte_udtf_view
+
+statement ok
+create table cte_udtf_caller.src(xs array(int))
+
+statement ok
+insert into cte_udtf_caller.src values ([11])
+
+statement ok
+create table cte_udtf_view.src(xs array(int))
+
+statement ok
+insert into cte_udtf_view.src values ([22])
+
+statement ok
+create or replace function cte_view_udtf() returns table(n int) as $$ select 1::int as n $$
+
+statement ok
+use cte_udtf_caller
+
+# A lateral subquery must receive the view scope, not the UDTF body's session scope.
+statement ok
+create view cte_udtf_view.v_lateral as select * from cte_view_udtf(), lateral (select 2::int as m) l
+
+query II
+select * from cte_udtf_view.v_lateral
+----
+1 2
+
+# The nested CTE leaves the physical src reference unqualified in the stored SQL.
+# Its scalar subquery must still bind in the view's namespace, not the session's.
+statement ok
+create view cte_udtf_view.v_unnest as select * from cte_view_udtf(), lateral unnest((select xs from src)) u where exists (with src as (select 1 as k) select * from src)
+
+query II
+select * from cte_udtf_view.v_unnest
+----
+1 22
+
+# Returning from view binding must also preserve the caller's namespace.
+query II
+select v.n, src.xs[1] from cte_udtf_view.v_unnest v, src
+----
+1 11
+
+statement ok
+use cte_udtf_view
+
+query II
+select * from v_lateral
+----
+1 2
+
+query II
+select * from v_unnest
+----
+1 22
+
+statement ok
+use default
+
+statement ok
+drop function cte_view_udtf
+
+statement ok
+drop database cte_udtf_view
+
+statement ok
+drop database cte_udtf_caller

@@ -30,7 +30,6 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
@@ -97,6 +96,7 @@ pub struct ColumnOrientedSegmentBuilder {
     bloom_filter_index_location: LocationsWithOption,
     bloom_filter_index_size: Vec<u64>,
     inverted_index_size: Vec<Option<u64>>,
+    inverted_index_metas: Vec<Option<Vec<u8>>>,
     virtual_block_meta: Vec<Option<VirtualBlockMeta>>,
     compression: Vec<u8>,
     create_on: Vec<Option<i64>>,
@@ -165,6 +165,13 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             .push(block_meta.bloom_filter_index_size);
         self.inverted_index_size
             .push(block_meta.inverted_index_size);
+        self.inverted_index_metas.push(
+            block_meta
+                .inverted_index_metas
+                .as_ref()
+                .map(|metas| encode(&MetaEncoding::MessagePack, metas))
+                .transpose()?,
+        );
         self.virtual_block_meta.push(block_meta.virtual_block_meta);
         self.compression.push(block_meta.compression.to_u8());
         self.create_on
@@ -215,15 +222,14 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 StringType::from_data(this.location.0),
                 UInt64Type::from_data(this.location.1),
             ]),
-            Column::Nullable(Box::new(NullableColumn::new(
-                Column::Tuple(vec![
-                    StringType::from_data(this.bloom_filter_index_location.locations),
-                    UInt64Type::from_data(this.bloom_filter_index_location.versions),
-                ]),
-                this.bloom_filter_index_location.validity.into(),
-            ))),
+            Column::Tuple(vec![
+                StringType::from_data(this.bloom_filter_index_location.locations),
+                UInt64Type::from_data(this.bloom_filter_index_location.versions),
+            ])
+            .wrap_nullable(Some(this.bloom_filter_index_location.validity.into())),
             UInt64Type::from_data(this.bloom_filter_index_size),
             UInt64Type::from_opt_data(this.inverted_index_size),
+            BinaryType::from_opt_data(this.inverted_index_metas),
             UInt8Type::from_data(this.compression),
             Int64Type::from_opt_data(this.create_on),
         ];
@@ -286,6 +292,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             bloom_filter_index_location: LocationsWithOption::new_with_capacity(block_per_segment),
             bloom_filter_index_size: Vec::with_capacity(block_per_segment),
             inverted_index_size: Vec::with_capacity(block_per_segment),
+            inverted_index_metas: Vec::with_capacity(block_per_segment),
             virtual_block_meta: Vec::with_capacity(block_per_segment),
             compression: Vec::with_capacity(block_per_segment),
             create_on: Vec::with_capacity(block_per_segment),

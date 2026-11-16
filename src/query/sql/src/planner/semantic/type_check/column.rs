@@ -29,6 +29,7 @@ use derive_visitor::VisitorMut;
 
 use super::TypeCheckAdapter;
 use super::TypeChecker;
+use crate::ColumnEntry;
 use crate::binder::NameResolutionResult;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
@@ -75,7 +76,33 @@ where A: TypeCheckAdapter
 
         let (scalar, data_type) = match result {
             NameResolutionResult::Column(column) => {
+                // A path expression constructs virtual bindings internally. An SQL identifier
+                // must not expose those raw bindings after a policy or WHERE created them.
+                let raw_masked_virtual = {
+                    let metadata = self.metadata.read();
+                    match metadata.columns().get(column.index.as_usize()) {
+                        Some(ColumnEntry::VirtualColumn(virtual_column)) => metadata
+                            .table(virtual_column.table_index)
+                            .table()
+                            .get_table_info()
+                            .meta
+                            .column_mask_policy_columns_ids
+                            .contains_key(&virtual_column.source_column_id),
+                        _ => false,
+                    }
+                };
+                if raw_masked_virtual {
+                    return Err(ErrorCode::SemanticError(
+                        "Internal virtual columns of masked columns cannot be referenced by name",
+                    )
+                    .set_span(span));
+                }
                 if let Some(virtual_expr) = column.virtual_expr {
+                    if self.forbid_virtual_computed_column {
+                        return Err(ErrorCode::SemanticError(
+                            "TTL expression must not reference a virtual computed column",
+                        ));
+                    }
                     let sql_tokens = tokenize_sql(virtual_expr.as_str())?;
                     let expr = parse_expr(&sql_tokens, self.dialect)?;
                     return self.resolve(&expr);
@@ -83,7 +110,8 @@ where A: TypeCheckAdapter
                     // Fast path: Check if table has any masking policies at all before doing expensive async work
                     // BUT: skip masking policy application if we're already resolving a masking policy expression
                     // to prevent infinite recursion (e.g., policy references the masked column itself)
-                    let has_masking_policy = !self.in_masking_policy
+                    let has_masking_policy = self.apply_masking_policy
+                        && !self.in_masking_policy
                         // Does this column reference a table with masking policy?
                         && column
                             .table_index
@@ -134,6 +162,12 @@ where A: TypeCheckAdapter
                                         .iter()
                                         .find(|f| f.name == column.column_name)
                                         .and_then(|field| {
+                                            if self.masking_where_aliases.is_some()
+                                                && table_info.meta.masking_where_use_unmasked_value.contains(&field.column_id)
+                                                && matches!(metadata.columns().get(column.index.as_usize()), Some(ColumnEntry::BaseTableColumn(_)))
+                                            {
+                                                return None;
+                                            }
                                             table_info
                                                 .meta
                                                 .column_mask_policy_columns_ids
@@ -183,7 +217,25 @@ where A: TypeCheckAdapter
                 let data_type = *column.data_type.clone();
                 (BoundColumnRef { span, column }.into(), data_type)
             }
-            NameResolutionResult::Alias { scalar, .. } => {
+            NameResolutionResult::Alias { alias, scalar } => {
+                let original = self
+                    .masking_where_aliases
+                    .as_ref()
+                    .and_then(|aliases| aliases.iter().find(|(name, _)| name == &alias))
+                    .map(|(_, expr)| expr.clone());
+                if !self.in_masking_policy
+                    && let Some(original) = original
+                {
+                    if self.resolving_masking_where_aliases.contains(&alias) {
+                        return Err(
+                            ErrorCode::SemanticError("Recursive WHERE alias").set_span(span)
+                        );
+                    }
+                    self.resolving_masking_where_aliases.push(alias);
+                    let result = self.resolve(&original);
+                    self.resolving_masking_where_aliases.pop();
+                    return result;
+                }
                 (scalar.clone(), scalar.data_type().into_owned())
             }
         };

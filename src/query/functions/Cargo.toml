@@ -7,6 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+argminmax = { workspace = true }
 base64 = { workspace = true }
 blake3 = { workspace = true }
 borsh = { workspace = true }
@@ -30,10 +31,12 @@ databend-functions-scalar-geo = { workspace = true }
 databend-functions-scalar-integer-basic-arithmetic = { workspace = true }
 databend-functions-scalar-math = { workspace = true }
 databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
+encoding_rs = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }
 glob = { workspace = true }
 hex = { workspace = true }
+inventory = { workspace = true }
 itertools = { workspace = true }
 jaq-core = { workspace = true }
 jaq-json = { workspace = true }
@@ -43,9 +46,11 @@ libm = { workspace = true }
 match-template = { workspace = true }
 md-5 = { workspace = true }
 naive-cityhash = { workspace = true }
+num-bigint = { workspace = true }
 num-traits = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
+regex-syntax = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = { workspace = true }

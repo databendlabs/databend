@@ -50,6 +50,21 @@
 /// ```
 #[macro_export]
 macro_rules! impl_try_from_rel_operator {
+    (@enum $operator:ident, $variant:ident, $payload:ident) => {
+        impl TryFrom<$operator> for $payload {
+            type Error = ErrorCode;
+            fn try_from(value: $operator) -> Result<Self> {
+                if let $operator::$variant(value) = value { Ok(value) }
+                else { Err(ErrorCode::Internal(format!("Cannot downcast {:?} to {}", value.rel_op(), stringify!($payload)))) }
+            }
+        }
+        impl From<$payload> for $operator {
+            fn from(value: $payload) -> Self { Self::$variant(value) }
+        }
+        impl From<$payload> for Arc<$operator> {
+            fn from(value: $payload) -> Self { Arc::new($operator::$variant(value)) }
+        }
+    };
     // For a single type
     ($ty:ident) => {
         impl TryFrom<RelOperator> for $ty {
@@ -88,33 +103,44 @@ macro_rules! impl_try_from_rel_operator {
 #[macro_export]
 macro_rules! impl_match_rel_op {
     ($self:ident, $rel_op:ident, $method:ident, $($arg:expr),*) => {
+        $crate::impl_match_rel_op!(@enum RelOperator, $self, $rel_op, $method, $($arg),*)
+    };
+    (@enum PhysicalRelOperator, $self:ident, $rel_op:ident, $method:ident, $($arg:expr),*) => {
+        $crate::impl_match_rel_op!(@dispatch PhysicalRelOperator, $self, $rel_op, $method, [$($arg),*], [
+            PhysicalRelOperator::Exchange($rel_op) => $rel_op.$method($($arg),*),
+        ])
+    };
+    (@enum RelOperator, $self:ident, $rel_op:ident, $method:ident, $($arg:expr),*) => {
+        $crate::impl_match_rel_op!(@dispatch RelOperator, $self, $rel_op, $method, [$($arg),*], [])
+    };
+    (@dispatch $operator:ident, $self:ident, $rel_op:ident, $method:ident, [$($arg:expr),*], [$($extra_arms:tt)*]) => {
         match $self {
-            RelOperator::Scan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Join($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::EvalScalar($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Filter($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Aggregate($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Sort($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Limit($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::TopN($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Exchange($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::UnionAll($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::DummyTableScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Window($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::WindowGroup($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::ProjectSet($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::ConstantTableScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::ExpressionScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::CacheScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Udf($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::RecursiveCteScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::AsyncFunction($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Mutation($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::CompactBlock($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::MutationSource($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::MaterializedCTE($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::MaterializedCTERef($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Sequence($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Scan($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Join($rel_op) => $rel_op.$method($($arg),*),
+            $operator::EvalScalar($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Filter($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Aggregate($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Sort($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Limit($rel_op) => $rel_op.$method($($arg),*),
+            $operator::TopN($rel_op) => $rel_op.$method($($arg),*),
+            $operator::UnionAll($rel_op) => $rel_op.$method($($arg),*),
+            $operator::DummyTableScan($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Window($rel_op) => $rel_op.$method($($arg),*),
+            $operator::WindowGroup($rel_op) => $rel_op.$method($($arg),*),
+            $operator::ProjectSet($rel_op) => $rel_op.$method($($arg),*),
+            $operator::ConstantTableScan($rel_op) => $rel_op.$method($($arg),*),
+            $operator::ExpressionScan($rel_op) => $rel_op.$method($($arg),*),
+            $operator::CacheScan($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Udf($rel_op) => $rel_op.$method($($arg),*),
+            $operator::RecursiveCteScan($rel_op) => $rel_op.$method($($arg),*),
+            $operator::AsyncFunction($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Mutation($rel_op) => $rel_op.$method($($arg),*),
+            $operator::CompactBlock($rel_op) => $rel_op.$method($($arg),*),
+            $operator::MutationSource($rel_op) => $rel_op.$method($($arg),*),
+            $operator::MaterializedCTE($rel_op) => $rel_op.$method($($arg),*),
+            $operator::MaterializedCTERef($rel_op) => $rel_op.$method($($arg),*),
+            $operator::Sequence($rel_op) => $rel_op.$method($($arg),*),
+            $($extra_arms)*
         }
     }
 }

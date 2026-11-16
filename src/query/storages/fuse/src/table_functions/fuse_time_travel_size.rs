@@ -30,6 +30,7 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
+use databend_storages_common_cache::CachePolicy;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Operator;
@@ -253,7 +254,8 @@ async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, Result<u64>)> {
         Some(snapshot_location) => {
             let start = std::time::Instant::now();
             info!("fuse_time_travel_size will read: {}", snapshot_location);
-            let snapshot = SnapshotsIO::read_snapshot(snapshot_location, operator, true).await;
+            let snapshot =
+                SnapshotsIO::read_snapshot(snapshot_location, operator, CachePolicy::DEFAULT).await;
             info!("read_snapshot cost: {:?}", start.elapsed());
             snapshot.map(|(snapshot, _)| {
                 snapshot.summary.compressed_byte_size + snapshot.summary.index_size

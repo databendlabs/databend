@@ -356,7 +356,7 @@ create table tb101 (id int ,c1 datetime) 's3://wubx/tb101' connection=(aws_key_i
 statement ok
 drop table if exists tt_v2
 
-statement error 3001
+statement error 1301
 create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx'
 
 statement error 1301
@@ -377,7 +377,7 @@ create or replace table t_random(a int) engine=RANDOM seed='123'
 statement error 1301
 create table t(a int) snapshot_loc='xxx'
 
-statement error 3001
+statement error 1301
 create table t(a int) snapshot_location='xxx'
 
 statement error 1301
@@ -652,6 +652,52 @@ create table t(a int) cluster by (a+rand())
 
 statement error 1081.*is not deterministic
 create table t(a string) cluster by (a+uuid())
+
+# Context functions fold to literals before the deterministic check, so they
+# must be rejected up front (issue #19833).
+statement error depends on the session or query context
+create table t(a int) cluster by (concat(to_string(a), current_database()))
+
+statement error depends on the session or query context
+create table t(a int) cluster by (a + getvariable('x'))
+
+statement error depends on the session or query context
+create table t(a string, b string as (concat(a, current_database())) stored)
+
+statement error depends on the session or query context
+create table t(a string, b string as (concat(a, current_user())) virtual)
+
+statement error depends on the session or query context
+create table t(a int, b int null as (a + getvariable('x')) stored)
+
+# Persisted expressions have no UDF loading capability, including pure SQL UDFs.
+statement ok
+create or replace function ctx_pure_udf as (x) -> x + 1
+
+statement error UDFs are not allowed in persisted or storage-level expressions
+create table t(a int, b int as (ctx_pure_udf(a)) stored)
+
+statement error UDFs are not allowed in persisted or storage-level expressions
+create table t(a int) cluster by (ctx_pure_udf(a))
+
+statement ok
+drop function ctx_pure_udf
+
+# The default null order of array_sort() is a session setting.
+statement error depends on the session or query context
+create table t(a array(int), b array(int) as (array_sort(a)) stored)
+
+statement ok
+create or replace table t_ctx(a int)
+
+statement error depends on the session or query context
+alter table t_ctx cluster by (concat(to_string(a), current_database()))
+
+statement error depends on the session or query context
+alter table t_ctx add column b string as (concat(to_string(a), current_database())) virtual
+
+statement ok
+drop table t_ctx
 
 statement ok
 create or replace table tt(a tuple(x int, y int), b string, c int) cluster by (b);

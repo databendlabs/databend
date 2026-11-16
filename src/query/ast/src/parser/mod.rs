@@ -22,6 +22,9 @@ macro_rules! try_dispatch {
             } {
                 match result {
                     Ok(output) => return Ok(output),
+                    Err(nom::Err::Failure(error)) if error.is_expression_limit() => {
+                        return Err(nom::Err::Failure(error));
+                    }
                     Err(nom::Err::Error(error) | nom::Err::Failure(error)) => {
                         dispatch_error = Some(error);
                     }
@@ -61,6 +64,7 @@ mod error;
 mod error_suggestion;
 pub mod expr;
 mod input;
+pub(crate) mod mask;
 #[allow(clippy::module_inception)]
 mod parser;
 pub mod query;
@@ -81,5 +85,11 @@ pub use error_suggestion::suggest_correction;
 pub use input::Dialect;
 pub use input::Input;
 pub use input::ParseMode;
+pub use mask::SqlSecrets;
+pub use mask::mask_log_sql_secrets;
+pub use mask::mask_raw_sql_secrets;
+pub use mask::mask_raw_sql_with_secrets;
+pub use mask::mask_sql_secrets;
+pub use mask::mask_url;
 pub use parser::*;
 pub use token::all_reserved_keywords;

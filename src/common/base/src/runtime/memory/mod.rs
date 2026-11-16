@@ -15,6 +15,7 @@
 mod alloc_error_hook;
 mod mem_stat;
 mod memory_manager;
+mod memory_meter;
 mod stat_buffer_global;
 mod stat_buffer_mem_stat;
 
@@ -28,5 +29,6 @@ pub use mem_stat::MemStat;
 pub use mem_stat::OutOfLimit;
 pub use mem_stat::ParentMemStat;
 pub use memory_manager::GLOBAL_QUERIES_MANAGER;
+pub use memory_meter::MemoryMeter;
 pub use stat_buffer_global::GlobalStatBuffer;
 pub use stat_buffer_mem_stat::MemStatBuffer;

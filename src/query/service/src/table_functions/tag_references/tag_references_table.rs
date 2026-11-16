@@ -19,6 +19,7 @@ use databend_common_ast::parser::parse_database_ref;
 use databend_common_ast::parser::parse_procedure_ref;
 use databend_common_ast::parser::parse_table_ref;
 use databend_common_ast::parser::parse_udf_ref;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -150,7 +151,7 @@ impl Table for TagReferencesTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         pipeline.add_source(
             |output| {
@@ -293,19 +294,17 @@ async fn collect_tag_references(
                 .get_stage(&tenant, stage_name)
                 .await?;
             // Check stage visibility
-            if ctx.get_settings().get_enable_experimental_rbac_check()? {
-                let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-                let is_visible = stage_info.is_temporary
-                    || visibility_checker.check_stage_visibility(&stage_info.stage_name)
-                    || (stage_info.stage_type == StageType::User
-                        && stage_info.stage_name == ctx.get_current_user()?.name);
-                if !is_visible {
-                    return Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied: privilege READ is required on stage '{}' for user '{}'",
-                        stage_name,
-                        ctx.get_current_user()?.identity().display(),
-                    )));
-                }
+            let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+            let is_visible = stage_info.is_temporary
+                || visibility_checker.check_stage_visibility(&stage_info.stage_name)
+                || (stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == ctx.get_current_user()?.name);
+            if !is_visible {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege READ is required on stage '{}' for user '{}'",
+                    stage_name,
+                    ctx.get_current_user()?.identity().display(),
+                )));
             }
             (
                 TaggableObject::Stage {
@@ -382,20 +381,15 @@ async fn collect_tag_references(
         "CONNECTION" => {
             let conn_name = object_name.trim();
             // Check connection visibility
-            if ctx
-                .get_settings()
-                .get_enable_experimental_connection_privilege_check()?
-            {
-                let visibility_checker = ctx
-                    .get_visibility_checker(false, Object::Connection)
-                    .await?;
-                if !visibility_checker.check_connection_visibility(conn_name) {
-                    return Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied: privilege AccessConnection is required on connection '{}' for user '{}'",
-                        conn_name,
-                        ctx.get_current_user()?.identity().display(),
-                    )));
-                }
+            let visibility_checker = ctx
+                .get_visibility_checker(false, Object::Connection)
+                .await?;
+            if !visibility_checker.check_connection_visibility(conn_name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege AccessConnection is required on connection '{}' for user '{}'",
+                    conn_name,
+                    ctx.get_current_user()?.identity().display(),
+                )));
             }
             // Validate connection exists
             UserApiProvider::instance()
@@ -531,7 +525,7 @@ async fn collect_tag_references(
                     .args_type
                     .iter()
                     .map(|t| {
-                        databend_common_sql::resolve_type_name(t, true).map(|dt| {
+                        databend_common_expression::resolve_type_name(t, true).map(|dt| {
                             databend_common_expression::types::DataType::from(&dt).to_string()
                         })
                     })
@@ -604,7 +598,7 @@ async fn collect_tag_references(
     let obj_names: Vec<String> = vec![obj_name; len];
     let domains: Vec<String> = vec![domain_upper; len];
 
-    for (tag, name_opt) in tags.iter().zip(tag_names_result.into_iter()) {
+    for (tag, name_opt) in tags.iter().zip(tag_names_result) {
         let name = name_opt
             .ok_or_else(|| ErrorCode::UnknownTag(format!("Unknown tag_id: {}", tag.tag_id)))?
             .data

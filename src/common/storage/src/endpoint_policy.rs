@@ -194,7 +194,7 @@ impl ProtectedSocket {
 }
 
 #[derive(Clone, Debug)]
-struct CompiledPolicy {
+pub(crate) struct CompiledPolicy {
     policy: EndpointUrlPolicy,
     allowed_hosts: Vec<String>,
     blocked_hosts: Vec<String>,
@@ -234,7 +234,7 @@ impl EndpointUrlPolicyRegistry {
         Ok(())
     }
 
-    fn policy() -> Arc<CompiledPolicy> {
+    pub(crate) fn policy() -> Arc<CompiledPolicy> {
         GlobalInstance::try_get().unwrap_or_else(|| {
             Arc::new(
                 CompiledPolicy::try_from(&EndpointUrlPolicyConfig::default())
@@ -375,7 +375,7 @@ impl CompiledPolicy {
         })
     }
 
-    async fn check_url_at_definition(&self, url: &Url) -> Result<()> {
+    pub(crate) async fn check_url_at_definition(&self, url: &Url) -> Result<()> {
         self.check_url_without_dns(url)?;
 
         let Some(host) = url.host_str() else {

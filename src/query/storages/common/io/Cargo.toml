@@ -8,6 +8,7 @@ edition = { workspace = true }
 
 [dependencies]
 async-backtrace = { workspace = true }
+async-channel = { workspace = true }
 bytes = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
@@ -19,6 +20,10 @@ futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

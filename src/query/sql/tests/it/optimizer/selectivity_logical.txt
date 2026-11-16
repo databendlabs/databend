@@ -114,7 +114,7 @@ out stats     :
 description: Boolean predicates should use an equal true/false distribution, while numeric estimates below the lower-bound threshold should take priority over AND fallbacks.
 expr          : and_filters(flag, number = 1)
 cardinality   : 100
-estimated     : 25
+estimated     : 12.5
 in stats      :
 1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
 out stats     :
@@ -122,7 +122,7 @@ out stats     :
 
 expr          : and_filters(flag = true, number = 1)
 cardinality   : 100
-estimated     : 25
+estimated     : 12.5
 in stats      :
 1 ColumnStat { min: UInt(0), max: UInt(3), ndv: 4.0, null_count: 0, histogram: None }
 out stats     :
@@ -214,59 +214,59 @@ expr          : a > 3, a > 4
 cardinality   : 100
 estimated     : 50
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(9), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(5), max: UInt(9), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }] }) }
 
 expr          : or_filters(a > 3, a > 4)
 cardinality   : 100
 estimated     : 80
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.999998976[..10.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.8, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.999998976[..10.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.8, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 
 expr          : not(a > 3)
 cardinality   : 100
 estimated     : 40
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[..10.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[..10.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 
 expr          : or_filters(missing = 1, a = 5)
 cardinality   : 100
 estimated     : 50
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 
 expr          : missing = 1
 cardinality   : 100
 estimated     : 50
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 
 expr          : and_filters(missing = 1, true)
 cardinality   : 100
 estimated     : 50
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 
 expr          : a >= 5, b >= 8
 cardinality   : 100
-estimated     : 20
+estimated     : 10
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(8), max: UInt(9), ndv: 2.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 8, upper_bound: 9, num_values: 20.0, num_distinct: 2.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~4.463129088[..5.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.2, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }] }) }
+1 ColumnStat { min: UInt(8), max: UInt(9), ndv: ~1.998046875[..2.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 8, upper_bound: 9, num_values: 20.0, num_distinct: 2.0 }] }) }
 
 === constant_folded_distribution_predicates ===
 description: Constant folding should compose with arithmetic distribution predicates and visible AND constraints.
@@ -274,31 +274,31 @@ expr          : a > 3, a + 1 > 6, 1 + 1 = 2
 cardinality   : 100
 estimated     : 40
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~5.99989838947315[..6.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.6666666666666666, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~5.99989838947315[..6.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.6666666666666666, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }] }) }
 
 expr          : or_filters(and_filters(a > 7, 1 = 0), a + 1 > 6)
 cardinality   : 100
 estimated     : 40
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[..10.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[..10.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }] }) }
 
 expr          : and_filters(a > 4, a + b > 10)
 cardinality   : 100
 estimated     : 20
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.463129088[..5.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.2, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.463129088[..5.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.2, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }] }) }
 
 === constant_logical_predicates ===
 description: Constant predicates should preserve Zero and All through logical composition.
@@ -429,4 +429,540 @@ out stats     :
 1 ColumnStat { min: UInt(0), max: UInt(0), ndv: ~0.9999998976[..1.0], null_count: 0, histogram: None }
 2 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.8[..5.0], null_count: 0, histogram: None }
 3 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.8[..5.0], null_count: 0, histogram: None }
+
+=== and_strategies ===
+description: Independent multiplies only disjoint groups; a bridge merges all intersecting groups regardless of conjunct order. Min takes the global minimum.
+expr          : and_filters(a = 5, b = 7)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 10000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, b = 7, c = 3)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 10000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(3), max: UInt(3), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, a != 3, b = 7)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 10000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a >= 2, a <= 6, b = 7)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 10000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(2), max: UInt(6), ndv: 5.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, or_filters(a = 1, b = 2))
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(a = 1, b = 2), a < 3, b < 10)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, c < 5, or_filters(a = 1, b = 2))
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(a = 1, b = 2), a < 3, b < 10, c < 5)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, c < 5, or_filters(or_filters(a = 1, b = 2), c = 1))
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(or_filters(a = 1, b = 2), c = 1), a < 3, b < 10, c < 5)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, c < 5, or_filters(a = 1, b = 2), or_filters(b = 2, c = 1))
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(b = 2, c = 1), a < 3, b < 10, c < 5, or_filters(a = 1, b = 2))
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : a = 5
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, true)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, false)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 0.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : true
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 1000000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : false
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 0.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a < 3, b < 10, or_filters(a = 1, b = 2)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : or_filters(a = 1, b = 2), a < 3, b < 10
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a < 3, b < 10, c < 5, or_filters(a = 1, b = 2), or_filters(b = 2, c = 1)
+and strategy  : Min
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, b = 7)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, b = 7, c = 3)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(3), max: UInt(3), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, a != 3, b = 7)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a >= 2, a <= 6, b = 7)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 5000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(2), max: UInt(6), ndv: 5.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, or_filters(a = 1, b = 2))
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(a = 1, b = 2), a < 3, b < 10)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, c < 5, or_filters(a = 1, b = 2))
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 50000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(a = 1, b = 2), a < 3, b < 10, c < 5)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 50000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, c < 5, or_filters(or_filters(a = 1, b = 2), c = 1))
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(or_filters(a = 1, b = 2), c = 1), a < 3, b < 10, c < 5)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a < 3, b < 10, c < 5, or_filters(a = 1, b = 2), or_filters(b = 2, c = 1))
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : and_filters(or_filters(b = 2, c = 1), a < 3, b < 10, c < 5, or_filters(a = 1, b = 2))
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : a = 5
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, true)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a = 5, false)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 0.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : true
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 1000000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : false
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 0.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : a < 3, b < 10, or_filters(a = 1, b = 2)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : or_filters(a = 1, b = 2), a < 3, b < 10
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+
+expr          : a < 3, b < 10, c < 5, or_filters(a = 1, b = 2), or_filters(b = 2, c = 1)
+and strategy  : Independent
+cardinality   : 1000000
+estimated     : 100000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(2), ndv: 3.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
+
+=== and_default_strategy ===
+description: The default strategy should behave like Independent.
+expr          : and_filters(a = 5, b = 7)
+cardinality   : 1000000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(99), ndv: 100.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(7), max: UInt(7), ndv: 1.0, null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 

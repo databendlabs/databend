@@ -63,20 +63,13 @@ impl AsyncSystemTable for StagesTable {
         let tenant = ctx.get_tenant();
 
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
-        let enable_experimental_rbac_check =
-            ctx.get_settings().get_enable_experimental_rbac_check()?;
-        let stages = if enable_experimental_rbac_check {
-            let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-            stages
-                .into_iter()
-                .filter(|stage| {
-                    !stage.is_temporary
-                        && visibility_checker.check_stage_visibility(&stage.stage_name)
-                })
-                .collect::<Vec<_>>()
-        } else {
-            stages
-        };
+        let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+        let stages = stages
+            .into_iter()
+            .filter(|stage| {
+                !stage.is_temporary && visibility_checker.check_stage_visibility(&stage.stage_name)
+            })
+            .collect::<Vec<_>>();
 
         let user_api = UserApiProvider::instance();
         let mut owners: Vec<Option<String>> = vec![];

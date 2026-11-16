@@ -29,6 +29,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -76,7 +77,9 @@ impl Operator for RecursiveCteScan {
             partition_orderings: None,
         }))
     }
+}
 
+impl PhysicalOperator for RecursiveCteScan {
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: Distribution::Serial,
