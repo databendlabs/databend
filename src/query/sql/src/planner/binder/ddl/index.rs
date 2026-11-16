@@ -857,6 +857,9 @@ pub fn validate_table_indexes_by_schema(
                 Binder::validate_spatial_index_columns(schema.clone(), &columns)?;
                 Binder::validate_spatial_index_options(&index.options).map(|_| ())
             }
+            TableIndexType::Bloom => Err(ErrorCode::UnsupportedIndex(
+                "BLOOM index is not supported by this release",
+            )),
         };
 
         result.map_err(|err| {
