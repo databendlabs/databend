@@ -823,21 +823,22 @@ where A: super::TypeCheckAdapter
 /// The state of a type checker that binding a lambda body sets, and restores
 /// after it.
 ///
-/// The body is bound as a type checker of its own would bind it: without
-/// SELECT aliases, nor the aliases of a WHERE that uses unmasked values, and
-/// not inside an aggregate function, a window function or a masking policy.
-/// Every other field is inherited from the expression around the lambda: the
-/// expression context of its clause, the grouping-key matching state and its
-/// memo, the folding policy, whether masking policies apply and whether
-/// virtual computed columns are forbidden, which are the mode of the whole
-/// binding, and the parameters of enclosing lambdas, whose presence tells
-/// that a body is bound.
+/// The body is bound without SELECT aliases, nor the aliases of a WHERE that
+/// uses unmasked values, and not inside an aggregate function or a window
+/// function. Every other field is inherited from the expression around the
+/// lambda: the expression context of its clause, the grouping-key matching
+/// state and its memo, the folding policy, whether masking policies apply and
+/// whether virtual computed columns are forbidden, which are the mode of the
+/// whole binding, and the parameters of enclosing lambdas, whose presence
+/// tells that a body is bound. Whether a masking policy is being bound is
+/// inherited too: a body in a policy is a part of it, and a column it refers
+/// to must not have the policy applied again, which would bind the policy
+/// without end.
 struct LambdaBodyState<'a> {
     aliases: AliasLookup<'a>,
     select_items: Option<SelectItems<'a>>,
     in_aggregate_function: bool,
     in_window_function: bool,
-    in_masking_policy: bool,
     masking_where_aliases: Option<(&'a CoreExprArena<'a>, &'a [(String, CoreExprId)])>,
     resolving_masking_where_aliases: Vec<String>,
 }
@@ -849,7 +850,6 @@ impl<'a> LambdaBodyState<'a> {
             select_items: checker.select_items.take(),
             in_aggregate_function: std::mem::take(&mut checker.in_aggregate_function),
             in_window_function: std::mem::take(&mut checker.in_window_function),
-            in_masking_policy: std::mem::take(&mut checker.in_masking_policy),
             masking_where_aliases: checker.masking_where_aliases.take(),
             resolving_masking_where_aliases: std::mem::take(
                 &mut checker.resolving_masking_where_aliases,
@@ -862,7 +862,6 @@ impl<'a> LambdaBodyState<'a> {
         checker.select_items = self.select_items;
         checker.in_aggregate_function = self.in_aggregate_function;
         checker.in_window_function = self.in_window_function;
-        checker.in_masking_policy = self.in_masking_policy;
         checker.masking_where_aliases = self.masking_where_aliases;
         checker.resolving_masking_where_aliases = self.resolving_masking_where_aliases;
     }
