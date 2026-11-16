@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use smallvec::SmallVec;
 
 use super::BATCH_SIZE;
+use super::DictValueHashes;
 use super::HASH_INDEX_LOAD_FACTOR;
 use super::HashIndex;
 use super::HashTableConfig;
@@ -48,14 +49,13 @@ const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
 #[derive(Default)]
 struct GroupKeyState {
-    dict_hashes: Option<Vec<u64>>,
+    dict_hashes: Option<DictValueHashes>,
     // Independent code dimensions: (group column index, mixed-radix stride).
     code_columns: SmallVec<[(usize, usize); 4]>,
     rank_of_code: Vec<u32>,
     code_addresses: Vec<RowPtr>,
     /// The states of the groups of `code_addresses`.
     code_places: Vec<StateAddr>,
-    row_offset: usize,
 }
 
 impl GroupKeyState {
@@ -95,12 +95,6 @@ impl GroupKeyState {
         self.rank_of_code.resize(code_space, u32::MAX);
         self.code_addresses.resize(code_space, RowPtr::null());
         self.code_places.resize(code_space, StateAddr::null());
-    }
-
-    fn dict_hashes(&self, row_count: usize) -> Option<&[u64]> {
-        self.dict_hashes
-            .as_deref()
-            .map(|hashes| &hashes[self.row_offset..self.row_offset + row_count])
     }
 }
 
@@ -194,16 +188,10 @@ impl AggregateHashTable {
     ) -> Result<usize> {
         let mut group_state = GroupKeyState::default();
         group_state.init_codes(group_columns, row_count);
-        if row_count > BATCH_SIZE {
-            // Probing by codes hashes only one representative row per code combination, so
-            // hashing every row of the block up front is only worth it without codes.
-            group_state.dict_hashes = (group_state.code_addresses.is_empty()
-                && group_columns.iter().any(BlockEntry::is_dict_encoded))
-            .then(|| {
-                let mut hashes = vec![0; row_count];
-                group_hash_entries(group_columns, &mut hashes);
-                hashes
-            });
+        // Probing by codes hashes only one representative row per code combination, so
+        // hashing the dictionaries up front is only worth it without codes.
+        if group_state.code_addresses.is_empty() {
+            group_state.dict_hashes = DictValueHashes::new(group_columns, row_count);
         }
 
         let mut new_count = 0;
@@ -212,8 +200,7 @@ impl AggregateHashTable {
             params,
             agg_states,
             row_count,
-            |group_columns, params, agg_states, start, rows| {
-                group_state.row_offset = start;
+            |group_columns, params, agg_states, _, rows| {
                 new_count += self.add_groups_inner(
                     state,
                     group_columns,
@@ -265,7 +252,9 @@ impl AggregateHashTable {
 
     /// Adaptive partial aggregation entry point. When the index is full it grows at once to
     /// `capacity`, or restarts in place once it is that large; the group hashes are fed to
-    /// `sampler` once it has started.
+    /// `sampler` once it has started. `dict_hashes` hash the dictionaries of the group columns
+    /// once for all the batches, see [`DictValueHashes`].
+    #[allow(clippy::too_many_arguments)]
     pub fn add_groups_partial(
         &mut self,
         state: &mut ProbeState,
@@ -274,6 +263,7 @@ impl AggregateHashTable {
         row_count: usize,
         capacity: usize,
         mut sampler: Option<&mut DistinctSampler>,
+        dict_hashes: Option<&DictValueHashes>,
     ) -> Result<PartialAddStats> {
         debug_assert!(self.config.partial_agg);
         let mut stats = PartialAddStats::default();
@@ -283,6 +273,11 @@ impl AggregateHashTable {
             (&[]).into(),
             row_count,
             |group_columns, params, _, _, rows| {
+                Self::fill_group_hashes(
+                    group_columns,
+                    &mut state.group_hashes[..rows],
+                    dict_hashes,
+                );
                 self.add_groups_partial_inner(
                     state,
                     group_columns,
@@ -337,18 +332,15 @@ impl AggregateHashTable {
         }
     }
 
+    /// Hash a batch of group keys, by the hashes of their dictionaries when there are some.
     fn fill_group_hashes(
         group_columns: ProjectedBlock,
         hashes: &mut [u64],
-        dict_hashes: Option<&[u64]>,
-        rows: impl IntoIterator<Item = usize>,
+        dict_hashes: Option<&DictValueHashes>,
     ) {
-        if let Some(dict_hashes) = dict_hashes {
-            for (hash, row) in hashes.iter_mut().zip(rows) {
-                *hash = dict_hashes[row];
-            }
-        } else {
-            group_hash_entries(group_columns, hashes);
+        match dict_hashes {
+            Some(dict_hashes) => dict_hashes.group_hash_entries(group_columns, hashes),
+            None => group_hash_entries(group_columns, hashes),
         }
     }
 
@@ -387,8 +379,7 @@ impl AggregateHashTable {
             Self::fill_group_hashes(
                 group_columns,
                 &mut state.group_hashes[..row_count],
-                group_state.dict_hashes(row_count),
-                0..row_count,
+                group_state.dict_hashes.as_ref(),
             );
             self.probe_and_create(state, GroupRows::Columns(group_columns), row_count, None)
         };
@@ -408,8 +399,8 @@ impl AggregateHashTable {
         mut sampler: Option<&mut DistinctSampler>,
         stats: &mut PartialAddStats,
     ) -> Result<()> {
+        // The caller filled `state.group_hashes`.
         state.row_count = row_count;
-        group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
         stats.rows += row_count;
 
         if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
@@ -598,12 +589,7 @@ impl AggregateHashTable {
 
             let distinct = representatives.len();
             state.row_count = distinct;
-            Self::fill_group_hashes(
-                (&keys).into(),
-                &mut state.group_hashes[..distinct],
-                group_state.dict_hashes(row_count),
-                representatives.iter().map(|row| *row as usize),
-            );
+            group_hash_entries((&keys).into(), &mut state.group_hashes[..distinct]);
             // Functions map dictionary values without changing codes, so distinct codes can
             // produce equal values. Probe representatives normally to find their actual groups
             // before reusing the addresses for rows with the same code.
@@ -914,7 +900,15 @@ mod tests {
                 }
                 let groups = ProjectedBlock::project(&[0], block);
                 let stats = ht
-                    .add_groups_partial(&mut state, groups, &[], block.num_rows(), capacity, None)
+                    .add_groups_partial(
+                        &mut state,
+                        groups,
+                        &[],
+                        block.num_rows(),
+                        capacity,
+                        None,
+                        None,
+                    )
                     .unwrap();
                 new_groups += stats.new_groups;
             }

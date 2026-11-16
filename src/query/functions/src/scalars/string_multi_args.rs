@@ -34,7 +34,6 @@ use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::array::ArrayColumnBuilder;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::string::StringDomain;
@@ -949,11 +948,9 @@ fn regexp_replace_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<An
             None
         }
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
-            regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)).ok()
+            regexp::ReplaceRegex::build("regexp_replace", pat, Some(mt)).ok()
         }
-        (Value::Scalar(pat), None) => {
-            regexp::build_regexp_from_pattern("regexp_replace", pat, None).ok()
-        }
+        (Value::Scalar(pat), None) => regexp::ReplaceRegex::build("regexp_replace", pat, None).ok(),
         _ => None,
     };
 
@@ -999,7 +996,7 @@ fn regexp_replace_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<An
 
         let mut local_re = None;
         if cached_reg.is_none() {
-            match regexp::build_regexp_from_pattern("regexp_replace", pat, mt) {
+            match regexp::ReplaceRegex::build("regexp_replace", pat, mt) {
                 Ok(re) => {
                     local_re = Some(re);
                 }
@@ -1136,7 +1133,7 @@ fn regexp_substr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<Any
     }
     match len {
         Some(_) => {
-            let col = NullableColumn::new_column(Column::String(builder.build()), validity.into());
+            let col = Column::String(builder.build()).wrap_nullable(Some(validity.into()));
             Value::Column(col)
         }
         _ => match validity.pop() {
@@ -1295,6 +1292,78 @@ pub mod regexp {
     use databend_common_expression::types::string::StringColumnBuilder;
     use regex::Regex;
     use regex::RegexBuilder;
+    use regex_syntax::ParserBuilder;
+    use regex_syntax::hir::Dot;
+    use regex_syntax::hir::Hir;
+    use regex_syntax::hir::HirKind;
+    use regex_syntax::hir::Look;
+
+    /// The regex of `regexp_replace`.
+    ///
+    /// A pattern `^P.*$` matches the same as `^P` on input without a newline, as `.*$` then
+    /// matches the rest of it. Resolving the capture groups of `^P` reads only the prefix of
+    /// the input the match needs rather than all of it, which is most of the cost of a
+    /// replacement: URL extractions as `^https?://([^/]+)/.*$` take a quarter of the time.
+    pub struct ReplaceRegex {
+        re: Regex,
+        anchored_prefix: Option<Regex>,
+    }
+
+    impl ReplaceRegex {
+        pub fn build(fn_name: &str, pat: &str, mt: Option<&str>) -> Result<Self, String> {
+            let re = build_regexp_from_pattern(fn_name, pat, mt)?;
+            let anchored_prefix = anchored_prefix(pat, mt)
+                .and_then(|prefix| build_regexp_from_pattern(fn_name, prefix, mt).ok());
+            Ok(ReplaceRegex {
+                re,
+                anchored_prefix,
+            })
+        }
+    }
+
+    /// `^P` of a pattern `^P.*$` parsed under the match type `mt`: anchored at the start of the
+    /// input, ending with a greedy `.*` that stops at newlines, then the end of the input.
+    fn anchored_prefix<'a>(pat: &'a str, mt: Option<&str>) -> Option<&'a str> {
+        let prefix = pat.strip_suffix(".*$")?;
+        let mut parser = ParserBuilder::new();
+        for c in match_type(mt).chars() {
+            match c {
+                'c' => parser.case_insensitive(false),
+                'i' => parser.case_insensitive(true),
+                'm' => parser.multi_line(true),
+                'n' => parser.dot_matches_new_line(true),
+                _ => return None,
+            };
+        }
+        let hir = parser.build().parse(pat).ok()?;
+        let HirKind::Concat(items) = hir.kind() else {
+            return None;
+        };
+        let [first, .., any, end] = items.as_slice() else {
+            return None;
+        };
+        let any_to_newline = matches!(any.kind(), HirKind::Repetition(rep)
+            if rep.min == 0 && rep.max.is_none() && rep.greedy
+                && *rep.sub == Hir::dot(Dot::AnyCharExceptLF));
+        if !any_to_newline
+            || *first.kind() != HirKind::Look(Look::Start)
+            || *end.kind() != HirKind::Look(Look::End)
+        {
+            return None;
+        }
+        // The prefix text must parse to the pattern without its last two items, e.g. not the
+        // prefix of an escaped `\.*$`.
+        let expected = Hir::concat(items[..items.len() - 2].to_vec());
+        (parser.build().parse(prefix).ok()? == expected).then_some(prefix)
+    }
+
+    /// The match type, `i` when it is not given.
+    fn match_type(mt: Option<&str>) -> &str {
+        match mt {
+            Some(mt) if !mt.is_empty() => mt,
+            _ => "i",
+        }
+    }
 
     #[inline]
     pub fn build_regexp_from_pattern(
@@ -1308,16 +1377,7 @@ pub mod regexp {
         };
 
         // the default match type value is 'i', if it is empty
-        let mt = match mt {
-            Some(mt) => {
-                if mt.is_empty() {
-                    "i"
-                } else {
-                    mt
-                }
-            }
-            None => "i",
-        };
+        let mt = match_type(mt);
 
         let mut builder = RegexBuilder::new(pattern);
 
@@ -1409,10 +1469,23 @@ pub mod regexp {
         0
     }
 
+    /// Conservatively detect references to the whole match before expanding on a prefix.
+    fn replacement_uses_capture_zero(repl: &str) -> bool {
+        // Unbraced numeric references to zero start with `$0`. Braced references accept
+        // anything up to `}`, parsed as usize, including a leading `+` and leading zeros.
+        // Escaped references may also disable the fast path, which is safe.
+        repl.contains("$0")
+            || repl.split("${").skip(1).any(|reference| {
+                reference
+                    .split_once('}')
+                    .is_some_and(|(name, _)| name.parse::<usize>() == Ok(0))
+            })
+    }
+
     #[inline]
     pub fn regexp_replace(
         s: &str,
-        re: &Regex,
+        re: &ReplaceRegex,
         repl: &str,
         pos: i64,
         occur: i64,
@@ -1432,6 +1505,25 @@ pub mod regexp {
 
         let (before_trimmed, trimmed) = (&s[..char_pos], &s[char_pos..]);
         builder.put_str(before_trimmed);
+
+        // An anchored pattern matches at most once, so `occur` 0 and 1 replace the same match:
+        // all of `trimmed`. `$0` would name the match of the prefix, not of the pattern.
+        if let Some(prefix) = &re.anchored_prefix
+            && (occur == 1 || (occur == 0 && !replacement_uses_capture_zero(repl)))
+            && !trimmed.contains('\n')
+        {
+            match prefix.captures(trimmed) {
+                None => builder.put_str(trimmed),
+                Some(captures) if occur == 0 => {
+                    let mut replaced = String::new();
+                    captures.expand(repl, &mut replaced);
+                    builder.put_str(&replaced);
+                }
+                Some(_) => builder.put_str(repl),
+            }
+            return;
+        }
+        let re = &re.re;
 
         // means we should replace all matched strings
         if occur == 0 {

@@ -66,9 +66,9 @@ fn expected_data_block(
             offsets: None,
             base_block_ids: None,
             inner: None,
-            matched_rows: block_meta.matched_rows.clone(),
-            matched_scores: block_meta.matched_scores.clone(),
-            // The table has no vector index.
+            // The table has no inverted or vector index.
+            matched_rows: None,
+            matched_scores: None,
             vector_scores: None,
         };
         let block = DataBlock::empty_with_rows(num_rows);

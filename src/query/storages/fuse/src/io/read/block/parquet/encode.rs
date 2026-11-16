@@ -115,9 +115,11 @@ impl ColumnEncoding {
 
         let column = Column::from_arrow_rs(array, data_type)?;
         Ok(match column {
-            Column::Nullable(column) => self
-                .encode_column(column.column, max_ndv_ratio)
-                .wrap_nullable(Some(column.validity)),
+            Column::Nullable(column) => {
+                let (column, validity) = column.destructure();
+                self.encode_column(column, max_ndv_ratio)
+                    .wrap_nullable(Some(validity))
+            }
             column => self.encode_column(column, max_ndv_ratio),
         })
     }
@@ -234,9 +236,9 @@ mod tests {
                 &data_type,
             );
             let nullable = column.as_nullable().unwrap();
-            assert!(nullable.column.is_encoded());
+            assert!(nullable.column().is_encoded());
             assert_eq!(
-                nullable.validity.null_count(),
+                nullable.validity().null_count(),
                 if all_valid { 0 } else { 198 }
             );
         }
@@ -248,8 +250,8 @@ mod tests {
         );
         let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
         let nullable = column.as_nullable().unwrap();
-        assert!(nullable.column.is_encoded());
-        assert_eq!(nullable.validity.null_count(), 200);
+        assert!(nullable.column().is_encoded());
+        assert_eq!(nullable.validity().null_count(), 200);
 
         // Nullable dictionary entries contribute logical nulls even when all keys are valid.
         let array = DictionaryArray::<UInt32Type>::try_new(
@@ -258,7 +260,7 @@ mod tests {
         )
         .unwrap();
         let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
-        assert_eq!(column.as_nullable().unwrap().validity.null_count(), 500);
+        assert_eq!(column.as_nullable().unwrap().validity().null_count(), 500);
 
         // Empty dictionaries with all-null keys must not produce out-of-bounds codes.
         let array = DictionaryArray::<UInt32Type>::try_new(
@@ -267,7 +269,7 @@ mod tests {
         )
         .unwrap();
         let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
-        assert_eq!(column.as_nullable().unwrap().validity.null_count(), 16);
+        assert_eq!(column.as_nullable().unwrap().validity().null_count(), 16);
     }
 
     #[test]

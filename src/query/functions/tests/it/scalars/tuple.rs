@@ -17,7 +17,6 @@ use std::io::Write;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::nullable::NullableColumn;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -61,12 +60,10 @@ fn test_get(file: &mut impl Write) {
     )]);
     run_ast(file, "col.1", &[(
         "col",
-        NullableColumn::new_column(
-            Column::Tuple(vec![StringType::from_data_with_validity(
-                vec!["a", "b", "c", "d"],
-                vec![true, true, false, false],
-            )]),
-            vec![true, false, true, false].into(),
-        ),
+        Column::Tuple(vec![StringType::from_data_with_validity(
+            vec!["a", "b", "c", "d"],
+            vec![true, true, false, false],
+        )])
+        .wrap_nullable(Some(vec![true, false, true, false].into())),
     )]);
 }

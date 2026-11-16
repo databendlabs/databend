@@ -57,7 +57,7 @@ fn traverse_column_recursive(
         DataType::Tuple(inner_types) => {
             let inner_columns = if data_type.is_nullable() {
                 let nullable_column = column.as_nullable().unwrap();
-                nullable_column.column.as_tuple().unwrap()
+                nullable_column.column().as_tuple().unwrap()
             } else {
                 column.as_tuple().unwrap()
             };
@@ -68,7 +68,7 @@ fn traverse_column_recursive(
         DataType::Array(inner_type) => {
             let array_column = if data_type.is_nullable() {
                 let nullable_column = column.as_nullable().unwrap();
-                nullable_column.column.as_array().unwrap()
+                nullable_column.column().as_array().unwrap()
             } else {
                 column.as_array().unwrap()
             };
@@ -83,7 +83,7 @@ fn traverse_column_recursive(
             DataType::Tuple(inner_types) => {
                 let map_column = if data_type.is_nullable() {
                     let nullable_column = column.as_nullable().unwrap();
-                    nullable_column.column.as_map().unwrap()
+                    nullable_column.column().as_map().unwrap()
                 } else {
                     column.as_map().unwrap()
                 };

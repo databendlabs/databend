@@ -74,6 +74,10 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
         T::downcast_domain(domain).ok_or_else(|| domain_type_error::<Self>(domain))
     }
 
+    fn column_is_nullable_or_null(_col: &Self::Column) -> bool {
+        T::upcast_column(0).is_null()
+    }
+
     fn column_len(len: &usize) -> usize {
         *len
     }

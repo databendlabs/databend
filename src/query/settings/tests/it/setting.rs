@@ -14,10 +14,38 @@
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::default_server_memory_limit;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
+
+#[test]
+fn test_recluster_task_selection_v2_setting() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
+    for value in ["1", "0"] {
+        settings
+            .set_setting(
+                "enable_recluster_task_selection_v2".to_string(),
+                value.to_string(),
+            )
+            .unwrap();
+        assert_eq!(
+            settings.get_enable_recluster_task_selection_v2().unwrap(),
+            value == "1"
+        );
+    }
+    assert!(
+        settings
+            .set_setting(
+                "enable_recluster_task_selection_v2".to_string(),
+                "2".to_string()
+            )
+            .is_err()
+    );
+    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
@@ -392,4 +420,19 @@ async fn test_http_json_result_mode_settings() {
     let result = settings.set_setting("http_json_result_mode".to_string(), "invalid".to_string());
     let expect = "WrongValueForVariable. Code: 2803, Text = Value invalid is not within the allowed values [\"display\", \"driver\"].";
     assert_eq!(expect, format!("{}", result.unwrap_err()));
+}
+
+/// With `max_server_memory_usage` 0 the `max_memory_usage` default, from which the spill
+/// thresholds derive, is the limit the allocator enforces: 80% of the machine or the cgroup.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_max_memory_usage_default_is_server_memory_limit() {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
+
+    let settings = Settings::create(Tenant::new_literal("test"));
+    assert_eq!(
+        settings.get_max_memory_usage().unwrap(),
+        default_server_memory_limit()
+    );
 }

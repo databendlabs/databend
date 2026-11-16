@@ -459,6 +459,7 @@ impl StreamBlockBuilder {
                 .map(|v| v.ngram_size)
                 .unwrap_or_default(),
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta: None,
         };
         // Vector/spatial statistics already live in the block meta above; the pending output

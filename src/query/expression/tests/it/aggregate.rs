@@ -956,6 +956,7 @@ fn test_distinct_sampler_counts_the_first_window() -> Result<()> {
             (end - start) as usize,
             capacity,
             partial.sampler(),
+            None,
         )?;
     }
     assert!(table.partial_restarted());
@@ -1232,6 +1233,7 @@ fn test_partial_absorbs_cyclic_string_keys() -> Result<()> {
             BLOCK_ROWS,
             capacity,
             partial.sampler(),
+            None,
         )?;
         if grown {
             grown_rows += stats.rows;

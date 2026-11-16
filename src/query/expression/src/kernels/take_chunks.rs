@@ -44,7 +44,6 @@ use crate::types::encoded::widen;
 use crate::types::geography::GeographyColumn;
 use crate::types::geometry::GeometryType;
 use crate::types::map::KvColumnBuilder;
-use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
 use crate::types::opaque::OpaqueColumn;
@@ -328,7 +327,7 @@ impl Column {
                 let inner_columns = columns
                     .iter()
                     .map(|c| match c {
-                        Column::Nullable(c) => c.column.clone(),
+                        Column::Nullable(c) => c.column().clone(),
                         _ => unreachable!(),
                     })
                     .collect::<Vec<_>>();
@@ -336,17 +335,16 @@ impl Column {
                 let inner_bitmaps = columns
                     .iter()
                     .map(|c| match c {
-                        Column::Nullable(c) => Column::Boolean(c.validity.clone()),
+                        Column::Nullable(c) => Column::Boolean(c.validity().clone()),
                         _ => unreachable!(),
                     })
                     .collect::<Vec<_>>();
 
                 let inner_column = Self::take_column_indices(&inner_columns, indices);
                 let inner_bitmap = Self::take_column_indices(&inner_bitmaps, indices);
-                NullableColumn::new_column(
-                    inner_column,
+                inner_column.wrap_nullable(Some(
                     BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                )
+                ))
             }
             Column::Tuple(first) => {
                 let fields = (0..first.len())
@@ -572,7 +570,7 @@ impl Column {
                 let inner_columns = columns
                     .iter()
                     .map(|c| match c {
-                        Column::Nullable(c) => c.column.clone(),
+                        Column::Nullable(c) => c.column().clone(),
                         _ => unreachable!(),
                     })
                     .collect::<Vec<_>>();
@@ -580,7 +578,7 @@ impl Column {
                 let inner_bitmaps = columns
                     .iter()
                     .map(|c| match c {
-                        Column::Nullable(c) => Column::Boolean(c.validity.clone()),
+                        Column::Nullable(c) => Column::Boolean(c.validity().clone()),
                         _ => unreachable!(),
                     })
                     .collect::<Vec<_>>();
@@ -764,10 +762,9 @@ impl Column {
                 let inner_bitmap =
                     Self::take_column_vec_indices(&columns.validity, DataType::Boolean, indices);
 
-                NullableColumn::new_column(
-                    inner_column,
+                inner_column.wrap_nullable(Some(
                     BooleanType::try_downcast_column(&inner_bitmap).unwrap(),
-                )
+                ))
             }
             ColumnVec::Tuple(columns) => {
                 let inner_data_type = data_type.as_tuple().unwrap();

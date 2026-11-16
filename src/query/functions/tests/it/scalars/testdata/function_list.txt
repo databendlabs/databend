@@ -1380,8 +1380,12 @@ Functions overloads:
 1 conv(String NULL, Int64 NULL, Int64 NULL) :: String NULL
 2 conv(Int64, Int64, Int64) :: String
 3 conv(Int64 NULL, Int64 NULL, Int64 NULL) :: String NULL
+0 convert_from(Binary, String) :: String
+1 convert_from(Binary NULL, String NULL) :: String NULL
 0 convert_timezone(String, Timestamp) :: Timestamp
 1 convert_timezone(String NULL, Timestamp NULL) :: Timestamp NULL
+0 convert_to(String, String) :: Binary
+1 convert_to(String NULL, String NULL) :: Binary NULL
 0 cos(Float64) :: Float64
 1 cos(Float64 NULL) :: Float64 NULL
 0 cosine_distance(Array(Float32), Array(Float32)) :: Float32
@@ -4601,20 +4605,22 @@ Functions overloads:
 32 to_string(TimestampTz NULL) :: String NULL
 33 to_string(Binary) :: String
 34 to_string(Binary NULL) :: String NULL
-35 to_string(Int64, String) :: String
-36 to_string(Int64 NULL, String NULL) :: String NULL
-37 to_string(Float32, String) :: String
-38 to_string(Float32 NULL, String NULL) :: String NULL
-39 to_string(Float64, String) :: String
-40 to_string(Float64 NULL, String NULL) :: String NULL
-41 to_string(Bitmap) :: String
-42 to_string(Bitmap NULL) :: String NULL
-43 to_string(Geometry) :: String
-44 to_string(Geometry NULL) :: String NULL
-45 to_string(Geography) :: String
-46 to_string(Geography NULL) :: String NULL
-47 to_string(Interval) :: String
-48 to_string(Interval NULL) :: String NULL
+35 to_string(Binary, String) :: String
+36 to_string(Binary NULL, String NULL) :: String NULL
+37 to_string(Int64, String) :: String
+38 to_string(Int64 NULL, String NULL) :: String NULL
+39 to_string(Float32, String) :: String
+40 to_string(Float32 NULL, String NULL) :: String NULL
+41 to_string(Float64, String) :: String
+42 to_string(Float64 NULL, String NULL) :: String NULL
+43 to_string(Bitmap) :: String
+44 to_string(Bitmap NULL) :: String NULL
+45 to_string(Geometry) :: String
+46 to_string(Geometry NULL) :: String NULL
+47 to_string(Geography) :: String
+48 to_string(Geography NULL) :: String NULL
+49 to_string(Interval) :: String
+50 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp NULL
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
@@ -4826,6 +4832,10 @@ Functions overloads:
 38 truncate(Float64 NULL) :: Float64 NULL
 39 truncate(Float64, Int64) :: Float64
 40 truncate(Float64 NULL, Int64 NULL) :: Float64 NULL
+0 try_convert_from(Binary, String) :: String NULL
+1 try_convert_from(Binary NULL, String NULL) :: String NULL
+0 try_convert_to(String, String) :: Binary NULL
+1 try_convert_to(String NULL, String NULL) :: Binary NULL
 0 try_from_base64(String) :: Binary NULL
 1 try_from_base64(String NULL) :: Binary NULL
 0 try_from_hex(String) :: Binary NULL
@@ -5102,6 +5112,8 @@ Functions overloads:
 27 try_to_string(Timestamp NULL) :: String NULL
 28 try_to_string(Binary) :: String NULL
 29 try_to_string(Binary NULL) :: String NULL
+30 try_to_string(Binary, String) :: String NULL
+31 try_to_string(Binary NULL, String NULL) :: String NULL
 0 try_to_timestamp(Variant) :: Timestamp NULL
 1 try_to_timestamp(Variant NULL) :: Timestamp NULL
 2 try_to_timestamp(String) :: Timestamp NULL

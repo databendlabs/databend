@@ -62,7 +62,6 @@ use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::test_kits::*;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::VectorScores;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -1036,16 +1035,19 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         for ((block_meta_index, _), expected_scores) in
             block_metas.iter().zip(expected_results.iter())
         {
-            // The pruner attaches the TopN rows (`TopN`) or the scores of all rows
-            // (`All`); compare them in row order.
-            let mut vector_scores: Vec<(usize, F32)> = match &block_meta_index.vector_scores {
-                Some(VectorScores::TopN(scores)) => scores
-                    .iter()
-                    .map(|&(row, score)| (row as usize, score))
-                    .collect(),
-                Some(VectorScores::All(scores)) => scores.iter().copied().enumerate().collect(),
-                None => panic!("missing vector scores"),
-            };
+            // The pruner attaches the scored rows; compare them in row order.
+            let matches = block_meta_index
+                .vector_index_matches
+                .as_ref()
+                .expect("missing vector scores");
+            let scores = matches.scores.as_ref().expect("missing vector scores");
+            assert_eq!(scores.len(), matches.rows.len());
+            let mut vector_scores: Vec<(usize, F32)> = matches
+                .rows
+                .iter()
+                .map(|row| *row as usize)
+                .zip(scores.iter().copied())
+                .collect();
             vector_scores.sort_by_key(|(row, _)| *row);
             let mut expected_scores = expected_scores.clone();
             expected_scores.sort_by_key(|expected| expected.vector_idx);
