@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -25,7 +24,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_pipeline::core::check_interrupt;
 use databend_common_settings::Settings;
@@ -254,10 +252,7 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
 
                         match col.is_null() || col.is_nullable() {
                             true => entry.clone(),
-                            false => BlockEntry::from(NullableColumn::new_column(
-                                col,
-                                Bitmap::new_constant(true, result_block.num_rows()),
-                            )),
+                            false => BlockEntry::from(col.wrap_nullable(None)),
                         }
                     }
                 };

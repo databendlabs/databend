@@ -21,6 +21,7 @@ mod metrics;
 mod progress;
 mod range_merger;
 mod runtime;
+mod singleton_instance;
 mod string;
 mod time_series;
 

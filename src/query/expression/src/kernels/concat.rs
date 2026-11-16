@@ -46,7 +46,6 @@ use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
 use crate::types::map::KvColumnBuilder;
-use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::opaque::OpaqueType;
 use crate::types::string::StringColumn;
@@ -242,7 +241,7 @@ impl Column {
                     .unzip();
                 let column = Self::concat_columns_impl(inner)?;
                 let validity = Self::concat_boolean_types(validity.into_iter(), capacity)?;
-                NullableColumn::new_column(column, validity)
+                column.wrap_nullable(Some(validity))
             }
             Column::Tuple(first_fields) => {
                 // Transpose rows of fields into columns of fields, moving each field.

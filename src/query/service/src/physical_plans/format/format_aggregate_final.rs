@@ -69,6 +69,9 @@ impl<'a> PhysicalFormat for AggregateFinalFormatter<'a> {
             FormatTreeNode::new(format!("group by: [{group_by}]")),
             FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
         ];
+        if self.inner.allow_duplicate_groups {
+            node_children.push(FormatTreeNode::new("duplicate groups: allowed".to_string()));
+        }
 
         if let Some(info) = &self.inner.stat_info {
             let items = plan_stats_info_to_format_tree(info);

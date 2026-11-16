@@ -130,7 +130,17 @@ impl IcebergStatistics {
         let Some(snapshot) = table.metadata().current_snapshot() else {
             return Ok(IcebergStatistics::default());
         };
+        Self::parse_snapshot(table, snapshot).await
+    }
 
+    /// Get statistics of the given snapshot.
+    ///
+    /// Time travel reads a historical snapshot, so its row counts and column bounds must be
+    /// computed from that snapshot's manifests instead of the current one.
+    pub async fn parse_snapshot(
+        table: &iceberg::table::Table,
+        snapshot: &iceberg::spec::Snapshot,
+    ) -> Result<IcebergStatistics> {
         // Map from column id to the total size on disk of all regions that
         // store the column. Does not include bytes necessary to read other
         // columns, like footers. Leave null for row-oriented formats (Avro)
@@ -164,6 +174,10 @@ impl IcebergStatistics {
             .load_manifest_list(table.file_io(), table.metadata())
             .await
             .map_err(|err| ErrorCode::Internal(format!("load manifest list error: {err:?}")))?;
+
+        let snapshot_schema = snapshot.schema(table.metadata()).map_err(|err| {
+            ErrorCode::TableSchemaMismatch(format!("Iceberg snapshot schema: {err}"))
+        })?;
 
         for manifest_file in manifest.entries() {
             statistics.number_of_manifest_files += 1;
@@ -237,14 +251,31 @@ impl IcebergStatistics {
 
         let mut computed_statistics = HashMap::new();
         for field in IcebergTable::get_schema(table)?.fields() {
-            if let Some(column_stats) = get_column_stats(
-                field,
-                &column_sizes,
-                &lower_bounds,
-                &upper_bounds,
-                &null_value_counts,
-                statistics.record_count,
-            ) {
+            // A column that the scanned snapshot does not know about has no files in it, so
+            // it can only report nulls. Lookups stay on the field id, which both schemas share.
+            let known_in_snapshot = snapshot_schema
+                .field_by_id(field.column_id as i32)
+                .is_some();
+            let column_stats = if known_in_snapshot {
+                get_column_stats(
+                    field,
+                    &column_sizes,
+                    &lower_bounds,
+                    &upper_bounds,
+                    &null_value_counts,
+                    statistics.record_count,
+                )
+            } else {
+                column_statistics(
+                    field.column_id,
+                    None,
+                    None,
+                    statistics.record_count,
+                    0,
+                    statistics.record_count,
+                )
+            };
+            if let Some(column_stats) = column_stats {
                 computed_statistics.insert(field.column_id, column_stats);
             }
         }

@@ -8,7 +8,6 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
@@ -113,10 +112,8 @@ fn test_count_distinct_group_by() {
 
 #[test]
 fn test_v2_count_distinct_suffix_names_are_case_insensitive() -> Result<()> {
-    let values = NullableColumn::new_column(
-        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
-        Bitmap::from([true, false, true, true, true]),
-    );
+    let values = UInt64Type::from_data(vec![10, 20, 10, 40, 20])
+        .wrap_nullable(Some(Bitmap::from([true, false, true, true, true])));
     let entries = [values.into()];
 
     assert_v2_direct_matches_serialized("COUNT_DISTINCT", &entries, 5)
@@ -149,10 +146,9 @@ fn test_count_distinct_dictionary() -> Result<()> {
         StringType::from_data(vec!["a", "b", "c", "unused"]),
     ))));
     // The only "c" row is NULL.
-    let nullable = NullableColumn::new_column(
-        dict.clone(),
-        Bitmap::from([true, true, true, false, true, true]),
-    );
+    let nullable = dict
+        .clone()
+        .wrap_nullable(Some(Bitmap::from([true, true, true, false, true, true])));
     for (column, expected) in [(dict, 3), (nullable, 2)] {
         for serialized in [false, true] {
             let (result, _) =
@@ -186,10 +182,7 @@ fn test_count_distinct_float_equality_serialized() -> Result<()> {
     for column in columns {
         for column in [
             column.clone(),
-            NullableColumn::new_column(
-                column,
-                Bitmap::from([true, true, true, true, false, false]),
-            ),
+            column.wrap_nullable(Some(Bitmap::from([true, true, true, true, false, false]))),
         ] {
             let expected = if matches!(column, databend_common_expression::Column::Nullable(_)) {
                 2

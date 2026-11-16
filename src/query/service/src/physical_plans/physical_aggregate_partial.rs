@@ -184,7 +184,6 @@ impl IPhysicalPlan for AggregatePartial {
             self.input.output_schema()?,
             &self.group_by,
             &self.agg_funcs,
-            builder.is_exchange_parent(),
             max_block_rows,
             max_block_bytes,
         )?;
@@ -238,7 +237,7 @@ impl IPhysicalPlan for AggregatePartial {
             )?))
         })?;
 
-        builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
+        builder.exchange_injector = AggregateInjector::create(params.clone());
         Ok(())
     }
 }

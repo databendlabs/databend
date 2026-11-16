@@ -78,6 +78,17 @@ impl Display for DescribeConnectionStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
+pub struct ShowCreateConnectionStmt {
+    pub name: Identifier,
+}
+
+impl Display for ShowCreateConnectionStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW CREATE CONNECTION {}", self.name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowConnectionsStmt {}
 

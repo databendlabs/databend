@@ -16,11 +16,20 @@ use super::BATCH_SIZE;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::StateAddr;
+use super::partitioned_payload::RowReserver;
 use super::payload::GroupRows;
 use super::payload_row::CompareState;
+use super::row_ptr::RowDecoder;
 
 pub(super) trait TableAdapter {
     fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize);
+
+    /// Start reserving the rows of new groups for a probe of `row_count` rows, see
+    /// `PartitionedPayload::begin_rows`.
+    fn begin_rows(&mut self, row_count: usize);
+
+    /// Decodes the row ids of the index, and reserves the rows of new groups.
+    fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>);
 
     fn compare(
         &mut self,
@@ -46,6 +55,15 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         }
         self.payload
             .append_rows(state, count, self.groups, self.source_states);
+    }
+
+    fn begin_rows(&mut self, row_count: usize) {
+        self.payload.begin_rows(row_count);
+    }
+
+    #[inline]
+    fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>) {
+        self.payload.rows()
     }
 
     fn compare(

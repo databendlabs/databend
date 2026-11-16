@@ -1,0 +1,23 @@
+sql: SELECT l.k, l.flag FROM shuffle_left l JOIN shuffle_right r ON l.tag = r.tag AND lower(l.tag) = lower(r.tag) AND l.flag = r.flag
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [shuffle_left.k (#0) AS (#0), shuffle_left.flag (#1) AS (#1), shuffle_left.tag (#2) AS (#6), shuffle_right.tag (#5) AS (#7), shuffle_right.flag (#4) AS (#8)]
+    └── Join(Inner)
+        ├── build keys: [shuffle_right.tag (#5), lower(shuffle_right.tag (#5)), shuffle_right.flag (#4)]
+        ├── probe keys: [shuffle_left.tag (#2), lower(shuffle_left.tag (#2)), shuffle_left.flag (#1)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [shuffle_right.tag (#5), shuffle_right.flag (#4)]
+        │   └── Scan
+        │       ├── table: default.shuffle_right (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [shuffle_left.tag (#2), shuffle_left.flag (#1)]
+            └── Scan
+                ├── table: default.shuffle_left (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+

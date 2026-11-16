@@ -623,7 +623,7 @@ fn test_estimated_scalar_repeat_size() {
         let col = NullableType::<IntervalType>::try_downcast_column(&col).unwrap();
         assert_eq!(
             scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.validity.as_slice().0.len()
+            col.validity().as_slice().0.len()
         );
     }
 
@@ -846,7 +846,6 @@ fn test_select_if_then_else_non_strict_decimal() {
     use databend_common_expression::types::DictColumn;
     use databend_common_expression::types::EncodedColumn;
     use databend_common_expression::types::NarrowBuffer;
-    use databend_common_expression::types::NullableColumn;
 
     // Decimal(10, 2) carried by a Decimal128 column is a non-strict
     // representation: the selection reads it at the strict Decimal64 width.
@@ -884,8 +883,7 @@ fn test_select_if_then_else_non_strict_decimal() {
 
     // The same column under a nullable type, with a NULL scalar on the other side.
     let nullable_type = data_type.wrap_nullable();
-    let nullable =
-        NullableColumn::new_column(non_strict, Bitmap::from([true, true, false].as_slice()));
+    let nullable = non_strict.wrap_nullable(Some(Bitmap::from([true, true, false].as_slice())));
     let result = select_if_then_else(
         &mask,
         &Value::Column(nullable),
@@ -894,10 +892,8 @@ fn test_select_if_then_else_non_strict_decimal() {
     );
     assert_eq!(
         result,
-        NullableColumn::new_column(
-            Column::Decimal(DecimalColumn::Decimal64(vec![1_i64, 2, 3].into(), size)),
-            Bitmap::from([true, false, false].as_slice()),
-        )
+        Column::Decimal(DecimalColumn::Decimal64(vec![1_i64, 2, 3].into(), size))
+            .wrap_nullable(Some(Bitmap::from([true, false, false].as_slice())))
     );
 
     // Inside a tuple, for all-set, all-unset and mixed masks, and for two
@@ -978,7 +974,7 @@ fn test_filter_by_mask_word() {
             );
         }
         if let (Column::Nullable(result), Column::Nullable(column)) = (result, column) {
-            assert_rows(&result.column, &column.column, rows, context);
+            assert_rows(result.column(), column.column(), rows, context);
         }
     }
 
@@ -1333,7 +1329,6 @@ fn test_take_by_runs_and_ranges() -> databend_common_exception::Result<()> {
 /// column with runs of 32 rows or more takes the runs path.
 #[test]
 fn test_take_by_runs_copies_strings() -> databend_common_exception::Result<()> {
-    use databend_common_expression::types::NullableColumn;
     use databend_common_expression::types::StringColumn;
 
     let values = (0..1000)
@@ -1341,13 +1336,13 @@ fn test_take_by_runs_copies_strings() -> databend_common_exception::Result<()> {
         .collect::<Vec<_>>();
     let strings = StringType::from_data(values);
     let validity = Bitmap::from_iter((0..1000).map(|row| row % 7 != 0));
-    let nullable_strings = NullableColumn::new_column(strings.clone(), validity.clone());
+    let nullable_strings = strings.clone().wrap_nullable(Some(validity.clone()));
     let ranges = [100..400, 600..700];
     let indices = ranges.iter().cloned().flatten().collect::<Vec<u32>>();
 
     let inner_strings = |column: &Column| -> StringColumn {
         match column {
-            Column::Nullable(nullable) => nullable.column.as_string().unwrap().clone(),
+            Column::Nullable(nullable) => nullable.column().as_string().unwrap().clone(),
             column => column.as_string().unwrap().clone(),
         }
     };
@@ -1375,7 +1370,7 @@ fn test_take_by_runs_copies_strings() -> databend_common_exception::Result<()> {
         );
         if let Column::Nullable(taken) = by_runs.get_by_offset(0).as_column().unwrap() {
             let expected = indices.iter().map(|&row| validity.get_bit(row as usize));
-            assert!(taken.validity.iter().eq(expected), "{case}");
+            assert!(taken.validity().iter().eq(expected), "{case}");
         }
 
         let by_ranges = block.clone().take_ranges(&ranges, indices.len())?;
@@ -1391,7 +1386,6 @@ fn test_take_by_runs_copies_strings() -> databend_common_exception::Result<()> {
 #[test]
 fn test_take_ranges_non_strict_nested_decimal() -> databend_common_exception::Result<()> {
     use databend_common_expression::types::DecimalColumn;
-    use databend_common_expression::types::NullableColumn;
 
     let size = DecimalSize::new_unchecked(10, 2);
     let len = 200;
@@ -1399,10 +1393,9 @@ fn test_take_ranges_non_strict_nested_decimal() -> databend_common_exception::Re
         Column::Decimal(DecimalColumn::Decimal128((0..len as i128).collect(), size)),
         Int16Type::from_data((0..len as i16).collect::<Vec<_>>()),
     ]);
-    let nullable_tuple = NullableColumn::new_column(
-        tuple.clone(),
-        Bitmap::from_iter((0..len).map(|row| row % 3 != 0)),
-    );
+    let nullable_tuple = tuple
+        .clone()
+        .wrap_nullable(Some(Bitmap::from_iter((0..len).map(|row| row % 3 != 0))));
     let block = DataBlock::new_from_columns(vec![tuple, nullable_tuple]);
     let ranges = [10..100, 150..190];
     let indices = ranges.iter().cloned().flatten().collect::<Vec<u32>>();

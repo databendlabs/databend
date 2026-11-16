@@ -23,9 +23,14 @@ use serde::Serialize;
 
 pub type Span = Option<Range>;
 
+// No visitor looks at a span, and every expression has one: skipping it saves
+// six visitor calls per expression of a statement.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Drive, DriveMut)]
+#[drive(skip)]
 pub struct Range {
+    #[drive(skip)]
     pub start: u32,
+    #[drive(skip)]
     pub end: u32,
 }
 

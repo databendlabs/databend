@@ -45,6 +45,7 @@ pub struct AuthMgr {
 #[derive(Debug, Serialize)]
 pub enum CredentialType {
     DatabendToken,
+    QueryToken,
     Jwt,
     KeyPair,
     Password,
@@ -53,6 +54,10 @@ pub enum CredentialType {
 
 #[derive(Clone)]
 pub enum Credential {
+    QueryToken {
+        query_id: String,
+        token: String,
+    },
     DatabendToken {
         token: String,
     },
@@ -75,6 +80,7 @@ pub enum Credential {
 impl Credential {
     pub fn type_name(&self) -> CredentialType {
         match self {
+            Credential::QueryToken { .. } => CredentialType::QueryToken,
             Credential::DatabendToken { .. } => CredentialType::DatabendToken,
             Credential::Jwt { .. } => CredentialType::Jwt,
             Credential::KeyPair { .. } => CredentialType::KeyPair,
@@ -85,6 +91,7 @@ impl Credential {
 
     pub fn user_name(&self) -> Option<String> {
         match self {
+            Credential::QueryToken { .. } => None,
             Credential::DatabendToken { .. } => None,
             Credential::Jwt { .. } => None,
             Credential::KeyPair { .. } => None,
@@ -124,12 +131,19 @@ impl AuthMgr {
             .unwrap_or_default();
         match credential {
             Credential::NoNeed => Ok(("".to_string(), None)),
+            // HTTP middleware authorizes query capabilities against a specific
+            // query object. They must never initialize ordinary SQL privileges.
+            Credential::QueryToken { .. } => Err(ErrorCode::AuthenticateFailure(
+                "Query tokens require HTTP query authorization",
+            )),
             Credential::DatabendToken { token } => {
                 let claim = ClientSessionManager::instance().verify_token(token).await?;
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
+                // PollQuery also needs the authenticated tenant for query ownership
+                // checks, but must not fetch user info from meta.
+                session.set_current_tenant(tenant.clone())?;
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
-                    session.set_current_tenant(tenant.clone())?;
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }

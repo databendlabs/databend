@@ -31,6 +31,7 @@ mod interpreter_connection_create;
 mod interpreter_connection_desc;
 mod interpreter_connection_drop;
 mod interpreter_connection_show;
+mod interpreter_connection_show_create;
 #[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_location;
 #[cfg(feature = "storage-stage")]

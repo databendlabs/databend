@@ -20,6 +20,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
 use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalPruningRuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::CatalogManager;
@@ -201,17 +202,11 @@ impl GlobalServices {
             &config.query.common.share_endpoint_auth_token_file,
             config.query.tenant_id.tenant_name().to_string(),
         )?;
-        // The shared pools are reclaimed when the server memory limit is reached; without an
-        // enforced limit they never would be.
-        if config.cache.shared_memory_enabled && !config.query.common.max_memory_limit_enabled {
-            return Err(ErrorCode::InvalidConfig(
-                "cache.shared_memory_enabled requires a server memory limit: set \
-                 query.max_memory_limit_enabled and query.max_server_memory_usage",
-            ));
-        }
+        // The shared pools are a share of the server memory limit. They are reclaimed when it
+        // is reached, so only while `max_memory_limit_enabled` enforces it.
         CacheManager::init(
             &config.cache,
-            &config.query.common.max_server_memory_usage,
+            &config.server_memory_limit(),
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
@@ -234,6 +229,8 @@ impl GlobalServices {
 
         if config.query.common.enable_queries_executor {
             GlobalQueriesExecutor::init()?;
+            // The queries of the global executor prune on a global runtime too.
+            GlobalPruningRuntime::init(num_cpus::get())?;
         }
 
         Self::init_workload_mgr(config).await?;

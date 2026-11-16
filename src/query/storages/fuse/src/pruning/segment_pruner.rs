@@ -64,6 +64,7 @@ impl SegmentPruner {
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
 
         for segment_location in segment_locs {
+            self.pruning_ctx.check_aborting()?;
             let info = pruning_cost
                 .measure_async(
                     PruningCostKind::SegmentsRead,

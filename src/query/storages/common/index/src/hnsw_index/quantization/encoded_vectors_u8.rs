@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::prefetch::MIN_PREFETCH_STORAGE_BYTES;
 use crate::hnsw_index::common::prefetch::prefetch_slice;
 use crate::hnsw_index::common::prefetch::prefetch_slice_l2;
@@ -60,7 +61,7 @@ struct Metadata {
     vector_parameters: VectorParameters,
 }
 
-impl EncodedVectorsU8<Vec<u8>> {
+impl EncodedVectorsU8<HugePageBytes> {
     pub(crate) fn memory_size(&self) -> usize {
         std::mem::size_of::<Self>() + self.encoded_vectors.capacity()
     }

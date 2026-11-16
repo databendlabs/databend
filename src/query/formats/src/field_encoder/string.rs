@@ -99,10 +99,10 @@ impl FieldEncoderToString {
             )),
             Column::Bitmap(_) => Ok(Cow::Borrowed(self.bitmap_text())),
             Column::Nullable(c) => {
-                if !c.validity.get_bit(row_index) {
+                if !c.validity().get_bit(row_index) {
                     Ok(Cow::Borrowed(NULL_BYTES_UPPER))
                 } else {
-                    self.encode(&c.column, row_index)
+                    self.encode(c.column(), row_index)
                 }
             }
             Column::Variant(c) => Ok(Cow::Owned(
@@ -146,10 +146,10 @@ impl FieldEncoderToString {
             Column::EmptyArray { .. } => out.push_str("[]"),
             Column::EmptyMap { .. } => out.push_str("{}"),
             Column::Nullable(c) => {
-                if !c.validity.get_bit(row_index) {
+                if !c.validity().get_bit(row_index) {
                     out.push_str(NULL_BYTES_UPPER);
                 } else {
-                    self.write_nested_to(&c.column, row_index, out)?;
+                    self.write_nested_to(c.column(), row_index, out)?;
                 }
             }
             Column::Boolean(c) => out.push_str(self.bool_text(c.get_bit(row_index))),

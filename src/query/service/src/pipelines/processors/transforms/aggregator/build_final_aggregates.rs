@@ -26,7 +26,6 @@ use databend_common_pipeline::core::TransformPipeBuilder;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::LocalScatter;
 use crate::pipelines::processors::transforms::aggregator::LocalScatterTransform;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
@@ -36,7 +35,7 @@ use crate::sessions::TableContextSettings;
 /// Build the final aggregates. Unless `global_shuffled`, where the hash shuffle already delivered
 /// to each output of `pipeline` the input of one final aggregate, the partial aggregate output is
 /// scattered here to the final aggregates of this node.
-pub fn build_partition_bucket(
+pub fn build_final_aggregates(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     after_worker: usize,
@@ -47,10 +46,7 @@ pub fn build_partition_bucket(
         pipeline.output_len()
     } else {
         let final_parallelism = ctx.get_settings().get_max_threads()? as usize;
-        let scatter: Arc<Box<dyn LocalScatter>> = Arc::new(Box::new(AggregateScatter::local(
-            final_parallelism,
-            params.clone(),
-        )));
+        let scatter = Arc::new(AggregateScatter::local(final_parallelism, params.clone()));
         pipeline.add_transform(|input, output| {
             Ok(LocalScatterTransform::create(
                 input,

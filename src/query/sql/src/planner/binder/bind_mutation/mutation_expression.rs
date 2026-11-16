@@ -390,7 +390,6 @@ impl MutationExpression {
                 join_type: JoinType::Cross,
                 marker_index: None,
                 from_correlated_subquery: true,
-                need_hold_hash_table: false,
                 is_lateral: false,
                 single_to_inner: None,
                 build_side_cache_info: None,

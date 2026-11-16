@@ -1090,22 +1090,6 @@ impl BindContext {
         {
             btree_map::Entry::Vacant(e) => {
                 let mut metadata = metadata.write();
-                // Allocate a query-time temporary virtual column id. This is not
-                // a persisted segment-local column id: every segment resolves the
-                // canonical path to its own physical column id during pruning/read.
-                let column_id = metadata
-                    .virtual_columns_by_table_index(table_index)
-                    .filter_map(|column| match column {
-                        ColumnEntry::VirtualColumn(VirtualColumn {
-                            query_column_id, ..
-                        }) => Some(*query_column_id),
-                        _ => None,
-                    })
-                    .max()
-                    .map_or(VIRTUAL_COLUMN_ID_START, |column_id| {
-                        column_id.saturating_add(1)
-                    });
-
                 let source_column_id = virtual_column_name.source_column_id;
 
                 // If a target type is provided, the virtual column is cast to that type at the storage layer.
@@ -1126,16 +1110,55 @@ impl BindContext {
                     virtual_column_name.target_cast.as_ref(),
                 );
 
-                let column_index = metadata.add_virtual_column(
-                    table_index,
-                    source_column_name.to_string(),
-                    source_column_id,
-                    column_id,
-                    column_name,
-                    key_paths,
-                    table_data_type,
-                    is_try,
-                );
+                // Another bind context may have bound the same virtual column of the
+                // same scan, e.g. a CTE or subquery and the query reading its output.
+                // Reuse it: two entries with one name collapse into one field in
+                // `TableScan.name_mapping`, and the scan loses the other one.
+                let existing = metadata
+                    .virtual_columns_by_table_index(table_index)
+                    .find_map(|column| match column {
+                        ColumnEntry::VirtualColumn(column)
+                            if column.source_column_id == source_column_id
+                                && column.column_name == column_name
+                                && column.data_type == table_data_type
+                                && column.is_try == is_try =>
+                        {
+                            Some((column.query_column_id, column.column_index))
+                        }
+                        _ => None,
+                    });
+                let (column_id, column_index) = match existing {
+                    Some(existing) => existing,
+                    None => {
+                        // Allocate a query-time temporary virtual column id. This is not
+                        // a persisted segment-local column id: every segment resolves the
+                        // canonical path to its own physical column id during pruning/read.
+                        let column_id = metadata
+                            .virtual_columns_by_table_index(table_index)
+                            .filter_map(|column| match column {
+                                ColumnEntry::VirtualColumn(VirtualColumn {
+                                    query_column_id,
+                                    ..
+                                }) => Some(*query_column_id),
+                                _ => None,
+                            })
+                            .max()
+                            .map_or(VIRTUAL_COLUMN_ID_START, |column_id| {
+                                column_id.saturating_add(1)
+                            });
+                        let column_index = metadata.add_virtual_column(
+                            table_index,
+                            source_column_name.to_string(),
+                            source_column_id,
+                            column_id,
+                            column_name,
+                            key_paths,
+                            table_data_type,
+                            is_try,
+                        );
+                        (column_id, column_index)
+                    }
+                };
 
                 e.insert((column_id, column_index));
                 (column_index, true)
@@ -1161,8 +1184,9 @@ impl BindContext {
         .table_index(Some(table_index))
         .build();
 
-        if is_new {
-            debug_assert!(!self.columns.iter().any(|c| c == &column_binding));
+        // A virtual column reused from another bind context is new to this one,
+        // but may already be visible here through that context's output columns.
+        if is_new && !self.columns.iter().any(|c| c.index == column_index) {
             self.columns.push(column_binding.clone());
         }
 

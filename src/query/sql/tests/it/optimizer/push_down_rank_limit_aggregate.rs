@@ -146,6 +146,36 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             setup_sqls: &[EVENTS_TABLE, WIDE_EVENTS_TABLE],
             sql: "SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM wide_events) u GROUP BY k ORDER BY k DESC LIMIT 3",
         },
+        SqlTestCase {
+            name: "order_by_prefix_breaks_ties_by_unselected_group_key",
+            description: "ORDER BY covers only part of the group keys: the TopN must break ties by the remaining group keys, even one that is not selected, since only the first groups by all the rank keys are whole.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, count(*) FROM events GROUP BY category, value ORDER BY category DESC LIMIT 3",
+        },
+        SqlTestCase {
+            name: "order_by_prefix_with_unsortable_group_key_is_not_pushed",
+            description: "The TopN cannot break ties by a group key it cannot sort by, so the rank limit must not be pushed.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT category, tags, count(*) FROM tagged_events GROUP BY category, tags ORDER BY category LIMIT 3",
+        },
+        SqlTestCase {
+            name: "limit_with_unsortable_group_key_is_not_pushed",
+            description: "Without a sort by every group key the limit could keep a group that lost rows to the rank limit, so the rank limit must not be pushed.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT category, tags, count(*) FROM tagged_events GROUP BY category, tags LIMIT 3",
+        },
+        SqlTestCase {
+            name: "limit_without_aggregate_functions_keeps_unsortable_group_key",
+            description: "Without aggregate functions a group that lost rows to the rank limit is still the same group, so the rank limit is pushed even with a group key the sort cannot order by.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT DISTINCT category, tags FROM tagged_events LIMIT 3",
+        },
+        SqlTestCase {
+            name: "order_by_prefix_without_aggregate_functions_needs_no_tie_breaker",
+            description: "Without aggregate functions any group tied on the ORDER BY keys is a right answer, so the TopN keeps its sort keys.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT DISTINCT category, tags FROM tagged_events ORDER BY category LIMIT 3",
+        },
     ];
 
     for case in &cases {
@@ -158,3 +188,4 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
 const EVENTS_TABLE: &str = "CREATE TABLE events(category INT, value INT)";
 const CATEGORIES_TABLE: &str = "CREATE TABLE categories(category INT, name STRING)";
 const WIDE_EVENTS_TABLE: &str = "CREATE TABLE wide_events(category BIGINT)";
+const TAGGED_EVENTS_TABLE: &str = "CREATE TABLE tagged_events(category INT, tags ARRAY(INT))";

@@ -238,6 +238,9 @@ impl Planner {
                     return Err(ErrorCode::SyntaxException("PRQL to SQL conversion failed"));
                 }
 
+                // Before the rewrites below and the rest of planning can fail.
+                // The text is attached later, once it is final.
+                self.ctx.attach_query_kind(get_query_kind(&stmt));
                 self.replace_stmt(&mut stmt)?;
 
                 PlanExtras {
@@ -295,6 +298,8 @@ impl Planner {
         stmt: &Statement,
         force_disable_distributed_optimization: bool,
     ) -> Result<Plan> {
+        // Callers may pass a statement that was not parsed by this planner.
+        self.ctx.attach_query_kind(get_query_kind(stmt));
         self.plan_stmt_with_materialized_view_rewrite(
             stmt,
             force_disable_distributed_optimization,
@@ -310,6 +315,7 @@ impl Planner {
         stmt: &Statement,
         force_disable_distributed_optimization: bool,
     ) -> Result<Plan> {
+        self.ctx.attach_query_kind(get_query_kind(stmt));
         self.plan_stmt_with_materialized_view_rewrite(
             stmt,
             force_disable_distributed_optimization,

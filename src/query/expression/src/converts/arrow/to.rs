@@ -463,9 +463,9 @@ impl From<&Column> for ArrayData {
                 unsafe { builder.build_unchecked() }
             }
             Column::Nullable(col) => {
-                let data = ArrayData::from(&col.column);
+                let data = ArrayData::from(col.column());
                 let builder = data.into_builder();
-                let nulls = col.validity.clone().into();
+                let nulls = col.validity().clone().into();
                 unsafe { builder.nulls(Some(nulls)).build_unchecked() }
             }
             Column::Map(col) => {

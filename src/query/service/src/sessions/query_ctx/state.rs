@@ -89,6 +89,10 @@ impl TableContextQueryIdentity for QueryContext {
         self.shared.attach_query_str(kind, query);
     }
 
+    fn attach_query_kind(&self, kind: QueryKind) {
+        self.shared.attach_query_kind(kind);
+    }
+
     fn add_query_secrets(&self, secrets: SqlSecrets) {
         self.shared.query_secrets.write().extend(secrets);
     }

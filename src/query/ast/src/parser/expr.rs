@@ -1082,6 +1082,84 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
         Ok(expr)
     }
 }
+
+/// Parses the elements of an array.
+fn array_elements(i: Input) -> IResult<Vec<Expr>> {
+    match numeric_array_elements(i) {
+        Some(parsed) => Ok(parsed),
+        None => comma_separated_list0_ignore_trailing(subexpr(0)).parse(i),
+    }
+}
+
+/// Parses the elements of an array of plain numeric literals, such as the query
+/// vector `[0.12, -3.4, 5e-2]` of a vector search, straight from the tokens.
+///
+/// It returns what `comma_separated_list0_ignore_trailing(subexpr(0))` returns
+/// for the same tokens, without running the expression parser for every element.
+/// It returns `None` for anything else, which is then left to that parser: other
+/// kinds of elements, an element that is an expression, and a number that fails
+/// to parse.
+fn numeric_array_elements(i: Input) -> Option<(Input, Vec<Expr>)> {
+    // The expression parser refuses elements at this depth.
+    if i.expr_depth >= MAX_EXPR_DEPTH {
+        return None;
+    }
+
+    // The tokens are checked before any element is built: an array that is not
+    // of numeric literals costs a scan, not the elements parsed so far.
+    let tokens = i.tokens;
+    let kind = |pos: usize| tokens.get(pos).map(|token| token.kind);
+    let mut len = 0;
+    let mut pos = 0;
+    loop {
+        if kind(pos) == Some(Minus) {
+            pos += 1;
+        }
+        match tokens.get(pos) {
+            Some(number) if number.kind == LiteralInteger => {}
+            // `.5` is a map access for the expression parser.
+            Some(number) if number.kind == LiteralFloat && !number.text().starts_with('.') => {}
+            _ => return None,
+        }
+        len += 1;
+        pos += 1;
+        // The caller takes a trailing comma and the closing bracket.
+        match (kind(pos), kind(pos + 1)) {
+            (Some(RBracket), _) | (Some(Comma), Some(RBracket)) => break,
+            (Some(Comma), _) => pos += 1,
+            _ => return None,
+        }
+    }
+    let end = pos;
+
+    let mut exprs = Vec::with_capacity(len);
+    let mut pos = 0;
+    while pos < end {
+        let minus = (tokens[pos].kind == Minus).then(|| {
+            pos += 1;
+            tokens[pos - 1].span
+        });
+        let number = &tokens[pos];
+        let value = match number.kind {
+            LiteralInteger => parse_uint(number.text(), 10),
+            _ => parse_float(number.text()),
+        }
+        .ok()?;
+        let span = Some(number.span);
+        exprs.push(match minus {
+            // The same folding as `ExprParser::prefix`.
+            Some(minus) => Expr::Literal {
+                span: merge_span(Some(minus), span),
+                value: try_negate_literal(&value)?,
+            },
+            None => Expr::Literal { span, value },
+        });
+        // The number, and the comma after it.
+        pos += 2;
+    }
+    Some((i.slice(end..), exprs))
+}
+
 #[allow(unreachable_code)]
 #[recursive::recursive]
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
@@ -1415,7 +1493,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         // and then will be converted back to an array if the map access is not following
         // a primary element nor a postfix element.
         rule! {
-            "[" ~ #comma_separated_list0_ignore_trailing(subexpr(0))? ~ ","? ~ ^"]"
+            "[" ~ #array_elements? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
             let mut exprs = opt_args.unwrap_or_default();

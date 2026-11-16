@@ -17,6 +17,8 @@ pub use v2::AdditionalStatsMeta;
 pub use v2::BlockIndexMeta;
 pub use v2::BlockMeta;
 pub use v2::ClusterStatistics;
+pub use v2::ColumnGroupBloomMeta;
+pub use v2::ColumnGroupFileMeta;
 pub use v2::ColumnMeta;
 pub use v2::ColumnStatistics;
 pub use v2::DraftVirtualBlockMeta;

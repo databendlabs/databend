@@ -129,7 +129,7 @@ pub trait ValueVisitor: Sized {
         &mut self,
         column: Box<NullableColumn<AnyType>>,
     ) -> Result<Self::U, Self::Error> {
-        let data_type = column.column.data_type().wrap_nullable();
+        let data_type = column.column().data_type().wrap_nullable();
         self.visit_typed_column::<AnyType>(Column::Nullable(column), &data_type)
     }
 

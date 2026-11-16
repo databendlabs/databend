@@ -95,7 +95,7 @@ fn test_short_sql() {
         expected_result_insert
     );
 
-    // Test case 3: SQL query longer than 128 characters but does not start with "INSERT"
+    // Test case 3: SQL query longer than 128 characters but not an INSERT or REPLACE
     let long_sql_update =
         "UPDATE users SET name = 'John' WHERE id = 1;".to_string() + &"id = 1 OR ".repeat(20); // Make sure this creates a string longer than 128 characters
     assert_eq!(
@@ -139,4 +139,28 @@ fn test_short_sql() {
     let multibyte_sql = "INSERT INTO t VALUES ('".to_string() + &"😊".repeat(100) + "')";
     assert!(multibyte_sql.len() > 128 && multibyte_sql.graphemes(true).count() <= 128);
     assert_eq!(short_sql(multibyte_sql.clone(), max_length), multibyte_sql);
+}
+
+#[test]
+fn test_short_sql_replace() {
+    for keyword in ["REPLACE", "replace", "RePlAcE"] {
+        let sql = format!(
+            "{keyword} INTO t ON (id) VALUES (1, '{}')",
+            "😊".repeat(128)
+        );
+        let original_length = sql.graphemes(true).count();
+        for max_length in [128, original_length, original_length + 1] {
+            let expected = if original_length > max_length {
+                let prefix: String = sql.graphemes(true).take(max_length).collect();
+                format!(
+                    "{prefix}...[{} more characters]",
+                    original_length - max_length
+                )
+            } else {
+                sql.clone()
+            };
+            assert_eq!(short_sql(sql.clone(), max_length as u64), expected);
+            assert_eq!(short_sql(format!(" \n {sql}"), max_length as u64), expected);
+        }
+    }
 }

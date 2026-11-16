@@ -42,6 +42,7 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::variant::JSONB_NULL;
 use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
@@ -476,6 +477,8 @@ impl FastFieldDecoderValues {
             }
             Err(_) => {
                 if self.common_settings.settings.disable_variant_check {
+                    // Store an unparsable value as JSON null: empty bytes are not valid JSONB.
+                    column.put_slice(JSONB_NULL);
                     column.commit_row();
                 } else {
                     return Err(ErrorCode::BadBytes(format!(
