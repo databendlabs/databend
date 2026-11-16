@@ -63,8 +63,9 @@ pub struct HybridHashJoinState {
     // for the lifetime of this join.
     pub ever_spilled: AtomicBool,
     // Set by a processor that detects memory pressure while the in-memory hash table is being
-    // built. Processors stop inserting once it is set; the partial hash table is discarded at
-    // the next stage barrier and the build final stage runs again in grace mode.
+    // built. Processors stop inserting once it is set; after the stage barrier the partial hash
+    // table is discarded and the build final stage runs again in grace mode. Never cleared:
+    // a processor that has switched to grace mode no longer acts on it.
     final_build_spill_requested: AtomicBool,
     // Count logical build input before spill repartitioning so the runtime-filter packet can
     // globalize build-side emptiness without depending on in-memory state that spill resets.
@@ -134,11 +135,6 @@ impl HybridHashJoinState {
 
     pub fn final_build_spill_requested(&self) -> bool {
         self.final_build_spill_requested.load(Ordering::Acquire)
-    }
-
-    pub fn clear_final_build_spill_request(&self) {
-        self.final_build_spill_requested
-            .store(false, Ordering::Release);
     }
 
     pub fn add_build_input_rows(&self, rows: usize) {
