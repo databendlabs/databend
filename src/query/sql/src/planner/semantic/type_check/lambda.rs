@@ -154,6 +154,18 @@ impl<'a> CoreExprArena<'a> {
         lambda: &'a Lambda,
     ) -> Result<CoreExprId> {
         let args = self.lower_expr_args(args)?;
+        // A parameter is named by a plain identifier, without quotes or
+        // IDENTIFIER().
+        if let Some(param) = lambda
+            .params
+            .iter()
+            .find(|param| param.is_quoted() || param.is_hole() || param.is_variable())
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "lambda parameter {param} must be a plain identifier, without quotes or IDENTIFIER()"
+            ))
+            .set_span(param.span));
+        }
         let first = self.nodes.len();
         let lambda_expr = self.lower_ast_expr(&lambda.expr)?;
         self.reject_lambda_body_nodes(first)?;

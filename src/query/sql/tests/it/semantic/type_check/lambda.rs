@@ -59,9 +59,21 @@ async fn test_type_check_lambda_functions() -> Result<()> {
         },
         SqlTestCase {
             name: "lambda_parameter_names_are_normalized_like_references",
-            description: "Parameter names are normalized as the names in the body are: an unquoted name matches it in any case, a quoted one as written.",
+            description: "Parameter names are normalized as the names in the body are: an unquoted name matches it in any case.",
             setup_sqls: &[],
-            sql: "(array_transform([number], X -> x + 1), array_transform([number], \"Y\" -> \"Y\" + 1))",
+            sql: "array_transform([number], X -> x + 1)",
+        },
+        SqlTestCase {
+            name: "lambda_parameter_must_not_be_quoted",
+            description: "A parameter is named by a plain identifier, so a quoted name is rejected.",
+            setup_sqls: &[],
+            sql: "array_transform([number], \"Y\" -> \"Y\" + 1)",
+        },
+        SqlTestCase {
+            name: "lambda_parameters_must_not_be_quoted",
+            description: "Each of the parameters of a lambda is named by a plain identifier.",
+            setup_sqls: &[],
+            sql: "array_reduce([number], (x, `y`) -> x + y)",
         },
     ];
 
