@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod final_build_spill;
 mod hybrid_join;
 mod hybrid_state;
 

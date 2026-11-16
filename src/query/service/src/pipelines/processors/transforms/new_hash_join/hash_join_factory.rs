@@ -20,6 +20,7 @@ use databend_common_expression::HashMethodKind;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
+use super::encoded_build::EncodedBuild;
 use super::grace::GraceMemoryJoin;
 use super::hybrid::HybridHashJoin;
 use super::hybrid::HybridHashJoinState;
@@ -43,6 +44,7 @@ pub struct HashJoinFactory {
     desc: Arc<HashJoinDesc>,
     hash_method: HashMethodKind,
     function_ctx: FunctionContext,
+    encoded_build: Arc<EncodedBuild>,
 }
 
 impl HashJoinFactory {
@@ -52,18 +54,30 @@ impl HashJoinFactory {
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
     ) -> Arc<HashJoinFactory> {
+        let encoded_build = Arc::new(EncodedBuild::create(
+            desc.clone(),
+            method.clone(),
+            function_ctx.clone(),
+        ));
         Arc::new(HashJoinFactory {
             ctx,
             desc,
             function_ctx,
             hash_method: method,
+            encoded_build,
         })
+    }
+
+    /// The form grace hash join spills build rows in, shared by all levels.
+    pub fn encoded_build(&self) -> Arc<EncodedBuild> {
+        self.encoded_build.clone()
     }
 
     /// Create the states shared by all processors of one hybrid hash join level.
     pub fn create_level_states(self: &Arc<Self>, level: usize) -> Result<HybridLevelStates> {
         Ok(HybridLevelStates {
-            basic: Arc::new(BasicHashJoinState::create()),
+            // The levels below the top restore the build rows spilled in encoded form.
+            basic: Arc::new(BasicHashJoinState::create(level > 0)),
             hybrid: HybridHashJoinState::create(self.ctx.clone(), level, self.clone())?,
         })
     }

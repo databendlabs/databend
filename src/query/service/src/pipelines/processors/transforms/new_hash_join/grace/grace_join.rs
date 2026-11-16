@@ -34,6 +34,7 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::get_hashes;
 use crate::pipelines::processors::transforms::hash_join_table::hash_bits;
+use crate::pipelines::processors::transforms::new_hash_join::encoded_build::EncodedBuild;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::GraceHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::SpillMetadata;
@@ -53,6 +54,8 @@ const BYTES_PER_MIB: usize = 1024 * 1024;
 
 pub struct GraceHashJoin<T: GraceMemoryJoin> {
     pub(crate) desc: Arc<HashJoinDesc>,
+    // Build blocks arrive and are spilled in this form.
+    pub(crate) encoded_build: Arc<EncodedBuild>,
     pub(crate) hash_method_kind: HashMethodKind,
     pub(crate) function_context: FunctionContext,
 
@@ -212,6 +215,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         function_ctx: FunctionContext,
         hash_method_kind: HashMethodKind,
         desc: Arc<HashJoinDesc>,
+        encoded_build: Arc<EncodedBuild>,
         state: Arc<GraceHashJoinState>,
         memory_hash_join: T,
         shift_bits: usize,
@@ -235,6 +239,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
         Ok(GraceHashJoin {
             desc,
+            encoded_build,
             state,
             shift_bits,
             location_prefix,
@@ -296,7 +301,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
             let mut reader = buffer_pool.reader(
                 operator.clone(),
                 data.path,
-                self.desc.build_schema.clone(),
+                self.encoded_build.schema(),
                 data.row_groups,
                 target,
                 self.read_settings,
@@ -316,17 +321,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
     fn partition_build_data(&mut self, data: DataBlock) -> Result<Vec<(usize, DataBlock)>> {
         let mut hashes = Vec::with_capacity(data.num_rows());
-
-        get_hashes(
-            &self.function_context,
-            &data,
-            &self.desc.build_keys,
-            &self.hash_method_kind,
-            self.desc.join_type,
-            true,
-            &self.desc.is_null_equal,
-            &mut hashes,
-        )?;
+        self.encoded_build.hashes(&data, &mut hashes)?;
 
         for hash in hashes.iter_mut() {
             *hash = get_partition_id(*hash, self.shift_bits);
