@@ -114,7 +114,7 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
-        settings.load_changes().await?;
+        settings.load_session_changes().await?;
 
         let session = self.create_with_settings_with_conn_id(typ, settings, None, mysql_conn_id)?;
 
