@@ -16,8 +16,13 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortCompare;
+use databend_common_expression::Value;
+use databend_common_expression::group_hash_entries;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 
@@ -165,9 +170,11 @@ impl PartitionTopN {
         func: WindowPartitionTopNFunc,
     ) -> PartitionTopN {
         assert!(top > 0);
-        let sort_desc = partition_indices
-            .iter()
-            .map(|&offset| SortColumnDescription {
+        // The first sort column is the hash of the partition keys, which is
+        // not a column of the block, so its offset is not used.
+        let sort_desc = std::iter::once(0)
+            .chain(partition_indices.iter().copied())
+            .map(|offset| SortColumnDescription {
                 offset,
                 asc: true,
                 nulls_first: false,
@@ -198,9 +205,27 @@ impl PartitionTopN {
     /// partition among the rows of `block`. A row ranked beyond `top` inside
     /// one block is ranked beyond `top` among all rows, so dropping it does
     /// not change the window result.
+    ///
+    /// Rows are in one partition here only when their partition keys have the
+    /// same hash and compare equal. The window exchange sends each row by
+    /// this hash, and the window then splits the rows it receives by
+    /// comparing the keys. Keys can compare equal with different hashes, such
+    /// as the variants `1` and `1.0`, and may then reach different windows,
+    /// so grouping them by comparison alone could drop a row that its window
+    /// ranks within `top`.
     fn top_n_rows(&self, block: &DataBlock) -> Vec<u32> {
         let rows = block.num_rows();
         let mut sort_compare = SortCompare::with_force_equality(self.sort_desc.to_vec(), rows);
+
+        let mut hashes = vec![0u64; rows];
+        group_hash_entries(
+            ProjectedBlock::project(&self.partition_indices, block),
+            &mut hashes,
+        );
+        sort_compare
+            .visit_value(Value::Column(UInt64Type::from_data(hashes)))
+            .unwrap();
+        sort_compare.increment_column_index();
 
         for &offset in &self.partition_indices {
             let array = block.get_by_offset(offset).value();
@@ -210,7 +235,7 @@ impl PartitionTopN {
 
         let partition_equality = sort_compare.equality_index().to_vec();
 
-        for desc in self.sort_desc.iter().skip(self.partition_indices.len()) {
+        for desc in self.sort_desc.iter().skip(1 + self.partition_indices.len()) {
             let array = block.get_by_offset(desc.offset).value();
             sort_compare.visit_value(array).unwrap();
             sort_compare.increment_column_index();
@@ -269,6 +294,7 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::StringType;
+    use databend_common_expression::types::VariantType;
 
     use super::*;
 
@@ -472,6 +498,25 @@ mod tests {
             out[0].columns(),
             DataBlock::new_from_columns(vec![StringType::from_data(vec!["x"; 10])]).columns()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_keys_equal_with_different_hashes() -> Result<()> {
+        // The variants `1` and `1.0` compare equal, but their hashes differ,
+        // so the window exchange may send them to different windows.
+        let key = |text: &str| jsonb::parse_value(text.as_bytes()).unwrap().to_vec();
+        let data = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![10, 20]),
+            VariantType::from_data(vec![key("1"), key("1.0")]),
+        ]);
+        let mut hashes = vec![0u64; 2];
+        group_hash_entries(ProjectedBlock::project(&[1], &data), &mut hashes);
+        assert_ne!(hashes[0], hashes[1]);
+
+        // Each row may be the first of its window partition, so both are kept.
+        let rows = top_n_rows(vec![1], 1, WindowPartitionTopNFunc::RowNumber, &data);
+        assert_eq!(rows, vec![0, 1]);
         Ok(())
     }
 }
