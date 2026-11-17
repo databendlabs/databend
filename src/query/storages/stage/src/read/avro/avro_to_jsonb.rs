@@ -19,6 +19,8 @@ use apache_avro::types::Value;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::i256;
 use num_bigint::BigInt;
+use num_traits::ToPrimitive;
+use num_traits::Zero;
 
 pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::Value<'a>, String> {
     let jvalue = match (value, schema) {
@@ -37,12 +39,12 @@ pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::V
         }
         (Value::Decimal(d), Schema::Decimal(schema)) => {
             let big_int = <BigInt>::from(d.to_owned());
-            jsonb::Value::Number(convert_decimal(schema.precision, schema.scale, big_int)?)
+            let scale = i64::try_from(schema.scale).unwrap_or(i64::MAX);
+            jsonb::Value::Number(convert_decimal(schema.precision, scale, big_int))
         }
         (Value::BigDecimal(d), Schema::BigDecimal) => {
-            let precision = d.digits() as usize;
             let (big_int, scale) = d.clone().into_bigint_and_exponent();
-            jsonb::Value::Number(convert_decimal(precision, scale as usize, big_int)?)
+            jsonb::Value::Number(convert_decimal(0, scale, big_int))
         }
         (Value::Date(d), Schema::Date) => jsonb::Value::Date(jsonb::Date { value: *d }),
         (Value::TimeMillis(t), Schema::TimeMillis) => {
@@ -126,34 +128,66 @@ pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::V
     Ok(jvalue)
 }
 
-fn convert_decimal(
-    precision: usize,
-    scale: usize,
-    big_int: BigInt,
-) -> Result<jsonb::Number, String> {
-    let max_64 = i64::MAX_PRECISION as usize;
-    let max_128 = i128::MAX_PRECISION as usize;
-    let max_256 = i256::MAX_PRECISION as usize;
-    if precision <= max_64 {
-        Ok(jsonb::Number::Decimal64(jsonb::Decimal64 {
-            scale: scale as u8,
-            value: i64::from_bigint(big_int).ok_or("too many bits for i64".to_string())?,
-        }))
-    } else if precision <= max_128 {
-        Ok(jsonb::Number::Decimal128(jsonb::Decimal128 {
-            scale: scale as u8,
-            value: i128::from_bigint(big_int).ok_or("too many bits for i128".to_string())?,
-        }))
-    } else if precision <= max_256 {
-        Ok(jsonb::Number::Decimal256(jsonb::Decimal256 {
-            scale: scale as u8,
-            value: i256::from_bigint(big_int)
-                .ok_or("too many bits for i256".to_string())?
-                .0,
-        }))
+/// Converts `value / 10^scale` to the narrowest JSONB decimal that holds its
+/// scale and digits and is at least as wide as the declared `precision`, or to
+/// the nearest `f64` when no JSONB decimal holds it exactly.
+///
+/// Avro does not ensure that a value fits its declared precision, and a
+/// `BigDecimal` scale can exceed its digits or be negative, so the width and
+/// the scale come from the value. Trailing zeros are dropped only when the
+/// scale exceeds 76.
+fn convert_decimal(precision: usize, scale: i64, value: BigInt) -> jsonb::Number {
+    let max_scale = i64::from(i256::MAX_PRECISION);
+    let (value, scale) = if value.is_zero() {
+        (value, scale.clamp(0, max_scale))
+    } else if scale < 0 {
+        // Beyond 76 digits, `value * 10^-scale` fits no decimal.
+        if scale < -max_scale {
+            return decimal_to_f64(&value, scale);
+        }
+        (value * BigInt::from(10).pow(scale.unsigned_abs() as u32), 0)
     } else {
-        return Err(format!("Decimal precision too large: {}", precision));
+        let (mut value, mut scale) = (value, scale);
+        let ten = BigInt::from(10);
+        while scale > max_scale && (&value % &ten).is_zero() {
+            value /= &ten;
+            scale -= 1;
+        }
+        if scale > max_scale {
+            return decimal_to_f64(&value, scale);
+        }
+        (value, scale)
+    };
+    let scale = scale as u8;
+    let precision = precision.min(usize::from(i256::MAX_PRECISION));
+    if let Some(v) = value.to_i64().filter(|v| fits(*v, scale, precision)) {
+        return jsonb::Number::Decimal64(jsonb::Decimal64 { scale, value: v });
     }
+    if let Some(v) = value.to_i128().filter(|v| fits(*v, scale, precision)) {
+        return jsonb::Number::Decimal128(jsonb::Decimal128 { scale, value: v });
+    }
+    match i256::from_bigint(value.clone()).filter(|v| fits(*v, scale, precision)) {
+        Some(v) => jsonb::Number::Decimal256(jsonb::Decimal256 { scale, value: v.0 }),
+        None => decimal_to_f64(&value, i64::from(scale)),
+    }
+}
+
+/// Returns whether `T` stores a decimal of `scale` and `value` within its
+/// precision, and that precision is at least `precision`.
+fn fits<T: Decimal>(value: T, scale: u8, precision: usize) -> bool {
+    precision <= usize::from(T::MAX_PRECISION)
+        && scale <= T::MAX_PRECISION
+        && value >= T::min_for_precision(T::MAX_PRECISION)
+        && value <= T::max_for_precision(T::MAX_PRECISION)
+}
+
+/// Returns the `f64` nearest to `value / 10^scale`, or an infinity or zero
+/// beyond the `f64` range.
+fn decimal_to_f64(value: &BigInt, scale: i64) -> jsonb::Number {
+    // The standard parser rounds correctly, and the text is `-`, digits, `e`
+    // and the exponent.
+    let text = format!("{value}e{}", -i128::from(scale));
+    jsonb::Number::Float64(text.parse().expect("decimal text is a valid float"))
 }
 
 #[cfg(test)]
@@ -254,5 +288,161 @@ mod tests {
             }));
             assert_eq!(jsonb_value, expected);
         }
+    }
+
+    // Avro does not ensure that a value fits its declared precision, and a
+    // `BigDecimal` scale can exceed its digits or be negative. These used to
+    // become JSONB decimals beyond their precision, or wrap the scale: `1E+5`
+    // became `1e-251`.
+    #[test]
+    fn test_decimal_width_and_scale_follow_the_value() {
+        use jsonb::Decimal64;
+        use jsonb::Decimal128;
+        use jsonb::Decimal256;
+        use jsonb::Number;
+
+        use super::convert_decimal;
+
+        let int = |text: &str| BigInt::from_str(text).unwrap();
+        let e76 = format!("1{}", "0".repeat(76));
+        let cases = [
+            // The declared width is kept when the value fits it.
+            (
+                0,
+                2,
+                "12345",
+                Number::Decimal64(Decimal64 {
+                    scale: 2,
+                    value: 12345,
+                }),
+            ),
+            (
+                20,
+                2,
+                "12345",
+                Number::Decimal128(Decimal128 {
+                    scale: 2,
+                    value: 12345,
+                }),
+            ),
+            // More digits than the declared precision.
+            (
+                10,
+                0,
+                "1000000000000000000",
+                Number::Decimal128(Decimal128 {
+                    scale: 0,
+                    value: 10_i128.pow(18),
+                }),
+            ),
+            // A scale beyond the digits.
+            (
+                0,
+                30,
+                "1",
+                Number::Decimal128(Decimal128 {
+                    scale: 30,
+                    value: 1,
+                }),
+            ),
+            (
+                0,
+                76,
+                "1",
+                Number::Decimal256(Decimal256 {
+                    scale: 76,
+                    value: 1.into(),
+                }),
+            ),
+            // Negative scales.
+            (
+                0,
+                -5,
+                "1",
+                Number::Decimal64(Decimal64 {
+                    scale: 0,
+                    value: 100000,
+                }),
+            ),
+            (
+                0,
+                -5,
+                "-12",
+                Number::Decimal64(Decimal64 {
+                    scale: 0,
+                    value: -1200000,
+                }),
+            ),
+            // Trailing zeros are dropped only beyond scale 76.
+            (
+                0,
+                78,
+                "1000",
+                Number::Decimal256(Decimal256 {
+                    scale: 76,
+                    value: 10.into(),
+                }),
+            ),
+            (
+                0,
+                100,
+                "0",
+                Number::Decimal256(Decimal256 {
+                    scale: 76,
+                    value: 0.into(),
+                }),
+            ),
+            (
+                0,
+                -100,
+                "0",
+                Number::Decimal64(Decimal64 { scale: 0, value: 0 }),
+            ),
+            // No JSONB decimal holds these exactly.
+            (0, 80, "1", Number::Float64(1e-80)),
+            (0, 80, "-15", Number::Float64(-1.5e-79)),
+            (0, 0, e76.as_str(), Number::Float64(1e76)),
+            (0, -100, "1", Number::Float64(1e100)),
+            (0, i64::MIN, "1", Number::Float64(f64::INFINITY)),
+            (0, i64::MAX, "1", Number::Float64(0.0)),
+        ];
+        for (precision, scale, value, expected) in cases {
+            let number = convert_decimal(precision, scale, int(value));
+            assert_eq!(
+                format!("{number:?}"),
+                format!("{expected:?}"),
+                "{value}e{}",
+                -i128::from(scale)
+            );
+        }
+
+        // Through Avro values.
+        let value = apache_avro::types::Value::BigDecimal(apache_avro::BigDecimal::new(
+            BigInt::from(1),
+            -5,
+        ));
+        let jsonb_value = to_jsonb(&value, &Schema::BigDecimal).unwrap();
+        assert_eq!(
+            format!("{jsonb_value:?}"),
+            format!(
+                "{:?}",
+                jsonb::Value::Number(Number::Decimal64(Decimal64 {
+                    scale: 0,
+                    value: 100000,
+                }))
+            )
+        );
+        let (value, schema) = create_avro_decimal(&10_i64.pow(18).to_string(), 10, 2);
+        let jsonb_value = to_jsonb(&value, &schema).unwrap();
+        assert_eq!(
+            format!("{jsonb_value:?}"),
+            format!(
+                "{:?}",
+                jsonb::Value::Number(Number::Decimal128(Decimal128 {
+                    scale: 2,
+                    value: 10_i128.pow(18),
+                }))
+            )
+        );
     }
 }

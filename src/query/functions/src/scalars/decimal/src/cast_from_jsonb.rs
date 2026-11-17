@@ -105,7 +105,8 @@ where
                 .map(Some)
                 .ok_or_else(|| format!("Decimal overflow, value `{v}`")),
             JsonbNumber::Decimal64(d) => {
-                let from_size = DecimalSize::new_unchecked(i64::MAX_PRECISION, d.scale);
+                let from_size = DecimalSize::new(i64::MAX_PRECISION, d.scale)
+                    .map_err(|e| format!("Invalid jsonb value, {}", e.message()))?;
                 match dest_type {
                     DecimalDataType::Decimal64(_) => {
                         let x = d.value;
@@ -122,7 +123,8 @@ where
                 }
             }
             JsonbNumber::Decimal128(d) => {
-                let from_size = DecimalSize::new_unchecked(i128::MAX_PRECISION, d.scale);
+                let from_size = DecimalSize::new(i128::MAX_PRECISION, d.scale)
+                    .map_err(|e| format!("Invalid jsonb value, {}", e.message()))?;
                 match dest_type {
                     DecimalDataType::Decimal64(_) => {
                         let x = d.value;
@@ -139,7 +141,8 @@ where
                 }
             }
             JsonbNumber::Decimal256(d) => {
-                let from_size = DecimalSize::new_unchecked(i256::MAX_PRECISION, d.scale);
+                let from_size = DecimalSize::new(i256::MAX_PRECISION, d.scale)
+                    .map_err(|e| format!("Invalid jsonb value, {}", e.message()))?;
                 match dest_type {
                     DecimalDataType::Decimal64(_) | DecimalDataType::Decimal128(_) => {
                         let x = i256(d.value);
@@ -214,3 +217,4 @@ fn decimal_to_decimal<T: DecimalExt>(
         }
     }
 }
+

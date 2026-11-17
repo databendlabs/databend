@@ -907,6 +907,11 @@ pub(super) struct ScaleReduction<T> {
 impl<T: DecimalExt> ScaleReduction<T> {
     pub(super) fn new(shift: u8, precision: u8) -> Self {
         assert!(shift >= 1, "internal scale reduction by {shift} digits");
+        // `T::e` overflows past the precision.
+        debug_assert!(
+            shift <= T::MAX_PRECISION,
+            "scale reduction by {shift} digits overflows"
+        );
         let factor = T::e(shift);
         Self {
             factor,
