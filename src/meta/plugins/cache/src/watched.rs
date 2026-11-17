@@ -14,12 +14,15 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use databend_meta_client::ClientHandle;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::types::SeqV;
+use databend_meta_client::types::SeqValue;
 use databend_meta_runtime::DatabendRuntime;
 use futures::FutureExt;
 
@@ -33,6 +36,9 @@ use crate::Cache;
 /// prefix, absent keys included, but lags a change by the watch delay, a change made by this
 /// process included. Use it where a briefly stale value is acceptable, never to read the seq of
 /// a compare-and-swap.
+///
+/// A key whose TTL has passed is absent, as from meta-service: meta-service removes it, and the
+/// watch tells, only when it applies a later write.
 pub struct WatchedPrefix {
     /// Without the trailing `/`: the copy holds the keys `{prefix}/...`.
     prefix: String,
@@ -71,8 +77,8 @@ impl WatchedPrefix {
         f(&mut cache)
     }
 
-    /// The values of `keys`, all from the copy if it is ready and covers them, or else all from
-    /// `kv` in one read.
+    /// The values of `keys`, all from the copy at one point if it is ready and covers them, or
+    /// else all from `kv` in one read.
     pub async fn mget_kv<KV>(
         &self,
         kv: &KV,
@@ -82,10 +88,16 @@ impl WatchedPrefix {
         KV: KVApi + ?Sized,
     {
         let local = keys.iter().all(|key| self.covers(key)).then(|| {
+            let now_ms = now_ms();
             self.ready(|cache| {
-                keys.iter()
-                    .map(|key| cache.try_get(key).now_or_never()?.ok())
-                    .collect::<Option<Vec<_>>>()
+                cache
+                    .try_access(|data| {
+                        keys.iter()
+                            .map(|key| live(data.data.get(key), now_ms).cloned())
+                            .collect::<Vec<_>>()
+                    })
+                    .now_or_never()?
+                    .ok()
             })
         });
         match local.flatten() {
@@ -95,12 +107,27 @@ impl WatchedPrefix {
     }
 
     /// The keys and values under `dir`, from the copy if it is ready and covers `dir`, or else
-    /// from `kv`. Like `list_kv` of `{dir}/`: a trailing `/` of `dir` is ignored.
+    /// from `kv`. Like `list_kv` of `{dir}/`: one trailing `/` of `dir` is ignored.
     pub async fn list_kv<KV>(&self, kv: &KV, dir: &str) -> Result<Vec<(String, SeqV)>, KV::Error>
     where KV: KVApi + ?Sized {
-        let dir = dir.trim_end_matches('/');
-        let local = (dir == self.prefix || self.covers(dir))
-            .then(|| self.ready(|cache| cache.try_list_dir(dir).now_or_never()?.ok()));
+        let dir = dir.strip_suffix('/').unwrap_or(dir);
+        let local = (dir == self.prefix || self.covers(dir)).then(|| {
+            // Not `try_list_dir`: it strips every trailing `/`, and would list `a/b` for `a/b//`.
+            let range = format!("{dir}/")..format!("{dir}0");
+            let now_ms = now_ms();
+            self.ready(|cache| {
+                cache
+                    .try_access(|data| {
+                        data.data
+                            .range(range)
+                            .filter(|(_, value)| !value.is_expired(now_ms))
+                            .map(|(key, value)| (key.clone(), value.clone()))
+                            .collect::<Vec<_>>()
+                    })
+                    .now_or_never()?
+                    .ok()
+            })
+        });
         match local.flatten() {
             Some(items) => Ok(items),
             None => {
@@ -110,4 +137,15 @@ impl WatchedPrefix {
             }
         }
     }
+}
+
+/// `value` unless its TTL has passed by `now_ms`.
+fn live(value: Option<&SeqV>, now_ms: u64) -> Option<&SeqV> {
+    value.filter(|value| !value.is_expired(now_ms))
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
 }

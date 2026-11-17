@@ -141,6 +141,8 @@ async fn test_watched_prefix_reads() -> anyhow::Result<()> {
         all.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
         vec!["pp/a", "pp/d/x"]
     );
+    // Only one trailing `/` is ignored: `pp/d//` lists the keys `pp/d//...`, as meta-service does.
+    assert!(watched.list_kv(&kv, "pp/d//").await?.is_empty());
     assert_eq!(kv.reads(), 0);
 
     // Keys outside the prefix, `ppp/` included, go to meta-service, all in one read.
@@ -154,6 +156,45 @@ async fn test_watched_prefix_reads() -> anyhow::Result<()> {
     // Changes reach the copy by the watch.
     client.upsert_kv(UpsertKV::update("pp/a", b"a2")).await?;
     wait_for(&watched, "pp/a", b"a2").await?;
+    Ok(())
+}
+
+/// A key whose TTL has passed is absent from the copy, though no write has made meta-service
+/// remove it and tell the watch.
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
+#[fastrace::trace]
+async fn test_watched_prefix_hides_expired_keys() -> anyhow::Result<()> {
+    let tcs = start_metasrv_cluster::<DatabendRuntime>(&[0]).await?;
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+        vec![tcs[0].config.grpc.api_address().unwrap()],
+        "root",
+        "xxx",
+        Some(Duration::from_secs(2)),
+        Some(Duration::from_secs(10)),
+        None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
+    )?;
+    let watched = WatchedPrefix::new(client.clone(), "pp", "test-expired").await;
+    client.upsert_kv(UpsertKV::update("pp/a", b"a")).await?;
+    client
+        .upsert_kv(UpsertKV::update("pp/t", b"t").with_ttl(Duration::from_secs(3)))
+        .await?;
+    wait_for(&watched, "pp/a", b"a").await?;
+    wait_for(&watched, "pp/t", b"t").await?;
+
+    sleep(Duration::from_secs(4)).await;
+
+    let kv = CountingKv::default();
+    let got = watched
+        .mget_kv(&kv, &["pp/a".to_string(), "pp/t".to_string()])
+        .await?;
+    assert_eq!(data(got), vec![Some(b"a".to_vec()), None]);
+    let all = watched.list_kv(&kv, "pp").await?;
+    assert_eq!(
+        all.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
+        vec!["pp/a"]
+    );
+    assert_eq!(kv.reads(), 0);
     Ok(())
 }
 
