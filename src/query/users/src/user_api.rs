@@ -32,7 +32,6 @@ use databend_common_management::RoleMgr;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_management::task::TaskMgr;
 use databend_common_management::udf::UdfMgr;
@@ -58,12 +57,12 @@ use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_plugin_cache::Cache;
+use databend_meta_plugin_cache::WatchedPrefix;
 use log::debug;
 use tokio::sync::Mutex;
 
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;
-use crate::meta_watch::MetaWatches;
 
 #[cfg(test)]
 #[path = "user_api_external_access_tests.rs"]
@@ -71,7 +70,7 @@ mod external_access_tests;
 
 pub struct UserApiProvider {
     meta: MetaStore,
-    pub(crate) client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
+    client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
 
     /// Optional cache for ownership information for all keys [`TenantOwnershipObjectIdent`] in meta-service.
     ///
@@ -87,10 +86,18 @@ pub struct UserApiProvider {
     pub(crate) network_rule_cache: Option<Mutex<Cache>>,
     pub(crate) external_access_integration_cache: Option<Mutex<Cache>>,
 
-    /// By `cache.meta_service_watch_cache`: users and global settings of the node tenant.
-    pub(crate) meta_watches: Option<MetaWatches>,
+    /// By `cache.meta_service_watch_cache`: the watched users and global settings of the node
+    /// tenant.
+    watched: Option<Watched>,
 
     builtin: BuiltIn,
+}
+
+/// The watched users and global settings of one tenant: the tenant of this node.
+struct Watched {
+    tenant: Tenant,
+    users: Arc<WatchedPrefix>,
+    settings: Arc<WatchedPrefix>,
 }
 
 impl UserApiProvider {
@@ -138,8 +145,12 @@ impl UserApiProvider {
             None
         };
 
-        let meta_watches = if cache_config.meta_service_watch_cache {
-            Some(MetaWatches::new(client.clone(), tenant).await)
+        let watched = if cache_config.meta_service_watch_cache {
+            Some(Watched {
+                tenant: tenant.clone(),
+                users: Arc::new(UserMgr::watch(client.clone(), tenant).await),
+                settings: Arc::new(SettingMgr::watch(client.clone(), tenant).await),
+            })
         } else {
             None
         };
@@ -170,7 +181,7 @@ impl UserApiProvider {
             external_access_cache_tenant: tenant.clone(),
             network_rule_cache,
             external_access_integration_cache,
-            meta_watches,
+            watched,
             builtin,
         };
 
@@ -252,10 +263,17 @@ impl UserApiProvider {
     /// change must be seen at once.
     #[async_backtrace::framed]
     pub async fn get_session_settings(&self, tenant: &Tenant) -> Result<Vec<UserSetting>> {
-        match MetaWatches::of(&self.meta_watches, tenant) {
-            Some(watches) => watches.get_settings(self.client.as_ref()).await,
-            None => self.setting_api(tenant).get_settings().await,
-        }
+        self.setting_api(tenant).get_watched_settings().await
+    }
+
+    /// The watched users and global settings of `tenant`, if it is the tenant they watch.
+    fn watched(&self, tenant: &Tenant) -> Option<&Watched> {
+        self.watched.as_ref().filter(|w| &w.tenant == tenant)
+    }
+
+    /// Whether the users of `tenant` are watched, see `UserMgr::get_watched_user`.
+    pub(crate) fn is_watched(&self, tenant: &Tenant) -> bool {
+        self.watched(tenant).is_some()
     }
 
     pub fn udf_api(&self, tenant: &Tenant) -> UdfMgr {
@@ -266,8 +284,14 @@ impl UserApiProvider {
         TaskMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn user_api(&self, tenant: &Tenant) -> Arc<impl UserApi> {
+    /// The users of `tenant`, read by `UserMgr::get_watched_user` from the watched copy if the
+    /// tenant is watched.
+    pub fn user_api(&self, tenant: &Tenant) -> Arc<UserMgr> {
         let user_mgr = UserMgr::create(self.client.clone(), tenant);
+        let user_mgr = match self.watched(tenant) {
+            Some(watched) => user_mgr.with_watched(watched.users.clone()),
+            None => user_mgr,
+        };
         Arc::new(user_mgr)
     }
 
@@ -310,8 +334,14 @@ impl UserApiProvider {
         Arc::new(QuotaMgr::<WRITE_PB>::create(self.client.clone(), tenant))
     }
 
+    /// The global settings of `tenant`, read by `SettingMgr::get_watched_settings` from the
+    /// watched copy if the tenant is watched.
     pub fn setting_api(&self, tenant: &Tenant) -> SettingMgr {
-        SettingMgr::create(self.client.clone(), tenant)
+        let setting_mgr = SettingMgr::create(self.client.clone(), tenant);
+        match self.watched(tenant) {
+            Some(watched) => setting_mgr.with_watched(watched.settings.clone()),
+            None => setting_mgr,
+        }
     }
     pub fn procedure_api(&self, tenant: &Tenant) -> ProcedureMgr {
         ProcedureMgr::create(self.client.clone(), tenant)

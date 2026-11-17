@@ -121,3 +121,40 @@ async fn new_setting_api() -> Result<(Arc<MetaStore>, SettingMgr)> {
     );
     Ok((test_api, mgr))
 }
+
+/// `get_watched_settings` of `mgr` comes to return `want`.
+async fn wait_for_settings(mgr: &SettingMgr, want: &[UserSetting]) -> anyhow::Result<()> {
+    for _ in 0..100 {
+        if mgr.get_watched_settings().await? == want {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    anyhow::bail!("get_watched_settings did not return {want:?}")
+}
+
+/// A watched `SettingMgr` reads the global settings from the copy as they are set and dropped;
+/// its other reads go to meta-service.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_get_watched_settings() -> anyhow::Result<()> {
+    let tenant = Tenant::new_literal("databend_query");
+    let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
+    let watched = Arc::new(SettingMgr::watch(meta_store.inner().clone(), &tenant).await);
+    let direct = SettingMgr::create(Arc::new(meta_store), &tenant);
+    // Whatever it finds, it finds in the copy: its meta-service has no keys.
+    let copy =
+        SettingMgr::create(Arc::new(crate::empty_kv::EmptyKv), &tenant).with_watched(watched);
+
+    let setting = UserSetting::create("max_threads", UserSettingValue::UInt64(3));
+    direct.set_setting(setting.clone()).await?;
+    wait_for_settings(&copy, std::slice::from_ref(&setting)).await?;
+    assert!(copy.get_settings().await?.is_empty());
+
+    direct.try_drop_setting("max_threads").await?;
+    wait_for_settings(&copy, &[]).await?;
+
+    // Without a watch, it reads meta-service.
+    direct.set_setting(setting.clone()).await?;
+    assert_eq!(direct.get_watched_settings().await?, vec![setting]);
+    Ok(())
+}
