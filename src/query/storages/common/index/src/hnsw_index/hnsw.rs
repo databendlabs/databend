@@ -397,8 +397,11 @@ impl HNSWIndex {
         };
 
         let builder = Vec::new();
+        // NULL rows hold a placeholder vector: encode them to keep point ids as
+        // block rows, but fit the value range on the real vectors only.
         let encoded_vectors = EncodedVectorsU8::encode(
             (0..params.count).map(|i| &data.as_ref()[i * params.dim..(i + 1) * params.dim]),
+            (0..params.count).map(|i| validity.as_ref().is_none_or(|bitmap| bitmap.get_bit(i))),
             builder,
             &params,
             None,
