@@ -33,7 +33,10 @@ use databend_meta_client::types::SeqV;
 
 use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
-use crate::meta_watch::MetaWatches;
+
+fn unknown_user(user: &UserIdentity) -> ErrorCode {
+    ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
+}
 
 impl UserApiProvider {
     // Get one user from by tenant.
@@ -74,9 +77,7 @@ impl UserApiProvider {
             .get_user(&user)
             .await
             .map_err(meta_service_error)?
-            .ok_or_else(|| {
-                ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
-            })
+            .ok_or_else(|| unknown_user(&user))
     }
 
     // Get one user and check client ip if has network policy.
@@ -102,21 +103,28 @@ impl UserApiProvider {
         user: UserIdentity,
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
-        let user_info = match (
-            self.configured_user_info(&user),
-            MetaWatches::of(&self.meta_watches, tenant),
-        ) {
-            (Some(user_info), _) => user_info,
-            (None, Some(watches)) => {
-                let user_info = watches.get_user(self.client.as_ref(), &user).await?;
-                match user_info.option.password_policy() {
-                    Some(_) => self.get_meta_user(tenant, user).await?.data,
-                    None => user_info,
-                }
-            }
-            (None, None) => self.get_meta_user(tenant, user).await?.data,
+        let user_info = match self.configured_user_info(&user) {
+            Some(user_info) => user_info,
+            None => self.get_login_meta_user(tenant, user).await?,
         };
         self.check_login(tenant, user_info, client_ip).await
+    }
+
+    /// A user of meta-service, for a login: from the watched copy if the tenant is watched. A
+    /// user with a password policy is read from meta-service then, so that its login failures
+    /// are all counted.
+    async fn get_login_meta_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
+        let user_info = self
+            .user_api(tenant)
+            .get_watched_user(&user)
+            .await
+            .map_err(meta_service_error)?
+            .ok_or_else(|| unknown_user(&user))?
+            .data;
+        if self.is_watched(tenant) && user_info.option.password_policy().is_some() {
+            return Ok(self.get_meta_user(tenant, user).await?.data);
+        }
+        Ok(user_info)
     }
 
     async fn check_login(

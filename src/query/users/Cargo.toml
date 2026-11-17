@@ -24,7 +24,6 @@ databend-common-meta-store = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-plugin-cache = { workspace = true }
-databend-meta-runtime = { workspace = true }
 enumflags2 = { workspace = true }
 itertools = { workspace = true }
 jwt-simple = { workspace = true }
@@ -44,6 +43,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-version = { workspace = true }
+databend-meta-runtime = { workspace = true }
 divan = { workspace = true }
 futures = { workspace = true }
 pretty_assertions = { workspace = true }

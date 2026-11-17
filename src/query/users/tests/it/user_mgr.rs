@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
+use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -23,9 +26,12 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::UserSetting;
+use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
 use databend_meta_client::RpcClientConf;
 use pretty_assertions::assert_eq;
@@ -260,5 +266,66 @@ async fn test_user_manager() -> anyhow::Result<()> {
         assert_eq!(not_exist.err().unwrap().code(), 2201)
     }
 
+    Ok(())
+}
+
+/// With `cache.meta_service_watch_cache`, a login finds a user and the new sessions find the
+/// global settings, as direct reads do, as they are created and dropped.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_login_with_watch_cache() -> anyhow::Result<()> {
+    let thread_name = std::thread::current()
+        .name()
+        .unwrap_or("test_login_with_watch_cache")
+        .to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO)?;
+    let tenant = Tenant::new_literal("test");
+    let cache = CacheConfig {
+        meta_service_watch_cache: true,
+        ..Default::default()
+    };
+    let provider =
+        UserApiProvider::try_create(RpcClientConf::empty(), &cache, BuiltIn::default(), &tenant)
+            .await?;
+
+    let user = UserInfo::new("u1", "%", AuthInfo::None);
+    provider
+        .create_user(&tenant, user.clone(), &CreateOption::Create)
+        .await?;
+    let setting = UserSetting::create("max_threads", UserSettingValue::UInt64(3));
+    provider
+        .setting_api(&tenant)
+        .set_setting(setting.clone())
+        .await?;
+    let mut found = false;
+    for _ in 0..100 {
+        let login = provider
+            .get_login_user_with_client_ip(&tenant, user.identity(), None)
+            .await;
+        let settings = provider.get_session_settings(&tenant).await?;
+        if login.ok().as_ref() == Some(&user) && settings == vec![setting.clone()] {
+            found = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        found,
+        "the login and the session did not find the user and the setting"
+    );
+
+    provider.drop_user(&tenant, user.identity(), false).await?;
+    let mut dropped = false;
+    for _ in 0..100 {
+        let login = provider
+            .get_login_user_with_client_ip(&tenant, user.identity(), None)
+            .await;
+        if login.is_err_and(|e| e.code() == ErrorCode::UNKNOWN_USER) {
+            dropped = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(dropped, "the login still found the dropped user");
     Ok(())
 }

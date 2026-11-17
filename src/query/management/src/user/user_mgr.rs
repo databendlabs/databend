@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_api::kv_pb_api::decode_seqv;
 use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::KeyWithTenant;
@@ -26,15 +27,19 @@ use databend_common_meta_app::principal::tenant_user_ident::Resource as UserIden
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
+use databend_meta_client::ClientHandle;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListKVReply;
 use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::With;
+use databend_meta_plugin_cache::WatchedPrefix;
+use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 use futures::TryStreamExt;
 
@@ -43,6 +48,8 @@ use crate::user::user_api::UserApi;
 pub struct UserMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
+    /// The users of the tenant, if watched: see `get_watched_user`.
+    watched: Option<Arc<WatchedPrefix>>,
 }
 
 impl UserMgr {
@@ -50,7 +57,46 @@ impl UserMgr {
         UserMgr {
             kv_api,
             tenant: tenant.clone(),
+            watched: None,
         }
+    }
+
+    /// Watch the users of `tenant`, for `with_watched`.
+    pub async fn watch(
+        client: Arc<ClientHandle<DatabendRuntime>>,
+        tenant: &Tenant,
+    ) -> WatchedPrefix {
+        WatchedPrefix::new(client, &Self::users_prefix(tenant), "users").await
+    }
+
+    /// Read the users by `get_watched_user` from `watched`, a `watch` of the tenant.
+    pub fn with_watched(mut self, watched: Arc<WatchedPrefix>) -> Self {
+        self.watched = Some(watched);
+        self
+    }
+
+    /// A user, from the watched copy if there is one and it is ready, see `WatchedPrefix`: it
+    /// may lag a change by the watch delay. Use `get_user` where a change must be seen at once,
+    /// or to update the user.
+    #[async_backtrace::framed]
+    pub async fn get_watched_user(
+        &self,
+        user: &UserIdentity,
+    ) -> Result<Option<SeqV<UserInfo>>, MetaError> {
+        let Some(watched) = &self.watched else {
+            return self.get_user(user).await;
+        };
+        let key = self.user_ident(user).to_string_key();
+        let value = watched
+            .mget_kv(self.kv_api.as_ref(), std::slice::from_ref(&key))
+            .await?
+            .pop()
+            .flatten();
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        let user = decode_seqv::<UserInfo>(value, || format!("decode value of {key}"))?;
+        Ok(Some(user))
     }
 
     fn user_ident(&self, user: &UserIdentity) -> TenantUserIdent {
@@ -58,7 +104,11 @@ impl UserMgr {
     }
 
     fn user_prefix(&self) -> String {
-        let ident = TenantUserIdent::new_user_host(self.tenant.clone(), "dummy", "dummy");
+        Self::users_prefix(&self.tenant)
+    }
+
+    fn users_prefix(tenant: &Tenant) -> String {
+        let ident = TenantUserIdent::new_user_host(tenant.clone(), "dummy", "dummy");
         ident.tenant_prefix()
     }
 }
