@@ -20,9 +20,6 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_meta_client::ClientHandle;
-use databend_meta_client::kvapi::KVApi;
-use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::runtime_api::SpawnApi;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
@@ -37,6 +34,7 @@ use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 
 use crate::Cache;
+use crate::cache::now_ms;
 
 /// How often a [`WatchedPrefix`] checks its copy against meta-service by default.
 pub const RESYNC_INTERVAL: Duration = Duration::from_secs(60);
@@ -51,17 +49,10 @@ const REBUILD_TIMEOUT: Duration = Duration::from_secs(30);
 /// of meta-service, which hides expired keys from a read, may be ahead of ours.
 const TTL_SLACK_MS: u64 = 5_000;
 
-/// Reads of the keys under one prefix, answered by a local copy that a meta-service watch keeps
-/// up to date, or by meta-service when the copy cannot answer at once.
+/// A [`Cache`] of the keys under one prefix, rebuilt if its watch loses a change.
 ///
-/// Reads never wait for the copy: while it initializes or reconnects, or when meta-service
-/// cannot be watched, they go to meta-service. A ready copy answers for every key under the
-/// prefix, absent keys included, but lags a change by the watch delay, a change made by this
-/// process included. Use it where a briefly stale value is acceptable, never to read the seq of
-/// a compare-and-swap.
-///
-/// A key whose TTL has passed is absent, as from meta-service: meta-service removes it, and the
-/// watch tells, only when it applies a later write.
+/// Its reads are those of [`Cache`]: they answer only if the copy can answer at once, and the
+/// caller reads meta-service for every `None`.
 ///
 /// The copy trusts the watch to deliver every change. In case one is lost, every resync interval
 /// the keys under the prefix are read from meta-service and compared with the copy: a change the
@@ -69,8 +60,6 @@ const TTL_SLACK_MS: u64 = 5_000;
 /// watch. A lost change so lasts about one resync interval. The check is a plain read: unlike a
 /// new watch, it does not hold up the writes of meta-service.
 pub struct WatchedPrefix {
-    /// Without the trailing `/`: the copy holds the keys `{prefix}/...`.
-    prefix: String,
     /// Held only to poll the copy once, or to swap in a rebuilt one, never across an await, so
     /// readers do not queue behind one another.
     cache: Arc<Mutex<Cache>>,
@@ -109,86 +98,22 @@ impl WatchedPrefix {
         let task = Resync {
             cache: cache.clone(),
             client,
-            prefix: prefix.clone(),
+            prefix,
             name: name.clone(),
             interval: resync_interval,
         };
         let resync = DatabendRuntime::spawn(task.run(), Some(format!("{name}-resync")));
-        WatchedPrefix {
-            prefix,
-            cache,
-            resync,
-        }
+        WatchedPrefix { cache, resync }
     }
 
-    pub fn prefix(&self) -> &str {
-        &self.prefix
+    /// See [`Cache::try_get_ready`].
+    pub fn try_get_ready(&self, key: &str) -> Option<SeqV> {
+        self.cache.lock().try_get_ready(key)
     }
 
-    fn covers(&self, key: &str) -> bool {
-        key.strip_prefix(self.prefix.as_str())
-            .is_some_and(|rest| rest.starts_with('/'))
-    }
-
-    /// The values of `keys`, all from the copy at one point if it is ready and covers them, or
-    /// else all from `kv` in one read.
-    pub async fn mget_kv<KV>(
-        &self,
-        kv: &KV,
-        keys: &[String],
-    ) -> Result<Vec<Option<SeqV>>, KV::Error>
-    where
-        KV: KVApi + ?Sized,
-    {
-        let local = keys.iter().all(|key| self.covers(key)).then(|| {
-            let now_ms = now_ms();
-            ready(&self.cache, |cache| {
-                cache
-                    .try_access(|data| {
-                        keys.iter()
-                            .map(|key| live(data.data.get(key), now_ms).cloned())
-                            .collect::<Vec<_>>()
-                    })
-                    .now_or_never()?
-                    .ok()
-            })
-        });
-        match local.flatten() {
-            Some(values) => Ok(values),
-            None => kv.mget_kv(keys).await,
-        }
-    }
-
-    /// The keys and values under `dir`, from the copy if it is ready and covers `dir`, or else
-    /// from `kv`. Like `list_kv` of `{dir}/`: one trailing `/` of `dir` is ignored.
-    pub async fn list_kv<KV>(&self, kv: &KV, dir: &str) -> Result<Vec<(String, SeqV)>, KV::Error>
-    where KV: KVApi + ?Sized {
-        let dir = dir.strip_suffix('/').unwrap_or(dir);
-        let local = (dir == self.prefix || self.covers(dir)).then(|| {
-            // Not `try_list_dir`: it strips every trailing `/`, and would list `a/b` for `a/b//`.
-            let range = format!("{dir}/")..format!("{dir}0");
-            let now_ms = now_ms();
-            ready(&self.cache, |cache| {
-                cache
-                    .try_access(|data| {
-                        data.data
-                            .range(range)
-                            .filter(|(_, value)| !value.is_expired(now_ms))
-                            .map(|(key, value)| (key.clone(), value.clone()))
-                            .collect::<Vec<_>>()
-                    })
-                    .now_or_never()?
-                    .ok()
-            })
-        });
-        match local.flatten() {
-            Some(items) => Ok(items),
-            None => {
-                let prefix = format!("{dir}/");
-                kv.list_kv_collect(ListOptions::unlimited(prefix.as_str()))
-                    .await
-            }
-        }
+    /// See [`Cache::try_list_dir_ready`].
+    pub fn try_list_dir_ready(&self, dir: &str) -> Option<Vec<(String, SeqV)>> {
+        self.cache.lock().try_list_dir_ready(dir)
     }
 }
 
@@ -355,17 +280,6 @@ fn jitter(interval: Duration) -> Duration {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.subsec_nanos());
     interval / 4 * (nanos % 1_000) / 1_000
-}
-
-/// `value` unless its TTL has passed by `now_ms`.
-fn live(value: Option<&SeqV>, now_ms: u64) -> Option<&SeqV> {
-    value.filter(|value| !value.is_expired(now_ms))
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis() as u64)
 }
 
 #[cfg(test)]

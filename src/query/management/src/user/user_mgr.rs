@@ -75,25 +75,18 @@ impl UserMgr {
         self
     }
 
-    /// A user, from the watched copy if there is one and it is ready, see `WatchedPrefix`: it
-    /// may lag a change by the watch delay. Use `get_user` where a change must be seen at once,
-    /// or to update the user.
+    /// A user, from the watched copy if there is one and it holds the user, or else from
+    /// meta-service, see `Cache::try_get_ready`. A user from the copy may lag a change by the
+    /// watch delay. Use `get_user` where a change must be seen at once, or to update the user.
     #[async_backtrace::framed]
     pub async fn get_watched_user(
         &self,
         user: &UserIdentity,
     ) -> Result<Option<SeqV<UserInfo>>, MetaError> {
-        let Some(watched) = &self.watched else {
-            return self.get_user(user).await;
-        };
         let key = self.user_ident(user).to_string_key();
-        let value = watched
-            .mget_kv(self.kv_api.as_ref(), std::slice::from_ref(&key))
-            .await?
-            .pop()
-            .flatten();
-        let Some(value) = value else {
-            return Ok(None);
+        let local = self.watched.as_ref().and_then(|w| w.try_get_ready(&key));
+        let Some(value) = local else {
+            return self.get_user(user).await;
         };
         let user = decode_seqv::<UserInfo>(value, || format!("decode value of {key}"))?;
         Ok(Some(user))

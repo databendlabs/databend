@@ -558,8 +558,8 @@ mod watched {
         )
     }
 
-    /// A watched `UserMgr` reads the users from the copy, absent ones included, as they are
-    /// created and dropped; its other reads go to meta-service.
+    /// A watched `UserMgr` reads the users the copy holds from the copy, as they are created and
+    /// dropped; a user the copy lacks, and its other reads, go to meta-service.
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_watched_user() -> anyhow::Result<()> {
         let tenant = Tenant::new_literal("tenant1");
@@ -585,6 +585,29 @@ mod watched {
         // Without a watch, it reads meta-service.
         assert!(direct.create_user(user.clone(), false).await?.is_ok());
         let got = direct.get_watched_user(&user.identity()).await?;
+        assert_eq!(got.map(|u| u.data), Some(user));
+        Ok(())
+    }
+
+    /// A user that a ready copy lacks is read from meta-service: here the copy watches another
+    /// meta-service, which never gets the user.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_watched_user_missing_from_copy() -> anyhow::Result<()> {
+        let tenant = Tenant::new_literal("tenant1");
+        let other_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
+        let watched = Arc::new(UserMgr::watch(other_store.inner().clone(), &tenant).await);
+        // The copy is ready once it holds a user of the other meta-service.
+        let u0 = UserInfo::new("u0", "%", default_test_auth_info());
+        let other = UserMgr::create(Arc::new(other_store), &tenant);
+        assert!(other.create_user(u0.clone(), false).await?.is_ok());
+        let copy = UserMgr::create(Arc::new(EmptyKv), &tenant).with_watched(watched.clone());
+        wait_for(&copy, &u0.identity(), Some(&u0)).await?;
+
+        let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
+        let mgr = UserMgr::create(Arc::new(meta_store), &tenant).with_watched(watched);
+        let user = UserInfo::new("u1", "%", default_test_auth_info());
+        assert!(mgr.create_user(user.clone(), false).await?.is_ok());
+        let got = mgr.get_watched_user(&user.identity()).await?;
         assert_eq!(got.map(|u| u.data), Some(user));
         Ok(())
     }

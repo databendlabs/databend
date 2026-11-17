@@ -115,19 +115,21 @@ impl SettingMgr {
         Ok(settings)
     }
 
-    /// The global settings, from the watched copy if there is one and it is ready, see
-    /// `WatchedPrefix`: they may lag a change by the watch delay. Use `get_settings` where a
-    /// change must be seen at once.
+    /// The global settings, from the watched copy if there is one and it can answer now, or else
+    /// from meta-service, see `Cache::try_list_dir_ready`. Settings from the copy may lag a
+    /// change by the watch delay. Use `get_settings` where a change must be seen at once.
     #[async_backtrace::framed]
     pub async fn get_watched_settings(&self) -> Result<Vec<UserSetting>> {
-        let Some(watched) = &self.watched else {
+        let prefix = self.setting_prefix();
+        let local = self
+            .watched
+            .as_ref()
+            .and_then(|w| w.try_list_dir_ready(&prefix));
+        let Some(items) = local else {
             return self.get_settings().await;
         };
-        watched
-            .list_kv(self.kv_api.as_ref(), watched.prefix())
-            .await
-            .map_err(meta_service_error)?
-            .into_iter()
+        items
+            .iter()
             .map(|(_, value)| Self::decode_setting(&value.data))
             .collect()
     }

@@ -210,8 +210,8 @@ impl WarehouseMgr {
         ))
     }
 
-    /// The nodes of a cluster, from `watched` if it is given, see `WatchedPrefix`, or else from
-    /// meta-service.
+    /// The nodes of a cluster, from `watched` if it is given and can answer now, see
+    /// `Cache::try_list_dir_ready`, or else from meta-service.
     async fn list_cluster_nodes(
         &self,
         warehouse: &str,
@@ -225,19 +225,15 @@ impl WarehouseMgr {
             escape_for_key(cluster)?
         );
 
-        let values = match watched {
-            Some(watched) => {
-                watched
-                    .list_kv(&self.metastore, &cluster_nodes_prefix)
-                    .await
-            }
-            None => {
-                self.metastore
-                    .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
-                    .await
-            }
-        }
-        .map_err(meta_service_error)?;
+        let local = watched.and_then(|w| w.try_list_dir_ready(&cluster_nodes_prefix));
+        let values = match local {
+            Some(values) => values,
+            None => self
+                .metastore
+                .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
+                .await
+                .map_err(meta_service_error)?,
+        };
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
