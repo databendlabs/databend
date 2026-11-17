@@ -210,6 +210,48 @@ impl WarehouseMgr {
         ))
     }
 
+    /// The nodes of a cluster, from `watched` if it is given, see `WatchedPrefix`, or else from
+    /// meta-service.
+    async fn list_cluster_nodes(
+        &self,
+        warehouse: &str,
+        cluster: &str,
+        watched: Option<&WatchedPrefix>,
+    ) -> Result<Vec<NodeInfo>> {
+        let cluster_nodes_prefix = format!(
+            "{}/{}/{}/",
+            self.cluster_node_key_prefix,
+            escape_for_key(warehouse)?,
+            escape_for_key(cluster)?
+        );
+
+        let values = match watched {
+            Some(watched) => {
+                watched
+                    .list_kv(&self.metastore, &cluster_nodes_prefix)
+                    .await
+            }
+            None => {
+                self.metastore
+                    .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
+                    .await
+            }
+        }
+        .map_err(meta_service_error)?;
+
+        let mut nodes_info = Vec::with_capacity(values.len());
+        for (node_key, value) in values {
+            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
+
+            node_info.id = unescape_for_key(&node_key[cluster_nodes_prefix.len()..])?;
+            node_info.cluster_id = cluster.to_string();
+            node_info.warehouse_id = warehouse.to_string();
+            nodes_info.push(node_info);
+        }
+
+        Ok(nodes_info)
+    }
+
     async fn start_self_managed(&self, node_with_wh: NodeInfo) -> Result<TxnReply> {
         if node_with_wh.warehouse_id.is_empty() || node_with_wh.cluster_id.is_empty() {
             return Err(ErrorCode::InvalidWarehouse(
@@ -2269,38 +2311,8 @@ impl WarehouseApi for WarehouseMgr {
         warehouse: &str,
         cluster: &str,
     ) -> Result<Vec<NodeInfo>> {
-        let cluster_nodes_prefix = format!(
-            "{}/{}/{}/",
-            self.cluster_node_key_prefix,
-            escape_for_key(warehouse)?,
-            escape_for_key(cluster)?
-        );
-
-        let values = match &self.cluster_nodes {
-            Some(watched) => {
-                watched
-                    .list_kv(&self.metastore, &cluster_nodes_prefix)
-                    .await
-            }
-            None => {
-                self.metastore
-                    .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
-                    .await
-            }
-        }
-        .map_err(meta_service_error)?;
-
-        let mut nodes_info = Vec::with_capacity(values.len());
-        for (node_key, value) in values {
-            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
-
-            node_info.id = unescape_for_key(&node_key[cluster_nodes_prefix.len()..])?;
-            node_info.cluster_id = cluster.to_string();
-            node_info.warehouse_id = warehouse.to_string();
-            nodes_info.push(node_info);
-        }
-
-        Ok(nodes_info)
+        self.list_cluster_nodes(warehouse, cluster, self.cluster_nodes.as_ref())
+            .await
     }
 
     #[async_backtrace::framed]
@@ -2352,9 +2364,20 @@ impl WarehouseApi for WarehouseMgr {
             return Ok(vec![node]);
         }
 
-        Ok(self
+        let mut nodes = self
             .list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id)
-            .await?
+            .await?;
+        // The node, read from meta-service, and its cluster entry are written in one transaction.
+        // Cluster nodes without the node come from a watched copy behind that read, as right after
+        // the node is assigned, by a watch served by a lagging follower: read them from
+        // meta-service then.
+        if self.cluster_nodes.is_some() && !nodes.iter().any(|x| x.id == node_id) {
+            nodes = self
+                .list_cluster_nodes(&node.warehouse_id, &node.cluster_id, None)
+                .await?;
+        }
+
+        Ok(nodes
             .into_iter()
             .filter(|x| x.binary_version == self.version.commit_detail)
             .collect::<Vec<_>>())
