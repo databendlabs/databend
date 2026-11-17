@@ -3183,8 +3183,10 @@ pub struct CacheConfig {
     ///
     /// A watched copy may lag a change by the watch delay, a change made through this node
     /// included. Only the meta-service leader serves the watches: a copy can miss changes for up
-    /// to 5 s after the leader steps down, and stays stale while the leader is cut off from the
-    /// other meta nodes.
+    /// to 5 s after the leader steps down. A leader cut off from the other meta nodes still leads
+    /// in its own view, and its copies stay stale with no time limit, until the cut heals
+    /// (databend-meta#193). What a stale copy can keep from taking effect is listed with each
+    /// [`MetaServiceCache`].
     #[clap(
         long = "cache-meta-service-caches",
         value_name = "VALUE",
@@ -3692,11 +3694,18 @@ impl CacheConfig {
 #[serde(rename_all = "snake_case")]
 #[value(rename_all = "snake_case")]
 pub enum MetaServiceCache {
-    /// The users of the tenant, read by authentication.
+    /// The users of the tenant, read by the HTTP password and key-pair logins and by the MySQL and
+    /// FlightSQL logins. A stale copy can keep a `DROP USER`, a password or key change,
+    /// `DISABLED`, a revoked grant or role, or a new network policy of the user from taking
+    /// effect for the logins on this node.
     User,
-    /// The global settings of the tenant, read by new sessions.
+    /// The global settings of the tenant, read by every new session. A stale copy can keep a
+    /// change of a global setting, such as the `network_policy` that logins enforce, from taking
+    /// effect for the new sessions on this node.
     Setting,
-    /// The online cluster nodes of the tenant, read by cluster discovery.
+    /// The online cluster nodes of the tenant, read by cluster discovery. A copy that lists the
+    /// cluster without this node is not used, and a stale copy stops listing this node within
+    /// the 60 s heartbeat lift time.
     ClusterNode,
 }
 
