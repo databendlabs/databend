@@ -136,7 +136,7 @@ impl Cache {
 }
 
 /// The time in ms since the Unix epoch, as meta-service compares it with the TTL of a key.
-pub(crate) fn now_ms() -> u64 {
+fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64)
