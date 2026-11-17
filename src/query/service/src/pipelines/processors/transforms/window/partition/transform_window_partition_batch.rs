@@ -102,7 +102,11 @@ impl AccumulatingTransform for TransformWindowPartitionBatch {
         let rows = block.num_rows();
         let bytes = block.memory_size();
         let columns = block.num_columns();
-        if self.buffered_blocks.is_empty() && !self.is_small(rows, bytes, columns) {
+        // A block that is not small is sent as it is, even when small blocks
+        // are buffered: concatenating it would copy all its rows. The window
+        // sorts each partition later, so the order of the blocks does not
+        // matter.
+        if !self.is_small(rows, bytes, columns) {
             return Ok(vec![block]);
         }
 
@@ -376,6 +380,17 @@ mod tests {
         let out = p.transform(wide.clone())?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].columns(), wide.columns());
+
+        // A block that is not small is not concatenated with the small
+        // blocks buffered before it.
+        assert!(p.transform(block_with_pairs(30))?.is_empty());
+        let out = p.transform(data.clone())?;
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].columns(), data.columns());
+        assert_eq!(p.buffered_rows, 30);
+        let out = p.on_finish(true)?;
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].num_rows(), 30);
 
         // A top-n window that keeps every row sends the block as it is.
         let mut p = TransformWindowPartitionBatch::create(1).with_top_n(
