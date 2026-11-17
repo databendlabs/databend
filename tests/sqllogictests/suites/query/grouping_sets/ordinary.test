@@ -76,6 +76,14 @@ SETTINGS (sql_dialect = 'PostgreSQL', quoted_ident_case_sensitive = 0) SELECT su
 1 2
 2 3
 
+# A name in a lambda body is a parameter or a column, never an alias, so `x`
+# is the parameter and the lambda item is a key.
+query IT rowsort
+SELECT sum(a) AS x, array_transform([a], x -> x + 1) FROM (VALUES (1), (2)) t(a) GROUP BY ALL
+----
+1 [2]
+2 [3]
+
 query III rowsort
 SELECT *, count(*) FROM t GROUP BY ALL
 ----

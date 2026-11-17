@@ -106,11 +106,15 @@ impl<'a> CoreExprArena<'a> {
         found
     }
 
-    /// The column references outside subqueries.
-    pub(crate) fn column_refs(&self, root: CoreExprId) -> Vec<&'a ColumnRef> {
+    /// The column references that can name a SELECT alias: those outside
+    /// subqueries and lambda bodies. A lambda body resolves no SELECT alias, a
+    /// name in it is a parameter or a column, see `LambdaBodyState`.
+    pub(crate) fn select_alias_candidates(&self, root: CoreExprId) -> Vec<&'a ColumnRef> {
         let mut column_refs = Vec::new();
-        self.visit_outside_subqueries(root, &mut |expr, _| {
-            if let CoreExpr::ColumnRef { column, .. } = expr {
+        self.visit_outside_subqueries(root, &mut |expr, region| {
+            if let CoreExpr::ColumnRef { column, .. } = expr
+                && !region.in_lambda_body
+            {
                 column_refs.push(*column);
             }
         });
@@ -352,17 +356,21 @@ mod tests {
 
     #[test]
     fn collects_names_outside_subqueries() {
-        let tokens = tokenize_sql("f(a, t.b) + (SELECT g(c)) + h(d)").unwrap();
+        let tokens = tokenize_sql(
+            "f(a, t.b) + (SELECT g(c)) + h(d) + array_sum(array_transform([e], x -> x + y))",
+        )
+        .unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
         let mut arena = CoreExprArena::new(0, &NameResolutionContext::default());
         let root = arena.lower_ast_expr(&expr).unwrap();
         let mut columns = arena
-            .column_refs(root)
+            .select_alias_candidates(root)
             .iter()
             .map(|column| column.to_string())
             .collect::<Vec<_>>();
         columns.sort();
-        assert_eq!(columns, ["a", "d", "t.b"]);
+        // The names in the lambda body, `x` and `y`, cannot name aliases.
+        assert_eq!(columns, ["a", "d", "e", "t.b"]);
         let mut udfs = arena
             .udf_call_names(root)
             .iter()

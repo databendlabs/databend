@@ -104,7 +104,8 @@ impl<'a> SelectClauseExprs<'a> {
     /// The positions that GROUP BY ALL stands for: those of the items that
     /// contain no aggregate function and refer to no earlier item that does.
     /// A name refers to an item unless it resolves to a column, as GROUP BY
-    /// resolves names column first.
+    /// resolves names column first, or is in a lambda body, which resolves no
+    /// alias.
     pub(crate) fn group_by_all(
         &self,
         names: &NameResolutionContext,
@@ -122,19 +123,23 @@ impl<'a> SelectClauseExprs<'a> {
                 SelectItemSource::Star(_) => false,
                 SelectItemSource::Expr { root, .. } => {
                     self.arena.contains_aggregate(root, &udafs)
-                        || self.arena.column_refs(root).into_iter().any(|column| {
-                            let ColumnRef {
-                                database: None,
-                                table: None,
-                                column: ColumnID::Name(ident),
-                            } = column
-                            else {
-                                return false;
-                            };
-                            let ident = normalize_identifier(ident, names);
-                            aliases.get(ident.name.as_str()).copied().unwrap_or(false)
-                                && !inputs.resolves_to_column(&ident, names)
-                        })
+                        || self
+                            .arena
+                            .select_alias_candidates(root)
+                            .into_iter()
+                            .any(|column| {
+                                let ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: ColumnID::Name(ident),
+                                } = column
+                                else {
+                                    return false;
+                                };
+                                let ident = normalize_identifier(ident, names);
+                                aliases.get(ident.name.as_str()).copied().unwrap_or(false)
+                                    && !inputs.resolves_to_column(&ident, names)
+                            })
                 }
             };
             aliases.insert(&item.alias, aggregate);
