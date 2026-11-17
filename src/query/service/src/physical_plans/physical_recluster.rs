@@ -154,7 +154,7 @@ impl IPhysicalPlan for Recluster {
             event = "recluster.node_batch_planned",
             tasks = self.tasks.len(), input_bytes = bytes,
             threads, io_requests;
-            "Building isolated recluster branches with a shared node budget"
+            "Building isolated recluster branches with node-local concurrency limits"
         );
         if self.tasks.len() == 1 {
             return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
