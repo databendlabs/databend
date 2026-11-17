@@ -211,6 +211,42 @@ async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A manager watching the cluster nodes discovers the cluster of a node right after the node is
+/// assigned to a warehouse, and after it moves to another one.
+///
+/// Its watched copy may not hold the new cluster entry yet: `discover` then reads the cluster from
+/// meta-service. With one embedded meta-service the watch is about always ahead of the
+/// `discover` read, so this does not force that case; a lagging follower serving the watch does.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_watched_discover_after_assign() -> anyhow::Result<()> {
+    let (kv, direct) = new_cluster_api(Duration::from_mins(60)).await?;
+    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
+        .watch_cluster_nodes()
+        .await;
+    let node = NodeInfo {
+        binary_version: BUILD_INFO.commit_detail.clone(),
+        ..system_managed_node("node_1")
+    };
+    direct.start_node(node.clone()).await?;
+
+    for i in 0..20 {
+        let warehouse = format!("warehouse_{i}");
+        direct
+            .create_warehouse(warehouse.clone(), vec![SelectedNode::Random(None)])
+            .await?;
+        let discovered = watched.discover(&node.id).await?;
+        assert_eq!(
+            discovered
+                .iter()
+                .map(|x| (x.id.as_str(), x.warehouse_id.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("node_1", warehouse.as_str())]
+        );
+        direct.drop_warehouse(warehouse).await?;
+    }
+    Ok(())
+}
+
 /// `direct` lists `want` in `test-cluster-id`, and `watched` comes to list the same.
 async fn assert_watched_nodes(
     watched: &WarehouseMgr,
