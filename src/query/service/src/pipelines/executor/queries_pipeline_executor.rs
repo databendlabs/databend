@@ -118,6 +118,12 @@ impl QueriesPipelineExecutor {
             let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
             self.global_tasks_queue
                 .init_sync_tasks(sync_queue, self.workers_condvar.clone());
+
+            // All its processors finished in their first event, so no worker runs
+            // a task of the graph that would finish it.
+            if graph.is_all_nodes_finished() {
+                graph.should_finish::<()>(Ok(()))?;
+            }
             Ok(())
         }
     }

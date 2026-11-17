@@ -20,6 +20,8 @@ use std::time::Instant;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
 use databend_common_exception::ErrorCode;
@@ -32,6 +34,7 @@ use databend_common_pipeline::core::PlanProfile;
 use futures_util::future::Either;
 use futures_util::future::select;
 use log::info;
+use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
@@ -53,6 +56,42 @@ pub struct QueryWrapper {
     lock_guards: Vec<Arc<LockGuard>>,
     finish_condvar_wait: Arc<(Mutex<bool>, Condvar)>,
     finished_notify: Arc<WatchNotify>,
+}
+
+impl QueryWrapper {
+    /// Runs the finish callbacks of the query with its result. Only the first
+    /// call runs them.
+    fn on_finished(&self, res: Result<()>) -> Result<()> {
+        let mut on_finished_chain = self.on_finished_chain.lock();
+
+        // untracking for on finished
+        let tracking_payload = ThreadTracker::new_tracking_payload();
+        let _guard = ThreadTracker::tracking(tracking_payload);
+        let profiling = self
+            .graph
+            .fetch_profiling(Some(self.settings.executor_node_id.clone()));
+        on_finished_chain.apply(ExecutionInfo::create(res, profiling))
+    }
+}
+
+/// Runs the finish callbacks of a query that never executed, as the per-query
+/// executor does on drop. A no-op once `execute` has run them.
+impl Drop for QueryWrapper {
+    fn drop(&mut self) {
+        let _guard = LimitMemGuard::enter_unlimited();
+
+        // Drops the tasks that the wakers of its processors may still queue.
+        if let Err(cause) = self.graph.should_finish::<()>(Ok(())) {
+            warn!("Shutdown failure: {:?}", cause);
+        }
+
+        let cause = self.graph.get_error().unwrap_or_else(|| {
+            ErrorCode::Internal("Pipeline illegal state: not successfully shutdown")
+        });
+        if let Err(cause) = self.on_finished(Err(cause)) {
+            warn!("Shutdown failure: {:?}", cause);
+        }
+    }
 }
 
 pub enum PipelineExecutor {
@@ -179,38 +218,46 @@ impl PipelineExecutor {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.execute(),
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
-                Self::init(
-                    &query_wrapper.on_init_callback,
-                    &query_wrapper.settings.query_id,
-                )?;
-                GlobalQueriesExecutor::instance().send_graph(query_wrapper.graph.clone())?;
-                Self::start_executor_daemon(
-                    query_wrapper,
-                    query_wrapper.settings.max_execute_time_in_seconds,
-                )?;
-                let (lock, cvar) = &*query_wrapper.finish_condvar_wait;
-                let mut finished = lock.lock();
-                if !*finished {
-                    cvar.wait(&mut finished);
-                }
-
-                query_wrapper.finished_notify.notify_waiters();
-
-                let may_error = query_wrapper.graph.get_error();
-                match may_error {
-                    None => {
-                        let mut finished_chain = query_wrapper.on_finished_chain.lock();
-                        let info = ExecutionInfo::create(Ok(()), self.fetch_profiling(true));
-                        finished_chain.apply(info)
-                    }
-                    Some(cause) => {
-                        let mut finished_chain = query_wrapper.on_finished_chain.lock();
-                        let profiling = self.fetch_profiling(true);
-                        let info = ExecutionInfo::create(Err(cause.clone()), profiling);
-                        finished_chain.apply(info).and_then(|_| Err(cause))
-                    }
-                }
+                let res = Self::run_on_queries_executor(query_wrapper);
+                query_wrapper.on_finished(res.clone()).and(res)
             }
+        }
+    }
+
+    /// Runs the graph of the query on the queries executor until it finishes.
+    fn run_on_queries_executor(query_wrapper: &QueryWrapper) -> Result<()> {
+        let graph = &query_wrapper.graph;
+        let started = Self::init(
+            &query_wrapper.on_init_callback,
+            &query_wrapper.settings.query_id,
+        )
+        .and_then(|_| GlobalQueriesExecutor::instance().send_graph(graph.clone()));
+        if let Err(cause) = started {
+            // The tasks that the wakers of its processors queue are dropped then.
+            graph.should_finish(Err(cause.clone()))?;
+            return Err(cause);
+        }
+
+        Self::start_executor_daemon(
+            query_wrapper,
+            query_wrapper.settings.max_execute_time_in_seconds,
+        )?;
+        // Woken once the graph should finish and none of its tasks runs.
+        {
+            let (lock, cvar) = &*query_wrapper.finish_condvar_wait;
+            let mut finished = lock.lock();
+            while !*finished {
+                cvar.wait(&mut finished);
+            }
+        }
+        query_wrapper.finished_notify.notify_waiters();
+
+        match graph.get_error() {
+            Some(cause) => Err(cause),
+            // Stopped without an error before all its nodes finished, e.g. by a
+            // consumer that calls `finish(None)` early: the query did not
+            // complete, as on the per-query executor.
+            None => graph.assert_finished_graph(),
         }
     }
 
