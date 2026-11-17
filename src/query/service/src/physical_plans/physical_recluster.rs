@@ -77,7 +77,6 @@ use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
 use crate::pipelines::processors::horizontal_recluster::TransformPrepareReclusterIndex;
 use crate::pipelines::processors::horizontal_recluster::TransformReclusterOutputOrder;
-use crate::pipelines::processors::recluster_task_gate::ReclusterTaskGate;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
@@ -162,13 +161,12 @@ impl IPhysicalPlan for Recluster {
         }
         let sequential = self.tasks.len() > threads;
         let active_tasks = if sequential { 1 } else { self.tasks.len() };
-        let mut previous = None;
+        let mut groups = Vec::new();
         let mut outputs = Vec::new();
         for (idx, task) in self.tasks.iter().enumerate() {
             let task_threads = threads / active_tasks + usize::from(idx < threads % active_tasks);
             let task_io =
                 io_requests / active_tasks + usize::from(idx < io_requests % active_tasks);
-            let first_node = builder.main_pipeline.graph.node_count();
             let child_ctx = QueryContext::create_from(&builder.ctx);
             // Copy already-validated effective settings as well as shared state:
             // create_from alone does not inherit context-local overrides.
@@ -182,18 +180,18 @@ impl IPhysicalPlan for Recluster {
             let result = self.build_task_pipeline(builder, task, task_threads, task_io, idx);
             builder.ctx = parent_ctx;
             result?;
-            if sequential {
-                previous = Some(ReclusterTaskGate::wrap(
-                    &mut builder.main_pipeline,
-                    first_node,
-                    previous.as_ref(),
-                ));
-            }
-            outputs.extend(builder.main_pipeline.take_sinks());
+            let sinks = builder.main_pipeline.take_sinks();
+            groups.push((sinks.len(), false));
+            outputs.extend(sinks);
         }
         // Merge only serialized mutation output, never the task-local sorted rows.
         builder.main_pipeline.extend_sinks(outputs);
-        builder.main_pipeline.try_resize(1)
+        if sequential {
+            // Pull only the current task's serialized output. Later branches stay idle.
+            builder.main_pipeline.sequence_group(groups, 1)
+        } else {
+            builder.main_pipeline.try_resize(1)
+        }
     }
 }
 
@@ -238,11 +236,25 @@ impl Recluster {
         }
         let mut budget = settings.get_recluster_block_size()? as usize;
         let max_memory = settings.get_max_memory_usage()? as usize;
-        if max_memory != 0 {
-            // Query-level distributed usage is not this executor's live usage.
-            // Keep node admission local; query/spill limits remain shared as before.
-            let used = GLOBAL_MEM_STAT.get_memory_usage();
-            budget = budget.min(max_memory.saturating_sub(used) * 30 / 100);
+        if max_memory != 0
+            && self.tasks.len() > 1
+            && self.tasks.len() <= settings.get_max_threads()? as usize
+            && !ctx.get_enable_sort_spill()
+        {
+            let table = ctx.build_table_by_table_info(&self.table_info, None)?;
+            let table = FuseTable::try_from_table(table.as_ref())?;
+            let multiway_merge =
+                settings.get_enable_recluster_multiway_merge()?
+                    && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
+                    && !table.schema().fields().iter().any(|field| {
+                        matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_)))
+                    });
+            if !multiway_merge {
+                // Only concurrent, non-streaming tasks without spill need a joint
+                // live-memory guard. Sequential tasks retain the per-task guard below.
+                let used = GLOBAL_MEM_STAT.get_memory_usage();
+                budget = budget.min(max_memory.saturating_sub(used) * 30 / 100);
+            }
         }
         if bytes > budget {
             return Err(ErrorCode::MemoryExceedsLimit(format!(
@@ -714,13 +726,56 @@ mod tests {
     use crate::test_kits::execute_pipeline;
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_recluster_sort_pipeline_boundary() -> anyhow::Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        for width in [1, 2] {
+            for kind in [
+                ReclusterTaskKind::SortBlocks,
+                ReclusterTaskKind::MergeBlocks,
+            ] {
+                let kind: ReclusterTaskKind = serde_json::from_str(&serde_json::to_string(&kind)?)?;
+                let schema = DataSchemaRefExt::create(vec![DataField::new(
+                    "k",
+                    DataType::Number(NumberDataType::Int32),
+                )]);
+                let sort = SortPipelineBuilder::create(
+                    ctx.clone(),
+                    schema,
+                    vec![SortColumnDescription {
+                        offset: 0,
+                        asc: true,
+                        nulls_first: false,
+                    }]
+                    .into(),
+                    None,
+                    false,
+                )?;
+                let mut pipeline = Pipeline::create();
+                pipeline.add_source(EmptySource::create, width)?;
+                Recluster::build_recluster_sort_pipeline(kind, sort, &mut pipeline)?;
+                let partial_sorts = pipeline
+                    .graph
+                    .node_weights()
+                    .filter(|node| unsafe { node.proc.name() }.contains("SortPartialTransform"))
+                    .count();
+                assert_eq!(
+                    partial_sorts,
+                    if kind == ReclusterTaskKind::SortBlocks {
+                        width
+                    } else {
+                        0
+                    }
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_recluster_batch_pipeline() -> anyhow::Result<()> {
         let fixture = TestFixture::setup().await?;
         fixture.create_default_database().await?;
-        fixture
-            .default_session()
-            .get_settings()
-            .set_max_threads(2)?;
         let name = format!(
             "{}.{}",
             fixture.default_db_name(),
@@ -730,6 +785,8 @@ mod tests {
             "CREATE TABLE {name}(id INT NOT NULL) CLUSTER BY(id) ROW_PER_BLOCK=4 BLOCK_PER_SEGMENT=2"
         )).await?;
         for (multiway, local_id, threads, blocks_per_task) in [
+            (false, "node-b", 2, 4),
+            (true, "node-c", 2, 4),
             (false, "node-b", 2, 2),
             (true, "node-c", 2, 2),
             (false, "node-b", 1, 2),
@@ -802,6 +859,49 @@ mod tests {
                 table_info: table.get_table_info().clone(),
                 table_meta_timestamps,
             };
+
+            // Streaming/spilling batches must not acquire a new live-memory rejection.
+            // A one-byte limit makes the local 30% budget zero without global mutation.
+            let max_memory = ctx.get_settings().get_max_memory_usage()?;
+            ctx.get_settings().set_max_memory_usage(1)?;
+            ctx.set_enable_sort_spill(true);
+            source.validate_node_batch(&ctx)?;
+            ctx.set_enable_sort_spill(false);
+            if !multiway && task_count > 1 && task_count <= threads as usize {
+                assert_eq!(
+                    source.validate_node_batch(&ctx).unwrap_err().code(),
+                    ErrorCode::MemoryExceedsLimit("").code(),
+                );
+            } else {
+                source.validate_node_batch(&ctx)?;
+            }
+            if !multiway {
+                // Sequential batches still retain the existing per-task no-spill guard.
+                let mut builder = PipelineBuilder::create(
+                    ctx.get_function_context()?,
+                    ctx.get_settings(),
+                    ctx.clone(),
+                );
+                assert_eq!(
+                    source.build_pipeline2(&mut builder).unwrap_err().code(),
+                    ErrorCode::MemoryExceedsLimit("").code(),
+                );
+            }
+            ctx.set_enable_sort_spill(true);
+            ctx.get_settings().set_max_memory_usage(max_memory)?;
+            // Streaming and spill do not bypass the planned total-input bound.
+            let input_limit = ctx.get_settings().get_recluster_block_size()?;
+            let input_bytes: usize = source.tasks.iter().map(|task| task.total_bytes).sum();
+            ctx.get_settings().set_setting(
+                "recluster_block_size".to_string(),
+                (input_bytes - 1).to_string(),
+            )?;
+            assert_eq!(
+                source.validate_node_batch(&ctx).unwrap_err().code(),
+                ErrorCode::MemoryExceedsLimit("").code(),
+            );
+            ctx.get_settings()
+                .set_setting("recluster_block_size".to_string(), input_limit.to_string())?;
 
             // A whole batch follows either coordinator; worker indices are local
             // even when planning-time task indices arrive in reverse order.
@@ -887,11 +987,24 @@ mod tests {
                     .main_pipeline
                     .graph
                     .node_weights()
+                    .filter(|node| unsafe { node.proc.name() == "SequenceGroup" })
+                    .count(),
+                usize::from(task_count > threads as usize),
+            );
+            assert_eq!(
+                pipeline
+                    .main_pipeline
+                    .graph
+                    .node_weights()
                     .filter(|node| unsafe {
                         node.proc.name() == "HorizontalMultiwayReclusterSource"
                     })
                     .count(),
-                if multiway { task_count } else { 0 },
+                if multiway {
+                    task_count.max(threads as usize).min(blocks.len())
+                } else {
+                    0
+                },
             );
             execute_pipeline(ctx, pipeline).await?;
             let table = fixture.latest_default_table().await?;
@@ -901,7 +1014,12 @@ mod tests {
                 .unwrap();
             assert_eq!(next.prev_snapshot_id.unwrap().0, snapshot.snapshot_id);
             assert_eq!(next.summary.row_count, 8);
-            assert_eq!(next.summary.block_count, task_count as u64);
+            if task_count == 1 {
+                // Parallel compaction can leave one or two blocks for the singleton.
+                assert!((1..=threads).contains(&next.summary.block_count));
+            } else {
+                assert_eq!(next.summary.block_count, task_count as u64);
+            }
             let result: Vec<_> = fixture.execute_query(&format!(
                 "SELECT count()=8 AND count(distinct id)=8 AND min(id)=0 AND max(id)=7 FROM {name}"
             )).await?.try_collect().await?;

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod horizontal_recluster;
-pub(crate) mod recluster_task_gate;
 pub mod transforms;
 
 pub use transforms::HashJoinBuildState;
