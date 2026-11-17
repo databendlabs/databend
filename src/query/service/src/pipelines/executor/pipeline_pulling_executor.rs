@@ -347,6 +347,11 @@ impl Sink for PullingSink {
 #[async_trait]
 impl AsyncSink for PullingSink {
     const NAME: &'static str = "PullingExecutorSink";
+    // Nothing to run on drop: the sender is dropped with the sink. Running the
+    // hooks there would need the global runtime, which a query dropped late
+    // may outlive.
+    const CALL_ON_START_ON_ERROR: bool = false;
+    const CALL_ON_FINISH_ON_ERROR: bool = false;
 
     async fn on_finish(&mut self) -> Result<()> {
         drop(self.sender.take());

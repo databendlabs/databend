@@ -408,6 +408,25 @@ async fn test_queries_executor_failed_start_waits_running_tasks() -> anyhow::Res
     Ok(())
 }
 
+/// A pulling query that never ran has nothing to finish: dropping it must not
+/// need the global instances, which a query dropped late may outlive.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unstarted_pulling_query_drops_without_globals() -> anyhow::Result<()> {
+    let _fixture = setup().await?;
+
+    let mut pipeline = Pipeline::create();
+    pipeline.add_source(EmptySource::create, 1)?;
+    let executor = PipelinePullingExecutor::try_create(pipeline, queries_executor_settings())?;
+
+    // An unnamed thread cannot reach the global instances of the test.
+    std::thread::Builder::new()
+        .spawn(move || drop(executor))?
+        .join()
+        .unwrap();
+
+    Ok(())
+}
+
 fn queries_executor_settings() -> ExecutorSettings {
     ExecutorSettings {
         query_id: Arc::new("test-queries-executor".to_string()),
