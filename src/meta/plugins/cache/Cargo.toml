@@ -23,7 +23,9 @@ databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
+parking_lot = { workspace = true }
 sub-cache = { workspace = true }
+tokio = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
@@ -31,7 +33,6 @@ anyhow = { workspace = true }
 databend-meta-test-harness = { workspace = true }
 fastrace = { workspace = true }
 test-harness = { workspace = true }
-tokio = { workspace = true }
 
 [[test]]
 name = "it"
