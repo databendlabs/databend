@@ -564,7 +564,7 @@ mod watched {
     async fn test_get_watched_user() -> anyhow::Result<()> {
         let tenant = Tenant::new_literal("tenant1");
         let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
-        let watched = Arc::new(UserMgr::watch(meta_store.inner().clone(), &tenant).await);
+        let watched = UserMgr::watch(meta_store.inner().clone(), &tenant).await;
         let direct = UserMgr::create(Arc::new(meta_store), &tenant);
         // Whatever it finds, it finds in the copy: its meta-service has no keys.
         let copy = UserMgr::create(Arc::new(EmptyKv), &tenant).with_watched(watched);
@@ -595,7 +595,7 @@ mod watched {
     async fn test_get_watched_user_missing_from_copy() -> anyhow::Result<()> {
         let tenant = Tenant::new_literal("tenant1");
         let other_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
-        let watched = Arc::new(UserMgr::watch(other_store.inner().clone(), &tenant).await);
+        let watched = UserMgr::watch(other_store.inner().clone(), &tenant).await;
         // The copy is ready once it holds a user of the other meta-service.
         let u0 = UserInfo::new("u0", "%", default_test_auth_info());
         let other = UserMgr::create(Arc::new(other_store), &tenant);

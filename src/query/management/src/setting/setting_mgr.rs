@@ -26,9 +26,10 @@ use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::UpsertKV;
-use databend_meta_plugin_cache::WatchedPrefix;
+use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use futures::TryStreamExt;
+use parking_lot::Mutex;
 use seq_marked::SeqValue;
 
 use crate::errors::meta_service_error;
@@ -37,7 +38,7 @@ pub struct SettingMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
     /// The global settings of the tenant, if watched: see `get_watched_settings`.
-    watched: Option<Arc<WatchedPrefix>>,
+    watched: Option<Arc<Mutex<Cache>>>,
 }
 
 impl SettingMgr {
@@ -49,16 +50,18 @@ impl SettingMgr {
         }
     }
 
-    /// Watch the global settings of `tenant`, for `with_watched`.
+    /// Watch the global settings of `tenant`, for `with_watched`. The lock is held only to read
+    /// the copy once, never across an await.
     pub async fn watch(
         client: Arc<ClientHandle<DatabendRuntime>>,
         tenant: &Tenant,
-    ) -> WatchedPrefix {
-        WatchedPrefix::new(client, &Self::settings_prefix(tenant), "global settings").await
+    ) -> Arc<Mutex<Cache>> {
+        let cache = Cache::new(client, Self::settings_prefix(tenant), "global settings").await;
+        Arc::new(Mutex::new(cache))
     }
 
     /// Read the settings by `get_watched_settings` from `watched`, a `watch` of the tenant.
-    pub fn with_watched(mut self, watched: Arc<WatchedPrefix>) -> Self {
+    pub fn with_watched(mut self, watched: Arc<Mutex<Cache>>) -> Self {
         self.watched = Some(watched);
         self
     }
@@ -124,7 +127,7 @@ impl SettingMgr {
         let local = self
             .watched
             .as_ref()
-            .and_then(|w| w.try_list_dir_ready(&prefix));
+            .and_then(|w| w.lock().try_list_dir_ready(&prefix));
         let Some(items) = local else {
             return self.get_settings().await;
         };
