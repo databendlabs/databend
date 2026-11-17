@@ -3177,29 +3177,21 @@ pub struct CacheConfig {
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
 
-    /// Watch the users of the tenant in meta-service, so that authentication reads them
-    /// locally. A watched copy may lag a change by the watch delay, a change made through this
-    /// node included. Only the meta-service leader serves the watches: a copy can miss changes
-    /// for up to 5 s after the leader steps down, and stays stale while the leader is cut off
-    /// from the other meta nodes.
-    #[clap(long = "cache-enable-meta-service-user", default_value = "false")]
-    #[serde(default = "bool_false")]
-    pub meta_service_user_cache: bool,
-
-    /// Watch the global settings of the tenant in meta-service, so that new sessions read them
-    /// locally. The copy lags as `meta_service_user_cache` describes.
-    #[clap(long = "cache-enable-meta-service-setting", default_value = "false")]
-    #[serde(default = "bool_false")]
-    pub meta_service_setting_cache: bool,
-
-    /// Watch the online cluster nodes of the tenant in meta-service, so that cluster discovery
-    /// reads them locally. The copy lags as `meta_service_user_cache` describes.
+    /// The data of the tenant in meta-service that this node watches, to read it from a local
+    /// copy: names of [`MetaServiceCache`], such as `["user", "setting"]` in a config file or
+    /// `--cache-meta-service-caches user,setting`. Empty by default.
+    ///
+    /// A watched copy may lag a change by the watch delay, a change made through this node
+    /// included. Only the meta-service leader serves the watches: a copy can miss changes for up
+    /// to 5 s after the leader steps down, and stays stale while the leader is cut off from the
+    /// other meta nodes.
     #[clap(
-        long = "cache-enable-meta-service-cluster-node",
-        default_value = "false"
+        long = "cache-meta-service-caches",
+        value_name = "VALUE",
+        value_enum,
+        value_delimiter = ','
     )]
-    #[serde(default = "bool_false")]
-    pub meta_service_cluster_node_cache: bool,
+    pub meta_service_caches: Vec<MetaServiceCache>,
 
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
@@ -3632,9 +3624,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             meta_service_ownership_cache: false,
-            meta_service_user_cache: false,
-            meta_service_setting_cache: false,
-            meta_service_cluster_node_cache: false,
+            meta_service_caches: vec![],
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
@@ -3687,6 +3677,27 @@ impl Default for CacheConfig {
             table_meta_segment_count: None,
         }
     }
+}
+
+impl CacheConfig {
+    /// Whether `cache` is listed in `meta_service_caches`.
+    pub fn is_meta_service_cache_enabled(&self, cache: MetaServiceCache) -> bool {
+        self.meta_service_caches.contains(&cache)
+    }
+}
+
+/// A watched copy of meta-service data, enabled by its snake_case name, such as
+/// `cluster_node`, in `cache.meta_service_caches`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+#[value(rename_all = "snake_case")]
+pub enum MetaServiceCache {
+    /// The users of the tenant, read by authentication.
+    User,
+    /// The global settings of the tenant, read by new sessions.
+    Setting,
+    /// The online cluster nodes of the tenant, read by cluster discovery.
+    ClusterNode,
 }
 
 #[inline]

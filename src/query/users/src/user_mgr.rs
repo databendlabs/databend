@@ -93,9 +93,9 @@ impl UserApiProvider {
     }
 
     /// Like `get_user_with_client_ip`, for a login that writes nothing back from the user it
-    /// gets: the user may come from the watched copy, see `cache.meta_service_user_cache`, and
-    /// lag a change by the watch delay. A user with a password policy is read from meta-service,
-    /// so that its login failures are all counted.
+    /// gets: the user may come from the watched copy, see `user` in `cache.meta_service_caches`,
+    /// and lag a change by the watch delay. A user with a password policy is read from
+    /// meta-service, so that its login failures are all counted.
     #[async_backtrace::framed]
     pub async fn get_login_user_with_client_ip(
         &self,
