@@ -57,7 +57,6 @@ use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_plugin_cache::Cache;
-use databend_meta_plugin_cache::WatchedPrefix;
 use log::debug;
 use tokio::sync::Mutex;
 
@@ -96,8 +95,8 @@ pub struct UserApiProvider {
 /// The watched users and global settings of one tenant: the tenant of this node.
 struct Watched {
     tenant: Tenant,
-    users: Arc<WatchedPrefix>,
-    settings: Arc<WatchedPrefix>,
+    users: Arc<parking_lot::Mutex<Cache>>,
+    settings: Arc<parking_lot::Mutex<Cache>>,
 }
 
 impl UserApiProvider {
@@ -148,8 +147,8 @@ impl UserApiProvider {
         let watched = if cache_config.meta_service_watch_cache {
             Some(Watched {
                 tenant: tenant.clone(),
-                users: Arc::new(UserMgr::watch(client.clone(), tenant).await),
-                settings: Arc::new(SettingMgr::watch(client.clone(), tenant).await),
+                users: UserMgr::watch(client.clone(), tenant).await,
+                settings: SettingMgr::watch(client.clone(), tenant).await,
             })
         } else {
             None

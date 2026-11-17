@@ -139,7 +139,7 @@ async fn wait_for_settings(mgr: &SettingMgr, want: &[UserSetting]) -> anyhow::Re
 async fn test_get_watched_settings() -> anyhow::Result<()> {
     let tenant = Tenant::new_literal("databend_query");
     let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
-    let watched = Arc::new(SettingMgr::watch(meta_store.inner().clone(), &tenant).await);
+    let watched = SettingMgr::watch(meta_store.inner().clone(), &tenant).await;
     let direct = SettingMgr::create(Arc::new(meta_store), &tenant);
     // Whatever it finds, it finds in the copy: its meta-service has no keys.
     let copy =
