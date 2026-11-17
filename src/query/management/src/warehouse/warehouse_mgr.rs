@@ -44,9 +44,10 @@ use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
 use databend_meta_client::types::anyerror::AnyError;
 use databend_meta_client::types::txn_op_response::Response;
-use databend_meta_plugin_cache::WatchedPrefix;
+use databend_meta_plugin_cache::Cache;
 use log::error;
 use log::info;
+use parking_lot::Mutex;
 
 use crate::errors::meta_service_error;
 use crate::warehouse::WarehouseApi;
@@ -81,8 +82,8 @@ pub struct WarehouseMgr {
     warehouse_info_key_prefix: String,
     version: BuildInfoRef,
     /// The online nodes of the clusters, `{cluster_node_key_prefix}/...`, if watched: see
-    /// `watch_cluster_nodes`.
-    cluster_nodes: Option<WatchedPrefix>,
+    /// `watch_cluster_nodes`. The lock is held only to read the copy once, never across an await.
+    cluster_nodes: Option<Mutex<Cache>>,
 }
 
 impl WarehouseMgr {
@@ -129,9 +130,8 @@ impl WarehouseMgr {
     /// below the heartbeat lift time a node that stopped stays listed for anyway.
     pub async fn watch_cluster_nodes(mut self) -> Self {
         let client = self.metastore.inner().clone();
-        let watched =
-            WatchedPrefix::new(client, &self.cluster_node_key_prefix, "cluster nodes").await;
-        self.cluster_nodes = Some(watched);
+        let cache = Cache::new(client, &self.cluster_node_key_prefix, "cluster nodes").await;
+        self.cluster_nodes = Some(Mutex::new(cache));
         self
     }
 
@@ -216,7 +216,7 @@ impl WarehouseMgr {
         &self,
         warehouse: &str,
         cluster: &str,
-        watched: Option<&WatchedPrefix>,
+        watched: Option<&Mutex<Cache>>,
     ) -> Result<Vec<NodeInfo>> {
         let cluster_nodes_prefix = format!(
             "{}/{}/{}/",
@@ -225,7 +225,7 @@ impl WarehouseMgr {
             escape_for_key(cluster)?
         );
 
-        let local = watched.and_then(|w| w.try_list_dir_ready(&cluster_nodes_prefix));
+        let local = watched.and_then(|w| w.lock().try_list_dir_ready(&cluster_nodes_prefix));
         let values = match local {
             Some(values) => values,
             None => self
