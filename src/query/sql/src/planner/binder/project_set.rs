@@ -65,8 +65,10 @@ pub struct SetReturningInfo {
     /// Mapping: (function, phase) -> index in `srfs`, to find a
     /// set-returning function in the current context. The aggregate
     /// functions in the arguments are already their outputs, whose symbols
-    /// are stable. A function bound in both phases, e.g. `unnest([1, 2])` as
-    /// a key and in the SELECT list, is evaluated twice.
+    /// are stable. A SELECT expression matching a key reads its output
+    /// without registering another function. Other calls bound in both
+    /// phases, e.g. in an aggregate argument and in the SELECT list, are
+    /// evaluated separately.
     srfs_map: HashMap<(ScalarExpr, SrfPhase), usize>,
 }
 

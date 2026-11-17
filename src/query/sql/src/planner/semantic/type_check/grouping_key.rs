@@ -23,7 +23,7 @@
 //!   aggregate function, nor `grouping()`, nor a parameter of a lambda whose
 //!   body it is in, and it references a column or calls a function, or `K` is
 //!   a key of grouping sets of this SELECT;
-//! - its pre-aggregate form is not a deterministic expression without
+//! - its pre-aggregate form is not a deterministic scalar expression without
 //!   columns, unless the node references a column or `K` is a key of grouping
 //!   sets of this SELECT;
 //! - its pre-aggregate form equals the pre-aggregate expression of `K`,
@@ -59,11 +59,12 @@
 //! refers to an alias whose item has no pre-aggregate form after the
 //! aggregate, see `grouped_select.rs`, is not matched. A set-returning
 //! function matches a key over the output of the same pre-aggregate
-//! set-returning function. Nested contexts, such as subqueries and lambda
-//! bodies, match the keys of the active scopes of their ancestors; a reference
-//! to an ungrouped column of such an ancestor is rejected. Expressions that
-//! are not eligible can only refer to a key through a SELECT alias or
-//! position.
+//! set-returning function, even without columns: unlike a scalar constant,
+//! evaluating it again would expand rows again. Nested contexts, such as
+//! subqueries and lambda bodies, match the keys of the active scopes of their
+//! ancestors; a reference to an ungrouped column of such an ancestor is
+//! rejected. Expressions that are not eligible can only refer to a key through
+//! a SELECT alias or position.
 //!
 //! A lambda function is eligible as a whole if its arguments and its body
 //! are, with its parameters, and those of lambdas nested in it, allowed in
@@ -127,14 +128,17 @@ use crate::ColumnBinding;
 use crate::Visibility;
 use crate::binder::AggregateRewriter;
 use crate::binder::AliasLookup;
+use crate::binder::Any;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
+use crate::binder::Finder;
 use crate::binder::GroupingKeyScope;
 use crate::binder::GroupingScopeState;
 use crate::binder::SetReturningAnalyzer;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
+use crate::plans::Visitor;
 use crate::plans::VisitorMut;
 
 /// Which side of a grouping boundary is being bound.
@@ -338,8 +342,8 @@ where A: TypeCheckAdapter
         let CoreExpr::SetReturningFunction { args, .. } = arena.get(id) else {
             return false;
         };
-        let eligibility = self.are_grouping_key_eligible(arena, args.iter().copied());
-        eligibility.eligible && eligibility.has_column
+        self.are_grouping_key_eligible(arena, args.iter().copied())
+            .eligible
     }
 
     fn are_grouping_key_eligible(
@@ -724,7 +728,7 @@ where A: TypeCheckAdapter
             if is_srf && position != 0 {
                 break;
             }
-            // Literals and deterministic forms without columns are only
+            // Literals and deterministic scalar forms without columns are only
             // matched to keys of grouping sets of this SELECT, see the module
             // documentation.
             let grouping_sets_here =
@@ -737,7 +741,7 @@ where A: TypeCheckAdapter
             };
             let context = context_chain(self.bind_context).nth(position).unwrap();
             let constant = input.facts.column_free && input.facts.deterministic;
-            if constant && !eligibility.has_column && !grouping_sets_here {
+            if !is_srf && constant && !eligibility.has_column && !grouping_sets_here {
                 return Ok(None);
             }
             let input = input.scalar;
@@ -929,6 +933,7 @@ fn lookup_grouping_key_srf(
     input: &ScalarExpr,
 ) -> Result<Option<ColumnBinding>> {
     // Keys refer to registered set-returning functions by their outputs.
+    let span = input.span();
     let mut input = input.clone();
     for srf in context.srf_info.srfs.iter().map(|srf| &srf.item) {
         // Bound column references compare by symbol and table only.
@@ -944,7 +949,37 @@ fn lookup_grouping_key_srf(
         };
         input.replace_sub_scalar(srf.scalar.clone(), column.into())?;
     }
-    Ok(context.aggregate_info.lookup_grouping_key_output(&input))
+    if let Some(column) = context.aggregate_info.lookup_grouping_key_output(&input) {
+        return Ok(Some(column));
+    }
+    // A remaining SRF cannot read an input hidden inside a composite key.
+    // Compare the pre-aggregate form with the key's folding policy, just as
+    // for a successful match, rather than expanding it again after grouping.
+    let refers_to_srf_input = |scalar: &ScalarExpr| match scalar {
+        ScalarExpr::BoundColumnRef(column) => context
+            .srf_info
+            .srfs
+            .iter()
+            .any(|srf| srf.item.index == column.column.index),
+        _ => false,
+    };
+    let mut input_refs = Finder::new(&refers_to_srf_input);
+    input_refs.visit(&input)?;
+    if input_refs.scalars().is_empty() {
+        return Ok(None);
+    }
+    let used_by_key = |scalar: &ScalarExpr| input_refs.scalars().contains(&scalar);
+    let mut used_by_key = Any::new(&used_by_key);
+    for key in context.aggregate_info.group_items() {
+        used_by_key.visit(&key.scalar)?;
+        if used_by_key.result() {
+            return Err(ErrorCode::SemanticError(
+                "set-returning function is used inside a GROUP BY expression and cannot be evaluated again after aggregation; reference the group key by alias or position",
+            )
+            .set_span(span));
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]

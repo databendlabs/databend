@@ -219,6 +219,13 @@ SELECT a, unnest([a, a + 1]) AS s, count(*) FROM (VALUES (1), (1), (2)) t(a) GRO
 2 2 1
 2 3 1
 
+# The default grouping-sets UNION rewrite emits an empty-input grand total;
+# the SELECT reads its NULL key rather than expanding the constant SRF again.
+query III rowsort
+SELECT unnest([1, 2]), grouping(unnest([1, 2])), count(*) FROM (VALUES (1)) v(a) WHERE false GROUP BY ROLLUP(unnest([1, 2]))
+----
+NULL 1 0
+
 statement error (?s)1065.*set-returning functions evaluated before the aggregate can't contain aggregate functions
 SELECT unnest([sum(a)]) AS s FROM t GROUP BY s
 
