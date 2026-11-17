@@ -319,8 +319,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         "range",
         |_, _, _| FunctionDomain::Full,
         |start, end, ctx| {
-            const MAX: i128 = 500000000;
-            let len = (end as i128 - start as i128).max(0);
+            const MAX: u64 = 500000000;
+            if start >= end {
+                return vec![].into();
+            }
+            let len = start.abs_diff(end);
             if len > MAX {
                 // the same behavior as Clickhouse
                 ctx.set_error(
@@ -340,7 +343,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "range",
         |_, _, _, _| FunctionDomain::Full,
         |start, end, step, ctx| {
-            const MAX: i128 = 500000000;
+            const MAX: u64 = 500000000;
             if step == 0 {
                 ctx.set_error(
                     0,
@@ -348,15 +351,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 );
                 return vec![].into();
             }
-            // Widen before subtracting or taking abs: both the distance and
-            // the magnitude of i64::MIN can exceed i64::MAX.
-            let distance = if step > 0 {
-                end as i128 - start as i128
-            } else {
-                start as i128 - end as i128
-            };
-            let step_size = (step as i128).abs();
-            let len = (distance.max(0) + step_size - 1) / step_size;
+            if (step > 0 && start >= end) || (step < 0 && start <= end) {
+                return vec![].into();
+            }
+            let len = start.abs_diff(end).div_ceil(step.unsigned_abs());
             if len > MAX {
                 // the same behavior as Clickhouse
                 ctx.set_error(
