@@ -57,6 +57,7 @@ use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use petgraph::stable_graph::NodeIndex;
+use tokio::sync::oneshot;
 use tokio::time::sleep;
 use tokio::time::timeout;
 
@@ -404,6 +405,33 @@ async fn test_queries_executor_failed_start_waits_running_tasks() -> anyhow::Res
         Some(true),
         "the finish callbacks must run after the running task"
     );
+
+    Ok(())
+}
+
+/// A query killed during its init fails with the kill, not with the error of
+/// the init that the kill interrupted.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_queries_executor_kill_during_init_wins() -> anyhow::Result<()> {
+    let _fixture = setup().await?;
+
+    let (in_init_tx, in_init_rx) = oneshot::channel();
+    let (killed_tx, killed_rx) = oneshot::channel::<()>();
+    let (mut pipeline, _) = empty_pipeline()?;
+    pipeline.set_on_init(move || {
+        let _ = in_init_tx.send(());
+        let _ = killed_rx.blocking_recv();
+        Err(ErrorCode::Internal("test init failure"))
+    });
+
+    let executor = PipelineCompleteExecutor::try_create(pipeline, queries_executor_settings())?;
+    let kill = async {
+        in_init_rx.await.unwrap();
+        executor.finish(Some(ErrorCode::AbortedQuery("test kill")));
+        let _ = killed_tx.send(());
+    };
+    let (res, _) = tokio::join!(timeout(Duration::from_secs(20), executor.execute()), kill);
+    assert_eq!(res?.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
 
     Ok(())
 }

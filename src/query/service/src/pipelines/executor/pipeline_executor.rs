@@ -252,14 +252,18 @@ impl PipelineExecutor {
             }
         }
         query_wrapper.finished_notify.notify_waiters();
-        started?;
 
         match graph.get_error() {
+            // The error that finished the graph first, which may precede a
+            // failed start, e.g. a kill during init.
             Some(cause) => Err(cause),
-            // Stopped without an error before all its nodes finished, e.g. by a
-            // consumer that calls `finish(None)` early: the query did not
-            // complete, as on the per-query executor.
-            None => graph.assert_finished_graph(),
+            None => {
+                started?;
+                // Stopped without an error before all its nodes finished, e.g. by
+                // a consumer that calls `finish(None)` early: the query did not
+                // complete, as on the per-query executor.
+                graph.assert_finished_graph()
+            }
         }
     }
 
