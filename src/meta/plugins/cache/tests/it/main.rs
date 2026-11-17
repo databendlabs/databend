@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod grpc_cache;
+mod leader;
 mod watched;
