@@ -269,10 +269,35 @@ async fn test_user_manager() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// With `cache.meta_service_watch_cache`, a login finds a user and the new sessions find the
-/// global settings, as direct reads do, as they are created and dropped.
+/// With `cache.meta_service_user_cache` and `cache.meta_service_setting_cache`, a login finds a
+/// user and the new sessions find the global settings, as direct reads do, as they are created
+/// and dropped.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_login_with_watch_cache() -> anyhow::Result<()> {
+    check_login_and_session_settings(true, true).await
+}
+
+/// With only the users watched, a login and the new sessions find the user and the global
+/// settings: the settings come from meta-service.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_login_with_user_cache_only() -> anyhow::Result<()> {
+    check_login_and_session_settings(true, false).await
+}
+
+/// With only the global settings watched, a login and the new sessions find the user and the
+/// global settings: the user comes from meta-service.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_login_with_setting_cache_only() -> anyhow::Result<()> {
+    check_login_and_session_settings(false, true).await
+}
+
+/// A login finds a user and the new sessions find the global settings as they are created and
+/// dropped, with the users and the global settings watched as `user_cache` and `setting_cache`
+/// say.
+async fn check_login_and_session_settings(
+    user_cache: bool,
+    setting_cache: bool,
+) -> anyhow::Result<()> {
     let thread_name = std::thread::current()
         .name()
         .unwrap_or("test_login_with_watch_cache")
@@ -281,7 +306,8 @@ async fn test_login_with_watch_cache() -> anyhow::Result<()> {
     GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO)?;
     let tenant = Tenant::new_literal("test");
     let cache = CacheConfig {
-        meta_service_watch_cache: true,
+        meta_service_user_cache: user_cache,
+        meta_service_setting_cache: setting_cache,
         ..Default::default()
     };
     let provider =

@@ -85,18 +85,20 @@ pub struct UserApiProvider {
     pub(crate) network_rule_cache: Option<Mutex<Cache>>,
     pub(crate) external_access_integration_cache: Option<Mutex<Cache>>,
 
-    /// By `cache.meta_service_watch_cache`: the watched users and global settings of the node
-    /// tenant.
-    watched: Option<Watched>,
+    /// The watched users and global settings of the node tenant.
+    watched: Watched,
 
     builtin: BuiltIn,
 }
 
-/// The watched users and global settings of one tenant: the tenant of this node.
+/// The watched copies of one tenant, the tenant of this node. A copy is `None` when its flag in
+/// [`CacheConfig`] is off.
 struct Watched {
     tenant: Tenant,
-    users: Arc<parking_lot::Mutex<Cache>>,
-    settings: Arc<parking_lot::Mutex<Cache>>,
+    /// By `cache.meta_service_user_cache`.
+    users: Option<Arc<parking_lot::Mutex<Cache>>>,
+    /// By `cache.meta_service_setting_cache`.
+    settings: Option<Arc<parking_lot::Mutex<Cache>>>,
 }
 
 impl UserApiProvider {
@@ -144,14 +146,20 @@ impl UserApiProvider {
             None
         };
 
-        let watched = if cache_config.meta_service_watch_cache {
-            Some(Watched {
-                tenant: tenant.clone(),
-                users: UserMgr::watch(client.clone(), tenant).await,
-                settings: SettingMgr::watch(client.clone(), tenant).await,
-            })
+        let users = if cache_config.meta_service_user_cache {
+            Some(UserMgr::watch(client.clone(), tenant).await)
         } else {
             None
+        };
+        let settings = if cache_config.meta_service_setting_cache {
+            Some(SettingMgr::watch(client.clone(), tenant).await)
+        } else {
+            None
+        };
+        let watched = Watched {
+            tenant: tenant.clone(),
+            users,
+            settings,
         };
 
         let (network_rule_cache, external_access_integration_cache) =
@@ -265,14 +273,14 @@ impl UserApiProvider {
         self.setting_api(tenant).get_watched_settings().await
     }
 
-    /// The watched users and global settings of `tenant`, if it is the tenant they watch.
+    /// The watched copies of `tenant`, if it is the tenant they watch.
     fn watched(&self, tenant: &Tenant) -> Option<&Watched> {
-        self.watched.as_ref().filter(|w| &w.tenant == tenant)
+        (&self.watched.tenant == tenant).then_some(&self.watched)
     }
 
     /// Whether the users of `tenant` are watched, see `UserMgr::get_watched_user`.
-    pub(crate) fn is_watched(&self, tenant: &Tenant) -> bool {
-        self.watched(tenant).is_some()
+    pub(crate) fn watches_users(&self, tenant: &Tenant) -> bool {
+        self.watched(tenant).is_some_and(|w| w.users.is_some())
     }
 
     pub fn udf_api(&self, tenant: &Tenant) -> UdfMgr {
@@ -284,11 +292,11 @@ impl UserApiProvider {
     }
 
     /// The users of `tenant`, read by `UserMgr::get_watched_user` from the watched copy if the
-    /// tenant is watched.
+    /// users of the tenant are watched.
     pub fn user_api(&self, tenant: &Tenant) -> Arc<UserMgr> {
         let user_mgr = UserMgr::create(self.client.clone(), tenant);
-        let user_mgr = match self.watched(tenant) {
-            Some(watched) => user_mgr.with_watched(watched.users.clone()),
+        let user_mgr = match self.watched(tenant).and_then(|w| w.users.clone()) {
+            Some(users) => user_mgr.with_watched(users),
             None => user_mgr,
         };
         Arc::new(user_mgr)
@@ -334,11 +342,11 @@ impl UserApiProvider {
     }
 
     /// The global settings of `tenant`, read by `SettingMgr::get_watched_settings` from the
-    /// watched copy if the tenant is watched.
+    /// watched copy if the global settings of the tenant are watched.
     pub fn setting_api(&self, tenant: &Tenant) -> SettingMgr {
         let setting_mgr = SettingMgr::create(self.client.clone(), tenant);
-        match self.watched(tenant) {
-            Some(watched) => setting_mgr.with_watched(watched.settings.clone()),
+        match self.watched(tenant).and_then(|w| w.settings.clone()) {
+            Some(settings) => setting_mgr.with_watched(settings),
             None => setting_mgr,
         }
     }
