@@ -3177,15 +3177,29 @@ pub struct CacheConfig {
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
 
-    /// Watch the users, the global settings and the online cluster nodes of the tenant in
-    /// meta-service, so that authentication, new sessions and cluster discovery read them
-    /// locally. They may lag a change by the watch delay, a change made through this node
-    /// included. Only the meta-service leader serves the watches: a copy can miss changes for
-    /// up to 5 s after the leader steps down, and stays stale while the leader is cut off from
-    /// the other meta nodes.
-    #[clap(long = "cache-enable-meta-service-watch", default_value = "false")]
+    /// Watch the users of the tenant in meta-service, so that authentication reads them
+    /// locally. A watched copy may lag a change by the watch delay, a change made through this
+    /// node included. Only the meta-service leader serves the watches: a copy can miss changes
+    /// for up to 5 s after the leader steps down, and stays stale while the leader is cut off
+    /// from the other meta nodes.
+    #[clap(long = "cache-enable-meta-service-user", default_value = "false")]
     #[serde(default = "bool_false")]
-    pub meta_service_watch_cache: bool,
+    pub meta_service_user_cache: bool,
+
+    /// Watch the global settings of the tenant in meta-service, so that new sessions read them
+    /// locally. The copy lags as `meta_service_user_cache` describes.
+    #[clap(long = "cache-enable-meta-service-setting", default_value = "false")]
+    #[serde(default = "bool_false")]
+    pub meta_service_setting_cache: bool,
+
+    /// Watch the online cluster nodes of the tenant in meta-service, so that cluster discovery
+    /// reads them locally. The copy lags as `meta_service_user_cache` describes.
+    #[clap(
+        long = "cache-enable-meta-service-cluster-node",
+        default_value = "false"
+    )]
+    #[serde(default = "bool_false")]
+    pub meta_service_cluster_node_cache: bool,
 
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
@@ -3618,7 +3632,9 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             meta_service_ownership_cache: false,
-            meta_service_watch_cache: false,
+            meta_service_user_cache: false,
+            meta_service_setting_cache: false,
+            meta_service_cluster_node_cache: false,
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,

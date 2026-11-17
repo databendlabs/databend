@@ -93,7 +93,7 @@ impl UserApiProvider {
     }
 
     /// Like `get_user_with_client_ip`, for a login that writes nothing back from the user it
-    /// gets: the user may come from the watched copy, see `cache.meta_service_watch_cache`, and
+    /// gets: the user may come from the watched copy, see `cache.meta_service_user_cache`, and
     /// lag a change by the watch delay. A user with a password policy is read from meta-service,
     /// so that its login failures are all counted.
     #[async_backtrace::framed]
@@ -110,9 +110,9 @@ impl UserApiProvider {
         self.check_login(tenant, user_info, client_ip).await
     }
 
-    /// A user of meta-service, for a login: from the watched copy if the tenant is watched. A
-    /// user with a password policy is read from meta-service then, so that its login failures
-    /// are all counted.
+    /// A user of meta-service, for a login: from the watched copy if the users of the tenant are
+    /// watched. A user with a password policy is read from meta-service then, so that its login
+    /// failures are all counted.
     async fn get_login_meta_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
         let user_info = self
             .user_api(tenant)
@@ -121,7 +121,7 @@ impl UserApiProvider {
             .map_err(meta_service_error)?
             .ok_or_else(|| unknown_user(&user))?
             .data;
-        if self.is_watched(tenant) && user_info.option.password_policy().is_some() {
+        if self.watches_users(tenant) && user_info.option.password_policy().is_some() {
             return Ok(self.get_meta_user(tenant, user).await?.data);
         }
         Ok(user_info)

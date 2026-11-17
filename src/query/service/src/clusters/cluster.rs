@@ -321,7 +321,7 @@ impl ClusterDiscovery {
         let lift_time = Duration::from_secs(60);
         let mut cluster_manager =
             WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
-        if cfg.cache.meta_service_watch_cache {
+        if cfg.cache.meta_service_cluster_node_cache {
             cluster_manager = cluster_manager.watch_cluster_nodes().await;
         }
 
