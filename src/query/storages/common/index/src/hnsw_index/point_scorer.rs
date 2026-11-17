@@ -248,6 +248,7 @@ mod tests {
         };
         let encoded = EncodedVectorsU8::encode(
             data.chunks(dim),
+            std::iter::repeat_n(true, count),
             Vec::new(),
             &params,
             None,
