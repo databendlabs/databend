@@ -22,7 +22,6 @@
 extern crate core;
 
 mod jwt;
-mod meta_watch;
 mod network_policy;
 mod password_policy;
 mod role_mgr;
