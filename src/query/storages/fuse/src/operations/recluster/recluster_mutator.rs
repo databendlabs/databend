@@ -316,7 +316,7 @@ pub struct ReclusterMutator {
     pub(crate) schema: TableSchemaRef,
     // Per-executor probe target and task cap for strategies without shared placement.
     pub(crate) max_tasks: usize,
-    // Batch placement shares one input/thread budget per executor.
+    // Batch placement shares input-byte and task-count limits per executor.
     pub(crate) task_budget: Option<ReclusterTaskBudget>,
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
@@ -1039,7 +1039,7 @@ impl ReclusterMutator {
                 )
             })
             .collect::<Vec<_>>();
-        info!(
+        debug!(
             event = "recluster.dynamic_linear_planned",
             peaks = peaks.len(),
             gain_calls = gain_calls,

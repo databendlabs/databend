@@ -149,10 +149,10 @@ impl IPhysicalPlan for Recluster {
         if self.tasks.len() == 1 && self.task_batches.is_none() {
             return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
         }
-        let (bytes, budget) = self.validate_node_batch(&builder.ctx)?;
+        let bytes = self.validate_node_batch(&builder.ctx)?;
         log::info!(
             event = "recluster.node_batch_planned",
-            tasks = self.tasks.len(), input_bytes = bytes, input_budget = budget,
+            tasks = self.tasks.len(), input_bytes = bytes,
             threads, io_requests;
             "Building isolated recluster branches with a shared node budget"
         );
@@ -196,7 +196,7 @@ impl IPhysicalPlan for Recluster {
 }
 
 impl Recluster {
-    fn validate_node_batch(&self, ctx: &QueryContext) -> Result<(usize, usize)> {
+    fn validate_node_batch(&self, ctx: &QueryContext) -> Result<usize> {
         let settings = ctx.get_settings();
         let assigned_batch = self.task_batches.as_ref().is_some_and(|batches| {
             let mut seen = HashSet::new();
@@ -234,7 +234,6 @@ impl Recluster {
                 }
             }
         }
-        let mut budget = settings.get_recluster_block_size()? as usize;
         let max_memory = settings.get_max_memory_usage()? as usize;
         if max_memory != 0
             && self.tasks.len() > 1
@@ -253,15 +252,15 @@ impl Recluster {
                 // Only concurrent, non-streaming tasks without spill need a joint
                 // live-memory guard. Sequential tasks retain the per-task guard below.
                 let used = GLOBAL_MEM_STAT.get_memory_usage();
-                budget = budget.min(max_memory.saturating_sub(used) * 30 / 100);
+                let budget = max_memory.saturating_sub(used) * 30 / 100;
+                if bytes > budget {
+                    return Err(ErrorCode::MemoryExceedsLimit(format!(
+                        "Not enough memory for recluster executor batch: input_bytes = {bytes}, budget = {budget}."
+                    )));
+                }
             }
         }
-        if bytes > budget {
-            return Err(ErrorCode::MemoryExceedsLimit(format!(
-                "Not enough memory for recluster executor batch: input_bytes = {bytes}, budget = {budget}."
-            )));
-        }
-        Ok((bytes, budget))
+        Ok(bytes)
     }
 
     fn build_task_pipeline(
@@ -860,6 +859,11 @@ mod tests {
                 table_meta_timestamps,
             };
 
+            // Placement already checked the coordinator's input bound. A smaller
+            // worker-local setting must not reject that plan or change its parallelism.
+            ctx.get_settings()
+                .set_setting("recluster_block_size".to_string(), "1".to_string())?;
+
             // Streaming/spilling batches must not acquire a new live-memory rejection.
             // A one-byte limit makes the local 30% budget zero without global mutation.
             let max_memory = ctx.get_settings().get_max_memory_usage()?;
@@ -889,19 +893,9 @@ mod tests {
             }
             ctx.set_enable_sort_spill(true);
             ctx.get_settings().set_max_memory_usage(max_memory)?;
-            // Streaming and spill do not bypass the planned total-input bound.
-            let input_limit = ctx.get_settings().get_recluster_block_size()?;
             let input_bytes: usize = source.tasks.iter().map(|task| task.total_bytes).sum();
-            ctx.get_settings().set_setting(
-                "recluster_block_size".to_string(),
-                (input_bytes - 1).to_string(),
-            )?;
-            assert_eq!(
-                source.validate_node_batch(&ctx).unwrap_err().code(),
-                ErrorCode::MemoryExceedsLimit("").code(),
-            );
-            ctx.get_settings()
-                .set_setting("recluster_block_size".to_string(), input_limit.to_string())?;
+            assert!(input_bytes > 1);
+            assert_eq!(source.validate_node_batch(&ctx)?, input_bytes);
 
             // A whole batch follows either coordinator; worker indices are local
             // even when planning-time task indices arrive in reverse order.

@@ -1160,6 +1160,48 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     fixture
         .execute_command(&format!("alter table {name} recluster final"))
         .await?;
+
+    // A single placement must stay local even in a multi-node cluster. The
+    // remote nodes have no Flight endpoints, so an unnecessary Exchange fails.
+    for sql in [
+        format!("TRUNCATE TABLE {name}"),
+        format!("INSERT INTO {name} VALUES (1),(2),(3)"),
+        format!("ALTER TABLE {name} CLUSTER BY(-id)"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let ctx = fixture
+        .new_query_ctx_with_cluster(
+            ClusterDescriptor::new()
+                .with_node("node-a", "")
+                .with_node("node-b", "")
+                .with_local_id("node-a"),
+        )
+        .await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let (parts, before) = fuse
+        .do_recluster(
+            ctx.clone(),
+            None,
+            None,
+            ReclusterMode::Conservative,
+            &mut ReclusterFinalCarry::default(),
+            &HashSet::new(),
+        )
+        .await?
+        .expect("the obsolete cluster key requires one sort task");
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
+    assert_eq!(parts.task_batches, Some(vec![vec![0]]));
+    execute_command(ctx, &format!("ALTER TABLE {name} RECLUSTER")).await?;
+    let table = fixture.latest_default_table().await?;
+    let after = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_eq!(after.prev_snapshot_id.unwrap().0, before.snapshot_id);
+    assert_eq!(after.summary.row_count, 3);
     Ok(())
 }
 

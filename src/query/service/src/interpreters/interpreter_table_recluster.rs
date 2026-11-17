@@ -631,10 +631,11 @@ impl ReclusterTableInterpreter {
             removed_segment_indexes,
             removed_segment_summary,
         } = parts;
-        // Shared-budget placements are dispatched as batches, including a single
-        // batch in a multi-node cluster. Unbatched strategies route one task per node.
-        let is_distributed =
-            !self.ctx.get_cluster().is_empty() && (task_batches.is_some() || tasks.len() > 1);
+        // Keep a single batch local, even if it contains multiple tasks.
+        // Distributed placement preserves whole batches; unbatched strategies
+        // route one task per node.
+        let placements = task_batches.as_ref().map_or(tasks.len(), Vec::len);
+        let is_distributed = !self.ctx.get_cluster().is_empty() && placements > 1;
         let mut input = PhysicalPlan::new(Recluster {
             tasks,
             task_batches,
