@@ -428,7 +428,7 @@ impl ReclusterMutator {
             Some(ReclusterTaskBudget {
                 nodes: max_tasks,
                 // Workers serialize a batch when their local threads cannot run it in parallel.
-                threads_per_node: ReclusterTaskBudget::MAX_TASKS_PER_NODE,
+                tasks_per_node: ReclusterTaskBudget::MAX_TASKS_PER_NODE,
                 bytes_per_node: memory_threshold,
             })
         } else {

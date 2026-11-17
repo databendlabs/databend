@@ -14,12 +14,13 @@
 
 use super::ReclusterTaskKind;
 
-/// Planning-time shares of the existing node resources, not additional allowances.
-/// Executors must recheck their own live memory budget before running a batch.
+/// Planning-time batch limits, not additional resource allowances.
+/// Workers enforce their local execution limits independently of placement.
 #[derive(Clone, Copy, Debug)]
 pub struct ReclusterTaskBudget {
     pub nodes: usize,
-    pub threads_per_node: usize,
+    /// Placement capacity, independent of worker thread counts.
+    pub tasks_per_node: usize,
     pub bytes_per_node: usize,
 }
 
@@ -29,7 +30,7 @@ impl ReclusterTaskBudget {
 
     pub fn max_tasks(&self) -> usize {
         self.nodes
-            .saturating_mul(self.threads_per_node.min(Self::MAX_TASKS_PER_NODE))
+            .saturating_mul(self.tasks_per_node.min(Self::MAX_TASKS_PER_NODE))
     }
 
     /// Construct a deterministic, size-aware placement. A successful placement
@@ -39,10 +40,10 @@ impl ReclusterTaskBudget {
         &self,
         tasks: impl IntoIterator<Item = (usize, ReclusterTaskKind)>,
     ) -> Option<Vec<Vec<usize>>> {
-        if self.nodes == 0 || self.threads_per_node == 0 {
+        if self.nodes == 0 || self.tasks_per_node == 0 {
             return None;
         }
-        let tasks_per_node = self.threads_per_node.min(Self::MAX_TASKS_PER_NODE);
+        let tasks_per_node = self.tasks_per_node.min(Self::MAX_TASKS_PER_NODE);
         let mut tasks = tasks.into_iter().enumerate().collect::<Vec<_>>();
         if tasks.len() > self.max_tasks() {
             return None;

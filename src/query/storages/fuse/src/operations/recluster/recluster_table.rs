@@ -927,7 +927,7 @@ mod tests {
         assert_eq!(
             select_batched_task_candidates(&windows, &ranked, ReclusterTaskBudget {
                 nodes: 3,
-                threads_per_node: 1,
+                tasks_per_node: 1,
                 bytes_per_node: 100,
             }),
             selected
@@ -997,7 +997,7 @@ mod tests {
         assert_eq!(
             select_batched_task_candidates(&windows, &ranked, ReclusterTaskBudget {
                 nodes: 1,
-                threads_per_node: 4,
+                tasks_per_node: 4,
                 bytes_per_node: 2,
             }),
             selected
@@ -1006,7 +1006,7 @@ mod tests {
 
     #[test]
     fn test_batched_selection_keeps_four_task_winner_within_node_budget() {
-        for (task_count, threads, bytes, accepted) in [
+        for (task_count, tasks_per_node, bytes, accepted) in [
             (4, 4, 100, true),
             (4, 4, 99, false),
             (4, 3, 100, false),
@@ -1034,11 +1034,11 @@ mod tests {
             assert_eq!(
                 select_batched_task_candidates(&windows, &ranked, ReclusterTaskBudget {
                     nodes: 1,
-                    threads_per_node: threads,
+                    tasks_per_node,
                     bytes_per_node: bytes,
                 }),
                 expected,
-                "tasks={task_count}, threads={threads}, bytes={bytes}"
+                "tasks={task_count}, tasks_per_node={tasks_per_node}, bytes={bytes}"
             );
         }
     }
