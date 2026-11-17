@@ -167,6 +167,12 @@ ADDRESS = 'https://databend.com';"
         self
     }
 
+    /// Run the queries on the executor shared by all the queries.
+    pub fn enable_queries_executor(mut self) -> ConfigBuilder {
+        self.conf.query.common.enable_queries_executor = true;
+        self
+    }
+
     pub fn table_meta_segment_bytes(mut self, value: u64) -> ConfigBuilder {
         self.conf.cache.table_meta_segment_bytes = value;
         self
