@@ -179,7 +179,7 @@ pub fn convert_number_size(num: f64) -> String {
 /// If the query exceeds this length and starts with keywords,
 /// it will be truncated and appended with the remaining length.
 pub fn short_sql(sql: String, max_length: u64) -> String {
-    let keywords = ["INSERT"];
+    let keywords = ["INSERT", "REPLACE"];
 
     /// Whether `query` starts with `keyword` (upper case ASCII), ignoring case.
     /// Upper-casing only the first `keyword.len()` chars is enough: each char

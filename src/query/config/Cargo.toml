@@ -28,6 +28,7 @@ serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_with = { workspace = true }
 serfig = { workspace = true }
+sysinfo = { workspace = true }
 toml = { workspace = true }
 
 [dev-dependencies]

@@ -1,38 +1,38 @@
 === Connection authorization is always enabled ===
 === TEST USER A WITH SUPER AND EXPLICIT CREATE CONNECTION PRIVILEGES ===
 --- CREATE 3 CONNECTIONS WILL SUCCESS ---
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
+c1	azblob	endpoint_url=http://s3.amazonaws.com
+c2	s3	access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=mi***in
+c3	s3	access_key_id=*** endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=***
+c1	azblob	endpoint_url=http://s3.amazonaws.com
+c2	s3	access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=mi***in
+c3	s3	access_key_id=*** endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=***
 === TEST USER B, C WITH OWNERSHIP OR CREATE/ACCESS PRIVILEGES PRIVILEGES ===
 --- USER b cannot create without CREATE CONNECTION ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateConnection] is required on *.* for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 --- success, c1,c2,c3 owner role is role1 ---
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
+c1	azblob	endpoint_url=http://s3.amazonaws.com
+c2	s3	access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=mi***in
+c3	s3	access_key_id=*** endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=***
+c1	azblob	endpoint_url=http://s3.amazonaws.com
+c2	s3	access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=mi***in
+c3	s3	access_key_id=*** endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=***
 --- transform c2'ownership from role1 to role2 ---
 --- USER failed to desc conn c2, c2 role is role2 ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
-c1	azblob	endpoint_url=ht***om
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
+c1	azblob	endpoint_url=http://s3.amazonaws.com
+c3	s3	access_key_id=*** endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=***
 --- only return one row c2 ---
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
+c2	s3	access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=mi***in
+c2	s3	access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=mi***in
 --- grant access connection c1 to role3 ---
-c1	azblob	endpoint_url=ht***om
+c1	azblob	endpoint_url=http://s3.amazonaws.com
 --- grant access connection c3 to role3 ---
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
+c3	s3	access_key_id=*** endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=***
 --- return three rows c1,2,3 ---
-c1	azblob	endpoint_url=ht***om
-c2	s3	access_key_id=mi***in endpoint_url=ht***0/ region=*** secret_access_key=mi***in
-c3	s3	access_key_id=*** endpoint_url=ht***0/ region=*** secret_access_key=***
+c1	azblob	endpoint_url=http://s3.amazonaws.com
+c2	s3	access_key_id=mi***in endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=mi***in
+c3	s3	access_key_id=*** endpoint_url=http://127.0.0.1:9900/ region=auto secret_access_key=***
 --- user b can not drop connection c2 ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 1

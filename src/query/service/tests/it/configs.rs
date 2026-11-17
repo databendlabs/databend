@@ -1021,3 +1021,31 @@ fn test_env_cache_config_and_defaults() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+/// The memory limit and the shared cache backend are on by default; a limit of 0 is derived
+/// from the memory of the machine.
+#[test]
+fn test_server_memory_limit_defaults() {
+    let mut config = InnerConfig::default();
+    assert!(config.query.common.max_memory_limit_enabled);
+    assert!(config.cache.shared_memory_enabled);
+    assert_eq!(config.query.common.max_server_memory_usage, 0);
+    // The in-memory column data pool is off by default; metadata and index pools stay on.
+    assert_eq!(
+        (
+            config.cache.meta_max_ratio,
+            config.cache.index_max_ratio,
+            config.cache.data_max_ratio
+        ),
+        (10, 40, 0)
+    );
+
+    let mut system = sysinfo::System::new();
+    system.refresh_memory();
+    let derived = config.server_memory_limit();
+    assert!(derived > 0);
+    assert!(derived <= system.total_memory() / 10 * 8);
+
+    config.query.common.max_server_memory_usage = 1 << 30;
+    assert_eq!(config.server_memory_limit(), 1 << 30);
+}

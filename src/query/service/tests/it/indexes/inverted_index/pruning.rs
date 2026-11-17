@@ -807,8 +807,8 @@ async fn test_block_pruner() -> anyhow::Result<()> {
 
         let rows = block_metas
             .iter()
-            .map(|(v, _)| match &v.matched_rows {
-                Some(matched_rows) => matched_rows.len(),
+            .map(|(v, _)| match &v.inverted_index_matches {
+                Some(matches) => matches.rows.len(),
                 None => 0,
             })
             .sum::<usize>();

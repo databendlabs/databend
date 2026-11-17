@@ -61,7 +61,7 @@ impl Interpreter for DescConnectionInterpreter {
 
             let names = vec![connection.name.clone()];
             let types = vec![connection.storage_type.clone()];
-            let conn = Connection::new(connection.storage_params).mask();
+            let conn = Connection::new(connection.storage_params).mask_secrets();
             connection.storage_params = conn.conns;
             let params = vec![connection.storage_params_display().clone()];
 

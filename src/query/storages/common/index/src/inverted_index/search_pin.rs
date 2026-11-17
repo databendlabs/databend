@@ -16,6 +16,7 @@
 // Copyright 2021-Present Datadog, Inc.
 // Modified by Datafuse Labs into a search-scoped, non-evicting range pin.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt;
 use std::io;
@@ -40,10 +41,21 @@ struct CachedRange {
     bytes: OwnedBytes,
 }
 
+/// The pinned ranges of one file, by start. No range contains another, so the ranges have
+/// distinct starts, and their ends grow with their starts: the ranges that start at or before an
+/// offset end furthest with the last of them.
 #[derive(Clone, Debug, Default)]
-struct FileRangeCache(Arc<RwLock<Vec<CachedRange>>>);
+struct FileRangeCache(Arc<RwLock<BTreeMap<usize, CachedRange>>>);
 
 impl FileRangeCache {
+    /// The range that starts last at or before `offset`: of those, the one that ends last.
+    fn last_from(ranges: &BTreeMap<usize, CachedRange>, offset: usize) -> Option<&CachedRange> {
+        ranges
+            .range(..=offset)
+            .next_back()
+            .map(|(_, cached)| cached)
+    }
+
     fn insert(&self, range: Range<usize>, bytes: OwnedBytes) -> io::Result<()> {
         if range.len() != bytes.len() {
             return Err(io::Error::new(
@@ -52,15 +64,20 @@ impl FileRangeCache {
             ));
         }
         let mut ranges = self.0.write().expect("search pin lock poisoned");
-        if ranges
-            .iter()
-            .any(|cached| cached.range.start <= range.start && cached.range.end >= range.end)
+        if Self::last_from(&ranges, range.start).is_some_and(|cached| cached.range.end >= range.end)
         {
             return Ok(());
         }
-        ranges
-            .retain(|cached| !(range.start <= cached.range.start && range.end >= cached.range.end));
-        ranges.push(CachedRange { range, bytes });
+        // The ranges it contains start at or after it and, ends growing, are consecutive.
+        let contained = ranges
+            .range(range.start..)
+            .take_while(|(_, cached)| cached.range.end <= range.end)
+            .map(|(&start, _)| start)
+            .collect::<Vec<_>>();
+        for start in contained {
+            ranges.remove(&start);
+        }
+        ranges.insert(range.start, CachedRange { range, bytes });
         Ok(())
     }
 
@@ -69,15 +86,11 @@ impl FileRangeCache {
             return Some(OwnedBytes::empty());
         }
         let ranges = self.0.read().expect("search pin lock poisoned");
-        if let Some(bytes) = ranges.iter().rev().find_map(|cached| {
-            if cached.range.start <= range.start && cached.range.end >= range.end {
-                let start = range.start - cached.range.start;
-                Some(cached.bytes.slice(start..start + range.len()))
-            } else {
-                None
-            }
-        }) {
-            return Some(bytes);
+        if let Some(cached) =
+            Self::last_from(&ranges, range.start).filter(|cached| cached.range.end >= range.end)
+        {
+            let start = range.start - cached.range.start;
+            return Some(cached.bytes.slice(start..start + range.len()));
         }
 
         // Tantivy may asynchronously warm adjacent slices and later synchronously request their
@@ -85,10 +98,8 @@ impl FileRangeCache {
         let mut cursor = range.start;
         let mut output = Vec::with_capacity(range.len());
         while cursor < range.end {
-            let cached = ranges
-                .iter()
-                .filter(|cached| cached.range.start <= cursor && cached.range.end > cursor)
-                .max_by_key(|cached| cached.range.end)?;
+            let cached =
+                Self::last_from(&ranges, cursor).filter(|cached| cached.range.end > cursor)?;
             let end = cached.range.end.min(range.end);
             let start_in_cached = cursor - cached.range.start;
             output.extend_from_slice(
@@ -251,5 +262,115 @@ mod tests {
         pin.insert("file", 1..5, OwnedBytes::new(b"bcde".to_vec()))
             .unwrap();
         assert_eq!(file.read_bytes_slice(2..4).unwrap().as_ref(), b"cd");
+    }
+
+    fn pinned(cache: &FileRangeCache) -> Vec<Range<usize>> {
+        let ranges = cache.0.read().unwrap();
+        ranges.values().map(|cached| cached.range.clone()).collect()
+    }
+
+    #[test]
+    fn test_file_range_cache_cases() {
+        let data = (0..32u8).collect::<Vec<_>>();
+        let bytes = |range: Range<usize>| OwnedBytes::new(data[range].to_vec());
+        let cache = FileRangeCache::default();
+        cache.insert(4..8, bytes(4..8)).unwrap();
+        cache.insert(10..14, bytes(10..14)).unwrap();
+
+        // A contained range changes nothing.
+        cache.insert(5..7, bytes(5..7)).unwrap();
+        assert_eq!(pinned(&cache), vec![4..8, 10..14]);
+        // A range with the same start replaces the shorter one.
+        cache.insert(10..16, bytes(10..16)).unwrap();
+        assert_eq!(pinned(&cache), vec![4..8, 10..16]);
+        // A covering range replaces every range it contains.
+        cache.insert(2..18, bytes(2..18)).unwrap();
+        assert_eq!(pinned(&cache), vec![2..18]);
+
+        // Reads inside one range, across adjacent ranges, and with a gap.
+        cache.insert(18..20, bytes(18..20)).unwrap();
+        cache.insert(22..24, bytes(22..24)).unwrap();
+        assert_eq!(cache.get(3..9).unwrap().as_ref(), &data[3..9]);
+        assert_eq!(cache.get(16..20).unwrap().as_ref(), &data[16..20]);
+        assert!(cache.get(16..23).is_none());
+        assert!(cache.get(0..4).is_none());
+        assert!(cache.get(5..5).unwrap().is_empty());
+    }
+
+    /// The pinned ranges as a list scanned in full: what `FileRangeCache` must answer.
+    #[derive(Default)]
+    struct ListModel(Vec<Range<usize>>);
+
+    impl ListModel {
+        fn insert(&mut self, range: Range<usize>) {
+            if self
+                .0
+                .iter()
+                .any(|cached| cached.start <= range.start && cached.end >= range.end)
+            {
+                return;
+            }
+            self.0
+                .retain(|cached| !(range.start <= cached.start && range.end >= cached.end));
+            self.0.push(range);
+        }
+
+        /// Whether `range` is covered, by one range or by adjacent ones.
+        fn covers(&self, range: Range<usize>) -> bool {
+            let mut cursor = range.start;
+            while cursor < range.end {
+                match self
+                    .0
+                    .iter()
+                    .filter(|cached| cached.start <= cursor && cached.end > cursor)
+                    .map(|cached| cached.end)
+                    .max()
+                {
+                    Some(end) => cursor = end,
+                    None => return false,
+                }
+            }
+            true
+        }
+    }
+
+    #[test]
+    fn test_file_range_cache_matches_list() {
+        const LEN: usize = 64;
+        let data = (0..LEN).map(|i| i as u8).collect::<Vec<_>>();
+        // A fixed linear congruential sequence: the test is deterministic.
+        let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+        let mut next = |bound: usize| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (state >> 33) as usize % bound
+        };
+        for _ in 0..200 {
+            let cache = FileRangeCache::default();
+            let mut model = ListModel::default();
+            for _ in 0..40 {
+                let start = next(LEN + 1);
+                let end = start + next(LEN + 1 - start).min(12);
+                if next(2) == 0 {
+                    cache
+                        .insert(start..end, OwnedBytes::new(data[start..end].to_vec()))
+                        .unwrap();
+                    model.insert(start..end);
+                    let pinned = cache.0.read().unwrap();
+                    let mut want = model.0.clone();
+                    want.sort_by_key(|r| r.start);
+                    let got = pinned.values().map(|c| c.range.clone()).collect::<Vec<_>>();
+                    assert_eq!(got, want);
+                } else {
+                    let got = cache.get(start..end);
+                    if start == end || model.covers(start..end) {
+                        assert_eq!(got.unwrap().as_ref(), &data[start..end], "{start}..{end}");
+                    } else {
+                        assert!(got.is_none(), "{start}..{end}");
+                    }
+                }
+            }
+        }
     }
 }
