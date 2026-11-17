@@ -28,6 +28,7 @@ use std::time::SystemTime;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::PerfEvent;
@@ -216,6 +217,8 @@ const DEFAULT_POINTS: u64 = 3;
 
 struct ExecutingGraph {
     finished_nodes: AtomicUsize,
+    /// The tasks of the graph running on a worker of the queries executor.
+    running_tasks: AtomicUsize,
     graph: StableGraph<Arc<Node>, EdgeInfo>,
     /// points store two values
     ///
@@ -263,6 +266,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
+            running_tasks: AtomicUsize::new(0),
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
             query_id,
@@ -312,6 +316,7 @@ impl ExecutingGraph {
         let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
+            running_tasks: AtomicUsize::new(0),
             graph,
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
@@ -965,31 +970,60 @@ impl RunningGraph {
     }
 
     /// Flag the graph should finish and no more tasks should be scheduled.
+    ///
+    /// The first call decides the result of the graph. Its error is stored before
+    /// the flag is set, so whoever sees the flag sees the error too. The waiter of
+    /// the graph is woken once no worker runs a task of it.
     pub fn should_finish<C>(&self, cause: Result<(), C>) -> Result<()> {
         let cause = cause.with_context(|| "should finish");
 
-        if self.0.should_finish.load(Ordering::SeqCst) {
-            return Ok(());
+        {
+            let mut finished_error = self.0.finished_error.lock();
+            if self.0.should_finish.load(Ordering::SeqCst) {
+                return Ok(());
+            }
+            *finished_error = cause.as_ref().err().cloned();
+            // It is also the interrupt flag of the processors.
+            self.0.should_finish.store(true, Ordering::SeqCst);
         }
-        self.0.should_finish.store(true, Ordering::SeqCst);
+
         if let Err(cause) = &cause {
+            // The diagnostics may run on a thread that exceeded its memory limit.
+            let _guard = LimitMemGuard::enter_unlimited();
             log_memory_limit_diagnostics(cause, "memory limit exceeded");
         }
         self.0.finished_notify.notify_waiters();
-        self.interrupt();
-        let mut finished_error = self.0.finished_error.lock();
-        if finished_error.is_none() {
-            *finished_error = cause.err();
-            drop(finished_error);
+        self.notify_finished_if_idle();
+        Ok(())
+    }
+
+    /// Counts a task of the graph as running until the guard is dropped.
+    ///
+    /// Check `is_should_finish` after this, not before: a graph that finishes in
+    /// between has woken its waiter already, which then runs concurrently with
+    /// the task.
+    pub(crate) fn track_running_task(self: &Arc<Self>) -> RunningTaskGuard {
+        self.0.running_tasks.fetch_add(1, Ordering::SeqCst);
+        RunningTaskGuard {
+            graph: self.clone(),
+        }
+    }
+
+    /// Wakes the waiter of the graph, which runs the finish callbacks of the
+    /// query, once the graph should finish and no worker runs a task of it.
+    ///
+    /// The async tasks of the graph are not waited for: they are aborted by
+    /// `finished_notify`, as on the per-query executor.
+    fn notify_finished_if_idle(&self) {
+        if !self.is_should_finish() || self.0.running_tasks.load(Ordering::SeqCst) != 0 {
+            return;
         }
 
-        if let Some(notify) = self.0.finish_condvar_notify.clone() {
-            let (lock, cvar) = &*notify;
-            let mut started = lock.lock();
-            *started = true;
-            cvar.notify_one();
+        if let Some(notify) = &self.0.finish_condvar_notify {
+            let (lock, cvar) = &**notify;
+            *lock.lock() = true;
+            cvar.notify_all();
         }
-        Ok(())
     }
 
     /// Checks if the graph should finish and no more tasks should be scheduled.
@@ -1191,6 +1225,18 @@ impl RunningGraph {
 
     pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
         self.0.executor_stats.dump_snapshot()
+    }
+}
+
+/// A task of a graph running on a worker of the queries executor.
+pub(crate) struct RunningTaskGuard {
+    graph: Arc<RunningGraph>,
+}
+
+impl Drop for RunningTaskGuard {
+    fn drop(&mut self) {
+        self.graph.0.running_tasks.fetch_sub(1, Ordering::SeqCst);
+        self.graph.notify_finished_if_idle();
     }
 }
 

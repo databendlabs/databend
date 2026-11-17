@@ -222,6 +222,19 @@ impl QueriesPipelineExecutor {
 
                 while !self.global_tasks_queue.is_finished() && context.has_task() {
                     let task_info = context.get_task_info();
+                    // Counted before the check: a graph that finishes in between
+                    // waits for this task before running its finish callbacks.
+                    let _running_task = task_info
+                        .as_ref()
+                        .map(|(graph, _)| graph.track_running_task());
+                    if task_info
+                        .as_ref()
+                        .is_some_and(|(graph, _)| graph.is_should_finish())
+                    {
+                        drop(context.take_task());
+                        continue;
+                    }
+
                     let execute_res = catch_unwind(|| context.execute_task(Some(self)));
                     match execute_res {
                         Ok(res) => {
