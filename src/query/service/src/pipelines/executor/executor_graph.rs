@@ -987,13 +987,16 @@ impl RunningGraph {
             self.0.should_finish.store(true, Ordering::SeqCst);
         }
 
+        self.0.finished_notify.notify_waiters();
+        self.notify_finished_if_idle();
+
+        // After the notifications: the diagnostics wait for locks that other
+        // queries hold, e.g. the one of `DataExchangeManager::shutdown_query`,
+        // and may run on a thread that exceeded its memory limit.
         if let Err(cause) = &cause {
-            // The diagnostics may run on a thread that exceeded its memory limit.
             let _guard = LimitMemGuard::enter_unlimited();
             log_memory_limit_diagnostics(cause, "memory limit exceeded");
         }
-        self.0.finished_notify.notify_waiters();
-        self.notify_finished_if_idle();
         Ok(())
     }
 
@@ -1313,5 +1316,56 @@ impl Debug for ScheduleQueue {
                 .field("async_queue", &async_queue)
                 .finish()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use databend_common_base::runtime::Thread;
+    use databend_common_exception::ErrorCode;
+    use databend_common_pipeline::core::Pipeline;
+    use parking_lot::Condvar;
+    use parking_lot::Mutex;
+
+    use super::RunningGraph;
+    use crate::servers::flight::v1::exchange::DataExchangeManager;
+    use crate::test_kits::TestFixture;
+
+    /// The waiter of a graph is woken before the memory limit diagnostics, which
+    /// wait for locks that other queries hold.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_should_finish_notifies_before_diagnostics() -> anyhow::Result<()> {
+        let _fixture = TestFixture::setup().await?;
+        let finished = Arc::new((Mutex::new(false), Condvar::new()));
+        let graph = RunningGraph::create(
+            Pipeline::create(),
+            1,
+            Arc::new("test-notify-before-diagnostics".to_string()),
+            Some(finished.clone()),
+            vec![],
+        )?;
+
+        // Held like `DataExchangeManager::shutdown_query` does when it finishes
+        // a query; the diagnostics wait for it.
+        let exchange_manager = DataExchangeManager::instance();
+        let coordinator_guard = exchange_manager.lock_queries_coordinator_for_test();
+        let oom = Thread::spawn(move || {
+            graph.should_finish(Err(ErrorCode::MemoryExceedsLimit("test memory limit")))
+        });
+
+        let (lock, cvar) = &*finished;
+        let mut woken = lock.lock();
+        if !*woken {
+            cvar.wait_for(&mut woken, Duration::from_secs(10));
+        }
+        assert!(*woken, "the waiter must be woken before the diagnostics");
+        drop(woken);
+
+        drop(coordinator_guard);
+        oom.join().unwrap()?;
+        Ok(())
     }
 }
