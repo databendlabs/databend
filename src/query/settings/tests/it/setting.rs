@@ -47,6 +47,46 @@ fn test_recluster_task_selection_v2_setting() {
     assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
 }
 
+#[test]
+fn test_recluster_final_target_average_depth() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+    assert_eq!(
+        settings.get_recluster_final_target_average_depth().unwrap(),
+        0.0
+    );
+    for (value, expected) in [
+        ("0", 0.0),
+        ("0.5", 0.5),
+        ("791.9299", 791.9299),
+        ("2e2", 200.0),
+    ] {
+        settings
+            .set_setting(
+                "recluster_final_target_average_depth".to_string(),
+                value.to_string(),
+            )
+            .unwrap();
+        assert_eq!(
+            settings.get_recluster_final_target_average_depth().unwrap(),
+            expected
+        );
+    }
+    // Like the existing floating-point histogram setting, the string-backed value
+    // is validated when read by its consumer.
+    for value in ["-1", "NaN", "inf", "-inf", "1e309", "invalid", ""] {
+        settings
+            .set_setting(
+                "recluster_final_target_average_depth".to_string(),
+                value.to_string(),
+            )
+            .unwrap();
+        assert!(
+            settings.get_recluster_final_target_average_depth().is_err(),
+            "{value}"
+        );
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
     let settings = Settings::create(Tenant::new_literal("test"));

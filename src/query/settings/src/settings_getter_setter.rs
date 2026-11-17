@@ -806,6 +806,21 @@ impl Settings {
         ReplaceIntoShuffleStrategy::try_from(v)
     }
 
+    pub fn get_recluster_final_target_average_depth(&self) -> Result<f64> {
+        let value = self.try_get_string("recluster_final_target_average_depth")?;
+        let target = value.parse::<f64>().map_err(|_| {
+            ErrorCode::WrongValueForVariable(format!(
+                "Invalid recluster_final_target_average_depth value: {value}"
+            ))
+        })?;
+        if !target.is_finite() || target < 0.0 {
+            return Err(ErrorCode::WrongValueForVariable(format!(
+                "recluster_final_target_average_depth must be finite and nonnegative, got {value}"
+            )));
+        }
+        Ok(target)
+    }
+
     pub fn get_recluster_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("recluster_timeout_secs")
     }
