@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
+use databend_common_config::MetaServiceCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::ClientSessionMgr;
@@ -91,13 +92,13 @@ pub struct UserApiProvider {
     builtin: BuiltIn,
 }
 
-/// The watched copies of one tenant, the tenant of this node. A copy is `None` when its flag in
-/// [`CacheConfig`] is off.
+/// The watched copies of one tenant, the tenant of this node. A copy is `None` when its name is
+/// not in `cache.meta_service_caches`.
 struct Watched {
     tenant: Tenant,
-    /// By `cache.meta_service_user_cache`.
+    /// By [`MetaServiceCache::User`].
     users: Option<Arc<parking_lot::Mutex<Cache>>>,
-    /// By `cache.meta_service_setting_cache`.
+    /// By [`MetaServiceCache::Setting`].
     settings: Option<Arc<parking_lot::Mutex<Cache>>>,
 }
 
@@ -146,12 +147,12 @@ impl UserApiProvider {
             None
         };
 
-        let users = if cache_config.meta_service_user_cache {
+        let users = if cache_config.is_meta_service_cache_enabled(MetaServiceCache::User) {
             Some(UserMgr::watch(client.clone(), tenant).await)
         } else {
             None
         };
-        let settings = if cache_config.meta_service_setting_cache {
+        let settings = if cache_config.is_meta_service_cache_enabled(MetaServiceCache::Setting) {
             Some(SettingMgr::watch(client.clone(), tenant).await)
         } else {
             None

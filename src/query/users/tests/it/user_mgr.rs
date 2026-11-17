@@ -17,6 +17,7 @@ use std::time::Duration;
 use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::MetaServiceCache;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
@@ -269,35 +270,30 @@ async fn test_user_manager() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// With `cache.meta_service_user_cache` and `cache.meta_service_setting_cache`, a login finds a
-/// user and the new sessions find the global settings, as direct reads do, as they are created
-/// and dropped.
+/// With `user` and `setting` in `cache.meta_service_caches`, a login finds a user and the new
+/// sessions find the global settings, as direct reads do, as they are created and dropped.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_login_with_watch_cache() -> anyhow::Result<()> {
-    check_login_and_session_settings(true, true).await
+    check_login_and_session_settings(&[MetaServiceCache::User, MetaServiceCache::Setting]).await
 }
 
 /// With only the users watched, a login and the new sessions find the user and the global
 /// settings: the settings come from meta-service.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_login_with_user_cache_only() -> anyhow::Result<()> {
-    check_login_and_session_settings(true, false).await
+    check_login_and_session_settings(&[MetaServiceCache::User]).await
 }
 
 /// With only the global settings watched, a login and the new sessions find the user and the
 /// global settings: the user comes from meta-service.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_login_with_setting_cache_only() -> anyhow::Result<()> {
-    check_login_and_session_settings(false, true).await
+    check_login_and_session_settings(&[MetaServiceCache::Setting]).await
 }
 
 /// A login finds a user and the new sessions find the global settings as they are created and
-/// dropped, with the users and the global settings watched as `user_cache` and `setting_cache`
-/// say.
-async fn check_login_and_session_settings(
-    user_cache: bool,
-    setting_cache: bool,
-) -> anyhow::Result<()> {
+/// dropped, with `caches` as `cache.meta_service_caches`.
+async fn check_login_and_session_settings(caches: &[MetaServiceCache]) -> anyhow::Result<()> {
     let thread_name = std::thread::current()
         .name()
         .unwrap_or("test_login_with_watch_cache")
@@ -306,8 +302,7 @@ async fn check_login_and_session_settings(
     GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO)?;
     let tenant = Tenant::new_literal("test");
     let cache = CacheConfig {
-        meta_service_user_cache: user_cache,
-        meta_service_setting_cache: setting_cache,
+        meta_service_caches: caches.to_vec(),
         ..Default::default()
     };
     let provider =

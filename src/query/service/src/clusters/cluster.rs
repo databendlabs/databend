@@ -37,6 +37,7 @@ pub use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::MetaServiceCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
@@ -321,7 +322,10 @@ impl ClusterDiscovery {
         let lift_time = Duration::from_secs(60);
         let mut cluster_manager =
             WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
-        if cfg.cache.meta_service_cluster_node_cache {
+        if cfg
+            .cache
+            .is_meta_service_cache_enabled(MetaServiceCache::ClusterNode)
+        {
             cluster_manager = cluster_manager.watch_cluster_nodes().await;
         }
 
