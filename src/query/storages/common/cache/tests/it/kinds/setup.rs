@@ -35,12 +35,15 @@ impl Backend {
         let room = memory / 8;
         match self {
             Backend::Legacy => CacheConfig {
+                shared_memory_enabled: false,
                 segment_block_metas_count: 64,
                 table_data_deserialized_data_bytes: room,
                 ..CacheConfig::default()
             },
             Backend::Shared => CacheConfig {
                 shared_memory_enabled: true,
+                // The data pool is off by default.
+                data_max_ratio: 10,
                 // Off by default.
                 kind_max_bytes: [
                     ("memory_cache_column_data".to_string(), room),

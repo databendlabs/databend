@@ -21,6 +21,7 @@ use std::sync::atomic::Ordering;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::RoleInfo;
@@ -298,6 +299,27 @@ impl SessionContext {
     pub fn get_query_context_shared(&self) -> Option<Arc<QueryContextShared>> {
         let lock = self.query_context_shared.read();
         lock.upgrade()
+    }
+
+    pub fn force_kill_query_if_id<C>(&self, query_id: &str, cause: ErrorCode<C>) -> bool {
+        // Check and pin the exact context under the slot lock. After releasing it,
+        // a connection may attach another context, but we can only cancel the old one.
+        // Do not hold the slot/id locks while invoking executor cancellation callbacks.
+        let shared = {
+            let current = self.query_context_shared.read();
+            let Some(shared) = current.upgrade() else {
+                return false;
+            };
+            if *shared.init_query_id.read() != query_id {
+                return false;
+            }
+            shared
+        };
+        // The immutable context key cannot remove another tenant's entry or a
+        // subsequent statement, even when a client reuses the same query ID.
+        crate::sessions::QueriesQueueManager::instance().remove(shared.queue_entry_key);
+        shared.kill(cause);
+        true
     }
 
     pub fn set_query_context_shared(&self, ctx: Weak<QueryContextShared>) {

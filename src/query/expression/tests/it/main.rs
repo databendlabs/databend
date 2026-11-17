@@ -40,6 +40,7 @@ mod filter_executor;
 mod fold_rules;
 mod function_factory;
 mod group_by;
+mod group_hash;
 mod hilbert;
 mod kernel;
 mod meta_scalar;
