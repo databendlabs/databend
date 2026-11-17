@@ -133,7 +133,8 @@ impl IPhysicalPlan for CopyIntoTable {
             .ctx
             .build_table_by_table_info(&self.table_info, None)?;
 
-        // FILE_SORTED_BY: the read and append pipelines of every node preserve each file's order.
+        // SORTED_BY_CLUSTER_KEY: the read and append pipelines of every node preserve each file's
+        // order.
         let file_sort_keys = self.stage_table_info.file_sort_keys.clone();
         if file_sort_keys.is_some() {
             builder

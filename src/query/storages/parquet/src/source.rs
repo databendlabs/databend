@@ -164,7 +164,7 @@ pub struct ParquetSource {
     push_downs: Option<PushDownInfo>,
     topk: Arc<Option<TopK>>,
     op_registry: Arc<dyn OperatorRegistry>,
-    /// COPY with `FILE_SORTED_BY`: build blocks from consecutive rows of one file.
+    /// COPY with `SORTED_BY_CLUSTER_KEY`: build blocks from consecutive rows of one file.
     file_order: Option<FileOrder>,
 }
 

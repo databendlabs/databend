@@ -312,7 +312,7 @@ pub(crate) fn collect_parts(
     let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
     let rowgroup_hint_bytes = ctx.get_settings().get_parquet_rowgroup_hint_bytes()?;
     if ctx.copy_state().get_file_sort_keys().is_some() {
-        // COPY with FILE_SORTED_BY: one part per file, so that one source reads the whole
+        // COPY with SORTED_BY_CLUSTER_KEY: one part per file, so that one source reads the whole
         // file in order and its blocks are contiguous ranges of the file.
         return Ok(collect_whole_file_parts(files, compression_ratio));
     }

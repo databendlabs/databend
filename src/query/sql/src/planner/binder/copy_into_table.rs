@@ -24,7 +24,6 @@ use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
-use databend_common_ast::ast::FileSortedBy;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::LiteralStringOrVariable;
 use databend_common_ast::ast::SelectTarget;
@@ -128,44 +127,44 @@ impl Binder {
         }
     }
 
-    /// Bind `FILE_SORTED_BY = CLUSTER_KEY` to the cluster key of the target table, and check
+    /// Bind `SORTED_BY_CLUSTER_KEY = TRUE` to the cluster key of the target table, and check
     /// that preserving the file order keeps the blocks written from one file non-overlapping.
     fn resolve_file_sort_keys(
         &self,
         table: &Arc<dyn Table>,
-        file_sorted_by: Option<&FileSortedBy>,
+        sorted_by_cluster_key: bool,
         source_schema: &TableSchema,
         is_transform: bool,
     ) -> Result<Option<Vec<RemoteExpr<String>>>> {
-        let Some(FileSortedBy::ClusterKey) = file_sorted_by else {
+        if !sorted_by_cluster_key {
             return Ok(None);
-        };
+        }
         if is_transform {
             return Err(ErrorCode::BadArguments(
-                "FILE_SORTED_BY is not supported for COPY with a transform query",
+                "SORTED_BY_CLUSTER_KEY is not supported for COPY with a transform query",
             ));
         }
         if table.engine() != "FUSE" {
             return Err(ErrorCode::BadArguments(
-                "FILE_SORTED_BY requires a FUSE target table",
+                "SORTED_BY_CLUSTER_KEY requires a FUSE target table",
             ));
         }
         if table.options().contains_key(OPT_KEY_PARTITION_BY) {
             return Err(ErrorCode::BadArguments(
-                "FILE_SORTED_BY is not supported for tables with PARTITION BY",
+                "SORTED_BY_CLUSTER_KEY is not supported for tables with PARTITION BY",
             ));
         }
         let cluster_keys = match table.resolve_cluster_keys() {
             Some(ast_exprs) => parse_cluster_keys(self.ctx.clone(), table.clone(), ast_exprs)?,
             None => {
                 return Err(ErrorCode::BadArguments(
-                    "FILE_SORTED_BY requires the target table to have a linear cluster key",
+                    "SORTED_BY_CLUSTER_KEY requires the target table to have a linear cluster key",
                 ));
             }
         };
         let ClusterKeys::Linear(cluster_keys) = cluster_keys else {
             return Err(ErrorCode::BadArguments(
-                "FILE_SORTED_BY requires the target table to have a linear cluster key",
+                "SORTED_BY_CLUSTER_KEY requires the target table to have a linear cluster key",
             ));
         };
 
@@ -176,7 +175,7 @@ impl Binder {
                 let name = table_schema.field(*index).name();
                 if source_schema.field_with_name(name).is_err() {
                     return Err(ErrorCode::BadArguments(format!(
-                        "FILE_SORTED_BY references column `{name}`, which is not loaded from the files"
+                        "SORTED_BY_CLUSTER_KEY requires the cluster key columns to be loaded from the files, but `{name}` is not"
                     )));
                 }
                 Ok(name.to_string())
@@ -284,7 +283,7 @@ impl Binder {
 
         let file_sort_keys = self.resolve_file_sort_keys(
             &table,
-            stmt.options.file_sorted_by.as_ref(),
+            stmt.options.sorted_by_cluster_key,
             &required_values_table_schema,
             is_transform,
         )?;
@@ -294,7 +293,7 @@ impl Binder {
                     if enable_schema_evolution || fmt.missing_field_as != NullAs::Error)
         {
             return Err(ErrorCode::BadArguments(
-                "FILE_SORTED_BY does not support Parquet files with MISSING_FIELD_AS other than ERROR, or with schema evolution, for now",
+                "SORTED_BY_CLUSTER_KEY does not support Parquet files with MISSING_FIELD_AS other than ERROR, or with schema evolution, for now",
             ));
         }
 

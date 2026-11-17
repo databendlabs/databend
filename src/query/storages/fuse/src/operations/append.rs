@@ -99,7 +99,7 @@ impl FuseTable {
                     .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
                 pipeline.add_block_meta_transformer(|| TransformCompactBlock);
             } else if ctx.copy_state().get_file_sort_keys().is_some() {
-                // COPY with FILE_SORTED_BY: each block already holds a contiguous range of
+                // COPY with SORTED_BY_CLUSTER_KEY: each block already holds a contiguous range of
                 // one input file. Combining blocks would mix ranges and make them overlap.
                 build_split_only_block_pipeline(pipeline, block_thresholds)?;
             } else {

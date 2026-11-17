@@ -507,14 +507,14 @@ error:
 
 
 ---------- Input ----------
-COPY INTO mytable FROM @mystage FILE_SORTED_BY = (k);
+COPY INTO mytable FROM @mystage SORTED_BY_CLUSTER_KEY = (k);
 ---------- Output ---------
 error: 
-  --> SQL:1:50
+  --> SQL:1:57
   |
-1 | COPY INTO mytable FROM @mystage FILE_SORTED_BY = (k);
-  | ----                                             ^ unexpected `(`, expecting `CLUSTER_KEY`
-  | |                                                 
+1 | COPY INTO mytable FROM @mystage SORTED_BY_CLUSTER_KEY = (k);
+  | ----                                                    ^ unexpected `(`, expecting `TRUE` or `FALSE`
+  | |                                                        
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { @<stage_name>[/<path>]

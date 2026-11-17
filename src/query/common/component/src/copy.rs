@@ -31,7 +31,8 @@ pub struct CopyState {
     on_error_map: RwLock<Option<OnErrorMap>>,
     on_error_mode: RwLock<Option<OnErrorMode>>,
     copy_status: Arc<CopyStatus>,
-    /// `FILE_SORTED_BY` keys of the running COPY: when set, each input file's order is preserved.
+    /// The cluster key of a COPY with `SORTED_BY_CLUSTER_KEY = TRUE`: when set, each input file's
+    /// order is preserved.
     file_sort_keys: RwLock<Option<Arc<[RemoteExpr<String>]>>>,
 }
 
@@ -75,7 +76,8 @@ impl CopyState {
         *self.file_sort_keys.write().unwrap() = keys.map(Into::into);
     }
 
-    /// The `FILE_SORTED_BY` keys of the running COPY, if the input order must be preserved.
+    /// The cluster key of the running COPY, if `SORTED_BY_CLUSTER_KEY` requires preserving the
+    /// input order.
     pub fn get_file_sort_keys(&self) -> Option<Arc<[RemoteExpr<String>]>> {
         self.file_sort_keys.read().unwrap().clone()
     }

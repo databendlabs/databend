@@ -27,7 +27,7 @@ use databend_common_expression::utils::sort_key_order::compare_sort_key_rows;
 use databend_common_expression::utils::sort_key_order::display_sort_key_row;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-/// Builds the blocks of a COPY with `FILE_SORTED_BY` while one source reads a whole file:
+/// Builds the blocks of a COPY with `SORTED_BY_CLUSTER_KEY` while one source reads a whole file:
 /// consecutive blocks of the file are concatenated into blocks of the target size, and the
 /// key ranges of the read blocks are checked not to go back, taking each range from the first
 /// and last rows. A block never spans two files.
@@ -136,7 +136,7 @@ impl FileOrder {
 
     fn violation(&self, row: usize, detail: String) -> ErrorCode {
         ErrorCode::BadBytes(format!(
-            "File {} is not ordered by FILE_SORTED_BY: near row {}, {}",
+            "File {} is not sorted by the cluster key (SORTED_BY_CLUSTER_KEY): near row {}, {}",
             self.location, row, detail,
         ))
     }

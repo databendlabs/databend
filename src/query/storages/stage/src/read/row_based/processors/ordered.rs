@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Order-preserving read of row-based files for `COPY ... FILE_SORTED_BY`.
+//! Order-preserving read of row-based files for `COPY ... SORTED_BY_CLUSTER_KEY = TRUE`.
 //!
 //! The batches of one file are decoded in parallel and stitched back in file order, so that
 //! every output block holds a contiguous range of one file:
@@ -30,7 +30,7 @@
 //! next block always arrives. Port back pressure alone bounds the memory to about one decoded
 //! batch per builder.
 //!
-//! `FILE_SORTED_BY` is checked at batch granularity: the rows of a block are sorted again on
+//! The declared order is checked at batch granularity: the rows of a block are sorted again on
 //! write, so what keeps the blocks of a file from overlapping is that each batch starts at or
 //! after the end of the batch before it in the same file. Only the first and last rows of a
 //! batch are checked.
@@ -108,9 +108,9 @@ local_block_meta_serde!(SequencedBlock);
 #[typetag::serde(name = "ordered_sequenced_block")]
 impl BlockMetaInfo for SequencedBlock {}
 
-fn file_sorted_by_violation(path: &str, row: usize, detail: String) -> ErrorCode {
+fn not_sorted_error(path: &str, row: usize, detail: String) -> ErrorCode {
     ErrorCode::BadBytes(format!(
-        "File {path} is not ordered by FILE_SORTED_BY: near row {row}, {detail}"
+        "File {path} is not sorted by the cluster key (SORTED_BY_CLUSTER_KEY): near row {row}, {detail}"
     ))
 }
 
@@ -220,7 +220,7 @@ impl Transform for OrderedBlockBuilder {
         if let Some((first, last)) = &bounds
             && compare_sort_key_rows(first, last) == Ordering::Greater
         {
-            return Err(file_sorted_by_violation(
+            return Err(not_sorted_error(
                 &sequenced.path,
                 start_row + 1,
                 format!(
@@ -307,7 +307,7 @@ impl OrderedBatchStitcher {
         if let Some(previous) = &run.last_key
             && compare_sort_key_rows(&first_key, previous) == Ordering::Less
         {
-            return Err(file_sorted_by_violation(
+            return Err(not_sorted_error(
                 &meta.path,
                 meta.start_row + 1,
                 format!(

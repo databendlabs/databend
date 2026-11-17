@@ -177,7 +177,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         Ok(())
     }
 
-    /// `FILE_SORTED_BY`: decode batches in parallel, then stitch them back in file order, so
+    /// `SORTED_BY_CLUSTER_KEY`: decode batches in parallel, then stitch them back in file order, so
     /// that each block holds a contiguous range of one file. See [`OrderedBatchStitcher`].
     fn read_data_in_file_order(
         pipeline: &mut Pipeline,

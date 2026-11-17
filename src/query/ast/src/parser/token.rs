@@ -508,8 +508,6 @@ pub enum TokenKind {
     CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
-    #[token("CLUSTER_KEY", ignore(ascii_case))]
-    CLUSTER_KEY,
     #[token("CLONE", ignore(ascii_case))]
     CLONE,
     #[token("COMMENT", ignore(ascii_case))]
@@ -729,8 +727,6 @@ pub enum TokenKind {
     NULL_IF,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
-    #[token("FILE_SORTED_BY", ignore(ascii_case))]
-    FILE_SORTED_BY,
     #[token("FILE", ignore(ascii_case))]
     FILE,
     #[token("FILES", ignore(ascii_case))]
@@ -1270,6 +1266,8 @@ pub enum TokenKind {
     SNAPPY,
     #[token("SNAPSHOT", ignore(ascii_case))]
     SNAPSHOT,
+    #[token("SORTED_BY_CLUSTER_KEY", ignore(ascii_case))]
+    SORTED_BY_CLUSTER_KEY,
     #[token("SPLIT_SIZE", ignore(ascii_case))]
     SPLIT_SIZE,
     #[token("STAGE", ignore(ascii_case))]

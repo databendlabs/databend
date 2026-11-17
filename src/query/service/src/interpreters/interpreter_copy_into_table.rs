@@ -243,7 +243,8 @@ impl CopyIntoTableInterpreter {
     )> {
         let mut new_schema = None;
         let mut update_stream_meta_reqs = vec![];
-        // Partition planning of the source reads it to keep each FILE_SORTED_BY file in one part.
+        // Partition planning of the source reads it to keep each file in one part for
+        // SORTED_BY_CLUSTER_KEY.
         self.ctx
             .copy_state()
             .set_file_sort_keys(plan.stage_table_info.file_sort_keys.clone());

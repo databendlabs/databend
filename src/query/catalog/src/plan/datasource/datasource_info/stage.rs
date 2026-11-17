@@ -50,7 +50,7 @@ pub struct StageTableInfo {
     pub copy_into_table_options: CopyIntoTableOptions,
     pub is_variant: bool,
     /// Keys that the rows within each input file are declared to be ordered by
-    /// (`FILE_SORTED_BY`), bound to the target table columns by name.
+    /// (`SORTED_BY_CLUSTER_KEY`), bound to the target table columns by name.
     #[serde(default)]
     pub file_sort_keys: Option<Vec<RemoteExpr<String>>>,
 

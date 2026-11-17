@@ -193,7 +193,7 @@ impl FileFormatParams {
                 }
             }
         }
-        if options.file_sorted_by.is_some()
+        if options.sorted_by_cluster_key
             && !matches!(
                 self,
                 FileFormatParams::Csv(_)
@@ -203,7 +203,7 @@ impl FileFormatParams {
             )
         {
             return Err(ErrorCode::BadArguments(
-                "FILE_SORTED_BY only supports CSV, NDJSON, TEXT and PARQUET files for now.",
+                "SORTED_BY_CLUSTER_KEY only supports CSV, NDJSON, TEXT and PARQUET files for now.",
             ));
         }
         Ok(())
