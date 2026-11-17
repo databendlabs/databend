@@ -77,6 +77,7 @@ use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
 use crate::pipelines::processors::horizontal_recluster::TransformPrepareReclusterIndex;
 use crate::pipelines::processors::horizontal_recluster::TransformReclusterOutputOrder;
+use crate::pipelines::processors::recluster_task_gate::ReclusterTaskGate;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
@@ -149,7 +150,7 @@ impl IPhysicalPlan for Recluster {
         if self.tasks.len() == 1 && self.task_batches.is_none() {
             return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
         }
-        let (bytes, budget) = self.validate_node_batch(&builder.ctx, threads)?;
+        let (bytes, budget) = self.validate_node_batch(&builder.ctx)?;
         log::info!(
             event = "recluster.node_batch_planned",
             tasks = self.tasks.len(), input_bytes = bytes, input_budget = budget,
@@ -159,12 +160,15 @@ impl IPhysicalPlan for Recluster {
         if self.tasks.len() == 1 {
             return self.build_task_pipeline(builder, &self.tasks[0], threads, io_requests, 0);
         }
+        let sequential = self.tasks.len() > threads;
+        let active_tasks = if sequential { 1 } else { self.tasks.len() };
+        let mut previous = None;
         let mut outputs = Vec::new();
         for (idx, task) in self.tasks.iter().enumerate() {
-            let task_threads =
-                threads / self.tasks.len() + usize::from(idx < threads % self.tasks.len());
+            let task_threads = threads / active_tasks + usize::from(idx < threads % active_tasks);
             let task_io =
-                io_requests / self.tasks.len() + usize::from(idx < io_requests % self.tasks.len());
+                io_requests / active_tasks + usize::from(idx < io_requests % active_tasks);
+            let first_node = builder.main_pipeline.graph.node_count();
             let child_ctx = QueryContext::create_from(&builder.ctx);
             // Copy already-validated effective settings as well as shared state:
             // create_from alone does not inherit context-local overrides.
@@ -178,6 +182,13 @@ impl IPhysicalPlan for Recluster {
             let result = self.build_task_pipeline(builder, task, task_threads, task_io, idx);
             builder.ctx = parent_ctx;
             result?;
+            if sequential {
+                previous = Some(ReclusterTaskGate::wrap(
+                    &mut builder.main_pipeline,
+                    first_node,
+                    previous.as_ref(),
+                ));
+            }
             outputs.extend(builder.main_pipeline.take_sinks());
         }
         // Merge only serialized mutation output, never the task-local sorted rows.
@@ -187,7 +198,7 @@ impl IPhysicalPlan for Recluster {
 }
 
 impl Recluster {
-    fn validate_node_batch(&self, ctx: &QueryContext, threads: usize) -> Result<(usize, usize)> {
+    fn validate_node_batch(&self, ctx: &QueryContext) -> Result<(usize, usize)> {
         let settings = ctx.get_settings();
         let assigned_batch = self.task_batches.as_ref().is_some_and(|batches| {
             let mut seen = HashSet::new();
@@ -197,8 +208,8 @@ impl Recluster {
                     .iter()
                     .all(|&idx| idx < self.tasks.len() && seen.insert(idx))
         });
-        // Enforce the same per-node cap as planning, including on remote workers.
-        if self.tasks.len() > threads.min(ReclusterTaskBudget::MAX_TASKS_PER_NODE)
+        // Threads bound parallelism, not batch size. Oversubscribed batches run sequentially.
+        if self.tasks.len() > ReclusterTaskBudget::MAX_TASKS_PER_NODE
             || !assigned_batch
             || self.tasks.len() > 1
                 && self
@@ -718,7 +729,18 @@ mod tests {
         fixture.execute_command(&format!(
             "CREATE TABLE {name}(id INT NOT NULL) CLUSTER BY(id) ROW_PER_BLOCK=4 BLOCK_PER_SEGMENT=2"
         )).await?;
-        for (multiway, local_id) in [(false, "node-b"), (true, "node-c")] {
+        for (multiway, local_id, threads, blocks_per_task) in [
+            (false, "node-b", 2, 2),
+            (true, "node-c", 2, 2),
+            (false, "node-b", 1, 2),
+            (true, "node-c", 1, 2),
+            (false, "node-b", 3, 1),
+            (true, "node-c", 3, 1),
+        ] {
+            fixture
+                .default_session()
+                .get_settings()
+                .set_max_threads(threads)?;
             fixture
                 .execute_command(&format!("TRUNCATE TABLE {name}"))
                 .await?;
@@ -749,7 +771,7 @@ mod tests {
             let schema = fuse.schema();
             let column_nodes = ColumnNodes::new_from_schema(&schema.as_ref().into(), Some(&schema));
             let tasks = blocks
-                .chunks(2)
+                .chunks(blocks_per_task)
                 .map(|blocks| {
                     let metas = blocks
                         .iter()
@@ -771,11 +793,12 @@ mod tests {
                     }
                 })
                 .collect::<Vec<_>>();
+            let task_count = tasks.len();
             let table_meta_timestamps = TestFixture::default_table_meta_timestamps();
             let source = Recluster {
                 meta: PhysicalPlanMeta::new("Recluster"),
                 tasks,
-                task_batches: Some(vec![vec![1, 0]]),
+                task_batches: Some(vec![(0..task_count).rev().collect()]),
                 table_info: table.get_table_info().clone(),
                 table_meta_timestamps,
             };
@@ -817,8 +840,8 @@ mod tests {
             assert_eq!(assigned.len(), 1);
             let (executor, worker) = assigned[0];
             assert_eq!(executor, local_id);
-            assert_eq!(worker.tasks.len(), 2);
-            assert_eq!(worker.task_batches, Some(vec![vec![0, 1]]));
+            assert_eq!(worker.tasks.len(), task_count);
+            assert_eq!(worker.task_batches, Some(vec![(0..task_count).collect()]));
             for (task, original) in worker.tasks.iter().zip(source.tasks.iter().rev()) {
                 assert_eq!(
                     FuseBlockPartInfo::from_part(&task.parts.partitions[0])?.location,
@@ -868,7 +891,7 @@ mod tests {
                         node.proc.name() == "HorizontalMultiwayReclusterSource"
                     })
                     .count(),
-                if multiway { 2 } else { 0 },
+                if multiway { task_count } else { 0 },
             );
             execute_pipeline(ctx, pipeline).await?;
             let table = fixture.latest_default_table().await?;
@@ -878,7 +901,7 @@ mod tests {
                 .unwrap();
             assert_eq!(next.prev_snapshot_id.unwrap().0, snapshot.snapshot_id);
             assert_eq!(next.summary.row_count, 8);
-            assert_eq!(next.summary.block_count, 2);
+            assert_eq!(next.summary.block_count, task_count as u64);
             let result: Vec<_> = fixture.execute_query(&format!(
                 "SELECT count()=8 AND count(distinct id)=8 AND min(id)=0 AND max(id)=7 FROM {name}"
             )).await?.try_collect().await?;
