@@ -32,7 +32,9 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor as AstVisitor;
 use databend_common_ast::visit::VisitorMut as AstVisitorMut;
+use databend_common_ast::visit::Walk;
 use databend_common_ast::visit::WalkMut;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_cloud_control::client_config::build_client_config;
@@ -49,6 +51,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::convert_to_type_name;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
@@ -1586,6 +1589,29 @@ impl SqlUdfParameterSubstitution<'_> {
         .set_span(span))
     }
 
+    /// Reject `argument`, of the parameter `parameter`, if it is substituted
+    /// in the body of a lambda whose parameters shadow a name in it: the name
+    /// refers to a column of the caller, but would be bound to the lambda
+    /// parameter, and change the result silently. The ambiguous reading of an
+    /// arrow, which is lenient, is checked in its lambda reading.
+    fn reject_captured_argument(&self, parameter: &str, argument: &Expr) -> Result<()> {
+        if self.lambda_params.is_empty() {
+            return Ok(());
+        }
+        let mut free_names = FreeNames {
+            shadowing: &self.lambda_params,
+            name_resolution_ctx: self.name_resolution_ctx,
+            lambda_params: Vec::new(),
+        };
+        let VisitControl::Break((name, span)) = argument.walk(&mut free_names)? else {
+            return Ok(());
+        };
+        Err(ErrorCode::SemanticError(format!(
+            "the argument of SQL UDF parameter {parameter} refers to {name}, which a lambda parameter of the same name in the body of the UDF shadows; rename the column or the lambda parameter"
+        ))
+        .set_span(span))
+    }
+
     fn walk_lambda_function(&mut self, func: &mut ASTFunctionCall) -> Result<()> {
         let mut lambda = func.lambda.take();
         // The last argument is the ordinary reading of an ambiguous lambda,
@@ -1620,6 +1646,84 @@ impl SqlUdfParameterSubstitution<'_> {
     }
 }
 
+/// Finds the first unqualified name of an expression that is free in it and
+/// one of `shadowing`, outside subqueries, which a lambda body cannot hold.
+struct FreeNames<'a> {
+    shadowing: &'a [String],
+    name_resolution_ctx: &'a NameResolutionContext,
+    /// The parameters of the lambdas of the expression, which bind names in
+    /// their bodies.
+    lambda_params: Vec<Vec<String>>,
+}
+
+impl AstVisitor for FreeNames<'_> {
+    type Error = ErrorCode;
+    type Break = (String, Span);
+
+    fn visit_expr(&mut self, expr: &Expr) -> Result<VisitControl<Self::Break>> {
+        if let Expr::ColumnRef {
+            span,
+            column:
+                ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(ident),
+                },
+        } = expr
+        {
+            let name = normalize_identifier(ident, self.name_resolution_ctx).name;
+            if self.shadowing.contains(&name)
+                && !self
+                    .lambda_params
+                    .iter()
+                    .flatten()
+                    .any(|param| *param == name)
+            {
+                return Ok(VisitControl::Break((name, *span)));
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
+
+    fn visit_function_call(&mut self, func: &ASTFunctionCall) -> Result<VisitControl<Self::Break>> {
+        // An ambiguous arrow is a lambda, without its ordinary reading, the
+        // last argument, if the function takes one, as `try_lower_lambda`
+        // decides, and that ordinary reading otherwise.
+        let (args, body) = match &func.lambda {
+            None => return Ok(VisitControl::Continue),
+            Some(LambdaArgument::Lambda(body)) => (func.args.as_slice(), Some(body)),
+            Some(LambdaArgument::Ambiguous(body))
+                if GENERAL_LAMBDA_FUNCTIONS.contains(&Ascii::new(func.name.name.as_str())) =>
+            {
+                let args = func.args.split_last().map_or(&[][..], |(_, args)| args);
+                (args, Some(body))
+            }
+            Some(LambdaArgument::Ambiguous(_)) => (func.args.as_slice(), None),
+        };
+        for arg in args {
+            if let VisitControl::Break(found) = arg.walk(self)? {
+                return Ok(VisitControl::Break(found));
+            }
+        }
+        if let Some(body) = body {
+            self.lambda_params.push(
+                self.name_resolution_ctx
+                    .normalize_lambda_params(&body.params),
+            );
+            let result = body.expr.walk(self);
+            self.lambda_params.pop();
+            if let VisitControl::Break(found) = result? {
+                return Ok(VisitControl::Break(found));
+            }
+        }
+        Ok(VisitControl::SkipChildren)
+    }
+
+    fn visit_query(&mut self, _query: &Query) -> Result<VisitControl<Self::Break>> {
+        Ok(VisitControl::SkipChildren)
+    }
+}
+
 impl AstVisitorMut for SqlUdfParameterSubstitution<'_> {
     type Error = ErrorCode;
 
@@ -1639,6 +1743,9 @@ impl AstVisitorMut for SqlUdfParameterSubstitution<'_> {
                     return Ok(VisitControl::SkipChildren);
                 }
                 if let Some(argument) = self.arguments.get(&name) {
+                    if !self.lenient {
+                        self.reject_captured_argument(&name, argument)?;
+                    }
                     *expr = argument.clone();
                     return Ok(VisitControl::SkipChildren);
                 }

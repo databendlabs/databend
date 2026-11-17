@@ -453,6 +453,42 @@ async fn test_binder_nested_udf_rewrite() -> Result<()> {
             ],
             sql: "SETTINGS (inlist_to_join_threshold = 2) SELECT array_transform([a], x -> sql_in_list(x)) FROM t",
         },
+        SqlTestCase {
+            name: "aggregating_sql_udf_argument_captured_by_body_lambda_is_rejected",
+            description: "An aggregating SQL UDF is expanded with its arguments as written: `a` substituted for `x` in the body lambda `a -> x` would be bound to the lambda parameter, not to the column, so the call is rejected.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_capture AS (x) -> sum(x) + array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT a, sql_capture(a) FROM t GROUP BY a",
+        },
+        SqlTestCase {
+            name: "aggregating_sql_udf_argument_with_other_name_is_substituted_in_body_lambda",
+            description: "An argument whose names no lambda parameter of the body shadows is substituted in the lambda body, as a capture of the column.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_capture AS (x) -> sum(x) + array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT b, sql_capture(b) FROM t GROUP BY b",
+        },
+        SqlTestCase {
+            name: "aggregating_sql_udf_argument_binding_its_own_lambda_name_is_substituted",
+            description: "A name that a lambda of the argument binds is not free in the argument, so the lambda parameter of the body does not shadow it.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_capture AS (x) -> sum(x) + array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT b, sql_capture(array_sum(array_transform([b], a -> a + 1))) FROM t GROUP BY b",
+        },
+        SqlTestCase {
+            name: "scalar_sql_udf_argument_is_not_captured_by_body_lambda",
+            description: "A scalar SQL UDF binds its arguments before its body, so a lambda parameter of the body cannot shadow a column of the argument.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_scalar_capture AS (x) -> array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT sql_scalar_capture(a) FROM t",
+        },
     ];
 
     run_binder_cases("binder_nested_udf.txt", &cases).await
