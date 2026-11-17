@@ -1,0 +1,98 @@
+## A filter on a column whose every row is NULL is proven empty from the exact
+## row count and null count of a fuse table. After a non-NULL row is appended,
+## the filter is no longer proven empty.
+
+statement ok
+CREATE OR REPLACE DATABASE explain_proven_empty_all_null
+
+statement ok
+USE explain_proven_empty_all_null
+
+statement ok
+CREATE TABLE z(k INT NOT NULL, n INT NULL)
+
+statement ok
+INSERT INTO z SELECT number, NULL FROM numbers(100)
+
+statement ok
+CREATE TABLE t(k INT NOT NULL)
+
+statement ok
+INSERT INTO t SELECT number FROM numbers(100)
+
+query T
+EXPLAIN SELECT count(*) FROM z WHERE n > 10
+----
+EvalScalar
+├── output columns: [COUNT(*) (#2)]
+├── expressions: [0]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+query T
+EXPLAIN SELECT * FROM (SELECT * FROM z WHERE n > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 500) AS b ON a.k = b.k
+----
+HashJoin
+├── output columns: [k (#3), z.k (#0), z.n (#1)]
+├── join type: RIGHT OUTER
+├── build keys: [CAST(a.k (#0) AS Int32 NULL)]
+├── probe keys: [b.k (#3)]
+├── keys is null equal: [false]
+├── filters: []
+├── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.explain_proven_empty_all_null.z
+│   ├── scan id: 0
+│   ├── output columns: [k (#0), n (#1)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 1
+│   ├── partitions scanned: 0
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [is_true(z.n (#1) > 10)], limit: NONE]
+│   └── estimated rows: 0.00
+└── EvalScalar(Probe)
+    ├── output columns: [k (#3)]
+    ├── expressions: [CAST(t.k (#2) AS Int32 NULL)]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.explain_proven_empty_all_null.t
+        ├── scan id: 1
+        ├── output columns: [k (#2)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 1
+        ├── partitions scanned: 0
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 0 cost: <slt:ignore>>]
+        ├── push downs: [filters: [t.k (#2) > 500], limit: NONE]
+        └── estimated rows: 0.00
+
+statement ok
+INSERT INTO z VALUES (100, 20)
+
+query T
+EXPLAIN SELECT count(*) FROM z WHERE n > 10
+----
+AggregateFinal
+├── output columns: [COUNT(*) (#2)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── TableScan
+        ├── table: default.explain_proven_empty_all_null.z
+        ├── scan id: 0
+        ├── output columns: []
+        ├── read rows: 1
+        ├── read size: < 1 KiB
+        ├── partitions total: 2
+        ├── partitions scanned: 1
+        ├── pruning stats: [<slt:ignore>]
+        ├── push downs: [filters: [is_true(z.n (#1) > 10)], limit: NONE]
+        └── estimated rows: 1.00
+
+statement ok
+DROP DATABASE explain_proven_empty_all_null

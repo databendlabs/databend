@@ -188,11 +188,13 @@ impl SelectivityEstimator {
 
     /// Returns true when the last `apply` proved that the predicates return no
     /// rows: the input is exactly empty, or the predicates are false for every
-    /// value of their column types.
+    /// value of their column types. A nullable column whose exact null count
+    /// equals the exact input row count only holds NULLs.
     ///
-    /// This is stronger than an estimated cardinality of zero. Column
-    /// statistics may be stale or approximate, so a contradiction found only
-    /// through statistics-derived domains is not a proof.
+    /// This is stronger than an estimated cardinality of zero. Column min/max,
+    /// histograms and other value statistics may be approximate, so a
+    /// contradiction found only through statistics-derived domains is not a
+    /// proof.
     pub fn is_proven_empty(&self) -> bool {
         self.proven_empty
     }
@@ -209,7 +211,13 @@ impl SelectivityEstimator {
     pub fn apply(&mut self, predicates: &[ScalarExpr], func_ctx: &FunctionContext) -> Result<f64> {
         let cardinality = self.apply_predicates(predicates, func_ctx)?;
         self.proven_empty = self.cardinality == StatCardinality::Exact(0)
-            || (cardinality == 0.0 && predicates_are_unsatisfiable(predicates, func_ctx)?);
+            || (cardinality == 0.0
+                && predicates_are_unsatisfiable(
+                    predicates,
+                    self.cardinality,
+                    &self.column_stats,
+                    func_ctx,
+                )?);
         // Keep the input histogram until range comparisons have selected their
         // sparse fallback, but never export its untrusted positional model. This
         // also covers constant predicates and columns thinned by this filter.
@@ -500,11 +508,15 @@ fn conjunction(predicates: &[ScalarExpr]) -> ScalarExpr {
 
 /// Returns true when the predicates are false for every input row.
 ///
-/// Folds with the full domain of each column type instead of the
-/// statistics-derived domains used for estimation, so the answer does not
-/// depend on column statistics.
+/// Folds with constraint domains instead of the statistics-derived domains
+/// used for estimation: each column gets the full domain of its type, except
+/// that a nullable column whose exact null count equals the exact input row
+/// count gets the NULL-only domain. Exact row and null counts are the same
+/// facts `RuleFoldCountAggregate` relies on to fold `COUNT(col)`.
 fn predicates_are_unsatisfiable(
     predicates: &[ScalarExpr],
+    cardinality: StatCardinality,
+    column_stats: &ColumnStatSet,
     func_ctx: &FunctionContext,
 ) -> Result<bool> {
     if predicates.is_empty() {
@@ -514,7 +526,19 @@ fn predicates_are_unsatisfiable(
     let input_domains = expr
         .column_refs()
         .into_iter()
-        .map(|(binding, data_type)| (binding, Domain::full(&data_type)))
+        .map(|(binding, data_type)| {
+            let domain = if matches!(data_type, DataType::Nullable(_))
+                && column_is_all_null(binding.index, cardinality, column_stats)
+            {
+                Domain::Nullable(NullableDomain {
+                    has_null: true,
+                    value: None,
+                })
+            } else {
+                Domain::full(&data_type)
+            };
+            (binding, domain)
+        })
         .collect::<HashMap<_, _>>();
     let (expr, output_domain) = ConstantFolder::fold_with_domain(
         Cow::Owned(expr),
@@ -526,6 +550,20 @@ fn predicates_are_unsatisfiable(
         deterministic_folded_selectivity(&expr, output_domain.as_ref()),
         Some(Selectivity::Zero)
     ))
+}
+
+fn column_is_all_null(
+    index: Symbol,
+    cardinality: StatCardinality,
+    column_stats: &ColumnStatSet,
+) -> bool {
+    let StatCardinality::Exact(rows) = cardinality else {
+        return false;
+    };
+    rows > 0
+        && column_stats
+            .get(&index)
+            .is_some_and(|stat| stat.null_count() == StatCount::Exact(rows))
 }
 
 fn build_input_domains(

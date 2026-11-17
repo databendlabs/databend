@@ -72,6 +72,18 @@ struct StatisticsColumn {
     spacing_unit: f64,
 }
 
+// Statistics of a column whose every row is NULL. The scan turns them into
+// `ColumnStat::AllNull` because the null count equals the table row count.
+fn all_null_column_statistics(null_count: u64) -> BasicColumnStatistics {
+    BasicColumnStatistics {
+        min: None,
+        max: None,
+        ndv: Some(0),
+        null_count,
+        in_memory_size: 0,
+    }
+}
+
 /// Persisted column statistics are collected per *leaf* column, keyed by the leaf's
 /// `ColumnId`. A nested field (array, map, tuple) shares its `ColumnId` with its first
 /// leaf, so looking the field up by id would return the leaf's statistics: the leaf's
@@ -232,11 +244,30 @@ impl CollectStatisticsOptimizer {
                 let mut top_n = HashMap::new();
                 let mut count_min_sketch = HashMap::new();
                 let collect_frequency_stats = scan.change_type.is_none();
+                // Exact all-NULL facts describe the rows counted by
+                // `table_stats`. Change scans and streams count change rows
+                // instead, so the fact is only used for plain scans.
+                let collect_all_null_stats = scan.change_type.is_none()
+                    && !table.is_stream()
+                    && !table.has_changes_source()
+                    && column_statistics_provider.num_rows().is_some()
+                    && column_statistics_provider.num_rows()
+                        == table_stats.as_ref().and_then(|stats| stats.num_rows);
                 for column in &columns {
-                    let col_stat = column_statistics_provider.column_statistics(column.id);
+                    let col_stat = column_statistics_provider
+                        .column_statistics(column.id)
+                        .cloned()
+                        .or_else(|| {
+                            if !collect_all_null_stats {
+                                return None;
+                            }
+                            column_statistics_provider
+                                .all_null_count(column.id)
+                                .map(all_null_column_statistics)
+                        });
                     column_stats.insert(
                         column.index,
-                        col_stat.cloned().map(|basic| ScanColumnStatistics {
+                        col_stat.map(|basic| ScanColumnStatistics {
                             basic,
                             histogram_spacing_unit: column.spacing_unit,
                         }),

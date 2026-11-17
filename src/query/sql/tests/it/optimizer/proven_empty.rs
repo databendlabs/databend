@@ -40,10 +40,12 @@ use crate::framework::golden::write_case_title;
 // only used for estimation. The harness evaluates `now()` and `today()` at the
 // Unix epoch while the statistics of `w` cover 2020, so a window such as
 // `ts >= '1969-01-01 00:00:00' AND ts < now()` is satisfiable on its own but
-// contradicts the column statistics.
+// contradicts the column statistics. Every row of `z.n` is NULL, and both the
+// row count and the null count of `z` are exact.
 const EMPTY_TABLE: &str = "CREATE TABLE e(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const TABLE: &str = "CREATE TABLE t(k BIGINT NOT NULL, v BIGINT NOT NULL)";
 const TIME_TABLE: &str = "CREATE TABLE w(ts TIMESTAMP NOT NULL, d DATE NOT NULL)";
+const ALL_NULL_TABLE: &str = "CREATE TABLE z(k BIGINT NOT NULL, n BIGINT NULL)";
 
 struct StatsCase {
     name: &'static str,
@@ -83,6 +85,22 @@ async fn create_context() -> Result<Arc<LiteTableContext>> {
         HashMap::from([
             ("k".to_string(), int_stat(1, 1000, 1000)),
             ("v".to_string(), int_stat(1, 100, 100)),
+        ]),
+        HashMap::new(),
+    )
+    .await?;
+    ctx.register_table_sql_with_stats(
+        ALL_NULL_TABLE,
+        Some(table_statistics(1000)),
+        HashMap::from([
+            ("k".to_string(), int_stat(1, 1000, 1000)),
+            ("n".to_string(), BasicColumnStatistics {
+                min: None,
+                max: None,
+                ndv: Some(0),
+                null_count: 1000,
+                in_memory_size: 1000,
+            }),
         ]),
         HashMap::new(),
     )
@@ -186,6 +204,18 @@ async fn test_proven_empty_statistics_golden() -> Result<()> {
             operator: RelOp::Filter,
         },
         StatsCase {
+            name: "all_null_filter",
+            description: "A comparison on a column whose exact null count covers every input row is proven empty.",
+            sql: "SELECT k FROM z WHERE n > 10",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
+            name: "all_null_filter_over_estimated_input",
+            description: "The all-NULL fact needs an exact input row count, so it does not apply above an estimated filter.",
+            sql: "SELECT k FROM (SELECT * FROM z WHERE k > 10) AS f WHERE n > 10",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
             name: "out_of_range_filter",
             description: "A zero estimate from column statistics stays imprecise.",
             sql: "SELECT k FROM t WHERE k > 5000",
@@ -279,6 +309,11 @@ async fn test_proven_empty_plan_golden() -> Result<()> {
             sql: "SELECT count(*) FROM t WHERE k > 5000",
         },
         PlanCase {
+            name: "count_over_all_null_filter",
+            description: "COUNT(*) over a comparison on an all-NULL column with exact counts can be folded to 0.",
+            sql: "SELECT count(*) FROM z WHERE n > 10",
+        },
+        PlanCase {
             name: "count_over_filtered_empty_table",
             description: "COUNT(*) over a filter on an exactly empty table can be folded to 0.",
             sql: "SELECT count(*) FROM e WHERE v > 10",
@@ -292,6 +327,11 @@ async fn test_proven_empty_plan_golden() -> Result<()> {
             name: "right_join_keeps_proven_empty_build_side",
             description: "On a zero-cardinality tie, RIGHT JOIN is not commuted when the proven-empty side is already built.",
             sql: "SELECT * FROM (SELECT * FROM t WHERE k > 5000) AS a RIGHT JOIN (SELECT * FROM e WHERE v > 10) AS b ON a.k = b.k",
+        },
+        PlanCase {
+            name: "left_join_builds_all_null_proven_empty_side",
+            description: "On a zero-cardinality tie, a filter proven empty by an all-NULL column is built instead of an estimated-zero input.",
+            sql: "SELECT * FROM (SELECT * FROM z WHERE n > 10) AS a LEFT JOIN (SELECT * FROM t WHERE k > 5000) AS b ON a.k = b.k",
         },
         PlanCase {
             name: "left_join_estimated_zero_tie",
