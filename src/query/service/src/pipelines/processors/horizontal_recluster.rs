@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Task-local external merge of independently ordered FUSE blocks. Temporary
-//! runs are sequences of bounded spill chunks, never whole in-memory runs.
+//! Task-local multiway merge of independently ordered FUSE blocks. All the inputs
+//! of a task are merged directly, a batch of each in memory, and nothing is spilled:
+//! the size of the task bounds the memory of its merge.
 
 use std::cmp::Reverse;
-use std::collections::VecDeque;
-use std::mem;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -27,7 +26,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
-use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_exception::ErrorCode;
@@ -61,8 +59,6 @@ use databend_common_pipeline_transforms::sorts::core::RowsTypeVisitor;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
-use databend_common_pipeline_transforms::traits::SortSpiller;
-use databend_common_pipeline_transforms::traits::SpillReader;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::BlockReader;
@@ -78,7 +74,6 @@ use databend_storages_common_table_meta::meta::Versioned;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
-use crate::spillers::SortSpillerImpl;
 
 #[derive(Clone)]
 struct ReclusterMergeInputBlock {
@@ -103,7 +98,7 @@ struct ReclusterMergeConfig {
     emit_order: bool,
 }
 
-/// Source ordinals always refer to original task inputs, including after spill.
+/// Source ordinals refer to the task inputs.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ReclusterRowOriginRange {
     pub source_ordinal: u32,
@@ -207,37 +202,31 @@ pub fn extract_recluster_lineage(
     Ok((block, ranges))
 }
 
-enum ReclusterMergeInput {
-    Original {
-        input_block: ReclusterMergeInputBlock,
-        reader: Option<FuseLowLevelFullRowReader>,
-        position: usize,
-    },
-    Spill(VecDeque<String>),
+/// One source block of the task, read a batch at a time.
+struct ReclusterMergeInput {
+    input_block: ReclusterMergeInputBlock,
+    reader: Option<FuseLowLevelFullRowReader>,
+    position: usize,
 }
 
 struct ReclusterMergeStream<R: Rows> {
-    merge_input: ReclusterMergeInput,
-    head: Option<(DataBlock, Column)>,
+    /// `None` has no rows: it pads a single input to the two streams a merger needs.
+    merge_input: Option<ReclusterMergeInput>,
     converter: R::Converter,
     last_key: Option<Scalar>,
     merge_config: ReclusterMergeConfig,
-    spiller: SortSpillerImpl,
 }
 
 impl<R: Rows> ReclusterMergeStream<R> {
     fn new(
-        merge_input: ReclusterMergeInput,
+        merge_input: Option<ReclusterMergeInput>,
         merge_config: &ReclusterMergeConfig,
-        spiller: &SortSpillerImpl,
     ) -> Result<Self> {
         Ok(Self {
             converter: R::Converter::new(merge_config.keys.clone())?,
             merge_input,
-            head: None,
             last_key: None,
             merge_config: merge_config.clone(),
-            spiller: spiller.clone(),
         })
     }
 
@@ -255,9 +244,9 @@ impl<R: Rows> ReclusterMergeStream<R> {
                 "recluster input is not ordered across batches",
             ));
         }
-        // Source blocks are planner-verified ordered runs and spill chunks are merger
-        // output, so release builds keep only the batch-boundary check above. The
-        // per-row pass costs one key comparison per input row.
+        // Source blocks are planner-verified ordered runs, so release builds keep only
+        // the batch-boundary check above. The per-row pass costs one key comparison per
+        // input row.
         if cfg!(debug_assertions) {
             for row in 1..rows.len() {
                 if rows.row(row - 1) > rows.row(row) {
@@ -277,87 +266,64 @@ where R::Converter: Send
 {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         self.merge_config.abort_checker.try_check_aborting()?;
-        if let Some(head) = self.head.take() {
-            return Ok((Some(head), false));
-        }
-        let mut block = match &mut self.merge_input {
-            ReclusterMergeInput::Spill(paths) => {
-                let Some(path) = paths.pop_front() else {
-                    return Ok((None, false));
-                };
-                let mut block = self.spiller.reader(&path)?.read()?;
-                let key = block.get_last_column().clone();
-                block.pop_columns(1);
-                let batch = self.validate_batch(block, key)?;
-                return Ok((Some(batch), false));
-            }
-            ReclusterMergeInput::Original {
+        let mut block = {
+            let Some(ReclusterMergeInput {
                 input_block,
                 reader,
                 position,
-            } => {
-                if *position == input_block.meta.row_count as usize {
-                    if let Some(reader) = reader.take() {
-                        reader.finish()?;
-                    }
-                    return Ok((None, false));
+            }) = &mut self.merge_input
+            else {
+                return Ok((None, false));
+            };
+            if *position == input_block.meta.row_count as usize {
+                if let Some(reader) = reader.take() {
+                    reader.finish()?;
                 }
-                if reader.is_none() {
-                    let options = FuseLowLevelBlockReadOptions::new(
-                        self.merge_config.table.get_operator(),
-                        self.merge_config.schema.clone(),
-                        input_block.meta.clone(),
-                    )
-                    .with_default_values(self.merge_config.defaults.clone())
-                    .with_stream_table_version(self.merge_config.table.get_table_info().ident.seq)
-                    .with_window_rows(self.merge_config.batch_rows)
-                    .with_max_prefetch(1)
-                    .with_merge_io(self.merge_config.read_settings);
-                    let block_reader = FuseLowLevelBlockReader::create(options)?;
-                    let mut reopened = block_reader.read_full_rows()?;
-                    // Skip the decoded prefix when reopening a recovered stream.
-                    let mut skipped = 0;
-                    while skipped < *position {
-                        self.merge_config.abort_checker.try_check_aborting()?;
-                        let rows = (*position - skipped).min(self.merge_config.batch_rows);
-                        reopened.read(rows, false)?.ok_or_else(|| {
-                            ErrorCode::ParquetFileInvalid("premature EOF reopening recluster input")
-                        })?;
-                        skipped += rows;
-                    }
-                    *reader = Some(reopened);
-                }
-                let minimum = self.merge_config.minimum_batch;
-                let Some(block) = reader
-                    .as_mut()
-                    .expect("initialized reader")
-                    .read(self.merge_config.batch_rows, minimum)?
-                else {
-                    reader.take().expect("initialized reader").finish()?;
-                    return Ok((None, false));
-                };
-                let progress = self.merge_config.ctx.get_scan_progress();
-                progress.incr(&ProgressValues {
-                    rows: block.num_rows(),
-                    bytes: block.memory_size(),
-                });
-                let rows = block.num_rows();
-                let mut block = self.merge_config.eval.transform(block)?.maybe_gc();
-                if self.merge_config.lineage {
-                    let start = u32::try_from(*position)
-                        .map_err(|_| ErrorCode::BadArguments("input_block row exceeds u32"))?;
-                    let end = u32::try_from(*position + rows)
-                        .map_err(|_| ErrorCode::BadArguments("input_block row exceeds u32"))?;
-                    block.add_column(UInt32Type::from_data(vec![input_block.ordinal; rows]));
-                    block.add_column(UInt32Type::from_data((start..end).collect::<Vec<_>>()));
-                }
-                *position += rows;
-                if *position == input_block.meta.row_count as usize {
-                    // Release reader buffers before the final batch is consumed.
-                    reader.take().expect("initialized reader").finish()?;
-                }
-                block
+                return Ok((None, false));
             }
+            if reader.is_none() {
+                let options = FuseLowLevelBlockReadOptions::new(
+                    self.merge_config.table.get_operator(),
+                    self.merge_config.schema.clone(),
+                    input_block.meta.clone(),
+                )
+                .with_default_values(self.merge_config.defaults.clone())
+                .with_stream_table_version(self.merge_config.table.get_table_info().ident.seq)
+                .with_window_rows(self.merge_config.batch_rows)
+                .with_max_prefetch(1)
+                .with_merge_io(self.merge_config.read_settings);
+                *reader = Some(FuseLowLevelBlockReader::create(options)?.read_full_rows()?);
+            }
+            let minimum = self.merge_config.minimum_batch;
+            let Some(block) = reader
+                .as_mut()
+                .expect("initialized reader")
+                .read(self.merge_config.batch_rows, minimum)?
+            else {
+                reader.take().expect("initialized reader").finish()?;
+                return Ok((None, false));
+            };
+            let progress = self.merge_config.ctx.get_scan_progress();
+            progress.incr(&ProgressValues {
+                rows: block.num_rows(),
+                bytes: block.memory_size(),
+            });
+            let rows = block.num_rows();
+            let mut block = self.merge_config.eval.transform(block)?.maybe_gc();
+            if self.merge_config.lineage {
+                let start = u32::try_from(*position)
+                    .map_err(|_| ErrorCode::BadArguments("input_block row exceeds u32"))?;
+                let end = u32::try_from(*position + rows)
+                    .map_err(|_| ErrorCode::BadArguments("input_block row exceeds u32"))?;
+                block.add_column(UInt32Type::from_data(vec![input_block.ordinal; rows]));
+                block.add_column(UInt32Type::from_data((start..end).collect::<Vec<_>>()));
+            }
+            *position += rows;
+            if *position == input_block.meta.row_count as usize {
+                // Release reader buffers before the final batch is consumed.
+                reader.take().expect("initialized reader").finish()?;
+            }
+            block
         };
         let rows = self.converter.convert(&block)?;
         let keys = rows.to_column();
@@ -368,82 +334,24 @@ where R::Converter: Send
 }
 
 trait ReclusterMergeExecution: Send {
-    /// One synchronous work unit. None means a spill unit completed, not EOF.
+    /// One synchronous work unit. None means the unit produced no rows, not EOF.
     fn step(&mut self) -> Result<Option<DataBlock>>;
     fn finished(&self) -> bool;
 }
 
-struct ReclusterMergeSpillJob<R: Rows> {
-    merger: LoserTreeMerger<R, ReclusterMergeStream<R>>,
-    paths: VecDeque<String>,
-}
-
-struct ReclusterExternalMerge<R: Rows> {
+/// Merges all the inputs of one group directly and never spills. Every input holds at most
+/// one batch, so the merge takes no more memory than the task has bytes: the size of the
+/// task is what bounds it.
+struct ReclusterMultiwayMerge<R: Rows> {
     merge_config: ReclusterMergeConfig,
-    spiller: SortSpillerImpl,
-    pending: VecDeque<ReclusterMergeStream<R>>,
-    completed: VecDeque<ReclusterMergeStream<R>>,
-    job: Option<ReclusterMergeSpillJob<R>>,
-    final_merge: Option<LoserTreeMerger<R, ReclusterMergeStream<R>>>,
-    fan_in: usize,
-    force_initial: bool,
+    /// `None` once every row is out, or when the group has no input.
+    merger: Option<LoserTreeMerger<R, ReclusterMergeStream<R>>>,
     done: bool,
     output_rows: usize,
     expected_rows: usize,
 }
 
-impl<R: Rows + 'static> ReclusterExternalMerge<R>
-where R::Converter: Send
-{
-    fn merger(
-        &self,
-        merge_streams: Vec<ReclusterMergeStream<R>>,
-    ) -> LoserTreeMerger<R, ReclusterMergeStream<R>> {
-        LoserTreeMerger::new(merge_streams, self.merge_config.output_batch_rows, None)
-            .with_flush_before_refill()
-    }
-
-    fn spill_chunk(&self, mut block: DataBlock) -> Result<String> {
-        // Spill chunks carry an explicit key column, including simple-row encodings.
-        let converter = R::Converter::new(self.merge_config.keys.clone())?;
-        let keys = converter.convert(&block)?.to_column();
-        block.add_column(keys);
-        self.spiller.spill(block)
-    }
-
-    fn recover_inputs(
-        &mut self,
-        merger: LoserTreeMerger<R, ReclusterMergeStream<R>>,
-    ) -> Result<()> {
-        for recovered in merger.into_remaining_streams()? {
-            let mut stream = recovered.stream;
-            stream.head = recovered.head;
-            if let ReclusterMergeInput::Original { reader, .. } = &mut stream.merge_input {
-                *reader = None;
-            }
-            self.pending.push_back(stream);
-        }
-        self.force_initial = true;
-        let previous_fan_in = self.fan_in;
-        self.fan_in = (self.fan_in / 2).max(2);
-        log::info!(
-            "recluster multiway merge reduces fan-in: {} -> {}, output_rows={}",
-            previous_fan_in,
-            self.fan_in,
-            self.output_rows
-        );
-        Ok(())
-    }
-
-    fn pressure(&self) -> Result<bool> {
-        // Ignore the forced-spill zero threshold after the initial round.
-        let settings = self.merge_config.ctx.get_settings();
-        let forced_spill = settings.get_force_sort_data_spill()?;
-        Ok(!forced_spill && self.spiller.memory_settings().check_spill())
-    }
-}
-
-impl<R: Rows + 'static> ReclusterMergeExecution for ReclusterExternalMerge<R>
+impl<R: Rows + 'static> ReclusterMergeExecution for ReclusterMultiwayMerge<R>
 where R::Converter: Send
 {
     fn finished(&self) -> bool {
@@ -452,138 +360,42 @@ where R::Converter: Send
 
     fn step(&mut self) -> Result<Option<DataBlock>> {
         self.merge_config.abort_checker.try_check_aborting()?;
-        if let Some(mut merger) = self.final_merge.take() {
-            let block = merger.next_block()?.map(DataBlock::maybe_gc);
-            if let Some(ref block) = block {
-                self.output_rows += block.num_rows();
+        let block = match self.merger.as_mut() {
+            Some(merger) => {
+                let block = merger.next_block()?.map(DataBlock::maybe_gc);
+                if merger.is_finished() {
+                    // Release the readers and the last batches of the inputs.
+                    self.merger = None;
+                }
+                block
             }
-            if merger.is_finished() {
-                if self.output_rows != self.expected_rows {
-                    return Err(ErrorCode::Internal(
-                        "recluster merge output row count mismatch",
-                    ));
-                }
-                self.done = true;
-            } else if self.pressure()? {
-                if !self.merge_config.ctx.get_enable_sort_spill() {
-                    return Err(ErrorCode::MemoryExceedsLimit(
-                        "recluster merge is under memory pressure with spill disabled",
-                    ));
-                }
-                // Preserve unconsumed suffixes after emitting the selected prefix.
-                if self.fan_in <= 2 {
-                    return Err(ErrorCode::MemoryExceedsLimit(
-                        "minimum two-way recluster merge cannot fit under current memory pressure",
-                    ));
-                }
-                self.recover_inputs(merger)?;
-            } else {
-                self.final_merge = Some(merger);
-            }
-            let block = match block {
-                Some(mut block) => {
-                    if self.merge_config.emit_order
-                        && !self.merge_config.keys.uses_source_sort_col()
-                    {
-                        let converter = R::Converter::new(self.merge_config.keys.clone())?;
-                        block.add_column(converter.convert(&block)?.to_column());
-                    }
-                    Some(block)
-                }
-                None => None,
-            };
-            return Ok(block);
-        }
-        if let Some(mut job) = self.job.take() {
-            if let Some(block) = job.merger.next_block()? {
-                job.paths.push_back(self.spill_chunk(block.maybe_gc())?);
-            }
-            if !job.merger.is_finished() && self.pressure()? {
-                // Keep the spilled prefix separate from the recovered suffixes.
-                if self.fan_in <= 2 {
-                    return Err(ErrorCode::MemoryExceedsLimit(
-                        "minimum external recluster merge cannot fit under current memory pressure",
-                    ));
-                }
-                self.recover_inputs(job.merger)?;
-                if !job.paths.is_empty() {
-                    self.completed.push_back(ReclusterMergeStream::new(
-                        ReclusterMergeInput::Spill(job.paths),
-                        &self.merge_config,
-                        &self.spiller,
-                    )?);
-                }
-                return Ok(None);
-            }
-            if job.merger.is_finished() {
-                if !job.paths.is_empty() {
-                    self.completed.push_back(ReclusterMergeStream::new(
-                        ReclusterMergeInput::Spill(job.paths),
-                        &self.merge_config,
-                        &self.spiller,
-                    )?);
-                }
-            } else {
-                self.job = Some(job);
-            }
-            return Ok(None);
-        }
-        if self.pending.is_empty() {
-            self.pending = mem::take(&mut self.completed);
-            self.force_initial = false;
-        }
-        if !self.force_initial && self.completed.is_empty() && self.pending.len() <= self.fan_in {
-            let mut merge_streams = self.pending.drain(..).collect::<Vec<_>>();
-            if merge_streams.is_empty() {
-                if self.output_rows != self.expected_rows {
-                    return Err(ErrorCode::Internal(
-                        "empty recluster merge lost merge_input rows",
-                    ));
-                }
-                self.done = true;
-                return Ok(None);
-            }
-            if merge_streams.len() == 1 {
-                merge_streams.push(ReclusterMergeStream::new(
-                    ReclusterMergeInput::Spill(VecDeque::new()),
-                    &self.merge_config,
-                    &self.spiller,
-                )?);
-            }
-            self.final_merge = Some(self.merger(merge_streams));
-            return Ok(None);
-        }
-        if !self.merge_config.ctx.get_enable_sort_spill() {
-            return Err(ErrorCode::MemoryExceedsLimit(
-                "recluster merge needs external runs but sort spill is disabled",
-            ));
-        }
-        let count = match self.force_initial {
-            true => 1,
-            false => self.fan_in.min(self.pending.len()),
+            None => None,
         };
-        let mut merge_streams = self.pending.drain(..count).collect::<Vec<_>>();
-        if merge_streams.len() == 1 {
-            merge_streams.push(ReclusterMergeStream::new(
-                ReclusterMergeInput::Spill(VecDeque::new()),
-                &self.merge_config,
-                &self.spiller,
-            )?);
+        if let Some(block) = &block {
+            self.output_rows += block.num_rows();
         }
-        self.job = Some(ReclusterMergeSpillJob {
-            merger: self.merger(merge_streams),
-            paths: VecDeque::new(),
-        });
-        Ok(None)
+        if self.merger.is_none() {
+            if self.output_rows != self.expected_rows {
+                return Err(ErrorCode::Internal(
+                    "recluster merge output row count mismatch",
+                ));
+            }
+            self.done = true;
+        }
+        let Some(mut block) = block else {
+            return Ok(None);
+        };
+        if self.merge_config.emit_order && !self.merge_config.keys.uses_source_sort_col() {
+            let converter = R::Converter::new(self.merge_config.keys.clone())?;
+            block.add_column(converter.convert(&block)?.to_column());
+        }
+        Ok(Some(block))
     }
 }
 
 struct ReclusterMergeFactory {
     merge_config: ReclusterMergeConfig,
     input_blocks: Vec<ReclusterMergeInputBlock>,
-    spiller: SortSpillerImpl,
-    fan_in: usize,
-    force_initial: bool,
     expected_rows: usize,
 }
 
@@ -597,30 +409,34 @@ impl RowsTypeVisitor for ReclusterMergeFactory {
         R: Rows + 'static,
         R::Converter: Send + 'static,
     {
-        let merge_streams = self
+        let mut merge_streams = self
             .input_blocks
             .drain(..)
             .map(|input_block| {
                 ReclusterMergeStream::<R>::new(
-                    ReclusterMergeInput::Original {
+                    Some(ReclusterMergeInput {
                         input_block,
                         reader: None,
                         position: 0,
-                    },
+                    }),
                     &self.merge_config,
-                    &self.spiller,
                 )
             })
-            .collect::<Result<VecDeque<_>>>()?;
-        Ok(Box::new(ReclusterExternalMerge::<R> {
+            .collect::<Result<Vec<_>>>()?;
+        if merge_streams.len() == 1 {
+            merge_streams.push(ReclusterMergeStream::new(None, &self.merge_config)?);
+        }
+        let merger = match merge_streams.is_empty() {
+            true => None,
+            // Flushing before a refill releases the batches the merge has used up.
+            false => Some(
+                LoserTreeMerger::new(merge_streams, self.merge_config.output_batch_rows, None)
+                    .with_flush_before_refill(),
+            ),
+        };
+        Ok(Box::new(ReclusterMultiwayMerge::<R> {
             merge_config: self.merge_config.clone(),
-            spiller: self.spiller.clone(),
-            pending: merge_streams,
-            completed: VecDeque::new(),
-            job: None,
-            final_merge: None,
-            fan_in: self.fan_in,
-            force_initial: self.force_initial,
+            merger,
             done: false,
             output_rows: 0,
             expected_rows: self.expected_rows,
@@ -769,20 +585,13 @@ impl ReclusterMergeFactory {
         }
         let batch_rows = requested_rows;
         let output_batch_rows = requested_rows;
-        // Without spill, all input streams must merge directly.
-        let fan_in = match ctx.get_enable_sort_spill() {
-            true => input_blocks.len().clamp(2, 64),
-            false => input_blocks.len().max(2),
-        };
-        let force_initial = ctx.get_enable_sort_spill() && settings.get_force_sort_data_spill()?;
         let minimum_batch = false;
         log::info!(
-            "recluster multiway merge: inputs={}, rows={}, fan_in={}, batch_rows={}, force_spill={}",
+            "recluster multiway merge: inputs={}, rows={}, bytes={}, batch_rows={}",
             input_blocks.len(),
             task.total_rows,
-            fan_in,
-            batch_rows,
-            force_initial
+            task.total_bytes,
+            batch_rows
         );
         let fixed = settings.get_enable_fixed_rows_sort()?;
         let mut merge_fields = stats.out_fields.clone();
@@ -822,9 +631,6 @@ impl ReclusterMergeFactory {
         Ok(Self {
             merge_config,
             input_blocks,
-            spiller: SortSpillerImpl::new(ctx)?,
-            fan_in,
-            force_initial,
             expected_rows: task.total_rows,
         })
     }
@@ -858,13 +664,9 @@ impl ReclusterMergeFactory {
         for (input_blocks, rows) in partitions.into_iter().zip(group_rows) {
             let mut config = self.merge_config.clone();
             config.emit_order = true;
-            let fan_in = self.fan_in.min(input_blocks.len().max(2));
             factories.push(Self {
                 merge_config: config,
                 input_blocks,
-                spiller: self.spiller.clone(),
-                fan_in,
-                force_initial: self.force_initial,
                 expected_rows: rows,
             });
         }
@@ -875,15 +677,15 @@ impl ReclusterMergeFactory {
 
 impl SyncSource for HorizontalReclusterSource {
     const NAME: &'static str = "HorizontalMultiwayReclusterSource";
-    // Input reads already account for scan progress; spill/replayed output must not count again.
+    // Input reads already account for scan progress.
     const RECORD_SCAN_PROGRESS: bool = false;
 
     fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.merge_execution.finished() {
             return Ok(None);
         }
-        // A spill/recovery step can make progress without producing rows. Yield an empty block,
-        // which SyncSourcer skips, rather than interpreting that step as EOF or busy-looping here.
+        // A step can make progress without producing rows. Yield an empty block, which
+        // SyncSourcer skips, rather than interpreting that step as EOF or busy-looping here.
         Ok(Some(
             self.merge_execution
                 .step()?
@@ -894,6 +696,7 @@ impl SyncSource for HorizontalReclusterSource {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
     use std::env;
     use std::sync::Mutex;
     use std::time::Instant;
@@ -901,6 +704,7 @@ mod tests {
     use databend_common_base::runtime::MemStat;
     use databend_common_base::runtime::ThreadTracker;
     use databend_common_catalog::plan::ReclusterTaskKind;
+    use databend_common_catalog::table_context::TableContextPartitionStats;
     use databend_common_catalog::table_context::TableContextQueryIdentity;
     use databend_common_catalog::table_context::TableContextTableAccess;
     use databend_common_expression::BlockMetaInfoDowncast;
@@ -922,7 +726,6 @@ mod tests {
     use databend_common_pipeline_transforms::sorts::core::SimpleRowsAsc;
     use databend_common_pipeline_transforms::sorts::core::VariableRows;
     use databend_common_storage::ColumnNodes;
-    use databend_common_storage::DataOperator;
     use databend_common_storages_fuse::io::SegmentsIO;
     use databend_common_storages_fuse::io::WriteSettings;
     use databend_common_storages_fuse::io::serialize_block;
@@ -935,11 +738,10 @@ mod tests {
     use super::*;
     use crate::test_kits::TestFixture;
 
-    async fn check_external_merge<R: Rows + 'static>(
-        force_initial: bool,
+    /// Merges nine overlapping inputs of five rows in batches of two, in `groups` groups.
+    async fn check_multiway_merge<R: Rows + 'static>(
         lineage: bool,
-        fan_in: usize,
-        spill_enabled: bool,
+        minimum_batch: bool,
         groups: usize,
     ) -> anyhow::Result<()>
     where
@@ -949,7 +751,10 @@ mod tests {
         fixture.create_default_database().await?;
         fixture.create_default_table().await?;
         let ctx = fixture.new_query_ctx().await?;
-        ctx.set_enable_sort_spill(spill_enabled);
+        // The merge has no spill path: neither setting makes it write a file.
+        ctx.set_enable_sort_spill(true);
+        ctx.get_settings()
+            .set_setting("force_sort_data_spill".into(), "1".into())?;
         let table_ref = fixture.latest_default_table().await?;
         let table = FuseTable::try_from_table(table_ref.as_ref())?.clone();
         let schema = Arc::new(TableSchema::new(vec![
@@ -966,7 +771,7 @@ mod tests {
             ]);
             let (col_metas, bytes) =
                 serialize_block(&WriteSettings::default(), &schema, block.clone())?;
-            let path = format!("external-merge-{}-{ordinal}.parquet", ctx.get_id());
+            let path = format!("multiway-merge-{}-{ordinal}.parquet", ctx.get_id());
             let size = bytes.len();
             table.get_operator().write(&path, bytes).await?;
             let meta = BlockMeta::new(
@@ -1034,16 +839,13 @@ mod tests {
             },
             batch_rows: 2,
             output_batch_rows: 2,
-            minimum_batch: fan_in != 16,
+            minimum_batch,
             lineage,
             emit_order: false,
         };
-        let spiller = SortSpillerImpl::new(ctx.clone())?;
-        let mut probe = ReclusterMergeStream::<R>::new(
-            ReclusterMergeInput::Spill(VecDeque::new()),
-            &merge_config,
-            &spiller,
-        )?;
+        // A stream without an input has no rows.
+        let mut probe = ReclusterMergeStream::<R>::new(None, &merge_config)?;
+        assert!(probe.next()?.0.is_none());
         let unsorted = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![2, 1]),
             Int32Type::from_data(vec![0, 1]),
@@ -1055,7 +857,7 @@ mod tests {
             probe.validate_batch(unsorted, keys).is_err(),
             cfg!(debug_assertions)
         );
-        // Check ordering across batches, including restored spill chunks.
+        // Check ordering across batches.
         let high = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![2]),
             Int32Type::from_data(vec![0]),
@@ -1078,40 +880,28 @@ mod tests {
             ordinal: 0,
         };
         let mut missing_stream = ReclusterMergeStream::<R>::new(
-            ReclusterMergeInput::Original {
+            Some(ReclusterMergeInput {
                 input_block: missing,
                 reader: None,
                 position: 0,
-            },
+            }),
             &merge_config,
-            &spiller,
         )?;
         assert!(missing_stream.next().is_err());
 
-        // Missing spill chunks must also propagate as an execution error.
-        let mut spilled = DataBlock::new_from_columns(vec![
-            Int32Type::from_data(vec![1]),
-            Int32Type::from_data(vec![0]),
-        ]);
-        let keys = probe.converter.convert(&spilled)?.to_column();
-        spilled.add_column(keys);
-        let path = spiller.spill(spilled)?;
-        let operator = DataOperator::instance().spill_operator();
-        operator.delete(&path).await?;
-        let mut missing_spill = ReclusterMergeStream::<R>::new(
-            ReclusterMergeInput::Spill(VecDeque::from([path])),
-            &merge_config,
-            &spiller,
-        )?;
-        assert!(missing_spill.next().is_err());
-        ctx.unload_spill_meta();
+        // A group without an input finishes with no rows.
+        let mut empty = ReclusterMergeFactory {
+            merge_config: merge_config.clone(),
+            input_blocks: Vec::new(),
+            expected_rows: 0,
+        }
+        .visit_type::<R>()?;
+        assert!(empty.step()?.is_none());
+        assert!(empty.finished());
 
         let mut merge_factory = ReclusterMergeFactory {
             merge_config,
             input_blocks,
-            spiller,
-            fan_in,
-            force_initial,
             expected_rows: 45,
         };
         let mut merged = Vec::new();
@@ -1123,7 +913,7 @@ mod tests {
                     merged.push(block);
                 }
                 work_units += 1;
-                assert!(work_units < 1000, "external merge must terminate");
+                assert!(work_units < 1000, "the merge must terminate");
             }
             ctx.kill(ErrorCode::aborting());
             assert!(
@@ -1177,10 +967,7 @@ mod tests {
                 merged.push(block);
             }
         }
-        assert_eq!(
-            !ctx.get_spilled_files().is_empty(),
-            force_initial || fan_in < 9usize.div_ceil(groups)
-        );
+        assert!(ctx.get_spilled_files().is_empty());
         assert_eq!(ctx.get_scan_progress().get_values().rows, 45);
         let combined = DataBlock::concat(&merged)?;
         let keys = combined.get_by_offset(0).to_column();
@@ -1313,7 +1100,7 @@ mod tests {
             ctx.set_enable_sort_spill(true);
             execute_command(ctx.clone(), sql).await?;
         }
-        // FINAL clears spill metadata; direct merge tests assert forced spill.
+        // `force_sort_data_spill` does not reach the multiway merge, which never spills.
         let blocks = execute_query(fixture.new_query_ctx().await?,
             "select count(), count(k), sum(k), count_if(extra = 'default-value') from default.multiway_sql")
             .await?.try_collect::<Vec<_>>().await?;
@@ -1705,7 +1492,7 @@ mod tests {
             .unwrap();
         assert_eq!(snapshot.snapshot_id, after.snapshot_id);
 
-        // Verify doc-to-row mapping across spill and computed/duplicate keys.
+        // Verify doc-to-row mapping across computed/duplicate keys.
         for sql in [
             "create table default.index_multi(k int, content string, inverted index text_idx(content)) cluster by(-k) row_per_block=100 block_per_segment=2",
             "insert into default.index_multi select number, concat('word',to_string(number),' alpha') from numbers(200)",
@@ -1928,43 +1715,28 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_two_level_merge_variable_keys_spill_and_original_lineage() -> anyhow::Result<()> {
-        check_external_merge::<VariableRows>(true, true, 2, true, 3).await
+    async fn test_two_level_merge_variable_keys_and_original_lineage() -> anyhow::Result<()> {
+        check_multiway_merge::<VariableRows>(true, true, 3).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_two_level_merge_simple_keys_without_spill() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 32, false, 3).await
+    async fn test_two_level_merge_simple_keys() -> anyhow::Result<()> {
+        check_multiway_merge::<SimpleRowsAsc<Int32Type>>(true, true, 3).await
+    }
+
+    /// Every group has one input, which its merger takes with a stream without rows.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_two_level_merge_of_single_input_groups() -> anyhow::Result<()> {
+        check_multiway_merge::<SimpleRowsAsc<Int32Type>>(true, true, 9).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_external_merge_without_local_memory_threshold() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, true, 1).await
+    async fn test_multiway_merge_of_all_inputs_and_lineage() -> anyhow::Result<()> {
+        check_multiway_merge::<SimpleRowsAsc<Int32Type>>(true, false, 1).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_external_merge_without_spill() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, false, 1).await
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_external_merge_rejects_required_spill_when_disabled() {
-        let err = check_external_merge::<SimpleRowsAsc<Int32Type>>(false, false, 2, false, 1)
-            .await
-            .unwrap_err();
-        assert_eq!(
-            err.downcast_ref::<ErrorCode>().unwrap().code(),
-            ErrorCode::MEMORY_EXCEEDS_LIMIT
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_external_merge_multiple_rounds_and_lineage() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 2, true, 1).await
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_external_merge_forced_spill_variable_rows() -> anyhow::Result<()> {
-        check_external_merge::<VariableRows>(true, false, 2, true, 1).await
+    async fn test_multiway_merge_variable_rows() -> anyhow::Result<()> {
+        check_multiway_merge::<VariableRows>(false, true, 1).await
     }
 }
