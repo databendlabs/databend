@@ -3180,7 +3180,9 @@ pub struct CacheConfig {
     /// Watch the users, the global settings and the online cluster nodes of the tenant in
     /// meta-service, so that authentication, new sessions and cluster discovery read them
     /// locally. They may lag a change by the watch delay, a change made through this node
-    /// included. A change the watch loses is repaired within about a minute.
+    /// included. Only the meta-service leader serves the watches: a copy can miss changes for
+    /// up to 5 s after the leader steps down, and stays stale while the leader is cut off from
+    /// the other meta nodes.
     #[clap(long = "cache-enable-meta-service-watch", default_value = "false")]
     #[serde(default = "bool_false")]
     pub meta_service_watch_cache: bool,

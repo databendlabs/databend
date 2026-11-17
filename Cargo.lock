@@ -5347,6 +5347,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
+ "parking_lot 0.12.3",
  "sub-cache",
  "test-harness",
  "tokio",
