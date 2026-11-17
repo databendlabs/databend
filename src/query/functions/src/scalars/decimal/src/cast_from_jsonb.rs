@@ -217,4 +217,3 @@ fn decimal_to_decimal<T: DecimalExt>(
         }
     }
 }
-

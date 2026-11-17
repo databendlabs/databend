@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
@@ -48,7 +50,7 @@ impl JSONOutputFormat {
         }
     }
 
-    fn format_schema(&self) -> databend_common_exception::Result<Vec<u8>> {
+    fn format_schema(&self) -> Result<Vec<u8>> {
         let fields = self.schema.fields();
         if fields.is_empty() {
             return Ok(b"\"meta\":[]".to_vec());
@@ -69,10 +71,15 @@ impl JSONOutputFormat {
     }
 }
 
-fn scalar_to_json(
-    s: ScalarRef<'_>,
-    format: &OutputFormatSettings,
-) -> databend_common_exception::Result<JsonValue> {
+/// Parses the GeoJSON text of a geometry or geography value.
+fn geo_json_to_json(geo_json: geozero::error::Result<String>) -> Result<JsonValue> {
+    let geo_json = geo_json.map_err(|e| ErrorCode::BadBytes(format!("Invalid ewkb value, {e}")))?;
+    let value = jsonb::parse_value(geo_json.as_bytes())
+        .map_err(|e| ErrorCode::Internal(format!("Invalid GeoJSON text, {e}")))?;
+    Ok(value.into())
+}
+
+fn scalar_to_json(s: ScalarRef<'_>, format: &OutputFormatSettings) -> Result<JsonValue> {
     match s {
         ScalarRef::Null => Ok(JsonValue::Null),
         ScalarRef::Boolean(v) => Ok(JsonValue::Bool(v)),
@@ -114,7 +121,7 @@ fn scalar_to_json(
             let vals = x
                 .iter()
                 .map(|x| scalar_to_json(x.clone(), format))
-                .collect::<databend_common_exception::Result<Vec<_>>>()?;
+                .collect::<Result<Vec<_>>>()?;
             Ok(JsonValue::Array(vals))
         }
         ScalarRef::Map(x) => {
@@ -147,17 +154,12 @@ fn scalar_to_json(
             Ok(JsonValue::Object(vals))
         }
         ScalarRef::Variant(x) => {
-            let b = jsonb::from_slice(x).unwrap();
+            let b = jsonb::from_slice(x)
+                .map_err(|e| ErrorCode::BadBytes(format!("Invalid jsonb value, {e}")))?;
             Ok(b.into())
         }
-        ScalarRef::Geometry(x) => {
-            let geom = Ewkb(x).to_json().expect("failed to convert ewkb to json");
-            Ok(jsonb::from_slice(geom.as_bytes()).unwrap().into())
-        }
-        ScalarRef::Geography(x) => {
-            let geom = Ewkb(x.0).to_json().expect("failed to convert ewkb to json");
-            Ok(jsonb::from_slice(geom.as_bytes()).unwrap().into())
-        }
+        ScalarRef::Geometry(x) => geo_json_to_json(Ewkb(x).to_json()),
+        ScalarRef::Geography(x) => geo_json_to_json(Ewkb(x.0).to_json()),
         ScalarRef::Vector(x) => {
             let vals = match x {
                 VectorScalarRef::Int8(x) => x.iter().map(|x| (*x as i64).into()).collect(),
@@ -169,10 +171,7 @@ fn scalar_to_json(
 }
 
 impl OutputFormat for JSONOutputFormat {
-    fn serialize_block(
-        &mut self,
-        data_block: &DataBlock,
-    ) -> databend_common_exception::Result<Vec<u8>> {
+    fn serialize_block(&mut self, data_block: &DataBlock) -> Result<Vec<u8>> {
         let mut res = if self.first_block {
             self.first_block = false;
             let mut buf = b"{".to_vec();
@@ -220,7 +219,7 @@ impl OutputFormat for JSONOutputFormat {
         Ok(res)
     }
 
-    fn finalize(&mut self) -> databend_common_exception::Result<Vec<u8>> {
+    fn finalize(&mut self) -> Result<Vec<u8>> {
         let mut buf = b"".to_vec();
         if self.first_row {
             buf.push(b'{');
