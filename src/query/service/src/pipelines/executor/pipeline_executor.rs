@@ -232,16 +232,17 @@ impl PipelineExecutor {
             &query_wrapper.settings.query_id,
         )
         .and_then(|_| GlobalQueriesExecutor::instance().send_graph(graph.clone()));
-        if let Err(cause) = started {
-            // The tasks that the wakers of its processors queue are dropped then.
-            graph.should_finish(Err(cause.clone()))?;
-            return Err(cause);
+        match &started {
+            Ok(_) => Self::start_executor_daemon(
+                query_wrapper,
+                query_wrapper.settings.max_execute_time_in_seconds,
+            )?,
+            // A processor may have woken a worker from its first event before
+            // another one failed, so a task of the graph may be running: wait
+            // for it as well. The tasks still queued are dropped.
+            Err(cause) => graph.should_finish(Err(cause.clone()))?,
         }
 
-        Self::start_executor_daemon(
-            query_wrapper,
-            query_wrapper.settings.max_execute_time_in_seconds,
-        )?;
         // Woken once the graph should finish and none of its tasks runs.
         {
             let (lock, cvar) = &*query_wrapper.finish_condvar_wait;
@@ -251,6 +252,7 @@ impl PipelineExecutor {
             }
         }
         query_wrapper.finished_notify.notify_waiters();
+        started?;
 
         match graph.get_error() {
             Some(cause) => Err(cause),

@@ -33,6 +33,7 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::ExecutorWaker;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
@@ -40,6 +41,7 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::WakeCallback;
 use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::sources::BlocksSource;
 use databend_common_pipeline::sources::EmptySource;
@@ -54,6 +56,7 @@ use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
+use petgraph::stable_graph::NodeIndex;
 use tokio::time::sleep;
 use tokio::time::timeout;
 
@@ -353,6 +356,58 @@ async fn test_queries_executor_unconsumed_result_holds_no_worker() -> anyhow::Re
     Ok(())
 }
 
+/// A processor may wake a worker from its first event, e.g. an exchange. When
+/// another first event then fails, the query fails to start while that worker
+/// runs a task of it: the finish callbacks must wait for the task.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_queries_executor_failed_start_waits_running_tasks() -> anyhow::Result<()> {
+    let _fixture = setup().await?;
+
+    let started = Arc::new(AtomicBool::new(false));
+    let done = Arc::new(AtomicBool::new(false));
+    let mut pipeline = Pipeline::create();
+    let woken = WokenSource {
+        id: NodeIndex::new(0),
+        events: 0,
+        waker: pipeline.get_waker(),
+        started: started.clone(),
+        done: done.clone(),
+    };
+    let failing = FailingEvent {
+        started: started.clone(),
+    };
+    // The first events run in the order of the processors.
+    let items = vec![
+        PipeItem::create(ProcessorPtr::create(Box::new(woken)), vec![], vec![]),
+        PipeItem::create(ProcessorPtr::create(Box::new(failing)), vec![], vec![]),
+    ];
+    pipeline.add_pipe(Pipe::create(0, 0, items));
+
+    let done_at_finish = Arc::new(Mutex::new(None));
+    pipeline.set_on_finished(always_callback({
+        let done_at_finish = done_at_finish.clone();
+        move |_info: &ExecutionInfo| {
+            *done_at_finish.lock() = Some(done.load(Ordering::SeqCst));
+            Ok(())
+        }
+    }));
+
+    let executor = PipelineCompleteExecutor::try_create(pipeline, queries_executor_settings())?;
+    let res = timeout(Duration::from_secs(20), executor.execute()).await?;
+    assert_eq!(res.unwrap_err().code(), ErrorCode::INTERNAL);
+    assert!(
+        started.load(Ordering::SeqCst),
+        "a worker must run the woken processor"
+    );
+    assert_eq!(
+        *done_at_finish.lock(),
+        Some(true),
+        "the finish callbacks must run after the running task"
+    );
+
+    Ok(())
+}
+
 fn queries_executor_settings() -> ExecutorSettings {
     ExecutorSettings {
         query_id: Arc::new("test-queries-executor".to_string()),
@@ -513,5 +568,71 @@ impl Processor for PendingSource {
     async fn async_process(&mut self) -> Result<()> {
         self.started.store(true, Ordering::SeqCst);
         futures::future::pending().await
+    }
+}
+
+/// A processor that wakes a worker from its first event, which then runs its
+/// slow `process`.
+struct WokenSource {
+    id: NodeIndex,
+    events: usize,
+    waker: Arc<ExecutorWaker>,
+    started: Arc<AtomicBool>,
+    done: Arc<AtomicBool>,
+}
+
+impl Processor for WokenSource {
+    fn name(&self) -> String {
+        "WokenSource".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn set_id(&mut self, id: NodeIndex) {
+        self.id = id;
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        self.events += 1;
+        match self.events {
+            1 => {
+                self.waker.wake(self.id, 0)?;
+                Ok(Event::NeedData)
+            }
+            2 => Ok(Event::Sync),
+            _ => Ok(Event::Finished),
+        }
+    }
+
+    fn process(&mut self) -> Result<()> {
+        self.started.store(true, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(500));
+        self.done.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+/// A processor whose first event fails once the other processor runs.
+struct FailingEvent {
+    started: Arc<AtomicBool>,
+}
+
+impl Processor for FailingEvent {
+    fn name(&self) -> String {
+        "FailingEvent".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !self.started.load(Ordering::SeqCst) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        Err(ErrorCode::Internal("test event failure"))
     }
 }
