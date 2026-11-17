@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::ReclusterTaskKind;
+use databend_common_catalog::plan::ReclusterTaskKind;
 
 /// Planning-time batch limits, not additional resource allowances.
 /// Workers enforce their local execution limits independently of placement.

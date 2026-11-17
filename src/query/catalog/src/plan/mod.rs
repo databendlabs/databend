@@ -19,7 +19,6 @@ mod partition_statistics;
 mod projection;
 mod pruning_statistics;
 mod pushdown;
-mod recluster_task_budget;
 mod stream_column;
 mod virtual_column;
 
@@ -30,6 +29,5 @@ pub use partition_statistics::PartStatistics;
 pub use projection::Projection;
 pub use pruning_statistics::PruningStatistics;
 pub use pushdown::*;
-pub use recluster_task_budget::ReclusterTaskBudget;
 pub use stream_column::*;
 pub use virtual_column::*;
