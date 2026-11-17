@@ -17,7 +17,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use async_channel::Receiver;
+use async_channel::SendError;
 use async_channel::Sender;
+use async_trait::async_trait;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::Thread;
@@ -33,6 +35,8 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::core::basic_callback;
+use databend_common_pipeline::sinks::AsyncSink;
+use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline::sinks::Sink;
 use databend_common_pipeline::sinks::Sinker;
 use fastrace::func_path;
@@ -105,6 +109,7 @@ impl PipelinePullingExecutor {
         pipeline: &mut Pipeline,
         tx: Sender<DataBlock>,
         progress: Option<Arc<Progress>>,
+        settings: &ExecutorSettings,
     ) -> Result<()> {
         if !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
@@ -117,6 +122,7 @@ impl PipelinePullingExecutor {
                 tx.clone(),
                 progress.clone(),
                 input,
+                settings.enable_queries_executor,
             )))
         })?;
 
@@ -137,7 +143,7 @@ impl PipelinePullingExecutor {
 
         let (sender, receiver) = async_channel::bounded(std::cmp::max(1, pipeline.output_len()));
 
-        Self::wrap_pipeline(&mut pipeline, sender, None)?;
+        Self::wrap_pipeline(&mut pipeline, sender, None, &settings)?;
         let executor = PipelineExecutor::create(pipeline, settings)?;
 
         Ok(PipelinePullingExecutor {
@@ -170,7 +176,7 @@ impl PipelinePullingExecutor {
         let (sender, receiver) =
             async_channel::bounded(std::cmp::max(1, main_pipeline.output_len()));
 
-        Self::wrap_pipeline(&mut main_pipeline, sender, result_progress)?;
+        Self::wrap_pipeline(&mut main_pipeline, sender, result_progress, &settings)?;
 
         let mut pipelines = build_res.sources_pipelines;
         pipelines.push(main_pipeline);
@@ -285,15 +291,39 @@ struct PullingSink {
 }
 
 impl PullingSink {
+    /// The sink waits for the consumer of the query when the channel is full. On
+    /// the queries executor it waits asynchronously: blocking would hold a worker
+    /// shared by all the queries for as long as the consumer does not read.
     pub fn create(
         tx: Sender<DataBlock>,
         progress: Option<Arc<Progress>>,
         input: Arc<InputPort>,
+        enable_queries_executor: bool,
     ) -> Box<dyn Processor> {
-        Sinker::create(input, PullingSink {
+        let sink = PullingSink {
             sender: Some(tx),
             progress,
-        })
+        };
+        match enable_queries_executor {
+            true => AsyncSinker::create(input, sink),
+            false => Sinker::create(input, sink),
+        }
+    }
+
+    fn record_progress(&self, data_block: &DataBlock) {
+        if let Some(progress) = &self.progress {
+            progress.incr(&ProgressValues {
+                rows: data_block.num_rows(),
+                bytes: data_block.memory_size(),
+            });
+        }
+    }
+
+    fn send_error(cause: SendError<DataBlock>) -> ErrorCode {
+        ErrorCode::Internal(format!(
+            "Logical error, cannot push data into SyncSender, cause {:?}",
+            cause
+        ))
     }
 }
 
@@ -306,22 +336,28 @@ impl Sink for PullingSink {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        if let Some(progress) = &self.progress {
-            progress.incr(&ProgressValues {
-                rows: data_block.num_rows(),
-                bytes: data_block.memory_size(),
-            });
-        }
-
+        self.record_progress(&data_block);
         if let Some(sender) = &self.sender {
-            if let Err(cause) = sender.send_blocking(data_block) {
-                return Err(ErrorCode::Internal(format!(
-                    "Logical error, cannot push data into SyncSender, cause {:?}",
-                    cause
-                )));
-            }
+            sender.send_blocking(data_block).map_err(Self::send_error)?;
         }
-
         Ok(())
+    }
+}
+
+#[async_trait]
+impl AsyncSink for PullingSink {
+    const NAME: &'static str = "PullingExecutorSink";
+
+    async fn on_finish(&mut self) -> Result<()> {
+        drop(self.sender.take());
+        Ok(())
+    }
+
+    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
+        self.record_progress(&data_block);
+        if let Some(sender) = &self.sender {
+            sender.send(data_block).await.map_err(Self::send_error)?;
+        }
+        Ok(false)
     }
 }
