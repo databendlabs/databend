@@ -236,8 +236,9 @@ and it owns the difference between bare-name reuse and reuse inside a complex
 expression. The arguments of a set-returning function resolve names as the
 SELECT list does.
 
-Local context axes: `relation` (input-conflict, no-input) and `call`
-(srf-argument).
+Local context axes: `relation` (input-conflict, no-input, outer-input) and
+`call` (srf-argument). `outer-input` is a name that is also a column of an
+enclosing query block: a prior alias of the block comes before it.
 
 ### `group_by_alias`
 
@@ -246,13 +247,14 @@ This matrix owns the GROUP BY-family consumers: `group-by`, `grouping-sets`,
 `grouping-argument`, the arguments of `grouping()`.
 
 The rule is one: a name is an input column first, and otherwise the explicit
-alias of a SELECT item, which stands for the pre-aggregate form of that item.
+alias of a SELECT item, which stands for the pre-aggregate form of that item,
+and only then a column of an enclosing query block.
 A bare name that is such an alias is that item, as a position is. The rule is
 the same in every grouping set, and in the arguments of `grouping()` in
 whichever clause the call is. The cases show where it applies:
 
 - input conflicts, absent inputs and ambiguous inputs, for bare and complex
-  names;
+  names, and outer columns, which an alias shadows;
 - one case each for GROUPING SETS and CUBE, whose sets resolve names alike;
 - several SELECT items sharing an alias, and implicit item names, which are
   not aliases here;
@@ -265,7 +267,7 @@ whichever clause the call is. The cases show where it applies:
 Local context axes, in key order:
 
 ```text
-relation     input-conflict, no-input, input-ambiguous
+relation     input-conflict, no-input, input-ambiguous, outer-input
 alias_items  duplicate-same-form, duplicate-different-form
 alias_form   explicit, implicit
 key_side     input-column, alias-item
@@ -292,7 +294,9 @@ not allow the same producer kinds. Scalar, aggregate, window, and SRF aliases
 have different legality in WHERE, HAVING, and QUALIFY. Keeping them together is
 sound because the consumer dimension still exposes clause-specific legality.
 
-Local context axes: `relation` (input-conflict, no-input).
+Local context axes: `relation` (input-conflict, no-input, outer-input). In
+WHERE, as in the SELECT list and GROUP BY, an alias of the query block comes
+before a column of an enclosing one.
 
 ### `order_by_alias`
 

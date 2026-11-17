@@ -91,6 +91,47 @@ SELECT *, count(*) FROM t GROUP BY ALL
 1 4 1
 2 5 1
 
+## Names in subqueries
+
+# A name is a column of its query block, then a SELECT alias of it, and only
+# then a column of an enclosing block. `k` is the alias of `x % 2`, which
+# makes the groups {1, 3} and {2}, not the outer `o.k`, which would make one.
+statement ok
+CREATE TABLE names_inner(x INT NOT NULL)
+
+statement ok
+INSERT INTO names_inner VALUES (1), (2), (3)
+
+statement ok
+CREATE TABLE names_outer(k INT NOT NULL)
+
+statement ok
+INSERT INTO names_outer VALUES (100)
+
+query I
+SELECT (SELECT max(c) FROM (SELECT x % 2 AS k, count(*) AS c FROM names_inner GROUP BY k) d) FROM names_outer o
+----
+2
+
+# GROUP BY ALL resolves `k` the same way: it is the alias of the aggregate,
+# so `k + 1` is not a key, and not the outer `o.k` plus one.
+query I
+SELECT (SELECT max(v) FROM (SELECT sum(x) AS k, k + 1 AS v FROM names_inner GROUP BY ALL) d) FROM names_outer o
+----
+7
+
+# Without an alias of that name, `k` is the outer column.
+query I
+SELECT (SELECT max(v) FROM (SELECT k + x AS v FROM names_inner) d) FROM names_outer o
+----
+103
+
+statement ok
+DROP TABLE names_inner
+
+statement ok
+DROP TABLE names_outer
+
 ## Global aggregates
 
 # An aggregate whose result is folded away still makes the SELECT aggregate,

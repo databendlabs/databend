@@ -590,9 +590,41 @@ EvalScalar
                     └── limit: NONE
 
 
+=== group_by_alias__group_by_bare_select_alias_shadows_outer_column ===
+matrix: group_by_alias
+key: G0N0S1_16_3
+sql: SELECT (SELECT i AS k FROM t GROUP BY k LIMIT 1) FROM o
+status: ok
+EvalScalar
+├── scalars: [SUBQUERY AS (#1) AS (#2)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: t.i (#1)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [t.i (#1) AS (#1)]
+│               └── Aggregate(Initial)
+│                   ├── group items: [t.i (#1) AS (#1)]
+│                   ├── aggregate functions: []
+│                   └── EvalScalar
+│                       ├── scalars: [t.i (#1) AS (#1)]
+│                       └── Scan
+│                           ├── table: default.t (#1)
+│                           ├── filters: []
+│                           ├── order by: []
+│                           └── limit: NONE
+└── Scan
+    ├── table: default.o (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
 === group_by_alias__group_by_qualified_complex_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G0N3S1_16_
+key: G0N3S1_17_
 sql: SELECT i AS k, count(*) FROM t GROUP BY t.k + 1
 status: error
 code: 1065
@@ -600,7 +632,7 @@ message: column k doesn't exist
 
 === group_by_alias__grouping_sets_qualified_name_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G1N1S1_16_
+key: G1N1S1_17_
 sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))
 status: error
 code: 1065

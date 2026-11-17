@@ -129,6 +129,16 @@ impl<'a> AliasLookup<'a> {
     }
 }
 
+/// Where an unqualified name can be found: the input columns of its query
+/// block, its SELECT aliases, or the input columns of the enclosing query
+/// blocks, nearest first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameSource {
+    Columns,
+    Aliases,
+    OuterColumns,
+}
+
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumAsInner)]
@@ -165,7 +175,8 @@ impl ExprContext {
     /// e.g. ORDER BY and QUALIFY, an alias. The arguments of set-returning
     /// and async functions resolve names as their clause does. Whether
     /// HAVING should resolve input columns first is not settled; it prefers
-    /// aliases for now.
+    /// aliases for now. See `name_sources` for the columns of enclosing
+    /// query blocks.
     pub fn prefer_resolve_alias(&self) -> bool {
         match self {
             ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue => false,
@@ -177,6 +188,23 @@ impl ExprContext {
 
     pub fn allow_resolve_alias(&self) -> bool {
         !matches!(self, ExprContext::InAggregateFunction)
+    }
+
+    /// The sources of an unqualified name, in the order they are searched;
+    /// the first that has the name wins. The columns of enclosing query
+    /// blocks always come last: an alias is a name of its own query block,
+    /// so where names are columns first, a name is a column of the block,
+    /// then an alias of it, and only then an outer column, as in PostgreSQL
+    /// for GROUP BY. A qualified name is only searched in columns.
+    pub fn name_sources(&self) -> &'static [NameSource] {
+        use NameSource::*;
+        if !self.allow_resolve_alias() {
+            &[Columns, OuterColumns]
+        } else if self.prefer_resolve_alias() {
+            &[Aliases, Columns, OuterColumns]
+        } else {
+            &[Columns, Aliases, OuterColumns]
+        }
     }
 }
 
@@ -750,40 +778,35 @@ impl BindContext {
         }
 
         let mut result = NameResolutionCandidates::default();
-        // Lookup parent context to resolve outer reference.
-        if !self.expr_context.allow_resolve_alias() {
-            self.search_bound_columns_recursively(
-                database,
-                table,
-                column,
-                column_case_sensitive,
-                &mut result,
-            );
-        } else if self.expr_context.prefer_resolve_alias() {
-            if database.is_none() && table.is_none() {
-                available_aliases.push_candidates(name, &mut result);
-            }
-
-            if result.is_empty() {
-                self.search_bound_columns_recursively(
+        for source in self.expr_context.name_sources() {
+            match source {
+                NameSource::Columns => Self::search_bound_columns_in_context(
+                    self,
                     database,
                     table,
                     column,
                     column_case_sensitive,
                     &mut result,
-                );
+                ),
+                NameSource::Aliases => {
+                    if database.is_none() && table.is_none() {
+                        available_aliases.push_candidates(name, &mut result);
+                    }
+                }
+                NameSource::OuterColumns => {
+                    if let Some(parent) = &self.parent {
+                        parent.search_bound_columns_recursively(
+                            database,
+                            table,
+                            column,
+                            column_case_sensitive,
+                            &mut result,
+                        );
+                    }
+                }
             }
-        } else {
-            self.search_bound_columns_recursively(
-                database,
-                table,
-                column,
-                column_case_sensitive,
-                &mut result,
-            );
-
-            if result.is_empty() && database.is_none() && table.is_none() {
-                available_aliases.push_candidates(name, &mut result);
+            if !result.is_empty() {
+                break;
             }
         }
 
@@ -791,15 +814,17 @@ impl BindContext {
     }
 
     /// Whether the unqualified `column`, normalized, resolves to a column of
-    /// this context or an enclosing one, as a name that is resolved column
-    /// first does before it can be an alias.
+    /// this context, as a name that is resolved column first does before it
+    /// can be an alias. A column of an enclosing context comes after the
+    /// aliases, see `ExprContext::name_sources`.
     pub(crate) fn resolves_to_column(
         &self,
         column: &Identifier,
         name_resolution_ctx: &NameResolutionContext,
     ) -> bool {
         let mut result = NameResolutionCandidates::default();
-        self.search_bound_columns_recursively(
+        Self::search_bound_columns_in_context(
+            self,
             None,
             None,
             column,

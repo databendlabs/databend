@@ -1,7 +1,7 @@
 matrix: group_by_alias
 local_dimensions:
   - name: relation
-    values: [input-conflict, no-input, input-ambiguous]
+    values: [input-conflict, no-input, input-ambiguous, outer-input]
   - name: alias_items
     values: [duplicate-same-form, duplicate-different-form]
   - name: alias_form
@@ -390,6 +390,21 @@ regions:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT 0 AS a, count(*) FROM t GROUP BY sleep(a)"
+  - description: a bare GROUP BY name in a subquery is the SELECT alias of its own query block before a column of an enclosing one
+    main:
+      consumers: [G0]
+      name_shapes: [N0]
+      producers: [S1]
+    local:
+      relation: [outer-input]
+    cases:
+      - key: G0N0S1_16_3
+        name: group_by_bare_select_alias_shadows_outer_column
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+          - "CREATE TABLE o(k Int32)"
+        runs:
+          - sql: "SELECT (SELECT i AS k FROM t GROUP BY k LIMIT 1) FROM o"
   - description: GROUP BY-family main-coordinate closure outside positive coverage obligations
     excluded: true
     reason: this coarse region closes GROUP BY-family main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
@@ -398,13 +413,13 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, N0]
     cases:
-      - key: G0N3S1_16_
+      - key: G0N3S1_17_
         name: group_by_qualified_complex_does_not_fallback_to_select_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i AS k, count(*) FROM t GROUP BY t.k + 1"
-      - key: G1N1S1_16_
+      - key: G1N1S1_17_
         name: grouping_sets_qualified_name_does_not_fallback_to_select_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
