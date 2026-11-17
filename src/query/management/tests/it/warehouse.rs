@@ -189,9 +189,6 @@ async fn test_successfully_drop_self_managed_node() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
     let (kv, direct) = new_cluster_api(Duration::from_mins(60)).await?;
-    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
-        .watch_cluster_nodes()
-        .await;
     let node_1 = self_managed_node("node_1");
     let node_2 = self_managed_node("node_2");
     let other_cluster = NodeInfo {
@@ -199,6 +196,11 @@ async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
         warehouse_id: "test-cluster-id-2".to_string(),
         ..self_managed_node("node_3")
     };
+    // The manager of node_2: it starts node_2 below.
+    let client = kv.inner().clone();
+    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
+        .watch_cluster_nodes(client, &node_2.id)
+        .await;
 
     assert_watched_nodes(&watched, &direct, &[]).await?;
     direct.start_node(node_1.clone()).await?;
@@ -214,19 +216,21 @@ async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
 /// A manager watching the cluster nodes discovers the cluster of a node right after the node is
 /// assigned to a warehouse, and after it moves to another one.
 ///
-/// Its watched copy may not hold the new cluster entry yet: `discover` then reads the cluster from
-/// meta-service. With one embedded meta-service the watch is about always ahead of the
-/// `discover` read, so this does not force that case; a lagging follower serving the watch does.
+/// Its watched copy may not hold the new cluster entry yet: `list_warehouse_cluster_nodes` then
+/// reads the cluster from meta-service. With one embedded meta-service the watch is about always
+/// ahead of the `discover` read, so this does not force that case; a lagging follower serving the
+/// watch does.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_watched_discover_after_assign() -> anyhow::Result<()> {
     let (kv, direct) = new_cluster_api(Duration::from_mins(60)).await?;
-    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
-        .watch_cluster_nodes()
-        .await;
     let node = NodeInfo {
         binary_version: BUILD_INFO.commit_detail.clone(),
         ..system_managed_node("node_1")
     };
+    let client = kv.inner().clone();
+    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
+        .watch_cluster_nodes(client, &node.id)
+        .await;
     direct.start_node(node.clone()).await?;
 
     for i in 0..20 {

@@ -320,13 +320,16 @@ impl ClusterDiscovery {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
+        let client = metastore.inner().clone();
         let mut cluster_manager =
             WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
         if cfg
             .cache
             .is_meta_service_cache_enabled(MetaServiceCache::ClusterNode)
         {
-            cluster_manager = cluster_manager.watch_cluster_nodes().await;
+            cluster_manager = cluster_manager
+                .watch_cluster_nodes(client, &cfg.query.node_id)
+                .await;
         }
 
         Ok((lift_time, Arc::new(cluster_manager)))
