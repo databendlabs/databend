@@ -331,7 +331,9 @@ impl ReclusterTableInterpreter {
         if target == 0.0 {
             return Ok(false);
         }
-        self.ctx.check_aborting()?;
+        self.ctx
+            .check_aborting()
+            .map_err(|err| err.with_context("failed to execute"))?;
         self.ctx.clear_table_meta_timestamps_cache();
         self.ctx.evict_table_from_cache(
             &self.plan.catalog,
