@@ -15,6 +15,7 @@
 databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -33,6 +34,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
@@ -45,8 +47,16 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::PlanScope;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::always_callback;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_pipeline_transforms::OrderedBlockCompactBuilder;
@@ -69,16 +79,23 @@ use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_t
 use databend_common_storages_fuse::operations::build_recluster_index_merge_pipeline;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use parking_lot::Mutex;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
 use crate::pipelines::processors::horizontal_recluster::TransformPrepareReclusterIndex;
 use crate::pipelines::processors::horizontal_recluster::TransformReclusterOutputOrder;
+use crate::sessions::QueryContext;
 use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryProfile;
 use crate::sessions::TableContextSettings;
 use crate::spillers::ReclusterSpiller;
 
@@ -162,6 +179,9 @@ impl IPhysicalPlan for Recluster {
                     && !table.schema().fields().iter().any(|field| {
                         matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_)))
                     });
+                if multiway_merge && task.merge_groups.len() > 1 {
+                    return self.build_merge_groups_pipeline(builder, task);
+                }
                 if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
                     let max_memory_usage = settings.get_max_memory_usage()? as usize;
                     // `max_memory_usage == 0` means memory usage is unlimited.
@@ -445,6 +465,65 @@ impl IPhysicalPlan for Recluster {
 }
 
 impl Recluster {
+    /// Runs the merge groups of the task one after another, from a single source that builds
+    /// the pipeline of a group only after the previous group has finished.
+    fn build_merge_groups_pipeline(
+        &self,
+        builder: &mut PipelineBuilder,
+        task: &ReclusterTask,
+    ) -> Result<()> {
+        let groups = task.split_merge_groups()?;
+        log::info!(
+            event = "recluster.merge_groups",
+            groups = groups.len(),
+            group_blocks :? = task.merge_groups.iter().map(|group| group.blocks).collect::<Vec<_>>(),
+            group_bytes :? = task.merge_groups.iter().map(|group| group.total_bytes).collect::<Vec<_>>(),
+            input_levels :serde = task.input_level_stats;
+            "Recluster merge groups planned"
+        );
+        let running_group = Arc::new(Mutex::new(None));
+        let source = ReclusterMergeGroupsSource {
+            ctx: builder.ctx.clone(),
+            plan: Recluster {
+                meta: self.meta.clone(),
+                tasks: vec![],
+                table_info: self.table_info.clone(),
+                table_meta_timestamps: self.table_meta_timestamps,
+            },
+            scope: PlanScope::get_plan_scope(),
+            total_groups: groups.len(),
+            groups: groups.into(),
+            running: None,
+            running_group: running_group.clone(),
+        };
+        let output = OutputPort::create();
+        let processor =
+            AsyncSourcer::create(builder.ctx.get_scan_progress(), output.clone(), source)?;
+        builder
+            .main_pipeline
+            .add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
+                processor,
+                vec![],
+                vec![output],
+            )]));
+        // A group runs in its own executor, which a stop of this pipeline, such as a timeout or
+        // an error in another processor, does not reach by itself.
+        builder
+            .main_pipeline
+            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                if let Some(group) = running_group.lock().take() {
+                    let cause = match &info.res {
+                        Ok(()) => ErrorCode::AbortedQuery("recluster merge groups stopped"),
+                        Err(cause) => cause.clone(),
+                    };
+                    log::info!("recluster merge group stopped with the pipeline: {cause}");
+                    group.finish(Some(cause));
+                }
+                Ok(())
+            }));
+        Ok(())
+    }
+
     fn build_hilbert_layout_pipeline(
         builder: &mut PipelineBuilder,
         task: &ReclusterTask,
@@ -599,6 +678,86 @@ impl Recluster {
     }
 }
 
+/// Runs the merge groups of one task one after another. The pipeline of a group is built and
+/// started only when the previous group has finished, so the groups never open their inputs at
+/// the same time and only one group's processors exist at once. It yields the mutation logs of
+/// every group, which keeps the task a single commit.
+struct ReclusterMergeGroupsSource {
+    ctx: Arc<QueryContext>,
+    /// The recluster plan without tasks; each group runs it with the group as its only task.
+    plan: Recluster,
+    /// Profiles the processors of the groups under the recluster plan.
+    scope: Option<Arc<PlanScope>>,
+    groups: VecDeque<ReclusterTask>,
+    total_groups: usize,
+    running: Option<PipelinePullingExecutor>,
+    /// The executor of the running group, for the outer pipeline to stop when it finishes.
+    running_group: Arc<Mutex<Option<Arc<PipelineExecutor>>>>,
+}
+
+impl ReclusterMergeGroupsSource {
+    fn start_group(&self, task: ReclusterTask) -> Result<PipelinePullingExecutor> {
+        let ctx = self.ctx.clone();
+        let mut builder =
+            PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
+        let plan = Recluster {
+            tasks: vec![task],
+            ..self.plan.clone()
+        };
+        {
+            let _guard = self.scope.clone().map(|scope| scope.enter_scope_guard());
+            plan.build_pipeline2(&mut builder)?;
+        }
+        let mut build_res = PipelineBuildResult {
+            main_pipeline: builder.main_pipeline,
+            sources_pipelines: builder.pipelines,
+            exchange_injector: builder.exchange_injector,
+            r_cte_scan_interpreters: vec![],
+        };
+        build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+        let settings = ExecutorSettings::try_create(ctx.clone())?;
+        let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        *self.running_group.lock() = Some(executor.get_inner());
+        executor.start();
+        Ok(executor)
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for ReclusterMergeGroupsSource {
+    const NAME: &'static str = "ReclusterMergeGroupsSource";
+    // Mutation logs are blocks without rows.
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
+
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        loop {
+            if let Some(executor) = self.running.as_mut() {
+                if let Some(block) = executor.pull_data().await? {
+                    return Ok(Some(block));
+                }
+                // The group has finished: its pipeline is complete and its readers are closed.
+                self.ctx
+                    .add_query_profiles(&executor.get_inner().fetch_profiling(false));
+                self.running_group.lock().take();
+                self.running = None;
+            }
+            let Some(task) = self.groups.pop_front() else {
+                return Ok(None);
+            };
+            log::info!(
+                "recluster merge group {}/{}: blocks={}, rows={}, bytes={}",
+                self.total_groups - self.groups.len(),
+                self.total_groups,
+                task.parts.len(),
+                task.total_rows,
+                task.total_bytes
+            );
+            self.running = Some(self.start_group(task)?);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -649,5 +808,223 @@ mod tests {
             }
         }
         Ok(())
+    }
+
+    /// Merges four overlapping inputs as two groups: two blocks with `g = 1`, then two with
+    /// `g = 2`, all spread over the same key range.
+    async fn check_merge_groups(index_merge: bool) -> anyhow::Result<()> {
+        use databend_common_catalog::plan::ReclusterMergeGroup;
+        use databend_common_catalog::table_context::TableContextTableAccess;
+        use databend_common_catalog::table_context::TableContextTableManagement;
+        use databend_common_expression::BlockMetaInfoDowncast;
+        use databend_common_expression::Scalar;
+        use databend_common_storage::ColumnNodes;
+        use databend_common_storages_fuse::io::SegmentsIO;
+        use databend_common_storages_fuse::operations::MutationLogEntry;
+        use databend_common_storages_fuse::operations::MutationLogs;
+        use databend_storages_common_table_meta::meta::BlockMeta;
+        use databend_storages_common_table_meta::meta::SegmentInfo;
+
+        use crate::test_kits::execute_command;
+
+        let fixture = TestFixture::setup().await?;
+        let index = match index_merge {
+            true => ", inverted index idx(content)",
+            false => "",
+        };
+        for sql in [
+            format!(
+                "create table default.merge_groups(k int, g int, content string{index}) cluster by(k) row_per_block=3"
+            ),
+            "insert into default.merge_groups values (1,1,'a'),(5,1,'b'),(9,1,'c')".into(),
+            "insert into default.merge_groups values (3,1,'d'),(7,1,'e'),(11,1,'f')".into(),
+            "insert into default.merge_groups values (2,2,'g'),(6,2,'h'),(10,2,'i')".into(),
+            "insert into default.merge_groups values (4,2,'j'),(8,2,'k'),(12,2,'l')".into(),
+        ] {
+            execute_command(fixture.new_query_ctx().await?, &sql).await?;
+        }
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+        settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+        // One-row merge batches, so the compaction cuts each group into several blocks.
+        settings.set_setting("max_block_size".into(), "1".into())?;
+        settings.set_setting(
+            "enable_recluster_inverted_index_merge".into(),
+            u8::from(index_merge).to_string(),
+        )?;
+        let table = ctx.get_table("default", "default", "merge_groups").await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let schema = fuse.schema();
+        let (k, g) = (schema.column_id_of("k")?, schema.column_id_of("g")?);
+        let snapshot = fuse.read_table_snapshot().await?.unwrap();
+        let mut blocks = Vec::new();
+        for segment in SegmentsIO::create(ctx.clone(), fuse.get_operator(), schema.clone())
+            .read_segments::<SegmentInfo>(&snapshot.segments, CachePolicy::DEFAULT)
+            .await?
+        {
+            for block in segment?.blocks {
+                blocks.push((None, block));
+            }
+        }
+        let group_of = |block: &BlockMeta| block.col_stats[&g].min().clone();
+        blocks.sort_by_key(|(_, block)| (group_of(block), block.col_stats[&k].min().clone()));
+        assert_eq!(blocks.len(), 4);
+        let merge_groups = blocks
+            .chunks(2)
+            .map(|group| ReclusterMergeGroup {
+                blocks: 2,
+                total_rows: group.iter().map(|(_, b)| b.row_count as usize).sum(),
+                total_bytes: group.iter().map(|(_, b)| b.block_size as usize).sum(),
+                total_compressed: group.iter().map(|(_, b)| b.file_size as usize).sum(),
+            })
+            .collect::<Vec<_>>();
+        let arrow_schema = arrow_schema::Schema::from(schema.as_ref());
+        let nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
+        let (stats, parts) = FuseTable::to_partitions(Some(&schema), &blocks, &nodes, None, None);
+        let task = ReclusterTask {
+            parts,
+            stats,
+            total_rows: 12,
+            total_bytes: merge_groups.iter().map(|group| group.total_bytes).sum(),
+            total_compressed: merge_groups
+                .iter()
+                .map(|group| group.total_compressed)
+                .sum(),
+            level: 0,
+            input_level_stats: vec![],
+            kind: ReclusterTaskKind::MergeBlocks,
+            vertical_kind: None,
+            memory_budget: 0,
+            virtual_column_layout: None,
+            inverted_index_sources: match index_merge {
+                true => blocks
+                    .iter()
+                    .map(|(_, block)| block.inverted_index_metas.clone().unwrap_or_default())
+                    .collect(),
+                false => vec![],
+            },
+            merge_groups,
+        };
+        let plan = PhysicalPlan::new(Recluster {
+            meta: PhysicalPlanMeta::new("Recluster"),
+            tasks: vec![task],
+            table_info: fuse.get_table_info().clone(),
+            table_meta_timestamps: ctx.get_table_meta_timestamps(table.as_ref(), Some(snapshot))?,
+        });
+        #[derive(Clone, Copy, PartialEq)]
+        enum Stop {
+            Never,
+            /// Kill the query before any group starts.
+            KillFirst,
+            /// Kill the query while the first group runs.
+            KillAfterFirstBlock,
+            /// Stop the outer executor while the first group runs, as a timeout or an error in
+            /// another processor would, without touching the query.
+            FinishAfterFirstBlock,
+        }
+        let run = async |ctx: Arc<QueryContext>, stop: Stop| -> Result<Vec<DataBlock>> {
+            let builder = PipelineBuilder::create(
+                ctx.get_function_context()?,
+                ctx.get_settings(),
+                ctx.clone(),
+            );
+            let build_res = builder.finalize(&plan)?;
+            // Before execution, the task is a single source: no group has a processor yet.
+            assert_eq!(build_res.main_pipeline.graph.node_count(), 1);
+            assert!(build_res.sources_pipelines.is_empty());
+            let settings = ExecutorSettings::try_create(ctx.clone())?;
+            let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            if stop == Stop::KillFirst {
+                ctx.kill(ErrorCode::aborting());
+            }
+            executor.start();
+            let mut outputs = Vec::new();
+            while let Some(block) = executor.pull_data().await? {
+                outputs.push(block);
+                match stop {
+                    Stop::KillAfterFirstBlock => ctx.kill(ErrorCode::aborting()),
+                    Stop::FinishAfterFirstBlock => {
+                        executor.finish(Some(ErrorCode::AbortedQuery("stopped by the test")))
+                    }
+                    Stop::Never | Stop::KillFirst => {}
+                }
+            }
+            Ok(outputs)
+        };
+
+        let mut outputs = Vec::new();
+        for mut block in run(ctx.clone(), Stop::Never).await? {
+            let logs = MutationLogs::downcast_from(block.take_meta().unwrap()).unwrap();
+            for entry in logs.entries {
+                let MutationLogEntry::AppendBlock { block_meta, .. } = entry else {
+                    panic!("expected appended blocks");
+                };
+                outputs.push(block_meta.block_meta.clone());
+            }
+        }
+        let mut group_rows = [0; 2];
+        let mut group_blocks = [0; 2];
+        let mut previous_group = 0;
+        for output in &outputs {
+            // An output block holds rows of one group only, and the groups run in order.
+            let group = group_of(output);
+            assert_eq!(output.col_stats[&g].max(), &group);
+            let group = match group == Scalar::Number(1i32.into()) {
+                true => 0,
+                false => 1,
+            };
+            assert!(group >= previous_group, "a group ran after the next one");
+            previous_group = group;
+            group_rows[group] += output.row_count;
+            group_blocks[group] += 1;
+            // Ordered output: the cluster statistics, taken from the first and last rows,
+            // are the key range of the block.
+            let cluster_stats = output.cluster_stats.as_ref().unwrap();
+            assert_eq!(cluster_stats.level, 1);
+            assert_eq!(cluster_stats.min(), &vec![
+                output.col_stats[&k].min().clone()
+            ]);
+            assert_eq!(cluster_stats.max(), &vec![
+                output.col_stats[&k].max().clone()
+            ]);
+            if index_merge {
+                assert!(output.inverted_index_meta("idx").is_some());
+            }
+        }
+        assert_eq!(group_rows, [6, 6]);
+        // Each group is cut into blocks of its own.
+        assert!(
+            group_blocks.iter().all(|blocks| *blocks >= 2),
+            "{group_blocks:?}"
+        );
+
+        // A stopped query ends with an error instead of waiting on its groups, whether it is
+        // killed before or during a group, or its executor stops without the query being killed.
+        for stop in [
+            Stop::KillFirst,
+            Stop::KillAfterFirstBlock,
+            Stop::FinishAfterFirstBlock,
+        ] {
+            let stopped = fixture.new_query_ctx().await?;
+            stopped
+                .get_settings()
+                .set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+            let result =
+                tokio::time::timeout(std::time::Duration::from_secs(60), run(stopped, stop))
+                    .await
+                    .expect("a stopped recluster must not hang");
+            assert!(result.is_err());
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_recluster_merge_groups_run_in_order() -> anyhow::Result<()> {
+        check_merge_groups(false).await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_recluster_merge_groups_with_inverted_index_merge() -> anyhow::Result<()> {
+        check_merge_groups(true).await
     }
 }

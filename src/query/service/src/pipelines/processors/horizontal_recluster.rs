@@ -1309,6 +1309,7 @@ mod tests {
                 .iter()
                 .map(|(_, block)| block.inverted_index_metas.clone().unwrap_or_default())
                 .collect(),
+            merge_groups: vec![],
         };
         use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
         assert!(ReclusterIndexMergeInputs::try_create(fuse, &task)?.is_some());

@@ -1229,6 +1229,7 @@ impl ReclusterMutator {
                             .collect(),
                         false => vec![],
                     },
+                    merge_groups: vec![],
                 });
                 selected_block_count += block_metas.len() as u64;
             }
