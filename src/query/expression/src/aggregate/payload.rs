@@ -37,7 +37,6 @@ use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
 use super::payload_row::visit_row_type;
-use super::probe_state::SelectVector;
 use super::row_ptr::PageNumbering;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowMut;
@@ -103,89 +102,6 @@ impl RowCursor {
 pub(super) enum GroupRows<'a> {
     Columns(ProjectedBlock<'a>),
     Rows(&'a [RowPtr; BATCH_SIZE]),
-}
-
-pub(super) struct PayloadTransferBatch<'a> {
-    rows: usize,
-    addresses: &'a [RowPtr; BATCH_SIZE],
-    partitions: &'a [(u16, SelectVector)],
-}
-
-#[derive(Default)]
-pub(super) struct PayloadTransferStateOffsets {
-    offsets: Vec<(usize, usize, usize)>,
-}
-
-impl PayloadTransferStateOffsets {
-    fn record(&mut self, payload_index: usize, offsets: Vec<(usize, usize)>) {
-        self.offsets.extend(
-            offsets
-                .into_iter()
-                .map(|(page_index, offset)| (payload_index, page_index, offset)),
-        );
-    }
-
-    fn commit(self, payloads: &mut [Payload]) {
-        for (payload_index, page_index, offset) in self.offsets {
-            let payload = payloads
-                .get_mut(payload_index)
-                .expect("transfer target payload index is out of bounds");
-
-            let page = payload
-                .pages
-                .get_mut(page_index)
-                .expect("transfer target page index is out of bounds");
-            let next_state_offsets = page
-                .state_offsets
-                .checked_add(offset)
-                .expect("transfer target state offsets overflow");
-            let initialized_states = page
-                .rows
-                .checked_mul(payload.aggrs.len())
-                .expect("transfer target initialized states overflow");
-
-            assert!(
-                next_state_offsets <= initialized_states,
-                "transfer target state offsets exceed initialized aggregate states"
-            );
-            page.state_offsets = next_state_offsets;
-        }
-    }
-}
-
-impl<'a> PayloadTransferBatch<'a> {
-    pub(super) fn from_flush_state(flush_state: &'a PayloadFlushState) -> Self {
-        Self {
-            rows: flush_state.row_count,
-            addresses: &flush_state.addresses,
-            partitions: &flush_state.probe_state.partition_entries,
-        }
-    }
-
-    pub(super) fn copy_all_partitions_to(
-        &self,
-        payloads: &mut [Payload],
-        state_offsets: &mut PayloadTransferStateOffsets,
-    ) {
-        debug_assert_eq!(payloads.len(), self.partitions.len());
-        debug_assert_eq!(
-            self.rows,
-            self.partitions
-                .iter()
-                .map(|(count, _)| *count as usize)
-                .sum::<usize>()
-        );
-
-        for (payload_index, (payload, (count, sel))) in
-            payloads.iter_mut().zip(self.partitions).enumerate()
-        {
-            if *count > 0 {
-                let offsets = payload
-                    .copy_state_addr_rows_for_transfer(&sel[..*count as usize], self.addresses);
-                state_offsets.record(payload_index, offsets);
-            }
-        }
-    }
 }
 
 unsafe impl Send for Payload {}
@@ -375,18 +291,6 @@ impl Payload {
         let mut entries = flush_state.take_aggregate_results();
         entries.extend(flush_state.take_group_columns());
         Ok(Some(DataBlock::new(entries, flush_state.row_count)))
-    }
-
-    pub(super) fn commit_transferred_state_offsets(
-        mut self,
-        state_offsets: PayloadTransferStateOffsets,
-        payloads: &mut [Payload],
-    ) {
-        // Rows are copied with their aggregate states, so the states move to the targets.
-        // The source must give up state-drop ownership before target offsets
-        // make those states visible to target payload drops.
-        self.row_layout.states_layout = None;
-        state_offsets.commit(payloads);
     }
 
     #[inline]
@@ -712,17 +616,12 @@ impl Payload {
         self.routed_partitions
     }
 
-    fn copy_state_addr_rows_for_transfer(
-        &mut self,
-        select_vector: &[RowID],
-        row_refs: &[RowPtr; BATCH_SIZE],
-    ) -> Vec<(usize, usize)> {
+    /// Append copies of the rows of `select_vector` in `row_refs`, with their states. The states
+    /// are not counted as initialized in the pages: see `scatter_into_buckets`.
+    fn copy_rows_with_states(&mut self, select_vector: &[RowID], row_refs: &[RowPtr; BATCH_SIZE]) {
         let tuple_size = self.tuple_size;
         let states = self.row_layout.states;
-        let agg_len = self.aggrs.len();
-        let (mut page, mut page_index) = self.writable_page();
-        let mut state_offsets = Vec::new();
-        let mut page_state_offset = 0;
+        let (mut page, _) = self.writable_page();
 
         for index in select_vector {
             let mut row_mut = page.reserve_row(tuple_size);
@@ -735,18 +634,10 @@ impl Payload {
                     states.size,
                 );
             }
-            page_state_offset += agg_len;
 
             if page.rows == page.capacity {
-                if page_state_offset > 0 {
-                    state_offsets.push((page_index, page_state_offset));
-                }
-                (page, page_index) = self.writable_page();
-                page_state_offset = 0;
+                (page, _) = self.writable_page();
             }
-        }
-        if page_state_offset > 0 {
-            state_offsets.push((page_index, page_state_offset));
         }
 
         self.total_rows += select_vector.len();
@@ -755,19 +646,21 @@ impl Payload {
             self.total_rows,
             self.pages.iter().map(|x| x.rows).sum::<usize>()
         );
-
-        state_offsets
     }
 
-    pub(super) fn scan_hash_partition_transfer<'a>(
+    /// Scan the next rows into `flush_state` and select them by partition, of `partition_count`,
+    /// in its probe state. Returns whether there were rows left.
+    fn scan_hash_partitions(
         &self,
-        flush_state: &'a mut PayloadFlushState,
+        flush_state: &mut PayloadFlushState,
         partition_count: usize,
-    ) -> Option<PayloadTransferBatch<'a>> {
+    ) -> bool {
         debug_assert!(partition_count > 0);
 
         loop {
-            let page = self.pages.get(flush_state.flush_page)?;
+            let Some(page) = self.pages.get(flush_state.flush_page) else {
+                return false;
+            };
 
             if flush_state.flush_page_row >= page.rows {
                 flush_state.flush_page += 1;
@@ -797,13 +690,13 @@ impl Payload {
             }
 
             flush_state.flush_page_row = end;
-            return Some(PayloadTransferBatch::from_flush_state(flush_state));
+            return true;
         }
     }
 
     /// Split the rows into `buckets` payloads by `group_hash_route_index` of their group hash, the
     /// routing of raw rows with the same group keys.
-    pub fn scatter_into_buckets(self, buckets: usize) -> Vec<Payload> {
+    pub fn scatter_into_buckets(mut self, buckets: usize) -> Vec<Payload> {
         if buckets == 0 {
             return vec![];
         }
@@ -816,30 +709,31 @@ impl Payload {
                 payload
             })
             .collect::<Vec<_>>();
+        if self.len() == 0 {
+            return bucket_payloads;
+        }
 
-        let mut state = PayloadFlushState::default();
-        self.transfer_hash_partitioned_rows(&mut bucket_payloads, &mut state);
+        let mut flush_state = PayloadFlushState::default();
+        while self.scan_hash_partitions(&mut flush_state, buckets) {
+            let partitions = &flush_state.probe_state.partition_entries;
+            for (payload, (count, sel)) in bucket_payloads.iter_mut().zip(partitions) {
+                if *count > 0 {
+                    payload.copy_rows_with_states(&sel[..*count as usize], &flush_state.addresses);
+                }
+            }
+        }
+
+        // The states were copied with the rows, so they move to the bucket payloads, which only
+        // hold copied rows. The source gives up dropping them before the buckets count them as
+        // initialized: a panic in between drops no state twice.
+        self.row_layout.states_layout = None;
+        let agg_len = self.aggrs.len();
+        for payload in &mut bucket_payloads {
+            for page in &mut payload.pages {
+                page.state_offsets = page.rows * agg_len;
+            }
+        }
         bucket_payloads
-    }
-
-    pub(super) fn transfer_hash_partitioned_rows(
-        self,
-        target_payloads: &mut [Payload],
-        flush_state: &mut PayloadFlushState,
-    ) {
-        if self.len() == 0 || target_payloads.is_empty() {
-            return;
-        }
-
-        flush_state.clear();
-        let mut state_offsets = PayloadTransferStateOffsets::default();
-        while let Some(batch) =
-            self.scan_hash_partition_transfer(flush_state, target_payloads.len())
-        {
-            batch.copy_all_partitions_to(target_payloads, &mut state_offsets);
-        }
-
-        self.commit_transferred_state_offsets(state_offsets, target_payloads);
     }
 
     pub fn empty_block(&self, fake_rows: usize) -> DataBlock {
