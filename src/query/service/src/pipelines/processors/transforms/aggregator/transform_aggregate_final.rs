@@ -93,7 +93,7 @@ pub struct TransformFinalAggregate {
     /// `AggregatorParams::allow_duplicate_groups`.
     pressure_outputs: usize,
 
-    // Created on the first non-empty input. With bucket shuffle there are many final
+    // Created on the first non-empty input. With the global shuffle there are many final
     // processors and most of them may never receive rows, so an eagerly allocated
     // hash table (and its hash index) per processor is pure overhead.
     hashtable: Option<AggregateHashTable>,

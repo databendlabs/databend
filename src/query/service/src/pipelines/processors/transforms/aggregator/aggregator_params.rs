@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -26,7 +24,6 @@ use databend_common_expression::aggregate::aggregate_function::get_states_layout
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::StatesLayout;
 use databend_common_sql::IndexType;
-use itertools::Itertools;
 
 pub struct AggregatorParams {
     pub input_schema: DataSchemaRef,
@@ -82,20 +79,6 @@ impl AggregatorParams {
             top_n: None,
             allow_duplicate_groups: false,
         }))
-    }
-
-    pub fn empty_result_block(&self) -> DataBlock {
-        let columns = self
-            .aggregate_functions
-            .iter()
-            .map(|f| ColumnBuilder::with_capacity(&f.signature().return_type, 0).build())
-            .chain(
-                self.group_data_types
-                    .iter()
-                    .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
-            )
-            .collect_vec();
-        DataBlock::new_from_columns(columns)
     }
 
     pub fn num_states(&self) -> usize {
