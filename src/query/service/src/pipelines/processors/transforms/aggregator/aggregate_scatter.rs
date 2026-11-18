@@ -96,7 +96,7 @@ impl AggregateScatter {
     ) -> Self {
         AggregateScatter {
             partitions,
-            states_schema: params.spill_schema(),
+            states_schema: params.states_schema(),
             params,
             local_partitions,
         }

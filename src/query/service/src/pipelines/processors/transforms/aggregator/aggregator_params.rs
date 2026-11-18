@@ -102,7 +102,8 @@ impl AggregatorParams {
         self.aggregate_functions.len()
     }
 
-    pub fn spill_schema(&self) -> DataSchemaRef {
+    /// The schema of serialized aggregate states: spilled, or sent to another node.
+    pub fn states_schema(&self) -> DataSchemaRef {
         let mut fields = vec![];
         if let Some(states_layout) = &self.states_layout {
             for (idx, typ) in states_layout.serialize_type.iter().enumerate() {

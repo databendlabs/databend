@@ -131,7 +131,7 @@ impl TransformFinalAggregate {
         let spiller = AggregateSpiller::try_create(
             ctx.clone(),
             SPILL_BUCKET_NUM,
-            params.spill_schema(),
+            params.states_schema(),
             // Every final processor buffers the blocks it spills on its own: halve the block
             // bytes to bound the buffers of all of them.
             0,
