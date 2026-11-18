@@ -1005,12 +1005,12 @@ mod tests {
     }
 
     #[test]
-    fn test_batched_selection_keeps_four_task_winner_within_node_budget() {
+    fn test_batched_selection_keeps_eight_task_winner_within_node_budget() {
         for (task_count, tasks_per_node, bytes, accepted) in [
-            (4, 4, 100, true),
-            (4, 4, 99, false),
-            (4, 3, 100, false),
-            (5, 8, 125, false),
+            (8, 8, 200, true),
+            (8, 8, 199, false),
+            (8, 7, 200, false),
+            (9, 9, 225, false),
         ] {
             let mut joint = window("joint", task_count);
             joint.atomic_tasks = true;
