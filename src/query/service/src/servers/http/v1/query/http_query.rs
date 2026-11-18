@@ -21,8 +21,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_ast::parser::mask_log_sql_secrets;
-use databend_common_base::base::short_sql;
+use databend_common_ast::parser::format_sql_for_log;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::IoStats;
@@ -138,34 +137,10 @@ impl HttpQueryRequest {
 
 impl Debug for HttpQueryRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.fmt_with_masked_sql(&mask_log_sql_secrets(&self.sql), f)
-    }
-}
-
-/// A request for logs, with its SQL already masked: masking tokenizes the whole
-/// statement, so a caller that logs the SQL more than once masks it once.
-pub(crate) struct MaskedRequest<'a> {
-    pub request: &'a HttpQueryRequest,
-    pub masked_sql: &'a str,
-}
-
-impl Debug for MaskedRequest<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.request.fmt_with_masked_sql(self.masked_sql, f)
-    }
-}
-
-impl HttpQueryRequest {
-    fn fmt_with_masked_sql(
-        &self,
-        masked_sql: &str,
-        f: &mut std::fmt::Formatter,
-    ) -> std::fmt::Result {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
-            // Mask before Debug escapes quotes and line breaks, and before truncation.
-            .field("sql", &short_sql(masked_sql.to_string(), 1000))
+            .field("sql", &format_sql_for_log(&self.sql))
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
@@ -760,7 +735,6 @@ impl HttpQuery {
     pub async fn try_create(
         http_ctx: &HttpQueryContext,
         req: &HttpQueryRequest,
-        masked_sql: &str,
         arrow_result_version: Option<u64>,
         arrow_features: Option<ArrowFeatures>,
     ) -> Result<HttpQuery> {
@@ -771,7 +745,7 @@ impl HttpQuery {
         let query_id = http_ctx.query_id.clone();
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let node_id = &GlobalConfig::instance().query.node_id;
-        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql; "Creating new query");
+        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = format_sql_for_log(&req.sql).as_str(); "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,
@@ -1190,5 +1164,16 @@ mod tests {
         assert!(!logged.contains("variable_secret"), "{logged}");
         assert!(logged.contains(r#""max_threads": "8""#), "{logged}");
         assert!(logged.contains(r#"variables: ["p"]"#), "{logged}");
+    }
+
+    #[test]
+    fn debug_bounds_long_select_sql() {
+        let vector = vec!["0.123456"; 1536].join(", ");
+        let sql = format!("SELECT id FROM t ORDER BY cosine_distance(v, [{vector}]) LIMIT 10");
+        let request: HttpQueryRequest =
+            serde_json::from_value(serde_json::json!({ "sql": sql })).unwrap();
+        let logged = format!("{request:?}");
+        assert!(logged.contains("SELECT id FROM t ORDER BY"), "{logged}");
+        assert!(logged.contains("... (+1533 more)]) LIMIT 10"), "{logged}");
     }
 }
