@@ -152,14 +152,18 @@ impl LiteralRuns {
         }
     }
 
+    pub(super) fn interrupt(&mut self) {
+        self.parents.clear();
+        self.run.interrupt();
+    }
+
     /// A credential replacement takes precedence, even if it reaches back to
     /// the preceding option name. Drop any overlapping abbreviations.
     pub(super) fn drain_before(
         &mut self,
         end: usize,
     ) -> impl Iterator<Item = (Range<usize>, String)> + '_ {
-        self.parents.clear();
-        self.run.interrupt();
+        self.interrupt();
         self.edits.drain(..).filter(move |(r, _)| r.end <= end)
     }
 }

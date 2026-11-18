@@ -217,7 +217,11 @@ fn mask_tokens(mut masked: Masked<'_>, nested: NestedMasker) -> (String, SqlSecr
                     masked.replace(start..sql.len(), "'***'");
                     break;
                 }
-                masked.flush_literals_before(start);
+                // Recovery keeps `prev`, so a later mask can still reach
+                // back to an option name before the lexer error.
+                if let Some(literals) = &mut masked.literals {
+                    literals.interrupt();
+                }
                 continue;
             }
         };
@@ -1025,6 +1029,17 @@ mod tests {
             assert_eq!(masked, expected, "{sql}");
             assert_eq!(mask_sql_secrets(&masked), masked, "{sql}");
         }
+    }
+
+    #[test]
+    fn format_sql_for_log_masks_credentials_after_lexer_error() {
+        let key = "password".repeat(150);
+        let sql =
+            format!("SELECT * FROM 's3://bucket/data' (CONNECTION = ('{key}' ☃ = 'leak_pw'))");
+        assert_eq!(
+            format_sql_for_log(&sql),
+            format!("SELECT * FROM 's3://bucket/data' (CONNECTION = ('{key}' = 'le***pw'))")
+        );
     }
 
     #[test]
