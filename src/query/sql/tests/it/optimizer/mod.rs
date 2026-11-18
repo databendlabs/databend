@@ -48,6 +48,7 @@ mod push_down_top_n_union_scan;
 mod selectivity;
 mod selectivity_smoke;
 mod shuffle_keys;
+mod split_grouped_count_distinct;
 mod stat_derivation;
 mod statistics_trace;
 mod type_consistency;

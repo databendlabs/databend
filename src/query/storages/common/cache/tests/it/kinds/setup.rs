@@ -42,6 +42,8 @@ impl Backend {
             },
             Backend::Shared => CacheConfig {
                 shared_memory_enabled: true,
+                // The data pool is off by default.
+                data_max_ratio: 10,
                 // Off by default.
                 kind_max_bytes: [
                     ("memory_cache_column_data".to_string(), room),

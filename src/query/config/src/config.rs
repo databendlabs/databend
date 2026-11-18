@@ -3582,11 +3582,12 @@ pub struct CacheConfig {
     )]
     pub index_max_ratio: u64,
 
-    /// Shared backend: percentage of the server memory limit for column data.
+    /// Shared backend: percentage of the server memory limit for column data. 0 disables the
+    /// in-memory column data pool.
     #[clap(
         long = "cache-data-max-ratio",
         value_name = "VALUE",
-        default_value = "10"
+        default_value = "0"
     )]
     pub data_max_ratio: u64,
 
@@ -3652,7 +3653,7 @@ impl Default for CacheConfig {
             shared_memory_enabled: true,
             meta_max_ratio: 10,
             index_max_ratio: 40,
-            data_max_ratio: 10,
+            data_max_ratio: 0,
             kind_max_bytes: BTreeMap::new(),
 
             // ----- the following options/args are all deprecated               ----

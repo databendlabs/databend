@@ -633,6 +633,38 @@ fn test_payload_scatter_preserves_results() {
 }
 
 #[test]
+fn test_routed_payload_scatter_preserves_results() {
+    let fixture = TrackedHeapFixture::new();
+
+    {
+        // The partitions of a routed table go to the final aggregates as they are, and are
+        // scattered by row into other partitions, whose pages are laid out like theirs.
+        let config = HashTableConfig::default().with_route_partitions(3);
+        for buckets in [3, 2] {
+            let hashtable = fixture.build_from_rows(0, config.clone());
+            let payloads = hashtable.into_payloads();
+            assert!(payloads.iter().all(|p| p.routed_partitions() == 3));
+            let routed = match buckets {
+                3 => payloads,
+                _ => payloads
+                    .into_iter()
+                    .flat_map(|p| p.scatter_into_buckets(buckets))
+                    .collect(),
+            };
+
+            let mut merged = fixture.empty_table(HashTableConfig::default());
+            let mut flush_state = PayloadFlushState::default();
+            for payload in &routed {
+                merged.combine_payload(payload, &mut flush_state).unwrap();
+            }
+            fixture.assert_result(&mut merged);
+        }
+    }
+
+    fixture.assert_all_states_dropped();
+}
+
+#[test]
 fn test_add_serialized_groups_matches_combine_and_drops_states() {
     let fixture = TrackedHeapFixture::new();
 

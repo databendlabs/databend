@@ -26,7 +26,6 @@ use log::info;
 
 use super::AggrState;
 use super::BATCH_SIZE;
-use super::MAX_PAGE_SIZE;
 use super::PayloadFlushState;
 use super::RowID;
 use super::StateAddr;
@@ -76,6 +75,10 @@ pub struct Payload {
 
     // Starts from 1, zero means no page allocated
     current_write_page: usize,
+    /// Set to `n` when this is the partition of a table routed to `n` final aggregates, see
+    /// `PartitionMask::Route`: its rows all go to the final aggregate of its partition.
+    pub(super) routed_partitions: usize,
+    max_page_size: usize,
     // if set, the payload contains at least duplicate rows
 }
 
@@ -277,11 +280,15 @@ impl Page {
 }
 
 impl Payload {
+    /// A payload of pages of at most `max_page_size` bytes. A page is aligned to its size
+    /// rounded up to a power of two, see `StatesRegion`: the payloads a row is copied between
+    /// must have the same page size.
     pub fn new(
         arena: Arc<Bump>,
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateCallRef>,
         states_layout: Option<StatesLayout>,
+        max_page_size: usize,
     ) -> Self {
         let mut tuple_size = 0;
         let mut validity_offsets = Vec::with_capacity(group_types.len());
@@ -315,7 +322,7 @@ impl Payload {
             _ => (0, 1),
         };
         let row_per_page = (u16::MAX as usize)
-            .min(MAX_PAGE_SIZE.saturating_sub(state_align) / (tuple_size + state_size))
+            .min(max_page_size.saturating_sub(state_align) / (tuple_size + state_size))
             .max(1);
         let states_offset = (row_per_page * tuple_size).next_multiple_of(state_align);
         let page_bytes = states_offset + row_per_page * state_size;
@@ -336,6 +343,8 @@ impl Payload {
             row_per_page,
             page_bytes,
             total_rows: 0,
+            routed_partitions: 0,
+            max_page_size,
             row_layout: RowLayout {
                 hash_offset,
                 states,
@@ -686,12 +695,21 @@ impl Payload {
     }
 
     fn empty_like(&self) -> Payload {
-        Payload::new(
+        let mut payload = Payload::new(
             self.arena.clone(),
             self.group_types.clone(),
             self.aggrs.clone(),
             self.row_layout.states_layout.clone(),
-        )
+            self.max_page_size,
+        );
+        payload.routed_partitions = self.routed_partitions;
+        payload
+    }
+
+    /// The number of final aggregates the rows of this payload were routed among when it is a
+    /// partition of a routed table, else 0.
+    pub fn routed_partitions(&self) -> usize {
+        self.routed_partitions
     }
 
     fn copy_state_addr_rows_for_transfer(
@@ -792,12 +810,10 @@ impl Payload {
 
         let mut bucket_payloads = (0..buckets)
             .map(|_| {
-                Payload::new(
-                    self.arena.clone(),
-                    self.group_types.clone(),
-                    self.aggrs.clone(),
-                    self.row_layout.states_layout.clone(),
-                )
+                // Copying a row locates its states by the layout of the target.
+                let mut payload = self.empty_like();
+                payload.routed_partitions = 0;
+                payload
             })
             .collect::<Vec<_>>();
 

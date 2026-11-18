@@ -1030,6 +1030,15 @@ fn test_server_memory_limit_defaults() {
     assert!(config.query.common.max_memory_limit_enabled);
     assert!(config.cache.shared_memory_enabled);
     assert_eq!(config.query.common.max_server_memory_usage, 0);
+    // The in-memory column data pool is off by default; metadata and index pools stay on.
+    assert_eq!(
+        (
+            config.cache.meta_max_ratio,
+            config.cache.index_max_ratio,
+            config.cache.data_max_ratio
+        ),
+        (10, 40, 0)
+    );
 
     let mut system = sysinfo::System::new();
     system.refresh_memory();

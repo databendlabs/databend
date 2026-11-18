@@ -124,6 +124,14 @@ impl AggregateScatter {
 
         let mut partitions = (0..self.partitions).map(|_| vec![]).collect::<Vec<_>>();
         for payload in payloads {
+            // A partition of a table routed among these partitions goes as it is.
+            if payload.payload.routed_partitions() == self.partitions {
+                let (bucket, payload) = (payload.bucket as usize, payload.payload);
+                if payload.len() != 0 {
+                    partitions[bucket].push(AggregatePayload { bucket: 0, payload });
+                }
+                continue;
+            }
             let scattered = payload.payload.scatter_into_buckets(self.partitions);
             for (partition, part) in scattered.into_iter().enumerate() {
                 if part.len() != 0 {

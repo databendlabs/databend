@@ -387,6 +387,36 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Table metadata written by a newer release may carry a `BLOOM` table index
+/// (`index_type = 4`). This release must still decode that metadata, so the
+/// table remains visible to listing and `SHOW CREATE TABLE`, while any
+/// unknown value is rejected as before.
+#[test]
+fn test_table_index_type_bloom_placeholder() -> anyhow::Result<()> {
+    let mut index = new_table_index();
+    index.index_type = TableIndexType::Bloom;
+    index.options = btreemap! {s("filter_type") => s("binary_fuse32")};
+
+    let mut p = index.to_pb();
+    assert_eq!(p.index_type, 4);
+    let got = mt::TableIndex::from_pb(p.clone())?;
+    assert_eq!(index, got);
+    assert_eq!(got.index_type.to_string(), "BLOOM");
+
+    let mut tbl = new_table_meta();
+    tbl.indexes.insert(index.name.clone(), index);
+    let got = mt::TableMeta::from_pb(tbl.to_pb())?;
+    assert_eq!(tbl, got);
+
+    p.index_type = 99;
+    assert_eq!(
+        Incompatible::new(s("invalid IndexType: 99")),
+        mt::TableIndex::from_pb(p).unwrap_err()
+    );
+
+    Ok(())
+}
+
 #[test]
 fn test_incompatible() -> anyhow::Result<()> {
     let db_meta = new_db_meta();
