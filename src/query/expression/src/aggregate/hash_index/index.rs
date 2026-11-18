@@ -36,10 +36,8 @@ pub(in crate::aggregate) const CHUNK_SLOTS: usize = 12;
 pub(in crate::aggregate) const PREFETCH_DISTANCE: usize = 16;
 const PREFETCH_MIN_BYTES: usize = 1 << 20;
 
-/// The row ids of the lanes of a chunk, see `Chunk`.
+/// The row ids of the `CHUNK_SLOTS` lanes of a chunk, see `Chunk`.
 pub(in crate::aggregate) trait ChunkIds: Copy {
-    /// The lanes of a chunk with these ids, at most one per tag.
-    const LANES: usize;
     /// The largest id a lane holds.
     const MAX_ID: u64;
     const EMPTY: Self;
@@ -49,15 +47,14 @@ pub(in crate::aggregate) trait ChunkIds: Copy {
     fn set(&mut self, lane: usize, id: u64);
 }
 
-/// 12 ids of 4 bytes.
+/// Ids of 4 bytes.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(in crate::aggregate) struct Ids32([u32; 12]);
+pub(in crate::aggregate) struct Ids32([u32; CHUNK_SLOTS]);
 
 impl ChunkIds for Ids32 {
-    const LANES: usize = 12;
     const MAX_ID: u64 = u32::MAX as u64;
-    const EMPTY: Self = Ids32([0; 12]);
+    const EMPTY: Self = Ids32([0; CHUNK_SLOTS]);
 
     #[inline]
     fn get(&self, lane: usize) -> u64 {
@@ -73,15 +70,14 @@ impl ChunkIds for Ids32 {
     }
 }
 
-/// 12 ids of 8 bytes, for tables of more rows than 4 bytes can name.
+/// Ids of 8 bytes, for tables of more rows than 4 bytes can name.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(in crate::aggregate) struct Ids64([u64; 12]);
+pub(in crate::aggregate) struct Ids64([u64; CHUNK_SLOTS]);
 
 impl ChunkIds for Ids64 {
-    const LANES: usize = 12;
     const MAX_ID: u64 = u64::MAX;
-    const EMPTY: Self = Ids64([0; 12]);
+    const EMPTY: Self = Ids64([0; CHUNK_SLOTS]);
 
     #[inline]
     fn get(&self, lane: usize) -> u64 {
@@ -103,8 +99,8 @@ const fn tag(hash: u64) -> u8 {
 
 const EMPTY_TAG: u8 = 0x80;
 
-/// The tags of 16 lanes, then the row ids of the lanes the ids have room for: one probe reads
-/// one cache line with ids of up to 4 bytes.
+/// The tags of 16 lanes, then the row ids of the first `CHUNK_SLOTS` of them, the other lanes
+/// staying empty: one probe reads one cache line with ids of up to 4 bytes.
 #[repr(C, align(64))]
 #[derive(Clone, Copy)]
 struct Chunk<I> {
@@ -121,7 +117,7 @@ impl<I: ChunkIds> Chunk<I> {
         ids: I::EMPTY,
     };
     /// The nibbles of the lanes that have an id, see `match_tag`.
-    const LANE_MASK: u64 = u64::MAX >> (64 - I::LANES * 4);
+    const LANE_MASK: u64 = u64::MAX >> (64 - CHUNK_SLOTS * 4);
 
     /// Lanes from `from` whose tag is `tag`, four bits per lane: the lane of a match is
     /// `trailing_zeros / 4`. Narrowing the compared lanes by a shift moves them to a scalar
@@ -270,7 +266,7 @@ impl<I: ChunkIds> RowIdIndex<I> {
 
     #[inline]
     fn next_slot(&self, slot: usize) -> usize {
-        if (slot & 15) + 1 < I::LANES {
+        if (slot & 15) + 1 < CHUNK_SLOTS {
             slot + 1
         } else {
             (((slot >> 4) + 1) & self.chunk_mask) << 4
@@ -702,7 +698,7 @@ mod tests {
         fn run<I: ChunkIds>() {
             // Every key has the same tag and starts at the same chunk, so each probe compares
             // and steps over all the keys before it, past the end of a chunk into the next one.
-            let lanes = I::LANES as u64;
+            let lanes = CHUNK_SLOTS as u64;
             let same = |chunk: u64| (0x55u64 << 57) | chunk;
             let existing = |n: u64, chunk: u64| {
                 (0..n)
