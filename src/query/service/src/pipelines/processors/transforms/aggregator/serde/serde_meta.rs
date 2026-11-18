@@ -20,8 +20,6 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 
-use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 
 /// Serialized partial aggregate states of several buckets, concatenated in one block, sent to
@@ -48,7 +46,7 @@ impl AggregateStatesMeta {
     }
 
     /// Split `block` back into the serialized payload of each bucket.
-    pub fn into_aggregate_meta(self, block: DataBlock) -> Result<AggregateMeta> {
+    pub fn into_payloads(self, block: DataBlock) -> Result<Vec<SerializedPayload>> {
         if self.buckets.len() != self.payload_row_counts.len() {
             return Err(ErrorCode::Internal(
                 "Invalid aggregate states meta".to_string(),
@@ -76,9 +74,7 @@ impl AggregateStatesMeta {
                 "Aggregate states rows do not match block rows".to_string(),
             ));
         }
-        Ok(AggregateMeta::Partitioned(PartitionedData::Serialized(
-            payloads,
-        )))
+        Ok(payloads)
     }
 }
 

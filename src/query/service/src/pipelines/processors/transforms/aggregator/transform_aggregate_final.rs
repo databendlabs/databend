@@ -47,7 +47,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregateStatesMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
@@ -66,9 +65,13 @@ enum Stage {
     Channel,
 }
 
-/// An input block: partial aggregate states, or raw rows the partial aggregate forwarded.
+/// An input block.
 enum FinalInput {
-    Meta(AggregateMeta),
+    /// Partial aggregate states of this node.
+    Payloads(Vec<AggregatePayload>),
+    /// Partial aggregate states serialized by another node.
+    Serialized(Vec<SerializedPayload>),
+    /// Raw rows the partial aggregate forwarded.
     Raw(DataBlock),
 }
 
@@ -330,29 +333,21 @@ impl TransformFinalAggregate {
         BlockPartitionStream::create(self.params.max_block_rows, self.params.max_block_bytes, 1)
     }
 
-    fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
-        match meta {
-            AggregateMeta::Spilled(payloads) => {
+    fn handle_input(&mut self, input: FinalInput, need_check_spill: bool) -> Result<()> {
+        match input {
+            FinalInput::Payloads(payloads) => {
                 for payload in payloads {
                     check_interrupt()?;
-                    let restored = self.spiller.restore(payload)?;
-                    self.handle_serialized(restored, need_check_spill)?;
+                    self.handle_aggregate_payload(payload, need_check_spill)?;
                 }
             }
-            AggregateMeta::Partitioned(data) => match data {
-                PartitionedData::Serialized(payloads) => {
-                    for payload in payloads {
-                        check_interrupt()?;
-                        self.handle_serialized(payload, need_check_spill)?;
-                    }
+            FinalInput::Serialized(payloads) => {
+                for payload in payloads {
+                    check_interrupt()?;
+                    self.handle_serialized(payload, need_check_spill)?;
                 }
-                PartitionedData::AggregatePayload(payloads) => {
-                    for payload in payloads {
-                        check_interrupt()?;
-                        self.handle_aggregate_payload(payload, need_check_spill)?;
-                    }
-                }
-            },
+            }
+            FinalInput::Raw(block) => self.handle_raw(block, need_check_spill)?,
         }
         Ok(())
     }
@@ -567,10 +562,10 @@ impl Processor for TransformFinalAggregate {
                 None => (data_block.num_rows() != 0).then_some(FinalInput::Raw(data_block)),
                 Some(meta) if AggregateStatesMeta::downcast_ref_from(&meta).is_some() => {
                     let states = AggregateStatesMeta::downcast_from(meta).unwrap();
-                    Some(FinalInput::Meta(states.into_aggregate_meta(data_block)?))
+                    Some(FinalInput::Serialized(states.into_payloads(data_block)?))
                 }
                 Some(meta) => match AggregateMeta::downcast_from(meta) {
-                    Some(meta) => Some(FinalInput::Meta(meta)),
+                    Some(meta) => Some(FinalInput::Payloads(meta.payloads)),
                     None => {
                         return Err(ErrorCode::Internal(
                             "TransformFinalAggregate only accepts aggregate states or raw rows",
@@ -607,17 +602,17 @@ impl Processor for TransformFinalAggregate {
         if let Some(input) = input_data {
             self.ensure_spill_depth(0);
             let need_check_spill = self.max_aggregate_spill_level > 0;
-            match input {
-                FinalInput::Meta(meta) => self.handle_meta(meta, need_check_spill)?,
-                FinalInput::Raw(block) => self.handle_raw(block, need_check_spill)?,
-            }
+            self.handle_input(input, need_check_spill)?;
             return Ok(());
         } else if let Some(mut task) = self.channel_data.take() {
             self.ensure_spill_depth(task.spilled_depth);
             self.statistics.reset();
-            let meta = AggregateMeta::Spilled(mem::take(&mut task.spilled_payload));
             let need_check_spill = task.spilled_depth < self.max_aggregate_spill_level;
-            self.handle_meta(meta, need_check_spill)?;
+            for payload in mem::take(&mut task.spilled_payload) {
+                check_interrupt()?;
+                let restored = self.spiller.restore(payload)?;
+                self.handle_serialized(restored, need_check_spill)?;
+            }
             self.finish(Some(task.task_id), task.spilled_depth, task.tx)?;
 
             return Ok(());

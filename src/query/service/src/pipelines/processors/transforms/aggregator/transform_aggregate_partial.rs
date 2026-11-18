@@ -337,7 +337,6 @@ mod tests {
     use databend_common_expression::types::UInt64Type;
 
     use super::*;
-    use crate::pipelines::processors::transforms::aggregator::PartitionedData;
     use crate::test_kits::TestFixture;
 
     // Boxed like in the pipeline: the probe state alone is about 100KB, too large to
@@ -370,9 +369,7 @@ mod tests {
             .iter()
             .map(|block| {
                 let meta = block.get_meta().and_then(AggregateMeta::downcast_ref_from);
-                let Some(AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads))) =
-                    meta
-                else {
+                let Some(AggregateMeta { payloads }) = meta else {
                     unreachable!("partial aggregate only outputs aggregate payloads here")
                 };
                 payloads.iter().map(|p| p.payload.len()).sum::<usize>()
