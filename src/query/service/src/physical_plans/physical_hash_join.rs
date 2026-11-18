@@ -61,7 +61,6 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::resolve_scalar;
 use crate::physical_plans::runtime_filter::build_runtime_filter;
 use crate::pipelines::HashJoinStateRef;
 use crate::pipelines::PipelineBuilder;
@@ -74,6 +73,7 @@ use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
+use crate::pipelines::processors::transforms::probes_all_pairs;
 use crate::sessions::QueryContext;
 
 // Type aliases to simplify complex return types
@@ -100,12 +100,6 @@ type MergedFieldsResult = (
     Vec<DataField>,
     Vec<(usize, (bool, bool))>,
 );
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct NestedLoopFilterInfo {
-    pub predicates: Vec<RemoteExpr>,
-    pub projection: Vec<usize>,
-}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
@@ -145,7 +139,6 @@ pub struct HashJoin {
 
     pub runtime_filter: PhysicalRuntimeFilters,
     pub broadcast_id: Option<u32>,
-    pub nested_loop_filter: Option<NestedLoopFilterInfo>,
 }
 
 #[typetag::serde]
@@ -266,7 +259,6 @@ impl IPhysicalPlan for HashJoin {
             build_side_cache_info: self.build_side_cache_info.clone(),
             runtime_filter: self.runtime_filter.clone(),
             broadcast_id: self.broadcast_id,
-            nested_loop_filter: self.nested_loop_filter.clone(),
         })
     }
 
@@ -279,7 +271,9 @@ impl IPhysicalPlan for HashJoin {
         let experimental_new_join = builder.settings.get_enable_experimental_new_join()?;
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
 
+        // Joins without anything to hash stream all pairs on this executor.
         if desc.single_to_inner.is_none()
+            && !desc.probes_all_pairs()
             && matches!(
                 self.join_type,
                 JoinType::Inner
@@ -319,6 +313,28 @@ impl IPhysicalPlan for HashJoin {
 }
 
 impl HashJoin {
+    /// When the probe streams all pairs, a side without required columns
+    /// contributes only its row count, which the build side keeps without
+    /// retaining or spilling any block. Build it from that side. The
+    /// zero-column side occupies no projected positions, so join conditions
+    /// and the output keep the same column offsets.
+    fn build_zero_column_side(&mut self) {
+        // Build-side caches consume the build state of the side the planner chose.
+        if !probes_all_pairs(
+            self.join_type,
+            !self.build_keys.is_empty(),
+            self.single_to_inner,
+        ) || !self.probe_projections.is_empty()
+            || self.build_projections.is_empty()
+            || self.build_side_cache_info.is_some()
+        {
+            return;
+        }
+        debug_assert!(self.build_keys.is_empty() && self.probe_to_build.is_empty());
+        std::mem::swap(&mut self.probe, &mut self.build);
+        std::mem::swap(&mut self.probe_projections, &mut self.build_projections);
+    }
+
     fn build_state(&self, builder: &mut PipelineBuilder) -> Result<Arc<HashJoinState>> {
         let (enable_optimization, is_distributed) = builder.merge_into_get_optimization_flag(self);
         HashJoinState::try_create(
@@ -1195,71 +1211,6 @@ impl PhysicalPlanBuilder {
 
         Ok(non_equi_conditions)
     }
-
-    fn build_nested_loop_filter_info(
-        &self,
-        join: &Join,
-        probe_schema: &DataSchema,
-        build_schema: &DataSchema,
-        target_schema: &DataSchema,
-    ) -> Result<Option<NestedLoopFilterInfo>> {
-        build_nested_loop_filter_info_for_join(join, probe_schema, build_schema, target_schema)
-    }
-}
-
-fn build_nested_loop_filter_info_for_join(
-    join: &Join,
-    probe_schema: &DataSchema,
-    build_schema: &DataSchema,
-    target_schema: &DataSchema,
-) -> Result<Option<NestedLoopFilterInfo>> {
-    if !matches!(join.join_type, JoinType::Inner) {
-        return Ok(None);
-    }
-
-    if !join.equi_conditions.is_empty() {
-        // Inner joins with equality keys should still use the hash table even
-        // when the build side is small. Falling back to nested-loop evaluates
-        // the equality and residual predicates for every probe/build pair.
-        return Ok(None);
-    }
-
-    let merged = DataSchema::new(
-        probe_schema
-            .fields
-            .iter()
-            .cloned()
-            .chain(build_schema.fields.iter().cloned())
-            .collect(),
-    );
-
-    let mut predicates =
-        Vec::with_capacity(join.equi_conditions.len() + join.non_equi_conditions.len());
-
-    for scalar in &join.non_equi_conditions {
-        predicates.push(resolve_scalar(scalar, &merged).map_err(|err| {
-            err.add_message(format!(
-                "Failed build nested loop filter schema: {merged:#?} non_equi_conditions: {:#?}",
-                join.non_equi_conditions
-            ))
-        })?);
-    }
-
-    let projection = target_schema
-        .fields
-        .iter()
-        .map(|column| merged.index_of(column.name()))
-        .collect::<Result<Vec<_>>>()
-        .map_err(|err| {
-            err.add_message(format!(
-                "Failed build nested loop filter schema: {merged:#?} target: {target_schema:#?}",
-            ))
-        })?;
-
-    Ok(Some(NestedLoopFilterInfo {
-        predicates,
-        projection,
-    }))
 }
 
 impl PhysicalPlanBuilder {
@@ -1347,9 +1298,6 @@ impl PhysicalPlanBuilder {
         )
         .await?;
 
-        let nested_loop_filter =
-            self.build_nested_loop_filter_info(join, &probe_schema, &build_schema, &merged_schema)?;
-
         // Step 12: Create and return the HashJoin
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
         let broadcast_id = if build_side_data_distribution.as_ref().is_some_and(|e| {
@@ -1363,7 +1311,7 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-        Ok(PhysicalPlan::new(HashJoin {
+        let mut hash_join = HashJoin {
             projections,
             build_projections,
             probe_projections,
@@ -1384,8 +1332,9 @@ impl PhysicalPlanBuilder {
             build_side_cache_info,
             runtime_filter,
             broadcast_id,
-            nested_loop_filter,
-        }))
+        };
+        hash_join.build_zero_column_side();
+        Ok(PhysicalPlan::new(hash_join))
     }
 }
 
@@ -1397,13 +1346,94 @@ mod tests {
     use databend_common_sql::Visibility;
     use databend_common_sql::plans::BoundColumnRef;
     use databend_common_sql::plans::CastExpr;
-    use databend_common_sql::plans::FunctionCall;
     use databend_common_sql::plans::JoinEquiCondition;
 
     use super::*;
+    use crate::physical_plans::ConstantTableScan;
 
     fn int64_type() -> DataType {
         DataType::Number(NumberDataType::Int64)
+    }
+
+    fn cross_join(probe_projections: BTreeSet<usize>) -> HashJoin {
+        let scan = |name: &str| {
+            PhysicalPlan::new(ConstantTableScan {
+                meta: PhysicalPlanMeta::new("ConstantTableScan"),
+                values: vec![],
+                num_rows: 0,
+                output_schema: DataSchemaRefExt::create(vec![DataField::new(name, int64_type())]),
+            })
+        };
+        HashJoin {
+            meta: PhysicalPlanMeta::new("HashJoin"),
+            projections: BTreeSet::from([0]),
+            probe_projections,
+            build_projections: BTreeSet::from([0]),
+            build: scan("build"),
+            probe: scan("probe"),
+            build_keys: vec![],
+            probe_keys: vec![],
+            is_null_equal: vec![],
+            non_equi_conditions: vec![],
+            join_type: JoinType::Cross,
+            marker_index: None,
+            from_correlated_subquery: false,
+            probe_to_build: vec![],
+            output_schema: DataSchemaRefExt::create(vec![DataField::new("build", int64_type())]),
+            stat_info: None,
+            single_to_inner: None,
+            build_side_cache_info: None,
+            runtime_filter: Default::default(),
+            broadcast_id: None,
+        }
+    }
+
+    fn build_side(join: &HashJoin) -> Result<String> {
+        Ok(join.build.output_schema()?.field(0).name().clone())
+    }
+
+    // Inner joins that keep their hash join execution.
+    fn hash_table_variants() -> [fn(&mut HashJoin); 3] {
+        [
+            |join| {
+                let key = RemoteExpr::ColumnRef {
+                    span: None,
+                    id: 0,
+                    data_type: int64_type(),
+                    display_name: "key".to_string(),
+                };
+                join.probe_keys = vec![key.clone()];
+                join.build_keys = vec![key];
+            },
+            |join| join.single_to_inner = Some(JoinType::LeftSingle),
+            |join| join.build_side_cache_info = Some((0, HashMap::new())),
+        ]
+    }
+
+    #[test]
+    fn zero_column_side_becomes_build() -> Result<()> {
+        for join_type in [JoinType::Cross, JoinType::Inner] {
+            let mut join = cross_join(BTreeSet::new());
+            join.join_type = join_type;
+            join.build_zero_column_side();
+            assert_eq!(build_side(&join)?, "probe");
+            assert_eq!(join.join_type, join_type);
+            assert_eq!(join.probe_projections, BTreeSet::from([0]));
+            assert!(join.build_projections.is_empty());
+        }
+
+        let mut join = cross_join(BTreeSet::from([0]));
+        join.build_zero_column_side();
+        assert_eq!(build_side(&join)?, "build");
+
+        for variant in hash_table_variants() {
+            let mut join = cross_join(BTreeSet::new());
+            join.join_type = JoinType::Inner;
+            variant(&mut join);
+            join.build_zero_column_side();
+            assert_eq!(build_side(&join)?, "build");
+        }
+        Ok(())
     }
 
     fn typed_column(index: usize, data_type: DataType) -> ScalarExpr {
@@ -1418,10 +1448,6 @@ mod tests {
         ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
     }
 
-    fn column(index: usize) -> ScalarExpr {
-        typed_column(index, int64_type())
-    }
-
     fn cast(expr: ScalarExpr, target_type: DataType, is_try: bool) -> ScalarExpr {
         ScalarExpr::CastExpr(CastExpr {
             span: None,
@@ -1433,53 +1459,6 @@ mod tests {
 
     fn cast_to_string(expr: ScalarExpr) -> ScalarExpr {
         cast(expr, DataType::String, false)
-    }
-
-    fn schemas() -> (DataSchema, DataSchema, DataSchema) {
-        let probe = DataSchema::new(vec![DataField::new("0", int64_type())]);
-        let build = DataSchema::new(vec![DataField::new("1", int64_type())]);
-        let target = DataSchema::new(vec![
-            DataField::new("0", int64_type()),
-            DataField::new("1", int64_type()),
-        ]);
-        (probe, build, target)
-    }
-
-    #[test]
-    fn does_not_build_nested_loop_filter_for_inner_equi_join() -> Result<()> {
-        let join = Join {
-            join_type: JoinType::Inner,
-            equi_conditions: vec![JoinEquiCondition::new(column(0), column(1), false)],
-            ..Default::default()
-        };
-        let (probe, build, target) = schemas();
-
-        let info = build_nested_loop_filter_info_for_join(&join, &probe, &build, &target)?;
-
-        assert!(info.is_none());
-        Ok(())
-    }
-
-    #[test]
-    fn still_builds_nested_loop_filter_for_inner_non_equi_join() -> Result<()> {
-        let join = Join {
-            join_type: JoinType::Inner,
-            non_equi_conditions: vec![ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "gt".to_string(),
-                params: vec![],
-                arguments: vec![column(0), column(1)],
-                return_type: Box::new(DataType::Boolean),
-            })],
-            ..Default::default()
-        };
-        let (probe, build, target) = schemas();
-
-        let info = build_nested_loop_filter_info_for_join(&join, &probe, &build, &target)?;
-
-        assert!(info.is_some());
-        assert_eq!(info.unwrap().projection, vec![0, 1]);
-        Ok(())
     }
 
     #[test]

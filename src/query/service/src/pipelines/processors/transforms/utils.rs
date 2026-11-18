@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
@@ -21,6 +22,28 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+
+/// Append one row as constant columns without materializing the repeated payload.
+pub(crate) fn merge_with_constant_row(
+    input: DataBlock,
+    constants: &DataBlock,
+    row_index: usize,
+) -> DataBlock {
+    let rows = input.num_rows();
+    DataBlock::from_iter(
+        input
+            .take_columns()
+            .into_iter()
+            .chain(constants.columns().iter().map(|entry| {
+                BlockEntry::Const(
+                    entry.index(row_index).unwrap().to_owned(),
+                    entry.data_type(),
+                    rows,
+                )
+            })),
+        rows,
+    )
+}
 
 pub fn filter_block(
     block: DataBlock,
