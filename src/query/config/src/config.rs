@@ -3694,10 +3694,10 @@ impl CacheConfig {
 #[serde(rename_all = "snake_case")]
 #[value(rename_all = "snake_case")]
 pub enum MetaServiceCache {
-    /// The users of the tenant, read by the HTTP password and key-pair logins and by the MySQL and
-    /// FlightSQL logins. A stale copy can keep a `DROP USER`, a password or key change,
-    /// `DISABLED`, a revoked grant or role, or a new network policy of the user from taking
-    /// effect for the logins on this node.
+    /// The users of the tenant, read by the HTTP password and key-pair logins, by the MySQL and
+    /// FlightSQL logins, and by the HTTP requests authenticated by a session token. A stale copy
+    /// can keep a `DROP USER`, a password or key change, `DISABLED`, a revoked grant or role, or
+    /// a new network policy of the user from taking effect for these on this node.
     User,
     /// The global settings of the tenant, read by every new session. A stale copy can keep a
     /// change of a global setting, such as the `network_policy` that logins enforce, from taking

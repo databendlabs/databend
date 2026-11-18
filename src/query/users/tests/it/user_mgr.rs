@@ -291,8 +291,8 @@ async fn test_login_with_setting_cache_only() -> anyhow::Result<()> {
     check_login_and_session_settings(&[MetaServiceCache::Setting]).await
 }
 
-/// A login finds a user and the new sessions find the global settings as they are created and
-/// dropped, with `caches` as `cache.meta_service_caches`.
+/// A login and a session-token request find a user, and the new sessions find the global
+/// settings, as they are created and dropped, with `caches` as `cache.meta_service_caches`.
 async fn check_login_and_session_settings(caches: &[MetaServiceCache]) -> anyhow::Result<()> {
     let thread_name = std::thread::current()
         .name()
@@ -323,8 +323,13 @@ async fn check_login_and_session_settings(caches: &[MetaServiceCache]) -> anyhow
         let login = provider
             .get_login_user_with_client_ip(&tenant, user.identity(), None)
             .await;
+        // What a request authenticated by a session token reads.
+        let token = provider.get_auth_user(&tenant, user.identity()).await;
         let settings = provider.get_session_settings(&tenant).await?;
-        if login.ok().as_ref() == Some(&user) && settings == vec![setting.clone()] {
+        if login.ok().as_ref() == Some(&user)
+            && token.ok().as_ref() == Some(&user)
+            && settings == vec![setting.clone()]
+        {
             found = true;
             break;
         }
@@ -332,21 +337,29 @@ async fn check_login_and_session_settings(caches: &[MetaServiceCache]) -> anyhow
     }
     assert!(
         found,
-        "the login and the session did not find the user and the setting"
+        "the login, the session-token request and the session did not find the user and the setting"
     );
 
     provider.drop_user(&tenant, user.identity(), false).await?;
+    let unknown = |r: &databend_common_exception::Result<UserInfo>| {
+        r.as_ref()
+            .is_err_and(|e| e.code() == ErrorCode::UNKNOWN_USER)
+    };
     let mut dropped = false;
     for _ in 0..100 {
         let login = provider
             .get_login_user_with_client_ip(&tenant, user.identity(), None)
             .await;
-        if login.is_err_and(|e| e.code() == ErrorCode::UNKNOWN_USER) {
+        let token = provider.get_auth_user(&tenant, user.identity()).await;
+        if unknown(&login) && unknown(&token) {
             dropped = true;
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    assert!(dropped, "the login still found the dropped user");
+    assert!(
+        dropped,
+        "the login or the session-token request still found the dropped user"
+    );
     Ok(())
 }

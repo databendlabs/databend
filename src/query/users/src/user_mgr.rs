@@ -93,9 +93,7 @@ impl UserApiProvider {
     }
 
     /// Like `get_user_with_client_ip`, for a login that writes nothing back from the user it
-    /// gets: the user may come from the watched copy, see `user` in `cache.meta_service_caches`,
-    /// and lag a change by the watch delay. A user with a password policy is read from
-    /// meta-service, so that its login failures are all counted.
+    /// gets: the user comes from `get_auth_user`, and may lag a change by the watch delay.
     #[async_backtrace::framed]
     pub async fn get_login_user_with_client_ip(
         &self,
@@ -103,17 +101,26 @@ impl UserApiProvider {
         user: UserIdentity,
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
-        let user_info = match self.configured_user_info(&user) {
-            Some(user_info) => user_info,
-            None => self.get_login_meta_user(tenant, user).await?,
-        };
+        let user_info = self.get_auth_user(tenant, user).await?;
         self.check_login(tenant, user_info, client_ip).await
     }
 
-    /// A user of meta-service, for a login: from the watched copy if the users of the tenant are
-    /// watched. A user with a password policy is read from meta-service then, so that its login
-    /// failures are all counted.
-    async fn get_login_meta_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
+    /// The user of a request that authenticates it and writes nothing back from it: a login, or
+    /// a request with a session token. The user may come from the watched copy, see `user` in
+    /// `cache.meta_service_caches`, and lag a change by the watch delay. A user with a password
+    /// policy is read from meta-service, so that its login failures are all counted.
+    #[async_backtrace::framed]
+    pub async fn get_auth_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
+        match self.configured_user_info(&user) {
+            Some(user_info) => Ok(user_info),
+            None => self.get_auth_meta_user(tenant, user).await,
+        }
+    }
+
+    /// A user of meta-service, for `get_auth_user`: from the watched copy if the users of the
+    /// tenant are watched. A user with a password policy is read from meta-service then, so that
+    /// its login failures are all counted.
+    async fn get_auth_meta_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
         let user_info = self
             .user_api(tenant)
             .get_watched_user(&user)
