@@ -92,20 +92,10 @@ impl Cache {
         if !covered {
             return None;
         }
-        // Not `try_list_dir`: sub-cache 0.2 strips every trailing `/` of `dir`
-        // (databendlabs/sub-cache#5).
-        let range = format!("{dir}/")..format!("{dir}0");
         let now_ms = now_ms();
-        self.inner
-            .try_access(|data| {
-                data.data
-                    .range(range)
-                    .filter(|(_, value)| !value.is_expired(now_ms))
-                    .map(|(key, value)| (key.clone(), value.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .now_or_never()?
-            .ok()
+        let mut items = self.inner.try_list_dir(dir).now_or_never()?.ok()?;
+        items.retain(|(_, value)| !value.is_expired(now_ms));
+        Some(items)
     }
 
     /// Create a new cache of the directory `dir`, watched through `meta_client`.
@@ -116,8 +106,7 @@ impl Cache {
     ///
     /// * `meta_client` - The meta client to interact with the remote data store.
     /// * `dir` - The cache holds the keys under `{dir}/`, see [`Cache`]. It also identifies the
-    ///   cache instance. sub-cache 0.2 still strips a trailing `/` of the watched directory
-    ///   (databendlabs/sub-cache#5): until it does not, a `dir` must not end with `/`.
+    ///   cache instance.
     /// * `name` - The name of the cache, used for debugging and logging purposes.
     pub async fn new(
         meta_client: Arc<ClientHandle<DatabendRuntime>>,

@@ -463,7 +463,7 @@ state = "0.6.0"
 strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
-sub-cache = "0.2.1"
+sub-cache = "0.3.0"
 subtle = "2.6.1"
 syn = { version = "2.0", features = ["full"] }
 sysinfo = "0.34.2"
@@ -662,6 +662,6 @@ reqwest-hickory-resolver = { git = "https://github.com/datafuse-extras/reqwest-h
 rquickjs-core = { git = "https://github.com/DelSkayn/rquickjs.git", rev = "526317e574e1b4ac5dd0b0eb17def3e9f9011381" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.4.0" }
-sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
+sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.3.0" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.5.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
