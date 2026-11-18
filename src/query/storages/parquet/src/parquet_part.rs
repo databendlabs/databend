@@ -271,9 +271,12 @@ fn collect_file_parts(
 }
 
 /// One `ParquetPart::File` per non-empty file, read row group by row group in file order.
+/// The memory estimate is that of the columns read, as for the parts of a split file.
 fn collect_whole_file_parts(
     files: Vec<CollectFile>,
     compression_ratio: f64,
+    num_columns_to_read: usize,
+    total_columns_to_read: usize,
 ) -> (PartStatistics, Partitions) {
     let mut partitions = Partitions::create(PartitionsShuffleKind::Mod, vec![]);
     let mut stats = PartStatistics::default();
@@ -289,7 +292,11 @@ fn collect_whole_file_parts(
             .push(Arc::new(Box::new(ParquetPart::File(ParquetFilePart {
                 file,
                 compressed_size: size,
-                estimated_uncompressed_size: (size as f64 * compression_ratio) as u64,
+                estimated_uncompressed_size: (size as f64
+                    * compression_ratio
+                    * num_columns_to_read as f64
+                    / total_columns_to_read as f64)
+                    as u64,
                 dedup_key,
                 bucket_option: None,
                 meta,
@@ -314,7 +321,12 @@ pub(crate) fn collect_parts(
     if ctx.copy_state().get_file_sort_keys().is_some() {
         // COPY with SORTED_BY_CLUSTER_KEY: one part per file, so that one source reads the whole
         // file in order and its blocks are contiguous ranges of the file.
-        return Ok(collect_whole_file_parts(files, compression_ratio));
+        return Ok(collect_whole_file_parts(
+            files,
+            compression_ratio,
+            num_columns_to_read,
+            total_columns_to_read,
+        ));
     }
 
     let mut large_files = vec![];

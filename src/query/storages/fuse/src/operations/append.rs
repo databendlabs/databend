@@ -101,7 +101,8 @@ impl FuseTable {
             } else if ctx.copy_state().get_file_sort_keys().is_some() {
                 // COPY with SORTED_BY_CLUSTER_KEY: each block already holds a contiguous range of
                 // one input file. Combining blocks would mix ranges and make them overlap.
-                build_split_only_block_pipeline(pipeline, block_thresholds)?;
+                let max_threads = ctx.get_settings().get_max_threads()? as usize;
+                build_split_only_block_pipeline(pipeline, block_thresholds, max_threads)?;
             } else {
                 build_compact_block_pipeline(pipeline, block_thresholds)?;
             }

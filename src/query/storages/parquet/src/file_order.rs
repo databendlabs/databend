@@ -119,8 +119,18 @@ impl FileOrder {
         Ok(output)
     }
 
+    /// Ends the current file, returning its remaining rows. The next block starts a new file
+    /// even at the same location, which FILES may list twice.
+    pub(crate) fn finish_file(&mut self) -> Result<Option<DataBlock>> {
+        let block = self.flush()?;
+        self.location.clear();
+        self.rows_read = 0;
+        self.last_key = None;
+        Ok(block)
+    }
+
     /// Returns the collected rows of the current file as one block.
-    pub(crate) fn flush(&mut self) -> Result<Option<DataBlock>> {
+    fn flush(&mut self) -> Result<Option<DataBlock>> {
         self.rows = 0;
         self.bytes = 0;
         match self.blocks.len() {

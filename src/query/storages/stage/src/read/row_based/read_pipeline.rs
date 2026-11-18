@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
@@ -186,9 +187,10 @@ impl RowBasedReadPipelineBuilder<'_> {
         sort_keys: SortKeyEvaluator,
         max_threads: usize,
     ) -> Result<()> {
+        let file_ids = Arc::new(AtomicU64::new(0));
         pipeline.try_add_accumulating_transformer(|| {
             Separator::try_create(load_ctx.clone(), format.clone())
-                .map(Separator::with_file_end_marker)
+                .map(|separator| separator.with_file_ids(file_ids.clone()))
         })?;
 
         pipeline.try_resize(1)?;

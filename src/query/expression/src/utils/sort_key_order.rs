@@ -16,15 +16,16 @@
 //! linear cluster key sorts by.
 //!
 //! Only the first and last rows of each block are checked, which makes the check cheap and
-//! repeatable. Disorder between them goes unnoticed, but it only widens the range of one block
-//! on write, because blocks are sorted again and their statistics recomputed there.
+//! repeatable. Disorder between them goes unnoticed. It never changes the loaded data, because
+//! blocks are sorted again and their statistics recomputed on write, but it makes the blocks
+//! written from that range overlap: one wider block, or several overlapping ones when the range
+//! is split to the target block size.
 
 use std::cmp::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::Cast;
 use crate::Column;
 use crate::ColumnRef;
 use crate::DataBlock;
@@ -35,6 +36,7 @@ use crate::FunctionContext;
 use crate::RemoteExpr;
 use crate::Scalar;
 use crate::function::FunctionRegistry;
+use crate::type_check::check_cast;
 
 /// The sort key values of one row.
 pub type SortKeyRow = Vec<Scalar>;
@@ -76,16 +78,8 @@ impl SortKeyEvaluator {
                     data_type: source_type.clone(),
                     display_name: name.clone(),
                 });
-                let input = if source_type == data_type {
-                    column
-                } else {
-                    Expr::Cast(Cast {
-                        span: None,
-                        is_try: false,
-                        expr: Box::new(column),
-                        dest_type: data_type,
-                    })
-                };
+                // The same cast as the one that brings the source to the table schema later.
+                let input = check_cast(None, false, column, &data_type, registry)?;
                 input_names.push(name);
                 inputs.push(input);
             }
@@ -149,9 +143,11 @@ fn find_field(schema: &DataSchema, name: &str) -> Result<usize> {
         .iter()
         .position(|field| field.name() == name)
         .or_else(|| {
+            // Matches the binder, which refers to the source columns by lowercase name.
+            let name = name.to_lowercase();
             fields
                 .iter()
-                .position(|field| field.name().eq_ignore_ascii_case(name))
+                .position(|field| field.name().to_lowercase() == name)
         })
         .ok_or_else(|| {
             ErrorCode::Internal(format!(

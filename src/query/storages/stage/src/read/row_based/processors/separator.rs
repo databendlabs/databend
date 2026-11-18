@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
@@ -24,14 +26,17 @@ use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::BytesBatch;
 use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::SeparatorState;
-use crate::read::row_based::processors::ordered::FileEnd;
+use crate::read::row_based::processors::ordered::FileBatch;
 
 pub struct Separator {
     pub ctx: Arc<LoadContext>,
     pub state: Option<Box<dyn SeparatorState>>,
     pub format: Arc<dyn RowBasedFileFormat>,
-    /// Emit a [`FileEnd`] marker after the last batch of each file.
-    pub emit_file_end: bool,
+    /// For an order-preserving read: the source of file ids, shared by all separators. Each
+    /// batch is then wrapped in a [`FileBatch`] with the id of the file it was read from, and
+    /// the last batch of a file is followed by a [`FileBatch`] without one.
+    pub file_ids: Option<Arc<AtomicU64>>,
+    file_id: u64,
 }
 
 impl Separator {
@@ -41,12 +46,13 @@ impl Separator {
             ctx,
             format,
             state: None,
-            emit_file_end: false,
+            file_ids: None,
+            file_id: 0,
         })
     }
 
-    pub fn with_file_end_marker(mut self) -> Self {
-        self.emit_file_end = true;
+    pub fn with_file_ids(mut self, file_ids: Arc<AtomicU64>) -> Self {
+        self.file_ids = Some(file_ids);
         self
     }
 }
@@ -60,6 +66,12 @@ impl AccumulatingTransform for Separator {
             .and_then(BytesBatch::downcast_from)
             .unwrap();
 
+        if self.state.is_none()
+            && let Some(file_ids) = &self.file_ids
+        {
+            // Every read of a file gets its own id, even when FILES lists the file twice.
+            self.file_id = file_ids.fetch_add(1, Ordering::Relaxed);
+        }
         let state = self.state.get_or_insert_with(|| {
             self.format
                 .try_create_separator(self.ctx.clone(), &batch.path)
@@ -85,9 +97,13 @@ impl AccumulatingTransform for Separator {
         if batch_meta.is_eof {
             self.state = None;
         }
-        let file_end = (batch_meta.is_eof && self.emit_file_end).then(|| {
-            DataBlock::empty_with_meta(Box::new(FileEnd {
+        let ordered = self.file_ids.is_some();
+        let file_id = self.file_id;
+        let file_end = (batch_meta.is_eof && ordered).then(|| {
+            DataBlock::empty_with_meta(Box::new(FileBatch {
+                file_id,
                 path: batch_meta.path.clone(),
+                batch: None,
             }))
         });
         if row_batches.is_empty() {
@@ -103,7 +119,17 @@ impl AccumulatingTransform for Separator {
 
             let blocks = row_batches
                 .into_iter()
-                .map(|b| DataBlock::empty_with_meta(Box::new(b)))
+                .map(|b| {
+                    if ordered {
+                        DataBlock::empty_with_meta(Box::new(FileBatch {
+                            file_id,
+                            path: b.start_pos.path.clone(),
+                            batch: Some(b),
+                        }))
+                    } else {
+                        DataBlock::empty_with_meta(Box::new(b))
+                    }
+                })
                 .chain(file_end)
                 .collect::<Vec<_>>();
             Ok(blocks)

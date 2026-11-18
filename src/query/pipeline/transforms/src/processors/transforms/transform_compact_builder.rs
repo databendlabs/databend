@@ -40,11 +40,13 @@ pub fn build_compact_block_pipeline(
 pub fn build_split_only_block_pipeline(
     pipeline: &mut Pipeline,
     thresholds: BlockThresholds,
+    max_threads: usize,
 ) -> Result<()> {
-    // Blocks are complete, so they can move between lanes: rebalance them for the rest of the
-    // write, since an upstream lane may be bound to one input file.
-    let output_len = pipeline.output_len();
-    pipeline.resize(output_len, true)?;
+    // Blocks are complete, so they can move between lanes: spread them over at least
+    // `max_threads` lanes for the rest of the write, since an upstream lane may be bound to one
+    // input file, and a few large files may be read by fewer lanes.
+    let width = pipeline.output_len().max(max_threads);
+    pipeline.resize(width, true)?;
     pipeline.add_accumulating_transformer(|| BlockCompactBuilder::new_split_only(thresholds));
     pipeline.add_block_meta_transformer(|| TransformCompactBlock);
     Ok(())

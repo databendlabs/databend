@@ -310,7 +310,7 @@ impl Processor for ParquetSource {
                             && let Some(file_order) = &mut self.file_order
                         {
                             // The part holds the whole file: its last rows end here.
-                            self.generated_data = file_order.flush()?;
+                            self.generated_data = file_order.finish_file()?;
                         }
                     }
                     self.state = State::ReadRowGroup {
@@ -421,6 +421,14 @@ impl Processor for ParquetSource {
                             };
                         }
                         ParquetPart::File(part) => {
+                            if self.is_copy && self.file_order.is_some() {
+                                // The part holds the whole file: list it in the COPY result
+                                // even if it has no rows, as small files are.
+                                self.copy_status.add_chunk(part.file.as_str(), FileStatus {
+                                    num_rows_loaded: 0,
+                                    error: None,
+                                });
+                            }
                             let readers = self.get_rows_readers(part, None).await?;
                             if !readers.is_empty() {
                                 self.state = State::ReadRowGroup {

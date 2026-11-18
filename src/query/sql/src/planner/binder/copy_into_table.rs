@@ -45,6 +45,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::shrink_scalar;
@@ -135,6 +136,8 @@ impl Binder {
         sorted_by_cluster_key: bool,
         source_schema: &TableSchema,
         is_transform: bool,
+        file_format_params: &FileFormatParams,
+        enable_schema_evolution: bool,
     ) -> Result<Option<Vec<RemoteExpr<String>>>> {
         if !sorted_by_cluster_key {
             return Ok(None);
@@ -168,14 +171,39 @@ impl Binder {
             ));
         };
 
+        // Parquet keys are checked as the source reads them, before the NULL_IF and the
+        // STRUCT to VARIANT conversions that later steps of the load apply.
+        let parquet = match file_format_params {
+            FileFormatParams::Parquet(fmt) => {
+                if enable_schema_evolution || fmt.missing_field_as != NullAs::Error {
+                    return Err(ErrorCode::BadArguments(
+                        "SORTED_BY_CLUSTER_KEY does not support Parquet files with MISSING_FIELD_AS other than ERROR, or with schema evolution, for now",
+                    ));
+                }
+                if !fmt.null_if.is_empty() {
+                    return Err(ErrorCode::BadArguments(
+                        "SORTED_BY_CLUSTER_KEY does not support Parquet files with NULL_IF, for now",
+                    ));
+                }
+                true
+            }
+            _ => false,
+        };
+
         let table_schema = table.schema();
         let mut remote_keys = Vec::with_capacity(cluster_keys.len());
         for key in cluster_keys {
             let key = key.project_column_ref(|index| {
-                let name = table_schema.field(*index).name();
+                let field = table_schema.field(*index);
+                let name = field.name();
                 if source_schema.field_with_name(name).is_err() {
                     return Err(ErrorCode::BadArguments(format!(
                         "SORTED_BY_CLUSTER_KEY requires the cluster key columns to be loaded from the files, but `{name}` is not"
+                    )));
+                }
+                if parquet && field.data_type().remove_nullable() == TableDataType::Variant {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "SORTED_BY_CLUSTER_KEY does not support VARIANT cluster key columns in Parquet files, such as `{name}`, for now"
                     )));
                 }
                 Ok(name.to_string())
@@ -286,16 +314,9 @@ impl Binder {
             stmt.options.sorted_by_cluster_key,
             &required_values_table_schema,
             is_transform,
+            &stage_info.file_format_params,
+            enable_schema_evolution,
         )?;
-        if file_sort_keys.is_some()
-            && matches!(&stage_info.file_format_params,
-                FileFormatParams::Parquet(fmt)
-                    if enable_schema_evolution || fmt.missing_field_as != NullAs::Error)
-        {
-            return Err(ErrorCode::BadArguments(
-                "SORTED_BY_CLUSTER_KEY does not support Parquet files with MISSING_FIELD_AS other than ERROR, or with schema evolution, for now",
-            ));
-        }
 
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(

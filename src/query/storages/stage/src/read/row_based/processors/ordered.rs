@@ -18,7 +18,7 @@
 //! every output block holds a contiguous range of one file:
 //!
 //! ```text
-//! Separator(+FileEnd) -> resize(1) -> SeqAssigner -> resize(N) -> OrderedBlockBuilder
+//! Separator(+FileBatch) -> resize(1) -> SeqAssigner -> resize(N) -> OrderedBlockBuilder
 //!   -> OrderedBatchStitcher(N -> 1) -> resize(N) -> TransformCompactBlock
 //! ```
 //!
@@ -33,7 +33,9 @@
 //! The declared order is checked at batch granularity: the rows of a block are sorted again on
 //! write, so what keeps the blocks of a file from overlapping is that each batch starts at or
 //! after the end of the batch before it in the same file. Only the first and last rows of a
-//! batch are checked.
+//! batch are checked; see [`sort_key_order`] for what disorder between them does.
+//!
+//! [`sort_key_order`]: databend_common_expression::utils::sort_key_order
 
 use std::any::Any;
 use std::cmp::Ordering;
@@ -67,21 +69,25 @@ use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::processors::BlockBuilder;
 
-/// Marks the end of one input file.
+/// A batch of one read of a file, or the end of that read when `batch` is `None`.
 #[derive(Debug)]
-pub struct FileEnd {
+pub struct FileBatch {
+    /// Distinguishes the reads of one file listed twice in FILES.
+    pub file_id: u64,
     pub path: String,
+    pub batch: Option<RowBatchWithPosition>,
 }
 
-local_block_meta_serde!(FileEnd);
+local_block_meta_serde!(FileBatch);
 
-#[typetag::serde(name = "ordered_file_end")]
-impl BlockMetaInfo for FileEnd {}
+#[typetag::serde(name = "ordered_file_batch")]
+impl BlockMetaInfo for FileBatch {}
 
-/// A batch, or the end of a file, with its global sequence number.
+/// A [`FileBatch`] with its global sequence number.
 #[derive(Debug)]
 struct SequencedBatch {
     seq: u64,
+    file_id: u64,
     path: String,
     batch: Option<RowBatchWithPosition>,
 }
@@ -95,6 +101,7 @@ impl BlockMetaInfo for SequencedBatch {}
 #[derive(Debug)]
 struct SequencedBlock {
     seq: u64,
+    file_id: u64,
     path: String,
     is_file_end: bool,
     /// The row of the file the batch starts at, for error messages.
@@ -129,24 +136,15 @@ impl Transform for SeqAssigner {
     const NAME: &'static str = "SeqAssigner";
 
     fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
-        let meta = data
+        let file_batch = data
             .take_meta()
-            .ok_or_else(|| ErrorCode::Internal("ordered read expects a batch meta"))?;
-        let sequenced = match RowBatchWithPosition::downcast_from_err(meta) {
-            Ok(batch) => SequencedBatch {
-                seq: self.next_seq,
-                path: batch.start_pos.path.clone(),
-                batch: Some(batch),
-            },
-            Err(meta) => {
-                let file_end = FileEnd::downcast_from(meta)
-                    .ok_or_else(|| ErrorCode::Internal("ordered read got an unknown meta"))?;
-                SequencedBatch {
-                    seq: self.next_seq,
-                    path: file_end.path,
-                    batch: None,
-                }
-            }
+            .and_then(FileBatch::downcast_from)
+            .ok_or_else(|| ErrorCode::Internal("ordered read expects a file batch"))?;
+        let sequenced = SequencedBatch {
+            seq: self.next_seq,
+            file_id: file_batch.file_id,
+            path: file_batch.path,
+            batch: file_batch.batch,
         };
         self.next_seq += 1;
         Ok(DataBlock::empty_with_meta(Box::new(sequenced)))
@@ -196,6 +194,7 @@ impl Transform for OrderedBlockBuilder {
         let Some(batch) = sequenced.batch else {
             return Ok(DataBlock::empty_with_meta(Box::new(SequencedBlock {
                 seq: sequenced.seq,
+                file_id: sequenced.file_id,
                 path: sequenced.path,
                 is_file_end: true,
                 start_row: 0,
@@ -207,6 +206,7 @@ impl Transform for OrderedBlockBuilder {
         let Some(block) = self.builder.decode_batch(batch)? else {
             return Ok(DataBlock::empty_with_meta(Box::new(SequencedBlock {
                 seq: sequenced.seq,
+                file_id: sequenced.file_id,
                 path: sequenced.path,
                 is_file_end: false,
                 start_row,
@@ -232,6 +232,7 @@ impl Transform for OrderedBlockBuilder {
         }
         block.add_meta(Some(Box::new(SequencedBlock {
             seq: sequenced.seq,
+            file_id: sequenced.file_id,
             path: sequenced.path,
             is_file_end: false,
             start_row,
@@ -259,7 +260,8 @@ pub struct OrderedBatchStitcher {
     slots: Vec<Option<(SequencedBlock, DataBlock)>>,
     output: Arc<OutputPort>,
     next_seq: u64,
-    files: HashMap<String, FileRun>,
+    /// The pending blocks of each file being read, by file id.
+    files: HashMap<u64, FileRun>,
     ready: VecDeque<DataBlock>,
     thresholds: BlockThresholds,
 }
@@ -294,7 +296,7 @@ impl OrderedBatchStitcher {
 
     fn consume(&mut self, meta: SequencedBlock, block: DataBlock) -> Result<()> {
         if meta.is_file_end {
-            if let Some(run) = self.files.remove(&meta.path) {
+            if let Some(run) = self.files.remove(&meta.file_id) {
                 self.emit(run.blocks, run.rows, run.bytes);
             }
             return Ok(());
@@ -303,7 +305,7 @@ impl OrderedBatchStitcher {
             return Ok(());
         };
 
-        let run = self.files.entry(meta.path.clone()).or_default();
+        let run = self.files.entry(meta.file_id).or_default();
         if let Some(previous) = &run.last_key
             && compare_sort_key_rows(&first_key, previous) == Ordering::Less
         {
