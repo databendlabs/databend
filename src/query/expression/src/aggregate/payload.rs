@@ -115,14 +115,12 @@ pub(super) struct Page {
     // state_offset = state_rows * agg_len
     // which mark that the offset to clean the agg states
     state_offsets: usize,
-    capacity: usize,
 }
 
 /// The bytes of a page, aligned to `StatesRegion::page_align`.
 struct PageData {
     ptr: NonNull<u8>,
     layout: Layout,
-    len: usize,
 }
 
 impl PageData {
@@ -134,20 +132,7 @@ impl PageData {
                 NonNull::new(unsafe { alloc(layout) }).unwrap_or_else(|| handle_alloc_error(layout))
             }
         };
-        PageData {
-            ptr,
-            layout,
-            len: 0,
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.len
-    }
-
-    unsafe fn set_len(&mut self, len: usize) {
-        debug_assert!(len <= self.layout.size());
-        self.len = len;
+        PageData { ptr, layout }
     }
 
     fn as_ptr(&self) -> *const u8 {
@@ -179,16 +164,12 @@ impl Page {
 
     pub(super) fn row_ptr(&self, row: usize, row_size: usize) -> RowPtr {
         debug_assert!(row < self.rows);
-        debug_assert_eq!(self.data.len(), self.rows * row_size);
         RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) })
     }
 
     fn reserve_row(&mut self, row_size: usize) -> RowMut {
-        debug_assert!(self.rows < self.capacity);
-        let row_offset = self.data.len();
-        unsafe {
-            self.data.set_len(row_offset + row_size);
-        }
+        let row_offset = self.rows * row_size;
+        debug_assert!(row_offset + row_size <= self.data.layout.size());
         self.rows += 1;
         let ptr = unsafe { self.data.as_mut_ptr().add(row_offset) };
         RowMut::new(ptr)
@@ -296,8 +277,7 @@ impl Payload {
     #[inline]
     pub(super) fn writable_page(&mut self) -> (&mut Page, usize) {
         if self.current_write_page == 0
-            || self.pages[self.current_write_page - 1].rows
-                == self.pages[self.current_write_page - 1].capacity
+            || self.pages[self.current_write_page - 1].rows == self.row_per_page
         {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
@@ -308,7 +288,6 @@ impl Payload {
                     ),
                     rows: 0,
                     state_offsets: 0,
-                    capacity: self.row_per_page,
                 });
             }
         }
@@ -336,7 +315,7 @@ impl Payload {
         partition: usize,
     ) -> RowCursor {
         match self.current_write_page.checked_sub(1) {
-            Some(page) if self.pages[page].rows < self.pages[page].capacity => {
+            Some(page) if self.pages[page].rows < self.row_per_page => {
                 self.cursor_at(ids, partition, page)
             }
             _ => RowCursor::EMPTY,
@@ -359,7 +338,7 @@ impl Payload {
         let page = &self.pages[page_index];
         RowCursor {
             id: page_id | page.rows as u64,
-            end: page_id | page.capacity as u64,
+            end: page_id | self.row_per_page as u64,
             page: page_index,
         }
     }
@@ -370,13 +349,10 @@ impl Payload {
             return;
         }
         let page = &mut self.pages[cursor.page];
-        let rows = page.capacity - (cursor.end - cursor.id) as usize;
+        let rows = self.row_per_page - (cursor.end - cursor.id) as usize;
         debug_assert!(rows >= page.rows);
         self.total_rows += rows - page.rows;
         page.rows = rows;
-        // SAFETY: a cursor reserves at most the capacity of its page, and the probe writes the
-        // reserved rows before they are read, as `Page::reserve_row` does.
-        unsafe { page.data.set_len(rows * self.tuple_size) };
     }
 
     /// Write the groups and the states of the rows of `select_vector`, reserved at `address`.
@@ -621,9 +597,11 @@ impl Payload {
     fn copy_rows_with_states(&mut self, select_vector: &[RowID], row_refs: &[RowPtr; BATCH_SIZE]) {
         let tuple_size = self.tuple_size;
         let states = self.row_layout.states;
+        let row_per_page = self.row_per_page;
         let (mut page, _) = self.writable_page();
 
         for index in select_vector {
+            debug_assert!(page.rows < row_per_page);
             let mut row_mut = page.reserve_row(tuple_size);
             unsafe {
                 let source = row_refs[*index].as_ptr();
@@ -635,7 +613,7 @@ impl Payload {
                 );
             }
 
-            if page.rows == page.capacity {
+            if page.rows == row_per_page {
                 (page, _) = self.writable_page();
             }
         }
