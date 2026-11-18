@@ -88,7 +88,6 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
     }
 }
 
-/// This serialize column into row format by fixed size
 /// Runs `$body` with `$T` the value type of a frame of reference / dictionary encodable
 /// fixed size type, `$other` for other types.
 macro_rules! with_encoded_fixed_size_type {
@@ -970,7 +969,8 @@ mod tests {
 
         let mut row0 = vec![0u8; row_size];
         let mut row1 = vec![0u8; row_size];
-        let mut row_muts: [RowMut; BATCH_SIZE] = std::array::from_fn(|_| RowMut::dangling());
+        let mut row_muts: [RowMut; BATCH_SIZE] =
+            std::array::from_fn(|_| RowMut::new(std::ptr::NonNull::dangling().as_ptr()));
         row_muts[0] = RowMut::new(row0.as_mut_ptr());
         row_muts[1] = RowMut::new(row1.as_mut_ptr());
 
@@ -987,7 +987,7 @@ mod tests {
             );
         }
 
-        let row_refs = row_muts.map(RowMut::into_ref);
+        let row_refs = [RowPtr::new(row0.as_ptr()), RowPtr::new(row1.as_ptr())];
         let bytes0 = unsafe { row_refs[0].read_bytes(0) };
         let bytes1 = unsafe { row_refs[1].read_bytes(0) };
 

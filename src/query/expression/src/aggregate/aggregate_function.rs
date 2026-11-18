@@ -463,19 +463,6 @@ impl AggregateStateDescription {
     }
 }
 
-pub(crate) fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
-where T: Send + 'static {
-    state.addr.next(state.loc[index].offset()).get::<T>()
-}
-
-pub(crate) fn write_state_at<T>(state: AggrState<'_>, index: usize, value: T)
-where T: Send + 'static {
-    state
-        .addr
-        .next(state.loc[index].offset())
-        .write_state(value)
-}
-
 pub struct AggregateStateSet<'a> {
     places: &'a [StateAddr],
     loc: &'a [AggrStateLoc],

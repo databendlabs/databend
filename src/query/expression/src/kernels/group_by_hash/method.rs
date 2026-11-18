@@ -14,12 +14,10 @@
 
 use std::fmt::Debug;
 use std::iter::TrustedLen;
-use std::ptr::NonNull;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::FastHash;
-use either::Either;
 use ethnum::u256;
 
 use crate::Column;
@@ -32,8 +30,6 @@ use crate::HashMethodKeysU256;
 use crate::HashMethodSerializer;
 use crate::HashMethodSingleBinary;
 use crate::ProjectedBlock;
-use crate::types::StringColumn;
-use crate::types::binary::BinaryColumn;
 
 #[derive(Debug, Clone)]
 pub enum KeysState {

@@ -112,14 +112,6 @@ impl RowMut {
         self.0
     }
 
-    pub(super) fn dangling() -> Self {
-        Self(std::ptr::NonNull::<u8>::dangling().as_ptr())
-    }
-
-    pub(super) fn into_ref(self) -> RowPtr {
-        RowPtr::new(self.0.cast_const())
-    }
-
     pub(super) unsafe fn write<T: Copy>(&mut self, offset: usize, value: &T) {
         unsafe {
             core::ptr::copy_nonoverlapping(
@@ -300,14 +292,8 @@ impl RowIds {
         (self.partition_pages[partition][page] as u64) << self.layout.row_bits
     }
 
-    /// The row with id `id`.
-    #[inline]
-    pub(super) fn row_ptr(&self, id: u64) -> RowPtr {
-        self.decoder().row(id)
-    }
-
     /// Decodes the ids, see `RowDecoder`.
-    #[inline]
+    #[cfg(test)]
     pub(super) fn decoder(&self) -> RowDecoder<'_> {
         RowDecoder {
             pages: &self.pages,
@@ -380,19 +366,6 @@ pub(in crate::aggregate) struct RowDecoder<'a> {
 }
 
 impl RowDecoder<'_> {
-    /// The row with id `id`.
-    #[inline]
-    pub(in crate::aggregate) fn row(self, id: u64) -> RowPtr {
-        let IdLayout {
-            row_bits,
-            row_mask,
-            row_size,
-            ..
-        } = self.layout;
-        let page = self.pages[(id >> row_bits) as usize].get();
-        RowPtr::new(page.wrapping_add((id & row_mask) as usize * row_size))
-    }
-
     /// The row with id `id` and its states, found from the page and the row in it: the states of
     /// the rows of a page are in the same order as the rows.
     #[inline]
