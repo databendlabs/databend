@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::headers::HEADER_AUTH_METHOD;
+use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
+use databend_common_base::headers::HEADER_SESSION;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
@@ -26,6 +29,7 @@ use super::http_query_handlers::TestQueryResponse;
 use super::http_query_handlers::create_endpoint;
 use super::query_token::admin_sql;
 use super::query_token::basic_headers;
+use super::query_token::client_session_header;
 use super::query_token::request;
 use super::query_token::start;
 use super::query_token::start_query;
@@ -167,5 +171,157 @@ async fn test_credential_binding_avoids_password_lockout() -> anyhow::Result<()>
     }
     let new = basic_headers("binding_policy_user", "After123456");
     assert_eq!(submit(&ep, new).await, StatusCode::OK);
+    Ok(())
+}
+
+fn with_session(mut headers: HeaderMap, session_id: Option<&str>) -> HeaderMap {
+    headers.insert(
+        HEADER_CLIENT_CAPABILITIES,
+        HeaderValue::from_static("session_header"),
+    );
+    if let Some(id) = session_id {
+        headers.insert(HEADER_SESSION, client_session_header(id));
+    }
+    headers
+}
+
+fn bearer(token: &str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        http::header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+    );
+    headers
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_credential_binding_stays_in_client_session() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    create_admin_user(&ep, "binding_session_user", "before", "").await?;
+    let old = basic_headers("binding_session_user", "before");
+    let new = basic_headers("binding_session_user", "after");
+    let in_session = start(&ep, with_session(old.clone(), Some("binding-s1"))).await?;
+    let no_session = start(&ep, old.clone()).await?;
+    admin_sql(&ep, "ALTER USER binding_session_user IDENTIFIED BY 'after'").await?;
+
+    let uri = format!("/v1/query/{}", in_session.id);
+    let kill_uri = in_session.kill_uri.as_ref().unwrap();
+    let s1 = with_session(old.clone(), Some("binding-s1"));
+    assert_eq!(get(&ep, &uri, s1).await, StatusCode::OK);
+    // A stale credential cannot reach the query from another, new or missing
+    // session: it falls back to ordinary authentication and fails.
+    for headers in [
+        with_session(old.clone(), Some("binding-s2")),
+        with_session(old.clone(), None),
+        old.clone(),
+    ] {
+        assert_eq!(
+            get(&ep, &uri, headers.clone()).await,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(get(&ep, kill_uri, headers).await, StatusCode::UNAUTHORIZED);
+    }
+    let uri = format!("/v1/query/{}", no_session.id);
+    let headers = with_session(old.clone(), Some("binding-s1"));
+    assert_eq!(get(&ep, &uri, headers).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(get(&ep, &uri, old).await, StatusCode::OK);
+
+    // A valid credential keeps the existing cross-session state/kill access.
+    let uri = format!("/v1/query/{}", in_session.id);
+    let s2 = with_session(new, Some("binding-s2"));
+    assert_eq!(get(&ep, &uri, s2.clone()).await, StatusCode::OK);
+    assert_eq!(get(&ep, kill_uri, s2).await, StatusCode::OK);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_credential_binding_with_session_token() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let login = request(
+        &ep,
+        Method::POST,
+        "/v1/session/login",
+        with_session(basic_headers("root", ""), None),
+        json!({}),
+    )
+    .await;
+    assert_eq!(login.status(), StatusCode::OK);
+    let login: serde_json::Value = login.into_body().into_json().await?;
+    let session_id = login["session_id"].as_str().unwrap().to_string();
+    let session_token = login["tokens"]["session_token"].as_str().unwrap();
+    let refresh_token = login["tokens"]["refresh_token"].as_str().unwrap();
+    let in_session = |headers: HeaderMap| with_session(headers, Some(&session_id));
+
+    let result = start(&ep, in_session(bearer(session_token))).await?;
+    let uri = format!("/v1/query/{}", result.id);
+
+    // Native session tokens are not bound: polling keeps using ordinary
+    // verification, so a refreshed token works and explicit logout revokes.
+    let refresh = request(
+        &ep,
+        Method::POST,
+        "/v1/session/refresh",
+        in_session(bearer(refresh_token)),
+        json!({}),
+    )
+    .await;
+    assert_eq!(refresh.status(), StatusCode::OK);
+    let refresh: serde_json::Value = refresh.into_body().into_json().await?;
+    let refreshed = refresh["tokens"]["session_token"].as_str().unwrap();
+    assert_eq!(
+        get(&ep, &uri, in_session(bearer(refreshed))).await,
+        StatusCode::OK
+    );
+
+    // An explicit query-token request never falls back to the binding, even
+    // when Authorization equals the submission credential.
+    let mut explicit = in_session(bearer(session_token));
+    explicit.insert(HEADER_AUTH_METHOD, HeaderValue::from_static("query-token"));
+    assert_eq!(get(&ep, &uri, explicit).await, StatusCode::UNAUTHORIZED);
+
+    let logout = request(
+        &ep,
+        Method::POST,
+        "/v1/session/logout",
+        in_session(bearer(session_token)),
+        json!({}),
+    )
+    .await;
+    assert_eq!(logout.status(), StatusCode::OK);
+    assert_eq!(
+        get(&ep, &uri, in_session(bearer(session_token))).await,
+        StatusCode::UNAUTHORIZED
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_credential_binding_skipped_under_network_policy() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    admin_sql(
+        &ep,
+        "CREATE NETWORK POLICY binding_net ALLOWED_IP_LIST=('127.0.0.0/8')",
+    )
+    .await?;
+    create_admin_user(
+        &ep,
+        "binding_net_user",
+        "before",
+        "WITH SET NETWORK POLICY='binding_net'",
+    )
+    .await?;
+    let mut old = basic_headers("binding_net_user", "before");
+    old.insert("X-Real-IP", HeaderValue::from_static("127.0.0.1"));
+    let result = start(&ep, old.clone()).await?;
+    let uri = format!("/v1/query/{}", result.id);
+    assert_eq!(get(&ep, &uri, old.clone()).await, StatusCode::OK);
+    admin_sql(&ep, "ALTER USER binding_net_user IDENTIFIED BY 'after'").await?;
+
+    // Network policy must be checked on every request, so such queries are
+    // not bound and keep the ordinary per-request authentication.
+    assert_eq!(get(&ep, &uri, old).await, StatusCode::UNAUTHORIZED);
     Ok(())
 }

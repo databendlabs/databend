@@ -108,7 +108,7 @@ async fn decode_json(response: Response) -> anyhow::Result<TestQueryResponse> {
     Ok(result)
 }
 
-fn client_session_header(id: &str) -> HeaderValue {
+pub(super) fn client_session_header(id: &str) -> HeaderValue {
     let json = json!({"id": id, "last_refresh_time": 1}).to_string();
     HeaderValue::from_str(&URL_SAFE.encode(json)).unwrap()
 }

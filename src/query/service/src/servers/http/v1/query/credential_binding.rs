@@ -46,17 +46,22 @@ static KEY: LazyLock<[u8; 32]> = LazyLock::new(|| {
 pub struct CredentialBinding([u8; 32]);
 
 impl CredentialBinding {
-    /// Returns `None` if the request carries no single `Authorization` header.
+    /// Returns `None` unless the request carries exactly one `Authorization`
+    /// header and at most one auth-method header.
     pub(crate) fn from_request(tenant: &Tenant, headers: &HeaderMap) -> Option<Self> {
         let mut authorization = headers.get_all(AUTHORIZATION).iter();
         let value = authorization.next()?;
         if authorization.next().is_some() {
             return None;
         }
-        let auth_method = headers
-            .get(HEADER_AUTH_METHOD)
+        let mut auth_methods = headers.get_all(HEADER_AUTH_METHOD).iter();
+        let auth_method = auth_methods
+            .next()
             .map(|v| v.as_bytes().to_ascii_lowercase())
             .unwrap_or_default();
+        if auth_methods.next().is_some() {
+            return None;
+        }
 
         let mut mac = Hmac::<Sha256>::new_from_slice(KEY.as_slice()).expect("any key size");
         for part in [
@@ -127,6 +132,9 @@ mod tests {
         let mut duplicate = headers("Basic dTpw", None);
         duplicate.append(AUTHORIZATION, HeaderValue::from_static("Basic dTpw"));
         assert!(CredentialBinding::from_request(&tenant, &duplicate).is_none());
+        let mut duplicate_method = headers("Bearer x", Some("keypair"));
+        duplicate_method.append(HEADER_AUTH_METHOD, HeaderValue::from_static("keypair"));
+        assert!(CredentialBinding::from_request(&tenant, &duplicate_method).is_none());
     }
 
     #[test]
