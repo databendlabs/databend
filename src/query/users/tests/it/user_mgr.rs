@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
+use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::MetaServiceCache;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
@@ -23,9 +27,12 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::UserSetting;
+use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_common_users::builtin::BuiltIn;
 use databend_common_version::BUILD_INFO;
 use databend_meta_client::RpcClientConf;
 use pretty_assertions::assert_eq;
@@ -260,5 +267,99 @@ async fn test_user_manager() -> anyhow::Result<()> {
         assert_eq!(not_exist.err().unwrap().code(), 2201)
     }
 
+    Ok(())
+}
+
+/// With `user` and `setting` in `cache.meta_service_caches`, a login finds a user and the new
+/// sessions find the global settings, as direct reads do, as they are created and dropped.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_login_with_watch_cache() -> anyhow::Result<()> {
+    check_login_and_session_settings(&[MetaServiceCache::User, MetaServiceCache::Setting]).await
+}
+
+/// With only the users watched, a login and the new sessions find the user and the global
+/// settings: the settings come from meta-service.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_login_with_user_cache_only() -> anyhow::Result<()> {
+    check_login_and_session_settings(&[MetaServiceCache::User]).await
+}
+
+/// With only the global settings watched, a login and the new sessions find the user and the
+/// global settings: the user comes from meta-service.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_login_with_setting_cache_only() -> anyhow::Result<()> {
+    check_login_and_session_settings(&[MetaServiceCache::Setting]).await
+}
+
+/// A login and a session-token request find a user, and the new sessions find the global
+/// settings, as they are created and dropped, with `caches` as `cache.meta_service_caches`.
+async fn check_login_and_session_settings(caches: &[MetaServiceCache]) -> anyhow::Result<()> {
+    let thread_name = std::thread::current()
+        .name()
+        .unwrap_or("test_login_with_watch_cache")
+        .to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO)?;
+    let tenant = Tenant::new_literal("test");
+    let cache = CacheConfig {
+        meta_service_caches: caches.to_vec(),
+        ..Default::default()
+    };
+    let provider =
+        UserApiProvider::try_create(RpcClientConf::empty(), &cache, BuiltIn::default(), &tenant)
+            .await?;
+
+    let user = UserInfo::new("u1", "%", AuthInfo::None);
+    provider
+        .create_user(&tenant, user.clone(), &CreateOption::Create)
+        .await?;
+    let setting = UserSetting::create("max_threads", UserSettingValue::UInt64(3));
+    provider
+        .setting_api(&tenant)
+        .set_setting(setting.clone())
+        .await?;
+    let mut found = false;
+    for _ in 0..100 {
+        let login = provider
+            .get_login_user_with_client_ip(&tenant, user.identity(), None)
+            .await;
+        // What a request authenticated by a session token reads.
+        let token = provider.get_auth_user(&tenant, user.identity()).await;
+        let settings = provider.get_session_settings(&tenant).await?;
+        if login.ok().as_ref() == Some(&user)
+            && token.ok().as_ref() == Some(&user)
+            && settings == vec![setting.clone()]
+        {
+            found = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        found,
+        "the login, the session-token request and the session did not find the user and the setting"
+    );
+
+    provider.drop_user(&tenant, user.identity(), false).await?;
+    let unknown = |r: &databend_common_exception::Result<UserInfo>| {
+        r.as_ref()
+            .is_err_and(|e| e.code() == ErrorCode::UNKNOWN_USER)
+    };
+    let mut dropped = false;
+    for _ in 0..100 {
+        let login = provider
+            .get_login_user_with_client_ip(&tenant, user.identity(), None)
+            .await;
+        let token = provider.get_auth_user(&tenant, user.identity()).await;
+        if unknown(&login) && unknown(&token) {
+            dropped = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        dropped,
+        "the login or the session-token request still found the dropped user"
+    );
     Ok(())
 }

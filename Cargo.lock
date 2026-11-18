@@ -14484,8 +14484,8 @@ dependencies = [
 
 [[package]]
 name = "sub-cache"
-version = "0.2.1"
-source = "git+https://github.com/databendlabs/sub-cache?tag=v0.2.1#2826eb3290f6f9830b469d3808aefdca444f893f"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/sub-cache?tag=v0.4.0#d5afc804580bcda23ca74300e75c9e5450b6bd49"
 dependencies = [
  "async-trait",
  "futures",

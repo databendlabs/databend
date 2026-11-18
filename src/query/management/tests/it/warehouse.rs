@@ -183,6 +183,97 @@ async fn test_successfully_drop_self_managed_node() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A manager watching `test-cluster-id` lists in its copy what a direct read lists, as nodes
+/// join, through it or not, and leave. The copy holds that cluster only: it does not answer for
+/// `test-cluster-id-2`, whose escaped key extends that of `test-cluster-id`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
+    let (kv, direct) = new_cluster_api(Duration::from_mins(60)).await?;
+    let node_1 = self_managed_node("node_1");
+    let node_2 = self_managed_node("node_2");
+    let other_cluster = NodeInfo {
+        cluster_id: "test-cluster-id-2".to_string(),
+        warehouse_id: "test-cluster-id-2".to_string(),
+        ..self_managed_node("node_3")
+    };
+    // The manager of node_2: it starts node_2 below.
+    let client = kv.inner().clone();
+    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
+        .watch_cluster_nodes(client, "test-cluster-id", "test-cluster-id", &node_2.id)
+        .await?;
+
+    assert_watched_nodes(&watched, &direct, &[]).await?;
+    direct.start_node(node_1.clone()).await?;
+    direct.start_node(other_cluster).await?;
+    assert_watched_nodes(&watched, &direct, std::slice::from_ref(&node_1)).await?;
+    let other = watched.try_list_watched_cluster_nodes("test-cluster-id-2", "test-cluster-id-2")?;
+    assert_eq!(other, None);
+    watched.start_node(node_2.clone()).await?;
+    assert_watched_nodes(&watched, &direct, &[node_1.clone(), node_2.clone()]).await?;
+    direct.shutdown_node(node_1.id).await?;
+    assert_watched_nodes(&watched, &direct, &[node_2]).await?;
+    Ok(())
+}
+
+/// A copy that is ready but stale lists the cluster without the local node:
+/// `list_warehouse_cluster_nodes`, and `discover` by it, read the cluster from meta-service then.
+/// Here the copy watches another meta-service, which never gets the node.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_watched_cluster_nodes_from_stale_copy() -> anyhow::Result<()> {
+    let (kv, direct) = new_cluster_api(Duration::from_mins(60)).await?;
+    let other = MetaStore::new_local_testing::<DatabendRuntime>().await;
+    let node = NodeInfo {
+        binary_version: BUILD_INFO.commit_detail.clone(),
+        ..self_managed_node("node_1")
+    };
+    let client = other.inner().clone();
+    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
+        .watch_cluster_nodes(client, "test-cluster-id", "test-cluster-id", &node.id)
+        .await?;
+    direct.start_node(node.clone()).await?;
+
+    wait_for_copy(&watched, &[]).await?;
+    assert_eq!(
+        watched
+            .list_warehouse_cluster_nodes("test-cluster-id", "test-cluster-id")
+            .await?,
+        vec![node.clone()]
+    );
+    assert_eq!(watched.discover(&node.id).await?, vec![node]);
+    Ok(())
+}
+
+/// `direct` lists `want` in `test-cluster-id`, and the watched copy of `watched` comes to list
+/// the same.
+async fn assert_watched_nodes(
+    watched: &WarehouseMgr,
+    direct: &WarehouseMgr,
+    want: &[NodeInfo],
+) -> anyhow::Result<()> {
+    let (warehouse, cluster) = ("test-cluster-id", "test-cluster-id");
+    assert_eq!(
+        direct
+            .list_warehouse_cluster_nodes(warehouse, cluster)
+            .await?,
+        want
+    );
+    wait_for_copy(watched, want).await
+}
+
+/// The watched copy of `watched` comes to list `want` in `test-cluster-id`. It reads the copy
+/// alone: `list_warehouse_cluster_nodes` would read meta-service for a copy that never answers.
+async fn wait_for_copy(watched: &WarehouseMgr, want: &[NodeInfo]) -> anyhow::Result<()> {
+    let (warehouse, cluster) = ("test-cluster-id", "test-cluster-id");
+    for _ in 0..100 {
+        let got = watched.try_list_watched_cluster_nodes(warehouse, cluster)?;
+        if got.as_deref() == Some(want) {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    anyhow::bail!("the watched copy did not come to list {want:?}")
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_unknown_node_drop_self_managed_node() -> anyhow::Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
