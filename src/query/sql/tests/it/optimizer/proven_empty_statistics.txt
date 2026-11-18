@@ -1,0 +1,91 @@
+=== filter_over_empty_input ===
+description: A filter over an exactly empty input is proven empty.
+sql: SELECT k FROM e WHERE v > 10
+operator: Filter
+cardinality: 0.000
+precise_cardinality: Some(0)
+
+=== constant_false_filter ===
+description: A predicate that is false for every value is proven empty.
+sql: SELECT k FROM t WHERE k > 10 AND k IS NULL
+operator: Filter
+cardinality: 0.000
+precise_cardinality: Some(0)
+
+=== out_of_range_filter ===
+description: A zero estimate from column statistics stays imprecise.
+sql: SELECT k FROM t WHERE k > 5000
+operator: Filter
+cardinality: 0.000
+precise_cardinality: None
+
+=== now_window_filter ===
+description: A now() window that only contradicts column statistics stays imprecise.
+sql: SELECT ts FROM w WHERE ts >= '1969-01-01 00:00:00' AND ts < now()
+operator: Filter
+cardinality: 0.000
+precise_cardinality: None
+
+=== today_window_filter ===
+description: A today() window that only contradicts column statistics stays imprecise.
+sql: SELECT d FROM w WHERE d >= '1969-01-01' AND d < today()
+operator: Filter
+cardinality: 0.000
+precise_cardinality: None
+
+=== left_join_empty_preserved_side ===
+description: LEFT JOIN is proven empty when its preserved side is proven empty.
+sql: SELECT * FROM e LEFT JOIN t ON e.k = t.k
+operator: Join
+cardinality: 0.000
+precise_cardinality: Some(0)
+
+=== left_join_empty_null_extended_side ===
+description: LEFT JOIN keeps the preserved rows when only the other side is empty.
+sql: SELECT * FROM t LEFT JOIN e ON t.k = e.k
+operator: Join
+cardinality: 1000.000
+precise_cardinality: None
+
+=== right_join_empty_preserved_side ===
+description: RIGHT JOIN is proven empty when its preserved side is proven empty.
+sql: SELECT * FROM t RIGHT JOIN e ON t.k = e.k
+operator: Join
+cardinality: 0.000
+precise_cardinality: Some(0)
+
+=== inner_join_empty_side ===
+description: INNER JOIN is proven empty when either side is proven empty.
+sql: SELECT * FROM t INNER JOIN e ON t.k = e.k
+operator: Join
+cardinality: 0.000
+precise_cardinality: Some(0)
+
+=== inner_join_empty_filtered_side ===
+description: A proven-empty filter propagates through INNER JOIN.
+sql: SELECT * FROM t INNER JOIN (SELECT * FROM e WHERE v > 10) AS f ON t.k = f.k
+operator: Join
+cardinality: 0.000
+precise_cardinality: Some(0)
+
+=== inner_join_estimated_zero_side ===
+description: An estimated-zero side does not make INNER JOIN precise.
+sql: SELECT * FROM t INNER JOIN (SELECT * FROM t WHERE k > 5000) AS f ON t.k = f.k
+operator: Join
+cardinality: 0.000
+precise_cardinality: None
+
+=== full_join_one_empty_side ===
+description: FULL JOIN keeps the rows of the non-empty side.
+sql: SELECT * FROM t FULL JOIN e ON t.k = e.k
+operator: Join
+cardinality: 1000.000
+precise_cardinality: None
+
+=== full_join_both_sides_empty ===
+description: FULL JOIN is proven empty only when both sides are proven empty.
+sql: SELECT * FROM e AS a FULL JOIN e AS b ON a.k = b.k
+operator: Join
+cardinality: 0.000
+precise_cardinality: Some(0)
+

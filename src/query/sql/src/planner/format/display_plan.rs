@@ -286,6 +286,7 @@ impl Plan {
             Plan::CreateConnection(_) => Ok("CreateConnection".to_string()),
             Plan::DescConnection(_) => Ok("DescConnection".to_string()),
             Plan::DropConnection(_) => Ok("DropConnection".to_string()),
+            Plan::ShowCreateConnection(_) => Ok("ShowCreateConnection".to_string()),
             Plan::ShowConnections(_) => Ok("ShowConnections".to_string()),
             Plan::Begin => Ok("Begin".to_string()),
             Plan::Commit => Ok("commit".to_string()),

@@ -12,6 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod basic_statistics;
-pub use basic_statistics::BasicColumnStatistics;
+pub use databend_common_statistics::BasicColumnStatistics;
 pub mod data_cache_statistics;

@@ -20,7 +20,7 @@
 ## Other tests run in parallel and share the cache, so counts are checked as
 ## "> 0" only. The memory caches of the kinds checked here are turned off while
 ## the test runs, so that the second read of each object goes to the disk cache;
-## they are restored to the defaults of the CI config at the end.
+## they are set back to 'default', which the shared cache backend supports, at the end.
 ## -------------------------------------------------------
 
 statement ok
@@ -288,28 +288,28 @@ statement ok
 unset data_retention_time_in_days;
 
 statement ok
-call system$set_cache_capacity('memory_cache_table_snapshot', 256);
+call system$set_cache_capacity('memory_cache_table_snapshot', 'default');
 
 statement ok
-call system$set_cache_capacity('memory_cache_compact_segment_info', 1073741824);
+call system$set_cache_capacity('memory_cache_compact_segment_info', 'default');
 
 statement ok
-call system$set_cache_capacity('memory_cache_bloom_index_file_meta_data', 3000);
+call system$set_cache_capacity('memory_cache_bloom_index_file_meta_data', 'default');
 
 statement ok
-call system$set_cache_capacity('memory_cache_bloom_index_filter', 2147483648);
+call system$set_cache_capacity('memory_cache_bloom_index_filter', 'default');
 
 statement ok
-call system$set_cache_capacity('memory_cache_inverted_index_meta_data', 30000);
+call system$set_cache_capacity('memory_cache_inverted_index_meta_data', 'default');
 
 statement ok
-call system$set_cache_capacity('memory_cache_inverted_index_lookup', 8589934592);
+call system$set_cache_capacity('memory_cache_inverted_index_lookup', 'default');
 
 statement ok
-call system$set_cache_capacity('memory_cache_inverted_index_payload', 17179869184);
+call system$set_cache_capacity('memory_cache_inverted_index_payload', 'default');
 
 statement ok
-call system$set_cache_capacity('memory_cache_virtual_column_file_meta_data', 30000);
+call system$set_cache_capacity('memory_cache_virtual_column_file_meta_data', 'default');
 
 statement ok
 drop database test_disk_cache;

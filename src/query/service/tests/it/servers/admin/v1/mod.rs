@@ -18,3 +18,4 @@ mod clustering_information;
 mod config;
 mod perf;
 mod status;
+mod tenant_tables;

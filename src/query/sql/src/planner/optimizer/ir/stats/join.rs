@@ -420,6 +420,17 @@ impl JoinStatsEstimator {
     }
 
     pub(crate) fn finish(self) -> Result<Arc<StatInfo>> {
+        if self.output_is_proven_empty() {
+            return Ok(Arc::new(StatInfo {
+                cardinality: 0.0,
+                statistics: Statistics {
+                    precise_cardinality: Some(0),
+                    column_stats: HashMap::new(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
+                },
+            }));
+        }
         let mut stats = self.finish_join_stats()?;
         let output_rows = stats.output_rows;
         let column_stats = if output_rows == 0.0 {
@@ -441,6 +452,36 @@ impl JoinStatsEstimator {
                 count_min_sketch: Default::default(),
             },
         }))
+    }
+
+    /// Returns true when an input that is proven empty (`precise_cardinality =
+    /// Some(0)`) forces the join output to be empty.
+    fn output_is_proven_empty(&self) -> bool {
+        let left = self.left_input.statistics.precise_cardinality == Some(0);
+        let right = self.right_input.statistics.precise_cardinality == Some(0);
+        match self.join_type {
+            JoinType::Inner
+            | JoinType::InnerAny
+            | JoinType::Cross
+            | JoinType::Asof
+            | JoinType::LeftSemi
+            | JoinType::RightSemi => left || right,
+            JoinType::Left
+            | JoinType::LeftAny
+            | JoinType::LeftAnti
+            | JoinType::LeftSingle
+            | JoinType::RightMark => left,
+            JoinType::Right
+            | JoinType::RightAny
+            | JoinType::RightAnti
+            | JoinType::RightSingle
+            | JoinType::LeftMark => right,
+            // Outer ASOF joins swap their logical children while planning, so
+            // only rely on the case where both inputs are empty.
+            JoinType::Full | JoinType::FullAsof | JoinType::LeftAsof | JoinType::RightAsof => {
+                left && right
+            }
+        }
     }
 
     fn finish_join_stats(&self) -> Result<JoinStats> {

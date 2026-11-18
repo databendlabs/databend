@@ -44,7 +44,10 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
+use databend_common_storages_fuse::operations::VectorFinalPlan;
+use databend_common_storages_fuse::operations::VectorReclusterBlock;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
+use databend_common_storages_fuse::operations::vector_final_plan;
 use databend_common_storages_fuse::segment_zone_map::RefreshOutcome;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -149,6 +152,35 @@ impl Interpreter for ReclusterTableInterpreter {
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
+            // Vector FINAL: what it does is decided from the blocks when it starts (see
+            // `vector_final_plan`); the full pass starts at once. This scans every block
+            // meta, so it is skipped when FINAL rewrites part of the table at most:
+            // `LIMIT 0` does no work, and a `WHERE` selection only rewrites the selected
+            // segments, which the scan would not tell apart. These recluster the level-0
+            // blocks by rounds, as a recluster without FINAL does.
+            let vector_plan =
+                if is_final && self.plan.limit != Some(0) && self.plan.selection.is_none() {
+                    match self.vector_recluster_blocks().await {
+                        Ok(Some(blocks)) => {
+                            let plan = vector_final_plan(&blocks);
+                            if plan == VectorFinalPlan::FullPass {
+                                let blocks: HashSet<String> =
+                                    blocks.into_iter().map(|block| block.location).collect();
+                                info!(
+                                    event = "recluster.vector_full_pass",
+                                    blocks = blocks.len();
+                                    "Recluster starts the vector full pass"
+                                );
+                                linear_final_carry.start_vector_full_pass(blocks);
+                            }
+                            plan
+                        }
+                        Ok(None) => VectorFinalPlan::Rounds,
+                        Err(e) => return Err(e.with_context("failed to execute")),
+                    }
+                } else {
+                    VectorFinalPlan::Rounds
+                };
             let mut committed_rounds = 0;
             let mut zone_map_rounds = 0;
             let (result, stop_reason) = loop {
@@ -160,6 +192,11 @@ impl Interpreter for ReclusterTableInterpreter {
                     );
                     break (Err(err.with_context("failed to execute")), "aborted");
                 }
+                if vector_plan == VectorFinalPlan::Skip {
+                    // Rows not mixed yet are below the full pass threshold, or none:
+                    // they keep their level to add up.
+                    break (Ok(()), "vector rows not mixed below full pass threshold");
+                }
 
                 rounds += 1;
                 let res = self
@@ -168,6 +205,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
                 match res {
                     Ok(outcome) => {
+                        // The full pass ends when only blocks it wrote remain.
                         if let Some(reason) = outcome.stop_reason() {
                             break (Ok(()), reason);
                         }
@@ -262,6 +300,21 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
+    async fn vector_recluster_blocks(&self) -> Result<Option<Vec<VectorReclusterBlock>>> {
+        let ReclusterPlan {
+            catalog,
+            database,
+            table,
+            ..
+        } = &self.plan;
+        self.ctx.evict_table_from_cache(catalog, database, table)?;
+        let tbl = self.ctx.get_table(catalog, database, table).await?;
+        let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
+            return Ok(None);
+        };
+        fuse_table.vector_recluster_blocks(self.ctx.clone()).await
+    }
+
     /// Refresh the segment zone map on the snapshot the last round committed,
     /// subject to its start decision. Recluster is the only writer that builds
     /// it; every other commit carries the pointer along. Failures never fail
@@ -430,7 +483,7 @@ impl ReclusterTableInterpreter {
             claim_retries += 1;
 
             // Let concurrent losers spread out before selecting another candidate set.
-            *linear_final_carry = ReclusterFinalCarry::default();
+            linear_final_carry.reset();
             let delay_ms = rand::thread_rng().gen_range(5..=20);
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
 

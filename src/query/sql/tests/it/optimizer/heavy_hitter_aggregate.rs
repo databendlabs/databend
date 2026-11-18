@@ -26,6 +26,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_statistics::Datum;
+use databend_common_statistics::NdvEstimate;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
@@ -57,13 +58,15 @@ fn table_statistics(rows: u64) -> TableStatistics {
 }
 
 fn int_statistics(ndv: u64, rows: u64) -> BasicColumnStatistics {
-    BasicColumnStatistics {
-        min: Some(Datum::Int(0)),
-        max: Some(Datum::Int(ndv as i64 - 1)),
-        ndv: Some(ndv),
-        null_count: 0,
-        in_memory_size: rows * 8,
-    }
+    BasicColumnStatistics::new(
+        Some(Datum::Int(0)),
+        Some(Datum::Int(ndv as i64 - 1)),
+        0,
+        rows * 8,
+        NdvEstimate::exact(ndv as f64),
+        Some(rows),
+    )
+    .unwrap()
 }
 
 async fn setup(ctx: &Arc<LiteTableContext>) -> Result<()> {
@@ -74,13 +77,18 @@ async fn setup(ctx: &Arc<LiteTableContext>) -> Result<()> {
         HashMap::from([
             ("item".to_string(), int_statistics(5_000_000, rows)),
             ("value".to_string(), int_statistics(rows, rows)),
-            ("name".to_string(), BasicColumnStatistics {
-                min: Some(Datum::Bytes(b"a".to_vec())),
-                max: Some(Datum::Bytes(b"z".to_vec())),
-                ndv: Some(2_000_000),
-                null_count: 1000,
-                in_memory_size: rows * 16,
-            }),
+            (
+                "name".to_string(),
+                BasicColumnStatistics::new(
+                    Some(Datum::Bytes(b"a".to_vec())),
+                    Some(Datum::Bytes(b"z".to_vec())),
+                    1000,
+                    rows * 16,
+                    NdvEstimate::exact(2_000_000.0),
+                    Some(rows),
+                )
+                .unwrap(),
+            ),
         ]),
         HashMap::new(),
     )

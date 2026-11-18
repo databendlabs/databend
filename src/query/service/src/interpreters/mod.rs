@@ -31,6 +31,7 @@ mod interpreter_connection_create;
 mod interpreter_connection_desc;
 mod interpreter_connection_drop;
 mod interpreter_connection_show;
+mod interpreter_connection_show_create;
 #[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_location;
 #[cfg(feature = "storage-stage")]
@@ -263,6 +264,7 @@ pub use interpreter_insert::InsertInterpreter;
 pub use interpreter_insert::build_insert_select_physical_plan;
 pub use interpreter_insert_multi_table::InsertMultiTableInterpreter;
 pub use interpreter_kill::KillInterpreter;
+pub use interpreter_kill::KillQueryAccess;
 pub use interpreter_materialized_view_create::CreateMaterializedViewInterpreter;
 pub use interpreter_materialized_view_drop::DropMaterializedViewInterpreter;
 pub use interpreter_materialized_view_refresh::RefreshMaterializedViewInterpreter;
