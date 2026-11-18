@@ -28,10 +28,11 @@ use crate::plans::RelOp;
 
 /// Push predicates that do not use the computed items below `AsyncFunction`.
 ///
-/// The rule does not apply if an item calls `nextval`. Each call advances the
-/// sequence, so removing input rows changes the values returned for the rows
-/// that remain. `Udf` has no such rule: a UDF may keep state or have side
-/// effects, and the planner cannot check that.
+/// The rule does not apply if an item depends on the other rows, see
+/// [`crate::plans::AsyncFunctionArgument::depends_on_other_rows`]. For example,
+/// each `nextval` call advances the sequence, so removing input rows changes the
+/// values returned for the rows that remain. `Udf` has no such rule: a UDF may
+/// keep state or have side effects, and the planner cannot check that.
 ///
 /// Input:   Filter
 ///           \
@@ -78,7 +79,7 @@ impl Rule for RulePushDownFilterAsyncFunction {
         if async_func
             .items
             .iter()
-            .any(|item| item.scalar.contains_nextval())
+            .any(|item| item.scalar.depends_on_other_rows())
         {
             return Ok(());
         }

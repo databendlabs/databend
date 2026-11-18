@@ -578,8 +578,9 @@ impl ScalarExpr {
     }
 
     /// Whether the result for a row may depend on the other input rows, e.g. through
-    /// `running_difference`. Removing input rows before such an expression is evaluated can
-    /// change its result for the remaining rows, so filters must not be moved below it.
+    /// `running_difference` or `nextval`. Removing input rows before such an expression is
+    /// evaluated can change its result for the remaining rows, so filters must not be moved
+    /// below it.
     pub fn depends_on_other_rows(&self) -> bool {
         struct DependsOnOtherRowsVisitor {
             depends_on_other_rows: bool,
@@ -591,6 +592,17 @@ impl ScalarExpr {
                     .get_property(&func.func_name)
                     .is_some_and(|property| property.depends_on_other_rows)
                 {
+                    self.depends_on_other_rows = true;
+                    return Ok(());
+                }
+                for expr in &func.arguments {
+                    self.visit(expr)?;
+                }
+                Ok(())
+            }
+
+            fn visit_async_function_call(&mut self, func: &'a AsyncFunctionCall) -> Result<()> {
+                if func.func_arg.depends_on_other_rows() {
                     self.depends_on_other_rows = true;
                     return Ok(());
                 }
@@ -1539,6 +1551,22 @@ pub enum AsyncFunctionArgument {
     Sleep,
 }
 
+impl AsyncFunctionArgument {
+    /// Whether the value returned for a row may depend on the calls for the other rows.
+    /// Removing input rows before the call can then change the values of the remaining rows.
+    pub fn depends_on_other_rows(&self) -> bool {
+        match self {
+            // Each call takes the next value, so a skipped row shifts the later values.
+            AsyncFunctionArgument::SequenceFunction(_)
+            | AsyncFunctionArgument::AutoIncrement { .. } => true,
+            // The value only depends on the arguments of the row.
+            AsyncFunctionArgument::DictGetFunction(_)
+            | AsyncFunctionArgument::ReadFile(_)
+            | AsyncFunctionArgument::Sleep => false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct ReadFileFunctionArgument {
@@ -2073,6 +2101,21 @@ mod tests {
             !expr.is_deterministic(),
             "AsyncFunctionCall wrapped in CastExpr should stay non-deterministic at the ScalarExpr layer"
         );
+    }
+
+    #[test]
+    fn test_depends_on_other_rows_handles_async_function_call() {
+        assert!(casted_nextval_expr().depends_on_other_rows());
+
+        let sleep = ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+            span: None,
+            func_name: "sleep".to_string(),
+            display_name: "sleep(0)".to_string(),
+            return_type: Box::new(DataType::Number(NumberDataType::UInt8)),
+            arguments: vec![column_expr(0)],
+            func_arg: AsyncFunctionArgument::Sleep,
+        });
+        assert!(!sleep.depends_on_other_rows());
     }
 
     #[test]
