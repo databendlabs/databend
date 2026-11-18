@@ -29,6 +29,3 @@ pub use left_join_semi::SemiLeftHashJoin;
 pub use right_join::OuterRightHashJoin;
 pub use right_join_anti::AntiRightHashJoin;
 pub use right_join_semi::SemiRightHashJoin;
-mod nested_loop;
-
-pub use nested_loop::*;

@@ -356,4 +356,51 @@ impl PhysicalPlan {
 
         self.formatter()?.format(&mut context)
     }
+
+    pub fn format_for_log(&self, metadata: &Metadata) -> Result<String> {
+        let mut node = self.format(metadata, Default::default())?;
+        format_tree_node_for_log(&mut node);
+        Ok(node.format_pretty()?)
+    }
+}
+
+fn format_tree_node_for_log(node: &mut FormatTreeNode<String>) {
+    node.payload = databend_common_ast::parser::format_sql_for_log(&node.payload);
+    for child in &mut node.children {
+        format_tree_node_for_log(child);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::ast::FormatTreeNode;
+
+    use super::format_tree_node_for_log;
+
+    #[test]
+    fn format_tree_node_for_log_abbreviates_payloads_without_changing_tree_shape() {
+        let vector = vec!["-0.123456"; 1536].join(", ");
+        let mut root = FormatTreeNode::with_children("TopN(Final)".to_string(), vec![
+            FormatTreeNode::new(format!(
+                "output columns: [t.id (#0), cosine_distance(embedding, [{vector}]) (#2)]"
+            )),
+            FormatTreeNode::new(format!(
+                "sort keys: [cosine_distance(embedding, [{vector}]) ASC NULLS LAST]"
+            )),
+        ]);
+
+        let full = root.format_pretty().unwrap();
+        assert!(full.lines().nth(1).unwrap().len() > 10_000);
+
+        format_tree_node_for_log(&mut root);
+        let logged = root.format_pretty().unwrap();
+        assert_eq!(
+            logged,
+            concat!(
+                "TopN(Final)\n",
+                "├── output columns: [t.id (#0), cosine_distance(embedding, [-0.123456, -0.123456, -0.123456, ... (+1533 more)]) (#2)]\n",
+                "└── sort keys: [cosine_distance(embedding, [-0.123456, -0.123456, -0.123456, ... (+1533 more)]) ASC NULLS LAST]\n",
+            )
+        );
+    }
 }

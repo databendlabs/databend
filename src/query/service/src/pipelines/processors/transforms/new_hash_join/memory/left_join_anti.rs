@@ -71,7 +71,6 @@ impl AntiLeftHashJoin {
             method,
             desc.clone(),
             state.clone(),
-            0,
         )?;
 
         Ok(AntiLeftHashJoin {
@@ -120,9 +119,6 @@ impl Join for AntiLeftHashJoin {
 
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe(probe_data)
-            }
-            HashJoinHashTable::NestedLoop(_) => {
-                unreachable!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",

@@ -205,22 +205,18 @@ fn combine_group_hash_const<const IS_FIRST: bool>(
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {
             apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
         }
-        DataType::Nullable(inner) => {
+        DataType::Nullable(_) => {
             if scalar.is_null() {
                 apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
             } else {
-                combine_group_hash_const_nonnull::<IS_FIRST>(scalar, inner, values);
+                combine_group_hash_const_nonnull::<IS_FIRST>(scalar, values);
             }
         }
-        _ => combine_group_hash_const_nonnull::<IS_FIRST>(scalar, data_type, values),
+        _ => combine_group_hash_const_nonnull::<IS_FIRST>(scalar, values),
     }
 }
 
-fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(
-    scalar: &Scalar,
-    _data_type: &DataType,
-    values: &mut [u64],
-) {
+fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(scalar: &Scalar, values: &mut [u64]) {
     let hash = match scalar {
         Scalar::Null => unreachable!(),
         Scalar::EmptyArray | Scalar::EmptyMap => return,
@@ -662,7 +658,7 @@ fn merge_hash(a: u64, b: u64) -> u64 {
     a.wrapping_mul(NULL_HASH_VAL) ^ b
 }
 
-pub trait AggHash {
+trait AggHash {
     fn agg_hash(&self) -> u64;
 }
 
@@ -813,8 +809,8 @@ mod tests {
         let block = sample_block(num_rows);
         let full_block = block.convert_to_full();
 
-        for projection in (0..block.num_columns())
-            .map_windows(|[a, b]| vec![*a, *b])
+        for projection in (1..block.num_columns())
+            .map(|b| vec![b - 1, b])
             .chain(Some((0..block.num_columns()).collect()))
             .collect::<Vec<_>>()
         {

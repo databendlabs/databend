@@ -38,4 +38,9 @@ impl GlobalQueriesExecutor {
     pub fn instance() -> Arc<QueriesPipelineExecutor> {
         GlobalInstance::get()
     }
+
+    /// The executor, `None` if `enable_queries_executor` is off.
+    pub fn try_instance() -> Option<Arc<QueriesPipelineExecutor>> {
+        GlobalInstance::try_get()
+    }
 }

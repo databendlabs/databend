@@ -64,6 +64,7 @@ mod error;
 mod error_suggestion;
 pub mod expr;
 mod input;
+mod log_sql;
 pub(crate) mod mask;
 #[allow(clippy::module_inception)]
 mod parser;
@@ -86,7 +87,7 @@ pub use input::Dialect;
 pub use input::Input;
 pub use input::ParseMode;
 pub use mask::SqlSecrets;
-pub use mask::mask_log_sql_secrets;
+pub use mask::format_sql_for_log;
 pub use mask::mask_raw_sql_secrets;
 pub use mask::mask_raw_sql_with_secrets;
 pub use mask::mask_sql_secrets;

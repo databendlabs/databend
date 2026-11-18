@@ -22,7 +22,6 @@ use smallvec::SmallVec;
 
 use super::BATCH_SIZE;
 use super::DictValueHashes;
-use super::HASH_INDEX_LOAD_FACTOR;
 use super::HashIndex;
 use super::HashTableConfig;
 use super::Payload;
@@ -34,7 +33,6 @@ use super::partial_controller::DistinctSampler;
 use super::partial_controller::PartialAddStats;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::GroupRows;
-use super::payload::merge_flushed_states;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
@@ -217,7 +215,7 @@ impl AggregateHashTable {
             params,
             agg_states,
             row_count,
-            |group_columns, params, agg_states, _, rows| {
+            |group_columns, params, agg_states, rows| {
                 new_count += self.add_groups_inner(
                     state,
                     group_columns,
@@ -289,7 +287,7 @@ impl AggregateHashTable {
             params,
             (&[]).into(),
             row_count,
-            |group_columns, params, _, _, rows| {
+            |group_columns, params, _, rows| {
                 Self::fill_group_hashes(
                     group_columns,
                     &mut state.group_hashes[..rows],
@@ -309,16 +307,16 @@ impl AggregateHashTable {
         Ok(stats)
     }
 
-    /// Calls `f` with each batch of at most `BATCH_SIZE` rows and the offset of its first row.
+    /// Calls `f` with each batch of at most `BATCH_SIZE` rows and its number of rows.
     fn for_each_batch(
         group_columns: ProjectedBlock,
         params: &[ProjectedBlock],
         agg_states: ProjectedBlock,
         row_count: usize,
-        mut f: impl FnMut(ProjectedBlock, &[ProjectedBlock], ProjectedBlock, usize, usize) -> Result<()>,
+        mut f: impl FnMut(ProjectedBlock, &[ProjectedBlock], ProjectedBlock, usize) -> Result<()>,
     ) -> Result<()> {
         if row_count <= BATCH_SIZE {
-            f(group_columns, params, agg_states, 0, row_count)
+            f(group_columns, params, agg_states, row_count)
         } else {
             for start in (0..row_count).step_by(BATCH_SIZE) {
                 let end = (start + BATCH_SIZE).min(row_count);
@@ -341,7 +339,6 @@ impl AggregateHashTable {
                     (&step_group_columns).into(),
                     &step_params,
                     (&agg_states).into(),
-                    start,
                     end - start,
                 )?;
             }
@@ -392,7 +389,6 @@ impl AggregateHashTable {
         {
             new_group_count
         } else {
-            state.row_count = row_count;
             Self::fill_group_hashes(
                 group_columns,
                 &mut state.group_hashes[..row_count],
@@ -417,7 +413,6 @@ impl AggregateHashTable {
         stats: &mut PartialAddStats,
     ) -> Result<()> {
         // The caller filled `state.group_hashes`.
-        state.row_count = row_count;
         stats.rows += row_count;
 
         if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
@@ -498,10 +493,7 @@ impl AggregateHashTable {
 
     /// Index capacity that holds `groups` groups without growing.
     pub fn capacity_for_groups(groups: usize) -> usize {
-        // The index rounds up to whole chunks, a power of two of them: round the slots only once.
-        HashIndex::slots_for(
-            ((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1).max(INITIAL_CAPACITY),
-        )
+        HashIndex::slots_for_groups(groups).max(HashIndex::slots_for(INITIAL_CAPACITY))
     }
 
     /// Bytes held by the groups of the partial table, excluding the index.
@@ -604,7 +596,6 @@ impl AggregateHashTable {
                 .ok()?;
 
             let distinct = representatives.len();
-            state.row_count = distinct;
             group_hash_entries((&keys).into(), &mut state.group_hashes[..distinct]);
             // Functions map dictionary values without changing codes, so distinct codes can
             // produce equal values. Probe representatives normally to find their actual groups
@@ -624,7 +615,6 @@ impl AggregateHashTable {
             state.addresses[row] = group_state.code_addresses[*code as usize];
             state.state_places[row] = group_state.code_places[*code as usize];
         }
-        state.row_count = row_count;
         Some(new_group_count)
     }
 
@@ -728,15 +718,6 @@ impl AggregateHashTable {
         }
 
         Ok(())
-    }
-
-    pub fn merge_result(&mut self, flush_state: &mut PayloadFlushState) -> Result<bool> {
-        if !self.payload.flush(flush_state) {
-            return Ok(false);
-        }
-
-        merge_flushed_states(&self.payload.row_layout, &self.payload.aggrs, flush_state)?;
-        Ok(true)
     }
 
     /// Rebuild the index from the payload with at least `new_capacity` slots.
@@ -883,7 +864,10 @@ mod tests {
                     let first_row_id = payload.row_ids.first_row_id(partition, page_index);
                     for row in 0..page.rows {
                         let id = first_row_id | row as u64;
-                        assert_eq!(payload.row_ptr(id), p.data_ptr(page, row));
+                        assert_eq!(
+                            payload.row_ids.decoder().row_and_states(id).0,
+                            p.data_ptr(page, row)
+                        );
                         assert!(rows.insert(id));
                     }
                 }

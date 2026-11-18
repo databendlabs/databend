@@ -24,7 +24,6 @@ use super::grace::GraceMemoryJoin;
 use super::hybrid::HybridHashJoin;
 use super::hybrid::HybridHashJoinState;
 use super::hybrid::HybridLevelStates;
-use super::memory::NestedLoopJoin;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -84,29 +83,13 @@ impl HashJoinFactory {
         basic_state: Arc<BasicHashJoinState>,
     ) -> Result<Box<dyn GraceMemoryJoin>> {
         match typ {
-            JoinType::Inner => {
-                let settings = self.ctx.get_settings();
-                let nested_loop_desc = self
-                    .desc
-                    .create_nested_loop_desc(&settings, &self.function_ctx)?;
-
-                let inner = InnerHashJoin::create(
-                    &settings,
-                    self.function_ctx.clone(),
-                    self.hash_method.clone(),
-                    self.desc.clone(),
-                    basic_state.clone(),
-                    nested_loop_desc
-                        .as_ref()
-                        .map(|desc| desc.nested_loop_join_threshold)
-                        .unwrap_or_default(),
-                )?;
-
-                match nested_loop_desc {
-                    Some(desc) => Ok(Box::new(NestedLoopJoin::new(inner, basic_state, desc))),
-                    None => Ok(Box::new(inner)),
-                }
-            }
+            JoinType::Inner => Ok(Box::new(InnerHashJoin::create(
+                &self.ctx.get_settings(),
+                self.function_ctx.clone(),
+                self.hash_method.clone(),
+                self.desc.clone(),
+                basic_state,
+            )?)),
             JoinType::Left => Ok(Box::new(OuterLeftHashJoin::create(
                 &self.ctx,
                 self.function_ctx.clone(),

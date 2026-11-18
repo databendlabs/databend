@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -25,7 +24,6 @@ use smallvec::SmallVec;
 
 use crate::AutoCastRules;
 use crate::ColumnIndex;
-use crate::ConstantFolder;
 use crate::DynamicCastRules;
 use crate::ExprVisitor;
 use crate::FoldRules;

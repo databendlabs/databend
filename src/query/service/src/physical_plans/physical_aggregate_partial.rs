@@ -18,8 +18,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
-#[allow(unused_imports)]
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -131,24 +129,11 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn get_desc(&self) -> Result<String> {
-        Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
+        Ok(aggregate_desc(&self.agg_funcs))
     }
 
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        let mut labels = HashMap::with_capacity(2);
-
-        if !self.group_by_display.is_empty() {
-            labels.insert(String::from("Grouping keys"), self.group_by_display.clone());
-        }
-
-        if !self.agg_funcs.is_empty() {
-            labels.insert(
-                String::from("Aggregate Functions"),
-                self.agg_funcs.iter().map(|x| x.display.clone()).collect(),
-            );
-        }
-
-        Ok(labels)
+        Ok(aggregate_labels(&self.group_by_display, &self.agg_funcs))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -275,4 +260,27 @@ impl AggregatePartial {
         }
         Some((resolved.into(), *limit))
     }
+}
+
+/// The description of a partial or final aggregate in a profile.
+pub(crate) fn aggregate_desc(agg_funcs: &[AggregateFunctionDesc]) -> String {
+    agg_funcs.iter().map(|x| x.display.clone()).join(", ")
+}
+
+/// The labels of a partial or final aggregate in a profile.
+pub(crate) fn aggregate_labels(
+    group_by_display: &[String],
+    agg_funcs: &[AggregateFunctionDesc],
+) -> HashMap<String, Vec<String>> {
+    let mut labels = HashMap::with_capacity(2);
+    if !group_by_display.is_empty() {
+        labels.insert(String::from("Grouping keys"), group_by_display.to_vec());
+    }
+    if !agg_funcs.is_empty() {
+        labels.insert(
+            String::from("Aggregate Functions"),
+            agg_funcs.iter().map(|x| x.display.clone()).collect(),
+        );
+    }
+    labels
 }

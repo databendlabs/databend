@@ -34,7 +34,6 @@ use crate::FunctionDomain;
 use crate::FunctionSignature;
 use crate::Scalar;
 use crate::Value;
-use crate::function_stat::DeriveStat;
 use crate::function_stat::ScalarFunctionStat;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -75,7 +74,7 @@ impl ScalarFunction for Box<dyn ScalarFunction> {
 }
 
 impl ScalarFunctionDomain for FunctionDomain<AnyType> {
-    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, _ctx: &FunctionContext, _domains: &[Domain]) -> FunctionDomain<AnyType> {
         self.clone()
     }
 }
@@ -294,7 +293,7 @@ where T: ScalarFunction
 pub struct ImplByEvaluator(pub &'static str);
 
 impl ScalarFunction for ImplByEvaluator {
-    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    fn eval(&self, _args: &[Value<AnyType>], _ctx: &mut EvalContext) -> Value<AnyType> {
         unreachable!("`{}` should be handled by the `Evaluator`", self.0)
     }
 }

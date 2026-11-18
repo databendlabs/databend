@@ -75,4 +75,5 @@ pub use transform_spatial_join::TransformSpatialJoinProbe;
 pub use transform_srf::TransformSRF;
 pub use transform_udf_server::TransformUdfServer;
 pub(crate) use utils::filter_block;
+pub(crate) use utils::merge_with_constant_row;
 pub use window::*;

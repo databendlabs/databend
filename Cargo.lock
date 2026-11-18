@@ -4291,7 +4291,6 @@ dependencies = [
  "tantivy",
  "tantivy-jieba",
  "tempfile",
- "thrift",
  "tokio",
  "typetag",
  "uuid",
@@ -4316,6 +4315,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline",
  "databend-common-pipeline-transforms",
+ "databend-common-statistics",
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
@@ -4440,6 +4440,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-pipeline",
  "databend-common-settings",
+ "databend-common-statistics",
  "databend-common-storage",
  "databend-storages-common-cache",
  "databend-storages-common-pruner",
@@ -15088,15 +15089,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "threadpool"
-version = "1.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
-dependencies = [
- "num_cpus",
-]
-
-[[package]]
 name = "thrift"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15104,9 +15096,7 @@ checksum = "7e54bc85fc7faa8bc175c4bab5b92ba8d9a3ce893d0e9f42cc455c8ab16a9e09"
 dependencies = [
  "byteorder",
  "integer-encoding 3.0.4",
- "log",
  "ordered-float 2.10.1",
- "threadpool",
 ]
 
 [[package]]

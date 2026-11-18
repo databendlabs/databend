@@ -477,7 +477,6 @@ terminal_size = "0.4.2"
 test-harness = "0.3.0"
 testcontainers = "0.23"
 thiserror = { version = "1" }
-thrift = "0.17.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
 tikv-jemalloc-sys = "0.6.0"
 tokio = { version = "1.54.1", features = ["full"] }

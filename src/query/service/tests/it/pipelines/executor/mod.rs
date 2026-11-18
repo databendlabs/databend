@@ -15,3 +15,4 @@
 mod executor_graph;
 mod pipeline_executor;
 mod pipeline_pulling_executor;
+mod queries_executor;

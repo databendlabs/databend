@@ -20,6 +20,8 @@ use crate::ast::Statement;
 use crate::ast::quote::QuotedString;
 use crate::parser::Dialect;
 use crate::parser::ParseMode;
+use crate::parser::log_sql::LITERAL_BUDGET;
+use crate::parser::log_sql::LiteralRuns;
 use crate::parser::run_parser;
 use crate::parser::script::ScriptBlockOrStmt;
 use crate::parser::script::script_block_or_stmt;
@@ -163,7 +165,11 @@ pub(crate) fn mask_sql_inner(sql: &str) -> (String, SqlSecrets) {
 }
 
 fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
-    let mut masked = Masked::new(sql);
+    mask_tokens(Masked::new(sql), nested)
+}
+
+fn mask_tokens(mut masked: Masked<'_>, nested: NestedMasker) -> (String, SqlSecrets) {
+    let sql = masked.sql;
     let mut secrets = SqlSecrets::default();
     let mut auth = UserAuth::Outside;
     // Parenthesis depth inside `HEADERS = (...)`; 0 when outside.
@@ -211,9 +217,17 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
                     masked.replace(start..sql.len(), "'***'");
                     break;
                 }
+                // Recovery keeps `prev`, so a later mask can still reach
+                // back to an option name before the lexer error.
+                if let Some(literals) = &mut masked.literals {
+                    literals.interrupt();
+                }
                 continue;
             }
         };
+        if let Some(literals) = &mut masked.literals {
+            literals.observe(&token);
+        }
         let kind = token.kind;
         if kind == TokenKind::EOI {
             break;
@@ -424,10 +438,9 @@ fn is_query_head(kind: TokenKind) -> bool {
     )
 }
 
-/// Masks SQL for request logs written before planning, without parsing it.
-///
-/// Statements are masked as [`mask_sql_secrets`] does, and script blocks
-/// (`BEGIN` / `DECLARE`) hide all literal values, which keeps their structure.
+/// Formats SQL for INFO logs before planning. A single token scan masks
+/// credentials and abbreviates large literals and comma-separated literal lists.
+/// Script blocks (`BEGIN` / `DECLARE`) hide all literal values as before.
 ///
 /// TODO: unlike [`mask_raw_sql_secrets`], this does not parse, so these logs
 /// may still contain credentials of:
@@ -438,8 +451,19 @@ fn is_query_head(kind: TokenKind) -> bool {
 ///
 /// Query history and error messages are not affected: they are masked from
 /// the AST, or by [`mask_raw_sql_secrets`] when parsing fails.
-pub fn mask_log_sql_secrets(sql: &str) -> String {
-    mask_log_inner(sql).0
+pub fn format_sql_for_log(sql: &str) -> String {
+    if starts_script_block(sql) {
+        return mask_program_literals_with(sql, mask_log_inner).0;
+    }
+    if sql.len() <= LITERAL_BUDGET {
+        return mask_sql_with(sql, mask_log_inner).0;
+    }
+    let mut literals = LiteralRuns::default();
+    let masked = Masked {
+        literals: Some(&mut literals),
+        ..Masked::new(sql)
+    };
+    mask_tokens(masked, mask_log_inner).0
 }
 
 fn mask_log_inner(sql: &str) -> (String, SqlSecrets) {
@@ -810,6 +834,7 @@ struct Masked<'a> {
     sql: &'a str,
     out: String,
     copied: usize,
+    literals: Option<&'a mut LiteralRuns>,
 }
 
 impl<'a> Masked<'a> {
@@ -818,10 +843,22 @@ impl<'a> Masked<'a> {
             sql,
             out: String::new(),
             copied: 0,
+            literals: None,
+        }
+    }
+
+    fn flush_literals_before(&mut self, end: usize) {
+        if let Some(literals) = &mut self.literals {
+            for (range, marker) in literals.drain_before(end) {
+                self.out.push_str(&self.sql[self.copied..range.start]);
+                self.out.push_str(&marker);
+                self.copied = range.end;
+            }
         }
     }
 
     fn replace(&mut self, range: Range<usize>, text: &str) {
+        self.flush_literals_before(range.start);
         if range.start < self.copied {
             return;
         }
@@ -831,6 +868,7 @@ impl<'a> Masked<'a> {
     }
 
     fn finish(mut self) -> String {
+        self.flush_literals_before(self.sql.len());
         if self.copied == 0 {
             return self.sql.to_string();
         }
@@ -841,7 +879,7 @@ impl<'a> Masked<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::mask_log_sql_secrets;
+    use super::format_sql_for_log;
     use super::mask_raw_sql_secrets;
     use super::mask_raw_sql_with_secrets;
     use super::mask_sql_secrets;
@@ -994,6 +1032,89 @@ mod tests {
     }
 
     #[test]
+    fn format_sql_for_log_masks_credentials_after_lexer_error() {
+        let key = "password".repeat(150);
+        let sql =
+            format!("SELECT * FROM 's3://bucket/data' (CONNECTION = ('{key}' ☃ = 'leak_pw'))");
+        assert_eq!(
+            format_sql_for_log(&sql),
+            format!("SELECT * FROM 's3://bucket/data' (CONNECTION = ('{key}' = 'le***pw'))")
+        );
+    }
+
+    #[test]
+    fn format_sql_for_log_counts_omitted_items() {
+        let list = |value, count| vec![value; count].join(", ");
+        for (sql, expected) in [
+            (
+                format!("SELECT [{}]::VECTOR(1536) AS v", list("-0.123456", 1536)),
+                "SELECT [-0.123456, -0.123456, -0.123456, ... (+1533 more)]::VECTOR(1536) AS v",
+            ),
+            (
+                format!(
+                    "SELECT * FROM t WHERE id IN ({}) AND active",
+                    list("42", 1000)
+                ),
+                "SELECT * FROM t WHERE id IN (42, 42, 42, ... (+997 more)) AND active",
+            ),
+            (
+                format!("INSERT INTO t VALUES {};", list("(1, 'abc')", 500)),
+                "INSERT INTO t VALUES (1, 'abc'), (1, 'abc'), (1, 'abc'), ... (+497 more);",
+            ),
+            (
+                format!("SELECT '{}' LIMIT 5", "é".repeat(513)),
+                "SELECT '…' /* 1026 bytes */ LIMIT 5",
+            ),
+        ] {
+            assert_eq!(format_sql_for_log(&sql), expected);
+            assert_eq!(mask_sql_secrets(&sql), sql);
+        }
+        let sql = format!("SELECT f({}, now(), other_column)", list("1234", 500));
+        assert_eq!(
+            format_sql_for_log(&sql),
+            "SELECT f(1234, 1234, 1234, ... (+497 more), now(), other_column)"
+        );
+        for sql in [
+            "SELECT [1, 2, 3, 4]".to_owned(),
+            format!("INSERT INTO t VALUES {}", list("(1, now())", 500)),
+            format!("SELECT `{}`", "a".repeat(1025)),
+        ] {
+            assert_eq!(format_sql_for_log(&sql), sql);
+        }
+    }
+
+    #[test]
+    fn format_sql_for_log_keeps_mixed_items_after_long_literal_runs() {
+        let rows = vec!["(1, 'abc')"; 500].join(", ");
+        let vector = vec!["0.123456"; 1536].join(", ");
+        let sql = format!("INSERT INTO t VALUES {rows}, (2, now()), (3, f([{vector}]))");
+        assert_eq!(
+            format_sql_for_log(&sql),
+            "INSERT INTO t VALUES (1, 'abc'), (1, 'abc'), (1, 'abc'), ... (+497 more), (2, now()), (3, f([0.123456, 0.123456, 0.123456, ... (+1533 more)]))"
+        );
+
+        // The mixed item itself can contain an abbreviated list.
+        let sql = format!("INSERT INTO t VALUES {rows}, (2, f([{vector}]))");
+        assert_eq!(
+            format_sql_for_log(&sql),
+            "INSERT INTO t VALUES (1, 'abc'), (1, 'abc'), (1, 'abc'), ... (+497 more), (2, f([0.123456, 0.123456, 0.123456, ... (+1533 more)]))"
+        );
+    }
+
+    #[test]
+    fn format_sql_for_log_masks_before_abbreviating() {
+        let secret = "private".repeat(150);
+        let sql = format!(
+            "SELECT '{}' AS body; CREATE USER u IDENTIFIED BY '{secret}'",
+            "x".repeat(1025)
+        );
+        assert_eq!(
+            format_sql_for_log(&sql),
+            "SELECT '…' /* 1025 bytes */ AS body; CREATE USER u IDENTIFIED BY '***'"
+        );
+    }
+
+    #[test]
     fn test_mask_log_sql_url_credentials() {
         // Pre-planning request logs do not parse SQL; URL credentials in
         // queries and DML must still be hidden.
@@ -1002,7 +1123,7 @@ mod tests {
             "INSERT INTO t SELECT $1 FROM 'https://u:leak_pw@h.test/x.csv'",
             "COPY INTO t FROM 'https://u:leak_pw@h.test/x.csv'",
         ] {
-            let masked = mask_log_sql_secrets(sql);
+            let masked = format_sql_for_log(sql);
             assert!(!masked.contains("leak_pw"), "{masked}");
             assert!(masked.contains("h.test/x.csv"), "{masked}");
         }
@@ -1059,7 +1180,7 @@ mod tests {
         let nested = "EXECUTE IMMEDIATE $$CREATE USER u\nIDENTIFIED\nBY 'leak_pw' invalid$$";
         assert!(!mask_raw_sql_secrets(nested).contains("leak_pw"));
         let block = "DECLARE p STRING DEFAULT 'leak_pw'; BEGIN EXECUTE IMMEDIATE concat('SELECT ', p); END;";
-        for masked_block in [mask_raw_sql_secrets(block), mask_log_sql_secrets(block)] {
+        for masked_block in [mask_raw_sql_secrets(block), format_sql_for_log(block)] {
             assert!(!masked_block.contains("leak_pw"));
             assert!(masked_block.contains("EXECUTE IMMEDIATE"), "{masked_block}");
         }
