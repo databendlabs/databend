@@ -60,10 +60,7 @@ impl StateAddr {
         F: FnOnce() -> T,
         T: Send + 'static,
     {
-        unsafe {
-            let ptr = self.0.cast::<T>();
-            std::ptr::write(ptr, f());
-        }
+        self.write_state(f())
     }
 
     #[inline]

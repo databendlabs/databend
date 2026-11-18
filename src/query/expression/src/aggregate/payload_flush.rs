@@ -181,10 +181,6 @@ impl RowTypeVisitor for FlushColumn<'_> {
 }
 
 impl PartitionedPayload {
-    pub fn aggregate_flush_bucket(&self, bucket: usize) -> Result<DataBlock> {
-        self.payloads[bucket].aggregate_flush_all()
-    }
-
     pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
         let mut blocks = Vec::with_capacity(self.partition_count());
 
@@ -195,7 +191,7 @@ impl PartitionedPayload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.payloads[0].empty_block(0));
+            return Ok(self.payloads[0].empty_block());
         }
         DataBlock::concat(&blocks)
     }
@@ -205,7 +201,7 @@ impl Payload {
     pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
         // A PayloadFlushState is over 100KB, do not allocate one for an empty payload.
         if self.len() == 0 {
-            return Ok(self.empty_block(0));
+            return Ok(self.empty_block());
         }
 
         let mut state = PayloadFlushState::default();
@@ -226,12 +222,12 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block(0));
+            return Ok(self.empty_block());
         }
         DataBlock::concat(&blocks)
     }
 
-    pub fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
+    fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
         if !self.flush(state) {
             return Ok(None);
         }
@@ -262,7 +258,7 @@ impl Payload {
         Ok(Some(DataBlock::new(entries, row_count)))
     }
 
-    pub fn flush(&self, flush_state: &mut PayloadFlushState) -> bool {
+    pub(super) fn flush(&self, flush_state: &mut PayloadFlushState) -> bool {
         if !self.scan_rows(flush_state) {
             return false;
         }

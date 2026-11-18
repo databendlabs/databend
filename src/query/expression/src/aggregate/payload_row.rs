@@ -88,7 +88,6 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
     }
 }
 
-/// This serialize column into row format by fixed size
 /// Runs `$body` with `$T` the value type of a frame of reference / dictionary encodable
 /// fixed size type, `$other` for other types.
 macro_rules! with_encoded_fixed_size_type {

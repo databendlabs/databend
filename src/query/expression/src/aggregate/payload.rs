@@ -78,7 +78,6 @@ pub struct Payload {
     /// `PartitionMask::Route`: its rows all go to the final aggregate of its partition.
     pub(super) routed_partitions: usize,
     max_page_size: usize,
-    // if set, the payload contains at least duplicate rows
 }
 
 /// The ids of the next rows of a page, reserved one by one by a probe: see `RowReserver`.
@@ -112,9 +111,9 @@ pub(super) struct Page {
     // ids of it. A page must not reallocate once its rows are published.
     data: PageData,
     pub(super) rows: usize,
-    // state_offset = state_rows * agg_len
-    // which mark that the offset to clean the agg states
-    state_offsets: usize,
+    /// The aggregate states initialized, of the rows in order: `rows * aggregates` once every
+    /// row has its states. Only these are dropped with the page.
+    initialized_states: usize,
 }
 
 /// The bytes of a page, aligned to `StatesRegion::page_align`.
@@ -154,7 +153,7 @@ impl Drop for PageData {
 
 impl Page {
     fn is_partial_state(&self, agg_len: usize) -> bool {
-        self.rows * agg_len != self.state_offsets
+        self.rows * agg_len != self.initialized_states
     }
 
     /// The address of the first row.
@@ -287,7 +286,7 @@ impl Payload {
                         self.row_layout.states.page_align(),
                     ),
                     rows: 0,
-                    state_offsets: 0,
+                    initialized_states: 0,
                 });
             }
         }
@@ -525,14 +524,14 @@ impl Payload {
                     if source_states.is_none() || aggr.state().need_manual_drop() {
                         aggr.init_state(AggrState::new(place, loc));
                     }
-                    page.state_offsets += 1;
+                    page.initialized_states += 1;
                 }
             }
 
             #[cfg(debug_assertions)]
             {
                 for page in self.pages.iter() {
-                    assert_eq!(page.rows * self.aggrs.len(), page.state_offsets);
+                    assert_eq!(page.rows * self.aggrs.len(), page.initialized_states);
                 }
             }
         }
@@ -708,13 +707,14 @@ impl Payload {
         let agg_len = self.aggrs.len();
         for payload in &mut bucket_payloads {
             for page in &mut payload.pages {
-                page.state_offsets = page.rows * agg_len;
+                page.initialized_states = page.rows * agg_len;
             }
         }
         bucket_payloads
     }
 
-    pub fn empty_block(&self, fake_rows: usize) -> DataBlock {
+    /// A block of no rows with the columns of `aggregate_flush`.
+    pub(super) fn empty_block(&self) -> DataBlock {
         assert_eq!(
             self.aggrs.is_empty(),
             self.row_layout.states_layout.is_none()
@@ -726,17 +726,17 @@ impl Payload {
             .iter()
             .flat_map(|layout| layout.serialize_type.iter())
             .map(|serde_type| {
-                ColumnBuilder::repeat_default(&serde_type.data_type(), fake_rows)
+                ColumnBuilder::with_capacity(&serde_type.data_type(), 0)
                     .build()
                     .into()
             })
             .chain(
                 self.group_types
                     .iter()
-                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build().into()),
+                    .map(|t| ColumnBuilder::with_capacity(t, 0).build().into()),
             )
             .collect();
-        DataBlock::new(entries, fake_rows)
+        DataBlock::new(entries, 0)
     }
 }
 
@@ -784,14 +784,16 @@ impl Drop for Payload {
                     if is_partial_state && idx == 0 {
                         info!(
                             "Cleaning partial page, state_offsets: {}, row: {}, agg length: {}",
-                            page.state_offsets,
+                            page.initialized_states,
                             page.rows,
                             self.aggrs.len()
                         );
                     }
-                    for row in 0..page.state_offsets.div_ceil(self.aggrs.len()) {
+                    for row in 0..page.initialized_states.div_ceil(self.aggrs.len()) {
                         // When OOM, some states are not initialized, we don't need to destroy them
-                        if is_partial_state && row * self.aggrs.len() + idx >= page.state_offsets {
+                        if is_partial_state
+                            && row * self.aggrs.len() + idx >= page.initialized_states
+                        {
                             continue 'FOR;
                         }
                         let addr = self.data_ptr(page, row).state_addr(&self.row_layout);
