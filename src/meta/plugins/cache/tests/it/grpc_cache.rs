@@ -72,7 +72,7 @@ async fn test_cache_basic() -> anyhow::Result<()> {
 
     cli.upsert_kv(UpsertKV::update("pq/d", b"d")).await?;
 
-    let mut c = Cache::new(client(), "pp", "test").await;
+    let c = Cache::new(client(), "pp", "test").await;
 
     // Check initial state
 
@@ -184,7 +184,7 @@ async fn test_ready_cache_read_during_reconnect() -> anyhow::Result<()> {
         .upsert_kv(UpsertKV::update("ready/a", b"old"))
         .await?;
     let watch_client = make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone()])?;
-    let mut cache = Cache::new(watch_client, "ready", "reconnect-ready").await;
+    let cache = Cache::new(watch_client, "ready", "reconnect-ready").await;
     assert!(cache.try_get("ready/a").await?.is_some());
 
     let mut stopped = tcs.remove(0);
