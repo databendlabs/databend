@@ -59,7 +59,6 @@ use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_plugin_cache::Cache;
 use log::debug;
-use tokio::sync::Mutex;
 
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;
@@ -80,11 +79,11 @@ pub struct UserApiProvider {
     /// When UserApiProvider is created, the cache will be created and initialized.
     /// The `Cache` instance internally stores the status about if databend-meta service supports cache.
     /// If not, every access returns [`Unsupported`] error.
-    ownership_cache: Option<Arc<Mutex<Cache>>>,
+    ownership_cache: Option<Arc<Cache>>,
 
     external_access_cache_tenant: Tenant,
-    pub(crate) network_rule_cache: Option<Mutex<Cache>>,
-    pub(crate) external_access_integration_cache: Option<Mutex<Cache>>,
+    pub(crate) network_rule_cache: Option<Cache>,
+    pub(crate) external_access_integration_cache: Option<Cache>,
 
     /// The watched users and global settings of the node tenant.
     watched: Watched,
@@ -141,7 +140,7 @@ impl UserApiProvider {
 
         let cache = if cache_config.meta_service_ownership_cache {
             let cache = RoleMgr::new_cache(client.clone()).await;
-            let cache = Arc::new(Mutex::new(cache));
+            let cache = Arc::new(cache);
             Some(cache)
         } else {
             None
@@ -177,7 +176,7 @@ impl UserApiProvider {
                     ExternalAccessIntegrationResource::TYPE,
                 )
                 .await;
-                (Some(Mutex::new(rules)), Some(Mutex::new(integrations)))
+                (Some(rules), Some(integrations))
             } else {
                 (None, None)
             };
@@ -231,23 +230,20 @@ impl UserApiProvider {
     pub(crate) async fn external_access_values(
         &self,
         tenant: &Tenant,
-        cache: &Option<Mutex<Cache>>,
+        cache: &Option<Cache>,
         keys: impl Iterator<Item = String>,
     ) -> Result<Vec<Option<SeqV>>> {
         let mut values = Vec::with_capacity(keys.size_hint().0);
         let mut missing_keys = Vec::new();
-        {
-            let mut cache = cache
-                .as_ref()
-                .filter(|_| tenant == &self.external_access_cache_tenant)
-                .and_then(|cache| cache.try_lock().ok());
-            for key in keys {
-                let value = cache.as_mut().and_then(|cache| cache.try_get_ready(&key));
-                if value.is_none() {
-                    missing_keys.push(key);
-                }
-                values.push(value);
+        let cache = cache
+            .as_ref()
+            .filter(|_| tenant == &self.external_access_cache_tenant);
+        for key in keys {
+            let value = cache.and_then(|cache| cache.try_get_ready(&key));
+            if value.is_none() {
+                missing_keys.push(key);
             }
+            values.push(value);
         }
         if !missing_keys.is_empty() {
             let fetched = self
