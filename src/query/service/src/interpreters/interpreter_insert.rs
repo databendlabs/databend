@@ -590,9 +590,7 @@ impl Interpreter for InsertInterpreter {
 
                     let explain_plan = {
                         let metadata = metadata.read();
-                        select_plan
-                            .format(&metadata, Default::default())?
-                            .format_pretty()?
+                        select_plan.format_for_log(&metadata)?
                     };
 
                     info!("Insert select plan: \n{}", explain_plan);
