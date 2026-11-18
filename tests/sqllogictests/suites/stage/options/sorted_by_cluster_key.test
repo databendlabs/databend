@@ -363,6 +363,15 @@ SELECT count(*), sum(v) FROM t_sorted_by_cluster_key
 statement ok
 SET max_threads = 8
 
+# A Parquet file without rows is still listed in the COPY result.
+statement ok
+CREATE OR REPLACE TABLE t_sorted_by_cluster_key(k INT NULL, v INT NULL) CLUSTER BY (k)
+
+query ?????
+COPY INTO t_sorted_by_cluster_key FROM @data/parquet/empty_rows/ FILES = ('empty.parquet') FILE_FORMAT = (TYPE = PARQUET) SORTED_BY_CLUSTER_KEY = TRUE
+----
+parquet/empty_rows/empty.parquet 0 0 NULL NULL
+
 # Parquet keys are checked as the source reads them, before NULL_IF and the STRUCT to VARIANT
 # conversion apply, so these are rejected.
 statement error .*does not support Parquet files with NULL_IF
