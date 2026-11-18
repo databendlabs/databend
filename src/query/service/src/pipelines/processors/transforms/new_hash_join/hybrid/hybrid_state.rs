@@ -26,8 +26,16 @@ use databend_common_expression::DataBlock;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use crate::pipelines::processors::transforms::new_hash_join::memory::BuildArena;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
+
+/// A build chunk that `final_build` had inserted into the hash table when the join switched to
+/// grace mode, with the arena holding the encoded keys of its rows.
+pub struct InsertedChunk {
+    pub block: DataBlock,
+    pub arena: BuildArena,
+}
 
 /// States shared by all processors of one hybrid hash join level.
 #[derive(Clone)]
@@ -61,11 +69,18 @@ pub struct HybridHashJoinState {
     // Once set, it should never be cleared, so runtime filters stay disabled
     // for the lifetime of this join.
     pub ever_spilled: AtomicBool,
+    // Set by a processor that detects memory pressure while the in-memory hash table is being
+    // built. Processors stop inserting once it is set; after the stage barrier the partial hash
+    // table is discarded and the build final stage runs again in grace mode. Never cleared:
+    // a processor that has switched to grace mode no longer acts on it.
+    final_build_spill_requested: AtomicBool,
     // Count logical build input before spill repartitioning so the runtime-filter packet can
     // globalize build-side emptiness without depending on in-memory state that spill resets.
     build_input_rows: AtomicUsize,
 
     pub transition_queue: ConcurrentQueue<DataBlock>,
+    // Inserted build chunks to move into grace mode after a spill triggered in `final_build`.
+    pub inserted_queue: ConcurrentQueue<InsertedChunk>,
 
     // Owned here so that every restore partition of the parent grace join gets fresh
     // next-level states: they are dropped together with this level's grace mode.
@@ -95,8 +110,10 @@ impl HybridHashJoinState {
             factory,
             spilled: AtomicBool::new(false),
             ever_spilled: AtomicBool::new(false),
+            final_build_spill_requested: AtomicBool::new(false),
             build_input_rows: AtomicUsize::new(0),
             transition_queue: ConcurrentQueue::unbounded(),
+            inserted_queue: ConcurrentQueue::unbounded(),
             next_level: Mutex::new(None),
         }))
     }
@@ -116,6 +133,17 @@ impl HybridHashJoinState {
 
     pub fn has_spilled_once(&self) -> bool {
         self.ever_spilled.load(Ordering::Acquire)
+    }
+
+    /// Returns true for the one call that sets the request.
+    pub fn request_final_build_spill(&self) -> bool {
+        !self
+            .final_build_spill_requested
+            .swap(true, Ordering::AcqRel)
+    }
+
+    pub fn final_build_spill_requested(&self) -> bool {
+        self.final_build_spill_requested.load(Ordering::Acquire)
     }
 
     pub fn add_build_input_rows(&self, rows: usize) {

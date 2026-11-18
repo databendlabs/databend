@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
@@ -44,13 +43,17 @@ impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
         }
     }
 
-    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
-        let num_rows = keys.num_rows();
-        let keys = ProjectedBlock::from(keys.columns());
-        let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
-        let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
+    /// Insert `num_rows` keys encoded by the hash method of this table.
+    pub fn insert(
+        &self,
+        keys_state: &KeysState,
+        num_rows: usize,
+        chunk: usize,
+        arena: &mut Vec<u8>,
+    ) -> Result<()> {
+        let build_keys_iter = self.hash_method.build_keys_iter(keys_state)?;
 
-        let space_size = match &keys_state {
+        let space_size = match keys_state {
             // safe to unwrap(): offset.len() >= 1.
             KeysState::Column(Column::Bitmap(col)) => col.data().len(),
             KeysState::Column(Column::Binary(col)) => col.data().len(),

@@ -121,4 +121,10 @@ impl HashMethodKind {
             HashMethodKind::T(v) => v.name(),
         })
     }
+
+    pub fn build_keys_state(&self, columns: ProjectedBlock, rows: usize) -> Result<KeysState> {
+        with_hash_method!(|T| match self {
+            HashMethodKind::T(v) => v.build_keys_state(columns, rows),
+        })
+    }
 }

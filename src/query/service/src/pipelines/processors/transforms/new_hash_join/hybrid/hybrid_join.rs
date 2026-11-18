@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::PoisonError;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
@@ -24,13 +26,17 @@ use databend_common_expression::HashMethodKind;
 use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
+use log::info;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::GraceHashJoin;
+use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::new_hash_join::encoded_build::EncodedBuild;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::hybrid::hybrid_state::HybridHashJoinState;
+use crate::pipelines::processors::transforms::new_hash_join::hybrid::hybrid_state::InsertedChunk;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::sessions::QueryContext;
@@ -65,6 +71,15 @@ pub struct HybridHashJoin {
     hash_method_kind: HashMethodKind,
     desc: Arc<HashJoinDesc>,
     join_type: JoinType,
+
+    // Grace mode spills build rows in this form. Blocks of the top level are encoded first,
+    // restored blocks of the lower levels already are.
+    encoded_build: Arc<EncodedBuild>,
+
+    // Set when this join can spill while building the hash table. Only the top-level join can:
+    // switching needs a stage barrier to discard the partial hash table, which restore rounds
+    // do not have.
+    spill_in_final_build: bool,
 }
 
 unsafe impl Send for HybridHashJoin {}
@@ -85,14 +100,34 @@ impl HybridHashJoin {
         HybridHashJoin {
             ctx,
             desc,
-            state,
             join_type,
             function_ctx,
             basic_state,
             memory_settings,
             hash_method_kind,
+            encoded_build: state.factory.encoded_build(),
+            state,
             mode: HybridJoinMode::Memory(memory_join),
+            spill_in_final_build: false,
         }
+    }
+
+    /// Allow spilling while the in-memory hash table is built. The caller must run the build
+    /// final stage again whenever `final_build_spill_requested` is set after it.
+    pub fn with_spill_in_final_build(mut self) -> HybridHashJoin {
+        self.spill_in_final_build = true;
+        self
+    }
+
+    fn can_spill(&self) -> bool {
+        // Grace partitions rows by join keys. Without keys every row lands in the same
+        // partition, so spilling cannot shrink the working set and would only round-trip
+        // both sides (possibly blocks without any columns) through storage.
+        self.state.can_next_layer_join() && !self.desc.build_keys.is_empty()
+    }
+
+    fn need_final_build_spill(&self) -> bool {
+        self.spill_in_final_build && self.can_spill() && self.memory_settings.check_spill()
     }
 
     fn add_transition_work(&self) -> Result<()> {
@@ -138,7 +173,16 @@ impl HybridHashJoin {
         if let HybridJoinMode::Grace(grace_join) = &mut self.mode {
             while let Ok(memory_block) = self.state.transition_queue.pop() {
                 check_interrupt()?;
-                grace_join.add_block(Some(memory_block))?;
+                let block = encode_build(&self.encoded_build, &self.basic_state, memory_block)?;
+                grace_join.add_block(Some(block))?;
+            }
+
+            while let Ok(chunk) = self.state.inserted_queue.pop() {
+                check_interrupt()?;
+                let block = self
+                    .encoded_build
+                    .encode_inserted(chunk.block, &chunk.arena)?;
+                grace_join.add_block(Some(block))?;
             }
 
             if finished {
@@ -166,6 +210,7 @@ impl HybridHashJoin {
             self.function_ctx.clone(),
             self.hash_method_kind.clone(),
             self.desc.clone(),
+            self.encoded_build.clone(),
             next_level.grace,
             sub_hybrid,
             self.state.level * 4,
@@ -190,18 +235,17 @@ impl Join for HybridHashJoin {
             HybridJoinMode::Grace(grace_join) => match finished {
                 true => self.do_transition_work(finished),
                 false => {
-                    grace_join.add_block(data)?;
+                    let block = data
+                        .map(|block| encode_build(&self.encoded_build, &self.basic_state, block))
+                        .transpose()?;
+                    grace_join.add_block(block)?;
                     self.do_transition_work(false)
                 }
             },
             HybridJoinMode::Memory(memory_join) => {
                 memory_join.add_block(data)?;
 
-                // Grace partitions rows by join keys. Without keys every row lands in the same
-                // partition, so spilling cannot shrink the working set and would only round-trip
-                // both sides (possibly blocks without any columns) through storage.
-                if self.state.can_next_layer_join()
-                    && !self.desc.build_keys.is_empty()
+                if self.can_spill()
                     && (self.memory_settings.check_spill() || self.state.check_spilled())
                 {
                     self.switch_to_grace_mode(finished)?;
@@ -220,10 +264,77 @@ impl Join for HybridHashJoin {
             self.switch_to_grace_mode(true)?;
         }
 
-        match &mut self.mode {
-            HybridJoinMode::Memory(join) => join.final_build(),
-            HybridJoinMode::Grace(join) => join.final_build(),
+        if matches!(self.mode, HybridJoinMode::Memory(_)) {
+            if self.state.final_build_spill_requested() {
+                return Ok(None);
+            }
+
+            if self.need_final_build_spill() {
+                // Other processors may be inserting into the shared hash table right now, so
+                // only stop here; the switch happens at the stage barrier.
+                if self.state.request_final_build_spill() {
+                    info!(
+                        "HashJoin spill triggered while building hash table, level: {}",
+                        self.state.level
+                    );
+                }
+                return Ok(None);
+            }
         }
+
+        match &mut self.mode {
+            HybridJoinMode::Grace(join) => join.final_build(),
+            HybridJoinMode::Memory(join) => join.final_build(),
+        }
+    }
+
+    fn final_build_spill_requested(&self) -> bool {
+        // Once this processor has switched to grace mode, the request has been served.
+        matches!(self.mode, HybridJoinMode::Memory(_)) && self.state.final_build_spill_requested()
+    }
+
+    fn prepare_final_build_spill(&mut self) -> Result<()> {
+        let locked = self.basic_state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        // Every processor calls this; the first one does the work and marks the join spilled.
+        if self.state.check_spilled() {
+            return Ok(());
+        }
+
+        // Every processor has left `final_build`, so each chunk is either untouched or inserted
+        // into the hash table with its arena recorded. The arenas hold the encoded keys that
+        // grace mode spills; everything else built from the chunks can go now.
+        *self.basic_state.hash_table.as_mut() = HashJoinHashTable::Null;
+        self.basic_state.columns.as_mut().clear();
+        self.basic_state.column_types.as_mut().clear();
+
+        let mut arenas = std::mem::take(self.basic_state.arenas.as_mut())
+            .into_iter()
+            .map(|arena| (arena.chunk_index, arena))
+            .collect::<HashMap<_, _>>();
+
+        for (chunk_index, block) in std::mem::take(self.basic_state.chunks.as_mut())
+            .into_iter()
+            .enumerate()
+        {
+            let pushed = match arenas.remove(&chunk_index) {
+                None => self.state.transition_queue.push(block).is_ok(),
+                Some(arena) => {
+                    let chunk = InsertedChunk { block, arena };
+                    self.state.inserted_queue.push(chunk).is_ok()
+                }
+            };
+            if !pushed {
+                return Err(ErrorCode::Internal(
+                    "push unbound concurrent queue is error.",
+                ));
+            }
+        }
+
+        // The next build final round sees this and switches every processor to grace mode.
+        self.state.set_spilled();
+        Ok(())
     }
 
     fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
@@ -316,5 +427,17 @@ impl GraceMemoryJoin for HybridHashJoin {
                 self.mode = HybridJoinMode::Memory(new_memory_join);
             }
         }
+    }
+}
+
+/// Bring a block of this level's build input into the form grace mode spills.
+fn encode_build(
+    encoded_build: &EncodedBuild,
+    basic_state: &BasicHashJoinState,
+    block: DataBlock,
+) -> Result<DataBlock> {
+    match basic_state.encoded_build {
+        true => Ok(block),
+        false => encoded_build.encode(block),
     }
 }
