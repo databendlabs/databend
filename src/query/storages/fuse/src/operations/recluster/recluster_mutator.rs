@@ -449,12 +449,6 @@ impl ReclusterMutator {
         }
     }
 
-    /// Used for tests that exercise the optional block-reduction selector.
-    pub fn with_block_reduction(mut self, enabled: bool) -> Self {
-        self.properties.enable_block_reduction = enabled;
-        self
-    }
-
     /// Used for tests that compare horizontal and vertical task selection.
     pub fn with_vertical_kind(mut self, vertical_kind: Option<VerticalReclusterKind>) -> Self {
         self.properties.vertical_kind = vertical_kind;
@@ -927,21 +921,17 @@ impl ReclusterMutator {
         }
 
         let blocks_map = self.bin_blocks_into_groups(blocks);
-        // Keep the depth task ordering and deferral behavior. When block
-        // reduction is enabled, the compact shortcut is disabled in
-        // `build_recluster_task_candidates_for_indices` and emitted independently
-        // below, so it cannot consume the depth candidate budget.
-        let mut depth_tasks: Vec<ReclusterTaskCandidate> = Vec::new();
+        let mut tasks: Vec<ReclusterTaskCandidate> = Vec::new();
         let mut deferred_candidates = Vec::new();
         let large_task_bytes_threshold = self.large_task_bytes_threshold();
-        for ((group, _), indices) in &blocks_map {
-            if depth_tasks.len() >= task_budget {
+        for ((group, _), indices) in blocks_map {
+            if tasks.len() >= task_budget {
                 break;
             }
-            let remaining_task_budget = task_budget - depth_tasks.len();
+            let remaining_task_budget = task_budget - tasks.len();
             let candidates = self.build_recluster_task_candidates_for_indices(
-                *group,
-                indices,
+                group,
+                &indices,
                 blocks,
                 remaining_task_budget,
             )?;
@@ -959,42 +949,24 @@ impl ReclusterMutator {
                     );
                     deferred_candidates.push(candidate);
                 } else {
-                    depth_tasks.push(candidate);
-                    if depth_tasks.len() >= task_budget {
+                    tasks.push(candidate);
+                    if tasks.len() >= task_budget {
                         break;
                     }
                 }
             }
         }
 
-        if depth_tasks.len() < task_budget {
+        if tasks.len() < task_budget {
             deferred_candidates.sort_by(|left, right| right.score.cmp_desc(&left.score));
-            let remaining_task_budget = task_budget - depth_tasks.len();
+            let remaining_task_budget = task_budget - tasks.len();
             for candidate in deferred_candidates.into_iter().take(remaining_task_budget) {
                 debug!("recluster: backfill deferred candidate {}", candidate);
-                depth_tasks.push(candidate);
+                tasks.push(candidate);
             }
         }
 
-        if !self.properties.enable_block_reduction {
-            return Ok(depth_tasks);
-        }
-
-        let mut reduction_tasks = Vec::new();
-        for ((group, _), indices) in &blocks_map {
-            if reduction_tasks.len() >= task_budget {
-                break;
-            }
-            let remaining_task_budget = task_budget - reduction_tasks.len();
-            reduction_tasks.extend(self.build_block_reduction_candidates(
-                *group,
-                indices.clone(),
-                blocks,
-                remaining_task_budget,
-            ));
-        }
-        depth_tasks.extend(reduction_tasks);
-        Ok(depth_tasks)
+        Ok(tasks)
     }
 
     fn selection_stats(&self, blocks: &[&ReclusterBlock]) -> ReclusterSelectionStats {
@@ -1023,96 +995,6 @@ impl ReclusterMutator {
             }
         }
         stats
-    }
-
-    fn build_block_reduction_candidates(
-        &self,
-        group: ReclusterGroup,
-        mut indices: Vec<usize>,
-        blocks: &[&ReclusterBlock],
-        task_budget: usize,
-    ) -> Vec<ReclusterTaskCandidate> {
-        if indices.len() == 2
-            && indices
-                .iter()
-                .all(|idx| blocks[*idx].stats().level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS)
-        {
-            return Vec::new();
-        }
-
-        indices.sort_by(|left, right| {
-            sort_by_cluster_stats(
-                Some(blocks[*left].stats()),
-                Some(blocks[*right].stats()),
-                self.properties.cluster_key_info.cluster_key_id(),
-            )
-        });
-
-        let mut candidates = Vec::new();
-        let mut current = Vec::new();
-        let mut current_rows = 0usize;
-        let mut current_bytes = 0usize;
-        for idx in indices {
-            let rows = blocks[idx].meta.row_count as usize;
-            let bytes = blocks[idx].meta.block_size as usize;
-            let next_rows = current_rows.saturating_add(rows);
-            let next_bytes = current_bytes.saturating_add(bytes);
-            let fits = self
-                .properties
-                .block_thresholds
-                .check_for_compact(next_rows, next_bytes)
-                && next_bytes <= self.properties.memory_threshold;
-
-            if !current.is_empty() && !fits {
-                if current.len() >= 2 {
-                    candidates.push(task_candidate(
-                        &self.properties,
-                        ReclusterCandidateKind::BlockReduction,
-                        group,
-                        CandidateScore {
-                            selected_total_bytes: current_bytes,
-                            max_depth: 0,
-                            average_depth: 0.0,
-                        },
-                        &current,
-                        blocks,
-                    ));
-                    if candidates.len() >= task_budget {
-                        return candidates;
-                    }
-                }
-                current.clear();
-                current_rows = 0;
-                current_bytes = 0;
-            }
-
-            if self
-                .properties
-                .block_thresholds
-                .check_for_compact(rows, bytes)
-                && bytes <= self.properties.memory_threshold
-            {
-                current.push(idx);
-                current_rows = current_rows.saturating_add(rows);
-                current_bytes = current_bytes.saturating_add(bytes);
-            }
-        }
-
-        if current.len() >= 2 && candidates.len() < task_budget {
-            candidates.push(task_candidate(
-                &self.properties,
-                ReclusterCandidateKind::BlockReduction,
-                group,
-                CandidateScore {
-                    selected_total_bytes: current_bytes,
-                    max_depth: 0,
-                    average_depth: 0.0,
-                },
-                &current,
-                blocks,
-            ));
-        }
-        candidates
     }
 
     /// Convert selected in-memory candidates into physical recluster parts.
@@ -1406,10 +1288,7 @@ impl ReclusterMutator {
         // Physical small-block compaction intentionally takes precedence over strategy-specific
         // overlap depth gates. A compactable group is rewritten even when its strategy depth
         // is below the recluster threshold, so RECLUSTER also converges fragmented layouts.
-        // When the optional independent block-reduction selector is enabled, that selector
-        // emits compaction candidates instead, so the shortcut is disabled here.
         if block_count >= 2
-            && !self.properties.enable_block_reduction
             && self
                 .properties
                 .block_thresholds
@@ -1484,9 +1363,6 @@ impl ReclusterMutator {
 
     /// Fast-path acceptance for very deep, sufficiently large candidates.
     pub(crate) fn passes_early_accept(&self, candidate: &ReclusterTaskCandidate) -> bool {
-        if candidate.kind != ReclusterCandidateKind::Depth {
-            return false;
-        }
         let mature_gate = (2.0 * self.properties.depth_threshold).min(MAX_RECLUSTER_DEPTH as f64);
         let early_accept_depth = (mature_gate + 1.0).max(self.properties.depth_threshold * 4.0);
         let min_task_bytes = self.large_task_bytes_threshold();

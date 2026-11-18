@@ -38,7 +38,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
-use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_SEGMENT_ZONE_MAP;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
@@ -105,7 +104,6 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
     r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
-    r.insert(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
@@ -235,7 +233,6 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_RECLUSTER_DEPTH);
     r.insert(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER);
-    r.insert(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION);
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
@@ -338,24 +335,6 @@ pub fn is_valid_block_thresholds(
         if option == FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD && value > usize::MAX / 2 {
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "invalid {option} option, value is too large"
-            )));
-        }
-    }
-    Ok(())
-}
-
-pub fn is_valid_recluster_block_reduction(
-    options: &BTreeMap<String, String>,
-) -> databend_common_exception::Result<()> {
-    if let Some(value) = options.get(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION) {
-        let enabled = value.parse::<u32>().map_err(|e| {
-            ErrorCode::TableOptionInvalid(format!(
-                "Failed to parse value [{value}] for table option '{FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION}' as unsigned integer: {e}",
-            ))
-        })?;
-        if enabled > 1 {
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "Invalid value of the table option [{FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION}]: {enabled}, it should be 0 or 1",
             )));
         }
     }

@@ -62,22 +62,6 @@ use crate::pruning::SegmentPruner;
 const DEFAULT_RECLUSTER_SEGMENT_LIMIT: usize = 1024;
 const DEFAULT_MIN_RECLUSTER_SEGMENT_WINDOW: usize = 32;
 
-fn preferred_candidate_kind(
-    depth_candidates: usize,
-    reduction_candidates: usize,
-    repack_candidates: usize,
-) -> Option<ReclusterCandidateKind> {
-    if depth_candidates > 0 {
-        Some(ReclusterCandidateKind::Depth)
-    } else if reduction_candidates > 0 {
-        Some(ReclusterCandidateKind::BlockReduction)
-    } else if repack_candidates > 0 {
-        Some(ReclusterCandidateKind::Repack)
-    } else {
-        None
-    }
-}
-
 type RankedTaskCandidate = (usize, usize, CandidateScore, bool);
 
 fn sort_task_candidates(tasks: &mut [RankedTaskCandidate]) {
@@ -568,11 +552,12 @@ impl FuseTable {
             let (_, parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
-                // Step 3: choose one candidate class for this round. Depth always
-                // wins; block reduction only uses rounds with no depth work.
+                // Step 3: choose task candidates. Preserve score-only ranking unless
+                // early accepts fill the task budget. In that case early candidates
+                // rank first, while other probed tasks remain available to fill budget
+                // left by candidates skipped due to the segment-claim limit.
                 let prioritize_early_accept = early_accept_count >= mutator.max_tasks;
                 let mut depth_candidates = 0usize;
-                let mut reduction_candidates = 0usize;
                 let mut repack_candidates = 0usize;
                 let mut selection_stats = ReclusterSelectionStats::default();
                 for window in &pending_windows {
@@ -580,28 +565,20 @@ impl FuseTable {
                     for task in &window.tasks {
                         match task.kind {
                             ReclusterCandidateKind::Depth => depth_candidates += 1,
-                            ReclusterCandidateKind::BlockReduction => reduction_candidates += 1,
                             ReclusterCandidateKind::Repack => repack_candidates += 1,
                         }
                     }
                 }
-                let selected_kind = preferred_candidate_kind(
-                    depth_candidates,
-                    reduction_candidates,
-                    repack_candidates,
-                );
 
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
                     for (task_idx, task) in window.tasks.iter().enumerate() {
-                        if Some(task.kind) == selected_kind {
-                            sorted_tasks.push((
-                                window_idx,
-                                task_idx,
-                                task.score,
-                                prioritize_early_accept && mutator.passes_early_accept(task),
-                            ));
-                        }
+                        sorted_tasks.push((
+                            window_idx,
+                            task_idx,
+                            task.score,
+                            prioritize_early_accept && mutator.passes_early_accept(task),
+                        ));
                     }
                 }
                 sort_task_candidates(&mut sorted_tasks);
@@ -619,14 +596,11 @@ impl FuseTable {
                 }
 
                 info!(
-                    "recluster: candidate selection summary block_reduction_enabled={} scanned_blocks={} eligible_blocks={} depth_candidates={} reduction_candidates={} repack_candidates={} selected_kind={} selected_tasks={} selected_blocks={} max_tasks={} skipped_negative_level_blocks={} skipped_terminal_level_blocks={} skipped_terminal_level_bytes={}",
-                    mutator.properties.enable_block_reduction,
+                    "recluster: candidate selection summary scanned_blocks={} eligible_blocks={} depth_candidates={} repack_candidates={} selected_tasks={} selected_blocks={} max_tasks={} skipped_negative_level_blocks={} skipped_terminal_level_blocks={} skipped_terminal_level_bytes={}",
                     selection_stats.scanned_blocks,
                     selection_stats.eligible_blocks,
                     depth_candidates,
-                    reduction_candidates,
                     repack_candidates,
-                    selected_kind.map_or("none".to_string(), |kind| kind.to_string()),
                     selected_count,
                     selected_blocks,
                     mutator.max_tasks,
@@ -997,23 +971,6 @@ mod tests {
         let selected = select_task_candidates(&windows, &ranked, 2);
 
         assert_eq!(selected, vec![vec![0, 1]]);
-    }
-
-    #[test]
-    fn test_preferred_candidate_kind() {
-        assert_eq!(
-            preferred_candidate_kind(1, 10, 10),
-            Some(ReclusterCandidateKind::Depth)
-        );
-        assert_eq!(
-            preferred_candidate_kind(0, 10, 10),
-            Some(ReclusterCandidateKind::BlockReduction)
-        );
-        assert_eq!(
-            preferred_candidate_kind(0, 0, 10),
-            Some(ReclusterCandidateKind::Repack)
-        );
-        assert_eq!(preferred_candidate_kind(0, 0, 0), None);
     }
 
     #[test]

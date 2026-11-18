@@ -110,7 +110,6 @@ use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_
 use crate::interpreters::common::table_option_validation::is_valid_index_granularity;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
-use crate::interpreters::common::table_option_validation::is_valid_recluster_block_reduction;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_s3_storage_class;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
@@ -1099,7 +1098,6 @@ impl CreateTableInterpreter {
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_block_thresholds(&table_meta.options)?;
         is_valid_recluster_depth(&table_meta.options)?;
-        is_valid_recluster_block_reduction(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, table_meta.schema.clone())?;
         is_valid_bloom_index_type(&table_meta.options)?;

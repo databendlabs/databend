@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::ClusterType;
 
-use crate::FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::MAX_RECLUSTER_DEPTH;
@@ -81,7 +80,6 @@ pub(crate) struct ReclusterProperties {
     pub(crate) prepared_cluster_key_exprs: Vec<PreparedClusterKeyExpr>,
     pub(crate) scalar_cluster_key_types: Vec<DataType>,
     pub(crate) vertical_kind: Option<VerticalReclusterKind>,
-    pub(crate) enable_block_reduction: bool,
     /// Blocks of the final full pass of a vector RECLUSTER FINAL, which are
     /// rewritten once regardless of level; see `ReclusterFinalCarry`.
     pub(crate) vector_full_pass: Option<Arc<HashSet<String>>>,
@@ -182,8 +180,6 @@ impl ReclusterProperties {
         };
         let prepared_cluster_key_exprs =
             prepare_cluster_key_exprs(&cluster_key_exprs, schema.as_ref());
-        let enable_block_reduction =
-            table.get_option(FUSE_OPT_KEY_ENABLE_RECLUSTER_BLOCK_REDUCTION, 0u32) != 0;
         let properties = Self {
             mode,
             depth_threshold,
@@ -198,7 +194,6 @@ impl ReclusterProperties {
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
             vertical_kind,
-            enable_block_reduction,
             vector_full_pass: None,
             merge_group_limits: MergeGroupLimits::default(),
         };
@@ -250,7 +245,6 @@ impl ReclusterProperties {
             prepared_cluster_key_exprs,
             scalar_cluster_key_types,
             vertical_kind: None,
-            enable_block_reduction: false,
             vector_full_pass: None,
             merge_group_limits: MergeGroupLimits::default(),
         };
@@ -434,7 +428,6 @@ impl CandidateScore {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ReclusterCandidateKind {
     Repack,
-    BlockReduction,
     Depth,
 }
 
@@ -442,7 +435,6 @@ impl fmt::Display for ReclusterCandidateKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Repack => write!(f, "repack"),
-            Self::BlockReduction => write!(f, "block_reduction"),
             Self::Depth => write!(f, "depth"),
         }
     }
