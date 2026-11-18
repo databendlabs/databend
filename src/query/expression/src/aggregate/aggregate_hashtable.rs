@@ -216,7 +216,7 @@ impl AggregateHashTable {
             params,
             agg_states,
             row_count,
-            |group_columns, params, agg_states, _, rows| {
+            |group_columns, params, agg_states, rows| {
                 new_count += self.add_groups_inner(
                     state,
                     group_columns,
@@ -288,7 +288,7 @@ impl AggregateHashTable {
             params,
             (&[]).into(),
             row_count,
-            |group_columns, params, _, _, rows| {
+            |group_columns, params, _, rows| {
                 Self::fill_group_hashes(
                     group_columns,
                     &mut state.group_hashes[..rows],
@@ -308,16 +308,16 @@ impl AggregateHashTable {
         Ok(stats)
     }
 
-    /// Calls `f` with each batch of at most `BATCH_SIZE` rows and the offset of its first row.
+    /// Calls `f` with each batch of at most `BATCH_SIZE` rows and its number of rows.
     fn for_each_batch(
         group_columns: ProjectedBlock,
         params: &[ProjectedBlock],
         agg_states: ProjectedBlock,
         row_count: usize,
-        mut f: impl FnMut(ProjectedBlock, &[ProjectedBlock], ProjectedBlock, usize, usize) -> Result<()>,
+        mut f: impl FnMut(ProjectedBlock, &[ProjectedBlock], ProjectedBlock, usize) -> Result<()>,
     ) -> Result<()> {
         if row_count <= BATCH_SIZE {
-            f(group_columns, params, agg_states, 0, row_count)
+            f(group_columns, params, agg_states, row_count)
         } else {
             for start in (0..row_count).step_by(BATCH_SIZE) {
                 let end = (start + BATCH_SIZE).min(row_count);
@@ -340,7 +340,6 @@ impl AggregateHashTable {
                     (&step_group_columns).into(),
                     &step_params,
                     (&agg_states).into(),
-                    start,
                     end - start,
                 )?;
             }

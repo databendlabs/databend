@@ -405,10 +405,10 @@ impl<I: ChunkIds> RowIdIndex<I> {
             adapter.append_rows(state, new_entry_count);
         }
 
-        let mut no_match_count = 0;
-        if need_compare_count > 0 {
-            no_match_count = adapter.compare(state, need_compare_count, no_match_count);
-        }
+        let no_match_count = match need_compare_count {
+            0 => 0,
+            _ => adapter.compare(state, need_compare_count),
+        };
 
         for row in state.no_match_vector[..no_match_count].iter().copied() {
             state.slots[row] = self.next_slot(state.slots[row]);
@@ -584,12 +584,8 @@ mod tests {
             }
         }
 
-        fn compare(
-            &mut self,
-            state: &mut ProbeState,
-            need_compare_count: usize,
-            mut no_match_count: usize,
-        ) -> usize {
+        fn compare(&mut self, state: &mut ProbeState, need_compare_count: usize) -> usize {
+            let mut no_match_count = 0;
             for row in state.group_compare_vector[..need_compare_count]
                 .iter()
                 .copied()
