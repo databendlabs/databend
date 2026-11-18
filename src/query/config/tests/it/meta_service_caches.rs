@@ -71,3 +71,26 @@ fn test_meta_service_caches_from_env() {
         MetaServiceCache::Setting
     ]);
 }
+
+/// `ownership` in the list enables the ownership cache, and so does the deprecated
+/// `meta_service_ownership_cache = true` alone.
+#[test]
+fn test_meta_service_caches_ownership() {
+    let listed: Config =
+        toml::from_str("[cache]\nmeta_service_caches = [\"ownership\"]\n").unwrap();
+    let cache = listed.cache;
+    assert!(cache.is_meta_service_cache_enabled(MetaServiceCache::Ownership));
+
+    let deprecated: Config =
+        toml::from_str("[cache]\nmeta_service_ownership_cache = true\n").unwrap();
+    let cache = deprecated.cache;
+    assert!(cache.meta_service_caches.is_empty());
+    assert!(cache.is_meta_service_cache_enabled(MetaServiceCache::Ownership));
+    assert!(!cache.is_meta_service_cache_enabled(MetaServiceCache::User));
+
+    let cache = Args::try_parse_from(["databend-query"])
+        .unwrap()
+        .config
+        .cache;
+    assert!(!cache.is_meta_service_cache_enabled(MetaServiceCache::Ownership));
+}

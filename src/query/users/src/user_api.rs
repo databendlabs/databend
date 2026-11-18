@@ -139,7 +139,7 @@ impl UserApiProvider {
 
         let client = meta_store.inner().clone();
 
-        let cache = if cache_config.meta_service_ownership_cache {
+        let cache = if cache_config.is_meta_service_cache_enabled(MetaServiceCache::Ownership) {
             let cache = RoleMgr::new_cache(client.clone()).await;
             let cache = Arc::new(Mutex::new(cache));
             Some(cache)
