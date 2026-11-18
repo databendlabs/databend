@@ -56,7 +56,6 @@ pub struct PayloadFlushState {
     pub(super) aggregate_results: Vec<BlockEntry>,
     pub(super) row_count: usize,
 
-    flush_partition: usize,
     pub(super) flush_page: usize,
     pub(super) flush_page_row: usize,
 
@@ -71,7 +70,6 @@ impl Default for PayloadFlushState {
             group_columns: Vec::new(),
             aggregate_results: Vec::new(),
             row_count: 0,
-            flush_partition: 0,
             flush_page: 0,
             flush_page_row: 0,
             addresses: [RowPtr::null(); BATCH_SIZE],
@@ -86,7 +84,6 @@ unsafe impl Sync for PayloadFlushState {}
 impl PayloadFlushState {
     pub fn clear(&mut self) {
         self.row_count = 0;
-        self.flush_partition = 0;
         self.flush_page = 0;
         self.flush_page_row = 0;
     }
@@ -164,22 +161,6 @@ impl PartitionedPayload {
         }
         DataBlock::concat(&blocks)
     }
-
-    pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
-        if state.flush_partition >= self.payloads.len() {
-            return false;
-        }
-
-        let p = &self.payloads[state.flush_partition];
-        if p.flush(state) {
-            true
-        } else {
-            let partition_idx = state.flush_partition + 1;
-            state.clear();
-            state.flush_partition = partition_idx;
-            self.flush(state)
-        }
-    }
 }
 
 impl Payload {
@@ -241,26 +222,6 @@ impl Payload {
 
         entries.extend_from_slice(&state.take_group_columns());
         Ok(Some(DataBlock::new(entries, row_count)))
-    }
-
-    pub fn group_by_flush_all(&self) -> Result<DataBlock> {
-        if self.len() == 0 {
-            return Ok(self.empty_block(0));
-        }
-
-        let mut state = PayloadFlushState::default();
-        let mut blocks = vec![];
-
-        while self.flush(&mut state) {
-            let entries = state.take_group_columns();
-            blocks.push(DataBlock::new(entries, state.row_count));
-        }
-
-        if blocks.is_empty() {
-            return Ok(self.empty_block(0));
-        }
-
-        DataBlock::concat(&blocks)
     }
 
     pub fn flush(&self, flush_state: &mut PayloadFlushState) -> bool {

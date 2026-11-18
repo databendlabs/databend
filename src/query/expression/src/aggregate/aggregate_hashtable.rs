@@ -34,7 +34,6 @@ use super::partial_controller::DistinctSampler;
 use super::partial_controller::PartialAddStats;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::GroupRows;
-use super::payload::merge_flushed_states;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
@@ -726,15 +725,6 @@ impl AggregateHashTable {
         Ok(())
     }
 
-    pub fn merge_result(&mut self, flush_state: &mut PayloadFlushState) -> Result<bool> {
-        if !self.payload.flush(flush_state) {
-            return Ok(false);
-        }
-
-        merge_flushed_states(&self.payload.row_layout, &self.payload.aggrs, flush_state)?;
-        Ok(true)
-    }
-
     /// Rebuild the index from the payload with at least `new_capacity` slots.
     fn resize(&mut self, new_capacity: usize) {
         self.hash_index_resize_count += 1;
@@ -879,7 +869,10 @@ mod tests {
                     let first_row_id = payload.row_ids.first_row_id(partition, page_index);
                     for row in 0..page.rows {
                         let id = first_row_id | row as u64;
-                        assert_eq!(payload.row_ptr(id), p.data_ptr(page, row));
+                        assert_eq!(
+                            payload.row_ids.decoder().row_and_states(id).0,
+                            p.data_ptr(page, row)
+                        );
                         assert!(rows.insert(id));
                     }
                 }

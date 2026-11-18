@@ -35,7 +35,6 @@ use super::row_ptr::PageNumbering;
 use super::row_ptr::RowDecoder;
 use super::row_ptr::RowIds;
 use super::row_ptr::RowLayout;
-use super::row_ptr::RowPtr;
 use crate::types::DataType;
 
 /// Maps a group hash to a partition of a table.
@@ -234,12 +233,6 @@ impl PartitionedPayload {
             arenas,
             partition_mask,
         }
-    }
-
-    /// The row with id `id`.
-    #[inline]
-    pub(super) fn row_ptr(&self, id: u64) -> RowPtr {
-        self.row_ids.row_ptr(id)
     }
 
     /// The pages after `new_rows` more rows, however they spread over the partitions: each
