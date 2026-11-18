@@ -33,22 +33,14 @@ use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
-use crate::types::DateType;
-use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
-use crate::types::IntervalType;
-use crate::types::NumberDataType;
-use crate::types::NumberType;
 use crate::types::ReturnType;
-use crate::types::TimestampType;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
-use crate::types::i256;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
-use crate::with_number_mapped_type;
 
 pub struct PayloadFlushState {
     pub(super) probe_state: Box<ProbeState>,

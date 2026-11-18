@@ -20,7 +20,6 @@ use itertools::Itertools;
 use super::BATCH_SIZE;
 use super::MAX_PAGE_SIZE;
 use super::StateAddr;
-use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
 use super::aggregate_function::get_states_layout;
 use super::group_hash_route_index;

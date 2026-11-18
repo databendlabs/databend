@@ -112,14 +112,6 @@ impl RowMut {
         self.0
     }
 
-    pub(super) fn dangling() -> Self {
-        Self(std::ptr::NonNull::<u8>::dangling().as_ptr())
-    }
-
-    pub(super) fn into_ref(self) -> RowPtr {
-        RowPtr::new(self.0.cast_const())
-    }
-
     pub(super) unsafe fn write<T: Copy>(&mut self, offset: usize, value: &T) {
         unsafe {
             core::ptr::copy_nonoverlapping(

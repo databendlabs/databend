@@ -803,7 +803,7 @@ impl Payload {
 
     /// Split the rows into `buckets` payloads by `group_hash_route_index` of their group hash, the
     /// routing of raw rows with the same group keys.
-    pub fn scatter_into_buckets(mut self, buckets: usize) -> Vec<Payload> {
+    pub fn scatter_into_buckets(self, buckets: usize) -> Vec<Payload> {
         if buckets == 0 {
             return vec![];
         }
@@ -823,7 +823,7 @@ impl Payload {
     }
 
     pub(super) fn transfer_hash_partitioned_rows(
-        mut self,
+        self,
         target_payloads: &mut [Payload],
         flush_state: &mut PayloadFlushState,
     ) {

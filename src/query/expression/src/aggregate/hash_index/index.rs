@@ -204,10 +204,6 @@ impl HashIndex {
         (capacity as f64 / HASH_INDEX_LOAD_FACTOR) as usize
     }
 
-    pub fn allocated_bytes(&self) -> usize {
-        with_index!(self, index => index.allocated_bytes())
-    }
-
     /// The bytes `with_capacity(capacity, max_id)` allocates for ids of up to 4 bytes.
     pub fn allocated_bytes_for(capacity: usize) -> usize {
         Self::slots_for(capacity) / CHUNK_SLOTS * size_of::<Chunk<Ids32>>()

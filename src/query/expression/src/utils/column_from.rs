@@ -18,10 +18,7 @@ use databend_common_column::bitmap::MutableBitmap;
 use itertools::Itertools;
 
 use crate::Column;
-use crate::types::decimal::*;
 use crate::types::geometry::GeometryType;
-use crate::types::nullable::NullableColumn;
-use crate::types::number::*;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::*;
 

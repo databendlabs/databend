@@ -813,8 +813,8 @@ mod tests {
         let block = sample_block(num_rows);
         let full_block = block.convert_to_full();
 
-        for projection in (0..block.num_columns())
-            .map_windows(|[a, b]| vec![*a, *b])
+        for projection in (1..block.num_columns())
+            .map(|b| vec![b - 1, b])
             .chain(Some((0..block.num_columns()).collect()))
             .collect::<Vec<_>>()
         {

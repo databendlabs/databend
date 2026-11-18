@@ -18,10 +18,8 @@ use databend_common_column::types::timestamp_tz;
 
 use crate::Column;
 use crate::ProjectedBlock;
-use crate::types::AnyType;
 use crate::types::BinaryColumn;
 use crate::types::EncodedColumn;
-use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
