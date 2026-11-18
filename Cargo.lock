@@ -3670,7 +3670,6 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "parking_lot 0.12.3",
  "prost 0.14.3",
  "seq-marked",
  "serde",
@@ -14485,8 +14484,8 @@ dependencies = [
 
 [[package]]
 name = "sub-cache"
-version = "0.3.0"
-source = "git+https://github.com/databendlabs/sub-cache?tag=v0.3.0#173f25e6ed2695ce56b387a02ed4b544824058aa"
+version = "0.4.0"
+source = "git+https://github.com/databendlabs/sub-cache?tag=v0.4.0#d5afc804580bcda23ca74300e75c9e5450b6bd49"
 dependencies = [
  "async-trait",
  "futures",

@@ -114,7 +114,7 @@ async fn test_cache_watches_the_leader() -> anyhow::Result<()> {
     let writer = new_client(addresses.clone())?;
     writer.upsert_kv(UpsertKV::update("pp/a", b"a")).await?;
 
-    let mut cache = Cache::new(new_client(addresses.clone())?, "pp", "test-leader").await;
+    let cache = Cache::new(new_client(addresses.clone())?, "pp", "test-leader").await;
     // Waits for the initialization.
     let got = cache.try_get("pp/a").await?;
     assert_eq!(got.map(|v| v.data), Some(b"a".to_vec()));

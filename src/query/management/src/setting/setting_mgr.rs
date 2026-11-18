@@ -30,7 +30,6 @@ use databend_meta_client::types::UpsertKV;
 use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use futures::TryStreamExt;
-use parking_lot::Mutex;
 use seq_marked::SeqValue;
 
 use crate::errors::meta_service_error;
@@ -39,7 +38,7 @@ pub struct SettingMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
     /// The global settings of the tenant, if watched: see `get_watched_settings`.
-    watched: Option<Arc<Mutex<Cache>>>,
+    watched: Option<Arc<Cache>>,
 }
 
 impl SettingMgr {
@@ -51,18 +50,14 @@ impl SettingMgr {
         }
     }
 
-    /// Watch the global settings of `tenant`, for `with_watched`. The lock is held only to read
-    /// the copy once, never across an await.
-    pub async fn watch(
-        client: Arc<ClientHandle<DatabendRuntime>>,
-        tenant: &Tenant,
-    ) -> Arc<Mutex<Cache>> {
+    /// Watch the global settings of `tenant`, for `with_watched`.
+    pub async fn watch(client: Arc<ClientHandle<DatabendRuntime>>, tenant: &Tenant) -> Arc<Cache> {
         let cache = Cache::new(client, Self::settings_dir(tenant), "global settings").await;
-        Arc::new(Mutex::new(cache))
+        Arc::new(cache)
     }
 
     /// Read the settings by `get_watched_settings` from `watched`, a `watch` of the tenant.
-    pub fn with_watched(mut self, watched: Arc<Mutex<Cache>>) -> Self {
+    pub fn with_watched(mut self, watched: Arc<Cache>) -> Self {
         self.watched = Some(watched);
         self
     }
@@ -129,7 +124,7 @@ impl SettingMgr {
         let local = self
             .watched
             .as_ref()
-            .and_then(|w| w.lock().try_list_dir_ready(&dir));
+            .and_then(|w| w.try_list_dir_ready(&dir));
         let Some(items) = local else {
             return self.get_settings().await;
         };

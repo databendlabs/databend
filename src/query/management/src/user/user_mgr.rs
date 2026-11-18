@@ -42,7 +42,6 @@ use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use fastrace::func_name;
 use futures::TryStreamExt;
-use parking_lot::Mutex;
 
 use crate::user::user_api::UserApi;
 
@@ -50,7 +49,7 @@ pub struct UserMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
     /// The users of the tenant, if watched: see `get_watched_user`.
-    watched: Option<Arc<Mutex<Cache>>>,
+    watched: Option<Arc<Cache>>,
 }
 
 impl UserMgr {
@@ -62,18 +61,14 @@ impl UserMgr {
         }
     }
 
-    /// Watch the users of `tenant`, for `with_watched`. The lock is held only to read the copy
-    /// once, never across an await.
-    pub async fn watch(
-        client: Arc<ClientHandle<DatabendRuntime>>,
-        tenant: &Tenant,
-    ) -> Arc<Mutex<Cache>> {
+    /// Watch the users of `tenant`, for `with_watched`.
+    pub async fn watch(client: Arc<ClientHandle<DatabendRuntime>>, tenant: &Tenant) -> Arc<Cache> {
         let cache = Cache::new(client, Self::users_dir(tenant), "users").await;
-        Arc::new(Mutex::new(cache))
+        Arc::new(cache)
     }
 
     /// Read the users by `get_watched_user` from `watched`, a `watch` of the tenant.
-    pub fn with_watched(mut self, watched: Arc<Mutex<Cache>>) -> Self {
+    pub fn with_watched(mut self, watched: Arc<Cache>) -> Self {
         self.watched = Some(watched);
         self
     }
@@ -87,10 +82,7 @@ impl UserMgr {
         user: &UserIdentity,
     ) -> Result<Option<SeqV<UserInfo>>, MetaError> {
         let key = self.user_ident(user).to_string_key();
-        let local = self
-            .watched
-            .as_ref()
-            .and_then(|w| w.lock().try_get_ready(&key));
+        let local = self.watched.as_ref().and_then(|w| w.try_get_ready(&key));
         let Some(value) = local else {
             return self.get_user(user).await;
         };

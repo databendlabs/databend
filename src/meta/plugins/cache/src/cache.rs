@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -22,7 +21,6 @@ use databend_meta_client::ClientHandle;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::SeqValue;
 use databend_meta_runtime::DatabendRuntime;
-use futures::FutureExt;
 
 use crate::meta_cache_types::MetaCacheTypes;
 use crate::meta_client_source;
@@ -30,10 +28,11 @@ use crate::meta_client_source;
 /// A local copy of the keys under the directory `{dir}/` in meta-service, kept up to date by a
 /// watch.
 ///
-/// The `try_*_ready` reads never wait for the copy. While it initializes or reconnects, which
-/// holds its lock, or when meta-service cannot be watched, they return `None`, and the caller
-/// reads meta-service instead. A read polls the copy once: callers that share a `Cache` behind a
-/// lock hold it only for the read, and release it before reading meta-service.
+/// The `try_*_ready` reads never wait for the copy. While it initializes, reconnects or applies
+/// a change, which holds its lock, or when meta-service cannot be watched, they return `None`,
+/// and the caller reads meta-service instead. They take `&self` and are not futures: readers
+/// share a `Cache` without a lock, and a read answers whether or not the task's tokio coop
+/// budget is spent.
 ///
 /// What they return lags a change by the watch delay, a change made by this process included:
 /// use them where a briefly stale value is acceptable, never to read the seq of a
@@ -56,28 +55,21 @@ impl Deref for Cache {
     }
 }
 
-impl DerefMut for Cache {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
 impl Cache {
     /// The value of `key` if the copy can answer at once, see [`Cache`].
     ///
     /// `None` if the copy cannot answer, lacks `key`, or holds it past its TTL. The caller reads
     /// meta-service for every `None`: a key the copy lacks may be one the watch has not delivered
     /// yet.
-    pub fn try_get_ready(&mut self, key: &str) -> Option<SeqV> {
+    pub fn try_get_ready(&self, key: &str) -> Option<SeqV> {
         let now_ms = now_ms();
         self.inner
-            .try_access(|data| {
+            .try_access_now(|data| {
                 data.data
                     .get(key)
                     .filter(|value| !value.is_expired(now_ms))
                     .cloned()
-            })
-            .now_or_never()?
+            })?
             .ok()?
     }
 
@@ -85,7 +77,7 @@ impl Cache {
     /// [`Cache`].
     ///
     /// `None` if the copy cannot answer, or `dir` is neither the watched directory nor under it.
-    pub fn try_list_dir_ready(&mut self, dir: &str) -> Option<Vec<(String, SeqV)>> {
+    pub fn try_list_dir_ready(&self, dir: &str) -> Option<Vec<(String, SeqV)>> {
         let covered = dir
             .strip_prefix(self.dir.as_str())
             .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
@@ -93,7 +85,7 @@ impl Cache {
             return None;
         }
         let now_ms = now_ms();
-        let mut items = self.inner.try_list_dir(dir).now_or_never()?.ok()?;
+        let mut items = self.inner.try_list_dir_now(dir)?.ok()?;
         items.retain(|(_, value)| !value.is_expired(now_ms));
         Some(items)
     }
