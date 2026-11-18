@@ -25,6 +25,7 @@ mod collect_statistics;
 mod column_scope;
 mod decorrelate_correlated_aliases;
 mod decorrelate_scalar_aggregate;
+mod decorrelate_window;
 mod distributed_join;
 mod eager_aggregation;
 mod eliminate_eval_scalar;

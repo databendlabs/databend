@@ -294,7 +294,7 @@ impl PhysicalAggregate {
         Self { mode, aggregate }
     }
 
-    pub fn get_distribution_keys(&self, before_partial: bool) -> Result<Vec<ScalarExpr>> {
+    fn get_distribution_keys(&self, before_partial: bool) -> Result<Vec<ScalarExpr>> {
         if before_partial {
             self.aggregate
                 .group_items
@@ -377,10 +377,7 @@ impl PhysicalOperator for PhysicalAggregate {
 
         match self.mode {
             AggregateMode::Partial => {
-                // TODO(leiysky): in current implementation we are using the `_group_by_key` produced
-                // by partial aggregation as the distribution key, which is not exactly the same with
-                // `Hash(group_items)`. Because of this we cannot leverage the distribution key to
-                // satisfy the required hash distribution from parent node. We should fix this in the future.
+                // A partial aggregate does not distribute its output by the hash of its group keys.
                 Ok(PhysicalProperty {
                     distribution: Distribution::Random,
                 })

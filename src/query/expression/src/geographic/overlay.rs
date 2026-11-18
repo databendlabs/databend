@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use geo::BoundingRect;
-use geo::Contains;
 use geo::Coord;
 use geo::Geometry;
 use geo::GeometryCollection;
@@ -26,8 +25,6 @@ use geo::MultiPoint;
 use geo::MultiPolygon;
 use geo::Point;
 use geo::Polygon;
-use geo::Rect;
-use geo::Triangle;
 use geo::algorithm::bool_ops::BooleanOps;
 use geo::algorithm::bool_ops::unary_union;
 use geo::algorithm::line_intersection::LineIntersection;
@@ -113,10 +110,6 @@ impl GeometryOverlay {
 
     fn is_union_like(&self) -> bool {
         matches!(self.mode, OverlayMode::Union | OverlayMode::SymDifference)
-    }
-
-    fn empty_geometry() -> Geometry<f64> {
-        Geometry::GeometryCollection(GeometryCollection::empty())
     }
 
     fn can_fast_merge(g0: &Geometry<f64>, g1: &Geometry<f64>) -> bool {

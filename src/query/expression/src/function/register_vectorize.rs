@@ -15,7 +15,6 @@
 use databend_common_column::bitmap::Bitmap;
 
 use crate::EvalContext;
-use crate::types::nullable::NullableColumn;
 use crate::types::*;
 use crate::values::Value;
 

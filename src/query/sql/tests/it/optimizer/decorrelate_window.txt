@@ -1,0 +1,618 @@
+=== global_window_gains_partition_sort ===
+description: Decorrelation must sort by the new outer partition before SUM, not only before the LIMIT row_number window.
+sql: SELECT (SELECT sum(t1.a + t2.b) OVER () FROM (VALUES (10), (20)) t2(b) LIMIT 1) FROM (VALUES (1), (2)) t1(a)
+raw_plan:
+EvalScalar
+├── scalars: [SUBQUERY AS (#3) AS (#4)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: sum(t1.a + t2.b) OVER () (#3)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [sum(t1.a + t2.b) OVER () (#3) AS (#3)]
+│               └── Window
+│                   ├── aggregate function: sum
+│                   ├── partition items: []
+│                   ├── order by items: []
+│                   ├── frame: [Range: Preceding(None) ~ Following(None)]
+│                   └── EvalScalar
+│                       ├── scalars: [plus(a (#0), b (#1)) AS (#2)]
+│                       └── ConstantTableScan
+│                           ├── columns: [b (#1)]
+│                           └── num_rows: [2]
+└── ConstantTableScan
+    ├── columns: [a (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [sum(t1.a + t2.b) OVER () (#3) AS (#4)]
+    └── Join(Left)
+        ├── build keys: [a (#5)]
+        ├── probe keys: [a (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [a (#5) AS (#5)]
+        │           ├── order by items: []
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Window
+        │               ├── aggregate function: sum
+        │               ├── partition items: [a (#5) AS (#5)]
+        │               ├── order by items: []
+        │               ├── frame: [Range: Preceding(None) ~ Following(None)]
+        │               └── Sort
+        │                   ├── sort keys: [a (#5) ASC NULLS LAST]
+        │                   ├── limit: [NONE]
+        │                   ├── window top: NONE
+        │                   ├── window function: Aggregate(AggregateFunction { span: Some(15..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 2, data_type: Number(UInt16), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(t1.a + t2.b) OVER ()" })
+        │                   └── Exchange(Hash)
+        │                       ├── Exchange(Hash): keys: [a (#5)]
+        │                       └── EvalScalar
+        │                           ├── scalars: [plus(a (#5), b (#1)) AS (#2), a (#5) AS (#5)]
+        │                           └── Join(Cross)
+        │                               ├── build keys: []
+        │                               ├── probe keys: []
+        │                               ├── other filters: []
+        │                               ├── Exchange(Broadcast)
+        │                               │   └── ConstantTableScan
+        │                               │       ├── columns: [b (#1)]
+        │                               │       └── num_rows: [2]
+        │                               └── Aggregate(Final)
+        │                                   ├── group items: [a (#5) AS (#5)]
+        │                                   ├── aggregate functions: []
+        │                                   └── Aggregate(Partial)
+        │                                       ├── group items: [a (#5) AS (#5)]
+        │                                       ├── aggregate functions: []
+        │                                       └── Exchange(Hash)
+        │                                           ├── Exchange(Hash): keys: [a (#5)]
+        │                                           └── ConstantTableScan
+        │                                               ├── columns: [a (#5)]
+        │                                               └── num_rows: [2]
+        └── ConstantTableScan
+            ├── columns: [a (#0)]
+            └── num_rows: [2]
+
+
+=== partitioned_window_rebuilds_exchange ===
+description: An existing window partition exchange must include the outer correlation key.
+sql: SELECT (SELECT sum(t1.a + t2.b) OVER (PARTITION BY t2.k) FROM (VALUES (1, 10), (1, 20)) t2(k, b) LIMIT 1) FROM (VALUES (1), (2)) t1(a)
+raw_plan:
+EvalScalar
+├── scalars: [SUBQUERY AS (#4) AS (#5)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: sum(t1.a + t2.b) OVER (PARTITION BY t2.k) (#4)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [sum(t1.a + t2.b) OVER (PARTITION BY t2.k) (#4) AS (#4)]
+│               └── Window
+│                   ├── aggregate function: sum
+│                   ├── partition items: [k (#1) AS (#1)]
+│                   ├── order by items: []
+│                   ├── frame: [Range: Preceding(None) ~ Following(None)]
+│                   └── Sort
+│                       ├── sort keys: [k (#1) ASC NULLS LAST]
+│                       ├── limit: [NONE]
+│                       ├── window top: NONE
+│                       ├── window function: Aggregate(AggregateFunction { span: Some(15..56), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 3, data_type: Number(UInt16), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(t1.a + t2.b) OVER (PARTITION BY t2.k)" })
+│                       └── EvalScalar
+│                           ├── scalars: [k (#1) AS (#1), plus(a (#0), b (#2)) AS (#3)]
+│                           └── ConstantTableScan
+│                               ├── columns: [k (#1), b (#2)]
+│                               └── num_rows: [2]
+└── ConstantTableScan
+    ├── columns: [a (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [sum(t1.a + t2.b) OVER (PARTITION BY t2.k) (#4) AS (#5)]
+    └── Join(Left)
+        ├── build keys: [a (#6)]
+        ├── probe keys: [a (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [lte(correlated_limit_row_number (#7), 1)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [a (#6) AS (#6)]
+        │           ├── order by items: []
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Sort
+        │               ├── sort keys: [a (#6) ASC NULLS LAST]
+        │               ├── limit: [NONE]
+        │               ├── window top: 1
+        │               ├── window function: RowNumber
+        │               └── Exchange(Hash)
+        │                   ├── Exchange(Hash): keys: [a (#6)]
+        │                   └── Window
+        │                       ├── aggregate function: sum
+        │                       ├── partition items: [k (#1) AS (#1), a (#6) AS (#6)]
+        │                       ├── order by items: []
+        │                       ├── frame: [Range: Preceding(None) ~ Following(None)]
+        │                       └── Sort
+        │                           ├── sort keys: [k (#1) ASC NULLS LAST, a (#6) ASC NULLS LAST]
+        │                           ├── limit: [NONE]
+        │                           ├── window top: NONE
+        │                           ├── window function: Aggregate(AggregateFunction { span: Some(15..56), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 3, data_type: Number(UInt16), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(t1.a + t2.b) OVER (PARTITION BY t2.k)" })
+        │                           └── Exchange(Hash)
+        │                               ├── Exchange(Hash): keys: [k (#1), a (#6)]
+        │                               └── EvalScalar
+        │                                   ├── scalars: [k (#1) AS (#1), plus(a (#6), b (#2)) AS (#3), a (#6) AS (#6)]
+        │                                   └── Join(Cross)
+        │                                       ├── build keys: []
+        │                                       ├── probe keys: []
+        │                                       ├── other filters: []
+        │                                       ├── Exchange(Broadcast)
+        │                                       │   └── ConstantTableScan
+        │                                       │       ├── columns: [k (#1), b (#2)]
+        │                                       │       └── num_rows: [2]
+        │                                       └── Aggregate(Final)
+        │                                           ├── group items: [a (#6) AS (#6)]
+        │                                           ├── aggregate functions: []
+        │                                           └── Aggregate(Partial)
+        │                                               ├── group items: [a (#6) AS (#6)]
+        │                                               ├── aggregate functions: []
+        │                                               └── Exchange(Hash)
+        │                                                   ├── Exchange(Hash): keys: [a (#6)]
+        │                                                   └── ConstantTableScan
+        │                                                       ├── columns: [a (#6)]
+        │                                                       └── num_rows: [2]
+        └── ConstantTableScan
+            ├── columns: [a (#0)]
+            └── num_rows: [2]
+
+
+=== ordered_window_gains_partition_exchange ===
+description: An ORDER BY-only window gains an outer partition exchange while retaining DESC NULLS LAST.
+sql: SELECT (SELECT sum(t1.a + t2.b) OVER (ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM (VALUES (10), (20), (NULL)) t2(b) ORDER BY t2.b DESC NULLS LAST LIMIT 1 OFFSET 1) FROM (VALUES (1), (2)) t1(a)
+raw_plan:
+EvalScalar
+├── scalars: [SUBQUERY AS (#3) AS (#4)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: sum(t1.a + t2.b) OVER (ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#3)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [1]
+│           └── Sort
+│               ├── sort keys: [b (#1) DESC NULLS LAST]
+│               ├── limit: [NONE]
+│               └── EvalScalar
+│                   ├── scalars: [b (#1) AS (#1), sum(t1.a + t2.b) OVER (ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#3) AS (#3)]
+│                   └── Window
+│                       ├── aggregate function: sum
+│                       ├── partition items: []
+│                       ├── order by items: [b (#1) AS (#1) DESC NULLS LAST]
+│                       ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+│                       └── Sort
+│                           ├── sort keys: [b (#1) DESC NULLS LAST]
+│                           ├── limit: [NONE]
+│                           └── EvalScalar
+│                               ├── scalars: [b (#1) AS (#1), plus(a (#0), b (#1)) AS (#2)]
+│                               └── ConstantTableScan
+│                                   ├── columns: [b (#1)]
+│                                   └── num_rows: [3]
+└── ConstantTableScan
+    ├── columns: [a (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [sum(t1.a + t2.b) OVER (ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#3) AS (#4)]
+    └── Join(Left)
+        ├── build keys: [a (#5)]
+        ├── probe keys: [a (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [gt(correlated_limit_row_number (#6), 1), lte(correlated_limit_row_number (#6), 2)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [a (#5) AS (#5)]
+        │           ├── order by items: [b (#1) AS (#1) DESC NULLS LAST]
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Window
+        │               ├── aggregate function: sum
+        │               ├── partition items: [a (#5) AS (#5)]
+        │               ├── order by items: [b (#1) AS (#1) DESC NULLS LAST]
+        │               ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │               └── Sort
+        │                   ├── sort keys: [a (#5) ASC NULLS LAST, b (#1) DESC NULLS LAST]
+        │                   ├── limit: [NONE]
+        │                   ├── window top: NONE
+        │                   ├── window function: Aggregate(AggregateFunction { span: Some(15..117), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt16)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(t1.a + t2.b) OVER (ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)" })
+        │                   └── Exchange(Hash)
+        │                       ├── Exchange(Hash): keys: [a (#5)]
+        │                       └── EvalScalar
+        │                           ├── scalars: [b (#1) AS (#1), plus(a (#5), b (#1)) AS (#2), a (#5) AS (#5)]
+        │                           └── Join(Cross)
+        │                               ├── build keys: []
+        │                               ├── probe keys: []
+        │                               ├── other filters: []
+        │                               ├── Exchange(Broadcast)
+        │                               │   └── Aggregate(Final)
+        │                               │       ├── group items: [a (#5) AS (#5)]
+        │                               │       ├── aggregate functions: []
+        │                               │       └── Aggregate(Partial)
+        │                               │           ├── group items: [a (#5) AS (#5)]
+        │                               │           ├── aggregate functions: []
+        │                               │           └── Exchange(Hash)
+        │                               │               ├── Exchange(Hash): keys: [a (#5)]
+        │                               │               └── ConstantTableScan
+        │                               │                   ├── columns: [a (#5)]
+        │                               │                   └── num_rows: [2]
+        │                               └── ConstantTableScan
+        │                                   ├── columns: [b (#1)]
+        │                                   └── num_rows: [3]
+        └── ConstantTableScan
+            ├── columns: [a (#0)]
+            └── num_rows: [2]
+
+
+=== partitioned_ordered_window_rebuilds_sort ===
+description: Rebuild the window sort with both original and correlated partition keys, preserving the window ordering.
+sql: SELECT (SELECT sum(t1.a + t2.b) OVER (PARTITION BY t2.k ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM (VALUES (1, 10), (1, 20), (2, 100), (2, 200)) t2(k, b) ORDER BY t2.k, t2.b DESC NULLS LAST LIMIT 1 OFFSET 1) FROM (VALUES (1), (2)) t1(a)
+raw_plan:
+EvalScalar
+├── scalars: [SUBQUERY AS (#4) AS (#5)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: sum(t1.a + t2.b) OVER (PARTITION BY t2.k ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#4)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [1]
+│           └── Sort
+│               ├── sort keys: [k (#1) ASC NULLS LAST, b (#2) DESC NULLS LAST]
+│               ├── limit: [NONE]
+│               └── EvalScalar
+│                   ├── scalars: [k (#1) AS (#1), b (#2) AS (#2), sum(t1.a + t2.b) OVER (PARTITION BY t2.k ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#4) AS (#4)]
+│                   └── Window
+│                       ├── aggregate function: sum
+│                       ├── partition items: [k (#1) AS (#1)]
+│                       ├── order by items: [b (#2) AS (#2) DESC NULLS LAST]
+│                       ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+│                       └── Sort
+│                           ├── sort keys: [k (#1) ASC NULLS LAST, b (#2) DESC NULLS LAST]
+│                           ├── limit: [NONE]
+│                           ├── window top: NONE
+│                           ├── window function: Aggregate(AggregateFunction { span: Some(15..135), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 3, data_type: Number(UInt16), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(t1.a + t2.b) OVER (PARTITION BY t2.k ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)" })
+│                           └── EvalScalar
+│                               ├── scalars: [k (#1) AS (#1), b (#2) AS (#2), plus(a (#0), b (#2)) AS (#3)]
+│                               └── ConstantTableScan
+│                                   ├── columns: [k (#1), b (#2)]
+│                                   └── num_rows: [4]
+└── ConstantTableScan
+    ├── columns: [a (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [sum(t1.a + t2.b) OVER (PARTITION BY t2.k ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) (#4) AS (#5)]
+    └── Join(Left)
+        ├── build keys: [a (#6)]
+        ├── probe keys: [a (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [gt(correlated_limit_row_number (#7), 1), lte(correlated_limit_row_number (#7), 2)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [a (#6) AS (#6)]
+        │           ├── order by items: [k (#1) AS (#1) ASC NULLS LAST, b (#2) AS (#2) DESC NULLS LAST]
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Sort
+        │               ├── sort keys: [a (#6) ASC NULLS LAST, k (#1) ASC NULLS LAST, b (#2) DESC NULLS LAST]
+        │               ├── limit: [NONE]
+        │               ├── window top: 2
+        │               ├── window function: RowNumber
+        │               └── Exchange(Hash)
+        │                   ├── Exchange(Hash): keys: [a (#6)]
+        │                   └── Window
+        │                       ├── aggregate function: sum
+        │                       ├── partition items: [k (#1) AS (#1), a (#6) AS (#6)]
+        │                       ├── order by items: [b (#2) AS (#2) DESC NULLS LAST]
+        │                       ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │                       └── Sort
+        │                           ├── sort keys: [k (#1) ASC NULLS LAST, a (#6) ASC NULLS LAST, b (#2) DESC NULLS LAST]
+        │                           ├── limit: [NONE]
+        │                           ├── window top: NONE
+        │                           ├── window function: Aggregate(AggregateFunction { span: Some(15..135), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(24..25), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum_arg_0", column_name_lower: None, index: 3, data_type: Number(UInt16), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(t1.a + t2.b) OVER (PARTITION BY t2.k ORDER BY t2.b DESC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)" })
+        │                           └── Exchange(Hash)
+        │                               ├── Exchange(Hash): keys: [k (#1), a (#6)]
+        │                               └── EvalScalar
+        │                                   ├── scalars: [k (#1) AS (#1), b (#2) AS (#2), plus(a (#6), b (#2)) AS (#3), a (#6) AS (#6)]
+        │                                   └── Join(Cross)
+        │                                       ├── build keys: []
+        │                                       ├── probe keys: []
+        │                                       ├── other filters: []
+        │                                       ├── Exchange(Broadcast)
+        │                                       │   └── Aggregate(Final)
+        │                                       │       ├── group items: [a (#6) AS (#6)]
+        │                                       │       ├── aggregate functions: []
+        │                                       │       └── Aggregate(Partial)
+        │                                       │           ├── group items: [a (#6) AS (#6)]
+        │                                       │           ├── aggregate functions: []
+        │                                       │           └── Exchange(Hash)
+        │                                       │               ├── Exchange(Hash): keys: [a (#6)]
+        │                                       │               └── ConstantTableScan
+        │                                       │                   ├── columns: [a (#6)]
+        │                                       │                   └── num_rows: [2]
+        │                                       └── ConstantTableScan
+        │                                           ├── columns: [k (#1), b (#2)]
+        │                                           └── num_rows: [4]
+        └── ConstantTableScan
+            ├── columns: [a (#0)]
+            └── num_rows: [2]
+
+
+=== count_ordered_window_keeps_null_on_no_match ===
+description: Replacing a COUNT-ordered window sort must clear count fixup so an unmatched scalar subquery remains NULL.
+sql: SELECT o.k, (SELECT row_number() OVER (ORDER BY count(*)) FROM cw_inner i WHERE i.k = o.k GROUP BY i.k LIMIT 1) FROM (VALUES (1), (2)) o(k)
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0), SUBQUERY AS (#3) AS (#4)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: row_number() OVER (ORDER BY COUNT(*)) (#3)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [row_number() OVER (ORDER BY COUNT(*)) (#3) AS (#3)]
+│               └── Window
+│                   ├── aggregate function: row_number
+│                   ├── partition items: []
+│                   ├── order by items: [COUNT(*) (#2) AS (#2)]
+│                   ├── frame: [Range: Preceding(None) ~ CurrentRow]
+│                   └── Sort
+│                       ├── sort keys: [COUNT(*) (#2) ASC NULLS LAST]
+│                       ├── limit: [NONE]
+│                       └── EvalScalar
+│                           ├── scalars: [COUNT(*) (#2) AS (#2)]
+│                           └── Aggregate(Initial)
+│                               ├── group items: [cw_inner.k (#1) AS (#1)]
+│                               ├── aggregate functions: [count() AS (#2)]
+│                               └── EvalScalar
+│                                   ├── scalars: [cw_inner.k (#1) AS (#1)]
+│                                   └── Filter
+│                                       ├── filters: [eq(cw_inner.k (#1), k (#0))]
+│                                       └── Scan
+│                                           ├── table: default.cw_inner (#0)
+│                                           ├── filters: []
+│                                           ├── order by: []
+│                                           └── limit: NONE
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [k (#0) AS (#0), row_number() OVER (ORDER BY COUNT(*)) (#3) AS (#4)]
+    └── Join(LeftSingle)
+        ├── build keys: [k (#5)]
+        ├── probe keys: [k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [k (#5) AS (#5)]
+        │           ├── order by items: []
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Window
+        │               ├── aggregate function: row_number
+        │               ├── partition items: [k (#5) AS (#5)]
+        │               ├── order by items: [COUNT(*) (#2) AS (#2)]
+        │               ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │               └── Sort
+        │                   ├── sort keys: [k (#5) ASC NULLS LAST, COUNT(*) (#2) ASC NULLS LAST]
+        │                   ├── limit: [NONE]
+        │                   ├── window top: NONE
+        │                   ├── window function: RowNumber
+        │                   └── Exchange(Hash)
+        │                       ├── Exchange(Hash): keys: [k (#5)]
+        │                       └── Aggregate(Final)
+        │                           ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                           ├── aggregate functions: [count() AS (#2)]
+        │                           └── Aggregate(Partial)
+        │                               ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                               ├── aggregate functions: [count() AS (#2)]
+        │                               └── Exchange(Hash)
+        │                                   ├── Exchange(Hash): keys: [cw_inner.k (#1)]
+        │                                   └── Join(Inner)
+        │                                       ├── build keys: [cw_inner.k (#1)]
+        │                                       ├── probe keys: [k (#5)]
+        │                                       ├── other filters: []
+        │                                       ├── Exchange(Broadcast)
+        │                                       │   └── Scan
+        │                                       │       ├── table: default.cw_inner (#0)
+        │                                       │       ├── filters: []
+        │                                       │       ├── order by: []
+        │                                       │       └── limit: NONE
+        │                                       └── Aggregate(Final)
+        │                                           ├── group items: [k (#5) AS (#5)]
+        │                                           ├── aggregate functions: []
+        │                                           └── Aggregate(Partial)
+        │                                               ├── group items: [k (#5) AS (#5)]
+        │                                               ├── aggregate functions: []
+        │                                               └── Exchange(Hash)
+        │                                                   ├── Exchange(Hash): keys: [k (#5)]
+        │                                                   └── ConstantTableScan
+        │                                                       ├── columns: [k (#5)]
+        │                                                       └── num_rows: [2]
+        └── ConstantTableScan
+            ├── columns: [k (#0)]
+            └── num_rows: [2]
+
+
+=== distinct_count_ordered_window_keeps_null_on_no_match ===
+description: COUNT(DISTINCT) in the replaced window sort must also prevent filling a missing row_number with zero.
+sql: SELECT o.k, (SELECT row_number() OVER (ORDER BY count(DISTINCT i.k)) FROM cw_inner i WHERE i.k = o.k GROUP BY i.k LIMIT 1) FROM (VALUES (1), (2)) o(k)
+raw_plan:
+EvalScalar
+├── scalars: [k (#0) AS (#0), SUBQUERY AS (#3) AS (#4)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: row_number() OVER (ORDER BY count(DISTINCT i.k)) (#3)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [row_number() OVER (ORDER BY count(DISTINCT i.k)) (#3) AS (#3)]
+│               └── Window
+│                   ├── aggregate function: row_number
+│                   ├── partition items: []
+│                   ├── order by items: [count(DISTINCT i.k) (#2) AS (#2)]
+│                   ├── frame: [Range: Preceding(None) ~ CurrentRow]
+│                   └── Sort
+│                       ├── sort keys: [count(DISTINCT i.k) (#2) ASC NULLS LAST]
+│                       ├── limit: [NONE]
+│                       └── EvalScalar
+│                           ├── scalars: [count(DISTINCT i.k) (#2) AS (#2)]
+│                           └── Aggregate(Initial)
+│                               ├── group items: [cw_inner.k (#1) AS (#1)]
+│                               ├── aggregate functions: [count_distinct(cw_inner.k (#1)) AS (#2)]
+│                               └── EvalScalar
+│                                   ├── scalars: [cw_inner.k (#1) AS (#1)]
+│                                   └── Filter
+│                                       ├── filters: [eq(cw_inner.k (#1), k (#0))]
+│                                       └── Scan
+│                                           ├── table: default.cw_inner (#0)
+│                                           ├── filters: []
+│                                           ├── order by: []
+│                                           └── limit: NONE
+└── ConstantTableScan
+    ├── columns: [k (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [k (#0) AS (#0), row_number() OVER (ORDER BY count(DISTINCT i.k)) (#3) AS (#4)]
+    └── Join(LeftSingle)
+        ├── build keys: [k (#5)]
+        ├── probe keys: [k (#0)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── Filter
+        │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [k (#5) AS (#5)]
+        │           ├── order by items: []
+        │           ├── frame: [Rows: Preceding(None) ~ CurrentRow]
+        │           └── Window
+        │               ├── aggregate function: row_number
+        │               ├── partition items: [k (#5) AS (#5)]
+        │               ├── order by items: [count(DISTINCT i.k) (#2) AS (#2)]
+        │               ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │               └── Sort
+        │                   ├── sort keys: [k (#5) ASC NULLS LAST, count(DISTINCT i.k) (#2) ASC NULLS LAST]
+        │                   ├── limit: [NONE]
+        │                   ├── window top: NONE
+        │                   ├── window function: RowNumber
+        │                   └── Exchange(Hash)
+        │                       ├── Exchange(Hash): keys: [k (#5)]
+        │                       └── Aggregate(Final)
+        │                           ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                           ├── aggregate functions: [count_distinct(cw_inner.k (#1)) AS (#2)]
+        │                           └── Aggregate(Partial)
+        │                               ├── group items: [cw_inner.k (#1) AS (#1), k (#5) AS (#5)]
+        │                               ├── aggregate functions: [count_distinct(cw_inner.k (#1)) AS (#2)]
+        │                               └── Exchange(Hash)
+        │                                   ├── Exchange(Hash): keys: [cw_inner.k (#1)]
+        │                                   └── Join(Inner)
+        │                                       ├── build keys: [cw_inner.k (#1)]
+        │                                       ├── probe keys: [k (#5)]
+        │                                       ├── other filters: []
+        │                                       ├── Exchange(Broadcast)
+        │                                       │   └── Scan
+        │                                       │       ├── table: default.cw_inner (#0)
+        │                                       │       ├── filters: []
+        │                                       │       ├── order by: []
+        │                                       │       └── limit: NONE
+        │                                       └── Aggregate(Final)
+        │                                           ├── group items: [k (#5) AS (#5)]
+        │                                           ├── aggregate functions: []
+        │                                           └── Aggregate(Partial)
+        │                                               ├── group items: [k (#5) AS (#5)]
+        │                                               ├── aggregate functions: []
+        │                                               └── Exchange(Hash)
+        │                                                   ├── Exchange(Hash): keys: [k (#5)]
+        │                                                   └── ConstantTableScan
+        │                                                       ├── columns: [k (#5)]
+        │                                                       └── num_rows: [2]
+        └── ConstantTableScan
+            ├── columns: [k (#0)]
+            └── num_rows: [2]
+
+
+=== uncorrelated_window_keeps_global_input ===
+description: An uncorrelated global window needs no outer partition sort.
+sql: SELECT (SELECT sum(t2.b) OVER () FROM (VALUES (10), (20)) t2(b) LIMIT 1) FROM (VALUES (1), (2)) t1(a)
+raw_plan:
+EvalScalar
+├── scalars: [SUBQUERY AS (#2) AS (#3)]
+├── subquerys
+│   └── Subquery (Scalar)
+│       ├── output_column: sum(t2.b) OVER () (#2)
+│       └── Limit
+│           ├── limit: [1]
+│           ├── offset: [0]
+│           └── EvalScalar
+│               ├── scalars: [sum(t2.b) OVER () (#2) AS (#2)]
+│               └── Window
+│                   ├── aggregate function: sum
+│                   ├── partition items: []
+│                   ├── order by items: []
+│                   ├── frame: [Range: Preceding(None) ~ Following(None)]
+│                   └── EvalScalar
+│                       ├── scalars: [b (#1) AS (#1)]
+│                       └── ConstantTableScan
+│                           ├── columns: [b (#1)]
+│                           └── num_rows: [2]
+└── ConstantTableScan
+    ├── columns: [a (#0)]
+    └── num_rows: [2]
+
+optimized_plan:
+EvalScalar
+├── scalars: [sum(t2.b) OVER () (#2) AS (#3)]
+└── Join(LeftSingle)
+    ├── build keys: []
+    ├── probe keys: []
+    ├── other filters: []
+    ├── Limit
+    │   ├── limit: [1]
+    │   ├── offset: [0]
+    │   └── Window
+    │       ├── aggregate function: sum
+    │       ├── partition items: []
+    │       ├── order by items: []
+    │       ├── frame: [Range: Preceding(None) ~ Following(None)]
+    │       └── Exchange(Merge)
+    │           └── ConstantTableScan
+    │               ├── columns: [b (#1)]
+    │               └── num_rows: [2]
+    └── Exchange(Merge)
+        └── ConstantTableScan
+            ├── columns: [a (#0)]
+            └── num_rows: [2]
+
+

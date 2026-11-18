@@ -22,6 +22,7 @@ use databend_common_expression::filter::FilterExecutor;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::desc::MARKER_KIND_FALSE;
+use super::probe_join::CrossJoinProbe;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::sql::plans::JoinType;
 
@@ -34,10 +35,16 @@ pub struct ProcessState {
     pub next_idx: usize,
 }
 
+/// A probe input that has not produced all of its output yet.
+pub(crate) enum PendingProbe {
+    Hash(ProcessState),
+    Cross(CrossJoinProbe),
+}
+
 /// ProbeState used for probe phase of hash join.
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
-    pub(crate) process_state: Option<ProcessState>,
+    pub(crate) pending: Option<PendingProbe>,
 
     pub(crate) max_block_size: usize,
     // The `mutable_indexes` is used to call `take` or `gather`.
@@ -123,10 +130,8 @@ impl ProbeState {
         } else {
             None
         };
-        let filter_executor = if !matches!(
-            &join_type,
-            JoinType::LeftMark | JoinType::RightMark | JoinType::Cross
-        ) && let Some(predicate) = other_predicate
+        let filter_executor = if !matches!(&join_type, JoinType::LeftMark | JoinType::RightMark)
+            && let Some(predicate) = other_predicate
         {
             let filter_executor = FilterExecutor::new(
                 predicate,
@@ -141,7 +146,7 @@ impl ProbeState {
             None
         };
         ProbeState {
-            process_state: None,
+            pending: None,
             max_block_size,
             mutable_indexes: MutableIndexes::new(max_block_size),
             generation_state: ProbeBlockGenerationState::new(max_block_size),

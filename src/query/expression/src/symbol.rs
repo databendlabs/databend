@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::fmt::Write;
 use std::hash::Hash;
 
 use num_traits::FromPrimitive;

@@ -395,9 +395,8 @@ impl FuseTable {
         let read_info = self.read_snapshot_info().await?;
 
         info!(
-            "Reading partitions for table {}, push downs: {:?}, snapshot: {:?}",
+            "Reading partitions for table {}, snapshot: {:?}",
             self.name(),
-            push_downs,
             read_info.as_ref().map(|read_info| read_info.snapshot_id)
         );
         match read_info {

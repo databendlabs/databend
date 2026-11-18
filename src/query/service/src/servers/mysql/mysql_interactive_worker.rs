@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_ast::parser::mask_log_sql_secrets;
+use databend_common_ast::parser::format_sql_for_log;
 use databend_common_ast::parser::mask_raw_sql_secrets;
 use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::BuildInfoRef;
@@ -480,7 +480,7 @@ impl InteractiveWorkerBase {
                 ))
             }
             None => {
-                info!("Normal query: {}", mask_log_sql_secrets(query));
+                info!("Normal query: {}", format_sql_for_log(query));
                 let context = self.session.create_query_context(self.version).await?;
                 context.update_init_query_id(query_id);
                 let mut tracking_payload = ThreadTracker::new_tracking_payload();

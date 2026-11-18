@@ -37,7 +37,6 @@ pub use http_query::HttpQueryRequest;
 pub use http_query::HttpQueryResponseInternal;
 pub use http_query::HttpSessionConf;
 pub use http_query::HttpSessionStateInternal;
-pub(crate) use http_query::MaskedRequest;
 pub use http_query::ResponseState;
 pub use http_query_context::HttpQueryContext;
 pub(crate) use http_query_manager::CloseReason;

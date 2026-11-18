@@ -23,7 +23,6 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::aggregate_function::AggregateCallRef;
@@ -41,6 +40,8 @@ use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use itertools::Itertools;
+
+use super::agg_hashtable::merge_result_block;
 
 fn resolve_agg(name: &str, args_type: &[DataType]) -> AggregateCallRef {
     AGGR_REGISTRY
@@ -136,15 +137,7 @@ fn aggregate(batches: &[(Vec<Column>, Column)]) -> DataBlock {
             .unwrap();
     }
 
-    let mut merge_state = PayloadFlushState::default();
-    let mut blocks = Vec::new();
-    while hashtable.merge_result(&mut merge_state).unwrap() {
-        let mut entries = merge_state.take_group_columns();
-        entries.extend(merge_state.take_aggregate_results());
-        let num_rows = entries[0].len();
-        blocks.push(DataBlock::new(entries, num_rows));
-    }
-    DataBlock::concat(&blocks).unwrap()
+    merge_result_block(hashtable, aggrs.len())
 }
 
 // cargo test --package databend-common-functions --test it -- aggregates::agg_encoded --nocapture

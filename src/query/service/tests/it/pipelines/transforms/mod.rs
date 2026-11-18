@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod adaptive_topk_count;
+mod cross_join;
 mod sort;

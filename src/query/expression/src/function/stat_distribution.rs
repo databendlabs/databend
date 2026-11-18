@@ -23,7 +23,6 @@ pub use databend_common_statistics::StatEstimate;
 use crate::Domain;
 use crate::Scalar;
 use crate::types::DataType;
-use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
 
 #[derive(Debug, Clone)]
