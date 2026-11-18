@@ -138,7 +138,7 @@ async fn test_cache_when_leader_down() -> anyhow::Result<()> {
     cli.upsert_kv(UpsertKV::update("pp/a", b"a")).await?;
     cli.upsert_kv(UpsertKV::update("pp/c", b"c")).await?;
 
-    let mut c = Cache::new(client(), "pp", "test").await;
+    let c = Cache::new(client(), "pp", "test").await;
 
     cli.upsert_kv(UpsertKV::update("pp/after_cache_create", b"x"))
         .await?;

@@ -254,13 +254,13 @@ async fn external_access_watch_is_tenant_scoped() -> anyhow::Result<()> {
         )
         .await?;
     sleep(Duration::from_millis(500)).await;
-    let mut rules = provider.network_rule_cache.as_ref().unwrap().lock().await;
+    let rules = provider.network_rule_cache.as_ref().unwrap().lock().await;
     let dir = TIdent::<NetworkRuleResource>::new(&tenant, "").tenant_dir();
     assert_eq!(rules.try_list_dir(&dir).await?.len(), 1);
     let dir = TIdent::<NetworkRuleResource>::new(&foreign, "").tenant_dir();
     assert!(rules.try_list_dir(&dir).await?.is_empty());
     drop(rules);
-    let mut integrations = provider
+    let integrations = provider
         .external_access_integration_cache
         .as_ref()
         .unwrap()

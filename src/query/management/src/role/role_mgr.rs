@@ -97,7 +97,7 @@ impl RoleMgr {
         let prefix = TenantOwnershipObjectIdent::key_space_prefix();
         let name = TenantOwnershipObjectIdent::type_name();
 
-        let mut cache = Cache::new(client, prefix, name).await;
+        let cache = Cache::new(client, prefix, name).await;
 
         // The meta-service may not support `WatchRequest::initial_flush` parameter,
         // Peek the cache state to check if the cache is supported.
@@ -244,7 +244,7 @@ impl RoleApi for RoleMgr {
 
         let cached = {
             if let Some(ownership_cache) = &self.ownership_cache {
-                let mut cache = ownership_cache.lock().await;
+                let cache = ownership_cache.lock().await;
                 let kvs = cache.try_list_dir(&self.ownership_object_dir()).await;
 
                 match &kvs {
