@@ -58,6 +58,7 @@ use serde::Serializer;
 use tokio::sync::Mutex as TokioMutex;
 
 use super::CloseReason;
+use super::CredentialBinding;
 use super::ExecuteState;
 use super::ExecuteStateKind;
 use super::Executor;
@@ -672,6 +673,7 @@ pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) owner_tenant: Tenant,
     pub(crate) query_token: QueryToken,
+    pub(crate) credential_binding: Option<CredentialBinding>,
     pub(crate) user_name: String,
     pub(crate) client_session_id: Option<String>,
     pagination: PaginationConf,
@@ -781,6 +783,7 @@ impl HttpQuery {
             id: query_id,
             owner_tenant: http_ctx.authenticated_tenant.clone(),
             query_token: QueryToken::new(),
+            credential_binding: http_ctx.credential_binding.clone(),
             user_name: http_ctx.user_name.clone(),
             client_session_id: http_ctx.client_session_id.clone(),
             pagination: req.pagination.clone(),

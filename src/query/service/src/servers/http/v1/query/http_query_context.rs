@@ -32,6 +32,7 @@ use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
+use crate::servers::http::v1::query::CredentialBinding;
 use crate::servers::http::v1::query::HttpQuery;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
@@ -46,6 +47,8 @@ pub struct HttpQueryContext {
     pub(crate) authenticated_tenant: Tenant,
     /// Bound during HTTP authentication, before the context reaches a handler.
     pub(crate) authenticated_query: Option<Arc<HttpQuery>>,
+    /// Set for submissions only; retained by the created query.
+    pub(crate) credential_binding: Option<CredentialBinding>,
     pub credential: Credential,
     pub query_id: String,
     pub is_query_id_from_client: bool,

@@ -97,6 +97,25 @@ has already committed and is not a signal to automatically re-execute it.
   while a well-formed query-token request without retained query state gives 404.
 - Duplicate `X-DATABEND-AUTH-METHOD` headers are rejected on authenticated endpoints.
 
+## Credential binding for existing clients
+
+Clients that do not use query tokens get the same query-scoped behavior from a
+credential binding. On submission the server stores an HMAC (per-process random key)
+of the requested tenant, `X-DATABEND-AUTH-METHOD` and the exact `Authorization`
+header in the query record; the credential itself is not retained.
+
+A state/page/final/kill request without the explicit `query-token` method whose
+binding matches the target query is authenticated as the query owner without user,
+password-policy or token lookups in Meta, so it is not a login attempt and cannot
+count towards password lockout. Any other credential falls back to ordinary
+authentication and ownership checks. An explicit `query-token` request never falls
+back: a wrong token is 401 even if `Authorization` equals the submission credential.
+
+The binding has the token's lifetime and revocation semantics. The submission
+credential keeps working for its own query after a password change, credential
+expiry or user deletion, but cannot submit new SQL. Credentials that change on
+every request, such as key-pair JWTs, never match and keep the existing behavior.
+
 ## Transport and secrecy
 
 Use TLS. Never put tokens in URLs or unredacted logs/traces. Token-bearing responses

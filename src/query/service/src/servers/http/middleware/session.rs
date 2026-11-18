@@ -81,6 +81,7 @@ use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
+use crate::servers::http::v1::CredentialBinding;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
@@ -431,6 +432,27 @@ impl<E> HTTPSessionEndpoint<E> {
         if let Some(tenant) = &requested_tenant {
             session.set_current_tenant(tenant.clone())?;
         }
+        // Compute against the tenant requested before authentication: a follow-up
+        // repeats the submission's request, not its resolved (e.g. JWT) tenant.
+        let credential_binding = match (&credential, self.endpoint_kind) {
+            (Credential::QueryToken { .. }, _) => None,
+            (_, EndpointKind::StartQuery | EndpointKind::PollQuery) => {
+                CredentialBinding::from_request(&session.get_current_tenant(), req.headers())
+            }
+            _ => None,
+        };
+        let bound_query = match (&credential_binding, self.endpoint_kind) {
+            (Some(binding), EndpointKind::PollQuery) => req
+                .raw_path_param("id")
+                .and_then(|id| HttpQueryManager::instance().get_query(id))
+                .filter(|query| {
+                    query
+                        .credential_binding
+                        .as_ref()
+                        .is_some_and(|bound| bound.matches(binding))
+                }),
+            _ => None,
+        };
         let (user_name, authed_client_session_id, authenticated_query) =
             if let Credential::QueryToken { query_id, token } = &credential {
                 // Retain exactly the object whose capability was verified. A
@@ -451,6 +473,18 @@ impl<E> HTTPSessionEndpoint<E> {
                     query.client_session_id.clone(),
                     Some(query),
                 )
+            } else if let Some(query) = bound_query {
+                // The submitter repeating its own credential keeps access to this
+                // query even if the credential has since expired or changed. On a
+                // mismatch, fall through to ordinary authentication instead.
+                session.set_current_tenant(query.owner_tenant.clone())?;
+                let client_session_id = match &credential {
+                    Credential::DatabendToken { token } => {
+                        Some(SessionClaim::decode(token)?.0.session_id)
+                    }
+                    _ => None,
+                };
+                (query.user_name.clone(), client_session_id, Some(query))
             } else {
                 let (user_name, client_session_id) = self
                     .auth_manager
@@ -543,6 +577,8 @@ impl<E> HTTPSessionEndpoint<E> {
             session,
             authenticated_tenant,
             authenticated_query,
+            credential_binding: credential_binding
+                .filter(|_| matches!(self.endpoint_kind, EndpointKind::StartQuery)),
             query_id,
             is_query_id_from_client,
             node_id,

@@ -42,13 +42,13 @@ use super::http_query_handlers::TestQueryResponse;
 use super::http_query_handlers::create_endpoint;
 use super::http_query_handlers::post_sql_to_endpoint_new_session;
 
-fn basic_headers(user: &str, password: &str) -> HeaderMap {
+pub(super) fn basic_headers(user: &str, password: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.typed_insert(headers::Authorization::basic(user, password));
     headers
 }
 
-fn token_headers(token: &str) -> HeaderMap {
+pub(super) fn token_headers(token: &str) -> HeaderMap {
     let mut headers = HeaderMap::new();
     headers.insert(HEADER_AUTH_METHOD, HeaderValue::from_static("query-token"));
     headers.insert(
@@ -58,7 +58,7 @@ fn token_headers(token: &str) -> HeaderMap {
     headers
 }
 
-async fn request(
+pub(super) async fn request(
     ep: &Route,
     method: Method,
     uri: &str,
@@ -113,7 +113,7 @@ fn client_session_header(id: &str) -> HeaderValue {
     HeaderValue::from_str(&URL_SAFE.encode(json)).unwrap()
 }
 
-async fn start(ep: &Route, headers: HeaderMap) -> anyhow::Result<TestQueryResponse> {
+pub(super) async fn start(ep: &Route, headers: HeaderMap) -> anyhow::Result<TestQueryResponse> {
     start_with_timeout(ep, headers, 60).await
 }
 
@@ -125,7 +125,7 @@ async fn start_with_timeout(
     start_query(ep, headers, timeout_secs, "SELECT * FROM numbers(5)").await
 }
 
-async fn start_query(
+pub(super) async fn start_query(
     ep: &Route,
     mut headers: HeaderMap,
     timeout_secs: u64,
@@ -154,7 +154,7 @@ async fn start_query(
     Ok(result)
 }
 
-async fn admin_sql(ep: &Route, sql: &str) -> anyhow::Result<()> {
+pub(super) async fn admin_sql(ep: &Route, sql: &str) -> anyhow::Result<()> {
     let (status, result) =
         post_sql_to_endpoint_new_session(ep, sql, 5, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK);
@@ -445,15 +445,16 @@ async fn test_query_token_after_password_change_and_user_deletion() -> anyhow::R
     let result = start(&ep, basic.clone()).await?;
     let token = result.query_token.as_ref().unwrap();
     admin_sql(&ep, "ALTER USER query_token_user IDENTIFIED BY 'after'").await?;
+    // The submission credential stays bound to its query (see credential_binding.rs).
     let old = request(
         &ep,
         Method::GET,
-        result.next_uri.as_ref().unwrap(),
+        &format!("/v1/query/{}", result.id),
         basic.clone(),
         json!(null),
     )
     .await;
-    assert_eq!(old.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(old.status(), StatusCode::OK);
     let page = request(
         &ep,
         Method::GET,
