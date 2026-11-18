@@ -85,7 +85,7 @@ fn test_select_like_over_dictionary() {
             &BUILTIN_FUNCTIONS,
         )
         .unwrap();
-        let pattern = generate_like_pattern(b"xxx%".as_slice(), 0);
+        let pattern = generate_like_pattern(b"xxx%".as_slice());
         let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
         // Assert that encoded input reaches the fast path, not just that decoding gives
         // correct results. Ordinary strings must instead use the fallback.
