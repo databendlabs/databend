@@ -41,7 +41,7 @@ const PUSH_DOWN_RULES: [RuleID; 8] = [
     RuleID::PushDownFilterWindow,
     RuleID::PushDownFilterSort,
     RuleID::PushDownFilterProjectSet,
-    RuleID::PushDownFilterUdf,
+    RuleID::PushDownFilterAsyncFunction,
 ];
 
 /// Plan join runtime filters with the filter push-down rules.

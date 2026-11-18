@@ -22,56 +22,67 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::plans::AsyncFunction;
 use crate::plans::Filter;
 use crate::plans::RelOp;
 
-/// Push predicates that do not use the computed items below `Udf` or `AsyncFunction`.
+/// Push predicates that do not use the computed items below `AsyncFunction`.
+///
+/// The rule does not apply if an item calls `nextval`. Each call advances the
+/// sequence, so removing input rows changes the values returned for the rows
+/// that remain. `Udf` has no such rule: a UDF may keep state or have side
+/// effects, and the planner cannot check that.
 ///
 /// Input:   Filter
 ///           \
-///            Udf / AsyncFunction
+///            AsyncFunction
 ///             \
 ///              *
 ///
 /// Output:  Filter(remaining)
 ///           \
-///            Udf / AsyncFunction
+///            AsyncFunction
 ///             \
 ///              Filter(pushed down)
 ///               \
 ///                *
-pub struct RulePushDownFilterUdf {
+pub struct RulePushDownFilterAsyncFunction {
     id: RuleID,
     matchers: Vec<Matcher>,
 }
 
-impl RulePushDownFilterUdf {
+impl RulePushDownFilterAsyncFunction {
     pub fn new() -> Self {
         Self {
-            id: RuleID::PushDownFilterUdf,
-            matchers: [RelOp::Udf, RelOp::AsyncFunction]
-                .into_iter()
-                .map(|op_type| Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type,
-                        children: vec![Matcher::Leaf],
-                    }],
-                })
-                .collect(),
+            id: RuleID::PushDownFilterAsyncFunction,
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::AsyncFunction,
+                    children: vec![Matcher::Leaf],
+                }],
+            }],
         }
     }
 }
 
-impl Rule for RulePushDownFilterUdf {
+impl Rule for RulePushDownFilterAsyncFunction {
     fn id(&self) -> RuleID {
         self.id
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let udf_expr = s_expr.child(0)?;
-        let child_prop = RelExpr::with_s_expr(udf_expr).derive_relational_prop_child(0)?;
+        let async_func_expr = s_expr.child(0)?;
+        let async_func: AsyncFunction = async_func_expr.plan().clone().try_into()?;
+        if async_func
+            .items
+            .iter()
+            .any(|item| item.scalar.contains_nextval())
+        {
+            return Ok(());
+        }
+        let child_prop = RelExpr::with_s_expr(async_func_expr).derive_relational_prop_child(0)?;
 
         let (pushed_down_predicates, remaining_predicates): (Vec<_>, Vec<_>) = filter
             .predicates
@@ -88,9 +99,9 @@ impl Rule for RulePushDownFilterUdf {
                 }
                 .into(),
             ),
-            Arc::new(udf_expr.child(0)?.clone()),
+            Arc::new(async_func_expr.child(0)?.clone()),
         );
-        let mut result = udf_expr.replace_children([Arc::new(pushed_down)]);
+        let mut result = async_func_expr.replace_children([Arc::new(pushed_down)]);
         if !remaining_predicates.is_empty() {
             result = SExpr::create_unary(
                 Arc::new(
@@ -112,7 +123,7 @@ impl Rule for RulePushDownFilterUdf {
     }
 }
 
-impl Default for RulePushDownFilterUdf {
+impl Default for RulePushDownFilterAsyncFunction {
     fn default() -> Self {
         Self::new()
     }
