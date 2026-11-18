@@ -109,7 +109,7 @@ impl RowTypeVisitor for FlushColumn<'_> {
     type Output = Column;
 
     fn visit_empty(self, data_type: &DataType) -> Column {
-        let len = self.state.probe_state.row_count;
+        let len = self.state.row_count;
         match data_type {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
@@ -294,7 +294,6 @@ impl Payload {
         let rows = end - flush_state.flush_page_row;
         flush_state.row_count = rows;
         let state = &mut *flush_state.probe_state;
-        state.row_count = rows;
 
         for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
             *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
@@ -335,7 +334,7 @@ impl Payload {
         col_offset: usize,
         state: &mut PayloadFlushState,
     ) -> Column {
-        let len = state.probe_state.row_count;
+        let len = state.row_count;
         let iter =
             (0..len).map(|idx| unsafe { state.addresses[idx].read::<T::Scalar>(col_offset) });
         let col = T::column_from_iter(iter, &[]);
@@ -348,7 +347,7 @@ impl Payload {
         state: &mut PayloadFlushState,
         decimal_size: DecimalSize,
     ) -> Column {
-        let len = state.probe_state.row_count;
+        let len = state.row_count;
         let iter = (0..len).map(|idx| unsafe {
             state.addresses[idx].read::<<DecimalType<Num> as AccessType>::Scalar>(col_offset)
         });
@@ -361,7 +360,7 @@ impl Payload {
         col_offset: usize,
         state: &mut PayloadFlushState,
     ) -> BinaryColumn {
-        let len = state.probe_state.row_count;
+        let len = state.row_count;
         let mut binary_builder = BinaryColumnBuilder::with_capacity(len, len * 4);
 
         unsafe {
@@ -379,7 +378,7 @@ impl Payload {
         col_offset: usize,
         state: &mut PayloadFlushState,
     ) -> StringColumn {
-        let len = state.probe_state.row_count;
+        let len = state.row_count;
         let mut binary_builder = StringColumnBuilder::with_capacity(len);
 
         unsafe {
@@ -397,7 +396,7 @@ impl Payload {
         col_offset: usize,
         state: &mut PayloadFlushState,
     ) -> Column {
-        let len = state.probe_state.row_count;
+        let len = state.row_count;
         let mut builder = ColumnBuilder::with_capacity(data_type, len);
 
         unsafe {

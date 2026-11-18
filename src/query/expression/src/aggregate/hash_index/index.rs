@@ -530,10 +530,7 @@ mod tests {
         }
 
         fn init_state(&self) -> ProbeState {
-            let mut state = ProbeState {
-                row_count: self.incoming.len(),
-                ..Default::default()
-            };
+            let mut state = ProbeState::default();
 
             for (i, (_, hash)) in self.incoming.iter().enumerate() {
                 state.group_hashes[i] = *hash
@@ -651,7 +648,7 @@ mod tests {
 
             assert_eq!(want_count, count);
 
-            let got = state.addresses[..state.row_count]
+            let got = state.addresses[..adapter.incoming.len()]
                 .iter()
                 .map(|row_ptr| {
                     let (key, _, value) = adapter.get_payload(*row_ptr);

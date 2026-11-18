@@ -392,7 +392,6 @@ impl AggregateHashTable {
         {
             new_group_count
         } else {
-            state.row_count = row_count;
             Self::fill_group_hashes(
                 group_columns,
                 &mut state.group_hashes[..row_count],
@@ -417,7 +416,6 @@ impl AggregateHashTable {
         stats: &mut PartialAddStats,
     ) -> Result<()> {
         // The caller filled `state.group_hashes`.
-        state.row_count = row_count;
         stats.rows += row_count;
 
         if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
@@ -604,7 +602,6 @@ impl AggregateHashTable {
                 .ok()?;
 
             let distinct = representatives.len();
-            state.row_count = distinct;
             group_hash_entries((&keys).into(), &mut state.group_hashes[..distinct]);
             // Functions map dictionary values without changing codes, so distinct codes can
             // produce equal values. Probe representatives normally to find their actual groups
@@ -624,7 +621,6 @@ impl AggregateHashTable {
             state.addresses[row] = group_state.code_addresses[*code as usize];
             state.state_places[row] = group_state.code_places[*code as usize];
         }
-        state.row_count = row_count;
         Some(new_group_count)
     }
 

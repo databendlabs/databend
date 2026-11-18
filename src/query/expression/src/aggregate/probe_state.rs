@@ -39,7 +39,6 @@ pub struct ProbeState {
     pub(super) group_compare_vector: [RowID; BATCH_SIZE],
     pub(super) no_match_vector: [RowID; BATCH_SIZE],
     pub(super) slots: [usize; BATCH_SIZE],
-    pub(super) row_count: usize,
     // The rows that created a group, set when probing with source states.
     pub(super) new_groups: [bool; BATCH_SIZE],
 
@@ -58,8 +57,6 @@ impl Default for ProbeState {
             no_match_vector: [RowID::default(); BATCH_SIZE],
             empty_vector: [RowID::default(); BATCH_SIZE],
             slots: [0; BATCH_SIZE],
-
-            row_count: 0,
             new_groups: [false; BATCH_SIZE],
             partition_entries: vec![],
         }
