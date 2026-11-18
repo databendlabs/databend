@@ -18,9 +18,9 @@ echo "alter user 'testuser2' identified by '123'" | $TEST_USER_CONNECT 2>&1 | gr
 echo "alter user 'testuser1' identified by '123' with default_role='role1'" | $TEST_USER_CONNECT  2>&1 | grep 'Permission denied: privilege \[Alter\]' |wc -l
 echo "alter user 'testuser1' identified by '123' with disabled=true" | $TEST_USER_CONNECT  2>&1 | grep 'Permission denied: privilege \[Alter\]' |wc -l
 
-# Note: this query in bendsql will return err, because bendsql will call auth in poll, after password modified, in next poll the auth failed, it will return err.
-# testuser1@localhost:8000/default> alter user 'testuser1' identified by '123';
-# error: APIError: RequestError: Query Page failed with status 401 Unauthorized: {"error":{"code":"401","message":"... incorrect password ..."}}
+# bendsql keeps polling this query with the old password after it changes the
+# password. The submission credential stays bound to its own query, so polling
+# succeeds instead of failing with "incorrect password".
 echo "alter user 'testuser1' identified by '123'" | $TEST_USER_CONNECT 2>&1 | grep 'incorrect password' | wc -l
 
 export TEST_USER_MODIFY_CONNECT="bendsql_connect_user testuser1 123 -A"
