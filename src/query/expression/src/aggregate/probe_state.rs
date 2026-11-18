@@ -67,24 +67,15 @@ unsafe impl Send for ProbeState {}
 unsafe impl Sync for ProbeState {}
 
 impl ProbeState {
+    /// A state like `default()`, built in place on the heap without moving its arrays through
+    /// the stack.
     pub fn new_boxed() -> Box<ProbeState> {
         let mut state = Box::<ProbeState>::new_zeroed();
+        // SAFETY: all zeros is the value `default()` gives every field but `partition_entries`:
+        // hashes, ids, indices and slots of 0, null row and state addresses, rows of
+        // `RowID(0)` and `false`. Write that one before the box is taken as initialized.
         unsafe {
-            let uninit = state.assume_init_mut();
-            uninit.partition_entries = vec![];
-
-            for ptr in &mut uninit.addresses {
-                *ptr = RowPtr::null();
-            }
-            for addr in &mut uninit.state_places {
-                *addr = StateAddr::null()
-            }
-            for item in &mut uninit.group_compare_vector {
-                *item = Default::default()
-            }
-            for item in &mut uninit.no_match_vector {
-                *item = Default::default()
-            }
+            std::ptr::addr_of_mut!((*state.as_mut_ptr()).partition_entries).write(Vec::new());
             state.assume_init()
         }
     }
