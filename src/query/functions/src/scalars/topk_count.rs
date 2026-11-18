@@ -39,9 +39,9 @@ use crate::topk_count::with_topk_count_key_type;
 
 /// Registers `is_topk_count_candidate(candidates, key)`.
 ///
-/// `candidates` is the output of `topk_count_candidates`. The function
-/// returns true for the keys in the candidate set and for NULL keys, and for
-/// every key if there is no candidate set, see `crate::topk_count`.
+/// `candidates` is a candidate set encoded by the adaptive Top-K executor. The
+/// function returns true for the keys in the candidate set and for NULL keys,
+/// and for every key if there is no candidate set, see `crate::topk_count`.
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory(
         IS_TOPK_COUNT_CANDIDATE,
@@ -129,7 +129,7 @@ impl<K: TopKCountKey> CandidateFilter<K> {
 impl<K: TopKCountKey> ScalarFunction for CandidateFilter<K> {
     fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
         match (&args[0], &args[1]) {
-            // The planner passes the candidates as a constant column.
+            // The executor passes the candidates as a constant.
             (Value::Scalar(candidates), keys) => match Self::decode(candidates.as_ref()) {
                 Ok(None) => Value::Scalar(Scalar::Boolean(true)),
                 Ok(Some(set)) => match keys {

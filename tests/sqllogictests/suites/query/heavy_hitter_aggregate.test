@@ -1,8 +1,8 @@
 # run-with-settings: enable_heavy_hitter_aggregate=2
 
 # GROUP BY key ORDER BY COUNT(*) DESC LIMIT n must return the same rows with and without the
-# heavy hitter aggregation. Local pure COUNT tries bounded exact counting in one pass and falls
-# back to full aggregation when needed. Other aggregates/distributed queries use candidate filtering.
+# heavy hitter aggregation. A local pure COUNT tries bounded exact counting in one pass, then
+# candidate validation, then full aggregation. Other aggregates and cluster plans are not rewritten.
 
 statement ok
 create or replace database heavy_hitter_aggregate

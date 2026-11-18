@@ -507,7 +507,7 @@ impl DefaultSettings {
                 }),
                 ("enable_heavy_hitter_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Optimizes a GROUP BY of one key ordered by COUNT(*) DESC with a LIMIT using bounded heavy-hitter counting. A local pure COUNT returns proven exact counts in one pass or falls back to full aggregation. Other supported queries find candidates first, then aggregate their rows. 0 disables it, 1 applies cost heuristics, 2 skips the cost heuristics.",
+                    desc: "Optimizes a local GROUP BY of one key ordered by COUNT(*) DESC with a LIMIT using bounded heavy-hitter counting: proven exact counts return after one pass, otherwise only candidate keys or, failing that, every row is aggregated. 0 disables it, 1 applies cost heuristics, 2 skips the cost heuristics.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=2)),

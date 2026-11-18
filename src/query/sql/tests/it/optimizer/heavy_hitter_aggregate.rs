@@ -191,8 +191,8 @@ async fn test_heavy_hitter_aggregate_outcomes() -> Result<()> {
             sql: "SELECT item, count(*) AS c FROM events WHERE value > 10 GROUP BY item ORDER BY c DESC, item LIMIT 10 OFFSET 5",
         },
         SqlTestCase {
-            name: "top_count_nullable_string_key_with_other_aggregates",
-            description: "Other aggregates of the candidate groups stay exact because every row of a candidate key passes the filter.",
+            name: "other_aggregates_are_not_rewritten",
+            description: "The adaptive executor only produces COUNT(*); additional aggregates keep the plain aggregation.",
             setup_sqls: &[],
             sql: "SELECT name, count(*), sum(value) FROM events GROUP BY name ORDER BY count(*) DESC LIMIT 3",
         },
@@ -264,13 +264,13 @@ async fn test_heavy_hitter_aggregate_outcomes() -> Result<()> {
         },
         SqlTestCase {
             name: "join_input_is_not_rewritten",
-            description: "The input is scanned twice, so it must be one table scan.",
+            description: "A rescan must read the same rows, so the input must be one table scan.",
             setup_sqls: &[],
             sql: "SELECT e.item, count(*) AS c FROM events e JOIN small s ON e.item = s.item GROUP BY e.item ORDER BY c DESC LIMIT 10",
         },
         SqlTestCase {
             name: "unique_key_is_not_rewritten",
-            description: "Without top-N stats, an almost unique key is expected to have too few frequent keys to prove the candidates.",
+            description: "Without top-N stats, an almost unique key is expected to have too few frequent keys to prove the result.",
             setup_sqls: &[],
             sql: "SELECT item, count(*) AS c FROM uniq GROUP BY item ORDER BY c DESC LIMIT 10",
         },
@@ -294,7 +294,7 @@ async fn test_heavy_hitter_aggregate_outcomes() -> Result<()> {
         },
         SqlTestCase {
             name: "expensive_filter_is_not_rewritten",
-            description: "Both scans would evaluate a filter that is not a comparison of a column with a constant.",
+            description: "A rescan would evaluate again a filter that is not a comparison of a column with a constant.",
             setup_sqls: &[],
             sql: "SELECT item, count(*) AS c FROM events WHERE value % 2 = 0 GROUP BY item ORDER BY c DESC LIMIT 10",
         },
@@ -306,7 +306,7 @@ async fn test_heavy_hitter_aggregate_outcomes() -> Result<()> {
         },
         SqlTestCase {
             name: "non_deterministic_filter_is_not_rewritten",
-            description: "Two scans with a non-deterministic filter would not read the same rows.",
+            description: "A rescan with a non-deterministic filter would not read the same rows.",
             setup_sqls: &[],
             sql: "SELECT item, count(*) AS c FROM events WHERE rand() < 0.5 GROUP BY item ORDER BY c DESC LIMIT 10",
         },

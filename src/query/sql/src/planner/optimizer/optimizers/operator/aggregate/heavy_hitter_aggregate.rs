@@ -14,78 +14,42 @@
 
 //! Heavy hitter aggregation for `GROUP BY key ORDER BY COUNT(*) DESC LIMIT n`.
 //!
-//! For a local pure COUNT, annotate the aggregation for an adaptive executor:
-//! each worker keeps bounded residuals and exact counts of never-missed keys.
-//! When the K-th exact count beats every unknown-key upper bound, return those
-//! counts directly. Otherwise start the unchanged exact aggregation lazily.
-//! A failed proof may require two scans, so the same rescan safety checks apply.
+//! A local, single-key, pure `COUNT(*)` aggregation is annotated for the
+//! adaptive executor (`AdaptiveTopKCount`): each worker keeps bounded
+//! residuals and exact counts of never-missed keys. When the K-th exact count
+//! beats every unknown-key upper bound, the executor returns those counts after
+//! one scan. Otherwise it either rescans only the rows of a provably complete
+//! candidate set, through `is_topk_count_candidate`, or runs the unchanged
+//! exact aggregation. See `databend_common_functions::topk_count`.
 //!
-//! Distributed queries and queries with other aggregates keep the aggregation
-//! and filter its input by candidate keys:
-//!
-//! ```text
-//! TopN or Sort: COUNT(*) DESC, limit n
-//! └── Aggregate: GROUP BY key
-//!     └── Filter: is_topk_count_candidate(candidates, key)
-//!         └── Join: CROSS
-//!             ├── input
-//!             └── Aggregate: topk_count_candidates(n, capacity)(key') AS candidates
-//!                 └── input'      (the same input with fresh columns)
-//! ```
-//!
-//! The one-row build side scans the key column once and computes a mergeable
-//! Misra-Gries summary, partial per worker and final on one node. Its result
-//! is a candidate set that provably holds the first `n` groups, or no set when
-//! that cannot be proven. The probe side reads the input again and only
-//! aggregates the rows of candidate keys and of the NULL key, or every row
-//! without a candidate set, so the result is always the exact one. See
-//! `databend_common_functions::topk_count`.
-//!
-//! The rewrite applies only when the second scan reads the same rows: the
-//! input must be deterministic operators over one scan of a FUSE table. It
-//! also applies only when cost heuristics expect it to be faster, see
-//! `HeavyHitterAggregateOptimizer::worth_rewriting`.
+//! The rewrite applies only when a rescan reads the same rows: the input must
+//! be deterministic operators over one scan of a FUSE table. It also applies
+//! only when cost heuristics expect it to be faster, see
+//! `HeavyHitterAggregateOptimizer::worth_rewriting`. Distributed plans and
+//! aggregations with other functions are not rewritten.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::Scalar;
-use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
-use databend_common_functions::aggregates::AGGR_REGISTRY;
-use databend_common_functions::topk_count::IS_TOPK_COUNT_CANDIDATE;
-use databend_common_functions::topk_count::TOPK_COUNT_CANDIDATES;
 use databend_common_functions::topk_count::is_topk_count_key_type;
 use databend_common_functions::topk_count::topk_count_capacity;
 
-use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::Metadata;
 use crate::ScalarExpr;
 use crate::Symbol;
-use crate::Visibility;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AdaptiveTopKCountInfo;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::Filter;
-use crate::plans::FunctionCall;
-use crate::plans::Join;
-use crate::plans::JoinType;
 use crate::plans::Operator;
-use crate::plans::Prewhere;
 use crate::plans::RelOperator;
-use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::SortItem;
-use crate::plans::Statistics;
 
 /// The largest `limit + offset` the rewrite applies to.
 const MAX_LIMIT: usize = 1000;
@@ -169,6 +133,13 @@ impl HeavyHitterAggregateOptimizer {
             return Ok(None);
         }
 
+        // The adaptive executor runs on one node and only produces COUNT(*).
+        if self.opt_ctx.get_enable_distributed_optimization()
+            || aggregate.aggregate_functions.len() != 1
+        {
+            return Ok(None);
+        }
+
         let input = agg_expr.unary_child();
         if !input
             .derive_relational_prop()?
@@ -181,98 +152,18 @@ impl HeavyHitterAggregateOptimizer {
         if !self.force && !self.worth_rewriting(input, group_item.index, limit, capacity)? {
             return Ok(None);
         }
-        let metadata_ref = self.opt_ctx.get_metadata();
-        let mut metadata = metadata_ref.write();
-        if !can_scan_twice(input, &metadata) {
+        if !can_rescan_input(input, &self.opt_ctx.get_metadata().read()) {
             return Ok(None);
         }
 
-        if !self.opt_ctx.get_enable_distributed_optimization()
-            && aggregate.aggregate_functions.len() == 1
-        {
-            // Keep the original input and exact aggregation as a lazy fallback.
-            // The executor may return exact counts directly from its bounded
-            // state; unlike the candidate path this does not require a rescan.
-            let mut adaptive = aggregate.clone();
-            adaptive.adaptive_topk_count = Some(AdaptiveTopKCountInfo {
-                limit,
-                likely_candidates: has_frequency_evidence(input, group_item.index, limit, capacity)
-                    .unwrap_or(false),
-            });
-            let agg_expr = agg_expr.replace_plan(Arc::new(adaptive.into()));
-            let rewritten = match eval_scalar {
-                None => s_expr.replace_children([Arc::new(agg_expr)]),
-                Some(_) => s_expr.replace_children([Arc::new(
-                    s_expr.unary_child().replace_children([Arc::new(agg_expr)]),
-                )]),
-            };
-            return Ok(Some(rewritten));
-        }
-
-        let mut columns = HashMap::new();
-        let candidate_input = clone_with_fresh_columns(input, &mut metadata, &mut columns)?;
-        let candidate_key = columns[&group_item.index];
-        let key_type = metadata.column(candidate_key).data_type();
-        let params = vec![
-            Scalar::Number(NumberScalar::UInt64(limit as u64)),
-            Scalar::Number(NumberScalar::UInt64(capacity as u64)),
-        ];
-        let candidates_type = AGGR_REGISTRY
-            .resolve(RawAggregateCall {
-                name: TOPK_COUNT_CANDIDATES,
-                params: &params,
-                args_type: std::slice::from_ref(&key_type),
-                distinct: false,
-                order_by: &[],
-            })?
-            .signature()
-            .return_type
-            .clone();
-        let display_name = format!(
-            "{TOPK_COUNT_CANDIDATES}({limit}, {capacity})({})",
-            metadata.column(candidate_key).name()
-        );
-        let candidates = metadata.add_derived_column(display_name.clone(), candidates_type.clone());
-        let candidate_aggregate = Aggregate {
-            aggregate_functions: vec![ScalarItem {
-                scalar: ScalarExpr::AggregateFunction(AggregateFunction {
-                    span: None,
-                    func_name: TOPK_COUNT_CANDIDATES.to_string(),
-                    distinct: false,
-                    params,
-                    args: vec![column_ref(&metadata, candidate_key)],
-                    return_type: Box::new(candidates_type),
-                    sort_descs: vec![],
-                    display_name,
-                }),
-                index: candidates,
-            }],
-            ..Default::default()
-        };
-        let candidate_filter = Filter {
-            predicates: vec![ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: IS_TOPK_COUNT_CANDIDATE.to_string(),
-                params: vec![],
-                arguments: vec![
-                    column_ref(&metadata, candidates),
-                    column_ref(&metadata, group_item.index),
-                ],
-                return_type: Box::new(DataType::Boolean),
-            })],
-        };
-        drop(metadata);
-
-        let filtered_input = SExpr::create_binary(
-            Join {
-                join_type: JoinType::Cross,
-                ..Default::default()
-            },
-            input.clone(),
-            SExpr::create_unary(candidate_aggregate, candidate_input),
-        )
-        .build_unary(candidate_filter);
-        let agg_expr = agg_expr.replace_children([Arc::new(filtered_input)]);
+        // Keep the original input and exact aggregation as a lazy fallback.
+        let mut adaptive = aggregate.clone();
+        adaptive.adaptive_topk_count = Some(AdaptiveTopKCountInfo {
+            limit,
+            likely_candidates: has_frequency_evidence(input, group_item.index, limit, capacity)
+                .unwrap_or(false),
+        });
+        let agg_expr = agg_expr.replace_plan(Arc::new(adaptive.into()));
         let rewritten = match eval_scalar {
             None => s_expr.replace_children([Arc::new(agg_expr)]),
             Some(_) => s_expr.replace_children([Arc::new(
@@ -284,10 +175,11 @@ impl HeavyHitterAggregateOptimizer {
 
     /// Whether the rewrite is expected to be faster than aggregating every row.
     ///
-    /// The rewrite scans the input twice and only saves hash table work, so:
+    /// A failed proof costs an extra (partial) scan and only saves hash table
+    /// work, so:
     /// - the aggregation must hold many groups;
     /// - a filter must be cheap to evaluate again and keep enough rows;
-    /// - the summary must be likely to prove the candidates, since otherwise
+    /// - the summary must be likely to prove the result, since otherwise
     ///   every row is aggregated after the extra scan. Top-N stats of the key,
     ///   even stale ones, tell whether `limit` keys are frequent enough.
     ///   Without them, a key that is almost unique is assumed to fail.
@@ -415,7 +307,7 @@ fn orders_by_count(
     })
 }
 
-/// The scan of an input accepted by [`can_scan_twice`].
+/// The scan of an input accepted by [`can_rescan_input`].
 fn find_scan(s_expr: &SExpr) -> Option<&Scan> {
     match s_expr.plan() {
         RelOperator::Scan(scan) => Some(scan),
@@ -423,7 +315,7 @@ fn find_scan(s_expr: &SExpr) -> Option<&Scan> {
     }
 }
 
-/// The filter predicates of an input accepted by [`can_scan_twice`].
+/// The filter predicates of an input accepted by [`can_rescan_input`].
 fn collect_predicates<'a>(s_expr: &'a SExpr, predicates: &mut Vec<&'a ScalarExpr>) {
     match s_expr.plan() {
         RelOperator::Filter(filter) => predicates.extend(&filter.predicates),
@@ -464,13 +356,13 @@ fn is_cheap_predicate(predicate: &ScalarExpr) -> bool {
     }
 }
 
-/// Whether scanning `input` twice in one query reads the same rows twice.
-fn can_scan_twice(input: &SExpr, metadata: &Metadata) -> bool {
+/// Whether scanning `input` again in the same query reads the same rows.
+fn can_rescan_input(input: &SExpr, metadata: &Metadata) -> bool {
     let mut scans = 0;
-    can_scan_twice_inner(input, metadata, &mut scans) && scans == 1
+    can_rescan_inner(input, metadata, &mut scans) && scans == 1
 }
 
-fn can_scan_twice_inner(s_expr: &SExpr, metadata: &Metadata, scans: &mut usize) -> bool {
+fn can_rescan_inner(s_expr: &SExpr, metadata: &Metadata, scans: &mut usize) -> bool {
     let deterministic = s_expr
         .plan()
         .scalar_expr_iter()
@@ -487,7 +379,7 @@ fn can_scan_twice_inner(s_expr: &SExpr, metadata: &Metadata, scans: &mut usize) 
         && supported
         && s_expr
             .children()
-            .all(|child| can_scan_twice_inner(child, metadata, scans))
+            .all(|child| can_rescan_inner(child, metadata, scans))
 }
 
 fn can_rescan(scan: &Scan, metadata: &Metadata) -> bool {
@@ -520,143 +412,4 @@ fn can_rescan(scan: &Scan, metadata: &Metadata) -> bool {
                     if column.path_indices.is_none() && column.virtual_expr.is_none()
             )
         })
-}
-
-/// Clones an input accepted by [`can_scan_twice`], giving every column it
-/// produces a fresh symbol recorded in `columns`.
-#[recursive::recursive]
-fn clone_with_fresh_columns(
-    s_expr: &SExpr,
-    metadata: &mut Metadata,
-    columns: &mut HashMap<Symbol, Symbol>,
-) -> Result<SExpr> {
-    let children = s_expr
-        .children()
-        .map(|child| {
-            Ok(Arc::new(clone_with_fresh_columns(
-                child, metadata, columns,
-            )?))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    fn fresh(
-        column: Symbol,
-        metadata: &mut Metadata,
-        columns: &mut HashMap<Symbol, Symbol>,
-    ) -> Symbol {
-        let entry = metadata.column(column);
-        let (name, data_type) = (entry.name(), entry.data_type());
-        let new = metadata.add_derived_column(name, data_type);
-        columns.insert(column, new);
-        new
-    }
-    let plan: RelOperator = match s_expr.plan() {
-        RelOperator::Scan(scan) => {
-            // The derived columns read the base columns of the same names,
-            // as in decorrelated subqueries.
-            let new_columns = scan
-                .columns
-                .iter()
-                .map(|column| fresh(*column, metadata, columns))
-                .collect();
-            let mut scan = Scan {
-                columns: new_columns,
-                limit: None,
-                order_by: None,
-                is_lazy_table: false,
-                update_stream_columns: false,
-                scan_id: metadata.next_scan_id(),
-                statistics: Arc::new(remap_statistics(&scan.statistics, columns)),
-                ..scan.clone()
-            };
-            for predicate in scan.push_down_predicates.iter_mut().flatten() {
-                remap(predicate, columns)?;
-            }
-            if let Some(Prewhere {
-                output_columns,
-                prewhere_columns,
-                predicates,
-            }) = &mut scan.prewhere
-            {
-                *output_columns = output_columns
-                    .iter()
-                    .map(|column| columns[column])
-                    .collect();
-                *prewhere_columns = prewhere_columns
-                    .iter()
-                    .map(|column| columns[column])
-                    .collect();
-                for predicate in predicates {
-                    remap(predicate, columns)?;
-                }
-            }
-            scan.into()
-        }
-        RelOperator::Filter(filter) => {
-            let mut filter = filter.clone();
-            for predicate in &mut filter.predicates {
-                remap(predicate, columns)?;
-            }
-            filter.into()
-        }
-        RelOperator::EvalScalar(eval_scalar) => {
-            let mut eval_scalar = eval_scalar.clone();
-            for item in &mut eval_scalar.items {
-                remap(&mut item.scalar, columns)?;
-                item.index = fresh(item.index, metadata, columns);
-            }
-            eval_scalar.into()
-        }
-        _ => unreachable!("checked by can_scan_twice"),
-    };
-    Ok(SExpr::create(Arc::new(plan), children, None, None, None))
-}
-
-fn remap(scalar: &mut ScalarExpr, columns: &HashMap<Symbol, Symbol>) -> Result<()> {
-    scalar.replace_columns(|column| Ok(columns.get(&column).copied().unwrap_or(column)))
-}
-
-fn remap_statistics(statistics: &Statistics, columns: &HashMap<Symbol, Symbol>) -> Statistics {
-    let remap_keys = |column: &Symbol| columns.get(column).copied();
-    Statistics {
-        table_stats: statistics.table_stats,
-        column_stats: statistics
-            .column_stats
-            .iter()
-            .filter_map(|(column, stat)| Some((remap_keys(column)?, stat.clone())))
-            .collect(),
-        histograms: statistics
-            .histograms
-            .iter()
-            .filter_map(|(column, histogram)| Some((remap_keys(column)?, histogram.clone())))
-            .collect(),
-        top_n: statistics
-            .top_n
-            .iter()
-            .filter_map(|(column, top_n)| Some((remap_keys(column)?, top_n.clone())))
-            .collect(),
-        count_min_sketch: statistics
-            .count_min_sketch
-            .iter()
-            .filter_map(|(column, sketch)| Some((remap_keys(column)?, sketch.clone())))
-            .collect(),
-        approx_top_n: statistics
-            .approx_top_n
-            .iter()
-            .filter_map(|(column, top_n)| Some((remap_keys(column)?, top_n.clone())))
-            .collect(),
-    }
-}
-
-fn column_ref(metadata: &Metadata, column: Symbol) -> ScalarExpr {
-    let entry = metadata.column(column);
-    ScalarExpr::BoundColumnRef(BoundColumnRef {
-        span: None,
-        column: ColumnBindingBuilder::new(
-            entry.name(),
-            column,
-            Box::new(entry.data_type()),
-            Visibility::Visible,
-        )
-        .build(),
-    })
 }

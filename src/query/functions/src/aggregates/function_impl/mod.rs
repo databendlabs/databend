@@ -56,7 +56,6 @@ mod retention;
 mod stddev;
 mod string_agg;
 mod sum;
-mod topk_count_candidates;
 mod uniq;
 mod window_funnel;
 
