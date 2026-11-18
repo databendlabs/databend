@@ -37,6 +37,7 @@ use databend_common_management::UserMgr;
 use databend_common_management::task::TaskMgr;
 use databend_common_management::udf::UdfMgr;
 use databend_common_meta_api::crud::CrudMgr;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedFunction;
@@ -53,7 +54,6 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
@@ -167,13 +167,13 @@ impl UserApiProvider {
             if GlobalConfig::instance().query.common.enable_udf_server {
                 let rules = Cache::new(
                     client.clone(),
-                    TIdent::<NetworkRuleResource>::new(tenant, "").to_string_key(),
+                    TIdent::<NetworkRuleResource>::new(tenant, "").tenant_dir(),
                     NetworkRuleResource::TYPE,
                 )
                 .await;
                 let integrations = Cache::new(
                     client,
-                    TIdent::<ExternalAccessIntegrationResource>::new(tenant, "").to_string_key(),
+                    TIdent::<ExternalAccessIntegrationResource>::new(tenant, "").tenant_dir(),
                     ExternalAccessIntegrationResource::TYPE,
                 )
                 .await;
