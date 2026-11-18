@@ -543,10 +543,10 @@ impl fmt::Display for TableStatisticsContext {
             for (col_name, stats) in &self.columns_statistics {
                 writeln!(
                     f,
-                    "| {} | {} | {} |",
+                    "| {} | {:?} | {} |",
                     col_name,
-                    stats.ndv.map_or("NULL".to_string(), |n| n.to_string()),
-                    stats.null_count
+                    stats.ndv(),
+                    stats.null_count()
                 )?;
             }
         }

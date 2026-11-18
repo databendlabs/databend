@@ -19,19 +19,24 @@ use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
 use databend_common_exception::Result;
 use databend_common_statistics::Datum;
+use databend_common_statistics::NdvEstimate;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
 
+const NUM_ROWS: u64 = 1_000_000;
+
 fn column(ndv: u64, null_count: u64) -> BasicColumnStatistics {
-    BasicColumnStatistics {
-        min: Some(Datum::Int(0)),
-        max: Some(Datum::Int(ndv as i64 - 1)),
-        ndv: Some(ndv),
+    BasicColumnStatistics::new(
+        Some(Datum::Int(0)),
+        Some(Datum::Int(ndv as i64 - 1)),
         null_count,
-        in_memory_size: 8_000_000,
-    }
+        8 * NUM_ROWS,
+        NdvEstimate::exact(ndv as f64),
+        Some(NUM_ROWS),
+    )
+    .unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -41,7 +46,7 @@ async fn test_split_grouped_count_distinct() -> Result<()> {
     ctx.register_table_sql_with_stats(
         "CREATE TABLE t(g BIGINT NOT NULL, h BIGINT NOT NULL, x BIGINT NULL, b BITMAP NULL)",
         Some(TableStatistics {
-            num_rows: Some(1_000_000),
+            num_rows: Some(NUM_ROWS),
             number_of_blocks: Some(1),
             number_of_segments: Some(1),
             ..Default::default()

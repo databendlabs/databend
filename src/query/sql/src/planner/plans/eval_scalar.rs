@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::StatEvaluator;
 use databend_common_expression::function_stat::DomainStatBounds;
+use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::ReturnStat;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -103,7 +104,7 @@ impl EvalScalar {
             let Some(column_stat) = input_statistics.column_stats.get(&index) else {
                 return Ok(None);
             };
-            let Ok(arg_stat) = column_stat.to_arg_stat(&data_type) else {
+            let Ok(arg_stat) = ArgStat::from_column_stat(column_stat, &data_type) else {
                 return Ok(None);
             };
             input_stats.insert(index, arg_stat);

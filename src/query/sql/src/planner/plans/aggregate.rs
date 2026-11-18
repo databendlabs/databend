@@ -111,8 +111,22 @@ impl Aggregate {
                 None => true,
             })
         {
+            // A group key without a point NDV takes the default ratio. The
+            // NDV uppers still cap the group count: the keys cannot form more
+            // groups than the product of their distinct values.
+            let groups_upper = self
+                .group_items
+                .iter()
+                .map(|item| {
+                    column_stats
+                        .get(&item.index)
+                        .map_or(f64::INFINITY, |stat| stat.ndv().upper)
+                })
+                .fold(1.0, |acc, upper| acc * upper);
             return Ok(Arc::new(StatInfo {
-                cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
+                cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO)
+                    .min(groups_upper)
+                    .max(1.0),
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
