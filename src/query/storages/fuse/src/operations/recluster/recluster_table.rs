@@ -894,6 +894,8 @@ mod tests {
             kind: ReclusterCandidateKind::Depth,
             task_kind: ReclusterTaskKind::SortBlocks,
             vertical_kind: None,
+            merge_groups: Vec::new(),
+            skipped_blocks: 0,
         }
     }
 

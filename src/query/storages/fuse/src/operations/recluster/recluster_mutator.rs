@@ -21,6 +21,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::plan::ReclusterMergeGroup;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::plan::ReclusterTaskKind;
@@ -64,6 +65,7 @@ use crate::io::VirtualColumnLayoutPlanner;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
+use crate::operations::recluster::MergeGroupLimits;
 use crate::operations::recluster::ReclusterBlock;
 use crate::operations::recluster::ReclusterBlockStats;
 use crate::operations::recluster::ReclusterCandidateKind;
@@ -74,6 +76,7 @@ use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::operations::recluster::SelectedReclusterSegment;
 use crate::operations::recluster::VECTOR_LEVEL_MIXED;
+use crate::operations::recluster::depth_task_candidate;
 use crate::operations::recluster::task_candidate;
 use crate::statistics::VectorClusterInfo;
 use crate::statistics::partition_values;
@@ -375,6 +378,10 @@ impl ReclusterMutator {
             memory_threshold,
             vertical_kind,
         )?;
+        let properties = ReclusterProperties {
+            merge_group_limits: MergeGroupLimits::for_table(table, &ctx.get_settings())?,
+            ..properties
+        };
 
         Ok(Self {
             ctx,
@@ -425,6 +432,11 @@ impl ReclusterMutator {
             memory_threshold,
             vector_cluster_info,
         );
+        let properties = ReclusterProperties {
+            merge_group_limits: MergeGroupLimits::from_settings(&ctx.get_settings())
+                .expect("get merge group settings for recluster mutator"),
+            ..properties
+        };
         Self {
             ctx,
             operator,
@@ -555,6 +567,8 @@ impl ReclusterMutator {
                     input_level_stats: Vec::new(),
                     task_kind: ReclusterTaskKind::SortBlocks,
                     vertical_kind: None,
+                    merge_groups: Vec::new(),
+                    skipped_blocks: 0,
                 });
             } else {
                 return Ok(candidate_window);
@@ -842,10 +856,9 @@ impl ReclusterMutator {
         let selected_bytes = if task_count == 0 { 0 } else { best_bytes };
         let tasks = best
             .into_iter()
-            .map(|task| {
-                task_candidate(
+            .filter_map(|task| {
+                depth_task_candidate(
                     &self.properties,
-                    ReclusterCandidateKind::Depth,
                     task.group,
                     CandidateScore {
                         selected_total_bytes: task.bytes,
@@ -1137,8 +1150,21 @@ impl ReclusterMutator {
                 let mut total_bytes = 0usize;
                 let mut total_compressed = 0usize;
 
-                for (window_pos, block_indices) in &candidate.selected_blocks {
-                    let (location, segment_info) = &window.segments[*window_pos];
+                // Merge groups are consecutive runs of the task inputs.
+                let selected = match candidate.merge_groups.is_empty() {
+                    true => candidate
+                        .selected_blocks
+                        .iter()
+                        .flat_map(|(window_pos, block_indices)| {
+                            block_indices
+                                .iter()
+                                .map(|block_idx| (*window_pos, *block_idx))
+                        })
+                        .collect::<Vec<_>>(),
+                    false => candidate.merge_groups.iter().flatten().copied().collect(),
+                };
+                for (window_pos, block_idx) in selected {
+                    let (location, segment_info) = &window.segments[window_pos];
                     let current_segment_idx = live_segments[location];
                     let segment_info = segment_info
                         .as_ref()
@@ -1146,14 +1172,42 @@ impl ReclusterMutator {
                     removed_segment_infos
                         .entry(current_segment_idx)
                         .or_insert_with(|| segment_info.clone());
-                    for &block_idx in block_indices {
-                        let block_meta = segment_info.blocks[block_idx].clone();
-                        selected_block_keys.insert((current_segment_idx, block_idx));
-                        total_rows += block_meta.row_count as usize;
-                        total_bytes += block_meta.block_size as usize;
-                        total_compressed += block_meta.file_size as usize;
-                        block_metas.push((None, block_meta));
-                    }
+                    let block_meta = segment_info.blocks[block_idx].clone();
+                    selected_block_keys.insert((current_segment_idx, block_idx));
+                    total_rows += block_meta.row_count as usize;
+                    total_bytes += block_meta.block_size as usize;
+                    total_compressed += block_meta.file_size as usize;
+                    block_metas.push((None, block_meta));
+                }
+                let mut group_start = 0;
+                let merge_groups = candidate
+                    .merge_groups
+                    .iter()
+                    .map(|members| {
+                        let group = &block_metas[group_start..group_start + members.len()];
+                        group_start += members.len();
+                        ReclusterMergeGroup {
+                            blocks: group.len(),
+                            total_rows: group.iter().map(|(_, b)| b.row_count as usize).sum(),
+                            total_bytes: group.iter().map(|(_, b)| b.block_size as usize).sum(),
+                            total_compressed: group.iter().map(|(_, b)| b.file_size as usize).sum(),
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if !merge_groups.is_empty() || candidate.skipped_blocks != 0 {
+                    info!(
+                        "recluster: task merge groups={} group_blocks={:?} group_bytes={:?} skipped_blocks={}",
+                        merge_groups.len().max(1),
+                        merge_groups
+                            .iter()
+                            .map(|group| group.blocks)
+                            .collect::<Vec<_>>(),
+                        merge_groups
+                            .iter()
+                            .map(|group| group.total_bytes)
+                            .collect::<Vec<_>>(),
+                        candidate.skipped_blocks,
+                    );
                 }
 
                 if self.properties.split_sort_tasks {
@@ -1229,7 +1283,7 @@ impl ReclusterMutator {
                             .collect(),
                         false => vec![],
                     },
-                    merge_groups: vec![],
+                    merge_groups,
                 });
                 selected_block_count += block_metas.len() as u64;
             }
@@ -1337,14 +1391,11 @@ impl ReclusterMutator {
                 max_depth: block_count,
                 average_depth: block_count as f64,
             };
-            return Ok(vec![task_candidate(
-                &self.properties,
-                ReclusterCandidateKind::Depth,
-                group,
-                score,
-                indices,
-                blocks,
-            )]);
+            return Ok(
+                depth_task_candidate(&self.properties, group, score, indices, blocks)
+                    .into_iter()
+                    .collect(),
+            );
         }
 
         if self.properties.split_sort_tasks

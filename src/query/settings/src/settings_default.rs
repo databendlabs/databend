@@ -1122,6 +1122,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("recluster_max_group_blocks", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(64),
+                    desc: "Sets the maximum number of input blocks of one merge group of a linear recluster task; the groups are merged one after another. 0 merges a task as one group; 1 is invalid.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("recluster_group_max_size_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(5),
+                    desc: "Sets the maximum ratio of the largest to the smallest uncompressed block size within one recluster merge group. 0 disables the limit.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("compact_max_block_selection", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Limits the maximum number of imperfect blocks that can be selected during a compact operation.",
