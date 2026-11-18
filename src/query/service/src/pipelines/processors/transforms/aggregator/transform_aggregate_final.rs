@@ -59,11 +59,6 @@ const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
 /// `SPILL_BUCKET_BITS` of them.
 const PARTITION_HASH_BITS: u64 = 48;
 
-enum Stage {
-    Input,
-    Channel,
-}
-
 /// An input block.
 enum FinalInput {
     /// Partial aggregate states of this node.
@@ -88,10 +83,11 @@ pub struct TransformFinalAggregate {
     channel_data: Option<FinalAggregateTask>,
     output_data: VecDeque<DataBlock>,
     should_finish: bool,
+    /// Held while reading the input: the input finishes by taking it, see `finish`, after which
+    /// the processor reads the tasks of the channel.
     tx: Option<Sender<FinalAggregateTask>>,
     rx: Receiver<FinalAggregateTask>,
     output_finished: WatchNotify,
-    stage: Stage,
     spilled_occurred: bool,
     /// How many times the table was output and reset under memory pressure, see
     /// `AggregatorParams::allow_duplicate_groups`.
@@ -152,7 +148,6 @@ impl TransformFinalAggregate {
             tx: Some(tx),
             rx,
             output_finished: WatchNotify::new(),
-            stage: Stage::Input,
             spilled_occurred: false,
             pressure_outputs: 0,
             hashtable: None,
@@ -579,10 +574,8 @@ impl Processor for TransformFinalAggregate {
         }
 
         if self.input.is_finished() {
-            if matches!(self.stage, Stage::Input) {
-                // the stage that get meta from input is end now
-                // begin to get meta from channel
-                self.stage = Stage::Channel;
+            if self.tx.is_some() {
+                // Finish the input, then read the tasks of the channel.
                 return Ok(Event::Sync);
             }
 
