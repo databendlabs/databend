@@ -377,7 +377,11 @@ impl Processor for OrderedBatchStitcher {
             return Ok(Event::NeedConsume);
         }
 
-        let mut all_finished = true;
+        // Each input is looked at once. Looking again could see an input finish after the first
+        // look saw it running, and take a stitcher that has consumed every batch for one that
+        // lost a batch.
+        let mut inputs_finished = true;
+        let mut slots_empty = true;
         for (input, slot) in self.inputs.iter().zip(self.slots.iter_mut()) {
             if slot.is_none() && input.has_data() {
                 let mut block = input.pull_data().unwrap()?;
@@ -387,13 +391,14 @@ impl Processor for OrderedBatchStitcher {
                     .ok_or_else(|| ErrorCode::Internal("ordered read expects a sequenced block"))?;
                 *slot = Some((meta, block));
             }
+            let finished = input.is_finished();
             if slot.is_some() {
-                all_finished = false;
-            } else if !input.is_finished() {
+                slots_empty = false;
+            } else if !finished {
                 // Only a free slot asks for more: a held block is the back pressure.
                 input.set_need_data();
-                all_finished = false;
             }
+            inputs_finished &= finished;
         }
 
         let next_seq = self.next_seq;
@@ -404,19 +409,21 @@ impl Processor for OrderedBatchStitcher {
         {
             return Ok(Event::Sync);
         }
-        if all_finished {
+        if !inputs_finished {
+            // A finishing input triggers another event.
+            return Ok(Event::NeedData);
+        }
+        if slots_empty {
             if !self.files.is_empty() {
                 return Ok(Event::Sync);
             }
             self.output.finish();
             return Ok(Event::Finished);
         }
-        if self.inputs.iter().all(|input| input.is_finished()) {
-            return Err(ErrorCode::Internal(format!(
-                "ordered read lost the batch with sequence number {next_seq}"
-            )));
-        }
-        Ok(Event::NeedData)
+        // Every input is done, yet the held blocks do not continue the sequence.
+        Err(ErrorCode::Internal(format!(
+            "ordered read lost the batch with sequence number {next_seq}"
+        )))
     }
 
     fn process(&mut self) -> Result<()> {
