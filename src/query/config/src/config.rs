@@ -3703,9 +3703,11 @@ pub enum MetaServiceCache {
     /// change of a global setting, such as the `network_policy` that logins enforce, from taking
     /// effect for the new sessions on this node.
     Setting,
-    /// The online cluster nodes of the tenant, read by cluster discovery. A copy that lists the
-    /// cluster without this node is not used, and a stale copy stops listing this node within
-    /// the 60 s heartbeat lift time.
+    /// The online nodes of this node's cluster, read by cluster discovery. Only that cluster is
+    /// watched, so it needs a configured `cluster_id`: a system-managed node, whose cluster the
+    /// warehouse management assigns at runtime, reads its cluster from meta-service. A copy that
+    /// lists the cluster without this node is not used, and a stale copy stops listing this node
+    /// within the 60 s heartbeat lift time.
     ClusterNode,
 }
 

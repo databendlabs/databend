@@ -183,8 +183,8 @@ async fn test_successfully_drop_self_managed_node() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A manager watching the cluster nodes lists what a direct read lists, as nodes join, through
-/// it or not, and leave; and only the nodes of the cluster asked for: not those of
+/// A manager watching `test-cluster-id` lists in its copy what a direct read lists, as nodes
+/// join, through it or not, and leave. The copy holds that cluster only: it does not answer for
 /// `test-cluster-id-2`, whose escaped key extends that of `test-cluster-id`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
@@ -199,55 +199,19 @@ async fn test_watched_cluster_nodes() -> anyhow::Result<()> {
     // The manager of node_2: it starts node_2 below.
     let client = kv.inner().clone();
     let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
-        .watch_cluster_nodes(client, &node_2.id)
-        .await;
+        .watch_cluster_nodes(client, "test-cluster-id", "test-cluster-id", &node_2.id)
+        .await?;
 
     assert_watched_nodes(&watched, &direct, &[]).await?;
     direct.start_node(node_1.clone()).await?;
     direct.start_node(other_cluster).await?;
     assert_watched_nodes(&watched, &direct, std::slice::from_ref(&node_1)).await?;
+    let other = watched.try_list_watched_cluster_nodes("test-cluster-id-2", "test-cluster-id-2")?;
+    assert_eq!(other, None);
     watched.start_node(node_2.clone()).await?;
     assert_watched_nodes(&watched, &direct, &[node_1.clone(), node_2.clone()]).await?;
     direct.shutdown_node(node_1.id).await?;
     assert_watched_nodes(&watched, &direct, &[node_2]).await?;
-    Ok(())
-}
-
-/// A manager watching the cluster nodes discovers the cluster of a node right after the node is
-/// assigned to a warehouse, and after it moves to another one.
-///
-/// Its watched copy may not hold the new cluster entry yet: `list_warehouse_cluster_nodes` then
-/// reads the cluster from meta-service. With one embedded meta-service the watch is about always
-/// ahead of the `discover` read, so this does not force that case:
-/// `test_watched_cluster_nodes_from_stale_copy` does.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_watched_discover_after_assign() -> anyhow::Result<()> {
-    let (kv, direct) = new_cluster_api(Duration::from_mins(60)).await?;
-    let node = NodeInfo {
-        binary_version: BUILD_INFO.commit_detail.clone(),
-        ..system_managed_node("node_1")
-    };
-    let client = kv.inner().clone();
-    let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
-        .watch_cluster_nodes(client, &node.id)
-        .await;
-    direct.start_node(node.clone()).await?;
-
-    for i in 0..20 {
-        let warehouse = format!("warehouse_{i}");
-        direct
-            .create_warehouse(warehouse.clone(), vec![SelectedNode::Random(None)])
-            .await?;
-        let discovered = watched.discover(&node.id).await?;
-        assert_eq!(
-            discovered
-                .iter()
-                .map(|x| (x.id.as_str(), x.warehouse_id.as_str()))
-                .collect::<Vec<_>>(),
-            vec![("node_1", warehouse.as_str())]
-        );
-        direct.drop_warehouse(warehouse).await?;
-    }
     Ok(())
 }
 
@@ -262,9 +226,10 @@ async fn test_watched_cluster_nodes_from_stale_copy() -> anyhow::Result<()> {
         binary_version: BUILD_INFO.commit_detail.clone(),
         ..self_managed_node("node_1")
     };
+    let client = other.inner().clone();
     let watched = WarehouseMgr::create(kv, "test-tenant-id", Duration::from_mins(60), &BUILD_INFO)?
-        .watch_cluster_nodes(other.inner().clone(), &node.id)
-        .await;
+        .watch_cluster_nodes(client, "test-cluster-id", "test-cluster-id", &node.id)
+        .await?;
     direct.start_node(node.clone()).await?;
 
     wait_for_copy(&watched, &[]).await?;

@@ -84,15 +84,16 @@ pub struct WarehouseMgr {
     cluster_node_key_prefix: String,
     warehouse_info_key_prefix: String,
     version: BuildInfoRef,
-    /// The watched copy of the online nodes of the clusters, if any: see `watch_cluster_nodes`.
+    /// The watched copy of the online nodes of one cluster, if any: see `watch_cluster_nodes`.
     cluster_nodes: Option<WatchedClusterNodes>,
 }
 
-/// A watched copy of the online nodes of the clusters, `{cluster_node_key_prefix}/...`.
+/// A watched copy of the online nodes of one cluster,
+/// `{cluster_node_key_prefix}/{warehouse}/{cluster}/...`.
 struct WatchedClusterNodes {
     /// The lock is held only to read the copy once, never across an await.
     cache: Mutex<Cache>,
-    /// The node this manager runs on. Only its own cluster is listed, so a copy that lists the
+    /// The node this manager runs on, a node of the watched cluster. A copy that lists the
     /// cluster without it is behind: right after the node joins, or when the watch stopped
     /// receiving changes.
     local_node_id: String,
@@ -137,22 +138,28 @@ impl WarehouseMgr {
         })
     }
 
-    /// List the nodes of a cluster, `list_warehouse_cluster_nodes`, from a copy of the online
-    /// nodes of the clusters, watched through `client`. A node joining or leaving shows by the
-    /// watch delay, far below the heartbeat lift time a node that stopped stays listed for
-    /// anyway. `local_node_id` is the node this manager runs on: a cluster the copy lists without
-    /// it is read from meta-service instead.
+    /// List the nodes of `cluster` in `warehouse`, `list_warehouse_cluster_nodes`, from a copy
+    /// watched through `client`; the other clusters are read from meta-service. A node joining
+    /// or leaving shows by the watch delay, far below the heartbeat lift time a node that stopped
+    /// stays listed for anyway. `local_node_id` is the node this manager runs on, a node of
+    /// `cluster`: a copy that lists the cluster without it is not used.
+    ///
+    /// Only that cluster is watched, so a watching node receives the heartbeats of its own
+    /// cluster, not those of every cluster of the tenant.
     pub async fn watch_cluster_nodes(
         mut self,
         client: Arc<ClientHandle<DatabendRuntime>>,
+        warehouse: &str,
+        cluster: &str,
         local_node_id: &str,
-    ) -> Self {
-        let cache = Cache::new(client, &self.cluster_node_key_prefix, "cluster nodes").await;
+    ) -> Result<Self> {
+        let dir = self.cluster_nodes_dir(warehouse, cluster)?;
+        let cache = Cache::new(client, &dir, "cluster nodes").await;
         self.cluster_nodes = Some(WatchedClusterNodes {
             cache: Mutex::new(cache),
             local_node_id: local_node_id.to_string(),
         });
-        self
+        Ok(self)
     }
 
     async fn shutdown_system_managed(&self, node_info: &NodeInfo) -> Result<()> {
@@ -240,7 +247,7 @@ impl WarehouseMgr {
         ))
     }
 
-    /// The nodes of a cluster in the watched copy. `None` if the cluster nodes are not watched,
+    /// The nodes of a cluster in the watched copy. `None` if this cluster is not the watched one,
     /// or if the copy cannot answer now, see `Cache::try_list_dir_ready`.
     pub fn try_list_watched_cluster_nodes(
         &self,
