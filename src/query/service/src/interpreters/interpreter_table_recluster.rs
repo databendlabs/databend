@@ -155,16 +155,7 @@ impl Interpreter for ReclusterTableInterpreter {
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
-            let target_average_depth = if is_final
-                && self.plan.selection.is_none()
-                && self.plan.limit.is_none()
-                && self.plan.expected_table_id.is_none()
-            {
-                ctx.get_settings()
-                    .get_recluster_final_target_average_depth()?
-            } else {
-                0.0
-            };
+            let target_average_depth = self.final_target_average_depth().await?;
             let initial_target_reached = self
                 .average_depth_target_reached(target_average_depth)
                 .await?;
@@ -327,6 +318,42 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
+    /// The average-depth target of an explicit, unfiltered scalar-linear FINAL, or
+    /// zero when the target does not apply. The setting is read only after the
+    /// layout check, so its value cannot fail the FINAL paths that ignore it.
+    async fn final_target_average_depth(&self) -> Result<f64> {
+        let plan = &self.plan;
+        if !plan.is_final
+            || plan.selection.is_some()
+            || plan.limit.is_some()
+            || plan.expected_table_id.is_some()
+        {
+            return Ok(0.0);
+        }
+        let table = self
+            .ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await?;
+        let Ok(fuse) = FuseTable::try_from_table(table.as_ref()) else {
+            return Ok(0.0);
+        };
+        if !self.is_scalar_linear(fuse) {
+            return Ok(0.0);
+        }
+        self.ctx
+            .get_settings()
+            .get_recluster_final_target_average_depth()
+    }
+
+    fn is_scalar_linear(&self, fuse: &FuseTable) -> bool {
+        // The average-depth metric does not describe Hilbert or vector clustering quality.
+        fuse.cluster_type() == Some(ClusterType::Linear)
+            && !fuse
+                .cluster_key_types(self.ctx.clone())
+                .iter()
+                .any(|ty| matches!(ty.remove_nullable(), DataType::Vector(_)))
+    }
+
     async fn average_depth_target_reached(&self, target: f64) -> Result<bool> {
         if target == 0.0 {
             return Ok(false);
@@ -346,13 +373,8 @@ impl ReclusterTableInterpreter {
             .await?;
         check_maintenance_target(table.as_ref(), &self.plan.target)?;
         let fuse = FuseTable::try_from_table(table.as_ref())?;
-        // This metric does not describe Hilbert or vector clustering quality.
-        if fuse.cluster_type() != Some(ClusterType::Linear)
-            || fuse
-                .cluster_key_types(self.ctx.clone())
-                .iter()
-                .any(|ty| matches!(ty.remove_nullable(), DataType::Vector(_)))
-        {
+        // The cluster key may change while FINAL runs.
+        if !self.is_scalar_linear(fuse) {
             return Ok(false);
         }
         let quality = get_clustering_information(self.ctx.clone(), fuse, &None).await?;
