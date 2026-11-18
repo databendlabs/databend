@@ -564,7 +564,7 @@ where
                 skip_inactive_with_builder_1_arg::<BooleanType, DecimalType<T>>(
                     |a, out: &mut Vec<T>, ctx| {
                         if a {
-                            ctx.set_error(out.len(), "Decimal overflow");
+                            ctx.set_error(out.len(), DecimalOverflow(size));
                             out.push(T::one());
                         } else {
                             out.push(T::zero());
@@ -757,7 +757,7 @@ where
             from, ctx,
         )
     } else {
-        let overflow = concat!("Decimal overflow at line : ", line!());
+        let overflow = DecimalOverflow(size);
         if let Value::Scalar(value) = &from {
             let x = S::to_scalar_ref(value);
             if let Some(x) = T::from_i128(x).and_then(|x| x.checked_mul(multiplier))
@@ -796,13 +796,15 @@ where
 {
     let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
         let rounding_mode = ctx.func_ctx.rounding_mode;
-        match T::from_float(x.as_(), size, rounding_mode) {
+        let x: f64 = x.as_();
+        match T::from_float(x, size, rounding_mode) {
             Some(x) => builder.push(x),
+            None if !x.is_finite() => {
+                ctx.set_error(builder.len(), NonFiniteDecimal(x));
+                builder.push(T::one());
+            }
             None => {
-                ctx.set_error(
-                    builder.len(),
-                    concat!("Decimal overflow at line : ", line!()),
-                );
+                ctx.set_error(builder.len(), DecimalOverflow(size));
                 builder.push(T::one());
             }
         }
@@ -842,28 +844,29 @@ where
     let min = W::min_for_precision(dest.precision());
     let max = W::max_for_precision(dest.precision());
     match dest.scale().cmp(&from.scale()) {
-        Ordering::Equal => {
-            rescale::<F, W, T>(value, ctx, move |x, _| (x >= min && x <= max).then_some(x))
-        }
+        Ordering::Equal => rescale::<F, W, T>(value, ctx, dest, move |x, _| {
+            (x >= min && x <= max).then_some(x)
+        }),
         Ordering::Greater => {
             let factor = W::e(dest.scale() - from.scale());
-            rescale::<F, W, T>(value, ctx, move |x, _| {
+            rescale::<F, W, T>(value, ctx, dest, move |x, _| {
                 x.checked_mul(factor).filter(|x| *x >= min && *x <= max)
             })
         }
         Ordering::Less => {
             let reduction = ScaleReduction::<W>::new(from.scale() - dest.scale(), dest.precision());
-            rescale::<F, W, T>(value, ctx, move |x, rounding_mode| {
+            rescale::<F, W, T>(value, ctx, dest, move |x, rounding_mode| {
                 reduction.reduce(x, rounding_mode)
             })
         }
     }
 }
 
-// Rows the rescaling rejects do not fit the target precision.
+// Rows the rescaling rejects do not fit `dest`.
 fn rescale<F, W, T>(
     value: Value<DecimalType<F>>,
     ctx: &mut EvalContext,
+    dest: DecimalSize,
     rescale: impl Fn(W, bool) -> Option<W> + Copy + Send + Sync,
 ) -> Value<DecimalType<T>>
 where
@@ -878,14 +881,36 @@ where
         ) {
             Some(y) => builder.push(y.as_decimal::<T>()),
             None => {
-                ctx.set_error(
-                    builder.len(),
-                    concat!("Decimal overflow at line : ", line!()),
-                );
+                ctx.set_error(builder.len(), DecimalOverflow(dest));
                 builder.push(T::one());
             }
         },
     )(value, ctx)
+}
+
+/// The error of a value that a decimal of `size` cannot hold. The evaluator
+/// adds the function and its arguments to it, which show the value.
+#[derive(Clone, Copy)]
+struct DecimalOverflow(DecimalSize);
+
+impl std::fmt::Display for DecimalOverflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Decimal overflow: the value does not fit {}",
+            DataType::Decimal(self.0)
+        )
+    }
+}
+
+/// The error of a NaN or infinite float cast to a decimal.
+#[derive(Clone, Copy)]
+struct NonFiniteDecimal(f64);
+
+impl std::fmt::Display for NonFiniteDecimal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Decimal overflow: {} has no decimal value", self.0)
+    }
 }
 
 /// Drops `shift >= 1` fractional digits, truncating or rounding half away

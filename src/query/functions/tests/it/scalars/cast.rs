@@ -1267,6 +1267,8 @@ fn test_decimal_cast_precision_and_partial_errors() {
     let columns = [("a", Int64Type::from_data(vec![-10, -9, 0, 9, 10]))];
     run_ast(file, "CAST(a AS DECIMAL(1,0))", &columns);
     run_ast(file, "TRY_CAST(a AS DECIMAL(1,0))", &columns);
+    let columns = [("f", Float64Type::from_data(vec![1.5, f64::NAN]))];
+    run_ast(file, "CAST(f AS DECIMAL(38,10))", &columns);
     let columns = [("active", BooleanType::from_data(vec![false, true, false]))];
     run_ast(
         file,
