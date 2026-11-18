@@ -67,23 +67,26 @@ async fn test_ready_reads() -> anyhow::Result<()> {
     )?;
     client.upsert_kv(UpsertKV::update("pp/a", b"a")).await?;
     client.upsert_kv(UpsertKV::update("pp/d/x", b"x")).await?;
+    // A key in the empty-named directory inside `pp/d`.
+    client.upsert_kv(UpsertKV::update("pp/d//y", b"y")).await?;
     client
         .upsert_kv(UpsertKV::update("ppp/a", b"other"))
         .await?;
 
-    // The trailing `/` is ignored.
-    let mut cache = Cache::new(client.clone(), "pp/", "test-ready").await;
+    let mut cache = Cache::new(client.clone(), "pp", "test-ready").await;
     wait_for(&mut cache, "pp/a", b"a").await?;
 
-    // A ready copy lists every dir under the prefix, the prefix included.
-    let all = vec![kv("pp/a", "a"), kv("pp/d/x", "x")];
+    // A ready copy lists the keys under a directory, the watched one or one under it.
+    let all = vec![kv("pp/a", "a"), kv("pp/d//y", "y"), kv("pp/d/x", "x")];
     assert_eq!(listed(cache.try_list_dir_ready("pp")), Some(all));
-    let dir = vec![kv("pp/d/x", "x")];
-    assert_eq!(listed(cache.try_list_dir_ready("pp/d/")), Some(dir));
-    // Only one trailing `/` is ignored: `pp/d//` lists the keys `pp/d//...`, as meta-service does.
+    let dir = vec![kv("pp/d//y", "y"), kv("pp/d/x", "x")];
+    assert_eq!(listed(cache.try_list_dir_ready("pp/d")), Some(dir));
+    // A directory is used as given: `pp/d/` is the empty-named directory inside `pp/d`.
+    let empty_named = vec![kv("pp/d//y", "y")];
+    assert_eq!(listed(cache.try_list_dir_ready("pp/d/")), Some(empty_named));
     assert_eq!(listed(cache.try_list_dir_ready("pp/d//")), Some(vec![]));
 
-    // A key the copy lacks, and a dir outside the prefix, `ppp` included, are left to
+    // A key the copy lacks, and a directory outside the watched one, `ppp` included, are left to
     // meta-service.
     assert_eq!(data(cache.try_get_ready("pp/missing")), None);
     assert_eq!(data(cache.try_get_ready("ppp/a")), None);

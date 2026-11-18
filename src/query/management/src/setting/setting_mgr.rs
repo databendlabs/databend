@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::SettingIdent;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::tenant::Tenant;
@@ -56,7 +57,7 @@ impl SettingMgr {
         client: Arc<ClientHandle<DatabendRuntime>>,
         tenant: &Tenant,
     ) -> Arc<Mutex<Cache>> {
-        let cache = Cache::new(client, Self::settings_prefix(tenant), "global settings").await;
+        let cache = Cache::new(client, Self::settings_dir(tenant), "global settings").await;
         Arc::new(Mutex::new(cache))
     }
 
@@ -75,11 +76,12 @@ impl SettingMgr {
     }
 
     fn setting_prefix(&self) -> String {
-        Self::settings_prefix(&self.tenant)
+        SettingIdent::new(self.tenant.clone(), "").to_string_key()
     }
 
-    fn settings_prefix(tenant: &Tenant) -> String {
-        SettingIdent::new(tenant.clone(), "").to_string_key()
+    /// The directory of the global settings of `tenant`, which a watch of them takes.
+    fn settings_dir(tenant: &Tenant) -> String {
+        SettingIdent::new(tenant.clone(), "").tenant_dir()
     }
 }
 
@@ -123,11 +125,11 @@ impl SettingMgr {
     /// change by the watch delay. Use `get_settings` where a change must be seen at once.
     #[async_backtrace::framed]
     pub async fn get_watched_settings(&self) -> Result<Vec<UserSetting>> {
-        let prefix = self.setting_prefix();
+        let dir = Self::settings_dir(&self.tenant);
         let local = self
             .watched
             .as_ref()
-            .and_then(|w| w.lock().try_list_dir_ready(&prefix));
+            .and_then(|w| w.lock().try_list_dir_ready(&dir));
         let Some(items) = local else {
             return self.get_settings().await;
         };

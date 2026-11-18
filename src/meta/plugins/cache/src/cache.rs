@@ -27,7 +27,8 @@ use futures::FutureExt;
 use crate::meta_cache_types::MetaCacheTypes;
 use crate::meta_client_source;
 
-/// A local copy of the keys `{prefix}/...` in meta-service, kept up to date by a watch.
+/// A local copy of the keys under the directory `{dir}/` in meta-service, kept up to date by a
+/// watch.
 ///
 /// The `try_*_ready` reads never wait for the copy. While it initializes or reconnects, which
 /// holds its lock, or when meta-service cannot be watched, they return `None`, and the caller
@@ -38,9 +39,12 @@ use crate::meta_client_source;
 /// use them where a briefly stale value is acceptable, never to read the seq of a
 /// compare-and-swap. They hide a key whose TTL has passed, as meta-service does: meta-service
 /// removes the key, and tells the watch, only when it applies a later write.
+///
+/// A directory is used as given, and its keys are those under `{dir}/`: `a` is the directory
+/// `a`, and `a/` the empty-named directory inside it, whose keys are `a//...`.
 pub struct Cache {
-    /// Without the trailing `/`.
-    prefix: String,
+    /// The watched directory.
+    dir: String,
     pub(crate) inner: sub_cache::Cache<MetaCacheTypes>,
 }
 
@@ -77,61 +81,51 @@ impl Cache {
             .ok()?
     }
 
-    /// The keys and values under `dir` if the copy can answer at once, see [`Cache`]: those that
-    /// meta-service lists for `{dir}/`. One trailing `/` of `dir` is ignored.
+    /// The keys and values under the directory `{dir}/` if the copy can answer at once, see
+    /// [`Cache`].
     ///
-    /// `None` if the copy cannot answer, or `dir` is neither the prefix nor under it.
+    /// `None` if the copy cannot answer, or `dir` is neither the watched directory nor under it.
     pub fn try_list_dir_ready(&mut self, dir: &str) -> Option<Vec<(String, SeqV)>> {
-        let dir = dir.strip_suffix('/').unwrap_or(dir);
         let covered = dir
-            .strip_prefix(self.prefix.as_str())
+            .strip_prefix(self.dir.as_str())
             .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
         if !covered {
             return None;
         }
-        // Not `try_list_dir`: it strips every trailing `/`, and would list `a/b` for `a/b//`.
-        let range = format!("{dir}/")..format!("{dir}0");
         let now_ms = now_ms();
-        self.inner
-            .try_access(|data| {
-                data.data
-                    .range(range)
-                    .filter(|(_, value)| !value.is_expired(now_ms))
-                    .map(|(key, value)| (key.clone(), value.clone()))
-                    .collect::<Vec<_>>()
-            })
-            .now_or_never()?
-            .ok()
+        let mut items = self.inner.try_list_dir(dir).now_or_never()?.ok()?;
+        items.retain(|(_, value)| !value.is_expired(now_ms));
+        Some(items)
     }
 
-    /// Create a new cache with the given prefix and meta client.
+    /// Create a new cache of the directory `dir`, watched through `meta_client`.
     ///
     /// The cache will start watching for changes immediately.
     ///
     /// # Parameters
     ///
     /// * `meta_client` - The meta client to interact with the remote data store.
-    /// * `prefix` - The cache holds the keys `{prefix}/...`; trailing `/` are ignored. It also
-    ///   identifies the cache instance.
+    /// * `dir` - The cache holds the keys under `{dir}/`, see [`Cache`]. It also identifies the
+    ///   cache instance.
     /// * `name` - The name of the cache, used for debugging and logging purposes.
     pub async fn new(
         meta_client: Arc<ClientHandle<DatabendRuntime>>,
-        prefix: impl ToString,
+        dir: impl ToString,
         name: impl ToString,
     ) -> Self {
-        let prefix = prefix.to_string().trim_end_matches('/').to_string();
+        let dir = dir.to_string();
         let name = name.to_string();
         let inner = sub_cache::Cache::new(
             meta_client_source::MetaClientSource {
                 client: meta_client,
                 name: name.clone(),
             },
-            &prefix,
+            &dir,
             name,
         )
         .await;
 
-        Cache { prefix, inner }
+        Cache { dir, inner }
     }
 }
 

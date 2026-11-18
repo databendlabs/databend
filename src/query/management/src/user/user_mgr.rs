@@ -68,7 +68,7 @@ impl UserMgr {
         client: Arc<ClientHandle<DatabendRuntime>>,
         tenant: &Tenant,
     ) -> Arc<Mutex<Cache>> {
-        let cache = Cache::new(client, Self::users_prefix(tenant), "users").await;
+        let cache = Cache::new(client, Self::users_dir(tenant), "users").await;
         Arc::new(Mutex::new(cache))
     }
 
@@ -103,12 +103,16 @@ impl UserMgr {
     }
 
     fn user_prefix(&self) -> String {
-        Self::users_prefix(&self.tenant)
+        Self::user_dummy_ident(&self.tenant).tenant_prefix()
     }
 
-    fn users_prefix(tenant: &Tenant) -> String {
-        let ident = TenantUserIdent::new_user_host(tenant.clone(), "dummy", "dummy");
-        ident.tenant_prefix()
+    /// The directory of the users of `tenant`, which a watch of them takes.
+    fn users_dir(tenant: &Tenant) -> String {
+        Self::user_dummy_ident(tenant).tenant_dir()
+    }
+
+    fn user_dummy_ident(tenant: &Tenant) -> TenantUserIdent {
+        TenantUserIdent::new_user_host(tenant.clone(), "dummy", "dummy")
     }
 }
 

@@ -237,10 +237,10 @@ impl WarehouseMgr {
         ))
     }
 
-    /// The key prefix of the nodes of a cluster, with the trailing `/`.
+    /// The directory of the nodes of a cluster: its nodes are the keys under `{dir}/`.
     fn cluster_nodes_dir(&self, warehouse: &str, cluster: &str) -> Result<String> {
         Ok(format!(
-            "{}/{}/{}/",
+            "{}/{}/{}",
             self.cluster_node_key_prefix,
             escape_for_key(warehouse)?,
             escape_for_key(cluster)?
@@ -273,13 +273,13 @@ impl WarehouseMgr {
         let dir = self.cluster_nodes_dir(warehouse, cluster)?;
         let values = self
             .metastore
-            .list_kv_collect(ListOptions::unlimited(&dir))
+            .list_kv_collect(ListOptions::unlimited(&format!("{dir}/")))
             .await
             .map_err(meta_service_error)?;
         Self::decode_cluster_nodes(&dir, warehouse, cluster, values)
     }
 
-    /// The nodes of a cluster from the key-values under `dir`, its `cluster_nodes_dir`.
+    /// The nodes of a cluster from the key-values under `{dir}/`, `dir` its `cluster_nodes_dir`.
     fn decode_cluster_nodes(
         dir: &str,
         warehouse: &str,
@@ -290,7 +290,8 @@ impl WarehouseMgr {
         for (node_key, value) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
-            node_info.id = unescape_for_key(&node_key[dir.len()..])?;
+            // The key is `{dir}/{node id}`.
+            node_info.id = unescape_for_key(&node_key[dir.len() + 1..])?;
             node_info.cluster_id = cluster.to_string();
             node_info.warehouse_id = warehouse.to_string();
             nodes_info.push(node_info);

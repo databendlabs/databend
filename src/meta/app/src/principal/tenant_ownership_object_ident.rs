@@ -115,6 +115,7 @@ mod tests {
         );
 
         assert_eq!("__fd_object_owners/tenant/", r.tenant_prefix());
+        assert_eq!("__fd_object_owners/tenant", r.tenant_dir());
     }
 
     #[test]

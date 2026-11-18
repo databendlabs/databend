@@ -31,7 +31,7 @@
 //! use databend_meta_client::MetaClient;
 //!
 //! let meta_client = MetaClient::new("127.0.0.1:9191");
-//! let cache = Cache::new("my_prefix", meta_client).await?;
+//! let cache = Cache::new(meta_client, "my_dir", "my cache").await;
 //!
 //! // Get a value
 //! let value = cache.try_get("key").await?;
@@ -43,17 +43,18 @@
 //! # Cache Key Structure
 //!
 //! ```text
-//! <prefix>/foo
-//! <prefix>/..
-//! <prefix>/..
+//! <dir>/foo
+//! <dir>/..
+//! <dir>/..
 //! ```
 //!
-//! - `<prefix>` is a user-defined string to identify a cache instance.
+//! - `<dir>` is the watched directory, used as given: the cache holds the keys under `<dir>/`.
+//!   It also identifies a cache instance.
 //!
 //! # Initialization Process
 //!
 //! When a [`Cache`] is created, it:
-//! 1. Creates a new instance with the specified prefix
+//! 1. Creates a new instance of the specified directory
 //! 2. Spawns a background task to watch for changes
 //! 3. Establishes a watch stream with initial flush
 //! 4. Fetches and processes initial data
