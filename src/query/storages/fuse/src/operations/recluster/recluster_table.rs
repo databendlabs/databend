@@ -896,6 +896,7 @@ mod tests {
             vertical_kind: None,
             merge_groups: Vec::new(),
             skipped_blocks: 0,
+            promoted_blocks: Vec::new(),
         }
     }
 

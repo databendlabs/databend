@@ -65,6 +65,7 @@ use crate::io::VirtualColumnLayoutPlanner;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
+use crate::operations::recluster::LOW_MATURITY_MAX_LEVEL;
 use crate::operations::recluster::MergeGroupLimits;
 use crate::operations::recluster::ReclusterBlock;
 use crate::operations::recluster::ReclusterBlockStats;
@@ -525,6 +526,10 @@ impl ReclusterMutator {
             for (window_pos, _) in &candidate.selected_blocks {
                 selected_window_positions[*window_pos] = true;
             }
+            // A promoted block is rewritten into a new segment of its own segment's blocks.
+            for (window_pos, _) in &candidate.promoted_blocks {
+                selected_window_positions[*window_pos] = true;
+            }
         }
         candidate_window.tasks = tasks;
 
@@ -569,6 +574,7 @@ impl ReclusterMutator {
                     vertical_kind: None,
                     merge_groups: Vec::new(),
                     skipped_blocks: 0,
+                    promoted_blocks: Vec::new(),
                 });
             } else {
                 return Ok(candidate_window);
@@ -1123,6 +1129,7 @@ impl ReclusterMutator {
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
         let mut selected_block_keys = HashSet::new();
         let mut removed_segment_infos: HashMap<usize, Arc<SegmentInfo>> = HashMap::new();
+        let mut promoted_locations = HashSet::new();
         let mut tasks = Vec::new();
         let mut selected_block_count = 0u64;
 
@@ -1194,9 +1201,21 @@ impl ReclusterMutator {
                         }
                     })
                     .collect::<Vec<_>>();
+                // A promoted block keeps its data: its segment is rewritten with the block
+                // retained at the raised level.
+                for &(window_pos, block_idx) in &candidate.promoted_blocks {
+                    let (location, segment_info) = &window.segments[window_pos];
+                    let segment_info = segment_info
+                        .as_ref()
+                        .expect("promoted segment should be cached");
+                    removed_segment_infos
+                        .entry(live_segments[location])
+                        .or_insert_with(|| segment_info.clone());
+                    promoted_locations.insert(segment_info.blocks[block_idx].location.0.clone());
+                }
                 if !merge_groups.is_empty() || candidate.skipped_blocks != 0 {
                     info!(
-                        "recluster: task merge groups={} group_blocks={:?} group_bytes={:?} skipped_blocks={}",
+                        "recluster: task merge groups={} group_blocks={:?} group_bytes={:?} skipped_blocks={} promoted_blocks={}",
                         merge_groups.len().max(1),
                         merge_groups
                             .iter()
@@ -1207,6 +1226,7 @@ impl ReclusterMutator {
                             .map(|group| group.total_bytes)
                             .collect::<Vec<_>>(),
                         candidate.skipped_blocks,
+                        candidate.promoted_blocks.len(),
                     );
                 }
 
@@ -1321,7 +1341,17 @@ impl ReclusterMutator {
             virtual_schemas.push(segment.summary.virtual_segment_schema.clone().map(Arc::new));
             retained.push((virtual_schema_index, segment, indices));
         }
-        let remained_blocks = self.gather_retained_blocks(retained).await?;
+        let mut remained_blocks = self.gather_retained_blocks(retained).await?;
+        // A block another task rewrites is not retained, so it is not promoted either.
+        for block in &mut remained_blocks {
+            if promoted_locations.contains(&block.block_meta.location.0) {
+                let mut block_meta = block.block_meta.as_ref().clone();
+                if let Some(stats) = block_meta.cluster_stats.as_mut() {
+                    stats.level = (stats.level + 1).min(LOW_MATURITY_MAX_LEVEL);
+                }
+                block.block_meta = Arc::new(block_meta);
+            }
+        }
 
         Ok((selected_block_count, ReclusterParts {
             tasks,

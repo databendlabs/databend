@@ -3037,13 +3037,28 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Plans one hotspot of eight 10-byte blocks around one 1000-byte block, which no group of
-/// the small blocks admits at the default size ratio of 5. With `compact`, the blocks are
-/// small enough for the small-group compaction instead of the hotspot selection.
+/// Eight 10-byte level-0 blocks around one 1000-byte level-0 block, which no group of the
+/// small blocks admits at the default size ratio of 5.
+const HOTSPOT_WITH_LARGE_BLOCK: [(u64, i32); 9] = [
+    (10, 0),
+    (10, 0),
+    (10, 0),
+    (10, 0),
+    (1000, 0),
+    (10, 0),
+    (10, 0),
+    (10, 0),
+    (10, 0),
+];
+
+/// Plans one hotspot of fully overlapping blocks of the given sizes and levels; block `i` has
+/// `i + 1` rows. With `compact`, the blocks are small enough for the small-group compaction
+/// instead of the hotspot selection.
 async fn plan_merge_groups(
     settings: &[(&str, &str)],
     mode: ReclusterMode,
     compact: bool,
+    sizes_and_levels: &[(u64, i32)],
 ) -> anyhow::Result<(Vec<Arc<BlockMeta>>, ReclusterParts)> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -3061,11 +3076,10 @@ async fn plan_merge_groups(
         false => BlockThresholds::new(1000, 10, 10, 1000),
     };
     // Distinct row counts tell the blocks apart in the planned parts.
-    let blocks = (1..=9)
-        .map(|rows| {
-            let size = if rows == 5 { 1000 } else { 10 };
-            make_recluster_block(0, 1, 100, 0, rows, size, size)
-        })
+    let blocks = sizes_and_levels
+        .iter()
+        .zip(1..)
+        .map(|(&(size, level), rows)| make_recluster_block(0, 1, 100, level, rows, size, size))
         .collect::<Vec<_>>();
     let location = write_recluster_segment(
         &data_accessor,
@@ -3113,6 +3127,7 @@ async fn test_merge_groups_split_task_and_skip_lone_blocks() -> anyhow::Result<(
             ],
             mode,
             compact,
+            &HOTSPOT_WITH_LARGE_BLOCK,
         )
         .await?;
         assert_eq!(parts.tasks.len(), 1);
@@ -3143,20 +3158,14 @@ async fn test_merge_groups_split_task_and_skip_lone_blocks() -> anyhow::Result<(
             (40, 80, 80)
         );
         assert_eq!(task.stats.read_rows, 40);
-        // The large block stays in the rewritten segment unchanged.
+        // The large block keeps its data in the rewritten segment, promoted one level.
         assert_eq!(parts.remained_blocks.len(), 1);
+        let remained = &parts.remained_blocks[0].block_meta;
+        assert_eq!(remained.location, blocks[4].location);
+        assert_eq!(remained.cluster_stats.as_ref().unwrap().level, 1);
         assert_eq!(
-            parts.remained_blocks[0].block_meta.location,
-            blocks[4].location
-        );
-        assert_eq!(
-            parts.remained_blocks[0]
-                .block_meta
-                .cluster_stats
-                .as_ref()
-                .unwrap()
-                .level,
-            0
+            remained.cluster_stats.as_ref().unwrap().min(),
+            blocks[4].cluster_stats.as_ref().unwrap().min()
         );
     }
     Ok(())
@@ -3172,6 +3181,7 @@ async fn test_merge_groups_follow_their_settings() -> anyhow::Result<()> {
         ],
         ReclusterMode::Conservative,
         false,
+        &HOTSPOT_WITH_LARGE_BLOCK,
     )
     .await?;
     assert_eq!(parts.tasks.len(), 1);
@@ -3191,10 +3201,59 @@ async fn test_merge_groups_follow_their_settings() -> anyhow::Result<()> {
         "enable_recluster_multiway_merge",
         "0",
     )]] {
-        let (_, parts) = plan_merge_groups(&settings, ReclusterMode::Conservative, false).await?;
+        let (_, parts) = plan_merge_groups(
+            &settings,
+            ReclusterMode::Conservative,
+            false,
+            &HOTSPOT_WITH_LARGE_BLOCK,
+        )
+        .await?;
         assert_eq!(parts.tasks.len(), 1);
         assert_eq!(parts.tasks[0].parts.len(), 9);
         assert!(parts.tasks[0].merge_groups.is_empty());
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_merge_groups_promote_only_large_lone_blocks() -> anyhow::Result<()> {
+    let level_of = |parts: &ReclusterParts, location: &meta::Location| {
+        parts
+            .remained_blocks
+            .iter()
+            .find(|block| &block.block_meta.location == location)
+            .map(|block| block.block_meta.cluster_stats.as_ref().unwrap().level)
+    };
+    // Aggressive mode merges levels 1 to 3 together: a large lone block of level 2 is
+    // promoted to 3, one of level 3 stays at 3.
+    for (level, promoted) in [(2, 3), (3, 3)] {
+        let mut blocks = [(10, 1); 5];
+        blocks[2] = (1000, level);
+        let (blocks, parts) = plan_merge_groups(
+            &[("recluster_max_group_blocks", "2")],
+            ReclusterMode::Aggressive,
+            false,
+            &blocks,
+        )
+        .await?;
+        assert_eq!(parts.tasks.len(), 1);
+        assert_eq!(parts.tasks[0].parts.len(), 4);
+        assert_eq!(level_of(&parts, &blocks[2].location), Some(promoted));
+    }
+
+    // A lone block no larger than the grouped blocks keeps its level.
+    let (blocks, parts) = plan_merge_groups(
+        &[("recluster_max_group_blocks", "3")],
+        ReclusterMode::Conservative,
+        false,
+        &[(10, 0); 7],
+    )
+    .await?;
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].parts.len(), 6);
+    assert_eq!(parts.remained_blocks.len(), 1);
+    let lone = &parts.remained_blocks[0].block_meta.location;
+    assert!(blocks.iter().any(|block| &block.location == lone));
+    assert_eq!(level_of(&parts, lone), Some(0));
     Ok(())
 }

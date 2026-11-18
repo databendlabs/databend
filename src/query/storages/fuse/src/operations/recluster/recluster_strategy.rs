@@ -325,6 +325,9 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
     }
 }
 
+/// The highest level of the low mature levels Aggressive mode groups together.
+pub(crate) const LOW_MATURITY_MAX_LEVEL: i32 = 3;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ReclusterGroup {
     /// A single level forms its own group.
@@ -353,7 +356,9 @@ impl ReclusterGroup {
     /// Assign a block's recluster group for the given mode.
     pub(crate) fn assign(level: i32, mode: ReclusterMode) -> ReclusterGroup {
         match mode {
-            ReclusterMode::Aggressive if (1..=3).contains(&level) => ReclusterGroup::LowMaturity,
+            ReclusterMode::Aggressive if (1..=LOW_MATURITY_MAX_LEVEL).contains(&level) => {
+                ReclusterGroup::LowMaturity
+            }
             _ => ReclusterGroup::Level(level),
         }
     }
@@ -461,6 +466,9 @@ pub(crate) struct ReclusterTaskCandidate {
     pub(crate) merge_groups: Vec<Vec<(usize, usize)>>,
     /// Selected blocks left out of the task because no merge group admitted another block.
     pub(crate) skipped_blocks: usize,
+    /// Left-out blocks whose level is raised without rewriting them, as `(window position,
+    /// block index)`.
+    pub(crate) promoted_blocks: Vec<(usize, usize)>,
 }
 
 impl ReclusterTaskCandidate {
@@ -594,12 +602,17 @@ pub(crate) fn task_candidate(
         vertical_kind: properties.vertical_kind,
         merge_groups: Vec::new(),
         skipped_blocks: 0,
+        promoted_blocks: Vec::new(),
     }
 }
 
 /// A depth candidate for the blocks selected as one task. A linear merge task is split into
 /// merge groups, and a block left alone in its group is left out of the task, as a merge of
 /// one block would only rewrite it. None when no group remains.
+///
+/// A left-out block larger than every grouped block is promoted one level, up to
+/// `LOW_MATURITY_MAX_LEVEL`. At its level it would wait for blocks of its own size; at the next
+/// level it meets the outputs of these groups, which grow towards it.
 pub(crate) fn depth_task_candidate(
     properties: &ReclusterProperties,
     group: ReclusterGroup,
@@ -672,6 +685,21 @@ pub(crate) fn depth_task_candidate(
             .collect();
     }
     candidate.skipped_blocks = split.singles.len();
+    let largest_grouped = kept
+        .iter()
+        .map(|idx| blocks[*idx].meta.block_size)
+        .max()
+        .unwrap_or(0);
+    candidate.promoted_blocks = split
+        .singles
+        .iter()
+        .map(|position| blocks[task_indices[*position]])
+        .filter(|block| {
+            block.meta.block_size > largest_grouped
+                && (0..LOW_MATURITY_MAX_LEVEL).contains(&block.stats().level)
+        })
+        .map(|block| (block.index.segment_idx, block.index.block_idx))
+        .collect();
     Some(candidate)
 }
 

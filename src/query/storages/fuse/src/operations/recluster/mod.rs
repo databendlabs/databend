@@ -29,6 +29,7 @@ pub use recluster_mutator::ReclusterFinalCarry;
 pub use recluster_mutator::ReclusterMutator;
 pub(crate) use recluster_mutator::ReclusterSelectionStats;
 pub use recluster_strategy::CandidateScore;
+pub(crate) use recluster_strategy::LOW_MATURITY_MAX_LEVEL;
 pub(crate) use recluster_strategy::MergeGroupLimits;
 pub(crate) use recluster_strategy::ReclusterBlock;
 pub(crate) use recluster_strategy::ReclusterBlockStats;
