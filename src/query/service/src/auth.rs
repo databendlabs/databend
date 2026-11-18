@@ -144,7 +144,7 @@ impl AuthMgr {
                 session.set_current_tenant(tenant.clone())?;
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
-                    let user_info = user_api.get_user(&tenant, identity.clone()).await?;
+                    let user_info = user_api.get_auth_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
                 Ok((claim.user, Some(claim.session_id)))
