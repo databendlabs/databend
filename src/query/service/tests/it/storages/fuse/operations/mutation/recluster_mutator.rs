@@ -1161,8 +1161,9 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
         .execute_command(&format!("alter table {name} recluster final"))
         .await?;
 
-    // A single placement must stay local even in a multi-node cluster. The
-    // remote nodes have no Flight endpoints, so an unnecessary Exchange fails.
+    // A single placement must stay local even in a multi-node cluster. Assign
+    // both nodes to a warehouse for SQL execution, but leave Flight endpoints
+    // unset so an unnecessary Exchange fails.
     for sql in [
         format!("TRUNCATE TABLE {name}"),
         format!("INSERT INTO {name} VALUES (1),(2),(3)"),
@@ -1173,8 +1174,8 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let ctx = fixture
         .new_query_ctx_with_cluster(
             ClusterDescriptor::new()
-                .with_node("node-a", "")
-                .with_node("node-b", "")
+                .with_node_info("node-a", "", "cluster", "warehouse")
+                .with_node_info("node-b", "", "cluster", "warehouse")
                 .with_local_id("node-a"),
         )
         .await?;
