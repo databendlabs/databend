@@ -50,7 +50,6 @@ use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use log::error;
 use log::info;
-use parking_lot::Mutex;
 
 use crate::errors::meta_service_error;
 use crate::warehouse::WarehouseApi;
@@ -91,8 +90,7 @@ pub struct WarehouseMgr {
 /// A watched copy of the online nodes of one cluster,
 /// `{cluster_node_key_prefix}/{warehouse}/{cluster}/...`.
 struct WatchedClusterNodes {
-    /// The lock is held only to read the copy once, never across an await.
-    cache: Mutex<Cache>,
+    cache: Cache,
     /// The node this manager runs on, a node of the watched cluster. A copy that lists the
     /// cluster without it is behind: right after the node joins, or when the watch stopped
     /// receiving changes.
@@ -156,7 +154,7 @@ impl WarehouseMgr {
         let dir = self.cluster_nodes_dir(warehouse, cluster)?;
         let cache = Cache::new(client, &dir, "cluster nodes").await;
         self.cluster_nodes = Some(WatchedClusterNodes {
-            cache: Mutex::new(cache),
+            cache,
             local_node_id: local_node_id.to_string(),
         });
         Ok(self)
@@ -258,7 +256,7 @@ impl WarehouseMgr {
             return Ok(None);
         };
         let dir = self.cluster_nodes_dir(warehouse, cluster)?;
-        let local = watched.cache.lock().try_list_dir_ready(&dir);
+        let local = watched.cache.try_list_dir_ready(&dir);
         local
             .map(|values| Self::decode_cluster_nodes(&dir, warehouse, cluster, values))
             .transpose()

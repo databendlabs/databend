@@ -97,9 +97,9 @@ pub struct UserApiProvider {
 struct Watched {
     tenant: Tenant,
     /// By [`MetaServiceCache::User`].
-    users: Option<Arc<parking_lot::Mutex<Cache>>>,
+    users: Option<Arc<Cache>>,
     /// By [`MetaServiceCache::Setting`].
-    settings: Option<Arc<parking_lot::Mutex<Cache>>>,
+    settings: Option<Arc<Cache>>,
 }
 
 impl UserApiProvider {
