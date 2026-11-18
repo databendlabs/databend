@@ -68,12 +68,15 @@ async fn test_credential_binding_survives_password_change() -> anyhow::Result<()
     create_admin_user(&ep, "binding_user", "before", "").await?;
     let old = basic_headers("binding_user", "before");
     let new = basic_headers("binding_user", "after");
-    let result = start(&ep, old.clone()).await?;
+    let result = start(&ep, with_ip(old.clone(), "192.0.2.1")).await?;
     let state_uri = format!("/v1/query/{}", result.id);
     admin_sql(&ep, "ALTER USER binding_user IDENTIFIED BY 'after'").await?;
 
-    // The submission credential keeps working for its own query only.
-    assert_eq!(get(&ep, &state_uri, old.clone()).await, StatusCode::OK);
+    // Without a network policy the binding is independent of the client IP.
+    assert_eq!(
+        get(&ep, &state_uri, with_ip(old.clone(), "192.0.2.2")).await,
+        StatusCode::OK
+    );
     assert_eq!(
         get(&ep, result.next_uri.as_ref().unwrap(), old.clone()).await,
         StatusCode::OK
@@ -297,8 +300,13 @@ async fn test_credential_binding_with_session_token() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn with_ip(mut headers: HeaderMap, ip: &'static str) -> HeaderMap {
+    headers.insert("X-Real-IP", HeaderValue::from_static(ip));
+    headers
+}
+
 #[tokio::test(flavor = "current_thread")]
-async fn test_credential_binding_skipped_under_network_policy() -> anyhow::Result<()> {
+async fn test_credential_binding_under_user_network_policy() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
     let ep = create_endpoint()?;
     admin_sql(
@@ -313,15 +321,72 @@ async fn test_credential_binding_skipped_under_network_policy() -> anyhow::Resul
         "WITH SET NETWORK POLICY='binding_net'",
     )
     .await?;
-    let mut old = basic_headers("binding_net_user", "before");
-    old.insert("X-Real-IP", HeaderValue::from_static("127.0.0.1"));
-    let result = start(&ep, old.clone()).await?;
+    let old = basic_headers("binding_net_user", "before");
+    let new = basic_headers("binding_net_user", "after");
+    let source = with_ip(old.clone(), "127.0.0.1");
+    let result = start(&ep, source.clone()).await?;
     let uri = format!("/v1/query/{}", result.id);
-    assert_eq!(get(&ep, &uri, old.clone()).await, StatusCode::OK);
     admin_sql(&ep, "ALTER USER binding_net_user IDENTIFIED BY 'after'").await?;
 
-    // Network policy must be checked on every request, so such queries are
-    // not bound and keep the ordinary per-request authentication.
-    assert_eq!(get(&ep, &uri, old).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(get(&ep, &uri, source.clone()).await, StatusCode::OK);
+    assert_eq!(
+        get(&ep, result.next_uri.as_ref().unwrap(), source.clone()).await,
+        StatusCode::OK
+    );
+    assert_eq!(submit(&ep, source.clone()).await, StatusCode::UNAUTHORIZED);
+
+    // A different address inside the allowed range still needs a valid password.
+    let other_ip = "127.0.0.2";
+    assert_eq!(
+        get(&ep, &uri, with_ip(old, other_ip)).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        get(&ep, &uri, with_ip(new.clone(), other_ip)).await,
+        StatusCode::OK
+    );
+
+    // A policy change affects ordinary auth, but not a same-IP bound poll.
+    admin_sql(
+        &ep,
+        "ALTER NETWORK POLICY binding_net SET BLOCKED_IP_LIST=('127.0.0.1/32')",
+    )
+    .await?;
+    assert_eq!(get(&ep, &uri, source).await, StatusCode::OK);
+    let blocked = with_ip(new, "127.0.0.1");
+    assert_eq!(
+        get(&ep, &uri, blocked.clone()).await,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(submit(&ep, blocked).await, StatusCode::UNAUTHORIZED);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_credential_binding_under_global_network_policy() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    admin_sql(
+        &ep,
+        "CREATE NETWORK POLICY binding_global_net ALLOWED_IP_LIST=('127.0.0.0/8')",
+    )
+    .await?;
+    admin_sql(&ep, "SET GLOBAL network_policy = 'binding_global_net'").await?;
+    admin_sql(
+        &ep,
+        "CREATE USER binding_global_user IDENTIFIED BY 'before'",
+    )
+    .await?;
+    let old = basic_headers("binding_global_user", "before");
+    let source = with_ip(old.clone(), "127.0.0.1");
+    let result = start_query(&ep, source.clone(), 60, "SELECT 1").await?;
+    let uri = format!("/v1/query/{}", result.id);
+    admin_sql(&ep, "ALTER USER binding_global_user IDENTIFIED BY 'after'").await?;
+
+    assert_eq!(get(&ep, &uri, source).await, StatusCode::OK);
+    assert_eq!(
+        get(&ep, &uri, with_ip(old, "127.0.0.2")).await,
+        StatusCode::UNAUTHORIZED
+    );
     Ok(())
 }

@@ -478,7 +478,7 @@ impl<E> HTTPSessionEndpoint<E> {
                     query
                         .credential_binding
                         .as_ref()
-                        .is_some_and(|bound| bound.matches(binding))
+                        .is_some_and(|bound| bound.matches(binding, client_host.as_deref()))
                 }),
             _ => None,
         };
@@ -601,12 +601,17 @@ impl<E> HTTPSessionEndpoint<E> {
             login_history.disable_write = true;
         }
 
-        // Ordinary authentication enforces network policy on every request;
-        // keep that for queries it applies to by not binding them.
-        let credential_binding = credential_binding.filter(|_| {
-            matches!(self.endpoint_kind, EndpointKind::StartQuery)
-                && !network_policy_applies(&session)
-        });
+        // Only a normally authenticated submission can establish a binding.
+        // If a network policy applied, retain the IP it admitted, not the policy.
+        let credential_binding = credential_binding
+            .filter(|_| matches!(self.endpoint_kind, EndpointKind::StartQuery))
+            .and_then(|binding| {
+                if network_policy_applies(&session) {
+                    binding.restrict_to_client_ip(client_host.as_deref())
+                } else {
+                    Some(binding)
+                }
+            });
 
         let session = session_manager.register_session(session)?;
 

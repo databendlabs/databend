@@ -104,9 +104,21 @@ binding. On submission with a password, JWT or key-pair credential, the server
 stores an HMAC (per-process random key) of the requested tenant,
 `X-DATABEND-AUTH-METHOD` and the exact `Authorization` header in the query record;
 the credential itself is not retained. Native session tokens are not bound: they
-are cheap to verify and must keep honoring explicit logout. Queries whose user is
-subject to a network policy are not bound either, because network policy is
-checked on every request by ordinary authentication.
+are cheap to verify and must keep honoring explicit logout.
+
+If a user-level or applicable global network policy applies at submission, the
+binding also records the effective client IPv4 address used by ordinary
+authentication. It matches only follow-ups from that same address; a missing,
+invalid or different address does not match. A policy-bound submission without a
+usable address cannot establish a binding. When no policy applies at submission,
+the binding does not compare IP addresses.
+
+Network policy is evaluated at submission, not again on a bound follow-up. Changes
+made after submission (including attaching a policy) do not revoke a retained
+binding. New SQL and unbound follow-ups still use ordinary authentication and
+current policy. IP matching relies on the same trusted client-IP source as network
+policy: when forwarding headers are used, a trusted proxy must set them and
+clients must not be able to bypass it.
 
 A state/page/final/kill request without the explicit `query-token` method whose
 binding matches the target query, sent from the query's own client session (or

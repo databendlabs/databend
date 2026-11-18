@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::net::Ipv4Addr;
 use std::sync::LazyLock;
 
 use databend_common_base::headers::HEADER_AUTH_METHOD;
@@ -43,7 +44,10 @@ static KEY: LazyLock<[u8; 32]> = LazyLock::new(|| {
 /// without re-authenticating, e.g. after the user's password has changed.
 /// The credential cannot be recovered from the digest.
 #[derive(Clone)]
-pub struct CredentialBinding([u8; 32]);
+pub struct CredentialBinding {
+    digest: [u8; 32],
+    bound_client_ip: Option<Ipv4Addr>,
+}
 
 impl CredentialBinding {
     /// Returns `None` unless the request carries exactly one `Authorization`
@@ -73,11 +77,22 @@ impl CredentialBinding {
             mac.update(&(part.len() as u64).to_be_bytes());
             mac.update(part);
         }
-        Some(Self(mac.finalize().into_bytes().into()))
+        Some(Self {
+            digest: mac.finalize().into_bytes().into(),
+            bound_client_ip: None,
+        })
     }
 
-    pub(crate) fn matches(&self, other: &Self) -> bool {
-        self.0.ct_eq(&other.0).into()
+    pub(crate) fn restrict_to_client_ip(mut self, client_ip: Option<&str>) -> Option<Self> {
+        self.bound_client_ip = Some(client_ip?.parse().ok()?);
+        Some(self)
+    }
+
+    pub(crate) fn matches(&self, other: &Self, client_ip: Option<&str>) -> bool {
+        bool::from(self.digest.ct_eq(&other.digest))
+            && self.bound_client_ip.is_none_or(|bound_ip| {
+                client_ip.and_then(|ip| ip.parse::<Ipv4Addr>().ok()) == Some(bound_ip)
+            })
     }
 }
 
@@ -114,15 +129,31 @@ mod tests {
     #[test]
     fn test_binding_matches_only_identical_requests() {
         let base = bind("t1", "Basic dTpw", None);
-        assert!(base.matches(&bind("t1", "Basic dTpw", None)));
-        assert!(!base.matches(&bind("t2", "Basic dTpw", None)));
-        assert!(!base.matches(&bind("t1", "Basic dTpx", None)));
-        assert!(!base.matches(&bind("t1", "Basic dTpw", Some("keypair"))));
+        assert!(base.matches(&bind("t1", "Basic dTpw", None), None));
+        assert!(!base.matches(&bind("t2", "Basic dTpw", None), None));
+        assert!(!base.matches(&bind("t1", "Basic dTpx", None), None));
+        assert!(!base.matches(&bind("t1", "Basic dTpw", Some("keypair")), None));
         // Length prefixes keep field boundaries unambiguous.
-        assert!(!bind("t1a", "b", None).matches(&bind("t1", "ab", None)));
+        assert!(!bind("t1a", "b", None).matches(&bind("t1", "ab", None), None));
 
         let keypair = bind("t1", "Bearer x", Some("keypair"));
-        assert!(keypair.matches(&bind("t1", "Bearer x", Some("KeyPair"))));
+        assert!(keypair.matches(&bind("t1", "Bearer x", Some("KeyPair")), None));
+    }
+
+    #[test]
+    fn test_binding_client_ip_restriction() {
+        let candidate = bind("t1", "Basic dTpw", None);
+        let source = Some("192.0.2.1");
+        let other = Some("192.0.2.2");
+        let invalid = Some("");
+        let bound = candidate.clone().restrict_to_client_ip(source).unwrap();
+        assert!(bound.matches(&candidate, source));
+        assert!(!bound.matches(&candidate, other));
+        assert!(!bound.matches(&candidate, None));
+        assert!(!bound.matches(&candidate, invalid));
+        assert!(candidate.matches(&candidate, other));
+        assert!(candidate.clone().restrict_to_client_ip(None).is_none());
+        assert!(candidate.restrict_to_client_ip(invalid).is_none());
     }
 
     #[test]
