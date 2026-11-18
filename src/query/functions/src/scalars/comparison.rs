@@ -1142,6 +1142,13 @@ fn vectorize_string_cmp(
 ) -> impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar(func(arg1.cmp(&arg2))),
+        // Against the empty string only the length matters: `col <> ''` is a common filter.
+        (Value::Column(arg1), Value::Scalar(arg2)) if arg2.is_empty() => {
+            Value::Column(compare_lengths_to_empty(&arg1, func, false))
+        }
+        (Value::Scalar(arg1), Value::Column(arg2)) if arg1.is_empty() => {
+            Value::Column(compare_lengths_to_empty(&arg2, func, true))
+        }
         (Value::Column(arg1), Value::Scalar(arg2)) => {
             let col = Bitmap::collect_bool(ctx.num_rows, |i| {
                 func(StringColumn::compare_str(&arg1, i, &arg2))
@@ -1161,6 +1168,28 @@ fn vectorize_string_cmp(
             Value::Column(col)
         }
     }
+}
+
+/// Compares each string of `column` with the empty string: a non-empty string is greater, so
+/// only the view's length is read. `reversed` compares the empty string with the column instead.
+fn compare_lengths_to_empty(
+    column: &StringColumn,
+    func: impl Fn(Ordering) -> bool,
+    reversed: bool,
+) -> Bitmap {
+    let (empty, non_empty) = if reversed {
+        (func(Ordering::Equal), func(Ordering::Less))
+    } else {
+        (func(Ordering::Equal), func(Ordering::Greater))
+    };
+    let views = column.views().as_slice();
+    Bitmap::collect_bool(views.len(), |i| {
+        if views[i].length == 0 {
+            empty
+        } else {
+            non_empty
+        }
+    })
 }
 
 fn register_date_cmp(registry: &mut FunctionRegistry) {
