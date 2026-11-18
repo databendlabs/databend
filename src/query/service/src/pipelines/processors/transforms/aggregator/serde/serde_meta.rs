@@ -24,29 +24,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct AggregateSerdeMeta {
-    pub bucket: isize,
-    pub is_empty: bool,
-}
-
-impl AggregateSerdeMeta {
-    pub fn create_agg_payload(bucket: isize, is_empty: bool) -> BlockMetaInfoPtr {
-        Box::new(AggregateSerdeMeta { bucket, is_empty })
-    }
-}
-
-#[typetag::serde(name = "aggregate_serde")]
-impl BlockMetaInfo for AggregateSerdeMeta {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        AggregateSerdeMeta::downcast_ref_from(info).is_some_and(|other| self == other)
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
-    }
-}
-
 /// Serialized partial aggregate states of several buckets, concatenated in one block, sent to
 /// a remote node through the hash shuffle. The shuffle decodes blocks with the schema of the raw
 /// rows by default, so the states carry their own schema.

@@ -332,12 +332,6 @@ impl TransformFinalAggregate {
 
     fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
         match meta {
-            AggregateMeta::Serialized(payload) => {
-                self.handle_serialized(payload, need_check_spill)?;
-            }
-            AggregateMeta::AggregatePayload(payload) => {
-                self.handle_aggregate_payload(payload, need_check_spill)?;
-            }
             AggregateMeta::Spilled(payloads) => {
                 for payload in payloads {
                     check_interrupt()?;

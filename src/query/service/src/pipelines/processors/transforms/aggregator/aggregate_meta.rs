@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 
 use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockProfileStatistics;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SerializedPayload;
@@ -30,8 +29,6 @@ pub struct SpilledPayload {
 }
 
 pub enum AggregateMeta {
-    Serialized(SerializedPayload),
-    AggregatePayload(AggregatePayload),
     Partitioned(PartitionedData),
     Spilled(Vec<SpilledPayload>),
 }
@@ -70,13 +67,6 @@ impl PartitionedData {
 }
 
 impl AggregateMeta {
-    pub fn create_serialized(bucket: isize, block: DataBlock) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Serialized(SerializedPayload {
-            bucket,
-            data_block: block,
-        }))
-    }
-
     /// A block carrying the partial aggregate states of several buckets.
     pub fn payloads_block(payloads: Vec<AggregatePayload>) -> DataBlock {
         AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)).into_datablock()
@@ -105,13 +95,7 @@ impl Debug for AggregateMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             AggregateMeta::Partitioned(_) => f.debug_struct("AggregateMeta::Partitioned").finish(),
-            AggregateMeta::Serialized { .. } => {
-                f.debug_struct("AggregateMeta::Serialized").finish()
-            }
             AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
-            AggregateMeta::AggregatePayload(_) => {
-                f.debug_struct("AggregateMeta:AggregatePayload").finish()
-            }
         }
     }
 }
@@ -127,14 +111,6 @@ impl BlockMetaInfo for AggregateMeta {
 
     fn output_stats(&self) -> Option<BlockProfileStatistics> {
         match self {
-            AggregateMeta::Serialized(payload) => Some(BlockProfileStatistics {
-                rows: payload.data_block.num_rows(),
-                bytes: payload.data_block.memory_size(),
-            }),
-            AggregateMeta::AggregatePayload(payload) => Some(BlockProfileStatistics {
-                rows: payload.payload.len(),
-                bytes: payload.payload.memory_size(),
-            }),
             AggregateMeta::Partitioned(data) => data.output_stats(),
             AggregateMeta::Spilled(payloads) => Some(BlockProfileStatistics {
                 rows: payloads
