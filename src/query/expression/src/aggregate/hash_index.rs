@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! The index of an aggregate hash table. Portions of this module are derived from the excellent
+//! [hashbrown](https://github.com/rust-lang/hashbrown/tree/master) crate.
+
 use std::intrinsics::prefetch_read_data;
 use std::mem::size_of;
 use std::simd::ToBytes;
@@ -23,11 +26,14 @@ use std::simd::u8x16;
 use std::simd::u16x8;
 
 use crate::aggregate::BATCH_SIZE;
-use crate::aggregate::HASH_INDEX_LOAD_FACTOR;
 use crate::aggregate::ProbeState;
 use crate::aggregate::hash_index_adapter::TableAdapter;
 use crate::aggregate::partitioned_payload::RowReserver;
 use crate::aggregate::row_ptr::RowDecoder;
+
+// A hash index holds up to 1 / 1.35 (74%) of its slots: a probe matches the tags of a whole
+// chunk at once, so the index can be dense.
+const HASH_INDEX_LOAD_FACTOR: f64 = 1.35;
 
 /// The slots of a chunk, whatever the width of its ids: an index of `n` chunks has
 /// `n * CHUNK_SLOTS` slots.
@@ -193,6 +199,11 @@ impl HashIndex {
     /// The slots of an index asked for at least `capacity` slots: whole chunks, a power of two.
     pub fn slots_for(capacity: usize) -> usize {
         capacity.div_ceil(CHUNK_SLOTS).next_power_of_two() * CHUNK_SLOTS
+    }
+
+    /// The slots of an index that holds `groups` groups without growing.
+    pub fn slots_for_groups(groups: usize) -> usize {
+        Self::slots_for((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1)
     }
 
     /// The number of groups an index of `capacity` slots holds before it grows.

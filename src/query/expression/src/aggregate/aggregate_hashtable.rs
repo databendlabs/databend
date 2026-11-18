@@ -22,7 +22,6 @@ use smallvec::SmallVec;
 
 use super::BATCH_SIZE;
 use super::DictValueHashes;
-use super::HASH_INDEX_LOAD_FACTOR;
 use super::HashIndex;
 use super::HashTableConfig;
 use super::Payload;
@@ -494,10 +493,7 @@ impl AggregateHashTable {
 
     /// Index capacity that holds `groups` groups without growing.
     pub fn capacity_for_groups(groups: usize) -> usize {
-        // The index rounds up to whole chunks, a power of two of them: round the slots only once.
-        HashIndex::slots_for(
-            ((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1).max(INITIAL_CAPACITY),
-        )
+        HashIndex::slots_for_groups(groups).max(HashIndex::slots_for(INITIAL_CAPACITY))
     }
 
     /// Bytes held by the groups of the partial table, excluding the index.
