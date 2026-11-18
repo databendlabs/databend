@@ -46,7 +46,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregateStatesMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
@@ -137,9 +136,10 @@ impl TransformFinalAggregate {
             ctx.clone(),
             SPILL_BUCKET_NUM,
             params.spill_schema(),
-            // Final processors own separate spill buffers, unlike partial aggregation,
-            // so halve the threshold to reduce per-processor memory usage.
-            LocalPartitionStream::new(0, params.max_block_bytes / 2, SPILL_BUCKET_NUM),
+            // Every final processor buffers the blocks it spills on its own: halve the block
+            // bytes to bound the buffers of all of them.
+            0,
+            params.max_block_bytes / 2,
         )?;
 
         Ok(Box::new(TransformFinalAggregate {
