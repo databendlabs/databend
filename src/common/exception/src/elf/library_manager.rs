@@ -24,7 +24,6 @@ use once_cell::sync::OnceCell;
 use crate::elf::ElfFile;
 use crate::elf::dwarf::Dwarf;
 use crate::elf::library_loader::LibraryLoader;
-use crate::elf::library_symbol::Symbol;
 use crate::exception_backtrace::PhysicalAddr;
 use crate::exception_backtrace::ResolvedStackFrame;
 use crate::exception_backtrace::StackFrame;
@@ -40,25 +39,20 @@ pub struct Library {
 
 impl Library {
     pub fn create(name: String, data: *const u8, size: usize) -> Library {
-        let build_id = unsafe {
-            let data = std::slice::from_raw_parts(data, size);
-            match ElfFile::parse(data) {
-                Err(_) => None,
-                Ok(elf_file) => match elf_file.build_id() {
-                    Ok(None) | Err(_) => None,
-                    Ok(Some(build)) => Some(Arc::new(build.to_vec())),
-                },
-            }
-        };
+        let library_data = unsafe { std::slice::from_raw_parts(data, size) };
+        let elf = ElfFile::parse(library_data).ok().map(Arc::new);
+        let build_id = elf
+            .as_ref()
+            .and_then(|elf| elf.build_id().ok().flatten())
+            .map(|id| Arc::new(id.to_vec()));
 
         Library {
             name,
             build_id,
-            elf: None,
+            elf,
             address_end: 0,
             address_begin: 0,
-            // Leak memory
-            library_data: unsafe { std::slice::from_raw_parts(data, size) },
+            library_data,
         }
     }
     pub fn sort_begin_address(&self, other: &Self) -> Ordering {
@@ -88,7 +82,6 @@ impl Debug for Library {
 
 // #[derive(Debug)]
 pub struct LibraryManager {
-    symbols: Vec<Symbol>,
     libraries: Vec<Library>,
     executable_build_id: Option<Arc<Vec<u8>>>,
 }
@@ -97,7 +90,6 @@ impl Debug for LibraryManager {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LibraryManager")
             .field("libraries", &self.libraries)
-            .field("symbols", &self.symbols.len())
             .finish()
     }
 }
@@ -260,9 +252,8 @@ impl LibraryManager {
 
     pub fn create() -> Arc<LibraryManager> {
         let loader = LibraryLoader::load();
-        let (libraries, symbols, build_id) = loader.finalize();
+        let (libraries, build_id) = loader.finalize();
         Arc::new(LibraryManager {
-            symbols,
             libraries,
             executable_build_id: build_id.map(Arc::new),
         })
