@@ -290,9 +290,6 @@ async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()>
         .await?
         .unwrap();
     assert_eq!(before.segments.len(), 3);
-    // Model accumulated write hints, as when async hooks coalesce writes.
-    ctx.written_segment_locations()
-        .extend(before.segments.iter().cloned());
     // A threshold of 1 gives a two-block hint. Compact includes one boundary
     // segment, rewriting three of the four segments and leaving one untouched.
     TestFixture::execute_query_with_ctx(
@@ -308,22 +305,26 @@ async fn test_partial_compact_refreshes_untouched_blocks() -> anyhow::Result<()>
     let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     assert_eq!(snapshot.summary.row_count, 4);
     assert_eq!(snapshot.summary.block_count, 2);
-    let reader = SegmentInfoReader::new(fuse_table.get_operator(), table.schema());
-    let mut block_rows = Vec::new();
-    for (location, version) in &snapshot.segments {
-        let segment = reader
-            .read(&(location.clone(), *version), &CachePolicy::BYPASS)
-            .await?;
-        for block in segment.block_metas()? {
-            block_rows.push(block.row_count);
-            assert!(
+    // Compact is complete at statement return; index coverage is now asynchronous.
+    let blocks = tokio::time::timeout(std::time::Duration::from_secs(20), async {
+        loop {
+            let (_, blocks) = refresh_batch_blocks(&fixture).await?;
+            if blocks.iter().all(|block| {
                 block
                     .inverted_index_metas
                     .as_deref()
-                    .is_some_and(|metas| { metas.iter().any(|meta| meta.index_name == "idx") })
-            );
+                    .is_some_and(|metas| metas.iter().any(|meta| meta.index_name == "idx"))
+            }) {
+                break anyhow::Ok(blocks);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
-    }
+    })
+    .await??;
+    let mut block_rows = blocks
+        .iter()
+        .map(|block| block.row_count)
+        .collect::<Vec<_>>();
     block_rows.sort_unstable();
     assert_eq!(block_rows, vec![1, 3]);
     Ok(())
@@ -592,6 +593,92 @@ async fn test_refresh_batch_conflict_does_not_publish_snapshot() -> anyhow::Resu
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sync_commit_does_not_refresh_indexes_inline() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.stop_maintenance_scheduler().await;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    for (kind, name) in [("", "persistent"), ("TRANSIENT", "transient_t")] {
+        fixture
+            .execute_command(&format!(
+                "CREATE {kind} TABLE {db}.{name}(s STRING, ASYNC INVERTED INDEX idx(s))"
+            ))
+            .await?;
+    }
+    fixture.execute_command("BEGIN").await?;
+    for name in ["persistent", "transient_t", "persistent", "transient_t"] {
+        fixture
+            .execute_command(&format!("INSERT INTO {db}.{name} VALUES ('one')"))
+            .await?;
+    }
+    fixture.execute_command("COMMIT").await?;
+    for name in ["persistent", "transient_t"] {
+        let table = fixture
+            .new_query_ctx()
+            .await?
+            .get_table("default", &db, name)
+            .await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot = fuse.read_table_snapshot().await?.unwrap();
+        assert_eq!(snapshot.summary.row_count, 2);
+        let reader = SegmentInfoReader::new(fuse.get_operator(), table.schema());
+        for location in &snapshot.segments {
+            let segment = reader.read(location, &CachePolicy::BYPASS).await?;
+            assert!(
+                segment
+                    .block_metas()?
+                    .iter()
+                    .all(|b| b.inverted_index_meta("idx").is_none())
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_refresh_retains_fixed_snapshot_conflicts() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_stopped_maintenance().await?;
+    fixture.create_default_database().await?;
+    let name = format!(
+        "{}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    for sql in [
+        format!("CREATE TABLE {name}(s STRING, ASYNC INVERTED INDEX inv(s))"),
+        format!("INSERT INTO {name} VALUES ('first')"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let mut pipeline = Pipeline::create();
+    assert_eq!(
+        fuse.do_refresh_indexes(ctx.clone(), &["inv".into()], None, &mut pipeline)
+            .await?,
+        1
+    );
+    fixture
+        .execute_command(&format!("INSERT INTO {name} VALUES ('second')"))
+        .await?;
+    let appended = fixture.latest_default_table().await?;
+    let location = FuseTable::try_from_table(appended.as_ref())?.snapshot_loc();
+    PipelineCompleteExecutor::try_create(pipeline, ExecutorSettings::try_create(ctx)?)?
+        .execute()
+        .await
+        .expect_err("a stale Refresh must not overwrite the append");
+    let latest = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(latest.as_ref())?;
+    assert_eq!(fuse.snapshot_loc(), location);
+    assert_eq!(
+        fuse.read_table_snapshot().await?.unwrap().summary.row_count,
+        2
+    );
+    Ok(())
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RefreshBatchMode {
     VirtualMetadata,
@@ -599,7 +686,8 @@ enum RefreshBatchMode {
 }
 
 async fn refresh_batch_fixture(mode: RefreshBatchMode) -> anyhow::Result<TestFixture> {
-    let fixture = TestFixture::setup().await?;
+    // A queued INSERT hook must not refresh the indexes while the fixture prepares them.
+    let fixture = TestFixture::setup_with_stopped_maintenance().await?;
     let settings = fixture.default_session().get_settings();
     settings.set_max_threads(2)?;
     settings.set_enable_experimental_virtual_column(1)?;
@@ -1346,7 +1434,7 @@ async fn replace_refresh_batch_legacy_spatial_block(
     new_snapshot.segments = vec![(location, SegmentInfo::VERSION)];
     new_snapshot.summary = segment.summary;
     fuse.commit_to_meta_server(
-        ctx.as_ref(),
+        ctx,
         table.get_table_info(),
         generator,
         new_snapshot,

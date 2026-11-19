@@ -7,7 +7,7 @@ import subprocess
 import textwrap
 import time
 from pathlib import Path
-
+from urllib.request import urlopen
 
 CURDIR = Path(__file__).resolve().parent
 ROOT = CURDIR.parents[3]
@@ -205,6 +205,8 @@ def execute(sql):
         cwd=str(ROOT),
         text=True,
         capture_output=True,
+        check=False,
+        timeout=60,
     )
     if result.returncode != 0:
         raise RuntimeError(
@@ -217,14 +219,109 @@ def execute(sql):
 
 
 def wait_for_sql(sql, predicate, timeout=30):
-    deadline = time.time() + timeout
+    deadline = time.monotonic() + timeout
     last = None
-    while time.time() < deadline:
+    while time.monotonic() < deadline:
         last = execute(sql)
         if predicate(last):
             return last
-        time.sleep(0.5)
+        time.sleep(0.1)
     raise RuntimeError(f"condition not met for sql: {sql}; last result: {last}")
+
+
+def maintenance_gauges():
+    with urlopen(f"http://127.0.0.1:{METRIC_PORT}/metrics", timeout=5) as response:
+        text = response.read().decode()
+    prefix = "databend_table_maintenance_"
+    gauges = {}
+    for line in text.splitlines():
+        if line.startswith(prefix):
+            name, value, *_ = line[len(prefix):].split()
+            if name in ("mailbox_tables", "reserved_memory_bytes"):
+                gauges[name] = float(value)
+    return gauges["mailbox_tables"], gauges["reserved_memory_bytes"]
+
+
+def wait_for_maintenance_idle(timeout=60):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        tables, reserved = maintenance_gauges()
+        if tables == 0 and reserved == 0:
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"maintenance failed to release resources: tables={tables}, reserved={reserved}")
+
+
+def run_refresh_lifecycle_case():
+    table = f"{TEST_NAME}.coverage"
+    execute(
+        f"CREATE TABLE {table}(content STRING) ROW_PER_BLOCK=1 BLOCK_PER_SEGMENT=1000 "
+        "AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD=0"
+    )
+    execute(f"INSERT INTO {table} SELECT concat('alpha-', to_string(number)) FROM numbers(70)")
+    wait_for_maintenance_idle()
+    execute(f"CREATE ASYNC INVERTED INDEX inv ON {table}(content)")
+    execute(f"CREATE ASYNC NGRAM INDEX ng ON {table}(content)")
+    # Existing committed blocks lack coverage: an erroneous notification from a rolled-back
+    # write would build their indexes even though the new row never became visible.
+    execute(f"BEGIN; INSERT INTO {table} VALUES ('discard'); ROLLBACK;")
+    wait_for_maintenance_idle()
+    assert execute(f"SELECT count(*) FROM {table}") == [["70"]]
+    try:
+        execute(f"SELECT count(*) FROM {table} WHERE match(content, 'alpha')")
+    except RuntimeError as error:
+        assert "missing or uses an outdated format" in str(error), str(error)
+    else:
+        raise AssertionError("an unbuilt required inverted index must report missing coverage")
+
+    execute(f"INSERT INTO {table} VALUES ('beta')")
+    coverage = (
+        f"SELECT count(*) FROM fuse_block('{TEST_NAME}', 'coverage') "
+        "WHERE inverted_index_size IS NULL OR ngram_index_size IS NULL"
+    )
+    wait_for_sql(coverage, lambda rows: rows == [["0"]], timeout=60)
+    wait_for_maintenance_idle()
+    assert execute(f"SELECT count(*) FROM {table} WHERE match(content, 'alpha')") == [["70"]]
+
+    print("async refresh: rollback leaves indexes unbuilt; committed write restores coverage: ok")
+
+
+def run_special_table_cases():
+    # Transient and TEMP tables never enqueue Refresh, even on an async node.
+    table = f"{TEST_NAME}.tr"
+    execute(f"CREATE TRANSIENT TABLE {table}(id INT, s STRING, ASYNC INVERTED INDEX inv(s)) "
+            "ENABLE_AUTO_ANALYZE=1 ROW_PER_BLOCK=512")
+    execute(f"INSERT INTO {table} SELECT number, 'alpha' FROM numbers(4096)")
+    wait_for_maintenance_idle()
+    execute(f"BEGIN; DELETE FROM {table} WHERE id < 1024; COMMIT;")
+    stats = execute(f"SELECT stats_row_count, actual_row_count FROM system.statistics "
+                    f"WHERE database='{TEST_NAME}' AND table='tr'")
+    assert stats and all(row == ["3072", "3072"] for row in stats), stats
+    wait_for_maintenance_idle()
+    assert execute(f"SELECT count_if(inverted_index_size > 0) FROM fuse_block('{TEST_NAME}', 'tr')") == [["0"]]
+
+    # Even on an async node, do not wait out the FINAL accumulation window for transient tables.
+    clustered = f"{TEST_NAME}.tr_clustered"
+    execute(f"CREATE TRANSIENT TABLE {clustered}(a INT) CLUSTER BY(a) ROW_PER_BLOCK=5 "
+            "AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD=3")
+    for values in ["(1),(2),(7)", "(3),(5),(8)", "(4),(6),(10),(11)", "(0),(9),(12)"]:
+        execute(f"INSERT INTO {clustered} VALUES {values}")
+    rounds = execute(f"SELECT count(*) FROM system.clustering_history WHERE database='{TEST_NAME}' "
+                     "AND table='tr_clustered'")
+    assert int(rounds[0][0]) > 0, rounds
+
+    # The TEMP table lives in one client session: Analyze is inline, Refresh is skipped.
+    result = execute("""
+        CREATE TEMP TABLE tmp_stats(id INT, s STRING, ASYNC INVERTED INDEX inv(s))
+            ENABLE_AUTO_ANALYZE=1 ROW_PER_BLOCK=512;
+        INSERT INTO tmp_stats SELECT number, 'alpha' FROM numbers(4096);
+        BEGIN; DELETE FROM tmp_stats WHERE id < 1024; COMMIT;
+        SELECT 'stats', stats_row_count, actual_row_count FROM system.statistics
+            WHERE database='default' AND table='tmp_stats';
+        SELECT 'index', count_if(inverted_index_size > 0) FROM fuse_block('default','tmp_stats');
+    """)
+    assert ["stats", "3072", "3072"] in result and ["index", "0"] in result, result
+    print("transient and temporary tables: inline Analyze, no automatic Refresh: ok")
 
 
 def wait_for_log(pattern, timeout=30):
@@ -288,22 +385,22 @@ def run_case():
         )
 
         # These writes reproduce the auto-compaction case from 09_0041_auto_compaction:
-        # several small/imperfect blocks are committed first, then the async table hook
-        # should compact them in the background into a single segment with 3 blocks.
+        # several small/imperfect blocks are committed first. Compaction runs before each
+        # write returns, and the remaining stages of the async table hook run in the
+        # background; the result is a single segment with 3 blocks.
         execute(f"insert into {TEST_NAME}.t values(0)")
         execute(f"insert into {TEST_NAME}.t select number from numbers(12)")
         execute(f"insert into {TEST_NAME}.t select number from numbers(2)")
         execute(f"insert into {TEST_NAME}.t select number from numbers(2)")
 
-        wait_for_log("Start async table hook job")
-        print("async table hook dispatched: ok")
-
-        wait_for_sql(
-            f"select block_count, row_count from fuse_segment('{TEST_NAME}', 't')",
-            lambda rows: rows == [["3", "17"]],
-            timeout=60,
-        )
+        segments = execute(f"select block_count, row_count from fuse_segment('{TEST_NAME}', 't')")
+        assert segments == [["3", "17"]], segments
         print("async table hook compact completed: ok")
+
+        wait_for_log("Start maintenance unit")
+        print("async table hook dispatched: ok")
+        run_refresh_lifecycle_case()
+        run_special_table_cases()
 
         execute(f"drop database if exists {TEST_NAME}")
     except Exception:

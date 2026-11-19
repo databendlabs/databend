@@ -1,3 +1,5 @@
 async table hook config: ok
-async table hook dispatched: ok
 async table hook compact completed: ok
+async table hook dispatched: ok
+async refresh: rollback leaves indexes unbuilt; committed write restores coverage: ok
+transient and temporary tables: inline Analyze, no automatic Refresh: ok

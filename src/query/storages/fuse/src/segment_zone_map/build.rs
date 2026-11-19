@@ -428,7 +428,7 @@ impl FuseTable {
                 }
             }
             let commit = table.commit_to_meta_server(
-                ctx.as_ref(),
+                ctx.clone(),
                 &table.table_info,
                 generator,
                 snapshot,

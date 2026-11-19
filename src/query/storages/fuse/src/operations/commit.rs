@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -165,7 +166,7 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn commit_to_meta_server(
         &self,
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
         snapshot: TableSnapshot,
@@ -194,10 +195,33 @@ impl FuseTable {
         let table_statistics_location = snapshot.table_statistics_location();
         let lvt_check = Self::build_table_lvt_check(table_info, snapshot.timestamp)?;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
+        // Background Analyze and Recluster's zone map both publish directly, bypassing
+        // CommitSink. Stage files outside the gate; hold it through the exact-seq update
+        // and its snapshot hint, but never across the caller's conflict retry/backoff.
+        let _commit_guard = if ctx.is_automatic_maintenance() {
+            if table_info.meta.drop_on.is_some() {
+                return Err(ErrorCode::InvalidOperation(format!(
+                    "table {} was dropped before maintenance publication",
+                    table_info.ident.table_id
+                )));
+            }
+            ctx.clone()
+                .acquire_table_lock_by_id(
+                    table_info.catalog(),
+                    table_info.ident.table_id,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?
+        } else {
+            None
+        };
+        // ANALYZE and other direct snapshot publishers bypass CommitSink. Use the
+        // same bounded cooperative-cancellation protection around their publication.
+        let _publication_guard = ctx.begin_maintenance_publication()?;
         // 2. update table meta
         let res = self
             .update_table_meta(
-                ctx,
+                ctx.as_ref(),
                 catalog,
                 table_info,
                 location_generator,

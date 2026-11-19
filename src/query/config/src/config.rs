@@ -2046,13 +2046,44 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_queries_executor: bool,
 
-    /// Controls how table hooks after write are executed. Supported values: sync, async.
-    #[clap(long, value_name = "VALUE", default_value = "sync")]
+    /// Controls automatic Analyze and Recluster for ordinary persistent Fuse tables.
+    /// Sync runs one non-FINAL Recluster round; async runs FINAL in background rounds.
+    /// Compact is always synchronous. Index Refresh checks committed snapshots only in the
+    /// background. Temporary, transient and default.system_history tables run only the
+    /// synchronous maintenance stages; they never enqueue or run automatic index Refresh.
+    #[clap(long, value_name = "VALUE", default_value = "async")]
     pub table_hook_mode: String,
 
-    /// Max number of async table hook jobs running concurrently.
-    #[clap(long, value_name = "VALUE", default_value = "2")]
+    /// Maximum concurrent automatic maintenance units per node. Zero derives the ceiling
+    /// from effective CPU capacity (one unit per four cores, rounded up).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
     pub table_hook_async_max_concurrency: usize,
+
+    /// Optional absolute hard limit for per-node maintenance memory and commitments.
+    /// Zero leaves only the node limit and admission controls in effect.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub table_maintenance_max_memory_usage: u64,
+
+    /// Stop admitting maintenance when tracked maintenance memory reaches this percentage
+    /// of effective node memory. Also bounds the grant for one locally planned unit, not
+    /// the sum of grants. Units require at least 256 MiB.
+    #[clap(long, value_name = "VALUE", default_value = "50")]
+    pub table_maintenance_memory_ratio: u64,
+
+    /// Minimum memory percentage kept free of maintenance commitments for foreground bursts.
+    /// Admission adds up to 10 percentage points as tracked node usage rises from 60% to 70%.
+    #[clap(long, value_name = "VALUE", default_value = "10")]
+    pub table_maintenance_memory_headroom_ratio: u64,
+
+    /// Optional per-unit pipeline thread ceiling, including remote fragments. Zero lets
+    /// units share the node's CPU-derived maintenance thread budget without a fixed ceiling.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub table_maintenance_max_threads: u64,
+
+    /// Maximum table mailboxes. At capacity, new keys are discarded without delaying writes;
+    /// existing keys still merge. Automatic maintenance notifications are best-effort.
+    #[clap(long, value_name = "VALUE", default_value = "1024")]
+    pub table_maintenance_max_pending_tables: usize,
 }
 
 impl Default for QueryConfig {
@@ -2081,9 +2112,19 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 self.table_hook_mode
             )));
         }
-        if self.table_hook_async_max_concurrency == 0 {
+        let memory = self.table_maintenance_memory_ratio;
+        let headroom = self.table_maintenance_memory_headroom_ratio;
+        if !(1..100).contains(&memory)
+            || !(1..100).contains(&headroom)
+            || self.table_maintenance_max_pending_tables == 0
+            || self.table_maintenance_max_memory_usage > i64::MAX as u64
+            || (self.table_maintenance_max_memory_usage != 0
+                && self.table_maintenance_max_memory_usage < 256 * 1024 * 1024)
+        {
             return Err(ErrorCode::InvalidConfig(
-                "table_hook_async_max_concurrency must be greater than 0",
+                "Maintenance requires memory and headroom ratios between 1 and 99 percent, \
+                 positive queue capacity, and an absolute memory ceiling \
+                 of zero (disabled) or at least 256 MiB",
             ));
         }
         if self.warehouse_id.is_empty() {

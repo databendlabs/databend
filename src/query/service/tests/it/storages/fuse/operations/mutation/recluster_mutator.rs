@@ -709,7 +709,7 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_max_threads(1)?;
+    ctx.get_session_settings().set_max_threads(1)?;
 
     let mut create_table_plan = fixture.default_create_table_plan();
     create_table_plan
@@ -750,6 +750,37 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
         filters: Some(parse_to_filters(ctx.clone(), table.clone(), "id > 90")?),
         ..Default::default()
     };
+    // Background units scan four segments here. A claim in a later range does not
+    // require a rescan unless it still excludes a segment when that range is visited.
+    let mut background = ReclusterFinalCarry::default();
+    background.set_yield_after_scan(true);
+    for start in (0..=32).step_by(4) {
+        let (parts, _) = fuse_table
+            .do_recluster(
+                ctx.clone(),
+                Some(push_downs.clone()),
+                Some(2),
+                ReclusterMode::Conservative,
+                &mut background,
+                &claimed_segments,
+            )
+            .await?
+            .unwrap();
+        if start == 32 {
+            assert!(!parts.removed_segment_indexes.is_empty());
+            assert!(
+                parts
+                    .removed_segment_indexes
+                    .iter()
+                    .all(|idx| (33..36).contains(idx))
+            );
+        } else {
+            assert!(parts.is_empty());
+        }
+        assert_eq!(background.skipped_claimed_ranges(), start == 32);
+        background.release_round_resources();
+    }
+
     let mut carry = ReclusterFinalCarry::default();
     let (parts, _) = fuse_table
         .do_recluster(

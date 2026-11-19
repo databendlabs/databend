@@ -277,7 +277,7 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     new_snap.summary = merge_statistics(snapshot.summary.clone(), &seg_info.summary, None);
     fuse_table
         .commit_to_meta_server(
-            ctx.as_ref(),
+            ctx,
             fuse_table.get_table_info(),
             loc_gen,
             new_snap,

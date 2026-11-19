@@ -102,6 +102,7 @@ select count() > 4 from fuse_snapshot('i15760', 't1');
 ----
 1
 
+# Default mode: the single foreground Recluster round has already finished.
 query T
 select info:average_depth from clustering_information('i15760', 't1')
 ----
@@ -246,6 +247,25 @@ insert into t_refresh_multi values
 ('alpha', 'gamma', [1,2,3,4], [4,3,2,1], to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)')),
 ('beta', 'delta', [4,3,2,1], [1,2,3,4], to_geometry('POINT(3 3)'), to_geometry('POINT(4 4)'));
 
+# Observe the batch publication before issuing manual Refresh, which could win
+# the commit lock and publish individual indexes instead. The zero-work and
+# exact snapshot-count assertions below still verify all eight siblings.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := (SELECT count(DISTINCT snapshot_id) >= 2 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+    WHILE NOT ready AND attempts < 200 DO
+        SELECT sleep(0.1);
+        ready := (SELECT count(DISTINCT snapshot_id) >= 2 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+        attempts := attempts + 1;
+    END WHILE;
+    RETURN ready;
+END;
+$$;
+----
+1
+
 query I
 refresh inverted index idx_content on t_refresh_multi;
 ----
@@ -319,6 +339,23 @@ set auto_compaction_imperfect_blocks_threshold = 1;
 
 statement ok
 insert into t_refresh_multi values ('alpha', 'gamma', [1,2,3,4], [4,3,2,1], to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'));
+
+# Append and synchronous Compact add two snapshots; await the batch Refresh.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := (SELECT count(DISTINCT snapshot_id) >= 5 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+    WHILE NOT ready AND attempts < 200 DO
+        SELECT sleep(0.1);
+        ready := (SELECT count(DISTINCT snapshot_id) >= 5 FROM fuse_snapshot('i15760', 't_refresh_multi'));
+        attempts := attempts + 1;
+    END WHILE;
+    RETURN ready;
+END;
+$$;
+----
+1
 
 query I
 refresh inverted index idx_content on t_refresh_multi;

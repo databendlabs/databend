@@ -29,7 +29,6 @@ use databend_common_storages_fuse::operations::do_refresh_table_index;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextTableAccess;
 
 pub struct RefreshTableIndexInterpreter {
     ctx: Arc<QueryContext>,
@@ -59,9 +58,12 @@ impl Interpreter for RefreshTableIndexInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            let table = self
+            // Refresh is fixed-snapshot work: prevent background publishers from
+            // invalidating its input between planning and publication. This also
+            // verifies the bound table ID after waiting for the lock.
+            let (table, lock_guard) = self
                 .ctx
-                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .get_table_with_lock(&self.plan.catalog, &self.plan.database, &self.plan.table)
                 .await?;
             // check mutability
             table.check_mutable()?;
@@ -145,6 +147,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
                 .sources_pipelines
                 .extend(build_res.sources_pipelines);
             result_res.sources_pipelines.push(build_res.main_pipeline);
+            result_res.main_pipeline.add_lock_guard(lock_guard);
             Ok(result_res)
         })
     }

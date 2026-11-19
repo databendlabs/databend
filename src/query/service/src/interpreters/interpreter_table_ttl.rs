@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -118,13 +119,39 @@ impl Interpreter for AlterTableTtlInterpreter {
             // is not observed and the statement reports success without applying
             // anything. Accepted because DDL here is not transactional -- re-reading
             // the latest meta would only narrow the window, not close it -- and the
-            // non-no-op path is still protected by the bound sequence, which fails
+            // non-no-op path checks the bound schema and TTL, then commits
+            // with an exact sequence. A conflicting write after that check fails
             // with TABLE_VERSION_MISMATCHED.
             if table.get_table_info().meta.ttl == plan.ttl {
                 return Ok(PipelineBuildResult::create());
             }
 
-            let mut meta = table.get_table_info().meta.clone();
+            // Serialize this metadata write with background ANALYZE publication.
+            // Keep the bound schema and TTL as preconditions: only the snapshot
+            // and other unrelated metadata may have advanced while we waited.
+            let lock_guard = self
+                .ctx
+                .clone()
+                .acquire_table_lock_by_id(&plan.catalog, table_id, &LockTableOption::LockWithRetry)
+                .await?;
+            let latest = if lock_guard.is_some() {
+                catalog
+                    .get_table(&self.ctx.get_tenant(), &plan.database, &plan.table)
+                    .await?
+            } else {
+                table.clone()
+            };
+            if latest.get_id() != table_id
+                || latest.schema() != table.schema()
+                || latest.get_table_info().meta.ttl != table.get_table_info().meta.ttl
+            {
+                return Err(ErrorCode::TableVersionMismatched(
+                    "TTL target table, schema or TTL changed after binding",
+                ));
+            }
+            latest.check_mutable()?;
+            let fuse_table = FuseTable::try_from_table(latest.as_ref())?;
+            let mut meta = latest.get_table_info().meta.clone();
             meta.ttl = plan.ttl.clone();
             meta.updated_on = Utc::now();
             // Pure metadata change: the snapshot location does not move, so no LVT fence.
