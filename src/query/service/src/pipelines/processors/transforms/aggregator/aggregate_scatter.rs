@@ -34,7 +34,6 @@ use databend_common_pipeline_transforms::Transformer;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateStatesMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
@@ -97,7 +96,7 @@ impl AggregateScatter {
     ) -> Self {
         AggregateScatter {
             partitions,
-            states_schema: params.spill_schema(),
+            states_schema: params.states_schema(),
             params,
             local_partitions,
         }
@@ -124,6 +123,14 @@ impl AggregateScatter {
 
         let mut partitions = (0..self.partitions).map(|_| vec![]).collect::<Vec<_>>();
         for payload in payloads {
+            // A partition of a table routed among these partitions goes as it is.
+            if payload.payload.routed_partitions() == self.partitions {
+                let (bucket, payload) = (payload.bucket as usize, payload.payload);
+                if payload.len() != 0 {
+                    partitions[bucket].push(AggregatePayload { bucket: 0, payload });
+                }
+                continue;
+            }
             let scattered = payload.payload.scatter_into_buckets(self.partitions);
             for (partition, part) in scattered.into_iter().enumerate() {
                 if part.len() != 0 {
@@ -138,18 +145,11 @@ impl AggregateScatter {
     }
 
     fn take_states(block: DataBlock) -> Result<Vec<AggregatePayload>> {
-        let meta = block
+        block
             .get_owned_meta()
             .and_then(AggregateMeta::downcast_from)
-            .ok_or_else(|| {
-                ErrorCode::Internal("AggregateScatter expects partial aggregate states")
-            })?;
-        match meta {
-            AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)) => Ok(payloads),
-            other => Err(ErrorCode::Internal(format!(
-                "AggregateScatter cannot route {other:?}"
-            ))),
-        }
+            .map(|meta| meta.payloads)
+            .ok_or_else(|| ErrorCode::Internal("AggregateScatter expects partial aggregate states"))
     }
 
     /// Serialize the states for a remote node, one run of rows per bucket.
@@ -312,25 +312,16 @@ mod tests {
     /// Keys of the states in `block`, in memory or serialized for a remote node.
     fn state_keys(mut block: DataBlock) -> Result<Vec<u64>> {
         let meta = block.take_meta().unwrap();
-        let meta = match AggregateStatesMeta::downcast_ref_from(&meta).is_some() {
-            true => AggregateStatesMeta::downcast_from(meta)
-                .unwrap()
-                .into_aggregate_meta(block)?,
-            false => AggregateMeta::downcast_from(meta).unwrap(),
-        };
         let mut result = vec![];
-        match meta {
-            AggregateMeta::Partitioned(PartitionedData::AggregatePayload(payloads)) => {
-                for payload in payloads {
-                    result.extend(keys(&payload.payload.aggregate_flush_all()?, 0));
-                }
+        if AggregateStatesMeta::downcast_ref_from(&meta).is_some() {
+            let states = AggregateStatesMeta::downcast_from(meta).unwrap();
+            for payload in states.into_payloads(block)? {
+                result.extend(keys(&payload.data_block, 0));
             }
-            AggregateMeta::Partitioned(PartitionedData::Serialized(payloads)) => {
-                for payload in payloads {
-                    result.extend(keys(&payload.data_block, 0));
-                }
+        } else {
+            for payload in AggregateMeta::downcast_from(meta).unwrap().payloads {
+                result.extend(keys(&payload.payload.aggregate_flush_all()?, 0));
             }
-            other => unreachable!("{other:?}"),
         }
         Ok(result)
     }

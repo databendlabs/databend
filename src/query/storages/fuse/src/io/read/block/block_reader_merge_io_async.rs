@@ -26,6 +26,7 @@ use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BlockDataFile;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
 use crate::BlockReadResult;
@@ -47,9 +48,52 @@ impl BlockReader {
             .read_columns_data_by_merge_io(settings, location, columns_meta, ignore_column_ids)
             .await
     }
+
+    /// Reads the projected columns of a block from each of its data files at the same time.
+    #[async_backtrace::framed]
+    pub async fn read_files_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        files: &[BlockDataFile<'_>],
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<BlockReadResult> {
+        self.read_context()
+            .read_files_by_merge_io(settings, files, ignore_column_ids)
+            .await
+    }
 }
 
 impl BlockReadContext {
+    /// Reads the projected columns of a block from each of its data files at the same time.
+    #[async_backtrace::framed]
+    pub async fn read_files_by_merge_io(
+        &self,
+        settings: &ReadSettings,
+        files: &[BlockDataFile<'_>],
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
+    ) -> Result<BlockReadResult> {
+        if let [file] = files {
+            return self
+                .read_columns_data_by_merge_io(
+                    settings,
+                    file.location,
+                    file.col_metas,
+                    ignore_column_ids,
+                )
+                .await;
+        }
+        let reads = files.iter().map(|file| {
+            self.read_columns_data_by_merge_io(
+                settings,
+                file.location,
+                file.col_metas,
+                ignore_column_ids,
+            )
+        });
+        let results = futures::future::try_join_all(reads).await?;
+        Ok(BlockReadResult::merge(results))
+    }
+
     #[async_backtrace::framed]
     pub async fn read_columns_data_by_merge_io(
         &self,

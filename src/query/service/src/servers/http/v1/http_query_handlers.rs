@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_ast::parser::mask_log_sql_secrets;
 use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
@@ -73,7 +72,6 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
-use super::query::MaskedRequest;
 use super::query::ResponseState;
 use super::query::execute_state::ARROW_FEATURE_NEGOTIATION_VERSION;
 use super::query::execute_state::LEGACY_ARROW_RESULT_VERSION;
@@ -769,18 +767,7 @@ pub(crate) async fn query_handler(
             .as_ref()
             .map(|s| format!("(client_session_id={s})"))
             .unwrap_or("".to_string());
-        // Masked once for all the logs of this request.
-        let masked_sql = mask_log_sql_secrets(&req.sql);
-        info!(
-            "New query request{}{}: {:?}",
-            agent_info,
-            client_session_id_info,
-            // The Debug of a request masks the SQL and omits parameters.
-            MaskedRequest {
-                request: &req,
-                masked_sql: &masked_sql,
-            }
-        );
+        info!(query_id = ctx.query_id; "New query request{}{}", agent_info, client_session_id_info);
         let sql = req.sql.clone();
 
         let http_query_manager = HttpQueryManager::instance();
@@ -827,15 +814,7 @@ pub(crate) async fn query_handler(
                 .map_err(HttpErrorCode::bad_request)?;
         let arrow_features = negotiate_arrow_features(&req, arrow_result_version);
 
-        match HttpQuery::try_create(
-            ctx,
-            &req,
-            &masked_sql,
-            arrow_result_version,
-            arrow_features.clone(),
-        )
-        .await
-        {
+        match HttpQuery::try_create(ctx, &req, arrow_result_version, arrow_features.clone()).await {
             Err(err) => {
                 let err = err.display_with_sql(&sql);
                 log_start_query_error(&err, &sql);
@@ -869,9 +848,10 @@ pub(crate) async fn query_handler(
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
                 };
+                // The SQL is logged by `Creating new query` of the same query_id.
                 info!(
-                    "Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                    query.id, resp.state, rows, next_page, masked_sql
+                    "Initial response for query_id={}, state={:?}, rows={}, next_page={:?}",
+                    query.id, resp.state.state, rows, next_page
                 );
                 query
                     .update_expire_time(false, resp.is_data_drained())

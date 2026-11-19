@@ -25,23 +25,17 @@ use super::ConstantFolder;
 use super::Expr;
 use super::FunctionCall;
 use super::FunctionContext;
-use super::FunctionDomain;
 use super::FunctionEval;
 use super::FunctionRegistry;
-use super::Scalar;
 use super::conversion::classify_conversion;
-use super::function_stat::DeriveStat;
 use super::stat_distribution::ArgStat;
 use super::stat_distribution::BorrowedDistribution;
 use super::stat_distribution::NdvEstimate;
 use super::stat_distribution::OwnedDistribution;
 use super::stat_distribution::ReturnStat;
 use super::stat_distribution::StatArgs;
-use super::stat_distribution::StatBinaryArg;
 use super::stat_distribution::StatCardinality;
 use super::stat_distribution::StatCount;
-use super::stat_distribution::StatEstimate;
-use super::stat_distribution::StatUnaryArg;
 use crate::Constant;
 
 pub struct StatEvaluator<'a> {
@@ -291,6 +285,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::Scalar;
     use crate::types::DataType;
     use crate::types::NumberDataType;
     use crate::types::number::NumberScalar;

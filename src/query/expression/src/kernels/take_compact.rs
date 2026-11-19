@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use binary::BinaryColumnBuilder;
-use databend_common_base::vec_ext::VecExt;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
@@ -27,13 +26,10 @@ use crate::DataBlock;
 use crate::TakeIndex;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
-use crate::types::date::CoreDate;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
-use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
-use crate::with_number_mapped_type;
 use crate::with_opaque_mapped_type;
 
 impl DataBlock {
@@ -197,13 +193,11 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
     }
 
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
-        self.result = Some(Value::Column(
-            (with_opaque_mapped_type!(|T| match column {
-                OpaqueColumn::T(column) => {
-                    OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
-                }
-            })),
-        ));
+        self.result = Some(Value::Column(with_opaque_mapped_type!(|T| match column {
+            OpaqueColumn::T(column) => {
+                OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
+            }
+        })));
         Ok(())
     }
 }

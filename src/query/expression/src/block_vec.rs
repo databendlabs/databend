@@ -27,7 +27,6 @@ use databend_common_exception::Result;
 use string::StringColumnBuilder;
 
 use crate::BlockEntry;
-use crate::BlockIndex;
 use crate::Chunk;
 use crate::ChunkIndex;
 use crate::ColumnBuilder;
@@ -442,7 +441,7 @@ impl DataBlockVec {
             .columns
             .iter()
             .map(|storage| {
-                let mut builder = ColumnBuilder::with_capacity(&storage.data_type, 0);
+                let builder = ColumnBuilder::with_capacity(&storage.data_type, 0);
                 builder.build().into()
             })
             .collect();

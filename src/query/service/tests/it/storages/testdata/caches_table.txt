@@ -4,7 +4,6 @@ DB.Table: 'system'.'caches', Table: caches-table_id:1, ver:0, Engine: SystemCach
 +-------------+----------------------------------------------+----------+----------+----------------------+----------+----------+----------+----------+
 | Column 0    | Column 1                                     | Column 2 | Column 3 | Column 4             | Column 5 | Column 6 | Column 7 | Column 8 |
 +-------------+----------------------------------------------+----------+----------+----------------------+----------+----------+----------+----------+
-| 'test-node' | '__pool:data'                                | 0        | 0        | 107374182            | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | '__pool:index'                               | 0        | 0        | 429496729            | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | '__pool:meta'                                | 0        | 0        | 107374182            | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_bloom_index_file_meta_data'    | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
@@ -23,7 +22,6 @@ DB.Table: 'system'.'caches', Table: caches-table_id:1, ver:0, Engine: SystemCach
 | 'test-node' | 'memory_cache_segment_zone_map_meta_data'    | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_spatial_index_file'            | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_spatial_index_file_meta_data'  | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
-| 'test-node' | 'memory_cache_table_data'                    | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_table_snapshot'                | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_table_statistics'              | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |
 | 'test-node' | 'memory_cache_vector_index_file'             | 0        | 0        | 18446744073709551615 | 'bytes'  | 0        | 0        | 0        |

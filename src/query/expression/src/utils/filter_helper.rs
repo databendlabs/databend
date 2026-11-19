@@ -32,7 +32,6 @@ use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::StringColumn;
-use crate::types::nullable::NullableColumn;
 use crate::values::Column;
 
 pub struct FilterHelpers;

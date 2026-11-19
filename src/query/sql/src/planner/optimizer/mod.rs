@@ -33,3 +33,4 @@ pub use optimizer_context::OptimizerContext;
 pub use physical_planner::PhysicalPlanner;
 pub use statistics::collect_statistics::CollectStatisticsOptimizer;
 pub use statistics::collect_statistics::StatisticsTraceCollector;
+pub use statistics::trace::ColumnStatisticsTrace;

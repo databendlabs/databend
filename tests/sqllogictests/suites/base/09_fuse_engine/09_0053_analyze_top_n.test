@@ -199,14 +199,17 @@ EXPLAIN SELECT * FROM t_append_cms_stale WHERE a = 2
 ----
 table: default.db_09_0053.t_append_cms_stale<slt:ignore>estimated rows: 40.00
 
+# The append adds a second block, so without an HLL the NDV is only an upper and
+# `a = 2` takes the default selectivity: 160 * 0.2 = 32. A stale Count-Min
+# Sketch would report its old count of 40 instead.
 statement ok
 INSERT INTO t_append_cms_stale
-SELECT 4::int FROM numbers(100)
+SELECT 4::int FROM numbers(60)
 
 query T
 EXPLAIN SELECT * FROM t_append_cms_stale WHERE a = 2
 ----
-table: default.db_09_0053.t_append_cms_stale<slt:ignore>estimated rows: 16.67
+table: default.db_09_0053.t_append_cms_stale<slt:ignore>estimated rows: 32.00
 
 # Refreshing append TopN should preserve existing histogram stats.
 statement ok

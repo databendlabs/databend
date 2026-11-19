@@ -18,8 +18,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
-#[allow(unused_imports)]
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -49,6 +47,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::parse_partial_aggregate_mode;
+use crate::sessions::TableContextCluster;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -130,24 +129,11 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn get_desc(&self) -> Result<String> {
-        Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
+        Ok(aggregate_desc(&self.agg_funcs))
     }
 
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        let mut labels = HashMap::with_capacity(2);
-
-        if !self.group_by_display.is_empty() {
-            labels.insert(String::from("Grouping keys"), self.group_by_display.clone());
-        }
-
-        if !self.agg_funcs.is_empty() {
-            labels.insert(
-                String::from("Aggregate Functions"),
-                self.agg_funcs.iter().map(|x| x.display.clone()).collect(),
-            );
-        }
-
-        Ok(labels)
+        Ok(aggregate_labels(&self.group_by_display, &self.agg_funcs))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -202,7 +188,16 @@ impl IPhysicalPlan for AggregatePartial {
             builder.settings.get_max_memory_usage()? as usize,
             builder.main_pipeline.output_len(),
         );
-        let partial_agg_config = HashTableConfig::partial_aggregate();
+        // On one node the states are scattered by group hash among the `max_threads` final
+        // aggregates (see `build_final_aggregates`): split the partial tables the same way, so
+        // that each partition is handed over without copying its rows. A cluster scatters among
+        // the final aggregates of all nodes and copies the rows anyway, so routing would only
+        // cost.
+        let mut partial_agg_config = HashTableConfig::partial_aggregate();
+        if builder.ctx.get_cluster().is_empty() {
+            partial_agg_config =
+                partial_agg_config.with_route_partitions(builder.settings.get_max_threads()?);
+        }
 
         // For rank limit, we can filter data using sort with rank before partial.
         if let Some((sort_desc, limit)) =
@@ -265,4 +260,27 @@ impl AggregatePartial {
         }
         Some((resolved.into(), *limit))
     }
+}
+
+/// The description of a partial or final aggregate in a profile.
+pub(crate) fn aggregate_desc(agg_funcs: &[AggregateFunctionDesc]) -> String {
+    agg_funcs.iter().map(|x| x.display.clone()).join(", ")
+}
+
+/// The labels of a partial or final aggregate in a profile.
+pub(crate) fn aggregate_labels(
+    group_by_display: &[String],
+    agg_funcs: &[AggregateFunctionDesc],
+) -> HashMap<String, Vec<String>> {
+    let mut labels = HashMap::with_capacity(2);
+    if !group_by_display.is_empty() {
+        labels.insert(String::from("Grouping keys"), group_by_display.to_vec());
+    }
+    if !agg_funcs.is_empty() {
+        labels.insert(
+            String::from("Aggregate Functions"),
+            agg_funcs.iter().map(|x| x.display.clone()).collect(),
+        );
+    }
+    labels
 }

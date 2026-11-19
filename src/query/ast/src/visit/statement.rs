@@ -221,6 +221,7 @@ impl Walk for Statement {
             Statement::CreateConnection(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DropConnection(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::DescribeConnection(stmt) => try_walk!(stmt.walk(visitor)),
+            Statement::ShowCreateConnection(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::ShowConnections(_) => {}
             Statement::Presign(_) => {}
             Statement::CreateDatamaskPolicy(stmt) => try_walk!(stmt.walk(visitor)),
@@ -451,6 +452,7 @@ impl WalkMut for Statement {
             Statement::CreateConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DropConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::DescribeConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
+            Statement::ShowCreateConnection(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::ShowConnections(_) => {}
             Statement::Presign(_) => {}
             Statement::CreateDatamaskPolicy(stmt) => try_walk!(stmt.walk_mut(visitor)),

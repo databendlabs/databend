@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
+use databend_common_config::MetaServiceCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::ClientSessionMgr;
@@ -32,14 +33,15 @@ use databend_common_management::RoleMgr;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_management::task::TaskMgr;
 use databend_common_management::udf::UdfMgr;
 use databend_common_meta_api::crud::CrudMgr;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::external_access_integration_ident::Resource as ExternalAccessIntegrationResource;
 use databend_common_meta_app::principal::network_rule_ident::Resource as NetworkRuleResource;
 use databend_common_meta_app::schema::CreateOption;
@@ -52,13 +54,11 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_plugin_cache::Cache;
 use log::debug;
-use tokio::sync::Mutex;
 
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;
@@ -79,13 +79,26 @@ pub struct UserApiProvider {
     /// When UserApiProvider is created, the cache will be created and initialized.
     /// The `Cache` instance internally stores the status about if databend-meta service supports cache.
     /// If not, every access returns [`Unsupported`] error.
-    ownership_cache: Option<Arc<Mutex<Cache>>>,
+    ownership_cache: Option<Arc<Cache>>,
 
     external_access_cache_tenant: Tenant,
-    pub(crate) network_rule_cache: Option<Mutex<Cache>>,
-    pub(crate) external_access_integration_cache: Option<Mutex<Cache>>,
+    pub(crate) network_rule_cache: Option<Cache>,
+    pub(crate) external_access_integration_cache: Option<Cache>,
+
+    /// The watched users and global settings of the node tenant.
+    watched: Watched,
 
     builtin: BuiltIn,
+}
+
+/// The watched copies of one tenant, the tenant of this node. A copy is `None` when its name is
+/// not in `cache.meta_service_caches`.
+struct Watched {
+    tenant: Tenant,
+    /// By [`MetaServiceCache::User`].
+    users: Option<Arc<Cache>>,
+    /// By [`MetaServiceCache::Setting`].
+    settings: Option<Arc<Cache>>,
 }
 
 impl UserApiProvider {
@@ -125,29 +138,45 @@ impl UserApiProvider {
 
         let client = meta_store.inner().clone();
 
-        let cache = if cache_config.meta_service_ownership_cache {
+        let cache = if cache_config.is_meta_service_cache_enabled(MetaServiceCache::Ownership) {
             let cache = RoleMgr::new_cache(client.clone()).await;
-            let cache = Arc::new(Mutex::new(cache));
+            let cache = Arc::new(cache);
             Some(cache)
         } else {
             None
+        };
+
+        let users = if cache_config.is_meta_service_cache_enabled(MetaServiceCache::User) {
+            Some(UserMgr::watch(client.clone(), tenant).await)
+        } else {
+            None
+        };
+        let settings = if cache_config.is_meta_service_cache_enabled(MetaServiceCache::Setting) {
+            Some(SettingMgr::watch(client.clone(), tenant).await)
+        } else {
+            None
+        };
+        let watched = Watched {
+            tenant: tenant.clone(),
+            users,
+            settings,
         };
 
         let (network_rule_cache, external_access_integration_cache) =
             if GlobalConfig::instance().query.common.enable_udf_server {
                 let rules = Cache::new(
                     client.clone(),
-                    TIdent::<NetworkRuleResource>::new(tenant, "").to_string_key(),
+                    TIdent::<NetworkRuleResource>::new(tenant, "").tenant_dir(),
                     NetworkRuleResource::TYPE,
                 )
                 .await;
                 let integrations = Cache::new(
                     client,
-                    TIdent::<ExternalAccessIntegrationResource>::new(tenant, "").to_string_key(),
+                    TIdent::<ExternalAccessIntegrationResource>::new(tenant, "").tenant_dir(),
                     ExternalAccessIntegrationResource::TYPE,
                 )
                 .await;
-                (Some(Mutex::new(rules)), Some(Mutex::new(integrations)))
+                (Some(rules), Some(integrations))
             } else {
                 (None, None)
             };
@@ -159,6 +188,7 @@ impl UserApiProvider {
             external_access_cache_tenant: tenant.clone(),
             network_rule_cache,
             external_access_integration_cache,
+            watched,
             builtin,
         };
 
@@ -200,23 +230,20 @@ impl UserApiProvider {
     pub(crate) async fn external_access_values(
         &self,
         tenant: &Tenant,
-        cache: &Option<Mutex<Cache>>,
+        cache: &Option<Cache>,
         keys: impl Iterator<Item = String>,
     ) -> Result<Vec<Option<SeqV>>> {
         let mut values = Vec::with_capacity(keys.size_hint().0);
         let mut missing_keys = Vec::new();
-        {
-            let mut cache = cache
-                .as_ref()
-                .filter(|_| tenant == &self.external_access_cache_tenant)
-                .and_then(|cache| cache.try_lock().ok());
-            for key in keys {
-                let value = cache.as_mut().and_then(|cache| cache.try_get_ready(&key));
-                if value.is_none() {
-                    missing_keys.push(key);
-                }
-                values.push(value);
+        let cache = cache
+            .as_ref()
+            .filter(|_| tenant == &self.external_access_cache_tenant);
+        for key in keys {
+            let value = cache.and_then(|cache| cache.try_get_ready(&key));
+            if value.is_none() {
+                missing_keys.push(key);
             }
+            values.push(value);
         }
         if !missing_keys.is_empty() {
             let fetched = self
@@ -235,6 +262,24 @@ impl UserApiProvider {
         Ok(values)
     }
 
+    /// The global settings of `tenant` for a new session: from the watched copy if it is enabled
+    /// and ready, so they may lag a change by the watch delay. Read them by `setting_api` where a
+    /// change must be seen at once.
+    #[async_backtrace::framed]
+    pub async fn get_session_settings(&self, tenant: &Tenant) -> Result<Vec<UserSetting>> {
+        self.setting_api(tenant).get_watched_settings().await
+    }
+
+    /// The watched copies of `tenant`, if it is the tenant they watch.
+    fn watched(&self, tenant: &Tenant) -> Option<&Watched> {
+        (&self.watched.tenant == tenant).then_some(&self.watched)
+    }
+
+    /// Whether the users of `tenant` are watched, see `UserMgr::get_watched_user`.
+    pub(crate) fn watches_users(&self, tenant: &Tenant) -> bool {
+        self.watched(tenant).is_some_and(|w| w.users.is_some())
+    }
+
     pub fn udf_api(&self, tenant: &Tenant) -> UdfMgr {
         UdfMgr::create(self.client.clone(), tenant)
     }
@@ -243,8 +288,14 @@ impl UserApiProvider {
         TaskMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn user_api(&self, tenant: &Tenant) -> Arc<impl UserApi> {
+    /// The users of `tenant`, read by `UserMgr::get_watched_user` from the watched copy if the
+    /// users of the tenant are watched.
+    pub fn user_api(&self, tenant: &Tenant) -> Arc<UserMgr> {
         let user_mgr = UserMgr::create(self.client.clone(), tenant);
+        let user_mgr = match self.watched(tenant).and_then(|w| w.users.clone()) {
+            Some(users) => user_mgr.with_watched(users),
+            None => user_mgr,
+        };
         Arc::new(user_mgr)
     }
 
@@ -287,8 +338,14 @@ impl UserApiProvider {
         Arc::new(QuotaMgr::<WRITE_PB>::create(self.client.clone(), tenant))
     }
 
+    /// The global settings of `tenant`, read by `SettingMgr::get_watched_settings` from the
+    /// watched copy if the global settings of the tenant are watched.
     pub fn setting_api(&self, tenant: &Tenant) -> SettingMgr {
-        SettingMgr::create(self.client.clone(), tenant)
+        let setting_mgr = SettingMgr::create(self.client.clone(), tenant);
+        match self.watched(tenant).and_then(|w| w.settings.clone()) {
+            Some(settings) => setting_mgr.with_watched(settings),
+            None => setting_mgr,
+        }
     }
     pub fn procedure_api(&self, tenant: &Tenant) -> ProcedureMgr {
         ProcedureMgr::create(self.client.clone(), tenant)

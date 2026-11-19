@@ -153,13 +153,11 @@ impl Aggregate {
             ));
         }
 
-        let Some(cardinality) = estimate_group_count(
-            column_stats,
-            self.group_items.iter().map(|item| item.index),
-            stat_info.cardinality,
-        ) else {
+        let keys = || self.group_items.iter().map(|item| item.index);
+        let Some(cardinality) = estimate_group_count(column_stats, keys(), stat_info.cardinality)
+        else {
             return Ok(Arc::new(StatInfo {
-                cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
+                cardinality: fallback_group_count(column_stats, keys(), stat_info.cardinality),
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
@@ -199,7 +197,6 @@ impl Aggregate {
         stat_info: &StatInfo,
     ) -> StatInfo {
         let input_stats = &stat_info.statistics.column_stats;
-        let fallback = (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0);
         let set_cardinalities = grouping_sets
             .sets
             .iter()
@@ -208,8 +205,10 @@ impl Aggregate {
                     // The grand-total set produces one row.
                     return 1.0;
                 }
-                estimate_group_count(input_stats, set.iter().copied(), stat_info.cardinality)
-                    .unwrap_or(fallback)
+                let keys = || set.iter().copied();
+                estimate_group_count(input_stats, keys(), stat_info.cardinality).unwrap_or_else(
+                    || fallback_group_count(input_stats, keys(), stat_info.cardinality),
+                )
             })
             .collect::<Vec<_>>();
         let cardinality = set_cardinalities.iter().sum::<f64>();
@@ -284,6 +283,25 @@ fn estimate_group_count(
         cardinality *= x.max(1.0);
     }
     Some(cardinality.min(input_cardinality))
+}
+
+/// Without a point NDV for every key, use the default ratio capped by the
+/// product of the keys' NDV upper bounds.
+fn fallback_group_count(
+    column_stats: &ColumnStatSet,
+    keys: impl Iterator<Item = Symbol>,
+    input_cardinality: f64,
+) -> f64 {
+    let groups_upper = keys
+        .map(|key| {
+            column_stats
+                .get(&key)
+                .map_or(f64::INFINITY, |stat| stat.ndv().upper)
+        })
+        .product::<f64>();
+    (input_cardinality * DEFAULT_AGGREGATE_RATIO)
+        .min(groups_upper)
+        .max(1.0)
 }
 
 fn collapse_group_key_histogram(stat: &mut ColumnStat) {
@@ -391,7 +409,7 @@ impl PhysicalAggregate {
         Self { mode, aggregate }
     }
 
-    pub fn get_distribution_keys(&self, before_partial: bool) -> Result<Vec<ScalarExpr>> {
+    fn get_distribution_keys(&self, before_partial: bool) -> Result<Vec<ScalarExpr>> {
         if before_partial {
             self.aggregate
                 .group_items
@@ -474,10 +492,7 @@ impl PhysicalOperator for PhysicalAggregate {
 
         match self.mode {
             AggregateMode::Partial => {
-                // TODO(leiysky): in current implementation we are using the `_group_by_key` produced
-                // by partial aggregation as the distribution key, which is not exactly the same with
-                // `Hash(group_items)`. Because of this we cannot leverage the distribution key to
-                // satisfy the required hash distribution from parent node. We should fix this in the future.
+                // A partial aggregate does not distribute its output by the hash of its group keys.
                 Ok(PhysicalProperty {
                     distribution: Distribution::Random,
                 })

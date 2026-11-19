@@ -158,6 +158,12 @@ impl Transform for BuildIndex {
                         name: self.spec.index.name.clone(),
                     })
                 }
+                TableIndexType::Bloom => {
+                    return Err(ErrorCode::RefreshIndexError(format!(
+                        "BLOOM index {} is not supported by this release and cannot be refreshed",
+                        self.spec.index.name
+                    )));
+                }
             };
             artifacts.push(artifact);
         }

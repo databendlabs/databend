@@ -31,12 +31,10 @@ pub(super) trait TableAdapter {
     /// Decodes the row ids of the index, and reserves the rows of new groups.
     fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>);
 
-    fn compare(
-        &mut self,
-        state: &mut ProbeState,
-        need_compare_count: usize,
-        no_match_count: usize,
-    ) -> usize;
+    /// Compares the `need_compare_count` rows of `state.group_compare_vector` with the groups
+    /// they were matched to, and returns how many of them, put in `state.no_match_vector`,
+    /// differ.
+    fn compare(&mut self, state: &mut ProbeState, need_compare_count: usize) -> usize;
 }
 
 pub(super) struct AdapterImpl<'a> {
@@ -66,18 +64,13 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         self.payload.rows()
     }
 
-    fn compare(
-        &mut self,
-        state: &mut ProbeState,
-        need_compare_count: usize,
-        no_match_count: usize,
-    ) -> usize {
+    fn compare(&mut self, state: &mut ProbeState, need_compare_count: usize) -> usize {
         let compare = CompareState {
             address: &state.addresses,
             compare: &mut state.group_compare_vector,
             no_matched: &mut state.no_match_vector,
         };
-        let counts = (need_compare_count, no_match_count);
+        let counts = (need_compare_count, 0);
         match self.groups {
             GroupRows::Columns(columns) => {
                 compare.row_match_entries(columns, &self.payload.row_layout, counts)

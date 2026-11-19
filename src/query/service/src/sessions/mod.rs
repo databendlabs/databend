@@ -48,3 +48,8 @@ pub use session_mgr::SessionManager;
 pub use session_mgr_status::SessionManagerStatus;
 pub use session_privilege_mgr::SessionPrivilegeManager;
 pub use session_status::SessionStatus;
+
+/// Prefix for server-generated internal session ids exposed by `system.processes.id`.
+/// A SQL KILL lookup-order hint, not a reserved client query-id namespace.
+/// HTTP login/client-session ids are separate.
+pub const INTERNAL_SESSION_ID_PREFIX: &str = "p-";

@@ -407,7 +407,7 @@ impl SendPartInfoSink {
             for column in &columns {
                 for column_id in &column.leaf_column_ids {
                     // ignore all deleted field
-                    if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
+                    if let Some(col_metas) = block_meta.column_meta(column_id) {
                         let (_, len) = col_metas.offset_length();
                         self.statistics.read_bytes += len as usize;
                     }
@@ -430,7 +430,7 @@ impl SendPartInfoSink {
                         {
                             continue;
                         }
-                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                        if let Some(col_metas) = block_meta.column_meta(source_column_id) {
                             let (_, len) = col_metas.offset_length();
                             self.statistics.read_bytes += len as usize;
                         }
@@ -438,7 +438,7 @@ impl SendPartInfoSink {
                 } else {
                     // If virtual column meta not exist, all source columns are needed.
                     for source_column_id in &virtual_column.source_column_ids {
-                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                        if let Some(col_metas) = block_meta.column_meta(source_column_id) {
                             let (_, len) = col_metas.offset_length();
                             self.statistics.read_bytes += len as usize;
                         }

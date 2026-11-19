@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fmt::Display;
 use std::fmt::Write;
 use std::hash::Hash;
 use std::sync::Arc;

@@ -212,3 +212,19 @@ from (values (2::uint64, false, false, true), (2::uint64, false, false, true),
              (0::uint64, true, true, false), (0::uint64, true, true, false)) t(ts, e1, e2, e3);
 ----
 3 3 2 2
+
+# Few groups: count(distinct x) is rewritten into count(x) over distinct (g, x).
+# NULL values are not counted, and a group whose values are all NULL counts 0.
+statement ok
+create or replace table t_count_distinct_groups(g int, x int null) as
+select number % 3, if(number % 3 = 2 or number % 7 = 0, NULL, number % 50) from numbers(3000)
+
+query IIT
+select g, count(distinct x), typeof(count(distinct x)) from t_count_distinct_groups group by g order by g
+----
+0 50 BIGINT UNSIGNED
+1 50 BIGINT UNSIGNED
+2 0 BIGINT UNSIGNED
+
+statement ok
+drop table t_count_distinct_groups

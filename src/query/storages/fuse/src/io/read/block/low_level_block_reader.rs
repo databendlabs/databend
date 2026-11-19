@@ -202,7 +202,6 @@ pub struct FuseLowLevelBlockReader {
     leaf_columns: Vec<Vec<(ColumnId, usize)>>,
     parquet_metadata: Arc<ParquetMetaData>,
     row_count: usize,
-    compression: ParquetCompression,
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
@@ -294,7 +293,6 @@ impl FuseLowLevelBlockReader {
             leaf_columns,
             parquet_metadata,
             row_count,
-            compression,
             #[cfg(test)]
             window_size: options.window_size,
             max_prefetch: options.max_prefetch,
@@ -334,7 +332,7 @@ impl FuseLowLevelBlockReader {
     ) -> Result<usize> {
         let mut bytes = 0usize;
         for column_id in column_ids {
-            if let Some(meta) = block.col_metas.get(column_id) {
+            if let Some(meta) = block.column_meta(column_id) {
                 let (_, len) = meta.offset_length();
                 let window = Self::window_bytes_for_rows(len, block.row_count, min_rows)?;
                 bytes = bytes
@@ -345,6 +343,12 @@ impl FuseLowLevelBlockReader {
             }
         }
         Ok(bytes)
+    }
+
+    /// The file, chunk and codec of a leaf column, in whichever file of the block stores it.
+    fn leaf_chunk(&self, column_id: &ColumnId) -> Option<(&str, &ColumnMeta, ParquetCompression)> {
+        let chunk = self.block_meta.column_chunk(column_id)?;
+        Some((chunk.location, chunk.meta, chunk.compression.into()))
     }
 
     pub fn read_data(self) -> FuseLowLevelDataReader {
@@ -430,7 +434,7 @@ impl FuseLowLevelDataReader {
         let leaf_columns = &block.leaf_columns[field_index];
         let mut present = 0;
         for (column_id, _) in leaf_columns {
-            if block.block_meta.col_metas.contains_key(column_id) {
+            if block.leaf_chunk(column_id).is_some() {
                 present += 1;
             }
         }
@@ -448,10 +452,8 @@ impl FuseLowLevelDataReader {
         } else {
             let mut leaves = Vec::with_capacity(leaf_columns.len());
             for &(column_id, leaf_index) in leaf_columns {
-                let meta = block
-                    .block_meta
-                    .col_metas
-                    .get(&column_id)
+                let (path, meta, compression) = block
+                    .leaf_chunk(&column_id)
                     .expect("field presence validated");
                 let (offset, len, num_values) = match meta {
                     ColumnMeta::Parquet(meta) => (meta.offset, meta.len, meta.num_values),
@@ -461,13 +463,14 @@ impl FuseLowLevelDataReader {
                         "Parquet leaf {column_id} range overflows: offset {offset}, length {len}"
                     )));
                 };
-                leaves.push(FuseLowLevelLeafReader::create(
-                    block,
+                leaves.push(FuseLowLevelLeafReader::create(block, LeafChunk {
+                    path,
+                    compression,
                     column_id,
                     leaf_index,
-                    offset..end,
+                    range: offset..end,
                     num_values,
-                )?);
+                })?);
             }
             let current = vec![None; leaves.len()];
             Some(PhysicalColumnReader {
@@ -547,17 +550,21 @@ struct FuseLowLevelLeafReader {
     finished: bool,
 }
 
+/// The chunk of one physical Parquet leaf, in the file of the block that stores it.
+struct LeafChunk<'a> {
+    path: &'a str,
+    compression: ParquetCompression,
+    column_id: ColumnId,
+    leaf_index: usize,
+    range: Range<u64>,
+    num_values: u64,
+}
+
 impl FuseLowLevelLeafReader {
-    fn create(
-        context: &FuseLowLevelBlockReader,
-        column_id: ColumnId,
-        leaf_index: usize,
-        range: Range<u64>,
-        num_values: u64,
-    ) -> Result<Self> {
-        let row_group = ParquetLeafRowGroupAdapter::try_create(
-            context, column_id, leaf_index, range, num_values,
-        )?;
+    fn create(context: &FuseLowLevelBlockReader, chunk: LeafChunk<'_>) -> Result<Self> {
+        let column_id = chunk.column_id;
+        let leaf_index = chunk.leaf_index;
+        let row_group = ParquetLeafRowGroupAdapter::try_create(context, chunk)?;
         let mask =
             ProjectionMask::leaves(context.parquet_schema.as_ref(), std::iter::once(leaf_index));
         let levels = parquet_to_arrow_field_levels(
@@ -1440,13 +1447,15 @@ struct ParquetLeafRowGroupAdapter {
 }
 
 impl ParquetLeafRowGroupAdapter {
-    fn try_create(
-        reader: &FuseLowLevelBlockReader,
-        column_id: ColumnId,
-        leaf_index: usize,
-        range: Range<u64>,
-        num_values: u64,
-    ) -> Result<Self> {
+    fn try_create(reader: &FuseLowLevelBlockReader, chunk: LeafChunk<'_>) -> Result<Self> {
+        let LeafChunk {
+            path,
+            compression,
+            column_id,
+            leaf_index,
+            range,
+            num_values,
+        } = chunk;
         let len = range.end - range.start;
         let window_rows = match reader.window_rows {
             Some(rows) => rows,
@@ -1474,7 +1483,7 @@ impl ParquetLeafRowGroupAdapter {
             }
             let tail = OperatorRangeReader::new_streaming(
                 reader.operator.clone(),
-                reader.path.clone(),
+                path.to_string(),
                 range.clone(),
                 reader.max_prefetch.saturating_add(1),
             )?;
@@ -1487,7 +1496,7 @@ impl ParquetLeafRowGroupAdapter {
         } else {
             Box::new(OperatorRangeReader::new(
                 reader.operator.clone(),
-                reader.path.clone(),
+                path.to_string(),
                 reader.max_prefetch.saturating_add(1),
             ))
         };
@@ -1505,7 +1514,7 @@ impl ParquetLeafRowGroupAdapter {
         };
         let descriptor = reader.parquet_schema.column(leaf_index);
         let chunk_metadata = ColumnChunkMetaData::builder(descriptor)
-            .set_compression(reader.compression)
+            .set_compression(compression)
             .set_num_values(num_values)
             .set_data_page_offset(0)
             .set_total_compressed_size(compressed_size)
@@ -1585,6 +1594,7 @@ mod tests {
     use databend_common_expression::types::number::UInt64Type;
     use databend_common_expression::types::string::StringType;
     use databend_storages_common_table_meta::meta::BlockMeta;
+    use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
     use databend_storages_common_table_meta::meta::ColumnMeta;
     use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::table::TableCompression;
@@ -2280,6 +2290,80 @@ mod tests {
         let mut column = block.read_column(0).unwrap();
         column.read_rows(1).unwrap();
         assert!(column.finish().is_err());
+    }
+
+    /// Writes `columns` of the fields at `field_indices` as a group file of a split block.
+    fn write_group(
+        operator: Operator,
+        schema: &TableSchemaRef,
+        field_indices: &[usize],
+        path: &str,
+        columns: &[Column],
+        compression: TableCompression,
+    ) -> ColumnGroupFileMeta {
+        let group_schema = Arc::new(schema.project(field_indices));
+        let block = DataBlock::new_from_columns(columns.to_vec());
+        let settings = WriteSettings {
+            table_compression: compression,
+            data_page_rows: Some(2),
+            ..Default::default()
+        };
+        let (col_metas, bytes) =
+            crate::io::serialize_block(&settings, &group_schema, block).unwrap();
+        let file_size = bytes.len() as u64;
+        GlobalIORuntime::instance()
+            .block_on(async { operator.write(path, bytes).await.map_err(ErrorCode::from) })
+            .unwrap();
+        ColumnGroupFileMeta {
+            location: (path.to_string(), 0),
+            file_size,
+            leaf_column_metas: col_metas,
+            bloom: None,
+            compression: compression.into(),
+        }
+    }
+
+    /// The columns of a split block come from the group that serves each of them, each group
+    /// decompressed with its own codec.
+    #[test]
+    fn test_data_reader_reads_split_block_from_its_groups() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let (schema, columns) = test_data();
+        let mut meta = write_columns(operator.clone(), schema.clone(), "base.parquet", &columns);
+
+        let names = StringType::from_opt_data(vec![None, Some("x"), None, Some("yy"), Some("z")]);
+        let pairs = Column::Tuple(vec![
+            Int32Type::from_data(vec![-1, -2, -3, -4, -5]),
+            StringType::from_opt_data(vec![None, None, Some("p"), None, Some("q")]),
+        ]);
+        let group = write_group(
+            operator.clone(),
+            &schema,
+            &[1, 3],
+            "group-1.parquet",
+            &[names.clone(), pairs.clone()],
+            TableCompression::LZ4,
+        );
+        meta.append_column_group(group).unwrap();
+        let ids = Int32Type::from_data(vec![1, 2, 3, 4, 5]);
+        let group = write_group(
+            operator.clone(),
+            &schema,
+            &[0],
+            "group-2.parquet",
+            std::slice::from_ref(&ids),
+            TableCompression::None,
+        );
+        meta.append_column_group(group).unwrap();
+        assert_eq!(meta.column_groups.len(), 3);
+
+        let (actual, _) = read_columns(operator, schema, meta);
+        let mut expected = columns;
+        expected[0] = ids;
+        expected[1] = names;
+        expected[3] = pairs;
+        assert_eq!(actual, expected);
     }
 
     #[test]
