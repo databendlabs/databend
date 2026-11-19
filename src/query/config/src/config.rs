@@ -3172,13 +3172,14 @@ impl Default for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
-    /// The data in meta-service using key `TenantOwnershipObjectIdent`
+    /// Deprecated: name `ownership` in `meta_service_caches` instead. When true, it enables
+    /// [`MetaServiceCache::Ownership`] as that name does.
     #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
 
-    /// The data of the tenant in meta-service that this node watches, to read it from a local
-    /// copy: names of [`MetaServiceCache`], such as `["user", "setting"]` in a config file or
+    /// The meta-service data that this node watches, to read it from a local copy: names of
+    /// [`MetaServiceCache`], such as `["user", "setting"]` in a config file or
     /// `--cache-meta-service-caches user,setting`. Empty by default.
     ///
     /// A watched copy may lag a change by the watch delay, a change made through this node
@@ -3682,9 +3683,11 @@ impl Default for CacheConfig {
 }
 
 impl CacheConfig {
-    /// Whether `cache` is listed in `meta_service_caches`.
+    /// Whether `cache` is listed in `meta_service_caches`, or, for
+    /// [`MetaServiceCache::Ownership`], enabled by the deprecated `meta_service_ownership_cache`.
     pub fn is_meta_service_cache_enabled(&self, cache: MetaServiceCache) -> bool {
         self.meta_service_caches.contains(&cache)
+            || (cache == MetaServiceCache::Ownership && self.meta_service_ownership_cache)
     }
 }
 
@@ -3709,6 +3712,13 @@ pub enum MetaServiceCache {
     /// lists the cluster without this node is not used, and a stale copy stops listing this node
     /// within the 60 s heartbeat lift time.
     ClusterNode,
+    /// The ownership of the objects of every tenant, `__fd_object_owners/`, listed by the
+    /// privilege checks, the visibility of objects, `SHOW GRANTS`, and the transfer of the
+    /// objects of a dropped role to `account_admin`. A stale copy can keep a new owner, such as
+    /// that of an object just created or of a `GRANT OWNERSHIP`, from taking effect for these on
+    /// this node, and can leave an object it does not list owned by a dropped role. The
+    /// deprecated `meta_service_ownership_cache = true` enables it too.
+    Ownership,
 }
 
 #[inline]

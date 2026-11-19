@@ -61,7 +61,6 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use tokio::sync::Mutex;
 
 use crate::role::role_api::RoleApi;
 use crate::serde::Quota;
@@ -73,7 +72,7 @@ static TXN_MAX_RETRY_TIMES: u32 = 60;
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
-    ownership_cache: Option<Arc<Mutex<Cache>>>,
+    ownership_cache: Option<Arc<Cache>>,
     upgrade_to_pb: bool,
 }
 
@@ -82,7 +81,7 @@ impl RoleMgr {
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
         upgrade_to_pb: bool,
-        ownership_cache: Option<Arc<Mutex<Cache>>>,
+        ownership_cache: Option<Arc<Cache>>,
     ) -> Self {
         RoleMgr {
             kv_api,
@@ -243,8 +242,7 @@ impl RoleApi for RoleMgr {
         let object_owner_prefix = self.ownership_object_prefix();
 
         let cached = {
-            if let Some(ownership_cache) = &self.ownership_cache {
-                let cache = ownership_cache.lock().await;
+            if let Some(cache) = &self.ownership_cache {
                 let kvs = cache.try_list_dir(&self.ownership_object_dir()).await;
 
                 match &kvs {
