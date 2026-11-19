@@ -275,6 +275,15 @@ enum ObjectId {
 // table functions that need `Super` privilege
 const SYSTEM_TABLE_FUNCTIONS: [&str; 3] = ["fuse_amend", "set_cache_capacity", "send_notification"];
 
+pub(crate) async fn validate_stage_write_access(
+    ctx: Arc<QueryContext>,
+    stage: &StageInfo,
+) -> Result<()> {
+    PrivilegeAccess::new(ctx)
+        .validate_stage_access(stage, UserPrivilegeType::Write)
+        .await
+}
+
 pub(crate) async fn validate_share_management_for_connection(
     ctx: Arc<QueryContext>,
     connection: Option<&str>,
