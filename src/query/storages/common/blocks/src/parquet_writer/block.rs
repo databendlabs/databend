@@ -221,16 +221,6 @@ impl ParquetFileWriter {
             batch_size += bytes;
         }
 
-        // Record the counterfactual on retry even when the corrected check accepts the slice.
-        if num_rows == 1 && log::log_enabled!(log::Level::Debug) {
-            let retained = batch.get_array_memory_size();
-            if retained > hard_limit {
-                log::debug!(
-                    "Parquet single-row slice accepted: estimated_slice_bytes={batch_size}, batch_arrow_memory_bytes={retained}, limit={hard_limit}"
-                );
-            }
-        }
-
         if num_rows == 1 || batch_size <= soft_limit {
             return self.write_record_batch(schema, batch);
         }

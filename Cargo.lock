@@ -5998,7 +5998,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
- "log",
  "parking_lot 0.12.3",
  "parquet",
  "tokio",
