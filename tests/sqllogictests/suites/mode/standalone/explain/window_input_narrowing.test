@@ -1,0 +1,287 @@
+# Narrowing extractions over wide columns move below the window so the
+# partition shuffle and spill no longer carry the whole value.
+
+statement ok
+drop table if exists win_narrow
+
+statement ok
+create table win_narrow (id int, v variant, s string)
+
+statement ok
+insert into win_narrow values
+ (1, '{"a":{"k":1,"x":1.5,"n":"p"},"t":"2020-01-01"}', 'abc'),
+ (2, '{"a":{"k":1,"x":2.5,"n":"q"},"t":"2020-01-02"}', '12'),
+ (3, '{"a":{"k":2,"x":3.5,"n":"r"},"t":"2020-01-03"}', 'xyz'),
+ (4, '{"a":{"k":2,"x":null,"n":"s"},"t":"2020-01-01"}', null)
+
+# The fallible CAST stays above the filter; only the infallible path access
+# moves below the window and the VARIANT column is pruned from WindowPartition.
+query T
+explain select v:a:x::float as x, rn from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn from win_narrow) where rn = 1
+----
+EvalScalar
+├── output columns: [row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5), x (#6)]
+├── expressions: [CAST(get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#7) AS Float32 NULL)]
+├── estimated rows: 1.00
+└── Filter
+    ├── output columns: [get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#7), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5)]
+    ├── filters: [row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5) = 1]
+    ├── estimated rows: 1.00
+    └── Window
+        ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#7), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5)]
+        ├── aggregate function: [row_number]
+        ├── partition by: [row_number_part_0]
+        ├── order by: [row_number_order_0]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#7)]
+            ├── hash keys: [row_number_part_0]
+            ├── top: 1
+            ├── estimated rows: 4.00
+            └── EvalScalar
+                ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#7)]
+                ├── expressions: [get_by_keypath(win_narrow.v (#1), '{"a","k"}'), get_by_keypath(win_narrow.v (#1), '{"t"}'), get_by_keypath(win_narrow.v (#1), '{"a","x"}')]
+                ├── estimated rows: 4.00
+                └── TableScan
+                    ├── table: default.default.win_narrow
+                    ├── scan id: 0
+                    ├── output columns: [v (#1)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 4.00
+
+# The parent still reads the wide column: nothing moves.
+query T
+explain select v, v:a:x::float as x, rn from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn from win_narrow) where rn = 1
+----
+EvalScalar
+├── output columns: [win_narrow.v (#1), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5), x (#6)]
+├── expressions: [CAST(get_by_keypath(win_narrow.v (#1), '{"a","x"}') AS Float32 NULL)]
+├── estimated rows: 1.00
+└── Filter
+    ├── output columns: [win_narrow.v (#1), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5)]
+    ├── filters: [row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5) = 1]
+    ├── estimated rows: 1.00
+    └── Window
+        ├── output columns: [win_narrow.v (#1), row_number_part_0 (#3), row_number_order_0 (#4), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5)]
+        ├── aggregate function: [row_number]
+        ├── partition by: [row_number_part_0]
+        ├── order by: [row_number_order_0]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [win_narrow.v (#1), row_number_part_0 (#3), row_number_order_0 (#4)]
+            ├── hash keys: [row_number_part_0]
+            ├── top: 1
+            ├── estimated rows: 4.00
+            └── EvalScalar
+                ├── output columns: [win_narrow.v (#1), row_number_part_0 (#3), row_number_order_0 (#4)]
+                ├── expressions: [get_by_keypath(win_narrow.v (#1), '{"a","k"}'), get_by_keypath(win_narrow.v (#1), '{"t"}')]
+                ├── estimated rows: 4.00
+                └── TableScan
+                    ├── table: default.default.win_narrow
+                    ├── scan id: 0
+                    ├── output columns: [v (#1)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 4.00
+
+# TRY_CAST over a string column moves as a whole; both wide columns are pruned.
+query T
+explain select try_cast(s as int) as si, v:a:n as n, rn from (select v, s, row_number() over (partition by v:a:k order by id) as rn from win_narrow) where rn = 1
+----
+EvalScalar
+├── output columns: [row_number() OVER (PARTITION BY v:a:k ORDER BY id) (#4), si (#5), n (#6)]
+├── expressions: [CAST(win_narrow.s (#2) AS Int32 NULL) (#7), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#8)]
+├── estimated rows: 1.00
+└── Filter
+    ├── output columns: [CAST(win_narrow.s (#2) AS Int32 NULL) (#7), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#8), row_number() OVER (PARTITION BY v:a:k ORDER BY id) (#4)]
+    ├── filters: [row_number() OVER (PARTITION BY v:a:k ORDER BY id) (#4) = 1]
+    ├── estimated rows: 1.00
+    └── Window
+        ├── output columns: [win_narrow.id (#0), row_number_part_0 (#3), CAST(win_narrow.s (#2) AS Int32 NULL) (#7), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#8), row_number() OVER (PARTITION BY v:a:k ORDER BY id) (#4)]
+        ├── aggregate function: [row_number]
+        ├── partition by: [row_number_part_0]
+        ├── order by: [id]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [win_narrow.id (#0), row_number_part_0 (#3), CAST(win_narrow.s (#2) AS Int32 NULL) (#7), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#8)]
+            ├── hash keys: [row_number_part_0]
+            ├── top: 1
+            ├── estimated rows: 4.00
+            └── EvalScalar
+                ├── output columns: [win_narrow.id (#0), row_number_part_0 (#3), CAST(win_narrow.s (#2) AS Int32 NULL) (#7), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#8)]
+                ├── expressions: [get_by_keypath(win_narrow.v (#1), '{"a","k"}'), TRY_CAST(win_narrow.s (#2) AS Int32 NULL), get_by_keypath(win_narrow.v (#1), '{"a","n"}')]
+                ├── estimated rows: 4.00
+                └── TableScan
+                    ├── table: default.default.win_narrow
+                    ├── scan id: 0
+                    ├── output columns: [id (#0), v (#1), s (#2)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 4.00
+
+# WindowGroup: the extraction joins the group's scalar inputs.
+query T
+explain select v:a:x::float as x, rn, cnt from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn, count(*) over (partition by v:a:k) as cnt from win_narrow) where rn = 1
+----
+EvalScalar
+├── output columns: [row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5), COUNT(*) OVER (PARTITION BY v:a:k) (#7), x (#8)]
+├── expressions: [CAST(get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9) AS Float32 NULL)]
+├── estimated rows: 1.00
+└── Filter
+    ├── output columns: [get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5), COUNT(*) OVER (PARTITION BY v:a:k) (#7)]
+    ├── filters: [row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5) = 1]
+    ├── estimated rows: 1.00
+    └── WindowGroup
+        ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5), COUNT(*) OVER (PARTITION BY v:a:k) (#7)]
+        ├── Window
+        │   ├── output column: [5]
+        │   ├── aggregate function: [row_number]
+        │   ├── partition by: [row_number_part_0]
+        │   ├── order by: [row_number_order_0]
+        │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+        ├── Window
+        │   ├── output column: [7]
+        │   ├── aggregate function: [count()]
+        │   ├── partition by: [row_number_part_0]
+        │   ├── order by: []
+        │   └── frame: [Range: Preceding(None) ~ Following(None)]
+        └── WindowPartition
+            ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9)]
+            ├── hash keys: [row_number_part_0]
+            ├── estimated rows: 4.00
+            └── EvalScalar
+                ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9)]
+                ├── expressions: [get_by_keypath(win_narrow.v (#1), '{"a","k"}'), get_by_keypath(win_narrow.v (#1), '{"t"}'), get_by_keypath(win_narrow.v (#1), '{"a","x"}')]
+                ├── estimated rows: 4.00
+                └── TableScan
+                    ├── table: default.default.win_narrow
+                    ├── scan id: 0
+                    ├── output columns: [v (#1)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 4.00
+
+# Extractions inside the filter above the window move too.
+query T
+explain select v:a:x::float as x from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn from win_narrow) where rn = 1 and v:a:n::string <> 'zz'
+----
+EvalScalar
+├── output columns: [x (#6)]
+├── expressions: [CAST(get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9) AS Float32 NULL)]
+├── estimated rows: 1.00
+└── Filter
+    ├── output columns: [get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9)]
+    ├── filters: [row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5) = 1, is_true(CAST(get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#10) AS String NULL) <> 'zz')]
+    ├── estimated rows: 1.00
+    └── Window
+        ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#10), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#5)]
+        ├── aggregate function: [row_number]
+        ├── partition by: [row_number_part_0]
+        ├── order by: [row_number_order_0]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#10)]
+            ├── hash keys: [row_number_part_0]
+            ├── top: 1
+            ├── estimated rows: 4.00
+            └── EvalScalar
+                ├── output columns: [row_number_part_0 (#3), row_number_order_0 (#4), get_by_keypath(win_narrow.v (#1), '{"a","x"}') (#9), get_by_keypath(win_narrow.v (#1), '{"a","n"}') (#10)]
+                ├── expressions: [get_by_keypath(win_narrow.v (#1), '{"a","k"}'), get_by_keypath(win_narrow.v (#1), '{"t"}'), get_by_keypath(win_narrow.v (#1), '{"a","x"}'), get_by_keypath(win_narrow.v (#1), '{"a","n"}')]
+                ├── estimated rows: 4.00
+                └── TableScan
+                    ├── table: default.default.win_narrow
+                    ├── scan id: 0
+                    ├── output columns: [v (#1)]
+                    ├── read rows: 4
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 4.00
+
+query RTI
+select v:a:x::float as x, v:a:n::string as n, rn from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn from win_narrow) where rn = 1 order by x
+----
+2.5 q 1
+3.5 r 1
+
+query IIT
+select try_cast(s as int) as si, id, v:a:n::string as n from (select v, s, id, row_number() over (partition by v:a:k order by id) as rn from win_narrow) where rn = 1 order by id
+----
+NULL 1 p
+NULL 3 r
+
+query RII
+select v:a:x::float as x, rn, cnt from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn, count(*) over (partition by v:a:k) as cnt from win_narrow) where rn = 1 order by x
+----
+2.5 1 2
+3.5 1 2
+
+# A virtual column takes precedence: the scan already produces the narrow
+# value, so there is nothing left to move below the window.
+statement ok
+create or replace table win_narrow_vc (id int, v variant) enable_virtual_column = true
+
+statement ok
+insert into win_narrow_vc select id, v from win_narrow
+
+query T
+explain select v:a:x::float as x, rn from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn from win_narrow_vc) where rn = 1
+----
+Filter
+├── output columns: [win_narrow_vc.v['a']['x']::Float32 (#5), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#4)]
+├── filters: [row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#4) = 1]
+├── estimated rows: 1.00
+└── Window
+    ├── output columns: [win_narrow_vc.v['a']['k'] (#2), win_narrow_vc.v['t'] (#3), win_narrow_vc.v['a']['x']::Float32 (#5), row_number() OVER (PARTITION BY v:a:k ORDER BY v:t DESC) (#4)]
+    ├── aggregate function: [row_number]
+    ├── partition by: [v['a']['k']]
+    ├── order by: [v['t']]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── WindowPartition
+        ├── output columns: [win_narrow_vc.v['a']['k'] (#2), win_narrow_vc.v['t'] (#3), win_narrow_vc.v['a']['x']::Float32 (#5)]
+        ├── hash keys: [v['a']['k']]
+        ├── top: 1
+        ├── estimated rows: 4.00
+        └── TableScan
+            ├── table: default.default.win_narrow_vc
+            ├── scan id: 0
+            ├── output columns: [v['a']['k'] (#2), v['t'] (#3), v['a']['x']::Float32 (#5)]
+            ├── read rows: 4
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            ├── virtual columns: [v['a']['k'], v['a']['x']::Float32, v['t']]
+            └── estimated rows: 4.00
+
+query RI
+select v:a:x::float as x, rn from (select v, row_number() over (partition by v:a:k order by v:t desc) as rn from win_narrow_vc) where rn = 1 order by x
+----
+2.5 1
+3.5 1
+
+statement ok
+drop table win_narrow_vc
+
+statement ok
+drop table win_narrow
