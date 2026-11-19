@@ -290,6 +290,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     10,
                     Some(column_stat(
                         r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 1}"#,
+                        10,
                     )?),
                 ),
                 table(
@@ -297,6 +298,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     20,
                     Some(column_stat(
                         r#"{"min": 4, "max": 8, "ndv": 5, "null_count": 2}"#,
+                        20,
                     )?),
                 ),
             ],
@@ -314,6 +316,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                 10,
                 Some(column_stat(
                     r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 1}"#,
+                    10,
                 )?),
             )],
             targets: vec![StatTarget {
@@ -331,6 +334,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     2,
                     Some(column_stat(
                         r#"{"min": 1, "max": 2, "ndv": 2, "null_count": 0}"#,
+                        2,
                     )?),
                 ),
                 table(
@@ -338,6 +342,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     1,
                     Some(column_stat(
                         r#"{"min": 1, "max": 1, "ndv": 1, "null_count": 0}"#,
+                        1,
                     )?),
                 ),
             ],
@@ -356,6 +361,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     10,
                     Some(column_stat(
                         r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 1}"#,
+                        10,
                     )?),
                 ),
                 table("CREATE TABLE r(k BIGINT NOT NULL)", 20, None),
@@ -375,6 +381,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     10,
                     Some(column_stat(
                         r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 1}"#,
+                        10,
                     )?),
                 ),
                 table("CREATE TABLE r(k BIGINT NOT NULL)", 0, None),
@@ -394,6 +401,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     10,
                     Some(column_stat(
                         r#"{"min": 1, "max": 3, "ndv": null, "null_count": 0}"#,
+                        10,
                     )?),
                 ),
                 table(
@@ -401,6 +409,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     20,
                     Some(column_stat(
                         r#"{"min": 2, "max": 8, "ndv": 5, "null_count": 0}"#,
+                        20,
                     )?),
                 ),
             ],
@@ -419,7 +428,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     rows: 100,
                     column_stats: HashMap::from([(
                         "k".to_string(),
-                        column_stat(r#"{"min": 0, "max": 9, "ndv": 10, "null_count": 0}"#)?,
+                        column_stat(r#"{"min": 0, "max": 9, "ndv": 10, "null_count": 0}"#, 100)?,
                     )]),
                     histograms: HashMap::from([(
                         "k".to_string(),
@@ -440,7 +449,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     rows: 100,
                     column_stats: HashMap::from([(
                         "k".to_string(),
-                        column_stat(r#"{"min": 5, "max": 14, "ndv": 10, "null_count": 0}"#)?,
+                        column_stat(r#"{"min": 5, "max": 14, "ndv": 10, "null_count": 0}"#, 100)?,
                     )]),
                     histograms: HashMap::from([(
                         "k".to_string(),
@@ -472,6 +481,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     10,
                     Some(column_stat(
                         r#"{"min": 1, "max": 3, "ndv": 3, "null_count": 0}"#,
+                        10,
                     )?),
                 ),
                 table(
@@ -479,6 +489,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     20,
                     Some(column_stat(
                         r#"{"min": 4, "max": 8, "ndv": 5, "null_count": 0}"#,
+                        20,
                     )?),
                 ),
                 table(
@@ -486,6 +497,7 @@ fn cases() -> Result<Vec<UnionCase>> {
                     100,
                     Some(column_stat(
                         r#"{"min": 1, "max": 10, "ndv": 10, "null_count": 0}"#,
+                        100,
                     )?),
                 ),
             ],

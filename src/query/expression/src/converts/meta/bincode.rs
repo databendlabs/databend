@@ -30,7 +30,6 @@ use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalScalar;
-use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberScalar;
 use crate::types::*;

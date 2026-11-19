@@ -275,6 +275,15 @@ enum ObjectId {
 // table functions that need `Super` privilege
 const SYSTEM_TABLE_FUNCTIONS: [&str; 3] = ["fuse_amend", "set_cache_capacity", "send_notification"];
 
+pub(crate) async fn validate_stage_write_access(
+    ctx: Arc<QueryContext>,
+    stage: &StageInfo,
+) -> Result<()> {
+    PrivilegeAccess::new(ctx)
+        .validate_stage_access(stage, UserPrivilegeType::Write)
+        .await
+}
+
 pub(crate) async fn validate_share_management_for_connection(
     ctx: Arc<QueryContext>,
     connection: Option<&str>,
@@ -2808,7 +2817,9 @@ impl AccessChecker for PrivilegeAccess {
                         .await?;
                 }
             }
-            Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+            // KILL authorization depends on the target session and is checked at execution.
+            Plan::Kill(_) => {}
+            Plan::SetPriority(_) | Plan::System(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -2856,6 +2867,10 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DescConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
+            Plan::ShowCreateConnection(plan) => {
                 self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
                     .await?;
             }

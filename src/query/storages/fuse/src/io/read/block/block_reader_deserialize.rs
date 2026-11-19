@@ -19,9 +19,8 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BlockDataFile;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnMeta;
-use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 
 use super::BlockReader;
@@ -40,35 +39,21 @@ impl BlockReader {
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         let part = FuseBlockPartInfo::from_part(&part)?;
-
-        self.deserialize_chunks(
-            &part.location,
-            part.nums_rows,
-            &part.compression,
-            &part.columns_meta,
-            chunks,
-            storage_format,
-        )
+        self.deserialize_files(part.nums_rows, &part.data_files(), chunks, storage_format)
     }
 
-    pub fn deserialize_chunks(
+    /// Deserialize the column chunks read from the data files of a block.
+    pub fn deserialize_files(
         &self,
-        block_path: &str,
         num_rows: usize,
-        compression: &Compression,
-        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        files: &[BlockDataFile<'_>],
         column_chunks: HashMap<ColumnId, DataItem>,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
         match storage_format {
-            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
-                num_rows,
-                column_metas,
-                column_chunks,
-                compression,
-                block_path,
-                None,
-            ),
+            FuseStorageFormat::Parquet => {
+                self.deserialize_parquet_files(num_rows, files, column_chunks, None)
+            }
             FuseStorageFormat::Unsupported => Err(unsupported_storage_format_error()),
         }
     }
@@ -81,12 +66,14 @@ impl BlockReader {
         meta: &BlockMeta,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
-        // Get the merged IO read result.
-        let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
-            .await?;
-
-        self.deserialize_chunks_with_meta(&meta.into(), storage_format, merge_io_read_result)
+        let files = meta.data_files();
+        let data = self.read_files_by_merge_io(settings, &files, &None).await?;
+        self.deserialize_files(
+            meta.row_count as usize,
+            &files,
+            data.columns_chunks()?,
+            storage_format,
+        )
     }
 
     pub fn deserialize_chunks_with_meta(

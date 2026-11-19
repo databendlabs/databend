@@ -31,7 +31,6 @@ use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkt;
-use databend_common_io::geo_to_wkt;
 use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;

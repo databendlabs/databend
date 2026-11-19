@@ -531,3 +531,84 @@ mod set_user_privileges {
         Ok(())
     }
 }
+
+mod watched {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use super::*;
+    use crate::empty_kv::EmptyKv;
+
+    /// `get_watched_user` of `mgr` comes to return `want`.
+    async fn wait_for(
+        mgr: &UserMgr,
+        user: &UserIdentity,
+        want: Option<&UserInfo>,
+    ) -> anyhow::Result<()> {
+        for _ in 0..100 {
+            let got = mgr.get_watched_user(user).await?;
+            if got.as_ref().map(|u| &u.data) == want {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        anyhow::bail!(
+            "get_watched_user({}) did not return {want:?}",
+            user.display()
+        )
+    }
+
+    /// A watched `UserMgr` reads the users the copy holds from the copy, as they are created and
+    /// dropped; a user the copy lacks, and its other reads, go to meta-service.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_watched_user() -> anyhow::Result<()> {
+        let tenant = Tenant::new_literal("tenant1");
+        let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
+        let watched = UserMgr::watch(meta_store.inner().clone(), &tenant).await;
+        let direct = UserMgr::create(Arc::new(meta_store), &tenant);
+        // Whatever it finds, it finds in the copy: its meta-service has no keys.
+        let copy = UserMgr::create(Arc::new(EmptyKv), &tenant).with_watched(watched);
+
+        let user = UserInfo::new("u1", "%", default_test_auth_info());
+        assert!(direct.create_user(user.clone(), false).await?.is_ok());
+        wait_for(&copy, &user.identity(), Some(&user)).await?;
+        assert!(
+            copy.get_watched_user(&UserIdentity::new("u2", "%"))
+                .await?
+                .is_none()
+        );
+        assert!(copy.get_user(&user.identity()).await?.is_none());
+
+        assert!(direct.drop_user(&user.identity()).await?.is_ok());
+        wait_for(&copy, &user.identity(), None).await?;
+
+        // Without a watch, it reads meta-service.
+        assert!(direct.create_user(user.clone(), false).await?.is_ok());
+        let got = direct.get_watched_user(&user.identity()).await?;
+        assert_eq!(got.map(|u| u.data), Some(user));
+        Ok(())
+    }
+
+    /// A user that a ready copy lacks is read from meta-service: here the copy watches another
+    /// meta-service, which never gets the user.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_watched_user_missing_from_copy() -> anyhow::Result<()> {
+        let tenant = Tenant::new_literal("tenant1");
+        let other_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
+        let watched = UserMgr::watch(other_store.inner().clone(), &tenant).await;
+        // The copy is ready once it holds a user of the other meta-service.
+        let u0 = UserInfo::new("u0", "%", default_test_auth_info());
+        let other = UserMgr::create(Arc::new(other_store), &tenant);
+        assert!(other.create_user(u0.clone(), false).await?.is_ok());
+        let copy = UserMgr::create(Arc::new(EmptyKv), &tenant).with_watched(watched.clone());
+        wait_for(&copy, &u0.identity(), Some(&u0)).await?;
+
+        let meta_store = MetaStore::new_local_testing::<DatabendRuntime>().await;
+        let mgr = UserMgr::create(Arc::new(meta_store), &tenant).with_watched(watched);
+        let user = UserInfo::new("u1", "%", default_test_auth_info());
+        assert!(mgr.create_user(user.clone(), false).await?.is_ok());
+        let got = mgr.get_watched_user(&user.identity()).await?;
+        assert_eq!(got.map(|u| u.data), Some(user));
+        Ok(())
+    }
+}

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod physical_adaptive_topk_count;
 mod physical_add_stream_column;
 mod physical_aggregate_expand;
 mod physical_aggregate_final;

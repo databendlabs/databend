@@ -506,6 +506,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_heavy_hitter_aggregate", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Optimizes a local GROUP BY of one key ordered by COUNT(*) DESC with a LIMIT using bounded heavy-hitter counting: proven exact counts return after one pass, otherwise only candidate keys or, failing that, every row is aggregated. 0 disables it, 1 applies cost heuristics, 2 skips the cost heuristics.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=2)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -592,7 +599,7 @@ impl DefaultSettings {
                 }),
                 ("nested_loop_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),
-                    desc: "Set the threshold for use nested loop join. Setting it to 0 disable nested loop join.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -1114,6 +1121,13 @@ impl DefaultSettings {
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Deprecated; retained for compatibility and has no effect.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_recluster_task_selection_v2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

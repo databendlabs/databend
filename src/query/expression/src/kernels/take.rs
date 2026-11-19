@@ -28,11 +28,9 @@ use crate::DataBlock;
 use crate::SELECTIVITY_THRESHOLD;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
-use crate::types::date::CoreDate;
 use crate::types::nullable::NullableColumn;
 use crate::types::simple_type::SimpleType;
 use crate::types::string::StringColumn;
-use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::with_opaque_mapped_type;
@@ -244,13 +242,11 @@ where I: TakeIndex + ?Sized
     }
 
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
-        self.result = Some(Value::Column(
-            (with_opaque_mapped_type!(|T| match column {
-                OpaqueColumn::T(column) => {
-                    OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
-                }
-            })),
-        ));
+        self.result = Some(Value::Column(with_opaque_mapped_type!(|T| match column {
+            OpaqueColumn::T(column) => {
+                OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
+            }
+        })));
         Ok(())
     }
 }

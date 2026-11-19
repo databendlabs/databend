@@ -605,6 +605,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         )
     }
 
@@ -845,6 +846,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         )
     }
 

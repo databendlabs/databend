@@ -458,23 +458,23 @@ impl TrackedHeapFixture {
         Ok(hashtable)
     }
 
-    fn assert_result(&self, hashtable: &mut AggregateHashTable) {
+    fn assert_result(&self, hashtable: AggregateHashTable) {
         assert_block_value_sort_eq(
             &self.merge_result_block(hashtable),
             &self.expected_result_block(),
         );
     }
 
-    fn merge_result_block(&self, hashtable: &mut AggregateHashTable) -> DataBlock {
+    /// The result of `hashtable` as the final aggregate outputs it: payload by payload, the
+    /// aggregate results before the group columns.
+    fn merge_result_block(&self, hashtable: AggregateHashTable) -> DataBlock {
         let mut merge_state = PayloadFlushState::default();
         let mut blocks = Vec::new();
-
-        while hashtable.merge_result(&mut merge_state).unwrap() {
-            let mut entries = merge_state.take_group_columns();
-            entries.extend(merge_state.take_aggregate_results());
-
-            let num_rows = entries[0].len();
-            blocks.push(DataBlock::new(entries, num_rows));
+        for payload in hashtable.into_payloads() {
+            while let Some(block) = payload.merge_result(&mut merge_state).unwrap() {
+                blocks.push(block);
+            }
+            merge_state.clear();
         }
 
         DataBlock::concat(&blocks).unwrap()
@@ -483,8 +483,8 @@ impl TrackedHeapFixture {
     fn expected_result_block(&self) -> DataBlock {
         let count_per_group = ROWS / GROUPS;
         let entries = vec![
-            Int64Type::from_data((0..GROUPS).map(|x| x as i64).collect::<Vec<_>>()).into(),
             UInt64Type::from_data(vec![(count_per_group * BYTES_PER_ROW) as u64; GROUPS]).into(),
+            Int64Type::from_data((0..GROUPS).map(|x| x as i64).collect::<Vec<_>>()).into(),
         ];
         DataBlock::new(entries, GROUPS)
     }
@@ -626,7 +626,39 @@ fn test_payload_scatter_preserves_results() {
         for payload in &scattered {
             merged.combine_payload(payload, &mut flush_state).unwrap();
         }
-        fixture.assert_result(&mut merged);
+        fixture.assert_result(merged);
+    }
+
+    fixture.assert_all_states_dropped();
+}
+
+#[test]
+fn test_routed_payload_scatter_preserves_results() {
+    let fixture = TrackedHeapFixture::new();
+
+    {
+        // The partitions of a routed table go to the final aggregates as they are, and are
+        // scattered by row into other partitions, whose pages are laid out like theirs.
+        let config = HashTableConfig::default().with_route_partitions(3);
+        for buckets in [3, 2] {
+            let hashtable = fixture.build_from_rows(0, config.clone());
+            let payloads = hashtable.into_payloads();
+            assert!(payloads.iter().all(|p| p.routed_partitions() == 3));
+            let routed = match buckets {
+                3 => payloads,
+                _ => payloads
+                    .into_iter()
+                    .flat_map(|p| p.scatter_into_buckets(buckets))
+                    .collect(),
+            };
+
+            let mut merged = fixture.empty_table(HashTableConfig::default());
+            let mut flush_state = PayloadFlushState::default();
+            for payload in &routed {
+                merged.combine_payload(payload, &mut flush_state).unwrap();
+            }
+            fixture.assert_result(merged);
+        }
     }
 
     fixture.assert_all_states_dropped();
@@ -644,17 +676,19 @@ fn test_add_serialized_groups_matches_combine_and_drops_states() {
         let states = ProjectedBlock::project(&[0], &serialized);
         let groups = ProjectedBlock::project(&[1], &serialized);
 
-        let mut direct = fixture.empty_table(HashTableConfig::default());
         let mut flush_state = PayloadFlushState::default();
-        direct
-            .add_serialized_groups(&mut flush_state, groups, states, rows)
+        let mut once = fixture.empty_table(HashTableConfig::default());
+        once.add_serialized_groups(&mut flush_state, groups, states, rows)
             .unwrap();
-        fixture.assert_result(&mut direct);
+        fixture.assert_result(once);
 
         // Merged again into existing groups, like through a temporary table.
-        direct
-            .add_serialized_groups(&mut flush_state, groups, states, rows)
-            .unwrap();
+        let mut direct = fixture.empty_table(HashTableConfig::default());
+        for _ in 0..2 {
+            direct
+                .add_serialized_groups(&mut flush_state, groups, states, rows)
+                .unwrap();
+        }
         let mut combined = fixture.empty_table(HashTableConfig::default());
         for _ in 0..2 {
             combined
@@ -662,8 +696,8 @@ fn test_add_serialized_groups_matches_combine_and_drops_states() {
                 .unwrap();
         }
         assert_block_value_sort_eq(
-            &fixture.merge_result_block(&mut direct),
-            &fixture.merge_result_block(&mut combined),
+            &fixture.merge_result_block(direct),
+            &fixture.merge_result_block(combined),
         );
     }
 
@@ -737,7 +771,14 @@ fn test_tracked_heap_merge_result_failure_drops_states() {
             merged.combine_payload(payload, &mut flush_state).unwrap();
         }
 
-        let result = merged.merge_result(&mut PayloadFlushState::default());
+        // Fails like the final aggregate outputting the table, with its payloads still alive.
+        let payloads = merged.into_payloads();
+        let mut merge_state = PayloadFlushState::default();
+        let result = payloads.iter().try_for_each(|payload| -> Result<()> {
+            while payload.merge_result(&mut merge_state)?.is_some() {}
+            merge_state.clear();
+            Ok(())
+        });
         assert!(result.is_err());
         assert!(fixture.live_bytes() > (ROWS * BYTES_PER_ROW) as isize);
     }

@@ -19,6 +19,7 @@ mod filter;
 mod join;
 mod runtime_filter;
 
+pub use aggregate::HeavyHitterAggregateOptimizer;
 pub use aggregate::RuleNormalizeAggregateOptimizer;
 pub use aggregate::RuleStatsAggregateOptimizer;
 pub use cte::CleanupUnusedCTEOptimizer;

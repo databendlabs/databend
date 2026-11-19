@@ -293,11 +293,16 @@ impl<'a, I: IdHumanizer, O> TreeHumanizer<'a, I, O> {
                 let stat = match stat.bounds() {
                     Some(bounds) => {
                         let (min, max) = bounds.display_parts();
+                        let ndv = match stat.ndv().expected {
+                            Some(expected) => expected.to_string(),
+                            // Upper-only: the cap is not an estimate.
+                            None => format!("?[..{}]", stat.ndv().upper),
+                        };
                         format!(
                             "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
                             min,
                             max,
-                            stat.ndv().expected.unwrap_or(stat.ndv().upper),
+                            ndv,
                             stat.null_count().expected()
                         )
                     }

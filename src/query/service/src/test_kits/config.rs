@@ -157,13 +157,14 @@ ADDRESS = 'https://databend.com';"
         self
     }
 
-    pub fn enable_meta_service_ownership_cache(mut self) -> ConfigBuilder {
-        self.conf.cache.meta_service_ownership_cache = true;
+    pub fn enable_table_meta_cache(mut self) -> ConfigBuilder {
+        self.conf.cache.enable_table_meta_cache = true;
         self
     }
 
-    pub fn enable_table_meta_cache(mut self) -> ConfigBuilder {
-        self.conf.cache.enable_table_meta_cache = true;
+    /// Run the queries on the executor shared by all the queries.
+    pub fn enable_queries_executor(mut self) -> ConfigBuilder {
+        self.conf.query.common.enable_queries_executor = true;
         self
     }
 

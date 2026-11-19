@@ -40,6 +40,7 @@ pub use config::CacheStorageTypeConfig;
 pub use config::Commands;
 pub use config::Config;
 pub use config::LineageConfig;
+pub use config::MetaServiceCache;
 pub use config::StorageConfig;
 pub use config::StorageNetworkConfig;
 pub use global::GlobalConfig;

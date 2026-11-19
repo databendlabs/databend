@@ -63,6 +63,7 @@ use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RulePushDownTopNUnionScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
+use crate::optimizer::optimizers::rule::RuleSplitGroupedCountDistinct;
 use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
 pub struct RuleFactory;
@@ -133,6 +134,9 @@ impl RuleFactory {
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
                 ctx.get_stat_context().clone(),
                 ctx.get_function_context().query_specific_values.clone(),
+            ))),
+            RuleID::SplitGroupedCountDistinct => Ok(Box::new(RuleSplitGroupedCountDistinct::new(
+                ctx.get_stat_context().clone(),
             ))),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new(
                 ctx.get_stat_context().clone(),

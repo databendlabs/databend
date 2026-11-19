@@ -57,6 +57,8 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyMaterializedView,
+        // After TryApplyMaterializedView, which matches the aggregate as written.
+        RuleID::SplitGroupedCountDistinct,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
@@ -132,6 +134,7 @@ pub enum RuleID {
     GroupingSetsToUnion,
     HierarchicalGroupingSetsToUnion,
     FoldCountAggregate,
+    SplitGroupedCountDistinct,
     PushDownPrewhere,
     TryApplyMaterializedView,
     EliminateSelfJoin,
@@ -184,6 +187,7 @@ impl Display for RuleID {
             RuleID::GroupingSetsToUnion => write!(f, "GroupingSetsToUnion"),
             RuleID::HierarchicalGroupingSetsToUnion => write!(f, "HierarchicalGroupingSetsToUnion"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
+            RuleID::SplitGroupedCountDistinct => write!(f, "SplitGroupedCountDistinct"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
             RuleID::EliminateSelfJoin => write!(f, "EliminateSelfJoin"),
 

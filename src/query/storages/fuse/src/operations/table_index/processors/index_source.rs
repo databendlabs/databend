@@ -55,6 +55,7 @@ impl AsyncSource for ReadRefreshBlock {
         let Some(plan) = plan else {
             return Ok(None);
         };
+        crate::operations::ensure_legacy_block(&plan.meta, "table index refresh")?;
         let block = plan
             .reader
             .read_by_meta(&self.settings, &plan.meta, &self.format)

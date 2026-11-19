@@ -25,6 +25,31 @@ fn main() {
 // ├─ wide_embedding      2.435 ms      │ 2.8 ms        │ 2.503 ms      │ 2.514 ms      │ 100     │ 100
 // ╰─ wide_expr           30.73 µs      │ 45.14 µs      │ 31.18 µs      │ 31.78 µs      │ 100     │ 100
 
+#[divan::bench_group(max_time = 1)]
+mod log_sql {
+    use databend_common_ast::parser::format_sql_for_log;
+
+    fn query(case: &str) -> String {
+        match case {
+            "vector" => format!(
+                "SELECT id FROM t ORDER BY cosine_distance(v, [{}]) LIMIT 10",
+                vec!["-0.123456"; 1536].join(", ")
+            ),
+            "values" => format!(
+                "INSERT INTO t VALUES {}",
+                vec!["(1, 'abc')"; 500].join(", ")
+            ),
+            _ => "SELECT id FROM t WHERE id = 42".to_owned(),
+        }
+    }
+
+    #[divan::bench(args = ["short", "vector", "values"])]
+    fn format_for_log(b: divan::Bencher, case: &str) {
+        let sql = query(case);
+        b.bench_local(|| format_sql_for_log(divan::black_box(&sql)));
+    }
+}
+
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {
     use databend_common_ast::parser::Dialect;
