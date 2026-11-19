@@ -1,0 +1,91 @@
+# run-with-settings: enable_block_stream_write=0
+
+# Both writers must accept a string that has no bounded successor. Keep both
+# blocks separate so COMPACT SEGMENT only changes metadata.
+
+statement ok
+SET enable_auto_analyze = 0
+
+statement ok
+SET auto_compaction_imperfect_blocks_threshold = 0
+
+statement ok
+SET enable_planner_cache = 0
+
+statement ok
+SET enable_query_result_cache = 0
+
+statement ok
+CREATE OR REPLACE TABLE incomplete_string_stats (s STRING NOT NULL STATS_TRUNCATE_LEN 4) row_per_block = 100 storage_format = 'parquet'
+
+statement ok
+INSERT INTO incomplete_string_stats VALUES ('a')
+
+statement ok
+INSERT INTO incomplete_string_stats VALUES (repeat(unhex('F48FBFBF')::STRING, 4) || 'z')
+
+query II
+SELECT block_count, row_count FROM fuse_segment('default', 'incomplete_string_stats') ORDER BY block_count
+----
+1 1
+1 1
+
+# MAX must not be folded to the maximum of the only segment with bounds.
+query T
+SELECT hex(max(s)) FROM incomplete_string_stats
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+statement ok
+OPTIMIZE TABLE incomplete_string_stats COMPACT SEGMENT
+
+query II
+SELECT block_count, row_count FROM fuse_segment('default', 'incomplete_string_stats')
+----
+2 2
+
+query T
+SELECT hex(s) FROM incomplete_string_stats WHERE s > 'a'
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+query T
+SELECT hex(max(s)) FROM incomplete_string_stats
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+# The inverse predicate must not classify the whole segment as deleted either.
+statement ok
+DELETE FROM incomplete_string_stats WHERE s <= 'a'
+
+query T
+SELECT hex(s) FROM incomplete_string_stats
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+# A subsequent append must not replace unknown snapshot bounds with defaults.
+statement ok
+INSERT INTO incomplete_string_stats VALUES ('b')
+
+query I
+SELECT count(*) FROM fuse_statistic('default', 'incomplete_string_stats') WHERE column_name = 's'
+----
+0
+
+statement ok
+DROP TABLE incomplete_string_stats
+
+# Column-oriented segments must omit the stats column, not fail to write.
+statement ok
+CREATE OR REPLACE TABLE incomplete_column_stats (s STRING NOT NULL STATS_TRUNCATE_LEN 4) segment_format = 'column_oriented' storage_format = 'parquet'
+
+statement ok
+INSERT INTO incomplete_column_stats VALUES ('a'), (repeat(unhex('F48FBFBF')::STRING, 4) || 'z')
+
+query T
+SELECT hex(s) FROM incomplete_column_stats WHERE s > 'a'
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+statement ok
+DROP TABLE incomplete_column_stats

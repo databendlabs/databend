@@ -24,6 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableInfo;
@@ -601,7 +602,10 @@ fn column_has_no_previous_values(
         None => {
             // A nullable column added without a default has no old column stats;
             // historical rows read as NULL and should not block append TopN.
-            field.default_expr().is_none() && field.is_nullable_or_null()
+            // String bounds can also be absent for existing non-NULL values.
+            !matches!(field.data_type().remove_nullable(), TableDataType::String)
+                && field.default_expr().is_none()
+                && field.is_nullable_or_null()
         }
     }
 }

@@ -58,8 +58,11 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     col_to_stats_lit
         .iter()
         .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
-            acc.insert(*id, col_stats);
+            // Absence is unknown, not an empty or all-NULL input. A range
+            // covering only some of the inputs must not be published.
+            if stats.len() == stats_of_columns.len() {
+                acc.insert(*id, reduce_column_statistics(stats));
+            }
             acc
         })
 }
@@ -309,7 +312,9 @@ pub fn merge_statistics_mut(
         l.cluster_stats = r.cluster_stats.clone();
         l.partition_stats = r.partition_stats.clone();
     } else {
-        l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        if r.row_count != 0 {
+            l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        }
         l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
         l.cluster_stats =
             reduce_cluster_statistics(&[&l.cluster_stats, &r.cluster_stats], cluster_key_info);
@@ -367,18 +372,27 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.uncompressed_byte_size -= r.uncompressed_byte_size;
     l.compressed_byte_size -= r.compressed_byte_size;
     l.index_size -= r.index_size;
-    for (id, col_stats) in &mut l.col_stats {
-        if let Some(r_col_stats) = r.col_stats.get(id) {
-            // The MinMax of a column cannot be recalculated by the right statistics,
-            // so we skip deduct the MinMax statistics here.
-            col_stats.null_count -= r_col_stats.null_count;
-            col_stats.in_memory_size -= r_col_stats.in_memory_size;
-            col_stats.distinct_of_values =
-                match (col_stats.distinct_of_values, r_col_stats.distinct_of_values) {
-                    (Some(l), Some(r)) => l.checked_sub(r),
-                    _ => None,
-                };
-        }
+    if r.row_count != 0 {
+        // Bounds of the superset still bound the remaining rows, but the
+        // counts cannot be reconstructed from missing or partial statistics.
+        l.col_stats.retain(|id, col_stats| {
+            let Some(removed) = r.col_stats.get(id) else {
+                return false;
+            };
+            let (Some(null_count), Some(in_memory_size)) = (
+                col_stats.null_count.checked_sub(removed.null_count),
+                col_stats.in_memory_size.checked_sub(removed.in_memory_size),
+            ) else {
+                return false;
+            };
+            col_stats.null_count = null_count;
+            col_stats.in_memory_size = in_memory_size;
+            col_stats.distinct_of_values = col_stats
+                .distinct_of_values
+                .zip(removed.distinct_of_values)
+                .and_then(|(l, r)| l.checked_sub(r));
+            true
+        });
     }
     l.spatial_stats = None;
 
@@ -472,7 +486,9 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         {
             perfect_block_count += 1;
         }
-        col_stats.push(&b.col_stats);
+        if b.row_count != 0 {
+            col_stats.push(&b.col_stats);
+        }
         cluster_stats.push(&b.cluster_stats);
         partition_stats.push(&b.partition_stats);
         spatial_col_stats.push(&b.spatial_stats);
@@ -521,4 +537,49 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         virtual_segment_schema: None,
         additional_stats_meta: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_range_is_contagious_but_all_null_is_not() {
+        let string = Scalar::String("a".to_string());
+        let string = ColumnStatistics::new(string.clone(), string, 0, 1, None);
+        let null = ColumnStatistics::new(Scalar::Null, Scalar::Null, 1, 0, None);
+        let number = Scalar::Number(1_i64.into());
+        let number = ColumnStatistics::new(number.clone(), number, 0, 8, None);
+        let complete = HashMap::from([
+            (0, string.clone()),
+            (1, number.clone()),
+            (2, string.clone()),
+        ]);
+        let incomplete = HashMap::from([(1, number), (2, null)]);
+
+        let reduced = reduce_block_statistics(&[&complete, &incomplete]);
+        assert!(!reduced.contains_key(&0));
+        assert_eq!(reduced[&1].in_memory_size, 16);
+        assert_eq!(reduced[&2].min(), string.min());
+        assert_eq!(reduced[&2].max(), string.max());
+        assert_eq!(reduced[&2].null_count, 1);
+
+        let mut summary = Statistics {
+            col_stats: complete,
+            row_count: 1,
+            ..Default::default()
+        };
+        merge_statistics_mut(&mut summary, &Statistics::default(), None);
+        assert_eq!(summary.col_stats.len(), 3);
+        merge_statistics_mut(
+            &mut summary,
+            &Statistics {
+                col_stats: incomplete,
+                row_count: 1,
+                ..Default::default()
+            },
+            None,
+        );
+        assert_eq!(summary.col_stats, reduced);
+    }
 }
