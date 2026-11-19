@@ -20,6 +20,7 @@ use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
 use std::io::stdout;
+use std::process::ExitCode;
 
 use clap::Parser;
 use databend_common_config::Config;
@@ -34,7 +35,6 @@ use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_query::GlobalServices;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use log::info;
 use opendal::Operator;
 use opendal::services::Fs;
 use serde::Deserialize;
@@ -124,15 +124,18 @@ async fn run(config: &InspectorConfig) -> Result<()> {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> ExitCode {
     let mut log_config = LogConfig::default();
     log_config.stderr.on = true;
     let _guards = init_logging("table_meta_inspector", &log_config, BTreeMap::new());
 
     let config = InspectorConfig::parse();
 
-    if let Err(err) = run(&config).await {
-        info!("Error: {}", err);
+    match run(&config).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("Error: {err}");
+            ExitCode::FAILURE
+        }
     }
-    Ok(())
 }
