@@ -312,30 +312,49 @@ impl ReadState {
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<ReadStateOutput> {
+        self.deserialize_and_filter_rows(columns_chunks, part, 0, part.nums_rows)
+    }
+
+    /// Like [`deserialize_and_filter`], but for the `num_rows` rows from `start_row` of the
+    /// block: sparse-granule-index narrowed reads fetch partial chunks that cover fewer rows
+    /// than `part.nums_rows`.
+    ///
+    /// The returned scan statistics describe the `num_rows` rows that were actually read and
+    /// decoded for this range, not the whole block.
+    pub fn deserialize_and_filter_rows(
+        &mut self,
+        columns_chunks: HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+        start_row: usize,
+        num_rows: usize,
+    ) -> Result<ReadStateOutput> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
-        let mut preread_block = self
-            .pre_reader
-            .deserialize_part(part, pre_columns_chunks, None)?;
+        let mut preread_block = self.pre_reader.deserialize_part_with_num_rows(
+            part,
+            num_rows,
+            pre_columns_chunks,
+            None,
+        )?;
         let mut scan_stats = BlockScanStats {
-            rows: part.nums_rows,
+            rows: num_rows,
             bytes: preread_block.memory_size(),
         };
 
-        let filter_bitmap = self.filter(&preread_block, part.nums_rows)?;
+        let filter_bitmap = self.filter(&preread_block, num_rows)?;
         // Expensive probe expressions are evaluated only for rows surviving
         // the static prewhere predicate. Expand their bitmap back to the
         // original row positions before combining it with prewhere.
         let runtime_filter_bitmap = if self.runtime_filters.is_empty() {
             // Preserve the profile entry emitted before expression probes were
             // supported, even when there is no Bloom filter to evaluate.
-            self.runtime_filter(&preread_block, part.nums_rows)?
+            self.runtime_filter(&preread_block, num_rows)?
         } else if let Some(filter_bitmap) = &filter_bitmap {
             let filter_bitmap: Bitmap = filter_bitmap.clone().into();
             let filtered_block = preread_block.clone().filter_with_bitmap(&filter_bitmap)?;
             self.runtime_filter(&filtered_block, filtered_block.num_rows())?
                 .map(|runtime_bitmap| expand_runtime_filter_bitmap(&filter_bitmap, &runtime_bitmap))
         } else {
-            self.runtime_filter(&preread_block, part.nums_rows)?
+            self.runtime_filter(&preread_block, num_rows)?
         };
 
         let bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
@@ -347,7 +366,7 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
-        let bitmap_selection = match (bitmap_selection, selected_rows(part)) {
+        let bitmap_selection = match (bitmap_selection, selected_rows(part, start_row, num_rows)) {
             (Some(selection), Some(rows)) => Some(&selection & &rows),
             (selection, rows) => selection.or(rows),
         };
@@ -380,8 +399,9 @@ impl ReadState {
             0
         };
 
-        let mut remain_block = self.remain_reader.deserialize_part(
+        let mut remain_block = self.remain_reader.deserialize_part_with_num_rows(
             part,
+            num_rows,
             remain_columns_chunks,
             row_selection.as_ref(),
         )?;
@@ -389,7 +409,7 @@ impl ReadState {
             scan_stats.bytes += estimate_block_bytes(
                 remain_block.memory_size(),
                 remain_block.num_rows(),
-                part.nums_rows,
+                num_rows,
                 remain_raw_bytes,
             );
         } else {
@@ -436,9 +456,19 @@ fn runtime_filter_column_is_projectable(
 }
 
 /// The rows of the block that index pruning selected for output (see
-/// `BlockMetaIndex::selected_rows`). `None` when every row is output.
-fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
-    part.block_meta_index()?.selected_rows(part.nums_rows)
+/// `BlockMetaIndex::selected_rows`) among the `num_rows` rows read from `start_row`. `None`
+/// when every row of the range is output.
+fn selected_rows(part: &FuseBlockPartInfo, start_row: usize, num_rows: usize) -> Option<Bitmap> {
+    let rows = part.block_meta_index()?.selected_rows(part.nums_rows)?;
+    let rows = if start_row == 0 && num_rows == part.nums_rows {
+        rows
+    } else {
+        rows.sliced(start_row, num_rows)
+    };
+    if rows.null_count() == 0 {
+        return None;
+    }
+    Some(rows)
 }
 
 fn expand_runtime_filter_bitmap(
@@ -464,7 +494,7 @@ fn raw_bytes_of_chunks(columns_chunks: &HashMap<ColumnId, DataItem>) -> usize {
     columns_chunks
         .values()
         .map(|item| match item {
-            DataItem::RawData(buffer) => buffer.len(),
+            DataItem::RawData(buffer) | DataItem::GranuleData(buffer, _) => buffer.len(),
             DataItem::ColumnArray(array) => array.1,
         })
         .sum()

@@ -17,12 +17,14 @@ databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -75,7 +77,9 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextQueryInfo;
 use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
@@ -89,7 +93,7 @@ const ZONE_MAP_REFRESH_ROUNDS: usize = 10;
 
 #[derive(Debug, PartialEq, Eq)]
 enum ReclusterRoundOutcome {
-    Committed,
+    Committed(usize),
     NoParts,
     ClaimRetriesExhausted,
 }
@@ -97,7 +101,7 @@ enum ReclusterRoundOutcome {
 impl ReclusterRoundOutcome {
     fn stop_reason(&self) -> Option<&'static str> {
         match self {
-            Self::Committed => None,
+            Self::Committed(_) => None,
             Self::NoParts => Some("no_recluster_parts"),
             Self::ClaimRetriesExhausted => Some("claim_retries_exhausted"),
         }
@@ -108,6 +112,21 @@ pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ReclusterPlan,
     allow_segment_claims: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum VerticalRound {
+    MergeBlocks,
+    SortBlocks { task_budget: usize },
+}
+
+fn all_nodes_run_version<'a>(
+    current_version: &str,
+    node_versions: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    node_versions
+        .into_iter()
+        .all(|node_version| node_version == current_version)
 }
 
 impl ReclusterTableInterpreter {
@@ -149,6 +168,15 @@ impl Interpreter for ReclusterTableInterpreter {
             // FINAL carry is scoped to this fixed-scan statement loop.
             // A new FINAL statement starts from the table head again.
             let mut linear_final_carry = ReclusterFinalCarry::default();
+            let is_vertical = ctx.get_settings().get_recluster_method()?
+                == databend_common_settings::ReclusterMethod::Vertical;
+            let vertical_max_tasks = if is_vertical {
+                self.vertical_max_tasks()?
+            } else {
+                1
+            };
+            let mut vertical_round = VerticalRound::MergeBlocks;
+            let mut vertical_cycle_progress = false;
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
@@ -198,23 +226,85 @@ impl Interpreter for ReclusterTableInterpreter {
                     break (Ok(()), "vector rows not mixed below full pass threshold");
                 }
 
+                // A successful commit advances this phase. On retryable conflicts,
+                // keep the phase unchanged and rebuild it against the fresh snapshot.
                 rounds += 1;
+                let round_start = Instant::now();
                 let res = self
-                    .execute_recluster(&mut push_downs, &mut linear_final_carry)
+                    .execute_recluster(
+                        &mut push_downs,
+                        &mut linear_final_carry,
+                        vertical_round,
+                        vertical_max_tasks,
+                    )
                     .await;
+                let round_outcome = match &res {
+                    Ok(outcome) => format!("{outcome:?}"),
+                    Err(e) => format!("error({})", e.code()),
+                };
+                info!(
+                    event = "recluster.round",
+                    table = self.plan.table.as_str(),
+                    is_final,
+                    round = rounds,
+                    committed_rounds,
+                    outcome = round_outcome.as_str(),
+                    round_elapsed :? = round_start.elapsed(),
+                    elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
+                    "Recluster round finished"
+                );
 
+                let mut continue_vertical_phase = false;
                 match res {
                     Ok(outcome) => {
-                        // The full pass ends when only blocks it wrote remain.
-                        if let Some(reason) = outcome.stop_reason() {
-                            break (Ok(()), reason);
+                        // Only exhausted claims stop here: a round without parts may still
+                        // move a vertical recluster on to its next phase below.
+                        if outcome == ReclusterRoundOutcome::ClaimRetriesExhausted {
+                            break (Ok(()), outcome.stop_reason().unwrap());
                         }
-                        committed_rounds += 1;
-                        // A FINAL recluster may run for a long time, so the segment
-                        // zone map is refreshed along the way, not only at the end.
-                        if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
-                            self.refresh_segment_zone_map().await;
-                            zone_map_rounds = committed_rounds;
+                        let task_count = match outcome {
+                            ReclusterRoundOutcome::Committed(count) => Some(count),
+                            _ => None,
+                        };
+                        if task_count.is_some() {
+                            committed_rounds += 1;
+                            // A FINAL recluster may run for a long time, so the segment
+                            // zone map is refreshed along the way, not only at the end.
+                            if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
+                                self.refresh_segment_zone_map().await;
+                                zone_map_rounds = committed_rounds;
+                            }
+                        }
+                        if is_vertical {
+                            match vertical_round {
+                                VerticalRound::MergeBlocks => {
+                                    if let Some(task_count) = task_count {
+                                        vertical_cycle_progress = true;
+                                        let task_budget =
+                                            vertical_max_tasks.saturating_sub(task_count);
+                                        if task_budget > 0 {
+                                            vertical_round =
+                                                VerticalRound::SortBlocks { task_budget };
+                                            continue_vertical_phase = true;
+                                        }
+                                    } else {
+                                        vertical_round = VerticalRound::SortBlocks {
+                                            task_budget: vertical_max_tasks,
+                                        };
+                                        continue_vertical_phase = true;
+                                    }
+                                }
+                                VerticalRound::SortBlocks { .. } => {
+                                    vertical_cycle_progress |= task_count.is_some();
+                                    vertical_round = VerticalRound::MergeBlocks;
+                                }
+                            }
+                            linear_final_carry = ReclusterFinalCarry::default();
+                        }
+                        if task_count.is_none() && !continue_vertical_phase {
+                            if !is_final || !vertical_cycle_progress {
+                                break (Ok(()), "no_recluster_parts");
+                            }
                         }
                     }
                     Err(e) => {
@@ -257,8 +347,16 @@ impl Interpreter for ReclusterTableInterpreter {
                     rounds, committed_rounds, elapsed_time,
                 ));
 
+                if continue_vertical_phase {
+                    continue;
+                }
+
                 if !is_final {
                     break (Ok(()), "single_round_completed");
+                }
+
+                if is_vertical && vertical_round == VerticalRound::MergeBlocks {
+                    vertical_cycle_progress = false;
                 }
 
                 if elapsed_time >= timeout {
@@ -300,6 +398,27 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
+    fn vertical_max_tasks(&self) -> Result<usize> {
+        let cluster = self.ctx.get_cluster();
+        if cluster.is_empty() {
+            return Ok(1);
+        }
+
+        let current_version = &self.ctx.get_version().commit_detail;
+        if all_nodes_run_version(
+            current_version,
+            cluster
+                .nodes
+                .iter()
+                .map(|node| node.binary_version.as_str()),
+        ) {
+            Ok(cluster.nodes.len())
+        } else {
+            warn!("recluster: disable distributed vertical execution during mixed-version upgrade");
+            Ok(1)
+        }
+    }
+
     async fn vector_recluster_blocks(&self) -> Result<Option<Vec<VectorReclusterBlock>>> {
         let ReclusterPlan {
             catalog,
@@ -402,6 +521,8 @@ impl ReclusterTableInterpreter {
         &self,
         push_downs: &mut Option<PushDownInfo>,
         linear_final_carry: &mut ReclusterFinalCarry,
+        vertical_round: VerticalRound,
+        vertical_max_tasks: usize,
     ) -> Result<ReclusterRoundOutcome> {
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
@@ -453,6 +574,8 @@ impl ReclusterTableInterpreter {
                     push_downs,
                     *limit,
                     linear_final_carry,
+                    vertical_round,
+                    vertical_max_tasks,
                     &claimed_segments,
                 )
                 .await?;
@@ -491,6 +614,7 @@ impl ReclusterTableInterpreter {
             tbl = self.ctx.get_table(catalog, database, table).await?;
             check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
         };
+        let task_count = parts.tasks.len();
         let mut physical_plan =
             self.build_linear_plan(tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
         physical_plan.adjust_plan_id(&mut 0);
@@ -554,7 +678,7 @@ impl ReclusterTableInterpreter {
         drop(complete_executor);
 
         execution_result?;
-        Ok(ReclusterRoundOutcome::Committed)
+        Ok(ReclusterRoundOutcome::Committed(task_count))
     }
 
     async fn build_linear_candidate(
@@ -563,6 +687,8 @@ impl ReclusterTableInterpreter {
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
         linear_final_carry: &mut ReclusterFinalCarry,
+        vertical_round: VerticalRound,
+        vertical_max_tasks: usize,
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>, Vec<String>)>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
@@ -576,6 +702,19 @@ impl ReclusterTableInterpreter {
         } else {
             ReclusterMode::Conservative
         };
+        let method = self.ctx.get_settings().get_recluster_method()?;
+        let (vertical_kind, max_tasks_override) = match method {
+            databend_common_settings::ReclusterMethod::Vertical => match vertical_round {
+                VerticalRound::MergeBlocks => (
+                    Some(VerticalReclusterKind::MergeBlocks),
+                    Some(vertical_max_tasks),
+                ),
+                VerticalRound::SortBlocks { task_budget } => {
+                    (Some(VerticalReclusterKind::SortBlocks), Some(task_budget))
+                }
+            },
+            _ => (None, None),
+        };
         let Some((parts, snapshot)) = fuse_table
             .do_recluster(
                 self.ctx.clone(),
@@ -583,6 +722,8 @@ impl ReclusterTableInterpreter {
                 limit,
                 mode,
                 linear_final_carry,
+                vertical_kind,
+                max_tasks_override,
                 claimed_segments,
             )
             .await?
@@ -708,5 +849,16 @@ impl ReclusterTableInterpreter {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_nodes_run_version;
+
+    #[test]
+    fn test_all_nodes_run_version() {
+        assert!(all_nodes_run_version("current", ["current", "current"]));
+        assert!(!all_nodes_run_version("current", ["current", "old"]));
     }
 }

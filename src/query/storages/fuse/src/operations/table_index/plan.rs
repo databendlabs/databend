@@ -73,8 +73,9 @@ pub async fn collect_refresh_plan(
     for name in index_names.iter().collect::<BTreeSet<_>>() {
         let index = get_refresh_index(table, name)?;
         if index.index_type == TableIndexType::Bloom {
+            // Built with every block, as a granule index; there is no file to rebuild.
             return Err(ErrorCode::RefreshIndexError(format!(
-                "BLOOM index {name} is not supported by this release and cannot be refreshed"
+                "BLOOM index {name} is built with the blocks and cannot be refreshed"
             )));
         }
         let fields = index

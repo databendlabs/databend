@@ -1,0 +1,101 @@
+# Linear recluster tasks split into merge groups of two blocks, merged one group after another.
+statement ok
+create or replace database db_recluster_merge_groups
+
+statement ok
+use db_recluster_merge_groups
+
+statement ok
+set recluster_method = 'horizontal'
+
+statement ok
+set enable_recluster_multiway_merge = 1
+
+statement ok
+set enable_recluster_inverted_index_merge = 1
+
+statement ok
+set recluster_max_group_blocks = 2
+
+statement ok
+set max_threads = 2
+
+statement ok
+create table t(k int, content string, inverted index text_idx(content)) cluster by(k) row_per_block=100 block_per_segment=2
+
+# Five overlapping blocks of 20 rows each.
+statement ok
+insert into t select number * 5, concat('word', to_string(number * 5), ' alpha') from numbers(20)
+
+statement ok
+insert into t select number * 5 + 1, concat('word', to_string(number * 5 + 1), ' beta') from numbers(20)
+
+statement ok
+insert into t select number * 5 + 2, concat('word', to_string(number * 5 + 2), ' alpha') from numbers(20)
+
+statement ok
+insert into t select number * 5 + 3, concat('word', to_string(number * 5 + 3), ' beta') from numbers(20)
+
+statement ok
+insert into t select number * 5 + 4, concat('word', to_string(number * 5 + 4), ' gamma') from numbers(20)
+
+statement ok
+alter table t recluster final
+
+query III
+select count(), count(distinct k), sum(k) from t
+----
+100 100 4950
+
+query I
+select count() from t where match(content, 'word42') and k = 42
+----
+1
+
+query I
+select count() from t where match(content, 'alpha')
+----
+40
+
+query I
+select count() from t where match(content, 'beta')
+----
+40
+
+query I
+select count() from t where match(content, 'gamma')
+----
+20
+
+query I
+select count() from t where match(content, 'missingword')
+----
+0
+
+# One block per merge group is rejected.
+statement ok
+insert into t values (1000, 'word1000 delta'), (1001, 'word1001 delta')
+
+statement ok
+set recluster_max_group_blocks = 1
+
+statement error 1006
+alter table t recluster final
+
+statement ok
+unset recluster_max_group_blocks
+
+statement ok
+unset max_threads
+
+statement ok
+unset enable_recluster_inverted_index_merge
+
+statement ok
+unset enable_recluster_multiway_merge
+
+statement ok
+unset recluster_method
+
+statement ok
+drop database db_recluster_merge_groups

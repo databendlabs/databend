@@ -160,7 +160,7 @@ impl Transform for BuildIndex {
                 }
                 TableIndexType::Bloom => {
                     return Err(ErrorCode::RefreshIndexError(format!(
-                        "BLOOM index {} is not supported by this release and cannot be refreshed",
+                        "BLOOM index {} is built with the blocks and cannot be refreshed",
                         self.spec.index.name
                     )));
                 }

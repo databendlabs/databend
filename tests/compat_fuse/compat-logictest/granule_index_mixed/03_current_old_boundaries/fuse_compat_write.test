@@ -1,0 +1,58 @@
+statement ok
+USE compat_granule_mixed
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+409 627551 2
+
+query II
+SELECT count(),count(DISTINCT _block_name) FROM gi_sort_merge
+----
+16 1
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM gi_sort_merge)
+----
+0
+
+statement ok
+CREATE BLOOM INDEX gi_bloom_idx2 ON gi_bloom(tag)
+
+statement ok
+INSERT INTO gi_bloom SELECT number+301,concat('c',to_string(number+301)) FROM numbers(100)
+
+query III
+SELECT count(),count_if(tag='c99'),count_if(tag='o250') FROM gi_bloom WHERE tag IN ('c99','o250','missing')
+----
+2 1 1
+
+statement ok
+DROP BLOOM INDEX gi_bloom_idx2 ON gi_bloom
+
+statement ok
+INSERT INTO gi_t SELECT number+4000,number+4000,'current-99' FROM numbers(99)
+
+statement ok
+INSERT INTO gi_t VALUES (NULL,NULL,'current-edge2'),(100,100,'current-edge2'),(4098,4098,'current-edge2'),(4099,4099,'current-edge2')
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE gi_t RECLUSTER FINAL
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+512 1036699 3
+
+query III
+SELECT count_if(k BETWEEN 4000 AND 4099),count_if(k=4098),count_if(k=4099) FROM gi_t
+----
+101 2 1
+
+query T
+SELECT info:average_depth FROM clustering_information('compat_granule_mixed','gi_t')
+----
+1.0

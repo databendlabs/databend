@@ -1,0 +1,334 @@
+# A row the inverted index did not match can still pass the filter of the query: in
+# `id = 1 OR match(..)` and `NOT match(..)`, or when the filter stays above a join, a window or a
+# limit that has to see every row. The index must then not prune the blocks and the granules
+# without a match; it only tells which rows matched.
+#
+# The default pass prunes lazily in the pipeline; this pass prunes eagerly in read_partitions.
+# run-with-settings: enable_distributed_pruning=0, enable_prune_pipeline=0
+
+statement ok
+DROP DATABASE IF EXISTS test_inverted_index_unmatched_rows
+
+statement ok
+CREATE DATABASE test_inverted_index_unmatched_rows
+
+statement ok
+USE test_inverted_index_unmatched_rows
+
+# 2000 rows in 5 blocks of 400 rows, one block per segment. Every row holds a unique word, and
+# every 500th row holds `anchor`.
+statement ok
+CREATE TABLE docs(id int, content string, INVERTED INDEX docs_idx (content))
+
+statement ok
+INSERT INTO docs SELECT n, concat('row', to_string(n), if(n % 500 = 0, ' anchor', '')) FROM (SELECT number AS n FROM numbers(400))
+
+statement ok
+INSERT INTO docs SELECT n, concat('row', to_string(n), if(n % 500 = 0, ' anchor', '')) FROM (SELECT number + 400 AS n FROM numbers(400))
+
+statement ok
+INSERT INTO docs SELECT n, concat('row', to_string(n), if(n % 500 = 0, ' anchor', '')) FROM (SELECT number + 800 AS n FROM numbers(400))
+
+statement ok
+INSERT INTO docs SELECT n, concat('row', to_string(n), if(n % 500 = 0, ' anchor', '')) FROM (SELECT number + 1200 AS n FROM numbers(400))
+
+statement ok
+INSERT INTO docs SELECT n, concat('row', to_string(n), if(n % 500 = 0, ' anchor', '')) FROM (SELECT number + 1600 AS n FROM numbers(400))
+
+query II
+SELECT count(*), sum(row_count) FROM fuse_block('test_inverted_index_unmatched_rows', 'docs')
+----
+5 2000
+
+# `flag` is true for id 1 only.
+statement ok
+CREATE TABLE flags(id int, flag boolean)
+
+statement ok
+INSERT INTO flags SELECT number, number = 1 FROM numbers(2000)
+
+# The filter requires the match: the blocks without a matched row are pruned.
+query I
+SELECT id FROM docs WHERE match(content, 'row1500')
+----
+1500
+
+query T
+EXPLAIN SELECT id FROM docs WHERE match(content, 'row1500')
+----
+<slt:ignore>inverted pruning: 5 to 1<slt:ignore>
+
+query I
+SELECT id FROM docs WHERE match(content, 'anchor') AND id >= 900 ORDER BY id
+----
+1000
+1500
+
+query T
+EXPLAIN SELECT id FROM docs WHERE match(content, 'anchor') AND id >= 900
+----
+<slt:ignore>inverted pruning: 3 to 2<slt:ignore>
+
+query I
+SELECT count(*) FROM docs WHERE match(content, 'missingword')
+----
+0
+
+query T
+EXPLAIN SELECT count(*) FROM docs WHERE match(content, 'missingword')
+----
+<slt:ignore>inverted pruning: 5 to 0<slt:ignore>
+
+# `OR`: row 1 passes without a match, and its block has no matched row.
+query I
+SELECT id FROM docs WHERE id = 1 OR match(content, 'row1500') ORDER BY id
+----
+1
+1500
+
+query T
+EXPLAIN SELECT id FROM docs WHERE id = 1 OR match(content, 'row1500')
+----
+<slt:ignore>inverted pruning: 5 to 5<slt:ignore>
+
+query I
+SELECT id FROM docs WHERE id >= 1400 AND (id = 1999 OR match(content, 'anchor')) ORDER BY id
+----
+1500
+1999
+
+# `NOT`: the rows without a match are the ones that pass.
+query I
+SELECT count(*) FROM docs WHERE NOT match(content, 'row1500')
+----
+1999
+
+query I
+SELECT id FROM docs WHERE NOT match(content, 'row0') ORDER BY id LIMIT 3
+----
+1
+2
+3
+
+query I
+SELECT count(*) FROM (SELECT id FROM docs WHERE NOT match(content, 'row1500') LIMIT 3)
+----
+3
+
+query I
+SELECT count(*) FROM docs WHERE match(content, 'row1500') = false
+----
+1999
+
+query I
+SELECT id FROM docs WHERE CASE WHEN match(content, 'row1234') THEN true ELSE id = 7 END ORDER BY id
+----
+7
+1234
+
+# No block has a matched row, but every block still has to be read.
+query I
+SELECT id FROM docs WHERE match(content, 'missingword') OR id = 1
+----
+1
+
+query T
+EXPLAIN SELECT id FROM docs WHERE match(content, 'missingword') OR id = 1
+----
+<slt:ignore>inverted pruning: 5 to 5<slt:ignore>
+
+query I
+SELECT count(*) FROM docs WHERE NOT match(content, 'missingword')
+----
+2000
+
+# The rows that pass without a match have no score.
+query IB
+SELECT id, score() > 0 FROM docs WHERE id IN (1, 1999) OR match(content, 'row1500') ORDER BY id
+----
+1 0
+1500 1
+1999 0
+
+query IB
+SELECT id, score() > 0 FROM docs WHERE match(content, 'missingword') OR id = 1
+----
+1 0
+
+query IB
+SELECT id, score() > 0 FROM docs WHERE match(content, 'row1500') OR id < 2 ORDER BY score() DESC, id LIMIT 3
+----
+1500 1
+0 0
+1 0
+
+# The filter is not pushed down to the scan: it also depends on the other side of the join.
+query I
+SELECT d.id FROM docs d JOIN flags f ON d.id = f.id WHERE match(d.content, 'row1500') OR f.flag ORDER BY d.id
+----
+1
+1500
+
+query T
+EXPLAIN SELECT d.id FROM docs d JOIN flags f ON d.id = f.id WHERE match(d.content, 'row1500') OR f.flag
+----
+<slt:ignore>inverted pruning: 5 to 5<slt:ignore>
+
+query I
+SELECT d.id FROM docs d LEFT JOIN flags f ON d.id = f.id WHERE match(d.content, 'row1500') OR f.id < 2 ORDER BY d.id
+----
+0
+1
+1500
+
+query I
+SELECT count(*) FROM docs d WHERE match(d.content, 'row1500') OR EXISTS (SELECT 1 FROM flags f WHERE f.id = d.id AND f.flag)
+----
+2
+
+# The filter stays above an operator that has to see every row of the table.
+query II
+SELECT id, rn FROM (SELECT id, content, row_number() OVER (ORDER BY id) AS rn FROM docs) WHERE match(content, 'row1500')
+----
+1500 1501
+
+query I
+SELECT count(*) FROM (SELECT id, content, count(*) OVER () AS total FROM docs) WHERE match(content, 'row1500') AND total = 2000
+----
+1
+
+# Row 800 is the first row of its block, but not one of the first 10 rows of the table.
+query I
+SELECT id FROM (SELECT id, content FROM docs ORDER BY id LIMIT 10) WHERE match(content, 'row800')
+----
+
+# With `index_granularity`, the matched rows also select the granules to read: 5 blocks of 4
+# granules. Only a filter that requires the match may narrow them.
+statement ok
+CREATE TABLE docs_granule(id int, content string, INVERTED INDEX docs_granule_idx (content)) CLUSTER BY (id) index_granularity = 100
+
+statement ok
+INSERT INTO docs_granule SELECT * FROM docs WHERE id < 400
+
+statement ok
+INSERT INTO docs_granule SELECT * FROM docs WHERE id >= 400 AND id < 800
+
+statement ok
+INSERT INTO docs_granule SELECT * FROM docs WHERE id >= 800 AND id < 1200
+
+statement ok
+INSERT INTO docs_granule SELECT * FROM docs WHERE id >= 1200 AND id < 1600
+
+statement ok
+INSERT INTO docs_granule SELECT * FROM docs WHERE id >= 1600
+
+query II
+SELECT count(*), sum(row_count) FROM fuse_block('test_inverted_index_unmatched_rows', 'docs_granule')
+----
+5 2000
+
+query I
+SELECT id FROM docs_granule WHERE match(content, 'row1500')
+----
+1500
+
+query T
+EXPLAIN SELECT id FROM docs_granule WHERE match(content, 'row1500')
+----
+<slt:ignore>granule pruning: 4 to 1<slt:ignore>inverted pruning: 5 to 1<slt:ignore>
+
+query I
+SELECT id FROM docs_granule WHERE id = 1 OR match(content, 'row1500') ORDER BY id
+----
+1
+1500
+
+query T
+EXPLAIN SELECT id FROM docs_granule WHERE id = 1 OR match(content, 'row1500')
+----
+<slt:ignore>granule pruning: 20 to 20<slt:ignore>inverted pruning: 5 to 5<slt:ignore>
+
+query I
+SELECT count(*) FROM docs_granule WHERE NOT match(content, 'row1500')
+----
+1999
+
+query I
+SELECT id FROM docs_granule WHERE match(content, 'missingword') OR id = 1
+----
+1
+
+query IB
+SELECT id, score() > 0 FROM docs_granule WHERE id >= 1400 AND (id = 1999 OR match(content, 'anchor')) ORDER BY id
+----
+1500 1
+1999 0
+
+query I
+SELECT d.id FROM docs_granule d JOIN flags f ON d.id = f.id WHERE match(d.content, 'row1500') OR f.flag ORDER BY d.id
+----
+1
+1500
+
+# Column-oriented segments are pruned by their own transform, which only runs in the prune
+# pipeline: keep it enabled in the pass that prunes eagerly.
+statement ok
+SET enable_prune_pipeline = 1
+
+statement ok
+CREATE TABLE docs_column(id int, content string, INVERTED INDEX docs_column_idx (content)) segment_format = 'column_oriented'
+
+statement ok
+INSERT INTO docs_column SELECT * FROM docs WHERE id < 400
+
+statement ok
+INSERT INTO docs_column SELECT * FROM docs WHERE id >= 400 AND id < 800
+
+statement ok
+INSERT INTO docs_column SELECT * FROM docs WHERE id >= 800 AND id < 1200
+
+statement ok
+INSERT INTO docs_column SELECT * FROM docs WHERE id >= 1200 AND id < 1600
+
+statement ok
+INSERT INTO docs_column SELECT * FROM docs WHERE id >= 1600
+
+query I
+SELECT id FROM docs_column WHERE match(content, 'row1500')
+----
+1500
+
+query I
+SELECT id FROM docs_column WHERE id = 1 OR match(content, 'row1500') ORDER BY id
+----
+1
+1500
+
+query I
+SELECT count(*) FROM docs_column WHERE NOT match(content, 'row1500')
+----
+1999
+
+query I
+SELECT id FROM docs_column WHERE match(content, 'missingword') OR id = 1
+----
+1
+
+query IB
+SELECT id, score() > 0 FROM docs_column WHERE id IN (1, 1999) OR match(content, 'row1500') ORDER BY id
+----
+1 0
+1500 1
+1999 0
+
+query I
+SELECT d.id FROM docs_column d JOIN flags f ON d.id = f.id WHERE match(d.content, 'row1500') OR f.flag ORDER BY d.id
+----
+1
+1500
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE test_inverted_index_unmatched_rows

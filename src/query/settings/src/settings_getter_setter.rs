@@ -34,6 +34,29 @@ use crate::SettingScope;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ReclusterMethod {
+    #[default]
+    Auto,
+    Horizontal,
+    Vertical,
+}
+
+impl FromStr for ReclusterMethod {
+    type Err = ErrorCode;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "horizontal" => Ok(Self::Horizontal),
+            "vertical" => Ok(Self::Vertical),
+            _ => Err(ErrorCode::InvalidConfig(format!(
+                "invalid recluster_method {value:?}; expected auto, horizontal, or vertical"
+            ))),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum FlightCompression {
     Lz4,
@@ -289,6 +312,10 @@ impl Settings {
 
     pub fn get_storage_io_min_bytes_for_seek(&self) -> Result<u64> {
         self.try_get_u64("storage_io_min_bytes_for_seek")
+    }
+
+    pub fn get_storage_io_merge_equivalent_bytes(&self) -> Result<u64> {
+        self.try_get_u64("storage_io_merge_equivalent_bytes")
     }
 
     pub fn get_storage_io_max_page_bytes_for_read(&self) -> Result<u64> {
@@ -806,6 +833,20 @@ impl Settings {
         self.try_get_u64("recluster_timeout_secs")
     }
 
+    pub fn get_recluster_method(&self) -> Result<ReclusterMethod> {
+        self.try_get_string("recluster_method")?.parse()
+    }
+
+    pub fn set_recluster_method(&self, value: &str) -> Result<()> {
+        let method: ReclusterMethod = value.parse()?;
+        let value = match method {
+            ReclusterMethod::Auto => "auto",
+            ReclusterMethod::Horizontal => "horizontal",
+            ReclusterMethod::Vertical => "vertical",
+        };
+        self.set_setting("recluster_method".to_string(), value.to_string())
+    }
+
     pub fn get_enable_recluster_inverted_index_merge(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_recluster_inverted_index_merge")? != 0)
     }
@@ -820,6 +861,18 @@ impl Settings {
 
     pub fn get_recluster_block_size(&self) -> Result<u64> {
         self.try_get_u64("recluster_block_size")
+    }
+
+    pub fn set_recluster_max_group_blocks(&self, val: u64) -> Result<()> {
+        self.try_set_u64("recluster_max_group_blocks", val)
+    }
+
+    pub fn get_recluster_max_group_blocks(&self) -> Result<u64> {
+        self.try_get_u64("recluster_max_group_blocks")
+    }
+
+    pub fn get_recluster_group_max_size_ratio(&self) -> Result<u64> {
+        self.try_get_u64("recluster_group_max_size_ratio")
     }
 
     pub fn set_compact_max_block_selection(&self, val: u64) -> Result<()> {

@@ -96,7 +96,7 @@ fn test_flush_selected_prefix_with_pending_refills() -> Result<()> {
 fn test_flushes_prefix_before_missing_head() -> Result<()> {
     // Selecting 0 exhausts route 0. Materialize it before requesting its
     // next head; never select around an unknown head.
-    let (input, _) = prepare_input_and_result(
+    let (input, expected) = prepare_input_and_result(
         vec![vec![vec![0], vec![2, 4, 6, 8]], vec![vec![1, 3, 5]]],
         None,
     );
@@ -111,45 +111,11 @@ fn test_flushes_prefix_before_missing_head() -> Result<()> {
             break block;
         }
     };
-    assert!(!prefix.is_empty());
-    // Recovery requires the selected prefix to have been materialized.
-    assert!(merger.into_remaining_streams().is_ok());
-    Ok(())
-}
-
-#[test]
-fn test_recover_unconsumed_merge_suffixes() -> Result<()> {
-    let (input, expected) = prepare_input_and_result(
-        vec![vec![vec![0, 2, 4], vec![6, 8]], vec![vec![1, 3, 5], vec![
-            7, 9,
-        ]]],
-        None,
-    );
-    let streams = input
-        .into_iter()
-        .map(|blocks| TestStream::new(blocks.into()))
-        .collect();
-    let mut merger = Merger::<TestLoserTreeSort, _>::new(streams, 3, None);
-    let prefix = loop {
-        if let Some(block) = merger.next_block()? {
-            break block;
-        }
-    };
-    let recovered = merger.into_remaining_streams()?;
-    let streams = recovered
-        .into_iter()
-        .map(|recovered| {
-            let mut stream = recovered.stream;
-            if let Some((block, _)) = recovered.head {
-                stream.data.push_front(block);
-            }
-            stream
-        })
-        .collect();
-    let mut suffix = Merger::<TestLoserTreeSort, _>::new(streams, 3, None);
+    // Only row 0 is known to precede the missing head of route 0.
+    assert_eq!(prefix.num_rows(), 1);
     let mut output = vec![prefix];
-    while !suffix.is_finished() {
-        if let Some(block) = suffix.next_block()? {
+    while !merger.is_finished() {
+        if let Some(block) = merger.next_block()? {
             output.push(block);
         }
     }

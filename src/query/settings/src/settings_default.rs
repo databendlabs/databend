@@ -275,6 +275,15 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("storage_io_merge_equivalent_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024 * 1024),
+                    desc: "Sets the target minimum effective bytes per storage request when coalescing scattered \
+                granule reads on object storage; scattered ranges merge across data holes while the average \
+                request stays below this. 0 disables cost-based coalescing. Only applies to granule reads.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("storage_io_max_page_bytes_for_read", DefaultSettingValue {
                     value: UserSettingValue::UInt64(512 * 1024),
                     desc: "Sets the maximum byte size of data pages that can be read from storage in a single I/O operation.",
@@ -1080,6 +1089,15 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("recluster_method", DefaultSettingValue {
+                    value: UserSettingValue::String("auto".to_string()),
+                    desc: "Selects recluster execution: auto (default, currently horizontal), horizontal, or vertical.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "auto".into(), "horizontal".into(), "vertical".into(),
+                    ])),
+                }),
                 ("default_order_by_null", DefaultSettingValue {
                     value: UserSettingValue::String("nulls_last".to_string()),
                     desc: "Set numeric default_order_by_null mode",
@@ -1103,6 +1121,20 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("recluster_max_group_blocks", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(64),
+                    desc: "Sets the maximum number of input blocks of one merge group of a linear recluster task; the groups are merged one after another. 0 merges a task as one group; 1 is invalid.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("recluster_group_max_size_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(5),
+                    desc: "Sets the maximum ratio of the largest to the smallest uncompressed block size within one recluster merge group. 0 disables the limit.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("compact_max_block_selection", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),

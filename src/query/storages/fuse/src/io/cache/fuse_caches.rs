@@ -20,10 +20,12 @@ use databend_common_catalog::plan::Partitions;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedVectorIndex;
+use databend_storages_common_cache::GranuleMarkArray;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
+use databend_storages_common_cache::kinds::granule;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_cache::kinds::segment;
 use databend_storages_common_cache::kinds::spatial;
@@ -65,6 +67,8 @@ pub struct FuseCaches {
     pub vector_indexes: MemCache<CachedVectorIndex>,
     /// Deserialized columns, keyed by `TableDataCacheKey` with the type.
     pub column_arrays: MemCache<SizedColumnArray>,
+    /// Decoded granule index marks, keyed by `{file_path}-{mark_name}`.
+    pub granule_marks: MemCache<GranuleMarkArray>,
     pub segment_zone_maps: SegmentZoneMapCache,
 }
 
@@ -161,6 +165,7 @@ impl FuseCaches {
             },
             vector_indexes: manager.cache::<vector::Index>(),
             column_arrays: manager.cache::<column::Array>(),
+            granule_marks: manager.cache::<granule::Marks>(),
             segment_zone_maps: SegmentZoneMapCache {
                 meta: manager.cache::<zone_map::Meta>(),
                 chunks: manager.cache::<zone_map::Chunk>(),
@@ -188,6 +193,7 @@ impl FuseCaches {
             inverted: self.inverted.with_policy(policy),
             vector_indexes: self.vector_indexes.with_policy(policy),
             column_arrays: self.column_arrays.with_policy(policy),
+            granule_marks: self.granule_marks.with_policy(policy),
             segment_zone_maps: self.segment_zone_maps.with_policy(policy),
         })
     }

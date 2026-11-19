@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::max;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::future::Future;
 use std::pin::pin;
@@ -30,9 +31,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::ColumnId;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_after;
 use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_before;
 use databend_common_metrics::storage::metrics_inc_bytes_block_topn_pruning_after;
@@ -53,6 +56,7 @@ use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
@@ -68,6 +72,8 @@ use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
 use crate::io::BloomIndexRebuilder;
+use crate::io::granule_index::GranuleIndexPruner;
+use crate::io::granule_index::build_granule_index_specs;
 use crate::operations::DeletedSegmentInfo;
 use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
@@ -79,6 +85,7 @@ use crate::pruning::PartitionPruningInfo;
 use crate::pruning::PruningCostController;
 use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
+use crate::pruning::SparseGranuleIndexPruner;
 use crate::pruning::SpatialIndexPruner;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
@@ -149,6 +156,11 @@ pub struct PruningContext {
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
+    pub sparse_granule_index_pruner: Option<Arc<SparseGranuleIndexPruner>>,
+    /// Granule-level index pruners, each narrowing the surviving granule set in turn. Empty when none
+    /// applies to the query.
+    pub granule_index_pruners: Vec<Arc<dyn GranuleIndexPruner>>,
+    pub granule_read_settings: ReadSettings,
     pub partition_pruner: Option<PartitionPruner>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
     pub inverted_index_pruner: Option<Arc<InvertedIndexPruner>>,
@@ -169,6 +181,17 @@ pub struct PruningContext {
 }
 
 impl PruningContext {
+    pub fn has_granule_pruner(&self) -> bool {
+        self.sparse_granule_index_pruner.is_some() || !self.granule_index_pruners.is_empty()
+    }
+
+    pub fn has_async_block_pruner(&self) -> bool {
+        self.bloom_pruner.is_some()
+            || self.inverted_index_pruner.is_some()
+            || self.spatial_index_pruner.is_some()
+            || self.virtual_column_pruner.is_some()
+    }
+
     pub fn project_virtual_segment_schema(
         &self,
         schema: Option<&VirtualSegmentSchema>,
@@ -188,9 +211,12 @@ impl PruningContext {
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         partition_pruning_info: Option<PartitionPruningInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
+        indexes: BTreeMap<String, TableIndex>,
         max_concurrency: usize,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
@@ -270,6 +296,44 @@ impl PruningContext {
             )?
         };
 
+        // Sparse granule index pruner, used in parquet format with `index_granularity` set: narrows
+        // the byte ranges read per block to the granules matching the cluster-key predicate.
+        let sparse_granule_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            SparseGranuleIndexPruner::try_create(
+                func_ctx.clone(),
+                &table_schema,
+                filter_expr.as_ref(),
+                cluster_key_meta,
+                cluster_keys,
+                dal.clone(),
+                ctx.cache_policy(),
+            )?
+        };
+
+        // Granule-level index pruners: ask every spec for a pruner and keep the ones that apply to
+        // this query, so the call site stays agnostic of the index kind.
+        let granule_read_settings = ReadSettings::from_ctx(ctx)?;
+        let granule_index_pruners = if lightweight_pruning {
+            Vec::new()
+        } else {
+            let specs = build_granule_index_specs(&indexes, &table_schema)?;
+            let mut pruners = Vec::with_capacity(specs.len());
+            for spec in specs {
+                if let Some(pruner) = spec.new_pruner(
+                    func_ctx.clone(),
+                    &table_schema,
+                    filter_expr.as_ref(),
+                    dal.clone(),
+                    granule_read_settings,
+                )? {
+                    pruners.push(pruner);
+                }
+            }
+            pruners
+        };
+
         // inverted index pruner, used to search matched rows in block
         let inverted_index_pruner = if lightweight_pruning {
             None
@@ -337,6 +401,9 @@ impl PruningContext {
             limit_pruner,
             range_pruner,
             bloom_pruner,
+            sparse_granule_index_pruner,
+            granule_index_pruners,
+            granule_read_settings,
             partition_pruner,
             internal_column_pruner,
             inverted_index_pruner,
@@ -439,29 +506,67 @@ impl FusePruner {
         spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
-        Self::create_with_options(
+        Self::create_with_pages_and_options(
             ctx,
             dal,
             table_schema,
             push_down,
             partition_pruning_info,
+            None,
+            vec![],
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
+            BTreeMap::new(),
             bloom_index_builder,
         )
     }
 
+    // Create fuse pruner with pages.
     #[allow(clippy::too_many_arguments)]
-    fn create_with_options(
+    pub fn create_with_pages(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         partition_pruning_info: Option<PartitionPruningInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
+        indexes: BTreeMap<String, TableIndex>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
+    ) -> Result<Self> {
+        Self::create_with_pages_and_options(
+            ctx,
+            dal,
+            table_schema,
+            push_down,
+            partition_pruning_info,
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+            ngram_args,
+            spatial_index_columns,
+            indexes,
+            bloom_index_builder,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_with_pages_and_options(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        partition_pruning_info: Option<PartitionPruningInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_index_cols: BloomIndexColumns,
+        ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
+        indexes: BTreeMap<String, TableIndex>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
         let max_concurrency = {
@@ -478,7 +583,7 @@ impl FusePruner {
         };
 
         info!(
-            "Pruning max concurrency configured to {} threads",
+            "Pruning max concurrency configured to {} permits",
             max_concurrency
         );
 
@@ -488,9 +593,12 @@ impl FusePruner {
             table_schema.clone(),
             push_down,
             partition_pruning_info,
+            cluster_key_meta,
+            cluster_keys,
             bloom_index_cols,
             ngram_args,
             spatial_index_columns,
+            indexes,
             max_concurrency,
             bloom_index_builder,
         )?;
@@ -866,6 +974,9 @@ impl FusePruner {
         let blocks_range_pruning_after = stats.get_blocks_range_pruning_after() as usize;
         let blocks_range_pruning_cost = stats.get_blocks_range_pruning_cost();
 
+        let granules_pruning_before = stats.get_granules_pruning_before() as usize;
+        let granules_pruning_after = stats.get_granules_pruning_after() as usize;
+
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
         let blocks_bloom_pruning_cost = stats.get_blocks_bloom_pruning_cost();
@@ -905,6 +1016,8 @@ impl FusePruner {
             blocks_range_pruning_before,
             blocks_range_pruning_after,
             blocks_range_pruning_cost,
+            granules_pruning_before,
+            granules_pruning_after,
             blocks_bloom_pruning_before,
             blocks_bloom_pruning_after,
             blocks_bloom_pruning_cost,

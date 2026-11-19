@@ -122,7 +122,7 @@ pub fn column_chunks_to_record_batch_with_codecs(
     );
     for (column_id, data_item) in column_chunks.iter() {
         match data_item {
-            DataItem::RawData(bytes) => {
+            DataItem::RawData(bytes) | DataItem::GranuleData(bytes, _) => {
                 let dfs_id = column_id_to_dfs_id.get(column_id).cloned().unwrap();
                 projection_mask.push(dfs_id);
                 builder.add_column_chunk_with_compression(

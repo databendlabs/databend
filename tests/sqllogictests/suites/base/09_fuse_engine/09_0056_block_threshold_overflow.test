@@ -5,8 +5,12 @@ CREATE OR REPLACE DATABASE block_threshold_overflow
 statement ok
 USE block_threshold_overflow
 
+# Reject values above the table-option limit; accepted values must not overflow.
+statement error 1301
+CREATE TABLE invalid_threshold(k INT) block_size_threshold=18446744073709551615
+
 statement ok
-CREATE TABLE t(k INT) CLUSTER BY(k) block_size_threshold=18446744073709551615 file_size=18446744073709551615
+CREATE TABLE t(k INT) CLUSTER BY(k) block_size_threshold=9223372036854775807 file_size=18446744073709551615
 
 statement ok
 INSERT INTO t VALUES (1),(3)

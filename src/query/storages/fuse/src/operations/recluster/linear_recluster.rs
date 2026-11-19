@@ -37,8 +37,8 @@ use crate::operations::recluster::ReclusterProperties;
 use crate::operations::recluster::ReclusterStrategy;
 use crate::operations::recluster::ReclusterTaskCandidate;
 use crate::operations::recluster::SelectedReclusterSegment;
+use crate::operations::recluster::depth_task_candidate;
 use crate::operations::recluster::passes_depth_gate;
-use crate::operations::recluster::task_candidate;
 use crate::statistics::RangeMaxTree;
 
 /// Linear cluster-key recluster behavior.
@@ -523,8 +523,8 @@ impl ReclusterStrategy for LinearReclusterStrategy {
                 max_depth,
                 average_depth,
             };
-            candidates.push(task_candidate(
-                self.supports_ordered_merge(),
+            candidates.extend(depth_task_candidate(
+                properties,
                 group,
                 score,
                 &task_indices,

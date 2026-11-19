@@ -21,6 +21,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -29,6 +30,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
+use databend_common_settings::ReclusterMethod;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::ClusterKeys;
 use databend_common_sql::parse_cluster_keys;
@@ -46,10 +48,12 @@ use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::io::SegmentsIO;
 use crate::operations::recluster::CandidateScore;
+use crate::operations::recluster::ReclusterCandidateKind;
 use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
 use crate::operations::recluster::ReclusterMode;
 use crate::operations::recluster::ReclusterMutator;
+use crate::operations::recluster::ReclusterSelectionStats;
 use crate::operations::recluster::VECTOR_LEVEL_MIXED;
 use crate::operations::recluster::VECTOR_LEVEL_NEW;
 use crate::pruning::PruningContext;
@@ -248,6 +252,8 @@ impl FuseTable {
         limit: Option<usize>,
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
+        vertical_kind_override: Option<VerticalReclusterKind>,
+        max_tasks_override: Option<usize>,
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
@@ -271,9 +277,23 @@ impl FuseTable {
             return Ok(None);
         };
 
+        let method = ctx.get_settings().get_recluster_method()?;
+        let vertical_kind = match method {
+            ReclusterMethod::Auto | ReclusterMethod::Horizontal => None,
+            ReclusterMethod::Vertical => {
+                vertical_kind_override.or(Some(VerticalReclusterKind::MergeBlocks))
+            }
+        };
         let mutator = Arc::new(
-            ReclusterMutator::try_create(self, ctx.clone(), snapshot.as_ref(), mode)?
-                .with_vector_full_pass(carry.vector_full_pass.clone()),
+            ReclusterMutator::try_create(
+                self,
+                ctx.clone(),
+                snapshot.as_ref(),
+                mode,
+                vertical_kind,
+                max_tasks_override,
+            )?
+            .with_vector_full_pass(carry.vector_full_pass.clone()),
         );
 
         // Carry is tied to the current cluster key because cached block metas
@@ -537,6 +557,19 @@ impl FuseTable {
                 // rank first, while other probed tasks remain available to fill budget
                 // left by candidates skipped due to the segment-claim limit.
                 let prioritize_early_accept = early_accept_count >= mutator.max_tasks;
+                let mut depth_candidates = 0usize;
+                let mut repack_candidates = 0usize;
+                let mut selection_stats = ReclusterSelectionStats::default();
+                for window in &pending_windows {
+                    selection_stats += window.selection_stats;
+                    for task in &window.tasks {
+                        match task.kind {
+                            ReclusterCandidateKind::Depth => depth_candidates += 1,
+                            ReclusterCandidateKind::Repack => repack_candidates += 1,
+                        }
+                    }
+                }
+
                 let mut sorted_tasks = Vec::new();
                 for (window_idx, window) in pending_windows.iter().enumerate() {
                     for (task_idx, task) in window.tasks.iter().enumerate() {
@@ -552,6 +585,37 @@ impl FuseTable {
 
                 let mut selected_task_indices =
                     select_task_candidates(&pending_windows, &sorted_tasks, mutator.max_tasks);
+                let mut selected_count = 0;
+                let mut selected_blocks = 0;
+                for (window_idx, indices) in selected_task_indices.iter().enumerate() {
+                    selected_count += indices.len();
+                    for &task_idx in indices {
+                        selected_blocks +=
+                            pending_windows[window_idx].tasks[task_idx].selected_block_count();
+                    }
+                }
+
+                info!(
+                    "recluster: candidate selection summary scanned_blocks={} eligible_blocks={} depth_candidates={} repack_candidates={} selected_tasks={} selected_blocks={} max_tasks={} skipped_negative_level_blocks={} skipped_terminal_level_blocks={} skipped_terminal_level_bytes={}",
+                    selection_stats.scanned_blocks,
+                    selection_stats.eligible_blocks,
+                    depth_candidates,
+                    repack_candidates,
+                    selected_count,
+                    selected_blocks,
+                    mutator.max_tasks,
+                    selection_stats.skipped_negative_level_blocks,
+                    selection_stats.skipped_terminal_level_blocks,
+                    selection_stats.skipped_terminal_level_bytes,
+                );
+                debug!(
+                    "recluster: candidate level distribution level_0={} level_1_3={} level_4_8={} level_9_31={} level_ge_32={}",
+                    selection_stats.level_0,
+                    selection_stats.level_1_3,
+                    selection_stats.level_4_8,
+                    selection_stats.level_9_31,
+                    selection_stats.level_ge_32,
+                );
 
                 let mut selected = Vec::new();
                 let mut remaining_windows = Vec::with_capacity(pending_windows.len());
@@ -569,7 +633,8 @@ impl FuseTable {
                                 window_idx,
                                 task_idx,
                                 base_level = task.base_level,
-                                task_kind :? = task.kind,
+                                candidate_kind :? = task.kind,
+                                task_kind :? = task.task_kind,
                                 repack_only = task.is_repack_only(),
                                 max_depth = task.score.max_depth,
                                 avg_depth = task.score.average_depth,
@@ -679,9 +744,12 @@ impl FuseTable {
             schema.clone(),
             push_down,
             None,
+            None,
+            vec![],
             BloomIndexColumns::None,
             vec![],
             HashSet::new(),
+            std::collections::BTreeMap::new(),
             max_concurrency,
             None,
         )?;
@@ -797,7 +865,12 @@ mod tests {
                 .collect(),
             base_level: 0,
             input_level_stats: Vec::new(),
-            kind: ReclusterTaskKind::SortBlocks,
+            kind: ReclusterCandidateKind::Depth,
+            task_kind: ReclusterTaskKind::SortBlocks,
+            vertical_kind: None,
+            merge_groups: Vec::new(),
+            skipped_blocks: 0,
+            promoted_blocks: Vec::new(),
         }
     }
 
@@ -807,6 +880,7 @@ mod tests {
                 .map(|index| ((format!("{}-{}", prefix, index), 0), None))
                 .collect(),
             tasks: vec![candidate(0..segment_count)],
+            selection_stats: ReclusterSelectionStats::default(),
             atomic_tasks: false,
         }
     }

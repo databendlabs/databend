@@ -1,0 +1,85 @@
+# JSON path statistics from inserts must survive the granule writer and feed
+# virtual-column materialization in the column-oriented vertical recluster writer.
+statement ok
+create or replace database virtual_granule_recluster
+
+statement ok
+use virtual_granule_recluster
+
+statement ok
+set enable_experimental_virtual_column = 1
+
+statement ok
+set recluster_method = 'vertical'
+
+statement ok
+create table t(k int, v variant, w variant) enable_virtual_column = true row_per_block = 6 block_per_segment = 2 index_granularity = 2
+
+statement ok
+insert into t values (6, parse_json('{"a":6}'), parse_json('{"b":"six"}')), (1, parse_json('{"a":1}'), parse_json('{"b":"one"}')), (5, parse_json('{"a":5}'), parse_json('{"b":"five"}')), (3, parse_json('{"a":3}'), parse_json('{"b":"three"}')), (2, parse_json('{"a":2}'), parse_json('{"b":"two"}')), (4, parse_json('{"a":4}'), parse_json('{"b":"four"}'))
+
+# Adding a cluster key to an existing unordered block exercises SortBlocks.
+statement ok
+alter table t cluster by(k)
+
+statement ok
+alter table t recluster final
+
+query IIT rowsort
+select k, v:a::int, w:b::string from t
+----
+1 1 one
+2 2 two
+3 3 three
+4 4 four
+5 5 five
+6 6 six
+
+query I
+select sum(row_count) from fuse_virtual_column_block_meta('virtual_granule_recluster', 't') where virtual_column_metas is not null
+----
+6
+
+# Insert overlapping ordered blocks, then exercise MergeBlocks and both
+# cluster-key granule predicates and typed virtual-column range predicates.
+statement ok
+insert into t values (2, parse_json('{"a":20}'), parse_json('{"b":"second"}')), (5, parse_json('{"a":50}'), parse_json('{"b":"fifth"}'))
+
+statement ok
+alter table t recluster final
+
+query IIT rowsort
+select k, v:a::int, w:b::string from t where k between 2 and 5 and v:a::int >= 4
+----
+2 20 second
+4 4 four
+5 5 five
+5 50 fifth
+
+query II
+select count(), sum(v:a::int) from t
+----
+8 91
+
+statement ok
+set recluster_method = 'horizontal'
+
+statement ok
+optimize table t compact
+
+query IIT rowsort
+select k, v:a::int, w:b::string from t where k between 2 and 5 and v:a::int >= 4
+----
+2 20 second
+4 4 four
+5 5 five
+5 50 fifth
+
+statement ok
+set recluster_method = 'auto'
+
+statement ok
+set enable_experimental_virtual_column = 0
+
+statement ok
+drop database virtual_granule_recluster

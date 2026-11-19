@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::io::Write;
 use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
@@ -32,6 +33,8 @@ use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_index::VectorBundleBuilder;
 use databend_storages_common_index::normalize_vector;
 use databend_storages_common_index::vector_stat_distance;
+use databend_storages_common_io::BlockingWrite;
+use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
 use databend_storages_common_table_meta::meta::VectorColumnStatistics;
@@ -45,12 +48,16 @@ use log::info;
 use opendal::Buffer;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
+use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::block_index::PendingVectorIndex;
+use crate::io::write::block_index::WrittenBlockIndexOutput;
+use crate::io::write::block_index::WrittenVectorIndex;
 
 const DEFAULT_M: usize = 16;
 const DEFAULT_EF_CONSTRUCT: usize = 100;
@@ -161,6 +168,18 @@ impl BlockIndexSpec for VectorIndexWriteSpec {
             locations: context.meta_locations,
         }))
     }
+
+    fn new_low_level_writer(
+        &self,
+        context: BlockIndexWriteContext,
+    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        Ok(Box::new(VectorIndexLowLevelWriter {
+            builder: self.builder.clone(),
+            next_field: 0,
+            num_fields: context.physical_schema.num_fields(),
+            context,
+        }))
+    }
 }
 
 struct VectorIndexBlockWriter {
@@ -178,6 +197,84 @@ impl BlockIndexWriter for VectorIndexBlockWriter {
             vector: Some(self.builder.finalize_block(&self.locations)?),
             ..Default::default()
         })
+    }
+}
+
+/// Column-by-column writer: the bundle files are built in memory at the end, as the HNSW
+/// index needs every row, and written through blocking writes.
+struct VectorIndexLowLevelWriter {
+    builder: VectorIndexBuilder,
+    context: BlockIndexWriteContext,
+    next_field: usize,
+    num_fields: usize,
+}
+
+impl BlockIndexLowLevelWriter for VectorIndexLowLevelWriter {
+    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
+        if self.next_field >= self.num_fields {
+            return Err(ErrorCode::Internal(
+                "vector index low-level writer has no remaining columns",
+            ));
+        }
+        let field_index = self.next_field;
+        self.next_field += 1;
+        Ok(Box::new(VectorIndexLowLevelColumnWriter {
+            parent: Some(self),
+            field_index,
+        }))
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
+        if self.next_field != self.num_fields {
+            return Err(ErrorCode::Internal(format!(
+                "vector index low-level writer consumed {} of {} columns",
+                self.next_field, self.num_fields
+            )));
+        }
+        let pending = self.builder.finalize_block(&self.context.meta_locations)?;
+        let mut files = Vec::with_capacity(pending.files.len());
+        for (meta, file) in pending.files {
+            let mut write = self.context.create_write(&file.location);
+            write_blocking(&mut write, file.data)?;
+            files.push(meta);
+        }
+        Ok(WrittenBlockIndexOutput {
+            vector: Some(WrittenVectorIndex {
+                files,
+                statistics: pending.statistics,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+/// Write `data` through `write` and close it.
+fn write_blocking(write: &mut OpenDalBlockingWrite, data: Buffer) -> Result<()> {
+    for chunk in data {
+        write.write_all(&chunk)?;
+    }
+    write.close()
+}
+
+struct VectorIndexLowLevelColumnWriter {
+    parent: Option<Box<VectorIndexLowLevelWriter>>,
+    field_index: usize,
+}
+
+impl BlockIndexLowLevelColumnWriter for VectorIndexLowLevelColumnWriter {
+    fn write(&mut self, column: &Column) -> Result<()> {
+        self.parent
+            .as_mut()
+            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))?
+            .builder
+            .add_column(self.field_index, column.clone())
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        self.parent
+            .take()
+            .map(|parent| parent as Box<dyn BlockIndexLowLevelWriter>)
+            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))
     }
 }
 
@@ -276,6 +373,17 @@ impl VectorIndexBuilder {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn add_column(&mut self, field_index: usize, column: Column) -> Result<()> {
+        if !self.field_offsets_set.contains(&field_index) {
+            return Ok(());
+        }
+        let Some(columns) = self.columns.get_mut(&field_index) else {
+            return Err(ErrorCode::Internal("Can't find vector column"));
+        };
+        columns.push(column);
+        Ok(())
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {

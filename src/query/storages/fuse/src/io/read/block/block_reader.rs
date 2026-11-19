@@ -48,7 +48,6 @@ pub struct BlockReader {
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
     pub(crate) project_indices: Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
-    pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
     pub(crate) default_vals: Vec<Scalar>,
     pub(crate) all_field_default_vals: Vec<Scalar>,
     pub policy: CachePolicy,
@@ -157,7 +156,6 @@ impl BlockReader {
             .map(|c| (*c).clone())
             .collect();
         let project_indices = Arc::new(Self::build_projection_indices(&project_column_nodes));
-        let project_column_nodes = Arc::new(project_column_nodes);
         // The statement's policy applies too, as for every reader built from its context.
         let policy = policy.at_most(ctx.cache_policy());
         // Only query scans (which populate the memory cache) produce encoded columns.
@@ -204,7 +202,6 @@ impl BlockReader {
             projection,
             projected_schema,
             project_indices,
-            project_column_nodes,
             default_vals,
             all_field_default_vals,
             policy,
@@ -318,6 +315,16 @@ impl BlockReadContext {
 
     pub(crate) fn column_encoding(&self, column_id: ColumnId) -> Option<ColumnEncoding> {
         self.column_encodings.get(&column_id).copied()
+    }
+
+    pub(crate) fn storage_fetch_part_num(&self) -> Result<usize> {
+        Ok(self.ctx.get_settings().get_storage_fetch_part_num()? as usize)
+    }
+
+    pub(crate) fn storage_io_merge_equivalent_bytes(&self) -> Result<u64> {
+        self.ctx
+            .get_settings()
+            .get_storage_io_merge_equivalent_bytes()
     }
 
     pub(crate) fn report_cache_metrics<'a>(

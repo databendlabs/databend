@@ -23,6 +23,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::plan::ReclusterTaskKind;
+use databend_common_catalog::plan::VerticalReclusterKind;
 use databend_common_catalog::table::Table;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnRef;
@@ -540,6 +541,47 @@ async fn materialize_segments_by_level_and_size(
     Ok((block_num, parts))
 }
 
+async fn materialize_terminal_blocks(
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    block_count: usize,
+    thresholds: BlockThresholds,
+) -> anyhow::Result<ReclusterParts> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let segment_locations = gen_recluster_segments_by_level(
+        &data_accessor,
+        &location_generator,
+        &[(32, block_count)],
+        row_count,
+        block_size,
+        file_size,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx;
+    let (_, _, parts) = materialize_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        1,
+        1000,
+        ReclusterMode::Aggressive,
+    )
+    .await?;
+    Ok(parts)
+}
+
 async fn materialize_segment_locations_with_mode(
     ctx: Arc<dyn TableContext>,
     data_accessor: opendal::Operator,
@@ -682,6 +724,27 @@ fn task_part_counts(parts: &ReclusterParts) -> Vec<usize> {
         .collect::<Vec<_>>()
 }
 
+type TaskSignature = (i32, usize, usize, Vec<String>);
+
+fn task_signatures(parts: &ReclusterParts) -> anyhow::Result<Vec<TaskSignature>> {
+    let mut signatures = parts
+        .tasks
+        .iter()
+        .map(|task| {
+            let mut locations = task
+                .parts
+                .partitions
+                .iter()
+                .map(|part| Ok(FuseBlockPartInfo::from_part(part)?.location.clone()))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            locations.sort();
+            Ok((task.level, task.total_rows, task.total_bytes, locations))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    signatures.sort_by(|left, right| left.3.cmp(&right.3));
+    Ok(signatures)
+}
+
 fn assert_partition_isolated(windows: &[Vec<SelectedReclusterSegment>], expected_segments: usize) {
     let mut selected_segments = HashSet::new();
     for window in windows {
@@ -758,6 +821,8 @@ async fn test_recluster_limit_skips_empty_range() -> anyhow::Result<()> {
             Some(2),
             ReclusterMode::Conservative,
             &mut carry,
+            None,
+            None,
             &claimed_segments,
         )
         .await?
@@ -1965,6 +2030,74 @@ async fn test_builds_multiple_peaks_in_one_window() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_horizontal_and_vertical_merge_select_same_tasks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 10, 10, 1000);
+    let segment_locations = gen_recluster_segments(
+        &data_accessor,
+        &location_generator,
+        30,
+        10,
+        1000,
+        10,
+        10,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = test_cluster_schema();
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let compact_segments = segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        create_segment_location_vector(segment_locations, None),
+    )
+    .await?;
+    let horizontal = new_test_mutator(
+        ctx.clone(),
+        data_accessor.clone(),
+        schema.clone(),
+        thresholds,
+        cluster_key_id,
+        4,
+        ReclusterMode::Conservative,
+    );
+    let vertical = new_test_mutator(
+        ctx,
+        data_accessor,
+        schema,
+        thresholds,
+        cluster_key_id,
+        4,
+        ReclusterMode::Conservative,
+    )
+    .with_vertical_kind(Some(VerticalReclusterKind::MergeBlocks));
+
+    let mut windows = horizontal.select_segments(&compact_segments, 1000)?;
+    assert_eq!(windows.len(), 1);
+    let selected = windows.remove(0);
+    let (_, horizontal_parts) =
+        materialize_candidate_window(&horizontal, selected.clone(), 4).await?;
+    let (_, vertical_parts) = materialize_candidate_window(&vertical, selected, 4).await?;
+
+    assert_eq!(
+        task_signatures(&horizontal_parts)?,
+        task_signatures(&vertical_parts)?
+    );
+    assert_eq!(task_part_counts(&horizontal_parts), vec![100, 100, 100]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_splits_hotspot_by_memory() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -2504,6 +2637,28 @@ async fn test_repacks_max_level_without_rewrite() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_max_level_blocks_are_never_rewritten() -> anyhow::Result<()> {
+    // min_rows_per_block = 800, min_bytes_per_block = 80.
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    // Terminal-level blocks stay excluded regardless of size. Narrow-table
+    // blocks (rows just below the minimum, bytes far below it) and tiny
+    // fragments both used to be reselected by size-based exceptions, and
+    // rewriting them produced blocks of the same shape, so RECLUSTER FINAL
+    // looped until timeout.
+    for (row_count, block_size, file_size) in [(780, 50, 50), (100, 10, 10)] {
+        let parts =
+            materialize_terminal_blocks(row_count, block_size, file_size, 3, thresholds).await?;
+        assert!(
+            parts.tasks.is_empty(),
+            "{row_count} rows, {block_size} bytes"
+        );
+        assert_eq!(parts.remained_blocks.len(), 3);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_safety_for_recluster() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
@@ -2657,5 +2812,226 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Eight 10-byte level-0 blocks around one 1000-byte level-0 block, which no group of the
+/// small blocks admits at the default size ratio of 5.
+const HOTSPOT_WITH_LARGE_BLOCK: [(u64, i32); 9] = [
+    (10, 0),
+    (10, 0),
+    (10, 0),
+    (10, 0),
+    (1000, 0),
+    (10, 0),
+    (10, 0),
+    (10, 0),
+    (10, 0),
+];
+
+/// Plans one hotspot of fully overlapping blocks of the given sizes and levels; block `i` has
+/// `i + 1` rows. With `compact`, the blocks are small enough for the small-group compaction
+/// instead of the hotspot selection.
+async fn plan_merge_groups(
+    settings: &[(&str, &str)],
+    mode: ReclusterMode,
+    compact: bool,
+    sizes_and_levels: &[(u64, i32)],
+) -> anyhow::Result<(Vec<Arc<BlockMeta>>, ReclusterParts)> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1_000_000)?;
+    ctx.get_settings()
+        .set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+    for (name, value) in settings {
+        ctx.get_settings()
+            .set_setting(name.to_string(), value.to_string())?;
+    }
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let thresholds = match compact {
+        true => BlockThresholds::new(1000, 100_000, 100_000, 1000),
+        false => BlockThresholds::new(1000, 10, 10, 1000),
+    };
+    // Distinct row counts tell the blocks apart in the planned parts.
+    let blocks = sizes_and_levels
+        .iter()
+        .zip(1..)
+        .map(|(&(size, level), rows)| make_recluster_block(0, 1, 100, level, rows, size, size))
+        .collect::<Vec<_>>();
+    let location = write_recluster_segment(
+        &data_accessor,
+        &location_generator,
+        blocks.clone(),
+        thresholds,
+        0,
+    )
+    .await?;
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, _, parts) = materialize_segment_locations_with_mode(
+        ctx,
+        data_accessor,
+        vec![location],
+        thresholds,
+        0,
+        1,
+        8,
+        mode,
+    )
+    .await?;
+    Ok((blocks, parts))
+}
+
+fn part_rows(task: &ReclusterTask) -> anyhow::Result<Vec<u64>> {
+    task.parts
+        .partitions
+        .iter()
+        .map(|part| Ok(FuseBlockPartInfo::from_part(part)?.nums_rows as u64))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_merge_groups_split_task_and_skip_lone_blocks() -> anyhow::Result<()> {
+    // The hotspot selection, its v2 variant, and the small-group compaction.
+    for (v2, mode, compact) in [
+        ("0", ReclusterMode::Conservative, false),
+        ("1", ReclusterMode::Aggressive, false),
+        ("0", ReclusterMode::Conservative, true),
+    ] {
+        let (blocks, parts) = plan_merge_groups(
+            &[
+                ("recluster_max_group_blocks", "3"),
+                ("enable_recluster_task_selection_v2", v2),
+            ],
+            mode,
+            compact,
+            &HOTSPOT_WITH_LARGE_BLOCK,
+        )
+        .await?;
+        assert_eq!(parts.tasks.len(), 1);
+        let task = &parts.tasks[0];
+        // The eight small blocks form groups of 3, 3 and 2; the large block is left out.
+        assert_eq!(
+            task.merge_groups
+                .iter()
+                .map(|group| group.blocks)
+                .collect::<Vec<_>>(),
+            vec![3, 3, 2]
+        );
+        let rows = part_rows(task)?;
+        let mut sorted = rows.clone();
+        sorted.sort();
+        assert_eq!(sorted, vec![1, 2, 3, 4, 6, 7, 8, 9]);
+        // The groups are consecutive runs of the parts, with matching totals.
+        let mut start = 0;
+        for group in &task.merge_groups {
+            let run = &rows[start..start + group.blocks];
+            start += group.blocks;
+            assert_eq!(group.total_rows as u64, run.iter().sum::<u64>());
+            assert_eq!(group.total_bytes, 10 * group.blocks);
+            assert_eq!(group.total_compressed, 10 * group.blocks);
+        }
+        assert_eq!(
+            (task.total_rows, task.total_bytes, task.total_compressed),
+            (40, 80, 80)
+        );
+        assert_eq!(task.stats.read_rows, 40);
+        // The large block keeps its data in the rewritten segment, promoted one level.
+        assert_eq!(parts.remained_blocks.len(), 1);
+        let remained = &parts.remained_blocks[0].block_meta;
+        assert_eq!(remained.location, blocks[4].location);
+        assert_eq!(remained.cluster_stats.as_ref().unwrap().level, 1);
+        assert_eq!(
+            remained.cluster_stats.as_ref().unwrap().min(),
+            blocks[4].cluster_stats.as_ref().unwrap().min()
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_merge_groups_follow_their_settings() -> anyhow::Result<()> {
+    // Without a size ratio the large block joins a group.
+    let (_, parts) = plan_merge_groups(
+        &[
+            ("recluster_max_group_blocks", "3"),
+            ("recluster_group_max_size_ratio", "0"),
+        ],
+        ReclusterMode::Conservative,
+        false,
+        &HOTSPOT_WITH_LARGE_BLOCK,
+    )
+    .await?;
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].parts.len(), 9);
+    assert_eq!(
+        parts.tasks[0]
+            .merge_groups
+            .iter()
+            .map(|group| group.blocks)
+            .collect::<Vec<_>>(),
+        vec![3, 3, 3]
+    );
+    assert!(parts.remained_blocks.is_empty());
+
+    // Neither a zero block limit nor a disabled multiway merge splits the task.
+    for settings in [[("recluster_max_group_blocks", "0")], [(
+        "enable_recluster_multiway_merge",
+        "0",
+    )]] {
+        let (_, parts) = plan_merge_groups(
+            &settings,
+            ReclusterMode::Conservative,
+            false,
+            &HOTSPOT_WITH_LARGE_BLOCK,
+        )
+        .await?;
+        assert_eq!(parts.tasks.len(), 1);
+        assert_eq!(parts.tasks[0].parts.len(), 9);
+        assert!(parts.tasks[0].merge_groups.is_empty());
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_merge_groups_promote_only_large_lone_blocks() -> anyhow::Result<()> {
+    let level_of = |parts: &ReclusterParts, location: &meta::Location| {
+        parts
+            .remained_blocks
+            .iter()
+            .find(|block| &block.block_meta.location == location)
+            .map(|block| block.block_meta.cluster_stats.as_ref().unwrap().level)
+    };
+    // Aggressive mode merges levels 1 to 3 together: a large lone block of level 2 is
+    // promoted to 3, one of level 3 stays at 3.
+    for (level, promoted) in [(2, 3), (3, 3)] {
+        let mut blocks = [(10, 1); 5];
+        blocks[2] = (1000, level);
+        let (blocks, parts) = plan_merge_groups(
+            &[("recluster_max_group_blocks", "2")],
+            ReclusterMode::Aggressive,
+            false,
+            &blocks,
+        )
+        .await?;
+        assert_eq!(parts.tasks.len(), 1);
+        assert_eq!(parts.tasks[0].parts.len(), 4);
+        assert_eq!(level_of(&parts, &blocks[2].location), Some(promoted));
+    }
+
+    // A lone block no larger than the grouped blocks keeps its level.
+    let (blocks, parts) = plan_merge_groups(
+        &[("recluster_max_group_blocks", "3")],
+        ReclusterMode::Conservative,
+        false,
+        &[(10, 0); 7],
+    )
+    .await?;
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].parts.len(), 6);
+    assert_eq!(parts.remained_blocks.len(), 1);
+    let lone = &parts.remained_blocks[0].block_meta.location;
+    assert!(blocks.iter().any(|block| &block.location == lone));
+    assert_eq!(level_of(&parts, lone), Some(0));
     Ok(())
 }
