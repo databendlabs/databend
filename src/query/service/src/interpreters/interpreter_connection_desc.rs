@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Connection;
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -60,8 +59,7 @@ impl Interpreter for DescConnectionInterpreter {
             let mut connection = user_mgr
                 .get_connection(&tenant, self.plan.name.as_str())
                 .await?;
-            self.ctx
-                .record_object_access(NamedObjectKind::Connection, &connection.name);
+            self.ctx.record_connection_access(&connection.name);
 
             let names = vec![connection.name.clone()];
             let types = vec![connection.storage_type.clone()];

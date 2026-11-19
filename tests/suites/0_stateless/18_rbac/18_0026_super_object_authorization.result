@@ -1,9 +1,15 @@
-=== SUPER can manage connections, but cannot use named credentials ===
+=== Legacy Connection mode allows SUPER management and named usage ===
 allowed
 denied
 allowed
 allowed
 visible=1
+allowed
+=== Only SUPER can enable Connection object checks ===
+denied
+allowed
+allowed
+visible=0
 denied
 === SUPER alone cannot create or list private sequences ===
 denied
@@ -23,11 +29,29 @@ allowed
 allowed
 denied
 visible=0
-=== Only direct SUPER or SUPER on the current role can change the global switch ===
+=== Stage and UDF checks are on by default; SUPER can restore legacy behavior ===
+denied
+denied
+denied
+allowed
+allowed
+allowed
+=== Only direct SUPER or SUPER on the current role can change the global switches ===
 allowed
 denied
 denied
 denied
+denied
+denied
+denied
+denied
 session override rejected
+allowed
+session override rejected
+allowed
+session override rejected
+allowed
+denied
+denied
 allowed
 allowed

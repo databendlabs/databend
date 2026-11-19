@@ -25,7 +25,6 @@ use std::time::Duration;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -336,17 +335,19 @@ impl ReadFileContext {
             stage_info.allow_credential_chain = true;
         }
 
-        let visibility_checker = self.visibility_checker(ctx).await?;
-        if !(stage_info.is_temporary
-            || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-            || stage_info.stage_type == StageType::User
-                && stage_info.stage_name == ctx.get_current_user()?.name)
-        {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied: privilege READ is required on stage {} for user {}",
-                stage_info.stage_name.clone(),
-                ctx.get_current_user()?.identity().display(),
-            )));
+        if ctx.should_check_stage_privilege(&stage_info.stage_name)? {
+            let visibility_checker = self.visibility_checker(ctx).await?;
+            if !(stage_info.is_temporary
+                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                || stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == ctx.get_current_user()?.name)
+            {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege READ is required on stage {} for user {}",
+                    stage_info.stage_name.clone(),
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
         }
 
         self.stage_infos
@@ -883,7 +884,7 @@ impl NextValFetcher for SequenceNextValFetcher {
         let resp = catalog
             .get_sequence_next_value(req, &visibility_checker)
             .await?;
-        ctx.record_object_access(NamedObjectKind::Sequence, self.sequence_ident.name());
+        ctx.record_sequence_access(self.sequence_ident.name());
         Ok(NextValFetchResult {
             start: resp.start,
             batch_size,

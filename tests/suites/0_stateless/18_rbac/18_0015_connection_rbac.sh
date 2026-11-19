@@ -7,7 +7,10 @@ export USER_A_CONNECT="bendsql_connect_user a 123 -A"
 export USER_B_CONNECT="bendsql_connect_user b 123 -A"
 export USER_C_CONNECT="bendsql_connect_user c 123 -A"
 
-echo "=== Connection authorization is always enabled ==="
+bendsql_connect_root_null --query='SET GLOBAL enable_experimental_connection_privilege_check = 1'
+trap 'bendsql_connect_root_null --query="UNSET GLOBAL enable_experimental_connection_privilege_check"' EXIT
+
+echo "=== Connection object authorization enabled ==="
 echo "=== TEST USER A WITH SUPER AND EXPLICIT CREATE CONNECTION PRIVILEGES ==="
 run_root_sql "
 drop stage if exists c1;

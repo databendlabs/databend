@@ -16,8 +16,8 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK;
 use databend_common_settings::Settings;
+use databend_common_settings::is_rbac_upgrade_setting;
 use fastrace::func_name;
 use poem::IntoResponse;
 use poem::web::Json;
@@ -111,11 +111,11 @@ async fn unset_setting_impl(tenant: &str, key: &str) -> Result<Vec<SettingsItem>
 }
 
 fn check_admin_setting_mutation(key: &str) -> Result<()> {
-    if key.eq_ignore_ascii_case(ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK) {
+    if is_rbac_upgrade_setting(key) {
         // The admin listener does not authenticate a SQL user or role.
-        return Err(ErrorCode::PermissionDenied(
-            "Use SET GLOBAL or UNSET GLOBAL with SUPER to change the sequence privilege check",
-        ));
+        return Err(ErrorCode::PermissionDenied(format!(
+            "Use SET GLOBAL or UNSET GLOBAL with SUPER to change {key}",
+        )));
     }
     Ok(())
 }

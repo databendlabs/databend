@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::database::is_builtin_database;
 use databend_common_catalog::database::is_system_database;
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
@@ -308,7 +307,7 @@ async fn resolve_connection_object(
         .await
     {
         Ok(connection) => {
-            ctx.record_object_access(NamedObjectKind::Connection, &connection.name);
+            ctx.record_connection_access(&connection.name);
             Ok(Some(TaggableObject::Connection {
                 name: connection.name,
             }))

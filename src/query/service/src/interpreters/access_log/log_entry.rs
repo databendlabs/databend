@@ -41,7 +41,7 @@ impl AccessLogEntry {
     }
 }
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, Serialize)]
 pub enum ObjectDomain {
     #[default]
     Table,

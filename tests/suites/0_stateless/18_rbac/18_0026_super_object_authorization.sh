@@ -5,13 +5,19 @@ set -euo pipefail
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+rbac_check=enable_experimental_rbac_check
+connection_check=enable_experimental_connection_privilege_check
 sequence_check=enable_experimental_sequence_privilege_check
 
 cleanup() {
 	bendsql_connect_root_null --query="
+UNSET GLOBAL $rbac_check;
+UNSET GLOBAL $connection_check;
 UNSET GLOBAL $sequence_check;
 DROP STAGE IF EXISTS super_forbidden_stage;
+DROP STAGE IF EXISTS super_private_stage;
 DROP TABLE IF EXISTS super_seq_defaults;
+DROP FUNCTION IF EXISTS super_private_udf;
 DROP CONNECTION IF EXISTS super_legacy_conn;
 DROP CONNECTION IF EXISTS super_private_conn;
 DROP CONNECTION IF EXISTS super_created_conn;
@@ -38,7 +44,7 @@ expect_denied() {
 	output=$(request "$1" "$2")
 	jq -e --arg privilege "$3" '
 		(.error.code == 1063 or (.error.code == 1006 and (.error.message | contains("PermissionDenied. Code: 1063")))) and
-		(.error.message | contains($privilege))
+		(.error.message | ascii_downcase | contains($privilege | ascii_downcase))
 	' <<<"$output" >/dev/null || {
 		printf '%s\n' "$output"
 		return 1
@@ -74,6 +80,8 @@ trap cleanup EXIT
 bendsql_connect_root_null --query="
 CREATE CONNECTION super_private_conn STORAGE_TYPE = 's3' ENDPOINT_URL = 'http://127.0.0.1:9900';
 CREATE SEQUENCE super_private_seq;
+CREATE FUNCTION super_private_udf AS (x) -> (x + 1);
+CREATE STAGE super_private_stage;
 GRANT OWNERSHIP ON CONNECTION super_private_conn TO ROLE account_admin;
 GRANT OWNERSHIP ON SEQUENCE super_private_seq TO ROLE account_admin;
 CREATE USER super_direct_user IDENTIFIED BY 'super_object_test';
@@ -81,13 +89,22 @@ GRANT SUPER ON *.* TO super_direct_user;
 CREATE USER super_public_creator IDENTIFIED BY 'super_object_test';
 "
 
-echo '=== SUPER can manage connections, but cannot use named credentials ==='
+echo '=== Legacy Connection mode allows SUPER management and named usage ==='
 expect_allowed super_direct_user "CREATE CONNECTION super_legacy_conn STORAGE_TYPE = 's3'"
-expect_denied super_public_creator 'DESC CONNECTION super_legacy_conn' AccessConnection
+expect_denied super_public_creator 'DESC CONNECTION super_legacy_conn' Super
 expect_allowed super_direct_user 'DROP CONNECTION super_legacy_conn'
 expect_allowed super_direct_user 'DESC CONNECTION super_private_conn'
-expect_visible super_direct_user 'SHOW CONNECTIONS' super_private_conn 1
-expect_denied super_direct_user "CREATE STAGE super_forbidden_stage URL = 's3://bucket' CONNECTION = (CONNECTION_NAME = 'super_private_conn')" AccessConnection
+expect_visible super_public_creator 'SHOW CONNECTIONS' super_private_conn 1
+create_stage="CREATE STAGE super_forbidden_stage URL = 's3://bucket' CONNECTION = (CONNECTION_NAME = 'super_private_conn')"
+expect_allowed super_direct_user "$create_stage"
+bendsql_connect_root_null --query='DROP STAGE super_forbidden_stage'
+
+echo '=== Only SUPER can enable Connection object checks ==='
+expect_denied super_public_creator "SET GLOBAL $connection_check = 1" Super
+expect_allowed super_direct_user "SET GLOBAL $connection_check = 1"
+expect_allowed super_direct_user 'DESC CONNECTION super_private_conn'
+expect_visible super_direct_user 'SHOW CONNECTIONS' super_private_conn 0
+expect_denied super_direct_user "$create_stage" AccessConnection
 
 echo '=== SUPER alone cannot create or list private sequences ==='
 expect_denied super_direct_user 'CREATE SEQUENCE super_created_seq' CreateSequence
@@ -127,7 +144,15 @@ expect_allowed super_public_creator 'SELECT nextval(super_private_seq) FROM numb
 expect_denied super_public_creator 'DESC SEQUENCE super_private_seq' AccessSequence
 expect_visible super_public_creator 'SHOW SEQUENCES' super_private_seq 0
 
-echo '=== Only direct SUPER or SUPER on the current role can change the global switch ==='
+echo '=== Stage and UDF checks are on by default; SUPER can restore legacy behavior ==='
+expect_denied super_public_creator 'SELECT super_private_udf(1)' Usage
+expect_denied super_public_creator 'LIST @super_private_stage' Read
+expect_denied super_public_creator "SET GLOBAL $rbac_check = 0" Super
+expect_allowed super_direct_user "SET GLOBAL $rbac_check = 0"
+expect_allowed super_public_creator 'SELECT super_private_udf(1)'
+expect_allowed super_public_creator 'LIST @super_private_stage'
+
+echo '=== Only direct SUPER or SUPER on the current role can change the global switches ==='
 bendsql_connect_root_null --query="
 CREATE ROLE super_switch_role;
 GRANT SUPER ON *.* TO ROLE super_switch_role;
@@ -138,11 +163,20 @@ expect_allowed super_direct_user "SET GLOBAL $sequence_check = 1"
 expect_denied super_public_creator "SET GLOBAL $sequence_check = 0" Super
 expect_denied super_public_creator "UNSET GLOBAL $sequence_check" Super
 expect_denied super_public_creator 'INSERT INTO super_seq_defaults (payload) VALUES (3)' 'ACCESS SEQUENCE'
-output=$(request super_public_creator 'SELECT nextval(super_private_seq)' "{\"settings\":{\"$sequence_check\":\"0\"}}")
-jq -e '.error.message | contains("Variable scope mismatch")' <<<"$output" >/dev/null || {
-	printf '%s\n' "$output"
-	exit 1
-}
-echo 'session override rejected'
-expect_allowed super_public_creator "UNSET GLOBAL $sequence_check" '{"role":"super_switch_role"}'
+expect_denied super_public_creator "SET GLOBAL $connection_check = 0" Super
+expect_denied super_public_creator "UNSET GLOBAL $connection_check" Super
+expect_denied super_public_creator "SET GLOBAL $rbac_check = 1" Super
+expect_denied super_public_creator "UNSET GLOBAL $rbac_check" Super
+for setting in "$sequence_check" "$connection_check" "$rbac_check"; do
+	output=$(request super_public_creator 'SELECT 1' "{\"settings\":{\"$setting\":\"0\"}}")
+	jq -e '.error.message | contains("Variable scope mismatch")' <<<"$output" >/dev/null || {
+		printf '%s\n' "$output"
+		exit 1
+	}
+	echo 'session override rejected'
+	expect_allowed super_public_creator "UNSET GLOBAL $setting" '{"role":"super_switch_role"}'
+done
+expect_denied super_public_creator 'SELECT super_private_udf(1)' Usage
+expect_denied super_public_creator 'LIST @super_private_stage' Read
+expect_allowed super_direct_user "$create_stage"
 expect_allowed super_public_creator 'INSERT INTO super_seq_defaults (payload) VALUES (4)'

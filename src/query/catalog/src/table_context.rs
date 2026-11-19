@@ -47,7 +47,6 @@ mod table;
 mod table_access;
 mod table_management;
 
-pub use authorization::NamedObjectKind;
 pub use authorization::TableContextAuthorization;
 pub use cache_policy::TableContextCachePolicy;
 pub use databend_common_component::BroadcastChannel;
@@ -214,6 +213,17 @@ pub trait TableContext:
     fn result_cache_state(&self) -> &ResultCacheState;
 
     fn written_segment_locations(&self) -> &SegmentLocationsState;
+
+    /// The internal history stage must not bypass authorization in compatibility mode.
+    fn should_check_stage_privilege(&self, stage_name: &str) -> Result<bool> {
+        Ok(self.get_settings().get_enable_experimental_rbac_check()?
+            || stage_name.eq_ignore_ascii_case(
+                &databend_common_config::GlobalConfig::instance()
+                    .log
+                    .history
+                    .stage_name,
+            ))
+    }
 
     /// The upgrade setting applies only to using a sequence in an expression.
     /// Sequence management and visibility always require authorization.

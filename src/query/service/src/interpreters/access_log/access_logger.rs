@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourceInfo;
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::plans::CopyIntoLocationPlan;
@@ -53,16 +52,13 @@ impl AccessLogger {
         }
     }
 
-    pub fn log_named_access(ctx: &QueryContext, kind: NamedObjectKind, name: &str) {
+    pub fn log_named_access(ctx: &QueryContext, object_domain: ObjectDomain, name: &str) {
         let mut logger = Self::create(ctx);
         logger
             .entry
             .direct_objects_accessed
             .push(DirectAccessObject {
-                object_domain: match kind {
-                    NamedObjectKind::Connection => ObjectDomain::Connection,
-                    NamedObjectKind::Sequence => ObjectDomain::Sequence,
-                },
+                object_domain,
                 object_name: name.to_owned(),
                 role_name: ctx.audit_role_name(),
             });

@@ -19,8 +19,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -30,6 +28,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -65,11 +64,10 @@ impl Interpreter for ShowConnectionsInterpreter {
 
             formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-            if !self
+            if self
                 .ctx
-                .get_current_session()
-                .has_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
-                .await?
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
             {
                 let visibility_checker = self
                     .ctx

@@ -39,6 +39,7 @@ table_id() {
 
 cleanup() {
 	bendsql_connect_root_null --query="
+UNSET GLOBAL enable_experimental_connection_privilege_check;
 DROP DATABASE IF EXISTS if_not_exists_db;
 DROP CONNECTION IF EXISTS if_not_exists_conn;
 DROP STAGE IF EXISTS if_not_exists_stage;
@@ -54,6 +55,7 @@ DROP ROLE IF EXISTS if_not_exists_creator_role;
 cleanup
 trap cleanup EXIT
 bendsql_connect_root_null --query="
+SET GLOBAL enable_experimental_connection_privilege_check = 1;
 CREATE DATABASE if_not_exists_db;
 CREATE ROLE if_not_exists_owner_role;
 CREATE ROLE if_not_exists_creator_role;

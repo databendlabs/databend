@@ -30,6 +30,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -73,13 +74,17 @@ impl Interpreter for CreateConnectionInterpreter {
             // connections, in particular the public role.
             let owner = if self
                 .ctx
-                .get_current_session()
-                .has_privilege(
-                    &GrantObject::Global,
-                    UserPrivilegeType::CreateConnection,
-                    true,
-                )
-                .await?
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
+                && self
+                    .ctx
+                    .get_current_session()
+                    .has_privilege(
+                        &GrantObject::Global,
+                        UserPrivilegeType::CreateConnection,
+                        true,
+                    )
+                    .await?
             {
                 self.ctx.get_current_role().map(|role| role.name)
             } else {

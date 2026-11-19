@@ -48,7 +48,6 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
@@ -77,6 +76,7 @@ use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
+use crate::interpreters::access_log::ObjectDomain;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
@@ -130,7 +130,7 @@ pub struct QueryContextShared {
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     query_lineage: Arc<RwLock<Option<QueryLineage>>>,
     pending_lineage_logs: Arc<RwLock<Vec<String>>>,
-    pub(super) audited_named_objects: Mutex<HashMap<NamedObjectKind, HashSet<String>>>,
+    pub(super) audited_named_objects: Mutex<HashMap<ObjectDomain, HashSet<String>>>,
     /// The coordinator's role for audit attribution only, never for authorization.
     pub(super) remote_audit_role: OnceLock<Option<String>>,
     aborting: Arc<AtomicBool>,

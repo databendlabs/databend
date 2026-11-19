@@ -10,12 +10,15 @@
 
 With `access_history` enabled, successful named Connection resolution and Sequence
 value allocation are logged in `direct_objects_accessed`, including the user and
-current role. `DEFAULT nextval(...)` is included only when a value is allocated.
+current role. Successful access is recorded in both compatibility and strict
+privilege modes. `DEFAULT nextval(...)` is included only when a value is allocated.
 Named `DESC` and successful `DROP` operations are also recorded. The log stores
 object names, not storage credentials or generated values. It records the access
 itself, not the final status of the statement; use `query_id` to correlate with
 `system_history.query_history`.
 
+Before enabling the global privilege checks, collect representative workload
+history and compare these object/user/role combinations with existing grants.
 The current role is attribution, not proof of which grant authorized the access.
 Using a stage or table whose storage parameters were already resolved does not
 imply a new Connection lookup. Reading a share as a consumer likewise does not

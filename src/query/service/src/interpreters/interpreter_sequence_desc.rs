@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -61,8 +60,7 @@ impl Interpreter for DescSequenceInterpreter {
             let catalog = self.ctx.get_default_catalog()?;
             // Already check seq privilege before interpreter
             let reply = catalog.get_sequence(req, &None).await?;
-            self.ctx
-                .record_object_access(NamedObjectKind::Sequence, self.plan.ident.name());
+            self.ctx.record_sequence_access(self.plan.ident.name());
 
             let name = vec![self.plan.ident.name().to_string()];
             let interval = vec![reply.meta.step];

@@ -25,6 +25,8 @@ run_sql() {
 
 cleanup() {
   for sql in \
+    'UNSET GLOBAL enable_experimental_connection_privilege_check' \
+    'UNSET GLOBAL enable_experimental_sequence_privilege_check' \
     'DROP STAGE IF EXISTS history_access_stage' \
     'DROP TABLE IF EXISTS default.history_access_table' \
     'DROP SEQUENCE IF EXISTS history_access_seq' \
@@ -51,6 +53,9 @@ for sql in \
 done
 
 create_stage="CREATE STAGE history_access_stage URL = 's3://history-access-test' CONNECTION = (CONNECTION_NAME = 'history_access_conn')"
+legacy_connection_id=$(run_sql "$administrator" "$create_stage" | jq -er '.id')
+run_sql "$administrator" 'DROP STAGE history_access_stage' >/dev/null
+run_sql "$administrator" 'SET GLOBAL enable_experimental_connection_privilege_check = 1' >/dev/null
 denied=$(request "$writer" "$create_stage")
 denied_id=$(jq -er 'if .state == "Failed" and (.error.message | contains("AccessConnection")) then .id else error(tostring) end' <<<"$denied")
 grant_id=$(run_sql "$administrator" 'GRANT ACCESS CONNECTION ON CONNECTION history_access_conn TO ROLE history_access_role' | jq -er '.id')
@@ -65,6 +70,9 @@ values_id=$(run_sql "$writer" \
 select_id=$(run_sql "$writer" 'SELECT nextval(history_access_seq) FROM numbers(4)' | jq -er '.id')
 explicit_id=$(run_sql "$writer" 'INSERT INTO default.history_access_table VALUES (1234, 4)' | jq -er '.id')
 explain_id=$(run_sql "$writer" 'EXPLAIN SELECT nextval(history_access_seq)' | jq -er '.id')
+run_sql "$administrator" 'SET GLOBAL enable_experimental_sequence_privilege_check = 1' >/dev/null
+run_sql "$administrator" 'GRANT ACCESS SEQUENCE ON SEQUENCE history_access_seq TO ROLE history_access_role' >/dev/null
+strict_seq_id=$(run_sql "$writer" 'INSERT INTO default.history_access_table (payload) VALUES (5)' | jq -er '.id')
 # Exercise the no-op path before the last positive event, so polling does not
 # finish before those earlier statements' access events have been ingested.
 noop_id=$(run_sql "$administrator" 'DROP CONNECTION IF EXISTS history_access_missing_conn' | jq -er '.id')
@@ -76,21 +84,21 @@ drop_conn_id=$(run_sql "$administrator" 'DROP CONNECTION history_access_conn' | 
 sql="SELECT h.query_id, h.user_name, a.value['object_domain']::STRING,
        a.value['object_name']::STRING, a.value['role_name']::STRING
 FROM system_history.access_history AS h, LATERAL FLATTEN(input => h.direct_objects_accessed) AS a
-WHERE h.query_id IN ('$connection_id', '$conn_desc_id', '$tag_id', '$tag_read_id', '$desc_id', '$default_id', '$values_id',
-  '$select_id', '$explicit_id', '$explain_id', '$denied_id', '$grant_id', '$noop_id', '$missing_db_id', '$drop_seq_id', '$drop_conn_id')"
+WHERE h.query_id IN ('$legacy_connection_id', '$connection_id', '$conn_desc_id', '$tag_id', '$tag_read_id', '$desc_id', '$default_id', '$values_id',
+  '$select_id', '$strict_seq_id', '$explicit_id', '$explain_id', '$denied_id', '$grant_id', '$noop_id', '$missing_db_id', '$drop_seq_id', '$drop_conn_id')"
 for _ in {1..30}; do
   response=$(request "$administrator" "$sql")
-  if jq -e --arg conn "$connection_id" --arg conn_desc "$conn_desc_id" --arg tag "$tag_id" --arg tag_read "$tag_read_id" \
+  if jq -e --arg legacy_conn "$legacy_connection_id" --arg conn "$connection_id" --arg conn_desc "$conn_desc_id" --arg tag "$tag_id" --arg tag_read "$tag_read_id" \
     --arg desc "$desc_id" --arg default "$default_id" --arg values "$values_id" \
-    --arg select "$select_id" --arg drop_seq "$drop_seq_id" --arg drop_conn "$drop_conn_id" '
+    --arg select "$select_id" --arg strict_seq "$strict_seq_id" --arg drop_seq "$drop_seq_id" --arg drop_conn "$drop_conn_id" '
       def conn_as_writer($id): [$id, "history_access_writer", "Connection", "history_access_conn", "history_access_role"];
       def conn_as_admin($id): [$id, "root", "Connection", "history_access_conn", "account_admin"];
       def seq_as_writer($id): [$id, "history_access_writer", "Sequence", "history_access_seq", "history_access_role"];
       def seq_as_admin($id): [$id, "root", "Sequence", "history_access_seq", "account_admin"];
       .state == "Succeeded" and .error == null and
       ([.data[] | select(.[0] == $values)] == [seq_as_writer($values)]) and
-      ((.data | unique) == ([conn_as_admin($conn), conn_as_writer($conn_desc), conn_as_admin($tag), conn_as_writer($tag_read),
-        seq_as_admin($desc), seq_as_writer($default), seq_as_writer($values), seq_as_writer($select),
+      ((.data | unique) == ([conn_as_admin($legacy_conn), conn_as_admin($conn), conn_as_writer($conn_desc), conn_as_admin($tag), conn_as_writer($tag_read),
+        seq_as_admin($desc), seq_as_writer($default), seq_as_writer($values), seq_as_writer($select), seq_as_writer($strict_seq),
         seq_as_admin($drop_seq), conn_as_admin($drop_conn)] | sort))' <<<"$response" >/dev/null; then
     echo 'Named object access history checks passed'
     exit 0

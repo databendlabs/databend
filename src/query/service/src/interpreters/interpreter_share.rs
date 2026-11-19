@@ -15,7 +15,6 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -100,8 +99,7 @@ impl Interpreter for CreateShareInterpreter {
                 let connection = UserApiProvider::instance()
                     .get_connection(&self.plan.tenant, connection)
                     .await?;
-                self.ctx
-                    .record_object_access(NamedObjectKind::Connection, &connection.name);
+                self.ctx.record_connection_access(&connection.name);
             }
             service
                 .create_share(
@@ -171,8 +169,7 @@ impl AlterShareInterpreter {
         let connection_info = UserApiProvider::instance()
             .get_connection(&self.plan.tenant, connection)
             .await?;
-        self.ctx
-            .record_object_access(NamedObjectKind::Connection, &connection_info.name);
+        self.ctx.record_connection_access(&connection_info.name);
         let table_ids = service
             .get_granted_table_ids(&self.plan.tenant, &self.plan.name)
             .await?;

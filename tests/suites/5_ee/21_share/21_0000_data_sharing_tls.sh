@@ -7,6 +7,10 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TLS_SHARE_USER_CONNECT="bendsql_connect_user tls_share_user 123 -A --quote-style=never"
 
+# This suite asserts object grants on provider Connections.
+bendsql_connect_root_null --query='SET GLOBAL enable_experimental_connection_privilege_check = 1'
+trap 'bendsql_connect_root_null --query="UNSET GLOBAL enable_experimental_connection_privilege_check"' EXIT
+
 # Match the provider storage: EE CI uses S3/MinIO, while local runs can use fs.
 share_connection_options="storage_type = '${STORAGE_TYPE:-fs}'"
 if [[ "${STORAGE_TYPE:-fs}" == s3 ]]; then

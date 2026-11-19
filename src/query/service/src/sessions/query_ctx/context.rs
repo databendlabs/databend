@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table_context::NamedObjectKind;
-
 use super::*;
 use crate::interpreters::access_log::AccessLogger;
+use crate::interpreters::access_log::ObjectDomain;
 
 impl QueryContext {
     pub(crate) fn set_remote_audit_role(&self, role: Option<String>) {
@@ -27,6 +26,22 @@ impl QueryContext {
             Some(role) => role.clone(),
             None => self.get_current_role().map(|role| role.name),
         }
+    }
+
+    fn record_named_access(&self, domain: ObjectDomain, name: &str) {
+        if !log::log_enabled!(target: "databend::log::access", log::Level::Info) {
+            return;
+        }
+        {
+            let mut audited = self.shared.audited_named_objects.lock();
+            let names = audited.entry(domain).or_default();
+            if names.contains(name) {
+                return;
+            }
+            names.insert(name.to_owned());
+        }
+        // Emit on the node that performed the access, including worker-side nextval.
+        AccessLogger::log_named_access(self, domain, name);
     }
 }
 
@@ -79,20 +94,12 @@ impl TableContextAuthorization for QueryContext {
         self.shared.get_secondary_roles()
     }
 
-    fn record_object_access(&self, kind: NamedObjectKind, name: &str) {
-        if !log::log_enabled!(target: "databend::log::access", log::Level::Info) {
-            return;
-        }
-        {
-            let mut audited = self.shared.audited_named_objects.lock();
-            let names = audited.entry(kind).or_default();
-            if names.contains(name) {
-                return;
-            }
-            names.insert(name.to_owned());
-        }
-        // Emit on the node that performed the access, including worker-side nextval.
-        AccessLogger::log_named_access(self, kind, name);
+    fn record_connection_access(&self, name: &str) {
+        self.record_named_access(ObjectDomain::Connection, name);
+    }
+
+    fn record_sequence_access(&self, name: &str) {
+        self.record_named_access(ObjectDomain::Sequence, name);
     }
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {

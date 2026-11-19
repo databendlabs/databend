@@ -676,6 +676,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_row_access_policy")? != 0)
     }
 
+    pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64(crate::ENABLE_EXPERIMENTAL_RBAC_CHECK)? != 0)
+    }
+
+    pub fn get_enable_experimental_connection_privilege_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64(crate::ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK)? != 0)
+    }
+
     pub fn get_enable_experimental_sequence_privilege_check(&self) -> Result<bool> {
         Ok(self.try_get_u64(crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK)? != 0)
     }

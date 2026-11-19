@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -80,8 +79,7 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
                         .await
                 })?;
                 if let AsyncFunctionArgument::SequenceFunction(name) = &async_func.func_arg {
-                    self.ctx
-                        .record_object_access(NamedObjectKind::Sequence, name);
+                    self.ctx.record_sequence_access(name);
                 }
 
                 *expr = ScalarExpr::ConstantExpr(ConstantExpr {

@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::database::Database;
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -118,8 +117,7 @@ impl Interpreter for GrantShareInterpreter {
                             storage_params,
                         )
                         .await?;
-                    self.ctx
-                        .record_object_access(NamedObjectKind::Connection, &connection);
+                    self.ctx.record_connection_access(&connection);
                     manager
                         .grant_table(&self.plan.tenant, &self.plan.share, grant, connection)
                         .await?;

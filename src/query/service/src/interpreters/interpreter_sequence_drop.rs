@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
@@ -73,8 +72,7 @@ impl Interpreter for DropSequenceInterpreter {
             if reply.success {
                 let tenant = self.plan.ident.tenant();
                 let name = self.plan.ident.name().to_string();
-                self.ctx
-                    .record_object_access(NamedObjectKind::Sequence, &name);
+                self.ctx.record_sequence_access(&name);
                 let role_api = UserApiProvider::instance().role_api(tenant);
                 role_api
                     .revoke_ownership(&OwnershipObject::Sequence { name })

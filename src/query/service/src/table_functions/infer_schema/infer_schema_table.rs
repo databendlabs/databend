@@ -186,17 +186,19 @@ impl Table for InferSchemaTable {
         let (stage_info, path) = stage_resolver
             .resolve_data_file_location(&file_location, StagePathAccess::Read, file_format)
             .await?;
-        let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-        if !(stage_info.is_temporary
-            || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-            || stage_info.stage_type == StageType::User
-                && stage_info.stage_name == ctx.get_current_user()?.name)
-        {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied: privilege READ is required on stage {} for user {}",
-                stage_info.stage_name.clone(),
-                ctx.get_current_user()?.identity().display(),
-            )));
+        if ctx.should_check_stage_privilege(&stage_info.stage_name)? {
+            let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+            if !(stage_info.is_temporary
+                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                || stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == ctx.get_current_user()?.name)
+            {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege READ is required on stage {} for user {}",
+                    stage_info.stage_name.clone(),
+                    ctx.get_current_user()?.identity().display(),
+                )));
+            }
         }
         let files_info = StageFilesInfo {
             path: path.clone(),
