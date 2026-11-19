@@ -199,7 +199,7 @@ impl LibraryManager {
                 }
             };
 
-            if !only_address {
+            if !only_address && let Some(adjusted_addr) = addr.checked_sub(1) {
                 let dwarf = match library.elf.as_ref() {
                     None => &None,
                     Some(elf) => match dwarf_cache.get(&library.name) {
@@ -211,24 +211,23 @@ impl LibraryManager {
                     },
                 };
 
-                if let Some(dwarf) = dwarf {
-                    let adjusted_addr = (addr - 1) as u64;
-
-                    if let Ok(locations) = dwarf.find_frames(adjusted_addr) {
-                        for location in locations {
-                            f(ResolvedStackFrame {
-                                virtual_address: 0,
-                                physical_address: addr,
-                                symbol: location.symbol.unwrap_or("<unknown>".to_string()),
-                                inlined: location.is_inlined,
-                                file: location.file,
-                                line: location.line,
-                                column: location.column,
-                            })?;
-                        }
-
-                        continue;
+                if let Some(dwarf) = dwarf
+                    && let Ok(locations) = dwarf.find_frames(adjusted_addr as u64)
+                    && !locations.is_empty()
+                {
+                    for location in locations {
+                        f(ResolvedStackFrame {
+                            virtual_address: 0,
+                            physical_address: addr,
+                            symbol: location.symbol.unwrap_or("<unknown>".to_string()),
+                            inlined: location.is_inlined,
+                            file: location.file,
+                            line: location.line,
+                            column: location.column,
+                        })?;
                     }
+
+                    continue;
                 }
             }
 
@@ -261,5 +260,42 @@ impl LibraryManager {
 
     pub fn instance() -> Arc<LibraryManager> {
         INSTANCE.get_or_init(LibraryManager::create).clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_frames_preserves_unresolved_addresses() {
+        let manager = LibraryManager::instance();
+        let build_id = manager.executable_build_id().unwrap();
+        let library = manager.find_library_by_build_id(&build_id).unwrap();
+        // An offset outside any compilation unit is a successful but empty lookup.
+        let uncovered = usize::MAX;
+        if let Some(dwarf) = library.elf.clone().and_then(Dwarf::create) {
+            assert!(
+                dwarf
+                    .find_frames((uncovered - 1) as u64)
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+
+        for physical_addr in [uncovered, 0] {
+            let frame = StackFrame::PhysicalAddr(PhysicalAddr {
+                physical_addr,
+                library_build_id: Some(build_id.clone()),
+            });
+            let mut resolved = Vec::new();
+            manager
+                .resolve_frames(&[frame], false, |frame| {
+                    resolved.push((frame.physical_address, frame.symbol));
+                    Ok::<_, std::convert::Infallible>(())
+                })
+                .unwrap();
+            assert_eq!(resolved, [(physical_addr, "<unknown>".to_string())]);
+        }
     }
 }
