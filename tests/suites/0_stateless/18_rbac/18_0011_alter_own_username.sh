@@ -21,7 +21,7 @@ echo "alter user 'testuser1' identified by '123' with disabled=true" | $TEST_USE
 # bendsql keeps polling this query with the old password after it changes the
 # password. The submission credential stays bound to its own query, so polling
 # succeeds instead of failing with "incorrect password".
-echo "alter user 'testuser1' identified by '123'" | $TEST_USER_CONNECT 2>&1 | grep 'incorrect password' | wc -l
+echo "alter user 'testuser1' identified by '123'" | $TEST_USER_CONNECT > /dev/null || exit $?
 
 export TEST_USER_MODIFY_CONNECT="bendsql_connect_user testuser1 123 -A"
 
