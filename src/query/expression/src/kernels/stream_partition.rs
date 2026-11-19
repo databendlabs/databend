@@ -506,7 +506,7 @@ impl BlockConcatStream {
 
     /// Appends the rows of `block`, and returns the concatenated block once
     /// it reaches a threshold.
-    pub fn push(&mut self, mut block: DataBlock) -> Option<DataBlock> {
+    pub fn push(&mut self, block: DataBlock) -> Option<DataBlock> {
         if block.is_empty() {
             return None;
         }
