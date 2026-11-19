@@ -227,5 +227,68 @@ DROP TABLE attach_stats_source;
 statement ok
 UNSET VARIABLE attach_stats_history;
 
+## A block can omit string statistics entirely when no upper bound fits the
+## configured length. A short exact bound from another block is not a table max.
+statement ok
+SET enable_block_stream_write = 0;
+
+statement ok
+CREATE TABLE attach_stats_source(s STRING STATS_TRUNCATE_LEN 4)
+'fs:///tmp/attach_string_statistics/' row_per_block=100
+    auto_compaction_imperfect_blocks_threshold=0 enable_auto_analyze=0;
+
+statement ok
+INSERT INTO attach_stats_source VALUES ('a');
+
+## F48FBFBF is the UTF-8 encoding of U+10FFFF. Four of them followed by 'z'
+## cannot be represented by an upper bound of at most four characters.
+statement ok
+INSERT INTO attach_stats_source VALUES (repeat(unhex('F48FBFBF')::STRING, 4) || 'z');
+
+statement ok
+SET VARIABLE attach_stats_sql = (
+    SELECT 'ATTACH TABLE attach_stats_target ''fs:///tmp/attach_string_statistics/'
+           || split_part(snapshot_location, '/_ss/', 1) || ''''
+    FROM fuse_snapshot('default', 'attach_stats_source')
+    ORDER BY timestamp DESC LIMIT 1
+);
+
+statement ok
+EXECUTE IMMEDIATE $attach_stats_sql;
+
+query I rowsort
+SELECT block_count FROM fuse_segment('default', 'attach_stats_source');
+----
+1
+1
+
+query B
+SELECT MAX(s) = (repeat(unhex('F48FBFBF')::STRING, 4) || 'z') FROM attach_stats_target;
+----
+1
+
+## Segment compaction can hide a missing block statistic behind a segment summary.
+statement ok
+OPTIMIZE TABLE attach_stats_source COMPACT SEGMENT;
+
+query I
+SELECT block_count FROM fuse_segment('default', 'attach_stats_source');
+----
+2
+
+query B
+SELECT MAX(s) = (repeat(unhex('F48FBFBF')::STRING, 4) || 'z') FROM attach_stats_target;
+----
+1
+
+statement ok
+DROP TABLE attach_stats_target;
+
+statement ok
+DROP TABLE attach_stats_source;
+
+statement ok
+UNSET enable_block_stream_write;
+
 statement ok
 UNSET VARIABLE attach_stats_sql;
