@@ -235,6 +235,7 @@ mod tests {
                 ..Default::default()
             }),
             None,
+            vec![],
         )
     }
 

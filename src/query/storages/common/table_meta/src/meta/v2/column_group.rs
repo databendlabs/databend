@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -53,11 +54,89 @@ pub struct ColumnGroupFileMeta {
     pub compression: Compression,
 }
 
+/// A data file holding column chunks of a block, as a reader sees it.
+#[derive(Clone, Copy, Debug)]
+pub struct BlockDataFile<'a> {
+    pub location: &'a str,
+    /// Chunks the reader may read from this file. A column absent here is not in this file.
+    pub col_metas: &'a HashMap<ColumnId, ColumnMeta>,
+    pub compression: Compression,
+}
+
+/// A leaf column chunk of a block and the file that stores it.
+#[derive(Clone, Copy, Debug)]
+pub struct ColumnChunkRef<'a> {
+    pub location: &'a str,
+    pub meta: &'a ColumnMeta,
+    pub compression: Compression,
+}
+
 impl BlockMeta {
     /// A split block stores its columns across the group files in `column_groups`.
     /// A legacy block stores all columns in the single file at `location`.
     pub fn is_split(&self) -> bool {
         !self.column_groups.is_empty()
+    }
+
+    /// The files the columns of this block are read from: the single data file of a legacy
+    /// block, or the group files of a split block.
+    pub fn data_files(&self) -> Vec<BlockDataFile<'_>> {
+        if !self.is_split() {
+            return vec![BlockDataFile {
+                location: &self.location.0,
+                col_metas: &self.col_metas,
+                compression: self.compression,
+            }];
+        }
+        self.column_groups
+            .iter()
+            .map(|group| BlockDataFile {
+                location: &group.location.0,
+                col_metas: &group.leaf_column_metas,
+                compression: group.compression,
+            })
+            .collect()
+    }
+
+    /// The chunk of a leaf column, with the file of the block that stores it.
+    pub fn column_chunk(&self, column_id: &ColumnId) -> Option<ColumnChunkRef<'_>> {
+        if !self.is_split() {
+            return self.col_metas.get(column_id).map(|meta| ColumnChunkRef {
+                location: &self.location.0,
+                meta,
+                compression: self.compression,
+            });
+        }
+        self.column_groups.iter().find_map(|group| {
+            group
+                .leaf_column_metas
+                .get(column_id)
+                .map(|meta| ColumnChunkRef {
+                    location: &group.location.0,
+                    meta,
+                    compression: group.compression,
+                })
+        })
+    }
+
+    /// The chunk of a leaf column, in whichever file of the block stores it.
+    pub fn column_meta(&self, column_id: &ColumnId) -> Option<&ColumnMeta> {
+        self.column_chunk(column_id).map(|chunk| chunk.meta)
+    }
+
+    /// The chunks of all leaf columns the block stores. Each column appears in one group, so
+    /// the chunks of a split block do not collide.
+    pub fn column_metas(&self) -> Cow<'_, HashMap<ColumnId, ColumnMeta>> {
+        if !self.is_split() {
+            return Cow::Borrowed(&self.col_metas);
+        }
+        Cow::Owned(
+            self.column_groups
+                .iter()
+                .flat_map(|group| group.leaf_column_metas.iter())
+                .map(|(id, meta)| (*id, meta.clone()))
+                .collect(),
+        )
     }
 
     /// Records that `group` now serves every column it stores.
@@ -290,6 +369,44 @@ mod tests {
         assert_eq!(block.bloom_filter_index_location, None);
         assert_eq!(block.bloom_filter_index_size, 7);
         block.check_column_groups()
+    }
+
+    #[test]
+    fn readers_find_each_column_in_its_file() -> Result<()> {
+        let legacy = legacy_block();
+        let files = legacy.data_files();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].location, "d0.parquet");
+        assert_eq!(files[0].compression, Compression::Lz4);
+        assert_eq!(files[0].col_metas, &col_metas(&[ID, A, B]));
+        assert_eq!(legacy.column_chunk(&A).unwrap().location, "d0.parquet");
+        assert!(matches!(legacy.column_metas(), Cow::Borrowed(_)));
+
+        let mut split = legacy_block();
+        split.append_column_group(group("d1", &[A]))?;
+        let files = split
+            .data_files()
+            .iter()
+            .map(|f| (f.location, f.compression))
+            .collect::<Vec<_>>();
+        assert_eq!(files, vec![
+            ("d0.parquet", Compression::Lz4),
+            ("d1.parquet", Compression::Zstd)
+        ]);
+        let chunk = split.column_chunk(&A).unwrap();
+        assert_eq!(
+            (chunk.location, chunk.compression),
+            ("d1.parquet", Compression::Zstd)
+        );
+        assert_eq!(chunk.meta, &col_metas(&[A])[&A]);
+        let chunk = split.column_chunk(&B).unwrap();
+        assert_eq!(
+            (chunk.location, chunk.compression),
+            ("d0.parquet", Compression::Lz4)
+        );
+        assert!(split.column_chunk(&42).is_none());
+        assert_eq!(split.column_metas().into_owned(), col_metas(&[ID, A, B]));
+        Ok(())
     }
 
     #[test]

@@ -100,6 +100,7 @@ use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::fuse_part::PartColumnGroup;
 use crate::io::BloomIndexRebuilder;
 use crate::io::FuseCaches;
 use crate::pruning::BlockPruner;
@@ -1387,7 +1388,7 @@ impl FuseTable {
         for column in columns {
             for column_id in &column.leaf_column_ids {
                 // ignore all deleted field
-                if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
+                if let Some(col_metas) = block_meta.column_meta(column_id) {
                     let (_, len) = col_metas.offset_length();
                     statistics.read_bytes += len as usize;
                 }
@@ -1423,7 +1424,7 @@ impl FuseTable {
                 {
                     continue;
                 }
-                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                if let Some(col_metas) = block_meta.column_meta(source_column_id) {
                     let (_, len) = col_metas.offset_length();
                     statistics.read_bytes += len as usize;
                 }
@@ -1431,7 +1432,7 @@ impl FuseTable {
         } else {
             // If virtual column meta not exist, all source columns are needed.
             for source_column_id in &virtual_column.source_column_ids {
-                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                if let Some(col_metas) = block_meta.column_meta(source_column_id) {
                     let (_, len) = col_metas.offset_length();
                     statistics.read_bytes += len as usize;
                 }
@@ -1665,22 +1666,21 @@ impl FuseTable {
         top_k: &Option<(TopK, Scalar)>,
         meta: &BlockMeta,
     ) -> PartInfoPtr {
-        let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
+        let block_col_metas = meta.column_metas();
+        let mut columns_meta = HashMap::with_capacity(block_col_metas.len());
         let mut columns_stats = HashMap::with_capacity(meta.col_stats.len());
         let mut spatial_stats = HashMap::new();
+        let is_deleted = |column_id: &ColumnId| {
+            schema.is_some_and(|schema| schema.is_column_deleted(*column_id))
+        };
 
-        for column_id in meta.col_metas.keys() {
+        for (column_id, column_meta) in block_col_metas.iter() {
             // ignore all deleted field
-            if let Some(schema) = schema {
-                if schema.is_column_deleted(*column_id) {
-                    continue;
-                }
+            if is_deleted(column_id) {
+                continue;
             }
 
-            // ignore column this block dose not exist
-            if let Some(meta) = meta.col_metas.get(column_id) {
-                columns_meta.insert(*column_id, meta.clone());
-            }
+            columns_meta.insert(*column_id, column_meta.clone());
 
             if let Some(stat) = meta.col_stats.get(column_id) {
                 columns_stats.insert(*column_id, stat.clone());
@@ -1716,6 +1716,7 @@ impl FuseTable {
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
+            PartColumnGroup::from_block(meta, |id| !is_deleted(id)),
         )
     }
 
@@ -1734,7 +1735,7 @@ impl FuseTable {
         for column in &columns {
             for column_id in &column.leaf_column_ids {
                 // ignore column this block dose not exist
-                if let Some(column_meta) = meta.col_metas.get(column_id) {
+                if let Some(column_meta) = meta.column_meta(column_id) {
                     columns_meta.insert(*column_id, column_meta.clone());
                 }
                 if let Some(column_stat) = meta.col_stats.get(column_id) {
@@ -1763,6 +1764,7 @@ impl FuseTable {
         // TODO
         // row_count should be a hint value of  LIMIT,
         // not the count the rows in this partition
+        let column_groups = PartColumnGroup::from_block(meta, |id| columns_meta.contains_key(id));
         FuseBlockPartInfo::create(
             location,
             meta.bloom_filter_index_location.clone(),
@@ -1774,6 +1776,7 @@ impl FuseTable {
             sort_min_max,
             block_meta_index.to_owned(),
             create_on,
+            column_groups,
         )
     }
 }

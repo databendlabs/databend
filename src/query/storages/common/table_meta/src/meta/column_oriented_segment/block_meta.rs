@@ -29,6 +29,10 @@ pub trait AbstractBlockMeta: Send + Sync + 'static + Sized {
     fn row_count(&self) -> u64;
     fn location_path(&self) -> String;
     fn col_metas(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, ColumnMeta>;
+    /// The path of the file that stores a leaf column of the block.
+    fn column_location_path(&self, _col_id: &ColumnId) -> String {
+        self.location_path()
+    }
     fn virtual_block_meta(&self) -> Option<VirtualBlockMeta>;
 }
 
@@ -47,7 +51,7 @@ impl AbstractBlockMeta for BlockMeta {
     fn col_metas(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, ColumnMeta> {
         let mut col_metas = HashMap::new();
         for col_id in col_ids {
-            if let Some(col_meta) = self.col_metas.get(col_id) {
+            if let Some(col_meta) = self.column_meta(col_id) {
                 col_metas.insert(*col_id, col_meta.clone());
             }
         }
@@ -56,6 +60,11 @@ impl AbstractBlockMeta for BlockMeta {
 
     fn location_path(&self) -> String {
         self.location.0.to_string()
+    }
+
+    fn column_location_path(&self, col_id: &ColumnId) -> String {
+        self.column_chunk(col_id)
+            .map_or_else(|| self.location_path(), |chunk| chunk.location.to_string())
     }
 
     fn virtual_block_meta(&self) -> Option<VirtualBlockMeta> {
