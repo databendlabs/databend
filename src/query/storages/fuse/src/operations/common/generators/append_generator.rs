@@ -62,22 +62,19 @@ impl AppendGenerator {
         self.overwrite
     }
 
-    fn check_fill_default(&self, summary: &Statistics) -> Result<bool> {
-        let mut fill_default_values = false;
-        // check if need to fill default value in statistics
-        for column_id in self
-            .conflict_resolve_ctx()?
-            .0
-            .merged_statistics
-            .col_stats
-            .keys()
-        {
-            if !summary.col_stats.contains_key(column_id) {
-                fill_default_values = true;
-                break;
-            }
+    fn check_fill_default(&self, schema: &TableSchema, summary: &Statistics) -> Result<bool> {
+        let incoming = &self.conflict_resolve_ctx()?.0.merged_statistics.col_stats;
+        if incoming.keys().all(|id| summary.col_stats.contains_key(id)) {
+            return Ok(false);
         }
-        Ok(fill_default_values)
+
+        // A stored string may have no representable truncated upper bound.
+        // Missing stats alone do not prove it was a default value.
+        Ok(schema.leaf_fields().iter().any(|field| {
+            !matches!(field.data_type().remove_nullable(), TableDataType::String)
+                && incoming.contains_key(&field.column_id())
+                && !summary.col_stats.contains_key(&field.column_id())
+        }))
     }
 }
 
@@ -119,7 +116,7 @@ impl SnapshotGenerator for AppendGenerator {
         previous: &Option<Arc<TableSnapshot>>,
     ) -> Result<()> {
         if let Some(snapshot) = previous {
-            if !self.overwrite && self.check_fill_default(&snapshot.summary)? {
+            if !self.overwrite && self.check_fill_default(schema, &snapshot.summary)? {
                 let mut default_values = Vec::with_capacity(schema.num_fields());
                 for field in schema.fields() {
                     default_values
@@ -158,12 +155,14 @@ impl SnapshotGenerator for AppendGenerator {
                 let column_data_types: HashMap<ColumnId, &TableDataType> =
                     HashMap::from_iter(leaf_fields.iter().map(|f| (f.column_id, &f.data_type)));
 
-                if self.check_fill_default(&summary)? {
+                if self.check_fill_default(&table_schema, &summary)? {
                     self.leaf_default_values
                         .iter()
                         .for_each(|(col_id, default_value)| {
                             if let Some(data_type) = column_data_types.get(col_id) {
-                                if !summary.col_stats.contains_key(col_id) {
+                                if !summary.col_stats.contains_key(col_id)
+                                    && !matches!(data_type.remove_nullable(), TableDataType::String)
+                                {
                                     assert!(
                                         default_value
                                             .as_ref()

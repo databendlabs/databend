@@ -1,0 +1,85 @@
+# run-with-settings: enable_block_stream_write=1
+# run-with-settings: enable_block_stream_write=0
+
+# Issue #21130: no four-scalar upper bound exists for <U+10FFFF> repeated
+# four times and followed by a suffix. This is valid data, not a write error.
+statement ok
+SET max_threads = 1;
+
+statement ok
+SET enable_compact_after_write = 0;
+
+statement ok
+CREATE OR REPLACE TABLE t_string_stats_unbounded (
+    id INT, s STRING STATS_TRUNCATE_LEN 4
+) STORAGE_FORMAT = 'parquet' ROW_PER_BLOCK = 1 BLOCK_PER_SEGMENT = 2;
+
+statement ok
+INSERT INTO t_string_stats_unbounded
+SELECT number, if(number = 0, 'abc', repeat(char(0x10FFFF), 4) || 'z')
+FROM numbers(2);
+
+# The two blocks share a segment, so its string range must be omitted even
+# though the first block has a range. The filter must not prune the segment.
+query III
+SELECT count(*), count(DISTINCT _block_name), count(DISTINCT _segment_name)
+FROM t_string_stats_unbounded;
+----
+2 2 1
+
+query IT
+SELECT id, to_hex(s) FROM t_string_stats_unbounded WHERE s > 'abc';
+----
+1 f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+query TI
+SELECT column_name, count(*)
+FROM fuse_block_statistics('default', 't_string_stats_unbounded')
+GROUP BY column_name ORDER BY column_name;
+----
+id 2
+s 1
+
+# Add a segment with exact string bounds. Neither the snapshot summary nor
+# a statistics-only MAX may treat this second segment as covering both.
+statement ok
+INSERT INTO t_string_stats_unbounded VALUES (2, 'xyz');
+
+query T
+SELECT column_name FROM fuse_statistic('default', 't_string_stats_unbounded');
+----
+id
+
+query T
+SELECT to_hex(max(s)) FROM t_string_stats_unbounded;
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+statement ok
+DROP TABLE t_string_stats_unbounded;
+
+# Column-oriented segment metadata also has to accept incomplete stats.
+statement ok
+CREATE OR REPLACE TABLE t_string_stats_unbounded_column (
+    id INT, s STRING NULL STATS_TRUNCATE_LEN 4
+) STORAGE_FORMAT = 'parquet' SEGMENT_FORMAT = 'column_oriented'
+  ROW_PER_BLOCK = 1 BLOCK_PER_SEGMENT = 2;
+
+statement ok
+INSERT INTO t_string_stats_unbounded_column
+SELECT number, if(number = 0, 'abc', repeat(char(0x10FFFF), 4) || 'z')
+FROM numbers(2);
+
+query IT
+SELECT id, to_hex(s) FROM t_string_stats_unbounded_column WHERE s > 'abc';
+----
+1 f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+statement ok
+DROP TABLE t_string_stats_unbounded_column;
+
+statement ok
+UNSET enable_compact_after_write;
+
+statement ok
+UNSET max_threads;

@@ -38,6 +38,7 @@ use databend_common_functions::aggregates::eval_aggr;
 
 use super::AbstractSegment;
 use super::schema::segment_schema;
+use super::schema::stat_name;
 use super::segment::ColumnOrientedSegment;
 use crate::meta::AdditionalStatsMeta;
 use crate::meta::BlockMeta;
@@ -184,14 +185,18 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         self.compression.push(block_meta.compression.to_u8());
         self.create_on
             .push(block_meta.create_on.map(|t| t.timestamp()));
-        for (col_id, col_stat) in self.column_stats.iter_mut() {
-            let stat = &block_meta.col_stats[col_id];
+        // A column-oriented stats field covers every block in the segment.
+        self.column_stats.retain(|col_id, col_stat| {
+            let Some(stat) = block_meta.col_stats.get(col_id) else {
+                return false;
+            };
             col_stat.min.push(stat.min.as_ref());
             col_stat.max.push(stat.max.as_ref());
             col_stat.null_count.push(stat.null_count);
             col_stat.in_memory_size.push(stat.in_memory_size);
             col_stat.distinct_of_values.push(stat.distinct_of_values);
-        }
+            true
+        });
         for (col_id, col_meta) in self.column_meta.iter_mut() {
             let meta = &block_meta.col_metas[col_id].as_parquet().unwrap();
             col_meta.offset.push(meta.offset);
@@ -245,8 +250,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         let mut column_meta = this.column_meta;
         for field in this.table_schema.leaf_fields() {
             let col_id = field.column_id();
-            if supported_stat_type(&field.data_type().into()) {
-                let col_stat = column_stats.remove(&col_id).unwrap();
+            if let Some(col_stat) = column_stats.remove(&col_id) {
                 columns.push(Column::Tuple(vec![
                     col_stat.min.build(),
                     col_stat.max.build(),
@@ -254,6 +258,8 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                     UInt64Type::from_data(col_stat.in_memory_size),
                     UInt64Type::from_opt_data(col_stat.distinct_of_values),
                 ]));
+            } else if supported_stat_type(&field.data_type().into()) {
+                this.segment_schema.drop_column(&stat_name(col_id))?;
             }
 
             let col_meta = column_meta.remove(&col_id).unwrap();
@@ -266,7 +272,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         let segment = ColumnOrientedSegment {
             block_metas: DataBlock::new_from_columns(columns),
             summary,
-            segment_schema: this.segment_schema.clone(),
+            segment_schema: this.segment_schema,
         };
         Ok(segment)
     }

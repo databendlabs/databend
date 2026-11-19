@@ -51,17 +51,12 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
         )
     });
 
-    // Reduce the `Vec<&ColumnStatistics>` into ColumnStatistics`, i.e.:
-    // from : `HashMap<ColumnId, Vec<&ColumnStatistics>>`
-    // to   : `type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>`
-    let len = col_to_stats_lit.len();
+    // A range built from only some inputs may exclude rows in inputs without statistics.
     col_to_stats_lit
-        .iter()
-        .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
-            acc.insert(*id, col_stats);
-            acc
-        })
+        .into_iter()
+        .filter(|(_, stats)| stats.len() == stats_of_columns.len())
+        .map(|(id, stats)| (id, reduce_column_statistics(&stats)))
+        .collect()
 }
 
 pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
@@ -309,7 +304,9 @@ pub fn merge_statistics_mut(
         l.cluster_stats = r.cluster_stats.clone();
         l.partition_stats = r.partition_stats.clone();
     } else {
-        l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        if r.row_count != 0 {
+            l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        }
         l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
         l.cluster_stats =
             reduce_cluster_statistics(&[&l.cluster_stats, &r.cluster_stats], cluster_key_info);
