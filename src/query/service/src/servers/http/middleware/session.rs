@@ -19,11 +19,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::headers::HEADER_AUTH_METHOD;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_QUERY_TOKEN;
 use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
@@ -39,6 +41,8 @@ use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::NodeInfo;
 use fastrace::func_name;
+use headers::Authorization;
+use headers::HeaderMapExt;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
@@ -78,6 +82,7 @@ use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::SessionClaim;
@@ -209,6 +214,35 @@ fn get_credential(
             AUTHORIZATION
         );
         return Err(ErrorCode::AuthenticateFailure(msg));
+    }
+    let auth_methods: Vec<_> = req.headers().get_all(HEADER_AUTH_METHOD).iter().collect();
+    if auth_methods.len() > 1 {
+        return Err(ErrorCode::AuthenticateFailure(
+            "Authentication error: multiple authentication methods provided",
+        ));
+    }
+    if auth_methods.first().is_some_and(|v| {
+        v.to_str()
+            .is_ok_and(|method| method.eq_ignore_ascii_case("query-token"))
+    }) {
+        if !matches!(endpoint_kind, EndpointKind::PollQuery) {
+            return Err(ErrorCode::AuthenticateFailure(
+                "Query tokens only authorize query state/page/final/kill requests",
+            ));
+        }
+        let query_id = req.raw_path_param("id").ok_or_else(|| {
+            ErrorCode::AuthenticateFailure("Missing query ID for query authentication")
+        })?;
+        let bearer = req
+            .headers()
+            .typed_get::<Authorization<Bearer>>()
+            .ok_or_else(|| {
+                ErrorCode::AuthenticateFailure("Query authentication requires a Bearer token")
+            })?;
+        return Ok(Credential::QueryToken {
+            query_id: query_id.to_string(),
+            token: bearer.token().to_string(),
+        });
     }
     let client_ip = get_client_ip(req);
     let is_keypair = req
@@ -384,20 +418,66 @@ impl<E> HTTPSessionEndpoint<E> {
 
         let mut session = session_manager.create_session(SessionType::Dummy).await?;
 
-        if let Some(tenant_id) = req.headers().get(HEADER_TENANT) {
-            let tenant_id = tenant_id.to_str().unwrap().to_string();
-            let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
-            session.set_current_tenant(tenant)?;
+        let requested_tenant = req
+            .headers()
+            .get(HEADER_TENANT)
+            .map(|value| -> Result<Tenant> {
+                let name = value
+                    .to_str()
+                    .map_err(|_| ErrorCode::AuthenticateFailure("Invalid tenant header"))?;
+                Ok(Tenant::new_or_err(name, func_name!())?)
+            })
+            .transpose()?;
+        if let Some(tenant) = &requested_tenant {
+            session.set_current_tenant(tenant.clone())?;
         }
-        let (user_name, authed_client_session_id) = self
-            .auth_manager
-            .auth(
-                &mut session,
-                &credential,
-                self.endpoint_kind.need_user_info(),
-            )
-            .await?;
+        let (user_name, authed_client_session_id, authenticated_query) =
+            if let Credential::QueryToken { query_id, token } = &credential {
+                // Retain exactly the object whose capability was verified. A
+                // second lookup here could bind authorization to a reused ID.
+                let manager = HttpQueryManager::instance();
+                let query = manager.get_query(query_id).ok_or_else(|| {
+                    ErrorCode::UnknownQuery(format!(
+                        "Query ID {query_id} not found on node {}",
+                        manager.server_info.id
+                    ))
+                })?;
+                if !query.query_token.verify(token) {
+                    return Err(ErrorCode::AuthenticateFailure("Invalid query token"));
+                }
+                session.set_current_tenant(query.owner_tenant.clone())?;
+                (
+                    query.user_name.clone(),
+                    query.client_session_id.clone(),
+                    Some(query),
+                )
+            } else {
+                let (user_name, client_session_id) = self
+                    .auth_manager
+                    .auth(
+                        &mut session,
+                        &credential,
+                        self.endpoint_kind.need_user_info(),
+                    )
+                    .await?;
+                let query = if matches!(self.endpoint_kind, EndpointKind::PollQuery) {
+                    req.raw_path_param("id")
+                        .and_then(|id| HttpQueryManager::instance().get_query(id))
+                } else {
+                    None
+                };
+                (user_name, client_session_id, query)
+            };
         login_history.user_name = user_name.clone();
+        let authenticated_tenant = session.get_current_tenant();
+        if matches!(&credential, Credential::QueryToken { .. })
+            && GlobalConfig::instance().query.common.management_mode
+            && requested_tenant.is_some_and(|tenant| tenant != authenticated_tenant)
+        {
+            return Err(ErrorCode::AuthenticateFailure(
+                "Query token tenant mismatch",
+            ));
+        }
 
         let mut client_session = if is_worksheet {
             ClientSession::try_decode_for_worksheet(req)
@@ -432,7 +512,9 @@ impl<E> HTTPSessionEndpoint<E> {
                 //     log every request, which can be distinguished by `session_id = ''`
                 login_history.disable_write = true;
             }
-            if ClientSessionType::IDOnly != s.typ {
+            if ClientSessionType::IDOnly != s.typ
+                && !matches!(&credential, Credential::QueryToken { .. })
+            {
                 s.try_refresh_state(session.get_current_tenant(), &user_name, req.cookie())
                     .await?;
             }
@@ -459,6 +541,8 @@ impl<E> HTTPSessionEndpoint<E> {
         let version = GlobalConfig::version();
         Ok(HttpQueryContext {
             session,
+            authenticated_tenant,
+            authenticated_query,
             query_id,
             is_query_id_from_client,
             node_id,
@@ -544,6 +628,10 @@ pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
     let headers_ref = poem_resp.headers_mut();
     for (key, value) in headers.iter() {
         headers_ref.insert(key, value.to_owned());
+    }
+    // Sensitivity is an in-memory flag, not part of the forwarded HTTP headers.
+    if let Some(token) = headers_ref.get_mut(HEADER_QUERY_TOKEN) {
+        token.set_sensitive(true);
     }
     Ok(poem_resp)
 }
@@ -635,6 +723,18 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         let headers = req.headers().clone();
 
+        // Validate header encoding before forwarding; query ids may use any prefix.
+        let (query_id, is_query_id_from_client) = if let Some(v) = headers.get(HEADER_QUERY_ID) {
+            let id = v.to_str().map_err(|_| {
+                HttpErrorCode::bad_request(ErrorCode::BadArguments(
+                    "X-DATABEND-QUERY-ID must be valid UTF-8",
+                ))
+            })?;
+            (id.to_string(), true)
+        } else {
+            (Uuid::now_v7().simple().to_string(), false)
+        };
+
         let mut is_sticky_node = false;
 
         if self.endpoint_kind.may_need_sticky() {
@@ -723,15 +823,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             }
         };
 
-        let method = req.method().clone();
         let uri = req.uri().clone();
-
-        let (query_id, is_query_id_from_client) =
-            if let Some(v) = req.headers().get(HEADER_QUERY_ID) {
-                (v.to_str().unwrap().to_string(), true)
-            } else {
-                (Uuid::now_v7().simple().to_string(), false)
-            };
 
         let mut login_history = LoginHistory::new();
         login_history.handler = LoginHandler::HTTP;
@@ -751,6 +843,9 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                 Ok(ctx) => {
                     login_history.event_type = LoginEventType::LoginSuccess;
                     login_history.write_to_log();
+                    // Authorization errors retain the handler's HTTP response
+                    // semantics; they are not failed credential authentication.
+                    ctx.authorize_query()?;
                     let client_session = ctx.client_session.clone();
                     req.extensions_mut().insert(ctx);
                     self.ep.call(req).await.map(|v| {
@@ -761,36 +856,64 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         r
                     })
                 }
-                Err(err) => {
-                    login_history.event_type = LoginEventType::LoginFailed;
-                    login_history.error_message = err.to_string();
-                    login_history.write_to_log();
-                    let err = HttpErrorCode::error_code(err);
-                    if err.status() == StatusCode::UNAUTHORIZED {
-                        warn!(
-                            "Authentication failure: {method} {uri}, headers={:?}, error={}",
-                            sanitize_request_headers(&headers),
-                            err
-                        );
-                    } else {
-                        error!(
-                            "Request error: {method} {uri}, headers={:?}, error={}",
-                            sanitize_request_headers(&headers),
-                            err
-                        );
-                    }
-                    Ok(err.as_response())
-                }
+                Err(err) => Ok(auth_error_response(
+                    self.endpoint_kind,
+                    err,
+                    &mut login_history,
+                    &req,
+                    &headers,
+                )),
             }
         })
         .await
     }
 }
 
+fn auth_error_response(
+    endpoint_kind: EndpointKind,
+    err: ErrorCode,
+    login_history: &mut LoginHistory,
+    req: &Request,
+    headers: &HeaderMap,
+) -> Response {
+    if err.code() == ErrorCode::UNKNOWN_QUERY && matches!(endpoint_kind, EndpointKind::PollQuery) {
+        // Query-state loss is not an authentication failure. Keep it out of
+        // the security audit log, just like a handler-side query-not-found.
+        info!(
+            "Query state unavailable: {} {}, error={err}",
+            req.method(),
+            req.uri()
+        );
+        return HttpErrorCode::new(err, StatusCode::NOT_FOUND).as_response();
+    }
+
+    login_history.event_type = LoginEventType::LoginFailed;
+    login_history.error_message = err.to_string();
+    login_history.write_to_log();
+    let err = HttpErrorCode::error_code(err);
+    let method = req.method();
+    let uri = req.uri();
+    if err.status() == StatusCode::UNAUTHORIZED {
+        warn!(
+            "Authentication failure: {method} {uri}, headers={:?}, error={}",
+            sanitize_request_headers(headers),
+            err
+        );
+    } else {
+        error!(
+            "Request error: {method} {uri}, headers={:?}, error={}",
+            sanitize_request_headers(headers),
+            err
+        );
+    }
+    err.as_response()
+}
+
 pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
     let sensitive_headers = [
         "authorization",
         "proxy-authorization",
+        "x-databend-query-token",
         "cookie",
         "x-clickhouse-key",
         // May contain a credential-bearing SQL statement, even when the
@@ -846,11 +969,131 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
 
 #[cfg(test)]
 mod tests {
-    use poem::http::HeaderMap;
+    use std::sync::Arc;
 
+    use databend_common_base::headers::HEADER_QUERY_ID;
+    use databend_common_base::headers::HEADER_QUERY_TOKEN;
+    use databend_common_exception::ErrorCode;
+    use databend_meta_client::types::NodeInfo;
+    use poem::Request;
+    use poem::http::HeaderMap;
+    use poem::http::HeaderValue;
+    use poem::http::Method;
+    use poem::http::StatusCode;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+
+    use super::EndpointKind;
+    use super::auth_error_response;
+    use super::forward_request_with_body;
     use crate::servers::http::middleware::session::get_client_ip;
     use crate::servers::http::middleware::session::get_request_info;
     use crate::servers::http::middleware::session::sanitize_request_headers;
+    use crate::servers::login_history::LoginEventType;
+    use crate::servers::login_history::LoginHistory;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_forwarded_query_token_is_sensitive() -> anyhow::Result<()> {
+        let _fixture = TestFixture::setup().await?;
+        let server = MockServer::start().await;
+        let node = Arc::new(NodeInfo {
+            http_address: server.address().to_string(),
+            ..Default::default()
+        });
+        for with_token in [true, false] {
+            let mut template = ResponseTemplate::new(202)
+                .insert_header(HEADER_QUERY_ID, "forwarded-query")
+                .insert_header("cache-control", "no-store")
+                .set_body_string("forwarded body");
+            if with_token {
+                let mut token = HeaderValue::from_static("forwarded-query-token-secret");
+                token.set_sensitive(true);
+                template = template.insert_header(HEADER_QUERY_TOKEN, token);
+            }
+            let _mock = Mock::given(method("POST"))
+                .and(path("/v1/query"))
+                .respond_with(template)
+                .expect(1)
+                .mount_as_scoped(&server)
+                .await;
+            // Exercise the actual HTTP hop: received headers do not inherit
+            // the target node's in-memory sensitive flag.
+            let response = forward_request_with_body(
+                node.clone(),
+                "/query",
+                "submitted body",
+                Method::POST,
+                HeaderMap::new(),
+            )
+            .await?;
+            assert_eq!(response.status(), StatusCode::ACCEPTED);
+            assert_eq!(response.headers()[HEADER_QUERY_ID], "forwarded-query");
+            assert!(!response.headers()[HEADER_QUERY_ID].is_sensitive());
+            assert_eq!(response.headers()["cache-control"], "no-store");
+            if with_token {
+                let token = &response.headers()[HEADER_QUERY_TOKEN];
+                assert!(token.is_sensitive());
+                assert_eq!(token.to_str()?, "forwarded-query-token-secret");
+                assert!(
+                    !format!("{:?}", response.headers()).contains("forwarded-query-token-secret")
+                );
+            } else {
+                assert!(response.headers().get(HEADER_QUERY_TOKEN).is_none());
+            }
+            assert_eq!(response.into_body().into_string().await?, "forwarded body");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_missing_query_does_not_record_login_failure() {
+        let req = Request::builder()
+            .uri("/v1/query/missing/page/1".parse().unwrap())
+            .finish();
+        let mut history = LoginHistory::new();
+        assert!(!history.disable_write);
+        let before = serde_json::to_value(&history).unwrap();
+        let response = auth_error_response(
+            EndpointKind::PollQuery,
+            ErrorCode::UnknownQuery("Query ID missing not found on node test"),
+            &mut history,
+            &req,
+            req.headers(),
+        );
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(serde_json::to_value(&history).unwrap(), before);
+    }
+
+    #[test]
+    fn test_authentication_failure_still_records_login_failure() {
+        let req = Request::builder()
+            .uri("/v1/query/existing/page/1".parse().unwrap())
+            .finish();
+        for (kind, err, expected_status) in [
+            (
+                EndpointKind::PollQuery,
+                ErrorCode::AuthenticateFailure("Invalid query token"),
+                StatusCode::UNAUTHORIZED,
+            ),
+            (
+                EndpointKind::StartQuery,
+                ErrorCode::UnknownQuery("not a poll request"),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ),
+        ] {
+            let mut history = LoginHistory::new();
+            let message = err.to_string();
+            let response = auth_error_response(kind, err, &mut history, &req, req.headers());
+            assert_eq!(response.status(), expected_status);
+            assert!(matches!(history.event_type, LoginEventType::LoginFailed));
+            assert_eq!(history.error_message, message);
+            assert!(!history.disable_write);
+        }
+    }
 
     #[test]
     fn test_request_info_does_not_expose_credentials_or_body() {
@@ -887,12 +1130,20 @@ mod tests {
         headers.insert("authorization", "Bearer secret".parse().unwrap());
         headers.insert("cookie", "session=secret".parse().unwrap());
         headers.insert("x-clickhouse-key", "secret-key".parse().unwrap());
+        headers.insert(
+            "x-databend-query-token",
+            "secret-query-token".parse().unwrap(),
+        );
         headers.insert("x-clickhouse-user", "databend".parse().unwrap());
 
         let sanitized = sanitize_request_headers(&headers);
 
         assert_eq!(sanitized.get("authorization"), Some(&"******".to_string()));
         assert_eq!(sanitized.get("cookie"), Some(&"******".to_string()));
+        assert_eq!(
+            sanitized.get("x-databend-query-token"),
+            Some(&"******".to_string())
+        );
         assert_eq!(
             sanitized.get("x-clickhouse-key"),
             Some(&"******".to_string())

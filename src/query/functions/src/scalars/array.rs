@@ -319,15 +319,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         "range",
         |_, _, _| FunctionDomain::Full,
         |start, end, ctx| {
-            const MAX: i64 = 500000000;
-            if end - start > MAX {
+            const MAX: u64 = 500000000;
+            if start >= end {
+                return vec![].into();
+            }
+            let len = start.abs_diff(end);
+            if len > MAX {
                 // the same behavior as Clickhouse
                 ctx.set_error(
                     0,
                     format!(
                         "the allowed maximum values of range function is {}, but got {}",
-                        MAX,
-                        end - start
+                        MAX, len
                     ),
                 );
                 return vec![].into();
@@ -340,7 +343,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "range",
         |_, _, _, _| FunctionDomain::Full,
         |start, end, step, ctx| {
-            const MAX: i64 = 500000000;
+            const MAX: u64 = 500000000;
             if step == 0 {
                 ctx.set_error(
                     0,
@@ -348,7 +351,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                 );
                 return vec![].into();
             }
-            let len = ((end - start) / step).abs();
+            if (step > 0 && start >= end) || (step < 0 && start <= end) {
+                return vec![].into();
+            }
+            let len = start.abs_diff(end).div_ceil(step.unsigned_abs());
             if len > MAX {
                 // the same behavior as Clickhouse
                 ctx.set_error(
@@ -363,16 +369,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let mut vals = Vec::with_capacity(len as usize);
             let mut num = start;
-            if step > 0 {
-                while num < end {
-                    vals.push(num);
-                    num += step;
-                }
-            } else {
-                while num > end {
-                    vals.push(num);
-                    num += step;
-                }
+            while (step > 0 && num < end) || (step < 0 && num > end) {
+                vals.push(num);
+                let Some(next) = num.checked_add(step) else {
+                    break;
+                };
+                num = next;
             }
             vals.into()
         },

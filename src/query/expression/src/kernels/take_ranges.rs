@@ -14,7 +14,6 @@
 
 use core::ops::Range;
 
-use databend_common_base::vec_ext::VecExt;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
@@ -250,13 +249,11 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
     }
 
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
-        self.result = Some(Value::Column(
-            (with_opaque_mapped_type!(|T| match column {
-                OpaqueColumn::T(buffer) => {
-                    OpaqueType::<T>::upcast_column(self.take_primitive_types(buffer))
-                }
-            })),
-        ));
+        self.result = Some(Value::Column(with_opaque_mapped_type!(|T| match column {
+            OpaqueColumn::T(buffer) => {
+                OpaqueType::<T>::upcast_column(self.take_primitive_types(buffer))
+            }
+        })));
         Ok(())
     }
 }

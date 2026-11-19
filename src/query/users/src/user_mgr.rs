@@ -34,11 +34,22 @@ use databend_meta_client::types::SeqV;
 use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
 
+fn unknown_user(user: &UserIdentity) -> ErrorCode {
+    ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
+}
+
 impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
     pub async fn get_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
-        if let Some(auth_info) = self.get_configured_user(&user.username) {
+        match self.configured_user_info(&user) {
+            Some(user_info) => Ok(user_info),
+            None => Ok(self.get_meta_user(tenant, user).await?.data),
+        }
+    }
+
+    fn configured_user_info(&self, user: &UserIdentity) -> Option<UserInfo> {
+        self.get_configured_user(&user.username).map(|auth_info| {
             let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
             user_info.grants.grant_privileges(
                 &GrantObject::Global,
@@ -52,10 +63,8 @@ impl UserApiProvider {
                 .option
                 .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
             user_info.option.set_all_flag();
-            Ok(user_info)
-        } else {
-            Ok(self.get_meta_user(tenant, user).await?.data)
-        }
+            user_info
+        })
     }
 
     pub async fn get_meta_user(
@@ -68,9 +77,7 @@ impl UserApiProvider {
             .get_user(&user)
             .await
             .map_err(meta_service_error)?
-            .ok_or_else(|| {
-                ErrorCode::UnknownUser(format!("User {} does not exist.", user.display()))
-            })
+            .ok_or_else(|| unknown_user(&user))
     }
 
     // Get one user and check client ip if has network policy.
@@ -82,7 +89,57 @@ impl UserApiProvider {
         client_ip: Option<&str>,
     ) -> Result<UserInfo> {
         let user_info = self.get_user(tenant, user).await?;
+        self.check_login(tenant, user_info, client_ip).await
+    }
 
+    /// Like `get_user_with_client_ip`, for a login that writes nothing back from the user it
+    /// gets: the user comes from `get_auth_user`, and may lag a change by the watch delay.
+    #[async_backtrace::framed]
+    pub async fn get_login_user_with_client_ip(
+        &self,
+        tenant: &Tenant,
+        user: UserIdentity,
+        client_ip: Option<&str>,
+    ) -> Result<UserInfo> {
+        let user_info = self.get_auth_user(tenant, user).await?;
+        self.check_login(tenant, user_info, client_ip).await
+    }
+
+    /// The user of a request that authenticates it and writes nothing back from it: a login, or
+    /// a request with a session token. The user may come from the watched copy, see `user` in
+    /// `cache.meta_service_caches`, and lag a change by the watch delay. A user with a password
+    /// policy is read from meta-service, so that its login failures are all counted.
+    #[async_backtrace::framed]
+    pub async fn get_auth_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
+        match self.configured_user_info(&user) {
+            Some(user_info) => Ok(user_info),
+            None => self.get_auth_meta_user(tenant, user).await,
+        }
+    }
+
+    /// A user of meta-service, for `get_auth_user`: from the watched copy if the users of the
+    /// tenant are watched. A user with a password policy is read from meta-service then, so that
+    /// its login failures are all counted.
+    async fn get_auth_meta_user(&self, tenant: &Tenant, user: UserIdentity) -> Result<UserInfo> {
+        let user_info = self
+            .user_api(tenant)
+            .get_watched_user(&user)
+            .await
+            .map_err(meta_service_error)?
+            .ok_or_else(|| unknown_user(&user))?
+            .data;
+        if self.watches_users(tenant) && user_info.option.password_policy().is_some() {
+            return Ok(self.get_meta_user(tenant, user).await?.data);
+        }
+        Ok(user_info)
+    }
+
+    async fn check_login(
+        &self,
+        tenant: &Tenant,
+        user_info: UserInfo,
+        client_ip: Option<&str>,
+    ) -> Result<UserInfo> {
         if let Some(disabled) = user_info.option.disabled() {
             if *disabled {
                 return Err(ErrorCode::AuthenticateFailure(format!(

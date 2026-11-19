@@ -122,6 +122,19 @@ impl Drop for TestGuard {
         {
             log::set_max_level(log::LevelFilter::Off);
             databend_common_base::runtime::drop_guard(move || {
+                // Its workers outlive the test otherwise, and would look up the
+                // global instances of a dropped test, e.g. to drop a processor.
+                if let Some(executor) =
+                    crate::pipelines::executor::GlobalQueriesExecutor::try_instance()
+                {
+                    executor.finish(None);
+                    // Only this and the global instance hold it once the workers
+                    // exited.
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                    while Arc::strong_count(&executor) > 2 && std::time::Instant::now() < deadline {
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                }
                 databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);
             })
         }

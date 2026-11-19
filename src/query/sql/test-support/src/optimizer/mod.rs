@@ -45,6 +45,7 @@ use databend_common_sql::plans::Statistics;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 use databend_common_statistics::HistogramBucket;
+use databend_common_statistics::NdvEstimate;
 use goldenfile::Mint;
 use serde::Deserialize;
 use serde::Serialize;
@@ -91,19 +92,51 @@ pub struct TableStats {
 pub struct ColumnStats {
     pub min: Option<serde_json::Value>,
     pub max: Option<serde_json::Value>,
+    /// Exact NDV supplied by a replay fixture, not a storage-side estimate.
     pub ndv: Option<u64>,
     pub null_count: Option<u64>,
 }
 
 impl ColumnStats {
-    pub fn to_basic_column_statistics(&self) -> BasicColumnStatistics {
-        BasicColumnStatistics {
-            min: to_datum(&self.min),
-            max: to_datum(&self.max),
-            ndv: self.ndv,
-            null_count: self.null_count.unwrap_or(0),
-            in_memory_size: 0,
-        }
+    /// Provider statistics of a fixture column over `num_rows` rows.
+    pub fn to_basic_column_statistics(
+        &self,
+        num_rows: Option<u64>,
+    ) -> Result<BasicColumnStatistics> {
+        self.to_basic_column_statistics_with_bounds(
+            to_datum(&self.min),
+            to_datum(&self.max),
+            num_rows,
+        )
+    }
+
+    /// The fixture acts as a provider and derives its statistics the way one
+    /// does: a positive fixture NDV is exact, a missing or zero NDV is
+    /// upper-only, row and domain bounds cap it, and one-sided bounds are
+    /// dropped.
+    fn to_basic_column_statistics_with_bounds(
+        &self,
+        min: Option<Datum>,
+        max: Option<Datum>,
+        num_rows: Option<u64>,
+    ) -> Result<BasicColumnStatistics> {
+        let (min, max) = match (min, max) {
+            (Some(min), Some(max)) => (Some(min), Some(max)),
+            _ => (None, None),
+        };
+        let null_count = self.null_count.unwrap_or(0);
+        let upper = BasicColumnStatistics::ndv_upper_bound(
+            min.as_ref(),
+            max.as_ref(),
+            null_count,
+            num_rows,
+        );
+        let ndv = match self.ndv {
+            Some(ndv) if ndv > 0 => NdvEstimate::exact(ndv as f64),
+            _ => NdvEstimate::upper_bound(upper),
+        };
+        BasicColumnStatistics::new(min, max, null_count, 0, ndv.bound(upper), num_rows)
+            .map_err(ErrorCode::Internal)
     }
 }
 
@@ -496,8 +529,12 @@ impl SExprVisitor for StatsApplier<'_> {
             let table = metadata.table(scan.table_index);
 
             if let Some(stats) = self.table_stats.get(table.name()) {
-                let column_stats =
-                    self.build_column_stats(&metadata, scan.table_index, table.name());
+                let column_stats = self.build_column_stats(
+                    &metadata,
+                    scan.table_index,
+                    table.name(),
+                    stats.num_rows,
+                )?;
                 let histograms =
                     self.build_histograms(&metadata, scan.table_index, table.name())?;
                 let table_stats = TableStatistics {
@@ -538,7 +575,8 @@ impl StatsApplier<'_> {
         metadata: &Metadata,
         table_index: IndexType,
         table_name: &str,
-    ) -> HashMap<Symbol, Option<ScanColumnStatistics>> {
+        num_rows: Option<u64>,
+    ) -> Result<HashMap<Symbol, Option<ScanColumnStatistics>>> {
         let mut result = HashMap::new();
 
         for column in metadata.columns_by_table_index(table_index) {
@@ -550,9 +588,11 @@ impl StatsApplier<'_> {
             {
                 let full_name = format!("{table_name}.{column_name}");
                 if let Some(stats) = self.column_stats.get(&full_name) {
-                    let mut stats = stats.to_basic_column_statistics();
-                    stats.min = stats.min.or_else(|| default_min_datum(&column.data_type()));
-                    stats.max = stats.max.or_else(|| default_max_datum(&column.data_type()));
+                    let stats = stats.to_basic_column_statistics_with_bounds(
+                        to_datum(&stats.min).or_else(|| default_min_datum(&column.data_type())),
+                        to_datum(&stats.max).or_else(|| default_max_datum(&column.data_type())),
+                        num_rows,
+                    )?;
                     result.insert(
                         *column_index,
                         Some(ScanColumnStatistics {
@@ -566,7 +606,7 @@ impl StatsApplier<'_> {
             }
         }
 
-        result
+        Ok(result)
     }
 
     fn build_histograms(

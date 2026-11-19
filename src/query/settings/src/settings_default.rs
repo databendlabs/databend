@@ -592,7 +592,7 @@ impl DefaultSettings {
                 }),
                 ("nested_loop_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),
-                    desc: "Set the threshold for use nested loop join. Setting it to 0 disable nested loop join.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -1114,6 +1114,13 @@ impl DefaultSettings {
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Deprecated; retained for compatibility and has no effect.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_recluster_task_selection_v2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

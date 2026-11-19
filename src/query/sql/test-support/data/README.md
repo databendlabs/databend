@@ -68,7 +68,7 @@ column_statistics:              # Inline column statistics (can be combined with
   table_name.column_name:
     min: 1990                   # Min value (can be number or string)
     max: 2000                   # Max value (can be number or string)
-    ndv: 10                     # Number of distinct values
+    ndv: 10                     # Exact NDV (not an HLL estimate); omit or 0 for unknown
     null_count: 0               # Number of null values
 
 histogram_statistics:           # Optional inline histograms keyed by table.column
@@ -83,6 +83,34 @@ histogram_statistics:           # Optional inline histograms keyed by table.colu
 good_plan: |                    # Optional expected good plan
   ...
 ```
+
+## Statistics Trace NDV
+
+Trace JSON is a wire format owned by the SQL trace/replay boundary, not a serde
+encoding of runtime catalog or optimizer structures. A trace records the column
+statistics a provider returned; its column `statistics.ndv` is an object with
+`expected` and `upper`:
+
+```json
+"ndv": { "expected": 17.0, "upper": 3000.0 }
+```
+
+`expected: null` means that only the upper is known. The upper is a
+conservative cap within the row and domain bounds, not a guarantee; for
+HLL-backed NDV it is just those structural bounds.
+Replay rebuilds provider statistics unchanged and rejects values that violate
+their invariants (for example an `upper` above the column's non-NULL rows).
+
+Traces captured by older versions store a scalar (`"ndv": 25`) or `null`.
+Replay derives them the way the providers of that time did: a scalar is an
+exact NDV capped by the row and domain bounds, while `0` and `null` leave only
+those bounds. New traces are always written in the object form.
+`customer_self_join.json` is kept in the legacy scalar form so replay of old
+traces stays covered.
+
+YAML `column_statistics` above act as a provider: a positive `ndv` is exact, a
+missing or zero `ndv` leaves only the row and domain bounds, and both are capped
+by those bounds when the fixture is registered.
 
 ## External Statistics Files
 

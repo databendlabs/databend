@@ -45,10 +45,6 @@ use crate::aggregate::hash_index::HashIndex;
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
 
-// A hash index holds up to 1 / 1.35 (74%) of its slots: a probe matches the tags of a whole
-// chunk at once, so the index can be dense.
-const HASH_INDEX_LOAD_FACTOR: f64 = 1.35;
-
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
 #[derive(Clone, Debug)]
@@ -57,6 +53,9 @@ pub struct HashTableConfig {
     pub partition_start_bit: u64,
     // Partial aggregation: the caller drives how rows are handled and how the index grows.
     pub partial_agg: bool,
+    /// When above 1, the table is split into this many partitions by the final aggregate each
+    /// group is routed to, instead of by `initial_radix_bits`.
+    pub route_partitions: u64,
 }
 
 impl Default for HashTableConfig {
@@ -65,6 +64,7 @@ impl Default for HashTableConfig {
             initial_radix_bits: 3,
             partition_start_bit: 0,
             partial_agg: false,
+            route_partitions: 0,
         }
     }
 }
@@ -82,6 +82,11 @@ impl HashTableConfig {
 
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {
         self.initial_radix_bits = initial_radix_bits;
+        self
+    }
+
+    pub fn with_route_partitions(mut self, route_partitions: u64) -> Self {
+        self.route_partitions = route_partitions;
         self
     }
 

@@ -30,6 +30,7 @@ use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOp;
 use databend_common_statistics::Datum;
+use databend_common_statistics::NdvEstimate;
 
 use super::table_statistics;
 use crate::framework::LiteTableContext;
@@ -59,13 +60,15 @@ struct PlanCase {
 }
 
 fn int_stat(min: i64, max: i64, ndv: u64) -> BasicColumnStatistics {
-    BasicColumnStatistics {
-        min: Some(Datum::Int(min)),
-        max: Some(Datum::Int(max)),
-        ndv: Some(ndv),
-        null_count: 0,
-        in_memory_size: 8000,
-    }
+    BasicColumnStatistics::new(
+        Some(Datum::Int(min)),
+        Some(Datum::Int(max)),
+        0,
+        8000,
+        NdvEstimate::exact(ndv as f64),
+        Some(1000),
+    )
+    .unwrap()
 }
 
 async fn create_context() -> Result<Arc<LiteTableContext>> {

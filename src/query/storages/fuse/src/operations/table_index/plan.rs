@@ -72,6 +72,11 @@ pub async fn collect_refresh_plan(
     let mut specs = Vec::with_capacity(index_names.len());
     for name in index_names.iter().collect::<BTreeSet<_>>() {
         let index = get_refresh_index(table, name)?;
+        if index.index_type == TableIndexType::Bloom {
+            return Err(ErrorCode::RefreshIndexError(format!(
+                "BLOOM index {name} is not supported by this release and cannot be refreshed"
+            )));
+        }
         let fields = index
             .column_ids
             .iter()
@@ -315,6 +320,8 @@ async fn needs_refresh(
                         && stats.is_some_and(|stats| stats.contains_key(id))
                 }))
         }
+        // Rejected by `collect_refresh_plan`.
+        TableIndexType::Bloom => Ok(false),
     }
 }
 

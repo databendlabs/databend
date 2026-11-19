@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! The index of an aggregate hash table. Portions of this module are derived from the excellent
+//! [hashbrown](https://github.com/rust-lang/hashbrown/tree/master) crate.
+
 use std::intrinsics::prefetch_read_data;
 use std::mem::size_of;
 use std::simd::ToBytes;
@@ -23,11 +26,14 @@ use std::simd::u8x16;
 use std::simd::u16x8;
 
 use crate::aggregate::BATCH_SIZE;
-use crate::aggregate::HASH_INDEX_LOAD_FACTOR;
 use crate::aggregate::ProbeState;
 use crate::aggregate::hash_index_adapter::TableAdapter;
 use crate::aggregate::partitioned_payload::RowReserver;
 use crate::aggregate::row_ptr::RowDecoder;
+
+// A hash index holds up to 1 / 1.35 (74%) of its slots: a probe matches the tags of a whole
+// chunk at once, so the index can be dense.
+const HASH_INDEX_LOAD_FACTOR: f64 = 1.35;
 
 /// The slots of a chunk, whatever the width of its ids: an index of `n` chunks has
 /// `n * CHUNK_SLOTS` slots.
@@ -36,10 +42,8 @@ pub(in crate::aggregate) const CHUNK_SLOTS: usize = 12;
 pub(in crate::aggregate) const PREFETCH_DISTANCE: usize = 16;
 const PREFETCH_MIN_BYTES: usize = 1 << 20;
 
-/// The row ids of the lanes of a chunk, see `Chunk`.
+/// The row ids of the `CHUNK_SLOTS` lanes of a chunk, see `Chunk`.
 pub(in crate::aggregate) trait ChunkIds: Copy {
-    /// The lanes of a chunk with these ids, at most one per tag.
-    const LANES: usize;
     /// The largest id a lane holds.
     const MAX_ID: u64;
     const EMPTY: Self;
@@ -49,15 +53,14 @@ pub(in crate::aggregate) trait ChunkIds: Copy {
     fn set(&mut self, lane: usize, id: u64);
 }
 
-/// 12 ids of 4 bytes.
+/// Ids of 4 bytes.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(in crate::aggregate) struct Ids32([u32; 12]);
+pub(in crate::aggregate) struct Ids32([u32; CHUNK_SLOTS]);
 
 impl ChunkIds for Ids32 {
-    const LANES: usize = 12;
     const MAX_ID: u64 = u32::MAX as u64;
-    const EMPTY: Self = Ids32([0; 12]);
+    const EMPTY: Self = Ids32([0; CHUNK_SLOTS]);
 
     #[inline]
     fn get(&self, lane: usize) -> u64 {
@@ -73,15 +76,14 @@ impl ChunkIds for Ids32 {
     }
 }
 
-/// 12 ids of 8 bytes, for tables of more rows than 4 bytes can name.
+/// Ids of 8 bytes, for tables of more rows than 4 bytes can name.
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub(in crate::aggregate) struct Ids64([u64; 12]);
+pub(in crate::aggregate) struct Ids64([u64; CHUNK_SLOTS]);
 
 impl ChunkIds for Ids64 {
-    const LANES: usize = 12;
     const MAX_ID: u64 = u64::MAX;
-    const EMPTY: Self = Ids64([0; 12]);
+    const EMPTY: Self = Ids64([0; CHUNK_SLOTS]);
 
     #[inline]
     fn get(&self, lane: usize) -> u64 {
@@ -103,8 +105,8 @@ const fn tag(hash: u64) -> u8 {
 
 const EMPTY_TAG: u8 = 0x80;
 
-/// The tags of 16 lanes, then the row ids of the lanes the ids have room for: one probe reads
-/// one cache line with ids of up to 4 bytes.
+/// The tags of 16 lanes, then the row ids of the first `CHUNK_SLOTS` of them, the other lanes
+/// staying empty: one probe reads one cache line with ids of up to 4 bytes.
 #[repr(C, align(64))]
 #[derive(Clone, Copy)]
 struct Chunk<I> {
@@ -121,7 +123,7 @@ impl<I: ChunkIds> Chunk<I> {
         ids: I::EMPTY,
     };
     /// The nibbles of the lanes that have an id, see `match_tag`.
-    const LANE_MASK: u64 = u64::MAX >> (64 - I::LANES * 4);
+    const LANE_MASK: u64 = u64::MAX >> (64 - CHUNK_SLOTS * 4);
 
     /// Lanes from `from` whose tag is `tag`, four bits per lane: the lane of a match is
     /// `trailing_zeros / 4`. Narrowing the compared lanes by a shift moves them to a scalar
@@ -199,13 +201,14 @@ impl HashIndex {
         capacity.div_ceil(CHUNK_SLOTS).next_power_of_two() * CHUNK_SLOTS
     }
 
+    /// The slots of an index that holds `groups` groups without growing.
+    pub fn slots_for_groups(groups: usize) -> usize {
+        Self::slots_for((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1)
+    }
+
     /// The number of groups an index of `capacity` slots holds before it grows.
     pub fn threshold_for_capacity(capacity: usize) -> usize {
         (capacity as f64 / HASH_INDEX_LOAD_FACTOR) as usize
-    }
-
-    pub fn allocated_bytes(&self) -> usize {
-        with_index!(self, index => index.allocated_bytes())
     }
 
     /// The bytes `with_capacity(capacity, max_id)` allocates for ids of up to 4 bytes.
@@ -274,7 +277,7 @@ impl<I: ChunkIds> RowIdIndex<I> {
 
     #[inline]
     fn next_slot(&self, slot: usize) -> usize {
-        if (slot & 15) + 1 < I::LANES {
+        if (slot & 15) + 1 < CHUNK_SLOTS {
             slot + 1
         } else {
             (((slot >> 4) + 1) & self.chunk_mask) << 4
@@ -409,10 +412,10 @@ impl<I: ChunkIds> RowIdIndex<I> {
             adapter.append_rows(state, new_entry_count);
         }
 
-        let mut no_match_count = 0;
-        if need_compare_count > 0 {
-            no_match_count = adapter.compare(state, need_compare_count, no_match_count);
-        }
+        let no_match_count = match need_compare_count {
+            0 => 0,
+            _ => adapter.compare(state, need_compare_count),
+        };
 
         for row in state.no_match_vector[..no_match_count].iter().copied() {
             state.slots[row] = self.next_slot(state.slots[row]);
@@ -530,10 +533,7 @@ mod tests {
         }
 
         fn init_state(&self) -> ProbeState {
-            let mut state = ProbeState {
-                row_count: self.incoming.len(),
-                ..Default::default()
-            };
+            let mut state = ProbeState::default();
 
             for (i, (_, hash)) in self.incoming.iter().enumerate() {
                 state.group_hashes[i] = *hash
@@ -591,12 +591,8 @@ mod tests {
             }
         }
 
-        fn compare(
-            &mut self,
-            state: &mut ProbeState,
-            need_compare_count: usize,
-            mut no_match_count: usize,
-        ) -> usize {
+        fn compare(&mut self, state: &mut ProbeState, need_compare_count: usize) -> usize {
+            let mut no_match_count = 0;
             for row in state.group_compare_vector[..need_compare_count]
                 .iter()
                 .copied()
@@ -651,7 +647,7 @@ mod tests {
 
             assert_eq!(want_count, count);
 
-            let got = state.addresses[..state.row_count]
+            let got = state.addresses[..adapter.incoming.len()]
                 .iter()
                 .map(|row_ptr| {
                     let (key, _, value) = adapter.get_payload(*row_ptr);
@@ -713,7 +709,7 @@ mod tests {
         fn run<I: ChunkIds>() {
             // Every key has the same tag and starts at the same chunk, so each probe compares
             // and steps over all the keys before it, past the end of a chunk into the next one.
-            let lanes = I::LANES as u64;
+            let lanes = CHUNK_SLOTS as u64;
             let same = |chunk: u64| (0x55u64 << 57) | chunk;
             let existing = |n: u64, chunk: u64| {
                 (0..n)

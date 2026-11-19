@@ -33,6 +33,7 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::get_hashes;
+use crate::pipelines::processors::transforms::hash_join_table::hash_bits;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::GraceHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::SpillMetadata;
@@ -328,7 +329,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         )?;
 
         for hash in hashes.iter_mut() {
-            *hash = Self::get_partition_id(*hash, self.shift_bits);
+            *hash = get_partition_id(*hash, self.shift_bits);
         }
 
         Ok(self.build_partition_stream.partition(hashes, data, true))
@@ -349,7 +350,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         )?;
 
         for hash in hashes.iter_mut() {
-            *hash = Self::get_partition_id(*hash, self.shift_bits);
+            *hash = get_partition_id(*hash, self.shift_bits);
         }
 
         Ok(self.probe_partition_stream.partition(hashes, data, true))
@@ -413,20 +414,27 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
         Ok(())
     }
+}
 
-    #[inline(always)]
-    #[cfg(target_feature = "sse4.2")]
-    fn get_partition_id(hash: u64, shift_bits: usize) -> u64 {
-        // On SSE4.2, _mm_crc32_u64 only sets the low 32 bits; high 32 bits are always 0.
-        // Extract partition bits from the low 32 bits to avoid all rows landing in partition 0.
-        (hash << shift_bits >> 28) & 0b1111
-    }
-
-    #[inline(always)]
-    #[cfg(not(target_feature = "sse4.2"))]
-    fn get_partition_id(hash: u64, shift_bits: usize) -> u64 {
-        (hash << shift_bits >> 60) & 0b1111
-    }
+/// Partition id of a row at the grace level `shift_bits / 4`.
+///
+/// A restored partition is joined by an in-memory hash table that hashes the same keys with the
+/// same hash: the bucket index is the top bits of the hash (`hash >> hash_shift`) and the
+/// early-filtering tag is the low 4 bits (`hash & 0b1111`). Partition bits taken directly from
+/// either end would be constant inside a partition, e.g. the top 4 bits would leave only 1/16 of
+/// the buckets reachable (1/256 one level deeper) and turn probes into long chain walks.
+///
+/// Each level instead takes the parity of the tag nibble and its own nibble
+/// `[4 + shift_bits, 8 + shift_bits)`. Over GF(2) these parities are independent of each other
+/// and of the tag bits, and they only fall within the bucket bits when the bucket index also covers
+/// the tag bits (capacity above 2^(hash width - 4)), where the in-memory table already shares tag
+/// and bucket bits. So inside a partition the bucket index and the tag stay as spread as the
+/// remaining hash bits allow. The highest bit read is `7 + shift_bits`, which stays within the
+/// hash width (32 bits for the SSE4.2 CRC hash) for every level allowed by `HybridHashJoinState`.
+#[inline(always)]
+fn get_partition_id(hash: u64, shift_bits: usize) -> u64 {
+    debug_assert!(shift_bits + 8 <= hash_bits() as usize);
+    ((hash >> (4 + shift_bits)) ^ hash) & 0b1111
 }
 
 pub enum RestoreStage {
@@ -563,6 +571,82 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
                 if let Some(v) = spills_reader.read()? {
                     self.spills_reader = Some(spills_reader);
                     return Ok(Some(v));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::get_partition_id;
+    use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashTable;
+
+    // A uniform hash truncated to `width` bits: 32 models the SSE4.2 CRC hash, 64 the others.
+    fn hash(key: u64, width: u32) -> u64 {
+        let mut h = key;
+        h ^= h >> 33;
+        h = h.wrapping_mul(0xff51afd7ed558ccd);
+        h ^= h >> 33;
+        h = h.wrapping_mul(0xc4ceb9fe1a85ec53);
+        h ^= h >> 33;
+        h >> (64 - width)
+    }
+
+    // Buckets and tags reached by the hashes of one partition after `levels` grace levels,
+    // sampling 8x the capacity so that a correct partitioning reaches about all of them.
+    fn partition_coverage(width: u32, levels: usize, build_rows: usize) -> (f64, usize) {
+        let capacity = HashJoinHashTable::<u64>::with_build_row_num(build_rows)
+            .pointers
+            .len();
+        let hash_shift = width - capacity.trailing_zeros();
+
+        let mut buckets = HashSet::new();
+        let mut tags = HashSet::new();
+        let mut sampled = 0;
+        let mut key = 0;
+        while sampled < capacity * 8 {
+            key += 1;
+            let h = hash(key, width);
+            if (0..levels).all(|level| get_partition_id(h, level * 4) == 5) {
+                buckets.insert(h >> hash_shift);
+                tags.insert(h & 0b1111);
+                sampled += 1;
+            }
+        }
+        (buckets.len() as f64 / capacity as f64, tags.len())
+    }
+
+    #[test]
+    fn test_partition_keeps_all_buckets_reachable() {
+        for width in [32, 64] {
+            for levels in [1, 2] {
+                let (bucket_coverage, tags) = partition_coverage(width, levels, 1 << 10);
+                assert!(
+                    bucket_coverage > 0.99,
+                    "width {width}, levels {levels}: only {bucket_coverage} of buckets reachable"
+                );
+                assert_eq!(tags, 16, "width {width}, levels {levels}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_partition_is_balanced() {
+        for width in [32, 64] {
+            for shift_bits in [0, 4, 24] {
+                let mut counts = [0usize; 16];
+                for key in 0..(1 << 16) {
+                    counts[get_partition_id(hash(key, width), shift_bits) as usize] += 1;
+                }
+                let expected = (1 << 16) / 16;
+                for count in counts {
+                    assert!(
+                        count.abs_diff(expected) < expected / 10,
+                        "width {width}, shift {shift_bits}: {counts:?}"
+                    );
                 }
             }
         }

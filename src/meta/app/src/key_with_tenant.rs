@@ -41,4 +41,16 @@ pub trait KeyWithTenant {
             .push_raw("")
             .done()
     }
+
+    /// Return the encoded directory of the keys of this kind that belong to the tenant.
+    ///
+    /// It is in form of `<__PREFIX>/<tenant>`: the directory a watched cache of these keys takes,
+    /// which holds the keys under `<__PREFIX>/<tenant>/`. Unlike [`Self::tenant_prefix`], it has
+    /// no trailing `/`, which would name the empty-named directory inside it.
+    fn tenant_dir(&self) -> String
+    where Self: kvapi::Key {
+        kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+            .push_str(self.tenant().tenant_name())
+            .done()
+    }
 }
