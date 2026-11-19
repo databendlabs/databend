@@ -1239,7 +1239,7 @@ impl DefaultSettings {
                 }),
                 (crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK, DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Require ACCESS SEQUENCE or ownership to use nextval (1). The default (0) keeps legacy workloads compatible; sequence management always requires authorization.",
+                    desc: "Enable Sequence object privilege checks. At 0, retain legacy SUPER management, list all sequences and skip nextval checks.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,
                     range: Some(SettingRange::Numeric(0..=1)),

@@ -40,6 +40,7 @@ table_id() {
 cleanup() {
 	bendsql_connect_root_null --query="
 UNSET GLOBAL enable_experimental_connection_privilege_check;
+UNSET GLOBAL enable_experimental_sequence_privilege_check;
 DROP DATABASE IF EXISTS if_not_exists_db;
 DROP CONNECTION IF EXISTS if_not_exists_conn;
 DROP STAGE IF EXISTS if_not_exists_stage;
@@ -56,6 +57,7 @@ cleanup
 trap cleanup EXIT
 bendsql_connect_root_null --query="
 SET GLOBAL enable_experimental_connection_privilege_check = 1;
+SET GLOBAL enable_experimental_sequence_privilege_check = 1;
 CREATE DATABASE if_not_exists_db;
 CREATE ROLE if_not_exists_owner_role;
 CREATE ROLE if_not_exists_creator_role;
@@ -65,8 +67,8 @@ GRANT ROLE if_not_exists_owner_role TO if_not_exists_owner;
 GRANT ROLE if_not_exists_creator_role TO if_not_exists_creator;
 GRANT CREATE ON if_not_exists_db.* TO ROLE if_not_exists_owner_role;
 GRANT CREATE ON if_not_exists_db.* TO ROLE if_not_exists_creator_role;
-GRANT CREATE CONNECTION ON *.* TO ROLE if_not_exists_owner_role;
-GRANT CREATE CONNECTION ON *.* TO ROLE if_not_exists_creator_role;
+GRANT CREATE CONNECTION, CREATE SEQUENCE ON *.* TO ROLE if_not_exists_owner_role;
+GRANT CREATE CONNECTION, CREATE SEQUENCE ON *.* TO ROLE if_not_exists_creator_role;
 "
 
 echo "== CREATE TABLE IF NOT EXISTS on an existing table keeps its owner"
@@ -91,23 +93,29 @@ echo "owned before DROP: $(owned_count if_not_exists_conn)"
 run_user if_not_exists_owner "DROP CONNECTION if_not_exists_conn"
 echo "owned after DROP: $(owned_count if_not_exists_conn)"
 
+# Checked before SUPER is granted: with sequence object checks, SUPER can manage any sequence.
+echo "== CREATE SEQUENCE IF NOT EXISTS on an existing sequence keeps its owner"
+run_user if_not_exists_owner "CREATE SEQUENCE if_not_exists_seq START = 42" >/dev/null
+owner_of "SEQUENCE if_not_exists_seq"
+run_user if_not_exists_creator "CREATE SEQUENCE IF NOT EXISTS if_not_exists_seq START = 42" >/dev/null
+owner_of "SEQUENCE if_not_exists_seq"
+expect_denied if_not_exists_creator "DROP SEQUENCE if_not_exists_seq"
+echo "owned before DROP: $(owned_count if_not_exists_seq)"
+run_user if_not_exists_owner "DROP SEQUENCE if_not_exists_seq" >/dev/null
+echo "owned after DROP: $(owned_count if_not_exists_seq)"
+
 # SUPER authorizes Stage/UDF creation, but does not grant access to another
-# role's objects. Sequence creation requires its own explicit privilege.
+# role's objects.
 bendsql_connect_root_null --query="
-GRANT SUPER, CREATE SEQUENCE ON *.* TO ROLE if_not_exists_owner_role;
-GRANT SUPER, CREATE SEQUENCE ON *.* TO ROLE if_not_exists_creator_role;
+GRANT SUPER ON *.* TO ROLE if_not_exists_owner_role;
+GRANT SUPER ON *.* TO ROLE if_not_exists_creator_role;
 "
-for kind in STAGE SEQUENCE UDF; do
+for kind in STAGE UDF; do
 	case "$kind" in
 	STAGE)
 		name=if_not_exists_stage
 		ddl=STAGE
 		definition='FILE_FORMAT = (TYPE = CSV)'
-		;;
-	SEQUENCE)
-		name=if_not_exists_seq
-		ddl=SEQUENCE
-		definition='START = 42'
 		;;
 	UDF)
 		name=if_not_exists_udf

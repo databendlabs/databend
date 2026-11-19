@@ -1390,6 +1390,23 @@ impl PrivilegeAccess {
     }
 
     async fn validate_seq_access(&self, seq: String) -> Result<()> {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            return self
+                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                .await;
+        }
+        if self
+            .ctx
+            .get_current_session()
+            .has_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+            .await?
+        {
+            return Ok(());
+        }
         self.validate_access(
             &GrantObject::Sequence(seq),
             UserPrivilegeType::AccessSequence,
@@ -2920,8 +2937,11 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CreateSequence(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateSequence, true, false)
-                    .await?;
+                if !self.ctx.get_settings().get_enable_experimental_sequence_privilege_check()? {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false).await?;
+                } else if !self.ctx.get_current_session().has_privilege(&GrantObject::Global, UserPrivilegeType::Super, false).await? {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateSequence, true, false).await?;
+                }
             }
             Plan::DescSequence(plan) => {
                 self.validate_seq_access(plan.ident.name().to_string())

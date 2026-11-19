@@ -21,12 +21,16 @@ DROP FUNCTION IF EXISTS super_private_udf;
 DROP CONNECTION IF EXISTS super_legacy_conn;
 DROP CONNECTION IF EXISTS super_private_conn;
 DROP CONNECTION IF EXISTS super_created_conn;
+DROP CONNECTION IF EXISTS super_ops_conn;
 DROP SEQUENCE IF EXISTS super_private_seq;
 DROP SEQUENCE IF EXISTS super_created_seq;
+DROP SEQUENCE IF EXISTS super_legacy_seq;
 DROP USER IF EXISTS super_direct_user;
 DROP USER IF EXISTS super_public_creator;
+DROP USER IF EXISTS super_ops_user;
 DROP ROLE IF EXISTS super_creator_role;
 DROP ROLE IF EXISTS super_switch_role;
+DROP ROLE IF EXISTS super_ops_role;
 "
 }
 
@@ -106,9 +110,20 @@ expect_allowed super_direct_user 'DESC CONNECTION super_private_conn'
 expect_visible super_direct_user 'SHOW CONNECTIONS' super_private_conn 0
 expect_denied super_direct_user "$create_stage" AccessConnection
 
-echo '=== SUPER alone cannot create or list private sequences ==='
-expect_denied super_direct_user 'CREATE SEQUENCE super_created_seq' CreateSequence
+echo '=== Legacy sequence mode: SUPER manages sequences, and all sequences are listed ==='
+expect_allowed super_direct_user 'CREATE SEQUENCE super_legacy_seq'
+echo "owners: $(bendsql_connect_root --output tsv --query='SHOW GRANTS ON SEQUENCE super_legacy_seq' | grep -c OWNERSHIP)"
+expect_allowed super_direct_user 'DESC SEQUENCE super_private_seq'
+expect_visible super_public_creator 'SHOW SEQUENCES' super_private_seq 1
+expect_denied super_public_creator 'DESC SEQUENCE super_private_seq' Super
+expect_denied super_public_creator 'CREATE SEQUENCE super_created_seq' Super
+expect_allowed super_direct_user 'DROP SEQUENCE super_legacy_seq'
+
+echo '=== Sequence object checks keep the SUPER bypass for management ==='
+expect_allowed super_direct_user "SET GLOBAL $sequence_check = 1"
+expect_allowed super_direct_user 'DESC SEQUENCE super_private_seq'
 expect_visible super_direct_user 'SHOW SEQUENCES' super_private_seq 0
+expect_denied super_public_creator 'DESC SEQUENCE super_private_seq' AccessSequence
 
 echo '=== CREATE privileges must be granted to the current role ==='
 bendsql_connect_root_null --query="
@@ -132,7 +147,24 @@ done
 expect_allowed super_direct_user 'DESC CONNECTION super_created_conn'
 expect_allowed super_direct_user 'SELECT nextval(super_created_seq)'
 
-echo '=== By default, compatibility covers sequence use, not management ==='
+echo '=== With object checks, a SUPER role owns the connections it creates or replaces ==='
+bendsql_connect_root_null --query="
+CREATE ROLE super_ops_role;
+GRANT SUPER ON *.* TO ROLE super_ops_role;
+CREATE USER super_ops_user IDENTIFIED BY 'super_object_test' WITH DEFAULT_ROLE = 'super_ops_role';
+GRANT ROLE super_ops_role TO super_ops_user;
+"
+# super_ops_role has no CREATE CONNECTION, and super_created_conn is owned by super_creator_role.
+expect_allowed super_ops_user "CREATE CONNECTION super_ops_conn STORAGE_TYPE = 's3'"
+expect_allowed super_ops_user "CREATE OR REPLACE CONNECTION super_created_conn STORAGE_TYPE = 's3'"
+for connection in super_ops_conn super_created_conn; do
+	bendsql_connect_root --output tsv --query="SHOW GRANTS ON CONNECTION $connection" |
+		awk -F '\t' '$1 == "OWNERSHIP" { print $1 "\t" $5 }'
+	expect_visible super_ops_user 'SHOW CONNECTIONS' "$connection" 1
+done
+
+echo '=== In legacy sequence mode, nextval skips object checks ==='
+expect_allowed super_direct_user "UNSET GLOBAL $sequence_check"
 bendsql_connect_root_null --query="
 CREATE TABLE super_seq_defaults (id BIGINT DEFAULT nextval(super_private_seq), payload INT);
 GRANT INSERT ON default.super_seq_defaults TO super_public_creator;
@@ -141,8 +173,8 @@ expect_denied super_public_creator "SET GLOBAL $sequence_check = 1" Super
 expect_allowed super_public_creator 'INSERT INTO super_seq_defaults (payload) VALUES (1)'
 expect_allowed super_public_creator 'INSERT INTO super_seq_defaults VALUES (nextval(super_private_seq), 2)'
 expect_allowed super_public_creator 'SELECT nextval(super_private_seq) FROM numbers(2)'
-expect_denied super_public_creator 'DESC SEQUENCE super_private_seq' AccessSequence
-expect_visible super_public_creator 'SHOW SEQUENCES' super_private_seq 0
+expect_denied super_public_creator 'DESC SEQUENCE super_private_seq' Super
+expect_visible super_public_creator 'SHOW SEQUENCES' super_private_seq 1
 
 echo '=== Stage and UDF checks are on by default; SUPER can restore legacy behavior ==='
 expect_denied super_public_creator 'SELECT super_private_udf(1)' Usage

@@ -225,8 +225,8 @@ pub trait TableContext:
             ))
     }
 
-    /// The upgrade setting applies only to using a sequence in an expression.
-    /// Sequence management and visibility always require authorization.
+    /// Returns the checker for using or listing sequences when sequence object checks
+    /// are enabled, or `None` in legacy mode.
     async fn sequence_usage_checker(&self) -> Result<Option<Arc<GrantObjectVisibilityChecker>>> {
         if self
             .get_settings()
