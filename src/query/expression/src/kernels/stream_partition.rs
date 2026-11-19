@@ -133,7 +133,14 @@ impl PendingColumn {
     }
 
     fn push_column<I: Index>(&mut self, indices: &[I], column: &Column) {
-        copy_column(indices, column, self.builder(indices.len()));
+        let builder = self.builder(indices.len());
+        // A partition that gets every row of the block gets them in order, so
+        // the column is appended as a whole instead of row by row.
+        if indices.len() == column.len() && builder.data_type() == column.data_type() {
+            builder.append_column(column);
+        } else {
+            copy_column(indices, column, builder);
+        }
     }
 
     /// Turn the pending rows into a builder with room for `additional` more.

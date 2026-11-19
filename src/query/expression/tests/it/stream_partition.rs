@@ -108,6 +108,27 @@ fn assert_same_as_expanded(
 }
 
 #[test]
+fn test_partition_with_every_row() {
+    // Every row of each block goes to partition 1, so its columns are
+    // appended as a whole. The slice checks that only its own rows are.
+    let blocks = [
+        column_block(5, 0),
+        column_block(8, 10).slice(2..6),
+        const_block(3, 20, "a"),
+    ];
+    let mut stream = BlockPartitionStream::create(0, 0, 2);
+    for block in &blocks {
+        let indices = vec![1; block.num_rows()];
+        assert!(stream.partition(indices, block.clone(), true).is_empty());
+    }
+    assert!(stream.finalize_partition(0).is_none());
+
+    let actual = stream.finalize_partition(1).unwrap();
+    let expected = blocks.iter().map(expanded).collect::<Vec<_>>();
+    assert_same_values(&actual, &DataBlock::concat(&expected).unwrap());
+}
+
+#[test]
 fn test_partition_preserves_timezone_representations() {
     use databend_common_column::types::timestamp_tz;
     use databend_common_expression::Column;
