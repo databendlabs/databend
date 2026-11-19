@@ -23,6 +23,13 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 
+/// Tenant-scoped objects accessed outside table and stage plans.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum NamedObjectKind {
+    Connection,
+    Sequence,
+}
+
 #[async_trait::async_trait]
 pub trait TableContextAuthorization: Send + Sync {
     fn get_current_user(&self) -> Result<UserInfo>;
@@ -30,6 +37,9 @@ pub trait TableContextAuthorization: Send + Sync {
     fn get_current_role(&self) -> Option<RoleInfo>;
 
     fn get_secondary_roles(&self) -> Option<Vec<String>>;
+
+    /// Records a successful named object access for audit, not a privilege or existence check.
+    fn record_object_access(&self, _kind: NamedObjectKind, _name: &str) {}
 
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
 

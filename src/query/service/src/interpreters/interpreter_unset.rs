@@ -18,6 +18,9 @@ use databend_common_ast::ast::SetType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_settings::DefaultSettings;
+use databend_common_settings::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK;
+use databend_common_settings::SettingScope;
 use databend_common_sql::plans::UnsetPlan;
 use databend_common_users::UserApiProvider;
 
@@ -47,6 +50,18 @@ impl UnSetInterpreter {
         let mut is_globals: Vec<bool> = vec![];
         let settings = self.ctx.get_session_settings();
         let session_level = self.unset.unset_type == SetType::SettingsSession;
+        if session_level
+            && plan
+                .vars
+                .iter()
+                .any(|var| var.eq_ignore_ascii_case(ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK))
+        {
+            // A session must not remove the tenant's override and expose a different config default.
+            DefaultSettings::check_setting_scope(
+                ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK,
+                SettingScope::Session,
+            )?;
+        }
         settings.load_changes().await?;
 
         // Fetch global settings asynchronously if necessary

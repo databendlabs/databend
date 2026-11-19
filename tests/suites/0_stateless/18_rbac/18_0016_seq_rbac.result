@@ -1,4 +1,4 @@
-=== Sequence authorization is always enabled ===
+=== Sequence usage authorization is enabled ===
 === TEST USER A WITH SUPER AND EXPLICIT CREATE SEQUENCE PRIVILEGES ===
 --- CREATE 3 sequences WILL SUCCESS ---
 1

@@ -185,11 +185,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.to_string()),
         };
 
-        let ctx = self.ctx.clone();
-        let visibility_checker =
-            Some(self.block_on(async move {
-                ctx.get_visibility_checker(false, Object::Sequence).await
-            })?);
+        let visibility_checker = self.block_on(self.ctx.sequence_usage_checker())?;
         self.block_on(catalog.get_sequence(req, &visibility_checker))?;
         Ok(())
     }

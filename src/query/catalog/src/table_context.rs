@@ -31,6 +31,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFileInfo;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 
 mod authorization;
 mod cache_policy;
@@ -45,6 +47,7 @@ mod table;
 mod table_access;
 mod table_management;
 
+pub use authorization::NamedObjectKind;
 pub use authorization::TableContextAuthorization;
 pub use cache_policy::TableContextCachePolicy;
 pub use databend_common_component::BroadcastChannel;
@@ -211,6 +214,21 @@ pub trait TableContext:
     fn result_cache_state(&self) -> &ResultCacheState;
 
     fn written_segment_locations(&self) -> &SegmentLocationsState;
+
+    /// The upgrade setting applies only to using a sequence in an expression.
+    /// Sequence management and visibility always require authorization.
+    async fn sequence_usage_checker(&self) -> Result<Option<Arc<GrantObjectVisibilityChecker>>> {
+        if self
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            return self
+                .get_visibility_checker(false, Object::Sequence)
+                .await
+                .map(Some);
+        }
+        Ok(None)
+    }
 
     fn as_any(&self) -> &dyn Any;
 }

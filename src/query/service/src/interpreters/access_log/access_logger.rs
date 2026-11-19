@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::plans::CopyIntoLocationPlan;
@@ -30,6 +30,7 @@ use crate::interpreters::access_log::log_entry::AccessLogEntry;
 use crate::interpreters::access_log::log_entry::AccessObject;
 use crate::interpreters::access_log::log_entry::AccessObjectColumn;
 use crate::interpreters::access_log::log_entry::DDLOperationType;
+use crate::interpreters::access_log::log_entry::DirectAccessObject;
 use crate::interpreters::access_log::log_entry::ModifyByDDLObject;
 use crate::interpreters::access_log::log_entry::ObjectDomain;
 use crate::sessions::QueryContext;
@@ -42,7 +43,7 @@ pub struct AccessLogger {
 }
 
 impl AccessLogger {
-    pub fn create(ctx: Arc<QueryContext>) -> Self {
+    pub fn create(ctx: &QueryContext) -> Self {
         let query_id = ctx.get_id().to_string();
         let query_start = convert_query_log_timestamp(ctx.get_query_created_time());
         let user_name = ctx.get_current_user().map(|u| u.name).unwrap_or_default();
@@ -50,6 +51,22 @@ impl AccessLogger {
         Self {
             entry: AccessLogEntry::create(query_id, query_start, user_name),
         }
+    }
+
+    pub fn log_named_access(ctx: &QueryContext, kind: NamedObjectKind, name: &str) {
+        let mut logger = Self::create(ctx);
+        logger
+            .entry
+            .direct_objects_accessed
+            .push(DirectAccessObject {
+                object_domain: match kind {
+                    NamedObjectKind::Connection => ObjectDomain::Connection,
+                    NamedObjectKind::Sequence => ObjectDomain::Sequence,
+                },
+                object_name: name.to_owned(),
+                role_name: ctx.audit_role_name(),
+            });
+        logger.output();
     }
 
     #[recursive::recursive]

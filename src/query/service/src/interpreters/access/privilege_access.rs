@@ -47,6 +47,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_settings::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK;
 use databend_common_sql::DefinitionScope;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
@@ -2789,7 +2790,11 @@ impl AccessChecker for PrivilegeAccess {
                             }
                             Ok(())
                         })?;
-                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    // For the upgrade switch, accept direct SUPER or SUPER on the current role only.
+                    let current_role_only = plan.idents.iter().any(|setting| {
+                        setting.eq_ignore_ascii_case(ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK)
+                    });
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, current_role_only, false)
                         .await?;
                 }
             }
@@ -2804,7 +2809,10 @@ impl AccessChecker for PrivilegeAccess {
                             Ok(())
                             }
                         )?;
-                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    let current_role_only = plan.vars.iter().any(|setting| {
+                        setting.eq_ignore_ascii_case(ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK)
+                    });
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, current_role_only, false)
                         .await?;
                 }
             }
@@ -2850,7 +2858,10 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
             }
-            // Connection
+            // SUPER remains sufficient for direct Connection management, not for using
+            // named storage credentials (e.g. CONNECTION_NAME in CREATE STAGE).
+            Plan::CreateConnection(_) | Plan::DescConnection(_) | Plan::DropConnection(_)
+                if self.ctx.get_current_session().has_privilege(&GrantObject::Global, UserPrivilegeType::Super, false).await? => {}
             Plan::CreateConnection(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateConnection, true, false)
                     .await?;

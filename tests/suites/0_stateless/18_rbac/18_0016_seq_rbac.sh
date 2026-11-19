@@ -35,7 +35,12 @@ for seq in $(echo "select name from show_sequences();" | bendsql_connect_root); 
 	echo "drop sequence if exists \`$seq\`;" | bendsql_connect_root
 done
 
-echo "=== Sequence authorization is always enabled ==="
+# This suite exercises strict sequence authorization, which is opt-in for upgrade compatibility.
+sequence_check=enable_experimental_sequence_privilege_check
+trap 'bendsql_connect_root_null --query="UNSET GLOBAL $sequence_check"' EXIT
+bendsql_connect_root_null --query="SET GLOBAL $sequence_check = 1" || exit 1
+
+echo "=== Sequence usage authorization is enabled ==="
 echo "=== TEST USER A WITH SUPER AND EXPLICIT CREATE SEQUENCE PRIVILEGES ==="
 run_root_sql "
 drop sequence if exists seq1;

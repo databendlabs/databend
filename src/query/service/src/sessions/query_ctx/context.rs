@@ -12,7 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::NamedObjectKind;
+
 use super::*;
+use crate::interpreters::access_log::AccessLogger;
+
+impl QueryContext {
+    pub(crate) fn set_remote_audit_role(&self, role: Option<String>) {
+        let _ = self.shared.remote_audit_role.set(role);
+    }
+
+    pub(crate) fn audit_role_name(&self) -> Option<String> {
+        match self.shared.remote_audit_role.get() {
+            Some(role) => role.clone(),
+            None => self.get_current_role().map(|role| role.name),
+        }
+    }
+}
 
 #[async_trait::async_trait]
 impl TableContext for QueryContext {
@@ -61,6 +77,22 @@ impl TableContextAuthorization for QueryContext {
 
     fn get_secondary_roles(&self) -> Option<Vec<String>> {
         self.shared.get_secondary_roles()
+    }
+
+    fn record_object_access(&self, kind: NamedObjectKind, name: &str) {
+        if !log::log_enabled!(target: "databend::log::access", log::Level::Info) {
+            return;
+        }
+        {
+            let mut audited = self.shared.audited_named_objects.lock();
+            let names = audited.entry(kind).or_default();
+            if names.contains(name) {
+                return;
+            }
+            names.insert(name.to_owned());
+        }
+        // Emit on the node that performed the access, including worker-side nextval.
+        AccessLogger::log_named_access(self, kind, name);
     }
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {

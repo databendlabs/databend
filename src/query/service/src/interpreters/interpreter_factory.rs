@@ -151,7 +151,7 @@ impl InterpreterFactory {
                 error!("Access.denied(v2): {:?}", e);
             }
         })?;
-        let mut access_logger = AccessLogger::create(ctx.clone());
+        let mut access_logger = AccessLogger::create(&ctx);
         access_logger.log(plan);
         access_logger.output();
 

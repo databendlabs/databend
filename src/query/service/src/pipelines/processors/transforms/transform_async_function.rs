@@ -25,6 +25,8 @@ use std::time::Duration;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table_context::NamedObjectKind;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
@@ -874,13 +876,14 @@ impl NextValFetcher for SequenceNextValFetcher {
 
         // Calculate batch size - take the larger of count or step_size
         let req = GetSequenceNextValueReq {
-            ident: self.sequence_ident,
+            ident: self.sequence_ident.clone(),
             count: batch_size,
         };
 
         let resp = catalog
             .get_sequence_next_value(req, &visibility_checker)
             .await?;
+        ctx.record_object_access(NamedObjectKind::Sequence, self.sequence_ident.name());
         Ok(NextValFetchResult {
             start: resp.start,
             batch_size,
@@ -901,7 +904,7 @@ impl SequenceNextValFetcher {
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
     ) -> Result<(GetSequenceReply, Option<Arc<GrantObjectVisibilityChecker>>)> {
-        let visibility_checker = Some(ctx.get_visibility_checker(false, Object::Sequence).await?);
+        let visibility_checker = ctx.sequence_usage_checker().await?;
 
         let req = GetSequenceReq {
             ident: self.sequence_ident.clone(),

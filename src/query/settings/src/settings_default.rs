@@ -1223,6 +1223,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                (crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Require ACCESS SEQUENCE or ownership to use nextval (1). The default (0) keeps legacy workloads compatible; sequence management always requires authorization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_expand_roles", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable expand roles when execute show grants statement(enable by default).",

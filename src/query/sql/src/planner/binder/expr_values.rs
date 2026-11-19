@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,7 +26,6 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::UInt8Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_users::Object;
 
 use crate::BindContext;
 use crate::DefaultExprBinder;
@@ -35,6 +35,7 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
+use crate::plans::AsyncFunctionArgument;
 use crate::plans::ConstantExpr;
 use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
@@ -71,16 +72,17 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
             ScalarExpr::AsyncFunctionCall(async_func) => {
                 let tenant = self.ctx.get_tenant();
                 let catalog = self.ctx.get_default_catalog()?;
-                let ctx = self.ctx.clone();
                 let visibility_checker =
-                    Some(databend_common_base::runtime::block_on(async move {
-                        ctx.get_visibility_checker(false, Object::Sequence).await
-                    })?);
+                    databend_common_base::runtime::block_on(self.ctx.sequence_usage_checker())?;
                 let value = databend_common_base::runtime::block_on(async move {
                     async_func
                         .generate(tenant.clone(), catalog.clone(), visibility_checker)
                         .await
                 })?;
+                if let AsyncFunctionArgument::SequenceFunction(name) = &async_func.func_arg {
+                    self.ctx
+                        .record_object_access(NamedObjectKind::Sequence, name);
+                }
 
                 *expr = ScalarExpr::ConstantExpr(ConstantExpr {
                     span: async_func.span,

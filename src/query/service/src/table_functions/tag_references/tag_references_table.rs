@@ -27,6 +27,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_args::string_value;
+use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -391,10 +392,10 @@ async fn collect_tag_references(
                     ctx.get_current_user()?.identity().display(),
                 )));
             }
-            // Validate connection exists
-            UserApiProvider::instance()
+            let connection = UserApiProvider::instance()
                 .get_connection(&tenant, conn_name)
                 .await?;
+            ctx.record_object_access(NamedObjectKind::Connection, &connection.name);
             (
                 TaggableObject::Connection {
                     name: conn_name.to_string(),

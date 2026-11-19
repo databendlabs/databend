@@ -19,6 +19,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::StringType;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -63,11 +65,18 @@ impl Interpreter for ShowConnectionsInterpreter {
 
             formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-            let visibility_checker = self
+            if !self
                 .ctx
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
+                .get_current_session()
+                .has_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+                .await?
+            {
+                let visibility_checker = self
+                    .ctx
+                    .get_visibility_checker(false, Object::Connection)
+                    .await?;
+                formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
+            }
 
             // Merge three independent 'map().collect()' into one iteration.
             let capacity = formats.len();

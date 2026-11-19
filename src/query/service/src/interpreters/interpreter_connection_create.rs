@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserDefinedConnection;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::connection_ident;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_sql::plans::CreateConnectionPlan;
@@ -67,8 +69,22 @@ impl Interpreter for CreateConnectionInterpreter {
             );
 
             let tenant = self.ctx.get_tenant();
-            // An existing connection is left with its owner unless replaced.
-            let owner = self.ctx.get_current_role().map(|role| role.name);
+            // The SUPER fallback must not hand over access to a role that cannot create
+            // connections, in particular the public role.
+            let owner = if self
+                .ctx
+                .get_current_session()
+                .has_privilege(
+                    &GrantObject::Global,
+                    UserPrivilegeType::CreateConnection,
+                    true,
+                )
+                .await?
+            {
+                self.ctx.get_current_role().map(|role| role.name)
+            } else {
+                None
+            };
             let written = user_mgr
                 .add_connection(
                     &tenant,

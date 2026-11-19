@@ -28,3 +28,6 @@ pub use settings_default::SettingScope;
 pub use settings_getter_setter::FlightCompression;
 pub use settings_getter_setter::FlightKeepAliveParams;
 pub use settings_getter_setter::OutofMemoryBehavior;
+
+pub const ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK: &str =
+    "enable_experimental_sequence_privilege_check";

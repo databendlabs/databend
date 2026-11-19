@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::ErrorCode;
@@ -248,6 +249,17 @@ where
     A::Target: TableContextAuthorization,
 {
     pub async fn resolve_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        let connection = self.get_connection(name).await?;
+        self.authorization
+            .record_object_access(NamedObjectKind::Connection, &connection.name);
+        Ok(connection)
+    }
+
+    pub async fn check_connection_exists(&self, name: &str) -> Result<()> {
+        self.get_connection(name).await.map(|_| ())
+    }
+
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
         let visibility_checker = self
             .authorization
             .get_visibility_checker(false, Object::Connection)

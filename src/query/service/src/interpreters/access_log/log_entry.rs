@@ -27,7 +27,7 @@ pub struct AccessLogEntry {
     pub query_start: i64,
     pub user_name: String,
     pub base_objects_accessed: Vec<AccessObject>,
-    pub direct_objects_accessed: Vec<AccessObject>,
+    pub direct_objects_accessed: Vec<DirectAccessObject>,
     pub objects_modified: Vec<AccessObject>,
     pub object_modified_by_ddl: Vec<ModifyByDDLObject>,
 }
@@ -47,6 +47,8 @@ pub enum ObjectDomain {
     Table,
     Stage,
     Database,
+    Connection,
+    Sequence,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,6 +64,14 @@ pub struct AccessObject {
     pub columns: Option<Vec<AccessObjectColumn>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stage_type: Option<StageType>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DirectAccessObject {
+    pub object_domain: ObjectDomain,
+    pub object_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Default)]

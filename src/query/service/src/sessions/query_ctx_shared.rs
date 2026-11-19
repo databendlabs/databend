@@ -48,6 +48,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
+use databend_common_catalog::table_context::NamedObjectKind;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
@@ -129,6 +130,9 @@ pub struct QueryContextShared {
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     query_lineage: Arc<RwLock<Option<QueryLineage>>>,
     pending_lineage_logs: Arc<RwLock<Vec<String>>>,
+    pub(super) audited_named_objects: Mutex<HashMap<NamedObjectKind, HashSet<String>>>,
+    /// The coordinator's role for audit attribution only, never for authorization.
+    pub(super) remote_audit_role: OnceLock<Option<String>>,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
@@ -262,6 +266,8 @@ impl QueryContextShared {
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             query_lineage: Arc::new(RwLock::new(None)),
+            audited_named_objects: Mutex::default(),
+            remote_audit_role: OnceLock::new(),
             pending_lineage_logs: Arc::new(RwLock::new(Vec::new())),
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),
