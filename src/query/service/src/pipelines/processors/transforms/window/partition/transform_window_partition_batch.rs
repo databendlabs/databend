@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnBuilder;
+use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::ProjectedBlock;
@@ -31,7 +30,7 @@ use crate::physical_plans::WindowPartitionTopNFunc;
 /// A block is small when, scattered into the window partitions, each piece
 /// gets fewer rows than this on average and fewer bytes than
 /// `MIN_PIECE_BYTES_PER_COLUMN` per column. A constant column counts with its
-/// value repeated for every row, the size it takes once buffered.
+/// value repeated for every row, the size it can take once buffered.
 const MIN_PIECE_ROWS: usize = 64;
 
 const MIN_PIECE_BYTES_PER_COLUMN: usize = 1024;
@@ -42,9 +41,14 @@ const MIN_PIECE_BYTES_PER_COLUMN: usize = 1024;
 /// A small block, such as the output of a selective filter, would be cut into
 /// pieces of one or two rows. Each piece holds its own allocations per
 /// column, which take more memory than its rows, and the window buffers the
-/// pieces until all input arrives. So the rows of small blocks are copied
-/// into one buffer as they arrive, and sent as one block once they are not
-/// small together. Other blocks are sent as they are.
+/// pieces until all input arrives. So small blocks go to a
+/// `BlockPartitionStream` with a single partition: their rows are copied as
+/// they arrive, so a small slice does not keep its source block, and they are
+/// sent as one block once they are not small together. Other blocks are sent
+/// as they are.
+///
+/// There is one buffer for each input stream, not one per window partition:
+/// the exchange scatters the batch into the window partitions afterwards.
 ///
 /// With a top-n window function, the rows of each block that cannot rank
 /// within `top` of their partition are dropped first.
@@ -53,9 +57,9 @@ pub struct TransformWindowPartitionBatch {
 
     min_rows: usize,
     min_bytes_per_column: usize,
-    builders: Vec<ColumnBuilder>,
-    buffered_rows: usize,
-    buffered_bytes: usize,
+    // Created by the first small block, as its threshold in bytes depends on
+    // the number of columns.
+    stream: Option<BlockPartitionStream>,
 }
 
 impl TransformWindowPartitionBatch {
@@ -64,9 +68,7 @@ impl TransformWindowPartitionBatch {
             top_n: None,
             min_rows: num_partitions * MIN_PIECE_ROWS,
             min_bytes_per_column: num_partitions * MIN_PIECE_BYTES_PER_COLUMN,
-            builders: Vec::new(),
-            buffered_rows: 0,
-            buffered_bytes: 0,
+            stream: None,
         }
     }
 
@@ -83,34 +85,6 @@ impl TransformWindowPartitionBatch {
 
     fn is_small(&self, rows: usize, bytes: usize, columns: usize) -> bool {
         rows < self.min_rows && bytes < columns * self.min_bytes_per_column
-    }
-
-    /// Copies the rows of `block` into the buffer instead of keeping `block`:
-    /// a small block can be a slice that holds a much larger allocation.
-    fn buffer(&mut self, block: &DataBlock) {
-        if self.builders.is_empty() {
-            self.builders = block
-                .columns()
-                .iter()
-                .map(|entry| ColumnBuilder::with_capacity(&entry.data_type(), block.num_rows()))
-                .collect();
-        }
-        for (builder, entry) in self.builders.iter_mut().zip(block.columns()) {
-            match entry {
-                BlockEntry::Const(scalar, _, rows) => builder.push_repeat(&scalar.as_ref(), *rows),
-                BlockEntry::Column(column) => builder.append_column(column),
-            }
-        }
-    }
-
-    fn flush(&mut self) -> DataBlock {
-        let columns = std::mem::take(&mut self.builders)
-            .into_iter()
-            .map(|builder| builder.build())
-            .collect();
-        self.buffered_rows = 0;
-        self.buffered_bytes = 0;
-        DataBlock::new_from_columns(columns)
     }
 }
 
@@ -131,27 +105,32 @@ impl AccumulatingTransform for TransformWindowPartitionBatch {
         let columns = block.num_columns();
         let bytes = block.estimate_block_size(columns);
         // A block that is not small is sent as it is, even when small blocks
-        // are buffered: concatenating it would copy all its rows. The window
+        // are buffered: buffering it would copy all its rows. The window
         // sorts each partition later, so the order of the blocks does not
         // matter.
         if !self.is_small(rows, bytes, columns) {
             return Ok(vec![block]);
         }
 
-        self.buffer(&block);
-        self.buffered_rows += rows;
-        self.buffered_bytes += bytes;
-        if self.is_small(self.buffered_rows, self.buffered_bytes, columns) {
-            return Ok(vec![]);
-        }
-        Ok(vec![self.flush()])
+        // The stream sends the buffered rows once they reach either
+        // threshold, which is when they are no longer small.
+        let (min_rows, min_bytes) = (self.min_rows, columns * self.min_bytes_per_column);
+        let stream = self
+            .stream
+            .get_or_insert_with(|| BlockPartitionStream::create(min_rows, min_bytes, 1));
+        let ready = stream.partition(vec![0; rows], block, true);
+        Ok(ready.into_iter().map(|(_, block)| block).collect())
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
-        if !output || self.buffered_rows == 0 {
+        if !output {
             return Ok(vec![]);
         }
-        Ok(vec![self.flush()])
+        let block = self
+            .stream
+            .as_mut()
+            .and_then(|stream| stream.finalize_partition(0));
+        Ok(block.into_iter().collect())
     }
 }
 
@@ -372,6 +351,12 @@ mod tests {
         Ok(())
     }
 
+    fn has_buffered_rows(p: &TransformWindowPartitionBatch) -> bool {
+        p.stream
+            .as_ref()
+            .is_some_and(|stream| !stream.partition_ids().is_empty())
+    }
+
     /// `rows` rows of two Int32 columns, one partition key per two rows.
     fn block_with_pairs(rows: i32) -> DataBlock {
         DataBlock::new_from_columns(vec![
@@ -390,7 +375,7 @@ mod tests {
         let out = p.transform(block_with_pairs(30))?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].num_rows(), 90);
-        assert_eq!(p.buffered_rows, 0);
+        assert!(!has_buffered_rows(&p));
 
         // The rows left at the end are sent when the input finishes.
         assert!(p.transform(block_with_pairs(10))?.is_empty());
@@ -439,7 +424,7 @@ mod tests {
         let out = p.transform(data.clone())?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].columns(), data.columns());
-        assert_eq!(p.buffered_rows, 30);
+        assert!(has_buffered_rows(&p));
         let out = p.on_finish(true)?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].num_rows(), 30);
@@ -454,7 +439,7 @@ mod tests {
         let out = p.transform(data.clone())?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].columns(), data.columns());
-        assert_eq!(p.buffered_rows, 0);
+        assert!(!has_buffered_rows(&p));
         Ok(())
     }
 
@@ -489,14 +474,32 @@ mod tests {
         assert_eq!(out.len(), 1);
         assert!(out[0].get_by_offset(0).as_scalar().is_some());
 
-        // A small constant is expanded into the buffer.
-        let entry = BlockEntry::new_const_column(DataType::String, Scalar::String("x".into()), 10);
-        assert!(p.transform(DataBlock::new(vec![entry], 10))?.is_empty());
+        // Small blocks of the same constant stay a constant.
+        let small = |value: &str| {
+            let scalar = Scalar::String(value.to_string());
+            let entry = BlockEntry::new_const_column(DataType::String, scalar, 10);
+            DataBlock::new(vec![entry], 10)
+        };
+        assert!(p.transform(small("x"))?.is_empty());
+        assert!(p.transform(small("x"))?.is_empty());
         let out = p.on_finish(true)?;
         assert_eq!(out.len(), 1);
+        assert_eq!(out[0].num_rows(), 20);
+        assert_eq!(
+            out[0].get_by_offset(0).as_scalar(),
+            Some(&Scalar::String("x".to_string()))
+        );
+
+        // Different constants are expanded into one column.
+        let mut p = TransformWindowPartitionBatch::create(1);
+        assert!(p.transform(small("x"))?.is_empty());
+        assert!(p.transform(small("y"))?.is_empty());
+        let out = p.on_finish(true)?;
+        assert_eq!(out.len(), 1);
+        let expected = [vec!["x"; 10], vec!["y"; 10]].concat();
         assert_eq!(
             out[0].columns(),
-            DataBlock::new_from_columns(vec![StringType::from_data(vec!["x"; 10])]).columns()
+            DataBlock::new_from_columns(vec![StringType::from_data(expected)]).columns()
         );
         Ok(())
     }
