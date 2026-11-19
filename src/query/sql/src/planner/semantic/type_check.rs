@@ -52,8 +52,8 @@ use crate::planner::expression::UDFValidator;
 use crate::planner::expression::UdfValidationConfig;
 use crate::plans::DictGetFunctionArgument;
 
-const DEFAULT_DECIMAL_PRECISION: i64 = 38;
-const DEFAULT_DECIMAL_SCALE: i64 = 0;
+const DEFAULT_DECIMAL_PRECISION: u8 = 38;
+const DEFAULT_DECIMAL_SCALE: u8 = 0;
 
 mod adapter;
 mod aggregate;

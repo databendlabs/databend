@@ -52,6 +52,7 @@ use super::AccessType;
 use super::AnyType;
 use super::DataType;
 use super::F64;
+use super::NumberScalar;
 use super::NumberType;
 use super::SimpleDomain;
 use super::SimpleType;
@@ -518,28 +519,40 @@ impl DecimalSize {
     }
 
     pub fn new(precision: u8, scale: u8) -> Result<DecimalSize> {
-        let size = DecimalSize { precision, scale };
-        size.validate()?;
+        Self::from_checked_params(Some(precision), Some(scale))
+    }
 
-        Ok(size)
+    pub fn try_from_scalars(precision: &Scalar, scale: &Scalar) -> Result<Self> {
+        let to_u8 = |value: &Scalar| {
+            crate::with_integer_mapped_type!(|NUM_TYPE| match value.as_number()? {
+                NumberScalar::NUM_TYPE(value) => value.to_u8(),
+                _ => None,
+            })
+        };
+        Self::from_checked_params(to_u8(precision), to_u8(scale))
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.precision < 1 || self.precision > i256::MAX_PRECISION {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal precision must be between 1 and {}",
-                i256::MAX_PRECISION
-            )));
-        }
+        Self::new(self.precision, self.scale).map(|_| ())
+    }
 
-        if self.scale > self.precision {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal scale must be between 0 and precision {}",
-                self.precision
-            )));
-        }
-
-        Ok(())
+    fn from_checked_params(precision: Option<u8>, scale: Option<u8>) -> Result<Self> {
+        let precision = precision
+            .filter(|p| (1..=i256::MAX_PRECISION).contains(p))
+            .ok_or_else(|| {
+                ErrorCode::Overflow(format!(
+                    "Decimal precision must be between 1 and {}",
+                    i256::MAX_PRECISION
+                ))
+            })?;
+        let scale = scale
+            .filter(|s| (0..=precision).contains(s))
+            .ok_or_else(|| {
+                ErrorCode::Overflow(format!(
+                    "Decimal scale must be between 0 and precision {precision}"
+                ))
+            })?;
+        Ok(Self::new_unchecked(precision, scale))
     }
 
     pub fn default_128() -> DecimalSize {

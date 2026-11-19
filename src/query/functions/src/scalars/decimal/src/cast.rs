@@ -118,8 +118,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        let decimal_size =
-            DecimalSize::new(params[0].get_i64()? as _, params[1].get_i64()? as _).ok()?;
+        let decimal_size = DecimalSize::try_from_scalars(&params[0], &params[1]).ok()?;
 
         let is_variant = from_type == DataType::Variant;
         let return_type = if is_variant {
