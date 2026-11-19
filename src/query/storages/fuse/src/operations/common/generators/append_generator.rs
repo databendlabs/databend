@@ -209,7 +209,12 @@ impl SnapshotGenerator for AppendGenerator {
                     .cloned()
                     .collect();
 
-                merge_statistics_mut(&mut new_summary, &summary, cluster_key_info.as_ref());
+                merge_statistics_mut(
+                    &mut new_summary,
+                    &summary,
+                    cluster_key_info.as_ref(),
+                    &table_schema,
+                );
             }
         }
 

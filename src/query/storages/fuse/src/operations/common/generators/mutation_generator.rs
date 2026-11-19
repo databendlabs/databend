@@ -118,6 +118,7 @@ impl SnapshotGenerator for MutationGenerator {
                         previous.summary(),
                         &ctx.merged_statistics,
                         cluster_key_info.as_ref(),
+                        &table_info.schema(),
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
 

@@ -290,7 +290,12 @@ async fn try_rebuild_req(
         let base_summary = base_snapshot.summary();
         let txn_summary = new_snapshot.summary();
         let latest_summary = latest_snapshot.summary();
-        let s = merge_statistics(txn_summary, &latest_summary, cluster_key_info.as_ref());
+        let s = merge_statistics(
+            txn_summary,
+            &latest_summary,
+            cluster_key_info.as_ref(),
+            &latest_table.schema(),
+        );
         let mut merged_summary = deduct_statistics(&s, &base_summary);
 
         {

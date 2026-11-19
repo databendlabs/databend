@@ -205,6 +205,7 @@ impl<'a> SegmentCompactor<'a> {
             io_permits: Arc::new(Semaphore::new(max_io_requests)),
             decode_permits: Arc::new(Semaphore::new(max_threads)),
             cluster_key_info: cluster_key_info.clone(),
+            schema: schema.clone(),
             capacity: max_threads,
             stats_read_window: max_io_requests,
             in_flight: VecDeque::new(),
@@ -396,6 +397,7 @@ impl<'a> SegmentCompactor<'a> {
             &mut self.compacted_state.removed_statistics,
             &result.statistics,
             self.cluster_key_info.as_ref(),
+            &self.schema,
         );
         let replace_idx = *result.indexes.iter().min().expect("nonempty merge group");
         self.compacted_state
@@ -422,6 +424,7 @@ struct MergeTasks {
     // and deserializes input statistics on the IO runtime, outside this budget.
     decode_permits: Arc<Semaphore>,
     cluster_key_info: Option<ClusterKeyInfo>,
+    schema: TableSchemaRef,
     // Merge groups executed concurrently.
     capacity: usize,
     // Stats reads queued by one merge group.
@@ -464,6 +467,7 @@ impl MergeTasks {
             fragments,
             location,
             self.cluster_key_info.clone(),
+            self.schema.clone(),
             self.io_permits.clone(),
             self.stats_read_window,
             self.decode_permits.clone(),
@@ -476,6 +480,7 @@ impl MergeTasks {
     async fn decode_fragments(
         fragments: Vec<SegmentEntry>,
         cluster_key_info: Option<ClusterKeyInfo>,
+        schema: TableSchemaRef,
         decode_permits: Arc<Semaphore>,
     ) -> Result<DecodedGroup> {
         // Decode in parallel. Acquire before spawning to bound blocking work.
@@ -516,7 +521,12 @@ impl MergeTasks {
             let mut stats_locations = Some(Vec::new());
             // try_join_all preserves source order, independently of decode completion.
             for (segment, segment_blocks) in decoded {
-                merge_statistics_mut(&mut statistics, &segment.summary, cluster_key_info.as_ref());
+                merge_statistics_mut(
+                    &mut statistics,
+                    &segment.summary,
+                    cluster_key_info.as_ref(),
+                    &schema,
+                );
                 let virtual_schema = segment.summary.virtual_segment_schema.clone().map(Arc::new);
                 virtual_inputs.extend((0..segment_blocks.len()).map(|_| {
                     VirtualBlockInput::Existing {
@@ -556,12 +566,14 @@ impl MergeTasks {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn merge_group(
         operator: Operator,
         cache_policy: CachePolicy,
         fragments: Vec<SegmentEntry>,
         location: String,
         cluster_key_info: Option<ClusterKeyInfo>,
+        schema: TableSchemaRef,
         io_permits: Arc<Semaphore>,
         stats_read_window: usize,
         decode_permits: Arc<Semaphore>,
@@ -571,7 +583,8 @@ impl MergeTasks {
             blocks,
             mut statistics,
             stats_locations,
-        } = Self::decode_fragments(fragments, cluster_key_info, decode_permits.clone()).await?;
+        } = Self::decode_fragments(fragments, cluster_key_info, schema, decode_permits.clone())
+            .await?;
         let stats = if let Some(stats_locations) = stats_locations {
             Some(
                 Self::read_source_stats(

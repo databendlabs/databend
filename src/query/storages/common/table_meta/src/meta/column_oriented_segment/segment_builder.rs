@@ -25,7 +25,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
@@ -37,7 +36,6 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_functions::aggregates::eval_aggr;
 
 use super::AbstractSegment;
-use super::schema::STAT_PREFIX;
 use super::schema::segment_schema;
 use super::segment::ColumnOrientedSegment;
 use crate::meta::AdditionalStatsMeta;
@@ -105,7 +103,6 @@ pub struct ColumnOrientedSegmentBuilder {
     column_stats: HashMap<ColumnId, ColStatBuilder>,
     column_meta: HashMap<ColumnId, ColMetaBuilder>,
 
-    segment_schema: TableSchema,
     table_schema: TableSchemaRef,
     block_per_segment: usize,
 }
@@ -247,6 +244,8 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             UInt8Type::from_data(this.compression),
             Int64Type::from_opt_data(this.create_on),
         ];
+        let segment_schema =
+            segment_schema(&this.table_schema, |id| this.column_stats.contains_key(&id));
         let mut column_stats = this.column_stats;
         let mut column_meta = this.column_meta;
         for field in this.table_schema.leaf_fields() {
@@ -268,35 +267,15 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 UInt64Type::from_data(col_meta.num_values),
             ]));
         }
-        let projection = this
-            .segment_schema
-            .fields()
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, field)| {
-                let stat_id = field.name().strip_prefix(STAT_PREFIX);
-                if let Some(col_id) = stat_id {
-                    if !summary
-                        .col_stats
-                        .contains_key(&col_id.parse::<ColumnId>().unwrap())
-                    {
-                        return None;
-                    }
-                }
-                Some(idx)
-            })
-            .collect::<Vec<_>>();
         let segment = ColumnOrientedSegment {
             block_metas: DataBlock::new_from_columns(columns),
             summary,
-            segment_schema: this.segment_schema.project(&projection),
+            segment_schema,
         };
         Ok(segment)
     }
 
     fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self {
-        let segment_schema = segment_schema(&table_schema);
-
         let mut column_stats = HashMap::new();
         let mut column_meta = HashMap::new();
 
@@ -329,7 +308,6 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             create_on: Vec::with_capacity(block_per_segment),
             column_stats,
             column_meta,
-            segment_schema,
             table_schema,
             block_per_segment,
         }

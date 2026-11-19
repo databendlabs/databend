@@ -1445,7 +1445,7 @@ impl Table for FuseTable {
         let column_ids: HashSet<&ColumnId, RandomState> = HashSet::from_iter(column_ids);
 
         let schema = self.schema();
-        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema);
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema.clone());
         let chunk_size = std::cmp::min(
             ctx.get_settings().get_max_threads()? as usize * 4,
             num_segments,
@@ -1484,7 +1484,7 @@ impl Table for FuseTable {
                 );
             }
             if !partial_col_stats.is_empty() {
-                reduced = Some(reduce_block_statistics(&partial_col_stats));
+                reduced = Some(reduce_block_statistics(&partial_col_stats, &schema));
             }
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }

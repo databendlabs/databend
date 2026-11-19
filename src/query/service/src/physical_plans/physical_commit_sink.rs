@@ -159,8 +159,9 @@ impl IPhysicalPlan for CommitSink {
                     .as_ref()
                     .is_some_and(|info| info.acquire_commit_lock);
                 if *merge_meta {
+                    let schema = self.table_info.schema();
                     builder.main_pipeline.add_accumulating_transformer(move || {
-                        TransformMergeCommitMeta::create(cluster_key_info.clone())
+                        TransformMergeCommitMeta::create(cluster_key_info.clone(), schema.clone())
                     });
                 } else {
                     builder

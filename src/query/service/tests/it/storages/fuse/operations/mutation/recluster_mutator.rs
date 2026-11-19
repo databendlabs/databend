@@ -197,7 +197,12 @@ async fn write_recluster_segment(
         .collect::<Vec<_>>();
     let cluster_key_info =
         ClusterKeyInfo::new((cluster_key_id, "(c0)".to_string()), ClusterType::Linear);
-    let statistics = reduce_block_metas(&block_refs, thresholds, Some(&cluster_key_info))?;
+    let statistics = reduce_block_metas(
+        &block_refs,
+        thresholds,
+        Some(&cluster_key_info),
+        &TestFixture::default_table_schema(),
+    )?;
     let segment = SegmentInfo::new(blocks, statistics);
     let segment_location = location_generator
         .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
