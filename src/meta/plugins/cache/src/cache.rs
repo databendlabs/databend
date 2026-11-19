@@ -13,18 +13,37 @@
 // limitations under the License.
 
 use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use databend_meta_client::ClientHandle;
 use databend_meta_client::types::SeqV;
+use databend_meta_client::types::SeqValue;
 use databend_meta_runtime::DatabendRuntime;
-use futures::FutureExt;
 
 use crate::meta_cache_types::MetaCacheTypes;
 use crate::meta_client_source;
 
+/// A local copy of the keys under the directory `{dir}/` in meta-service, kept up to date by a
+/// watch.
+///
+/// The `try_*_ready` reads never wait for the copy. While it initializes, reconnects or applies
+/// a change, which holds its lock, or when meta-service cannot be watched, they return `None`,
+/// and the caller reads meta-service instead. They take `&self` and are not futures: readers
+/// share a `Cache` without a lock, and a read answers whether or not the task's tokio coop
+/// budget is spent.
+///
+/// What they return lags a change by the watch delay, a change made by this process included:
+/// use them where a briefly stale value is acceptable, never to read the seq of a
+/// compare-and-swap. They hide a key whose TTL has passed, as meta-service does: meta-service
+/// removes the key, and tells the watch, only when it applies a later write.
+///
+/// A directory is used as given, and its keys are those under `{dir}/`: `a` is the directory
+/// `a`, and `a/` the empty-named directory inside it, whose keys are `a//...`.
 pub struct Cache {
+    /// The watched directory.
+    dir: String,
     pub(crate) inner: sub_cache::Cache<MetaCacheTypes>,
 }
 
@@ -36,48 +55,75 @@ impl Deref for Cache {
     }
 }
 
-impl DerefMut for Cache {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
 impl Cache {
-    /// Read only if the cache can answer immediately. Initial sync and reconnect
-    /// hold the inner lock; callers must fall back instead of waiting for it.
-    pub fn try_get_ready(&mut self, key: &str) -> Option<SeqV> {
+    /// The value of `key` if the copy can answer at once, see [`Cache`].
+    ///
+    /// `None` if the copy cannot answer, lacks `key`, or holds it past its TTL. The caller reads
+    /// meta-service for every `None`: a key the copy lacks may be one the watch has not delivered
+    /// yet.
+    pub fn try_get_ready(&self, key: &str) -> Option<SeqV> {
+        let now_ms = now_ms();
         self.inner
-            .try_get(key)
-            .now_or_never()
-            .and_then(Result::ok)
-            .flatten()
+            .try_access_now(|data| {
+                data.data
+                    .get(key)
+                    .filter(|value| !value.is_expired(now_ms))
+                    .cloned()
+            })?
+            .ok()?
     }
 
-    /// Create a new cache with the given prefix and meta client.
+    /// The keys and values under the directory `{dir}/` if the copy can answer at once, see
+    /// [`Cache`].
+    ///
+    /// `None` if the copy cannot answer, or `dir` is neither the watched directory nor under it.
+    pub fn try_list_dir_ready(&self, dir: &str) -> Option<Vec<(String, SeqV)>> {
+        let covered = dir
+            .strip_prefix(self.dir.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'));
+        if !covered {
+            return None;
+        }
+        let now_ms = now_ms();
+        let mut items = self.inner.try_list_dir_now(dir)?.ok()?;
+        items.retain(|(_, value)| !value.is_expired(now_ms));
+        Some(items)
+    }
+
+    /// Create a new cache of the directory `dir`, watched through `meta_client`.
     ///
     /// The cache will start watching for changes immediately.
     ///
     /// # Parameters
     ///
     /// * `meta_client` - The meta client to interact with the remote data store.
-    /// * `prefix` - The prefix for the cache, used to identify the cache instance.
+    /// * `dir` - The cache holds the keys under `{dir}/`, see [`Cache`]. It also identifies the
+    ///   cache instance.
     /// * `name` - The name of the cache, used for debugging and logging purposes.
     pub async fn new(
         meta_client: Arc<ClientHandle<DatabendRuntime>>,
-        prefix: impl ToString,
+        dir: impl ToString,
         name: impl ToString,
     ) -> Self {
+        let dir = dir.to_string();
         let name = name.to_string();
         let inner = sub_cache::Cache::new(
             meta_client_source::MetaClientSource {
                 client: meta_client,
                 name: name.clone(),
             },
-            prefix,
+            &dir,
             name,
         )
         .await;
 
-        Cache { inner }
+        Cache { dir, inner }
     }
+}
+
+/// The time in ms since the Unix epoch, as meta-service compares it with the TTL of a key.
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
 }

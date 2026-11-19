@@ -74,6 +74,7 @@ use crate::operations::MutationGenerator;
 use crate::operations::MutationLogEntry;
 use crate::operations::MutationLogs;
 use crate::operations::TableMutationAggregator;
+use crate::operations::ensure_legacy_block;
 
 #[derive(Clone, Debug)]
 pub struct VirtualColumnRefreshResult {
@@ -268,6 +269,7 @@ pub async fn prepare_refresh_virtual_column(
                 segment_info.summary.virtual_segment_schema.as_ref(),
                 &block_meta,
             ) {
+                ensure_legacy_block(&block_meta, "virtual column refresh")?;
                 let block = block_reader
                     .read_by_meta(&settings, &block_meta, &storage_format)
                     .await?;
@@ -802,6 +804,7 @@ async fn build_virtual_columns(
             let storage_format = storage_format;
             let settings = settings;
             async move {
+                ensure_legacy_block(&task.block_meta, "virtual column refresh")?;
                 let block = block_reader
                     .read_by_meta(&settings, &task.block_meta, &storage_format)
                     .await?;

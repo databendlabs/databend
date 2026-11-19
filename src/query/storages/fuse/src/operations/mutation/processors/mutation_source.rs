@@ -408,12 +408,7 @@ impl Processor for MutationSource {
                         } else {
                             let read_res = self
                                 .block_reader
-                                .read_columns_data_by_merge_io(
-                                    &settings,
-                                    &fuse_part.location,
-                                    &fuse_part.columns_meta,
-                                    &None,
-                                )
+                                .read_files_by_merge_io(&settings, &fuse_part.data_files(), &None)
                                 .await?;
                             self.state = State::FilterData(inner_part, read_res);
                         }
@@ -430,12 +425,7 @@ impl Processor for MutationSource {
 
                     let settings = ReadSettings::from_ctx(&self.ctx)?;
                     let read_res = remain_reader
-                        .read_columns_data_by_merge_io(
-                            &settings,
-                            &fuse_part.location,
-                            &fuse_part.columns_meta,
-                            &None,
-                        )
+                        .read_files_by_merge_io(&settings, &fuse_part.data_files(), &None)
                         .await?;
                     self.state = State::MergeRemain {
                         part,

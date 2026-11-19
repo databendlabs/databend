@@ -36,9 +36,9 @@ pub enum DataItem<'a> {
 }
 
 /// The column chunks of one block: from storage, from the disk cache, and from the memory cache
-/// of deserialized columns.
+/// of deserialized columns. A split block reads from several files, one storage read each.
 pub struct BlockReadResult {
-    merge_io_result: MergeIOReadResult,
+    merge_io_results: Vec<MergeIOReadResult>,
     pub(crate) disk_column_data: DiskColumnData,
     pub(crate) cached_column_array: CachedColumnArray,
     row_range: Option<std::ops::Range<usize>>,
@@ -49,7 +49,7 @@ pub struct BlockReadResult {
 impl From<UnitsRead> for BlockReadResult {
     fn from(units: UnitsRead) -> Self {
         BlockReadResult {
-            merge_io_result: units.fetched,
+            merge_io_results: vec![units.fetched],
             disk_column_data: units.cached.into_iter().collect(),
             cached_column_array: vec![],
             row_range: None,
@@ -71,7 +71,7 @@ impl BlockReadResult {
         row_range: std::ops::Range<usize>,
     ) -> BlockReadResult {
         BlockReadResult {
-            merge_io_result,
+            merge_io_results: vec![merge_io_result],
             disk_column_data: vec![],
             cached_column_array,
             row_range: Some(row_range),
@@ -83,23 +83,49 @@ impl BlockReadResult {
         self.row_range.as_ref()
     }
 
+    /// Combines the reads of the files of one block. The files store disjoint columns.
+    pub fn merge(results: Vec<BlockReadResult>) -> Self {
+        let mut merged = BlockReadResult {
+            merge_io_results: Vec::with_capacity(results.len()),
+            disk_column_data: vec![],
+            cached_column_array: vec![],
+            row_range: None,
+            column_data_ranges: HashMap::new(),
+        };
+        for result in results {
+            debug_assert!(result.row_range.is_none());
+            debug_assert!(result.column_data_ranges.is_empty());
+            merged.merge_io_results.extend(result.merge_io_results);
+            merged.disk_column_data.extend(result.disk_column_data);
+            merged
+                .cached_column_array
+                .extend(result.cached_column_array);
+        }
+        merged
+    }
+
+    fn remote_chunks_len(&self) -> usize {
+        self.merge_io_results
+            .iter()
+            .map(|r| r.columns_chunk_offsets.len())
+            .sum()
+    }
+
     pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem<'_>>> {
-        let mut res = HashMap::with_capacity(self.merge_io_result.columns_chunk_offsets.len());
+        let mut res = HashMap::with_capacity(self.remote_chunks_len());
 
         // merge column data fetched from object storage
-        for (column_id, (chunk_idx, range)) in &self.merge_io_result.columns_chunk_offsets {
-            let chunk = self
-                .merge_io_result
-                .owner_memory
-                .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
-            let data = chunk.slice(range.clone());
-            match self.column_data_ranges.get(column_id) {
-                Some(data_range) => {
-                    res.insert(*column_id, DataItem::GranuleData(data, data_range.clone()));
-                }
-                None => {
-                    res.insert(*column_id, DataItem::RawData(data));
-                }
+        for merge_io_result in &self.merge_io_results {
+            for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
+                let chunk = merge_io_result
+                    .owner_memory
+                    .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
+                let data = chunk.slice(range.clone());
+                let item = match self.column_data_ranges.get(column_id) {
+                    Some(range) => DataItem::GranuleData(data, range.clone()),
+                    None => DataItem::RawData(data),
+                };
+                res.insert(*column_id, item);
             }
         }
 
@@ -117,15 +143,16 @@ impl BlockReadResult {
     }
 
     pub fn column_buffers(&self) -> Result<HashMap<ColumnId, Bytes>> {
-        let mut res = HashMap::with_capacity(self.merge_io_result.columns_chunk_offsets.len());
+        let mut res = HashMap::with_capacity(self.remote_chunks_len());
 
         // merge column data fetched from object storage
-        for (column_id, (chunk_idx, range)) in &self.merge_io_result.columns_chunk_offsets {
-            let chunk = self
-                .merge_io_result
-                .owner_memory
-                .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
-            res.insert(*column_id, chunk.slice(range.clone()).to_bytes());
+        for merge_io_result in &self.merge_io_results {
+            for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
+                let chunk = merge_io_result
+                    .owner_memory
+                    .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
+                res.insert(*column_id, chunk.slice(range.clone()).to_bytes());
+            }
         }
 
         // merge column data from the disk cache

@@ -28,6 +28,7 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_storages_common_cache::size::btree_map;
 use databend_storages_common_cache::size::column_statistics;
@@ -39,11 +40,15 @@ use databend_storages_common_cache::size::scalar;
 use databend_storages_common_cache::size::vec;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::IndexMatches;
+use databend_storages_common_table_meta::meta::BlockDataFile;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::GranuleIndexLayout;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::Versioned;
 
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -63,6 +68,78 @@ pub struct FuseBlockPartInfo {
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
+
+    /// The group files of a split block, holding the chunks this part reads. Empty for a
+    /// legacy block, whose chunks are all in the file at `location`. For a split block,
+    /// `columns_meta` holds the chunks of all groups, and `location` only identifies the block.
+    #[serde(default)]
+    pub column_groups: Vec<PartColumnGroup>,
+}
+
+/// A group file of a split block, with the chunks a part reads from it.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PartColumnGroup {
+    pub location: String,
+    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub compression: Compression,
+}
+
+impl PartColumnGroup {
+    /// The files to read: the legacy file at `location`, or the `groups` of a split block.
+    pub fn data_files<'a>(
+        location: &'a str,
+        columns_meta: &'a HashMap<ColumnId, ColumnMeta>,
+        compression: Compression,
+        groups: &'a [PartColumnGroup],
+    ) -> Vec<BlockDataFile<'a>> {
+        if groups.is_empty() {
+            return vec![BlockDataFile {
+                location,
+                col_metas: columns_meta,
+                compression,
+            }];
+        }
+        groups
+            .iter()
+            .map(|group| BlockDataFile {
+                location: &group.location,
+                col_metas: &group.columns_meta,
+                compression: group.compression,
+            })
+            .collect()
+    }
+
+    /// The group as block metadata a reader can read the group from. The file size and the
+    /// Bloom index are not known from a part.
+    pub fn to_file_meta(&self) -> ColumnGroupFileMeta {
+        ColumnGroupFileMeta {
+            location: (self.location.clone(), DataBlock::VERSION),
+            file_size: 0,
+            leaf_column_metas: self.columns_meta.clone(),
+            bloom: None,
+            compression: self.compression,
+        }
+    }
+
+    /// The groups of `meta` that store a column `keep` accepts, with only those columns.
+    pub fn from_block(meta: &BlockMeta, keep: impl Fn(&ColumnId) -> bool) -> Vec<Self> {
+        meta.column_groups
+            .iter()
+            .filter_map(|group| {
+                let columns_meta: HashMap<_, _> = group
+                    .leaf_column_metas
+                    .iter()
+                    .filter(|(id, _)| keep(id))
+                    .map(|(id, meta)| (*id, meta.clone()))
+                    .collect();
+                (!columns_meta.is_empty()).then(|| PartColumnGroup {
+                    location: group.location.0.clone(),
+                    columns_meta,
+                    compression: group.compression,
+                })
+            })
+            .collect()
+    }
 }
 
 #[typetag::serde(name = "fuse")]
@@ -98,6 +175,9 @@ impl PartInfo for FuseBlockPartInfo {
             })
             + option(&self.sort_min_max, |(min, max)| scalar(min) + scalar(max))
             + option(&self.block_meta_index, block_meta_index)
+            + vec(&self.column_groups, |g| {
+                g.location.capacity() + hash_map(&g.columns_meta, |_, _| 0)
+            })
     }
 }
 
@@ -133,8 +213,10 @@ impl FuseBlockPartInfo {
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
+        column_groups: Vec<PartColumnGroup>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FuseBlockPartInfo {
+            column_groups,
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
@@ -165,6 +247,16 @@ impl FuseBlockPartInfo {
 
     pub fn block_meta_index(&self) -> Option<&BlockMetaIndex> {
         self.block_meta_index.as_ref()
+    }
+
+    /// The files this part reads its column chunks from.
+    pub fn data_files(&self) -> Vec<BlockDataFile<'_>> {
+        PartColumnGroup::data_files(
+            &self.location,
+            &self.columns_meta,
+            self.compression,
+            &self.column_groups,
+        )
     }
 }
 
@@ -261,6 +353,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         )
     }
 

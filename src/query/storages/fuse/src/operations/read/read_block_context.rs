@@ -81,8 +81,7 @@ impl ReadBlockContext {
             .read_data_by_merge_io(
                 &self.block_read_ctx,
                 &self.read_settings,
-                &fuse_part.location,
-                &fuse_part.columns_meta,
+                &fuse_part.data_files(),
                 &ignore_column_ids,
             )
             .await?;
@@ -124,6 +123,11 @@ impl ReadBlockContext {
         ranges: Option<&[std::ops::Range<usize>]>,
     ) -> Result<Option<Vec<Vec<std::ops::Range<usize>>>>> {
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        // Granule offsets address a single data file. Until they carry file identity,
+        // read split blocks through the regular multi-file path.
+        if !fuse_part.column_groups.is_empty() {
+            return Ok(None);
+        }
         let Some(granule_index) = fuse_part.granule_index.as_ref() else {
             return Ok(None);
         };

@@ -361,6 +361,7 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         compression,
         sort_min_max: None,
         block_meta_index: None,
+        column_groups: vec![],
     };
 
     let bloom_y_plus_ten = create_bloom_filter(Int64Type::from_data(vec![40]));

@@ -31,6 +31,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_storages_common_cache::CachedColumnArray;
 use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_table_meta::meta::BlockDataFile;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
@@ -40,6 +41,7 @@ mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
+pub use deserialize::column_chunks_to_record_batch_with_codecs;
 pub use deserialize::dictionary_hint_fields;
 pub use encode::ColumnEncoding;
 pub use row_selection::RowSelection;
@@ -69,12 +71,10 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_chunks_inner(
+        self.deserialize_parquet_files_inner(
             num_rows,
-            &part.columns_meta,
+            &part.data_files(),
             column_chunks,
-            &part.compression,
-            &part.location,
             selection,
             num_rows == part.nums_rows,
         )
@@ -89,31 +89,36 @@ impl BlockReader {
         block_path: &str,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_chunks_inner(
-            num_rows,
-            column_metas,
-            column_chunks,
-            compression,
-            block_path,
-            selection,
-            true,
-        )
+        let file = BlockDataFile {
+            location: block_path,
+            col_metas: column_metas,
+            compression: *compression,
+        };
+        self.deserialize_parquet_files(num_rows, &[file], column_chunks, selection)
     }
 
-    /// `complete_column_chunks`: whether the raw chunks are whole column chunks. A narrowed
-    /// granule read carries its own byte range in `DataItem::GranuleData` and is cached under
-    /// it; a partial chunk without one is not cached.
-    #[allow(clippy::too_many_arguments)]
-    fn deserialize_parquet_chunks_inner(
+    /// Deserializes the column chunks a block read from `files`. Each chunk is decompressed
+    /// with the codec of the file that stores its column.
+    pub fn deserialize_parquet_files(
         &self,
         num_rows: usize,
-        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        files: &[BlockDataFile<'_>],
         column_chunks: HashMap<ColumnId, DataItem>,
-        compression: &Compression,
-        block_path: &str,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        self.deserialize_parquet_files_inner(num_rows, files, column_chunks, selection, true)
+    }
+
+    /// A narrowed granule read is cached under its own range; a partial chunk without one is not cached.
+    fn deserialize_parquet_files_inner(
+        &self,
+        num_rows: usize,
+        files: &[BlockDataFile<'_>],
+        column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
         complete_column_chunks: bool,
     ) -> databend_common_exception::Result<DataBlock> {
+        let files = DataFileLookup::new(files);
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
         if self.projected_schema.fields.is_empty() {
@@ -126,11 +131,12 @@ impl BlockReader {
 
         let has_selection = selection.is_some();
         let parquet_selection = selection.map(|s| s.selection.clone());
-        let record_batch = column_chunks_to_record_batch(
+        let record_batch = column_chunks_to_record_batch_with_codecs(
             &self.original_schema,
             num_rows,
             &column_chunks,
-            compression,
+            files.default_compression(),
+            |column_id| files.compression_of(column_id),
             parquet_selection,
             self.parquet_hint_fields.as_ref(),
         )?;
@@ -166,21 +172,23 @@ impl BlockReader {
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
                     // Nested columns are neither cached nor encoded. A raw chunk is cached
                     // under its column meta only when it is the whole chunk.
-                    let byte_range = match item {
-                        DataItem::GranuleData(_, range) => Some(range.clone()),
-                        _ if complete_column_chunks => {
-                            column_metas.get(&field.column_id).map(|meta| {
-                                let (offset, len) = meta.offset_length();
+                    let cache_range = files.file_of(field.column_id).and_then(|file| {
+                        let range = match item {
+                            DataItem::GranuleData(_, range) => range.clone(),
+                            _ if complete_column_chunks => {
+                                let (offset, len) =
+                                    file.col_metas.get(&field.column_id)?.offset_length();
                                 offset..offset + len
-                            })
-                        }
-                        _ => None,
-                    };
-                    let cache = array_cache.filter(|_| !is_nested && byte_range.is_some());
+                            }
+                            _ => return None,
+                        };
+                        Some((file.location, range))
+                    });
+                    let cache = array_cache.filter(|_| !is_nested && cache_range.is_some());
                     let cache_key = || {
-                        let range = byte_range.clone().unwrap();
+                        let (location, range) = cache_range.as_ref().unwrap();
                         TableDataCacheKey::new(
-                            block_path,
+                            location,
                             field.column_id,
                             range.start,
                             range.end - range.start,
@@ -240,6 +248,48 @@ impl BlockReader {
             entries.push(BlockEntry::new(value, || (data_type, result_rows)));
         }
         Ok(DataBlock::new(entries, result_rows))
+    }
+}
+
+/// Finds the file of a block that stores a column.
+struct DataFileLookup<'a> {
+    files: &'a [BlockDataFile<'a>],
+    /// Absent when the block has at most one file.
+    file_of_column: Option<HashMap<ColumnId, usize>>,
+}
+
+impl<'a> DataFileLookup<'a> {
+    fn new(files: &'a [BlockDataFile<'a>]) -> Self {
+        let file_of_column = (files.len() > 1).then(|| {
+            files
+                .iter()
+                .enumerate()
+                .flat_map(|(i, file)| file.col_metas.keys().map(move |id| (*id, i)))
+                .collect()
+        });
+        Self {
+            files,
+            file_of_column,
+        }
+    }
+
+    fn file_of(&self, column_id: ColumnId) -> Option<&BlockDataFile<'a>> {
+        match &self.file_of_column {
+            None => self.files.first(),
+            Some(files) => files.get(&column_id).map(|i| &self.files[*i]),
+        }
+    }
+
+    fn compression_of(&self, column_id: ColumnId) -> Compression {
+        self.file_of(column_id)
+            .map_or_else(|| self.default_compression(), |file| file.compression)
+    }
+
+    /// The codec of the columns without a chunk. Nothing is decompressed with it.
+    fn default_compression(&self) -> Compression {
+        self.files
+            .first()
+            .map_or(Compression::None, |file| file.compression)
     }
 }
 

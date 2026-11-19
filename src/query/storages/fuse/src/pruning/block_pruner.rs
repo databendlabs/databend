@@ -311,7 +311,7 @@ impl BlockPruner {
                 );
                 let range_start = Instant::now();
                 prune_result.keep = pruning_cost.measure(PruningCostKind::BlocksRange, || {
-                    range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
+                    range_pruner.should_keep(&range_input, Some(&block_meta.column_metas()))
                 });
                 drop(range_input);
                 block_range_ns
@@ -978,7 +978,11 @@ impl BlockPruner {
                 metrics_inc_bytes_block_bloom_pruning_before(block_meta.block_size);
                 pruning_stats.set_blocks_bloom_pruning_before(1);
 
-                let column_ids = block_meta.col_metas.keys().cloned().collect::<Vec<_>>();
+                let column_ids = block_meta
+                    .column_metas()
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
                 let keep_by_bloom = pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksBloom,
@@ -1120,7 +1124,7 @@ impl BlockPruner {
                 self.pruning_ctx.virtual_predicate_refs.as_deref(),
             );
             let keep_by_range = pruning_cost.measure(PruningCostKind::BlocksRange, || {
-                range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
+                range_pruner.should_keep(&range_input, Some(&block_meta.column_metas()))
             });
             drop(range_input);
             if keep_by_range && limit_pruner.within_limit(row_count) {

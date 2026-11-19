@@ -19,6 +19,8 @@ mod snapshot;
 pub mod statistics;
 mod table_snapshot_statistics;
 
+pub use column_group::BlockDataFile;
+pub use column_group::ColumnChunkRef;
 pub use column_group::ColumnGroupBloomMeta;
 pub use column_group::ColumnGroupFileMeta;
 pub use segment::BlockIndexMeta;

@@ -556,7 +556,7 @@ impl ReclusterMergeFactory {
         let mut input_blocks = Vec::with_capacity(task.parts.len());
         for (ordinal, part) in task.parts.partitions.iter().enumerate() {
             let part = FuseBlockPartInfo::from_part(part)?;
-            let meta = BlockMeta::new(
+            let mut meta = BlockMeta::new(
                 part.nums_rows as _,
                 0,
                 0,
@@ -577,6 +577,14 @@ impl ReclusterMergeFactory {
                 part.compression,
                 part.create_on,
             );
+            if !part.column_groups.is_empty() {
+                meta.col_metas.clear();
+                meta.column_groups = part
+                    .column_groups
+                    .iter()
+                    .map(|group| group.to_file_meta())
+                    .collect();
+            }
             input_blocks.push(ReclusterMergeInputBlock {
                 meta: Arc::new(meta),
                 ordinal: u32::try_from(ordinal)

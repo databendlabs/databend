@@ -318,10 +318,15 @@ impl<'a> FuseEncodingImpl<'a> {
     }
 
     #[async_backtrace::framed]
+    /// `group_chunk_offsets` is set for a group file of a split block: the file only serves
+    /// these columns, and their chunks are found by offset, as the file holds a subset of the
+    /// table columns.
+    #[allow(clippy::too_many_arguments)]
     async fn collect_parquet_block_rows_from_meta(
         operator: Operator,
         location: String,
         file_size: u64,
+        group_chunk_offsets: Option<HashMap<ColumnId, u64>>,
         storage_format: FuseStorageFormat,
         table_name: Arc<String>,
         fields: Arc<Vec<TableField>>,
@@ -348,12 +353,31 @@ impl<'a> FuseEncodingImpl<'a> {
                 continue;
             }
             let column_id = field.column_id;
-            let Some(column_idx) = column_id_to_index.get(&column_id) else {
-                continue;
-            };
-            let Some(column_chunk) = columns.get(*column_idx) else {
-                // Missing column caused by schema evolutions
-                continue;
+            let column_chunk = match &group_chunk_offsets {
+                Some(offsets) => {
+                    let Some(offset) = offsets.get(&column_id) else {
+                        continue;
+                    };
+                    let Some(column_chunk) =
+                        columns.iter().find(|chunk| chunk.byte_range().0 == *offset)
+                    else {
+                        return Err(ErrorCode::ParquetFileInvalid(format!(
+                            "column group {location} has no chunk at offset {offset} for column {}",
+                            field.name()
+                        )));
+                    };
+                    column_chunk
+                }
+                None => {
+                    let Some(column_idx) = column_id_to_index.get(&column_id) else {
+                        continue;
+                    };
+                    let Some(column_chunk) = columns.get(*column_idx) else {
+                        // Missing column caused by schema evolutions
+                        continue;
+                    };
+                    column_chunk
+                }
             };
             let compressed_size = u64::try_from(column_chunk.compressed_size()).map_err(|_| {
                 ErrorCode::ParquetFileInvalid(format!(
@@ -424,7 +448,22 @@ impl<'a> FuseEncodingImpl<'a> {
             for segment in segments {
                 let segment = segment?;
                 for block in segment.blocks.iter() {
-                    block_locations.push((block.location.0.clone(), block.file_size));
+                    if !block.is_split() {
+                        block_locations.push((block.location.0.clone(), block.file_size, None));
+                        continue;
+                    }
+                    for group in &block.column_groups {
+                        let offsets = group
+                            .leaf_column_metas
+                            .iter()
+                            .map(|(id, meta)| (*id, meta.offset_length().0))
+                            .collect();
+                        block_locations.push((
+                            group.location.0.clone(),
+                            group.file_size,
+                            Some(offsets),
+                        ));
+                    }
                 }
             }
 
@@ -438,7 +477,7 @@ impl<'a> FuseEncodingImpl<'a> {
             let table_name_arc = table_name.clone();
             let column_name_filter_arc = column_name_filter.clone();
             let mut block_stream = stream::iter(block_locations.into_iter().map(
-                move |(location, file_size)| {
+                move |(location, file_size, group_chunk_offsets)| {
                     let operator = table_operator.clone();
                     let fields = fields_arc.clone();
                     let column_id_to_index = column_id_to_index_arc.clone();
@@ -449,6 +488,7 @@ impl<'a> FuseEncodingImpl<'a> {
                             operator,
                             location,
                             file_size,
+                            group_chunk_offsets,
                             storage_format,
                             table_name,
                             fields,

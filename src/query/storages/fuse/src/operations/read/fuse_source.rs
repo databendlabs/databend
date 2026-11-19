@@ -352,6 +352,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         )
     }
 
@@ -380,6 +381,7 @@ mod tests {
             None,
             Some(block_meta_index),
             None,
+            vec![],
         )
     }
 

@@ -126,17 +126,40 @@ async fn provider(
     Ok((provider, count, tenant))
 }
 
+/// Replace the watched caches of `provider` with caches that never become ready: TCP connects, but
+/// no server answers the handshake. Ordinary KV reads still use the healthy provider client. Keep
+/// the returned listener alive while the caches are used.
+async fn use_unready_caches(provider: &mut Arc<UserApiProvider>) -> anyhow::Result<TcpListener> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
+        vec![listener.local_addr()?.to_string()],
+        "root",
+        "test",
+        Some(Duration::from_secs(60)),
+        Some(Duration::from_secs(60)),
+        None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
+    )?;
+    let api = Arc::get_mut(provider).unwrap();
+    api.external_access_integration_cache = Some(
+        Cache::new(
+            client.clone(),
+            "unavailable_integrations",
+            "unavailable integrations",
+        )
+        .await,
+    );
+    api.network_rule_cache =
+        Some(Cache::new(client, "unavailable_rules", "unavailable rules").await);
+    Ok(listener)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn external_access_busy_cache_batches_and_fails_closed() -> anyhow::Result<()> {
-    let (provider, count, tenant) = provider(true).await?;
-    // Hold the outer locks. Validation must not queue behind these guards.
-    let _integrations = provider
-        .external_access_integration_cache
-        .as_ref()
-        .unwrap()
-        .lock()
-        .await;
-    let _rules = provider.network_rule_cache.as_ref().unwrap().lock().await;
+    let (mut provider, count, tenant) = provider(true).await?;
+    // Caches that cannot answer, as while their watcher holds them: every key is read from
+    // meta-service.
+    let _listener = use_unready_caches(&mut provider).await?;
     let names = vec!["b".into(), "a".into(), "a".into()];
     timeout(
         Duration::from_secs(1),
@@ -162,30 +185,8 @@ async fn external_access_busy_cache_batches_and_fails_closed() -> anyhow::Result
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn external_access_initializing_watch_does_not_block() -> anyhow::Result<()> {
     let (mut provider, count, tenant) = provider(true).await?;
-    // TCP can connect, but no server accepts/answers the handshake. Ordinary KV
-    // reads still use the healthy provider client. This leaves cache sync pending.
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let client = MetaGrpcClient::<DatabendRuntime>::try_create(
-        vec![listener.local_addr()?.to_string()],
-        "root",
-        "test",
-        Some(Duration::from_secs(60)),
-        Some(Duration::from_secs(60)),
-        None,
-        DEFAULT_GRPC_MESSAGE_SIZE,
-    )?;
-    let api = Arc::get_mut(&mut provider).unwrap();
-    api.external_access_integration_cache = Some(Mutex::new(
-        Cache::new(
-            client.clone(),
-            "unavailable_integrations",
-            "unavailable integrations",
-        )
-        .await,
-    ));
-    api.network_rule_cache = Some(Mutex::new(
-        Cache::new(client, "unavailable_rules", "unavailable rules").await,
-    ));
+    // This leaves cache sync pending.
+    let _listener = use_unready_caches(&mut provider).await?;
     let mut tasks = Vec::new();
     for _ in 0..32 {
         let provider = provider.clone();
@@ -254,23 +255,16 @@ async fn external_access_watch_is_tenant_scoped() -> anyhow::Result<()> {
         )
         .await?;
     sleep(Duration::from_millis(500)).await;
-    let mut rules = provider.network_rule_cache.as_ref().unwrap().lock().await;
-    let prefix = TIdent::<NetworkRuleResource>::new(&tenant, "").to_string_key();
-    assert_eq!(rules.try_list_dir(&prefix).await?.len(), 1);
-    let prefix = TIdent::<NetworkRuleResource>::new(&foreign, "").to_string_key();
-    assert!(rules.try_list_dir(&prefix).await?.is_empty());
-    drop(rules);
-    let mut integrations = provider
-        .external_access_integration_cache
-        .as_ref()
-        .unwrap()
-        .lock()
-        .await;
-    let prefix = TIdent::<ExternalAccessIntegrationResource>::new(&tenant, "").to_string_key();
-    assert_eq!(integrations.try_list_dir(&prefix).await?.len(), 2);
-    let prefix = TIdent::<ExternalAccessIntegrationResource>::new(&foreign, "").to_string_key();
-    assert!(integrations.try_list_dir(&prefix).await?.is_empty());
-    drop(integrations);
+    let rules = provider.network_rule_cache.as_ref().unwrap();
+    let dir = TIdent::<NetworkRuleResource>::new(&tenant, "").tenant_dir();
+    assert_eq!(rules.try_list_dir(&dir).await?.len(), 1);
+    let dir = TIdent::<NetworkRuleResource>::new(&foreign, "").tenant_dir();
+    assert!(rules.try_list_dir(&dir).await?.is_empty());
+    let integrations = provider.external_access_integration_cache.as_ref().unwrap();
+    let dir = TIdent::<ExternalAccessIntegrationResource>::new(&tenant, "").tenant_dir();
+    assert_eq!(integrations.try_list_dir(&dir).await?.len(), 2);
+    let dir = TIdent::<ExternalAccessIntegrationResource>::new(&foreign, "").tenant_dir();
+    assert!(integrations.try_list_dir(&dir).await?.is_empty());
     count.batches.lock().clear();
     provider
         .validate_external_access(&foreign, "https://foreign.example.com", &["a".into()])
