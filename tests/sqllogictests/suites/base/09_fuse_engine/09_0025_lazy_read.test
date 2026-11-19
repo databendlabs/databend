@@ -192,3 +192,29 @@ select count(*) from (select _row_id, a from (select a from t_lazy_row_id where 
 
 statement ok
 drop table t_lazy_row_id
+
+# A filter-only Parquet scan must preserve row offsets after dropping a whole batch.
+statement ok
+create or replace table t_prewhere_row_id (url string null, n int not null)
+storage_format = 'parquet' row_per_block = 32768
+
+statement ok
+settings (max_threads = 1, max_block_size = 32768)
+insert into t_prewhere_row_id
+select case when number in (8192, 8195, 16385, 24575) then 'prefix-needle-suffix'
+            when number % 2 = 0 then null else '' end,
+       number
+from numbers(25000)
+
+query I
+select _row_id % 4294967296 as row_offset
+from t_prewhere_row_id
+where url like '%needle%' and n % 2 = 1
+order by row_offset
+----
+8195
+16385
+24575
+
+statement ok
+drop table t_prewhere_row_id

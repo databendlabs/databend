@@ -320,8 +320,49 @@ impl ReadState {
         &mut self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
+        no_output_columns: bool,
     ) -> Result<ReadStateOutput> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
+        const FILTER_BATCH_ROWS: usize = 8192;
+        if no_output_columns
+            && self.filters.is_some()
+            && self.runtime_filters.is_empty()
+            && self.remain_column_ids.is_empty()
+            && part.nums_rows > FILTER_BATCH_ROWS
+            && let Some(batches) = self.pre_reader.clone().parquet_filter_batches(
+                part,
+                &pre_columns_chunks,
+                FILTER_BATCH_ROWS,
+            )?
+        {
+            let mut bytes = 0;
+            let mut bits = MutableBitmap::with_capacity(part.nums_rows);
+            for batch in batches {
+                let batch = batch?;
+                // Adjacent batches can reference the same page; count logical decoded bytes.
+                bytes += batch
+                    .columns()
+                    .iter()
+                    .map(|entry| entry.memory_size_with_options(true))
+                    .sum::<usize>();
+                let bitmap = self.filter(&batch, batch.num_rows())?.unwrap();
+                bits.extend_from_bitmap(&bitmap.into());
+            }
+            // Apply the pruner's selection in original block coordinates.
+            let mut bitmap: Bitmap = bits.into();
+            if let Some(rows) = selected_rows(part) {
+                bitmap = &bitmap & &rows;
+            }
+            return Ok(ReadStateOutput {
+                block: DataBlock::empty_with_rows(bitmap.len() - bitmap.null_count()),
+                bitmap_selection: Some(bitmap),
+                scan_stats: BlockScanStats {
+                    rows: part.nums_rows,
+                    bytes,
+                },
+            });
+        }
+
         let mut preread_block = self
             .pre_reader
             .deserialize_part(part, pre_columns_chunks, None)?;
@@ -425,7 +466,7 @@ impl ReadState {
 
     fn filter_column_chunks<'a>(
         columns_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-        column_ids: &'a HashSet<ColumnId>,
+        column_ids: &HashSet<ColumnId>,
     ) -> Result<HashMap<ColumnId, DataItem<'a>>> {
         let mut filtered_columns_chunks = HashMap::new();
         for (column_id, data_item) in columns_chunks {

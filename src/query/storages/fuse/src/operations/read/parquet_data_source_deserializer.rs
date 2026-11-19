@@ -209,11 +209,11 @@ impl Processor for DeserializeDataTransform {
                 block: mut data_block,
                 bitmap_selection,
                 mut scan_stats,
-            } = self
-                .read_state
-                .as_mut()
-                .unwrap()
-                .deserialize_and_filter(columns_chunks, part)?;
+            } = self.read_state.as_mut().unwrap().deserialize_and_filter(
+                columns_chunks,
+                part,
+                self.output_schema.fields().is_empty() && self.virtual_reader.is_none(),
+            )?;
 
             // Virtual columns are read in addition to the columns `ReadState`
             // accounted for, so add them to the scan statistics.
