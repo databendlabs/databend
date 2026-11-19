@@ -34,6 +34,7 @@ use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
+use crate::optimizer::optimizers::operator::HeavyHitterAggregateOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
@@ -357,6 +358,14 @@ pub(super) async fn query_logical_pipeline(
         .add_if(
             settings.get_force_eager_aggregate()?,
             EagerAggregationOptimizer::new(opt_ctx.get_metadata()),
+        )
+        // Runs last: later rewrites must not move the candidate filter into the cross join.
+        .add_if(
+            settings.get_enable_heavy_hitter_aggregate()?,
+            HeavyHitterAggregateOptimizer::new(
+                opt_ctx.clone(),
+                settings.get_force_heavy_hitter_aggregate()?,
+            ),
         );
     Ok(pipeline)
 }

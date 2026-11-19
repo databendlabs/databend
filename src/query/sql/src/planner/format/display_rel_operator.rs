@@ -297,10 +297,17 @@ fn aggregate_to_format_tree<I: IdHumanizer>(
         .map(|item| format_scalar_item(id_humanizer, item))
         .collect::<Vec<String>>()
         .join(", ");
-    FormatTreeNode::with_children(label, vec![
+    let mut children = vec![
         FormatTreeNode::new(format!("group items: [{}]", group_items)),
         FormatTreeNode::new(format!("aggregate functions: [{}]", agg_funcs)),
-    ])
+    ];
+    if let Some(info) = op.adaptive_topk_count {
+        children.push(FormatTreeNode::new(format!(
+            "adaptive Top-K COUNT: {}, candidate hint: {}",
+            info.limit, info.likely_candidates
+        )));
+    }
+    FormatTreeNode::with_children(label, children)
 }
 
 fn window_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Window) -> FormatTreeNode {
