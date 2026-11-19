@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockPartitionStream;
+use databend_common_expression::BlockConcatStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::ProjectedBlock;
@@ -42,10 +42,9 @@ const MIN_PIECE_BYTES_PER_COLUMN: usize = 1024;
 /// pieces of one or two rows. Each piece holds its own allocations per
 /// column, which take more memory than its rows, and the window buffers the
 /// pieces until all input arrives. So small blocks go to a
-/// `BlockPartitionStream` with a single partition: their rows are copied as
-/// they arrive, so a small slice does not keep its source block, and they are
-/// sent as one block once they are not small together. Other blocks are sent
-/// as they are.
+/// `BlockConcatStream`: their rows are appended as they arrive, so a small
+/// slice does not keep its source block, and they are sent as one block once
+/// they are not small together. Other blocks are sent as they are.
 ///
 /// There is one buffer for each input stream, not one per window partition:
 /// the exchange scatters the batch into the window partitions afterwards.
@@ -59,7 +58,7 @@ pub struct TransformWindowPartitionBatch {
     min_bytes_per_column: usize,
     // Created by the first small block, as its threshold in bytes depends on
     // the number of columns.
-    stream: Option<BlockPartitionStream>,
+    stream: Option<BlockConcatStream>,
 }
 
 impl TransformWindowPartitionBatch {
@@ -117,19 +116,15 @@ impl AccumulatingTransform for TransformWindowPartitionBatch {
         let (min_rows, min_bytes) = (self.min_rows, columns * self.min_bytes_per_column);
         let stream = self
             .stream
-            .get_or_insert_with(|| BlockPartitionStream::create(min_rows, min_bytes, 1));
-        let ready = stream.partition(vec![0; rows], block, true);
-        Ok(ready.into_iter().map(|(_, block)| block).collect())
+            .get_or_insert_with(|| BlockConcatStream::create(min_rows, min_bytes));
+        Ok(stream.push(block).into_iter().collect())
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
         if !output {
             return Ok(vec![]);
         }
-        let block = self
-            .stream
-            .as_mut()
-            .and_then(|stream| stream.finalize_partition(0));
+        let block = self.stream.as_mut().and_then(BlockConcatStream::finish);
         Ok(block.into_iter().collect())
     }
 }
@@ -351,10 +346,8 @@ mod tests {
         Ok(())
     }
 
-    fn has_buffered_rows(p: &TransformWindowPartitionBatch) -> bool {
-        p.stream
-            .as_ref()
-            .is_some_and(|stream| !stream.partition_ids().is_empty())
+    fn buffered_rows(p: &TransformWindowPartitionBatch) -> usize {
+        p.stream.as_ref().map_or(0, BlockConcatStream::num_rows)
     }
 
     /// `rows` rows of two Int32 columns, one partition key per two rows.
@@ -375,7 +368,7 @@ mod tests {
         let out = p.transform(block_with_pairs(30))?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].num_rows(), 90);
-        assert!(!has_buffered_rows(&p));
+        assert_eq!(buffered_rows(&p), 0);
 
         // The rows left at the end are sent when the input finishes.
         assert!(p.transform(block_with_pairs(10))?.is_empty());
@@ -424,7 +417,7 @@ mod tests {
         let out = p.transform(data.clone())?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].columns(), data.columns());
-        assert!(has_buffered_rows(&p));
+        assert_eq!(buffered_rows(&p), 30);
         let out = p.on_finish(true)?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].num_rows(), 30);
@@ -439,7 +432,7 @@ mod tests {
         let out = p.transform(data.clone())?;
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].columns(), data.columns());
-        assert!(!has_buffered_rows(&p));
+        assert_eq!(buffered_rows(&p), 0);
         Ok(())
     }
 

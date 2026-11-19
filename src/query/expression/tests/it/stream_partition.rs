@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use databend_common_expression::BlockConcatStream;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
@@ -108,24 +109,59 @@ fn assert_same_as_expanded(
 }
 
 #[test]
-fn test_partition_with_every_row() {
-    // Every row of each block goes to partition 1, so its columns are
-    // appended as a whole. The slice checks that only its own rows are.
+fn test_concat_stream_cuts_as_one_partition() {
+    // Columns, runs of one constant, a new constant and a slice, cut at 10
+    // rows as a `BlockPartitionStream` with one partition cuts them.
     let blocks = [
         column_block(5, 0),
+        const_block(4, 5, "a"),
+        const_block(3, 9, "a"),
         column_block(8, 10).slice(2..6),
-        const_block(3, 20, "a"),
+        const_block(2, 20, "b"),
+        column_block(7, 30),
+        const_block(1, 40, "b"),
     ];
-    let mut stream = BlockPartitionStream::create(0, 0, 2);
+    let mut stream = BlockConcatStream::create(10, 0);
+    let mut reference = BlockPartitionStream::create(10, 0, 1);
     for block in &blocks {
-        let indices = vec![1; block.num_rows()];
-        assert!(stream.partition(indices, block.clone(), true).is_empty());
+        let actual = stream.push(block.clone());
+        let mut expected = reference.partition(vec![0; block.num_rows()], block.clone(), true);
+        assert_eq!(actual.is_some(), expected.len() == 1);
+        if let (Some(a), Some((_, e))) = (&actual, expected.pop()) {
+            assert_same_values(a, &e);
+        }
     }
-    assert!(stream.finalize_partition(0).is_none());
+    let actual = stream.finish();
+    let expected = reference.finalize_partition(0);
+    assert_eq!(actual.is_some(), expected.is_some());
+    if let (Some(a), Some(e)) = (&actual, &expected) {
+        assert_same_values(a, e);
+    }
+    assert!(stream.finish().is_none());
+}
 
-    let actual = stream.finalize_partition(1).unwrap();
-    let expected = blocks.iter().map(expanded).collect::<Vec<_>>();
-    assert_same_values(&actual, &DataBlock::concat(&expected).unwrap());
+#[test]
+fn test_concat_stream_keeps_one_constant() {
+    let mut stream = BlockConcatStream::create(0, 0);
+    assert!(stream.push(const_block(3, 0, "a")).is_none());
+    assert!(stream.push(const_block(4, 3, "a")).is_none());
+    assert_eq!(stream.num_rows(), 7);
+
+    let block = stream.finish().unwrap();
+    assert_eq!(block.num_rows(), 7);
+    assert_eq!(block.get_by_offset(1).as_scalar(), Some(&Scalar::Null));
+    assert_eq!(
+        block.get_by_offset(2).as_scalar(),
+        Some(&Scalar::String("a".to_string()))
+    );
+    assert_same_values(
+        &block,
+        &DataBlock::concat(&[
+            expanded(&const_block(3, 0, "a")),
+            expanded(&const_block(4, 3, "a")),
+        ])
+        .unwrap(),
+    );
 }
 
 #[test]
