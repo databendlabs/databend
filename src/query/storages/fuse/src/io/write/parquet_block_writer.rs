@@ -131,7 +131,14 @@ impl ParquetBlockWriter {
             let take = (rows - self.written).min(num_rows - offset);
             let range = offset..offset + take;
 
-            self.inner.write_block(block.slice(range.clone()))?;
+            self.inner.write_block(block.slice(range.clone())).map_err(|err| {
+                let role = if self.granule.is_some() { "data" } else { "virtual_column" };
+                let err = err.add_message_back(format!(
+                    "Parquet {role} file: parent_rows={num_rows}, slice={range:?}, granule_rows={rows}"
+                ));
+                log::warn!("{err}");
+                err
+            })?;
             if let Some(granule) = &mut self.granule {
                 for writer in &mut granule.writers {
                     writer.write(&block, range.clone())?;

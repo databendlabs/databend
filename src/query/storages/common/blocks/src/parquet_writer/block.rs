@@ -24,7 +24,10 @@
 
 use std::sync::Arc;
 
+use arrow_array::Array;
 use arrow_array::RecordBatch;
+use arrow_array::cast::AsArray;
+use arrow_schema::DataType;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
@@ -77,6 +80,47 @@ struct ColumnWriterState {
     column_writers: Vec<ArrowColumnWriter>,
     /// Parquet schema descriptor, kept for footer assembly at `finish`.
     parquet_schema: SchemaDescPtr,
+}
+
+/// Estimate bytes referenced by this slice, not the capacity of its backing buffers.
+/// Arrow's slice-size helper handles offset-based binary and fixed-width leaves, but
+/// does not count the payload of views or restrict list/map children to the visible range.
+fn slice_bytes(array: &dyn Array) -> Result<usize> {
+    if array.is_empty() {
+        return Ok(0);
+    }
+    let bytes = match array.data_type() {
+        DataType::Utf8View => array.as_string_view().total_bytes_len() + array.len() * 4,
+        DataType::LargeList(_) => {
+            let list = array.as_list::<i64>();
+            let offsets = list.value_offsets();
+            let start = offsets[0] as usize;
+            let len = offsets[array.len()] as usize - start;
+            slice_bytes(list.values().slice(start, len).as_ref())? + array.len() * 8
+        }
+        DataType::Map(_, _) => {
+            let map = array.as_map();
+            let offsets = map.value_offsets();
+            let start = offsets[0] as usize;
+            let len = offsets[array.len()] as usize - start;
+            slice_bytes(&map.entries().slice(start, len))? + array.len() * 4
+        }
+        DataType::Struct(_) => array
+            .as_struct()
+            .columns()
+            .iter()
+            .try_fold(0, |sum, child| {
+                Ok::<_, ErrorCode>(sum + slice_bytes(child.as_ref())?)
+            })?,
+        DataType::FixedSizeList(_, _) => slice_bytes(array.as_fixed_size_list().values().as_ref())?,
+        _ => return Ok(array.to_data().get_slice_memory_size()?),
+    };
+    Ok(bytes
+        + if array.nulls().is_some() {
+            array.len().div_ceil(8)
+        } else {
+            0
+        })
 }
 
 impl ParquetFileWriter {
@@ -132,9 +176,7 @@ impl ParquetFileWriter {
     /// the column writers flush pages by their `data_page_*` limits, but a single oversized
     /// `write` of values that all land in one mini-batch can still produce one page exceeding
     /// parquet's ~2GB page-size hard limit (i32 overflow). Pre-splitting keeps each `write`
-    /// bounded. Row size is assumed roughly uniform (`RecordBatch::slice` shares buffers, so a
-    /// sliced chunk's true size cannot be measured) — see the `LIMITATION` on the old
-    /// `write_batch_with_page_limit`.
+    /// bounded even when row sizes are skewed.
     pub fn write_block(&mut self, block: DataBlock) -> Result<()> {
         if block.is_empty() {
             return Ok(());
@@ -145,43 +187,61 @@ impl ParquetFileWriter {
         // Convert through the arrow schema so the columns line up with the parquet leaves by
         // schema (name/type/coercion), not by the block's positional column order.
         let batch = block.to_record_batch_with_arrow_schema(&arrow_schema)?;
-        let batch_size = batch.get_array_memory_size();
-
-        // Fast path: the whole batch fits within the soft limit, encode it in one go.
-        if batch_size <= MAX_BATCH_MEMORY_SIZE {
-            self.write_record_batch(&arrow_schema, &batch)?;
-            self.num_rows += num_rows;
-            return Ok(());
-        }
-
-        // A single row cannot be split across pages, so if one row exceeds the ~2GB hard limit
-        // the encode would overflow the i32 page size. Reject it up front with a clear error.
-        if num_rows == 1 {
-            if batch_size > PARQUET_PAGE_SIZE_HARD_LIMIT {
-                return Err(ErrorCode::Internal(format!(
-                    "A single row requires {} bytes which exceeds Parquet's page size limit ({} bytes).",
-                    batch_size, PARQUET_PAGE_SIZE_HARD_LIMIT
-                )));
-            }
-            self.write_record_batch(&arrow_schema, &batch)?;
-            self.num_rows += num_rows;
-            return Ok(());
-        }
-
-        // Split into row-chunks sized to stay under the soft limit, assuming uniform row size.
-        let rows_per_chunk = (((num_rows as f64) * (MAX_BATCH_MEMORY_SIZE as f64)
-            / batch_size as f64)
-            .ceil() as usize)
-            .max(1);
-        let mut offset = 0;
-        while offset < num_rows {
-            let length = rows_per_chunk.min(num_rows - offset);
-            let chunk = batch.slice(offset, length);
-            self.write_record_batch(&arrow_schema, &chunk)?;
-            offset += length;
-        }
+        self.write_sized_batch(
+            &arrow_schema,
+            &batch,
+            MAX_BATCH_MEMORY_SIZE,
+            PARQUET_PAGE_SIZE_HARD_LIMIT,
+        )?;
         self.num_rows += num_rows;
         Ok(())
+    }
+
+    fn write_sized_batch(
+        &mut self,
+        schema: &Schema,
+        batch: &RecordBatch,
+        soft_limit: usize,
+        hard_limit: usize,
+    ) -> Result<()> {
+        let num_rows = batch.num_rows();
+        let mut batch_size = 0;
+        for (field, column) in schema.fields().iter().zip(batch.columns()) {
+            let bytes = slice_bytes(column.as_ref())?;
+            // Different top-level fields never share a data page. Keep a conservative
+            // logical-size guard for a single field (which can itself be nested).
+            if num_rows == 1 && bytes > hard_limit {
+                return Err(ErrorCode::Internal(format!(
+                    "Single-row Parquet field '{}' exceeds the page size limit: estimated_slice_bytes={bytes}, field_arrow_memory_bytes={}, batch_arrow_memory_bytes={}, limit={hard_limit}",
+                    field.name(),
+                    column.get_array_memory_size(),
+                    batch.get_array_memory_size()
+                )));
+            }
+            batch_size += bytes;
+        }
+
+        // Record the counterfactual on retry even when the corrected check accepts the slice.
+        if num_rows == 1 && log::log_enabled!(log::Level::Debug) {
+            let retained = batch.get_array_memory_size();
+            if retained > hard_limit {
+                log::debug!(
+                    "Parquet single-row slice accepted: estimated_slice_bytes={batch_size}, batch_arrow_memory_bytes={retained}, limit={hard_limit}"
+                );
+            }
+        }
+
+        if num_rows == 1 || batch_size <= soft_limit {
+            return self.write_record_batch(schema, batch);
+        }
+        let mid = num_rows / 2;
+        self.write_sized_batch(schema, &batch.slice(0, mid), soft_limit, hard_limit)?;
+        self.write_sized_batch(
+            schema,
+            &batch.slice(mid, num_rows - mid),
+            soft_limit,
+            hard_limit,
+        )
     }
 
     /// Leaf-expand each top-level column of `batch` and feed every leaf fragment into the
@@ -590,6 +650,36 @@ mod tests {
         let got = DataBlock::concat(&blocks).unwrap();
         assert_eq!(got.num_rows(), 100);
         assert_eq!(got.columns()[0].to_column(), StringType::from_data(values));
+    }
+
+    #[test]
+    fn test_page_limit_counts_only_visible_variant_bytes() {
+        use databend_common_expression::types::VariantType;
+
+        let schema = TableSchema::new(vec![TableField::new("attrs", TableDataType::Variant)]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let block =
+            DataBlock::new_from_columns(vec![VariantType::from_data(vec![vec![1; 4096], vec![2]])]);
+        let tail = block
+            .slice(1..2)
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        let batch = block
+            .to_record_batch_with_arrow_schema(&arrow_schema)
+            .unwrap();
+        let mut writer = ParquetFileWriter::new(arrow_schema.clone(), props(&schema));
+        assert!(tail.get_array_memory_size() > 1024);
+        assert!(slice_bytes(tail.column(0).as_ref()).unwrap() < 512);
+        writer
+            .write_sized_batch(&arrow_schema, &tail, 512, 1024)
+            .unwrap();
+        let err = writer
+            .write_sized_batch(&arrow_schema, &batch, 512, 1024)
+            .unwrap_err();
+        assert!(
+            err.message()
+                .contains("'attrs' exceeds the page size limit")
+        );
     }
 
     // Finishing without writing any block (or after only empty blocks) must still emit a valid
