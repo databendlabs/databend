@@ -1,0 +1,10 @@
+Without a stage grant: 403
+With READ only: 403
+Named stage file count before authorization: 0
+With WRITE: SUCCESS
+With ownership (legacy header): SUCCESS
+Named stage file sizes:
+2
+2
+Own user stage: SUCCESS
+Own user stage file size: 2

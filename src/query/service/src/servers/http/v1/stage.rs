@@ -14,6 +14,7 @@
 
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_sql::binder::validate_stage_path_traversal_policy;
 use databend_common_storage::init_stage_operator;
@@ -22,6 +23,7 @@ use futures_util::AsyncWriteExt;
 use futures_util::io;
 use http::StatusCode;
 use poem::Request;
+use poem::error::Forbidden;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
@@ -31,6 +33,7 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use super::require_upload_filename;
+use crate::interpreters::validate_stage_write_access;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextTableAccess;
 
@@ -113,6 +116,13 @@ pub async fn upload_to_stage(
             .await
             .map_err(InternalServerError)?
     };
+
+    validate_stage_write_access(context, &stage)
+        .await
+        .map_err(|e| match e.code() {
+            ErrorCode::PERMISSION_DENIED => Forbidden(e),
+            _ => InternalServerError(e),
+        })?;
 
     let op = init_stage_operator(&stage).map_err(InternalServerError)?;
     let path_traversal_policy = databend_common_config::GlobalConfig::instance()
