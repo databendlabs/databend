@@ -78,6 +78,18 @@ async fn test_filter_push_down_row_dependent_barriers() -> Result<()> {
             sql: "SELECT * FROM (SELECT k, sum(running_difference(v)) OVER (PARTITION BY k) AS s, count(*) OVER (PARTITION BY k) AS n FROM t) w WHERE k = 1",
         },
         SqlTestCase {
+            name: "filter_stays_above_running_difference_set_returning_function",
+            description: "A set-returning function evaluates running_difference in its arguments, so a filter on another column stays above it.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT * FROM (SELECT k, unnest([running_difference(v)]) AS d FROM t) s WHERE k = 1",
+        },
+        SqlTestCase {
+            name: "filter_passes_row_local_set_returning_function",
+            description: "unnest([v]) only reads the current row, so a filter on another column still passes the set-returning function.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT * FROM (SELECT k, unnest([v]) AS d FROM t) s WHERE k = 1",
+        },
+        SqlTestCase {
             name: "filter_stays_out_of_left_any_join_null_supplying_side",
             description: "LEFT ANY JOIN is not converted to an inner join, so filters on its null-supplying side stay above it. The preserved side and the inferred copy are still pushed down.",
             setup_sqls: &[T_TABLE, U_TABLE],

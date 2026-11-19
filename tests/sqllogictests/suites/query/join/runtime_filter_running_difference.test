@@ -69,6 +69,31 @@ select q.k,q.s,q.n from (select k,sum(running_difference(v)) over (partition by 
 ----
 1 10 1
 
+# A set-returning function evaluates running_difference in its arguments.
+# Neither RF nor an ordinary filter on k may remove key 0 before it is read.
+statement ok
+set enable_join_runtime_filter = 0;
+
+query II
+select q.k,q.d from (select k,unnest([running_difference(v)]) as d from (select k,v from rf_eval_input order by k) o) q join rf_eval_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+# Before the fix RF removes key 0 below the set-returning function, returning 1 0.
+query II
+select q.k,q.d from (select k,unnest([running_difference(v)]) as d from (select k,v from rf_eval_input order by k) o) q join rf_eval_keep c on q.k=c.k where c.flag=1 order by q.k;
+----
+1 10
+
+# Before the fix the filter moves below the set-returning function, returning 1 0.
+query II
+select q.k,q.d from (select k,unnest([running_difference(v)]) as d from (select k,v from rf_eval_input order by k) o) q where q.k = 1;
+----
+1 10
+
 statement ok
 unset enable_join_runtime_filter;
 

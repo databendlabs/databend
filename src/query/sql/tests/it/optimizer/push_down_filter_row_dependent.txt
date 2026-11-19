@@ -115,6 +115,36 @@ Filter
         └── limit: NONE
 
 
+=== filter_stays_above_running_difference_set_returning_function ===
+description: A set-returning function evaluates running_difference in its arguments, so a filter on another column stays above it.
+sql: SELECT * FROM (SELECT k, unnest([running_difference(v)]) AS d FROM t) s WHERE k = 1
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), get(1)(unnest(array(running_difference(t.v (#1)))) (#2)) AS (#3)]
+└── Filter
+    ├── filters: [eq(t.k (#0), 1)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(25..56), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(32..55), func_name: "array", params: [], arguments: [FunctionCall(FunctionCall { span: Some(33..54), func_name: "running_difference", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(52..53), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } })] })] })] }), index: 2 }] })
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== filter_passes_row_local_set_returning_function ===
+description: unnest([v]) only reads the current row, so a filter on another column still passes the set-returning function.
+sql: SELECT * FROM (SELECT k, unnest([v]) AS d FROM t) s WHERE k = 1
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), get(1)(unnest(array(t.v (#1))) (#2)) AS (#3)]
+└── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(25..36), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(32..35), func_name: "array", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(33..34), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } })] })] }), index: 2 }] })
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [eq(t.k (#0), 1)]
+        ├── order by: []
+        └── limit: NONE
+
+
 === filter_stays_out_of_left_any_join_null_supplying_side ===
 description: LEFT ANY JOIN is not converted to an inner join, so filters on its null-supplying side stay above it. The preserved side and the inferred copy are still pushed down.
 sql: SELECT * FROM t LEFT ANY JOIN u ON t.k = u.k WHERE coalesce(u.v, 0) = 0 AND u.v = 1 AND t.k = 1

@@ -901,6 +901,54 @@ EvalScalar
             └── limit: NONE
 
 
+=== set_returning_function_stateful_argument_is_not_pushed ===
+description: The set-returning function evaluates running_difference in its arguments, so the filter is removed above it.
+sql: SELECT f.d FROM (SELECT k, unnest([running_difference(v)]) AS d FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k
+raw_plan:
+EvalScalar
+├── scalars: [d (#4) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#5)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), get(1)(unnest(array(running_difference(rf_fact.v (#1)))) (#3)) AS (#4)]
+        └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(27..58), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(34..57), func_name: "array", params: [], arguments: [FunctionCall(FunctionCall { span: Some(35..56), func_name: "running_difference", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(54..55), column: ColumnBinding { database_name: Some("default"), table_name: Some("rf_fact"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } })] })] })] }), index: 3 }] })
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [d (#4) AS (#4), rf_fact.k (#0) AS (#7), rf_dim.k (#5) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [rf_dim.k (#5)]
+    ├── probe keys: [rf_fact.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: rf_dim.k (#5) -> rf_fact.k (#0)]
+    ├── Scan
+    │   ├── table: default.rf_dim (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [rf_fact.k (#0) AS (#0), get(1)(unnest(array(running_difference(rf_fact.v (#1)))) (#3)) AS (#4)]
+        └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(27..58), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(34..57), func_name: "array", params: [], arguments: [FunctionCall(FunctionCall { span: Some(35..56), func_name: "running_difference", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(54..55), column: ColumnBinding { database_name: Some("default"), table_name: Some("rf_fact"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int32), visibility: Visible, virtual_expr: None, is_srf: false } })] })] })] }), index: 3 }] })
+            └── Scan
+                ├── table: default.rf_fact (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === row_local_volatile_scan_predicate ===
 description: rand() is evaluated per row, so the scan with v > rand() still receives the filter.
 sql: SELECT f.v FROM (SELECT k, v FROM rf_fact WHERE v > rand()) f

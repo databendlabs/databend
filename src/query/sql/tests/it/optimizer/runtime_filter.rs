@@ -180,6 +180,12 @@ JOIN rf_dim d ON f.k = d.k",
 JOIN rf_dim d ON f.k = d.k",
         },
         RuntimeFilterCase {
+            name: "set_returning_function_stateful_argument_is_not_pushed",
+            description: "The set-returning function evaluates running_difference in its arguments, so the filter is removed above it.",
+            sql: "SELECT f.d FROM (SELECT k, unnest([running_difference(v)]) AS d FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k",
+        },
+        RuntimeFilterCase {
             name: "row_local_volatile_scan_predicate",
             description: "rand() is evaluated per row, so the scan with v > rand() still receives the filter.",
             sql: "SELECT f.v FROM (SELECT k, v FROM rf_fact WHERE v > rand()) f
