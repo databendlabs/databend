@@ -231,7 +231,14 @@ impl CollectStatisticsOptimizer {
                 let mut histograms = HashMap::new();
                 let mut top_n = HashMap::new();
                 let mut count_min_sketch = HashMap::new();
+                let mut approx_top_n = HashMap::new();
                 let collect_frequency_stats = scan.change_type.is_none();
+                // Only the heavy hitter aggregation reads possibly stale top-N stats.
+                let collect_approx_top_n = collect_frequency_stats
+                    && self
+                        .table_ctx
+                        .get_settings()
+                        .get_enable_heavy_hitter_aggregate()?;
                 for column in &columns {
                     let col_stat = column_statistics_provider.column_statistics(column.id);
                     column_stats.insert(
@@ -253,6 +260,12 @@ impl CollectStatisticsOptimizer {
                             column_statistics_provider.count_min_sketch(column.id)
                     {
                         count_min_sketch.insert(column.index, column_count_min_sketch);
+                    }
+                    if collect_approx_top_n
+                        && let Some(column_top_n) =
+                            column_statistics_provider.approx_top_n(column.id)
+                    {
+                        approx_top_n.insert(column.index, column_top_n);
                     }
                 }
 
@@ -286,6 +299,7 @@ impl CollectStatisticsOptimizer {
                     histograms,
                     top_n,
                     count_min_sketch,
+                    approx_top_n,
                 });
                 let mut s_expr = s_expr.replace_plan(scan.clone());
                 if let Some(sample) = &scan.sample {

@@ -1399,6 +1399,10 @@ impl Table for FuseTable {
             let count_min_sketch = aligned_table_statistics
                 .map(|v| v.count_min_sketch.clone())
                 .unwrap_or_default();
+            let (approx_top_n, approx_top_n_rows) = table_statistics
+                .as_ref()
+                .map(|v| (v.top_n.clone(), v.row_count))
+                .unwrap_or_default();
             FuseTableColumnStatisticsProvider::new(
                 stats,
                 histograms,
@@ -1410,6 +1414,7 @@ impl Table for FuseTable {
                 snapshot.summary.block_count,
                 &self.schema(),
             )
+            .with_approx_top_n(approx_top_n, approx_top_n_rows)
         } else {
             FuseTableColumnStatisticsProvider::default()
         };
