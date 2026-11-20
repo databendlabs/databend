@@ -13,6 +13,7 @@ Exchange(Merge)
                     ├── build keys: [orders.o_orderkey (#16)]
                     ├── probe keys: [lineitem.l_orderkey (#0)]
                     ├── other filters: []
+                    ├── runtime filters: [#0: orders.o_orderkey (#16) -> lineitem.l_orderkey (#0)]
                     ├── Exchange(Broadcast)
                     │   └── Scan
                     │       ├── table: default.orders (#1)
@@ -23,5 +24,6 @@ Exchange(Merge)
                         ├── table: default.lineitem (#0)
                         ├── filters: []
                         ├── order by: []
-                        └── limit: NONE
+                        ├── limit: NONE
+                        └── runtime filters: [#0: lineitem.l_orderkey (#0)]
 

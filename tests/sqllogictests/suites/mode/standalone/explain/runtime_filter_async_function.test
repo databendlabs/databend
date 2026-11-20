@@ -1,0 +1,116 @@
+# A runtime filter passes an async function only if the function does not
+# depend on the other rows. Keep the async function on the probe side.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+create or replace table rf_async_probe(k INT NOT NULL);
+
+statement ok
+create or replace table rf_async_build(k INT NOT NULL);
+
+statement ok
+insert into rf_async_probe values (1), (2);
+
+statement ok
+insert into rf_async_build values (2);
+
+statement ok
+create or replace sequence rf_async_seq;
+
+# sleep() returns the same value whatever rows it is called for, so the probe
+# scan receives the runtime filter.
+query T
+explain select p.k, p.s from (select k, sleep(0) as s from rf_async_probe) p join rf_async_build b on p.k = b.k;
+----
+HashJoin
+├── output columns: [rf_async_probe.k (#0), s (#1)]
+├── join type: INNER
+├── build keys: [b.k (#3)]
+├── probe keys: [p.k (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:b.k (#3), probe targets:[rf_async_probe.k (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.default.rf_async_build
+│   ├── scan id: 1
+│   ├── output columns: [k (#3)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 1.00
+└── AsyncFunction(Probe)
+    ├── output columns: [rf_async_probe.k (#0), sleep(0)_arg_0 (#2), s (#1)]
+    ├── estimated rows: 2.00
+    └── EvalScalar
+        ├── output columns: [rf_async_probe.k (#0), sleep(0)_arg_0 (#2)]
+        ├── expressions: [0]
+        ├── estimated rows: 2.00
+        └── TableScan
+            ├── table: default.default.rf_async_probe
+            ├── scan id: 0
+            ├── output columns: [k (#0)]
+            ├── read rows: 2
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 2.00
+
+# Each nextval() call advances the sequence, so the runtime filter must not
+# remove rows below it.
+query T
+explain select p.k, p.v from (select k, nextval(rf_async_seq) as v from rf_async_probe) p join rf_async_build b on p.k = b.k;
+----
+HashJoin
+├── output columns: [rf_async_probe.k (#0), v (#1)]
+├── join type: INNER
+├── build keys: [b.k (#2)]
+├── probe keys: [p.k (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── estimated rows: 1.00
+├── TableScan(Build)
+│   ├── table: default.default.rf_async_build
+│   ├── scan id: 1
+│   ├── output columns: [k (#2)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 1.00
+└── AsyncFunction(Probe)
+    ├── output columns: [rf_async_probe.k (#0), v (#1)]
+    ├── estimated rows: 2.00
+    └── TableScan
+        ├── table: default.default.rf_async_probe
+        ├── scan id: 0
+        ├── output columns: [k (#0)]
+        ├── read rows: 2
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 2.00
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop sequence rf_async_seq;
+
+statement ok
+drop table rf_async_probe;
+
+statement ok
+drop table rf_async_build;

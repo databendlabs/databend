@@ -63,6 +63,7 @@ Exchange(Merge)
             │                               ├── build keys: [b (#3)]
             │                               ├── probe keys: [b (#6)]
             │                               ├── other filters: []
+            │                               ├── runtime filters: [#0: b (#3) -> b (#6)]
             │                               ├── Exchange(Broadcast)
             │                               │   └── ConstantTableScan
             │                               │       ├── columns: [a (#2), b (#3)]
@@ -148,6 +149,7 @@ Exchange(Merge)
             │                               ├── build keys: [b (#3)]
             │                               ├── probe keys: [b (#7)]
             │                               ├── other filters: []
+            │                               ├── runtime filters: [#0: b (#3) -> b (#7)]
             │                               ├── Exchange(Broadcast)
             │                               │   └── ConstantTableScan
             │                               │       ├── columns: [a (#2), b (#3)]
@@ -228,6 +230,7 @@ Exchange(Merge)
             │                               ├── build keys: [b (#3)]
             │                               ├── probe keys: [b (#7)]
             │                               ├── other filters: []
+            │                               ├── runtime filters: [#0: b (#3) -> b (#7)]
             │                               ├── Exchange(Broadcast)
             │                               │   └── ConstantTableScan
             │                               │       ├── columns: [a (#2), b (#3)]
@@ -312,6 +315,7 @@ Exchange(Merge)
             │           │       ├── build keys: [a (#2), b (#3)]
             │           │       ├── probe keys: [a (#8), b (#9)]
             │           │       ├── other filters: []
+            │           │       ├── runtime filters: [#0: a (#2) -> a (#8), #1: b (#3) -> b (#9)]
             │           │       ├── Exchange(Broadcast)
             │           │       │   └── ConstantTableScan
             │           │       │       ├── columns: [a (#2), b (#3)]
@@ -333,6 +337,7 @@ Exchange(Merge)
             │                   ├── build keys: [a (#4), b (#5)]
             │                   ├── probe keys: [a (#10), b (#11)]
             │                   ├── other filters: []
+            │                   ├── runtime filters: [#2: a (#4) -> a (#10), #3: b (#5) -> b (#11)]
             │                   ├── Exchange(Broadcast)
             │                   │   └── ConstantTableScan
             │                   │       ├── columns: [a (#4), b (#5)]
@@ -425,6 +430,7 @@ Exchange(Merge)
             │                   ├── build keys: [k (#4)]
             │                   ├── probe keys: [b (#10)]
             │                   ├── other filters: []
+            │                   ├── runtime filters: [#0: k (#4) -> b (#10)]
             │                   ├── Exchange(Broadcast)
             │                   │   └── Filter
             │                   │       ├── filters: [lte(correlated_limit_row_number (#6), 1)]
@@ -537,6 +543,7 @@ Exchange(Merge)
             │                   ├── build keys: [plus(v (#2), 1)]
             │                   ├── probe keys: [a (#9)]
             │                   ├── other filters: []
+            │                   ├── runtime filters: [#0: plus(v (#2), 1) -> a (#9)]
             │                   ├── Exchange(Broadcast)
             │                   │   └── ConstantTableScan
             │                   │       ├── columns: [v (#2)]

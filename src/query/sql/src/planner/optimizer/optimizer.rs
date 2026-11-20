@@ -38,6 +38,7 @@ use crate::optimizer::optimizers::operator::HeavyHitterAggregateOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
+use crate::optimizer::optimizers::operator::RuntimeFilterOptimizer;
 use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
@@ -358,6 +359,12 @@ pub(super) async fn query_logical_pipeline(
         .add_if(
             settings.get_force_eager_aggregate()?,
             EagerAggregationOptimizer::new(opt_ctx.get_metadata()),
+        )
+        // Plan join runtime filters after the join order and build sides are chosen.
+        // They reuse the filter push-down rules to reach the probe-side scans.
+        .add_if(
+            settings.get_enable_join_runtime_filter()?,
+            RuntimeFilterOptimizer::new(opt_ctx.clone()),
         )
         // Runs last: later rewrites must not move the candidate filter into the cross join.
         .add_if(

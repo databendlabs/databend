@@ -48,6 +48,7 @@ use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::ScanRuntimeFilter;
 use crate::plans::SortItem;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -123,6 +124,8 @@ pub struct Scan {
     pub sample: Option<SampleConfig>,
     pub scan_id: usize,
     pub statistics: Arc<Statistics>,
+    /// Join runtime filters pushed down to this scan.
+    pub runtime_filters: Vec<ScanRuntimeFilter>,
 }
 
 impl Scan {
@@ -188,6 +191,7 @@ impl Scan {
             is_lazy_table: self.is_lazy_table,
             sample: self.sample.clone(),
             scan_id: self.scan_id,
+            runtime_filters: self.runtime_filters.clone(),
         }
     }
 
@@ -217,6 +221,7 @@ impl Scan {
             order_by: None,
             prewhere: None,
             statistics: Arc::new(Statistics::default()),
+            runtime_filters: vec![],
         }
     }
 
@@ -244,6 +249,21 @@ impl Scan {
         used_columns
     }
 
+    /// Whether a predicate evaluated by this scan may depend on other input rows. Adding
+    /// predicates to the scan can then change which rows those predicates keep.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.push_down_predicates
+            .iter()
+            .chain(self.secure_predicates.iter())
+            .flatten()
+            .chain(
+                self.prewhere
+                    .iter()
+                    .flat_map(|prewhere| &prewhere.predicates),
+            )
+            .any(ScalarExpr::depends_on_other_rows)
+    }
+
     pub fn has_secure_predicates_not_applied_by_prewhere(&self) -> bool {
         let Some(secure_predicates) = &self.secure_predicates else {
             return false;
@@ -268,6 +288,7 @@ impl PartialEq for Scan {
             && self.columns == other.columns
             && self.push_down_predicates == other.push_down_predicates
             && self.secure_predicates == other.secure_predicates
+            && self.runtime_filters == other.runtime_filters
     }
 }
 
@@ -281,6 +302,7 @@ impl std::hash::Hash for Scan {
         }
         self.push_down_predicates.hash(state);
         self.secure_predicates.hash(state);
+        self.runtime_filters.hash(state);
     }
 }
 

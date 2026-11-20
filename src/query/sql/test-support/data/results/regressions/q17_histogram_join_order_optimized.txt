@@ -11,11 +11,13 @@ Aggregate(Final)
                 ├── build keys: [lineitem.l_partkey (#7)]
                 ├── probe keys: [lineitem.l_partkey (#0)]
                 ├── other filters: [lt(lineitem.l_quantity (#1), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12))]
+                ├── runtime filters: [#0: lineitem.l_partkey (#7) -> lineitem.l_partkey (#0)]
                 ├── Exchange(Broadcast)
                 │   └── Join(Inner)
                 │       ├── build keys: [lineitem.l_partkey (#7)]
                 │       ├── probe keys: [part.p_partkey (#3)]
                 │       ├── other filters: []
+                │       ├── runtime filters: [#1: lineitem.l_partkey (#7) -> part.p_partkey (#3)]
                 │       ├── Exchange(Broadcast)
                 │       │   └── EvalScalar
                 │       │       ├── scalars: [lineitem.l_partkey (#7) AS (#7), multiply(0.2, divide(sum(s.l_quantity) (#10), if(eq(count(s.l_quantity) (#11), 0), 1, count(s.l_quantity) (#11)))) AS (#12)]
@@ -36,10 +38,12 @@ Aggregate(Final)
                 │           ├── table: default.part (#1)
                 │           ├── filters: [eq(part.p_brand (#4), 'Brand#23'), eq(part.p_container (#5), 'MED BOX')]
                 │           ├── order by: []
-                │           └── limit: NONE
+                │           ├── limit: NONE
+                │           └── runtime filters: [#1: part.p_partkey (#3)]
                 └── Scan
                     ├── table: default.lineitem (#0)
                     ├── filters: []
                     ├── order by: []
-                    └── limit: NONE
+                    ├── limit: NONE
+                    └── runtime filters: [#0: lineitem.l_partkey (#0)]
 

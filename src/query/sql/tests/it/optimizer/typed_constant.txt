@@ -132,6 +132,7 @@ EvalScalar
     ├── build keys: [typed_constant_right.a (#3)]
     ├── probe keys: [typed_constant_left.a (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: typed_constant_right.a (#3) -> typed_constant_left.a (#0)]
     ├── Scan
     │   ├── table: default.typed_constant_right (#1)
     │   ├── filters: [gt(plus(typed_constant_right.b (#4), 1), 0)]
@@ -141,7 +142,8 @@ EvalScalar
         ├── table: default.typed_constant_left (#0)
         ├── filters: []
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: typed_constant_left.a (#0)]
 
 
 === typed_constant_in_subquery ===

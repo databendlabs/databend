@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::types::DataType;
 
+use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
@@ -46,6 +47,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
+use crate::plans::as_runtime_filter_predicate;
 
 pub struct RulePushDownFilterJoin {
     matchers: Vec<Matcher>,
@@ -122,6 +124,40 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
+/// A runtime filter predicate only removes rows whose probe key cannot match the build side
+/// of the join that created it, and that join rejects NULL keys. If the key is NULL for every
+/// row that this outer join extends with NULLs, filtering the null-supplying input first
+/// cannot change the rows that reach the originating join with a matchable key.
+fn can_push_runtime_filter_into_null_supplying_side(
+    predicate: &ScalarExpr,
+    null_supplying_columns: &ColumnSet,
+    join_type: &JoinType,
+    metadata: MetadataRef,
+    func_ctx: &FunctionContext,
+) -> Result<bool> {
+    // Single joins report an error for multiple matches; removing matches could hide it.
+    if !matches!(join_type, JoinType::Left | JoinType::Right | JoinType::Full) {
+        return Ok(false);
+    }
+    let Some((_, probe_key)) = as_runtime_filter_predicate(predicate) else {
+        return Ok(false);
+    };
+    let key_is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "is_not_null".to_string(),
+        params: vec![],
+        arguments: vec![probe_key.clone()],
+        return_type: Box::new(DataType::Boolean),
+    });
+    can_filter_null(
+        &key_is_not_null,
+        null_supplying_columns,
+        join_type,
+        metadata,
+        func_ctx,
+    )
+}
+
 fn try_push_down_filter_join(
     s_expr: &SExpr,
     metadata: MetadataRef,
@@ -134,6 +170,10 @@ fn try_push_down_filter_join(
     let mut predicates = rewrite_predicates(s_expr)?;
     let join_expr = s_expr.child(0)?;
     let mut join: Join = join_expr.plan().clone().try_into()?;
+    // A predicate moved into an input would also filter the rows that the join conditions see.
+    if join.depends_on_other_rows() {
+        return Ok((false, s_expr.clone()));
+    }
 
     let rel_expr = RelExpr::with_s_expr(join_expr);
     let left_prop = rel_expr.derive_relational_prop_child(0)?;
@@ -151,6 +191,15 @@ fn try_push_down_filter_join(
             visitor.visit(predicate)?;
         }
     }
+    // A join converted from a single join still reports an error when the single side has
+    // several matches for a row. A filter on that side could remove matches and hide the
+    // error, so it stays above the join. Predicates inferred through the join equalities
+    // below remain safe: they cannot remove a match of any row that the filter keeps.
+    let (single_side_is_left, single_side_is_right) = match join.single_to_inner {
+        Some(JoinType::LeftSingle) => (false, true),
+        Some(JoinType::RightSingle) => (true, false),
+        _ => (false, false),
+    };
     let original_predicates_count = predicates.len();
     let mut original_predicates = vec![];
     let mut left_push_down = vec![];
@@ -167,12 +216,29 @@ fn try_push_down_filter_join(
             JoinPredicate::ALL(_) => {
                 push_down_predicates.push(predicate);
             }
+            JoinPredicate::Left(_) if single_side_is_left => original_predicates.push(predicate),
+            JoinPredicate::Right(_) if single_side_is_right => original_predicates.push(predicate),
+            // An ANY outer join is never converted to an inner join. Filtering its
+            // null-supplying input could turn a matched row into a NULL-extended row that the
+            // predicate accepts, such as `coalesce(r.v, 0) = 0`.
+            JoinPredicate::Left(_) if join.join_type == JoinType::RightAny => {
+                original_predicates.push(predicate)
+            }
+            JoinPredicate::Right(_) if join.join_type == JoinType::LeftAny => {
+                original_predicates.push(predicate)
+            }
             JoinPredicate::Left(_) => {
                 if matches!(
                     join.join_type,
                     JoinType::Right | JoinType::RightSingle | JoinType::Full | JoinType::FullAsof
                 ) {
                     if can_filter_null(
+                        &predicate,
+                        &left_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )? || can_push_runtime_filter_into_null_supplying_side(
                         &predicate,
                         &left_prop.output_columns,
                         &join.join_type,
@@ -193,6 +259,12 @@ fn try_push_down_filter_join(
                     JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::FullAsof
                 ) {
                     if can_filter_null(
+                        &predicate,
+                        &right_prop.output_columns,
+                        &join.join_type,
+                        metadata.clone(),
+                        func_ctx,
+                    )? || can_push_runtime_filter_into_null_supplying_side(
                         &predicate,
                         &right_prop.output_columns,
                         &join.join_type,
