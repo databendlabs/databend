@@ -161,6 +161,9 @@ async fn test_segment_writers_omit_incomplete_column_ranges() -> anyhow::Result<
     // The old compactor persisted a key for b even with a block that lacks b.
     let mut legacy_summary = oldest.summary;
     merge_statistics_mut(&mut legacy_summary, &middle.summary, None);
+    legacy_summary
+        .col_stats
+        .insert(b, middle.summary.col_stats[&b].clone());
     assert_eq!(legacy_summary.col_stats[&b].min(), &int(100));
     let mut legacy_blocks = oldest.blocks;
     legacy_blocks.extend(middle.blocks);

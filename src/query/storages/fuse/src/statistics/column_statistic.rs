@@ -204,7 +204,7 @@ fn auto_stats_string_prefix_len(min: &str, max: &str) -> usize {
     }
 }
 
-pub(crate) fn trim_column_min_max(
+pub fn trim_column_min_max(
     min: Scalar,
     max: Scalar,
     string_truncate_len: Option<usize>,

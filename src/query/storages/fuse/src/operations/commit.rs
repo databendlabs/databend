@@ -140,7 +140,7 @@ impl FuseTable {
             )
         });
 
-        let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
+        let snapshot_gen = AppendGenerator::new(overwrite);
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,
@@ -574,12 +574,12 @@ fn append_top_n_merge_input(
     let previous_summary = previous_summary.filter(|summary| summary.row_count != 0);
     let mut append_top_n = HashMap::new();
 
-    for (&column_id, field) in columns {
+    for &column_id in columns.keys() {
         let Some(column_top_n) = insert_top_n.get(&column_id).cloned() else {
             continue;
         };
         if previous_top_n.contains_key(&column_id)
-            || column_has_no_previous_values(previous_summary, column_id, field)
+            || column_has_no_previous_values(previous_summary, column_id)
         {
             append_top_n.insert(column_id, column_top_n);
         }
@@ -591,19 +591,16 @@ fn append_top_n_merge_input(
 fn column_has_no_previous_values(
     previous_summary: Option<&Statistics>,
     column_id: ColumnId,
-    field: &TableField,
 ) -> bool {
     let Some(summary) = previous_summary else {
         return true;
     };
-    match summary.col_stats.get(&column_id) {
-        Some(stats) => stats.null_count == summary.row_count,
-        None => {
-            // A nullable column added without a default has no old column stats;
-            // historical rows read as NULL and should not block append TopN.
-            field.default_expr().is_none() && field.is_nullable_or_null()
-        }
-    }
+    // A missing range does not show that the old rows are NULL: some old blocks
+    // may lack statistics. ADD COLUMN records the NULL range of a new column.
+    summary
+        .col_stats
+        .get(&column_id)
+        .is_some_and(|stats| stats.null_count == summary.row_count)
 }
 
 pub(crate) fn is_fresh_table_snapshot_top_n(
