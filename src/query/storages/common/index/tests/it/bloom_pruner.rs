@@ -445,8 +445,14 @@ fn test_base(file: &mut impl Write) {
                     KvColumn {
                         keys: ["a", "b"].into_iter().map(String::from).collect(),
                         values: VariantType::from_data(vec![
-                            jsonb::parse_value(r#""abc""#.as_bytes()).unwrap().to_vec(),
-                            jsonb::parse_value(r#"100"#.as_bytes()).unwrap().to_vec(),
+                            jsonb::parse_value(r#""abc""#.as_bytes())
+                                .unwrap()
+                                .to_vec()
+                                .unwrap(),
+                            jsonb::parse_value(r#"100"#.as_bytes())
+                                .unwrap()
+                                .to_vec()
+                                .unwrap(),
                         ])
                         .into_variant()
                         .unwrap(),
@@ -480,9 +486,18 @@ fn test_base(file: &mut impl Write) {
                     KvColumn {
                         keys: StringType::from_data(vec!["b", "c", "d"]),
                         values: VariantType::from_data(vec![
-                            jsonb::parse_value(r#""def""#.as_bytes()).unwrap().to_vec(),
-                            jsonb::parse_value(r#"true"#.as_bytes()).unwrap().to_vec(),
-                            jsonb::parse_value(r#""xyz""#.as_bytes()).unwrap().to_vec(),
+                            jsonb::parse_value(r#""def""#.as_bytes())
+                                .unwrap()
+                                .to_vec()
+                                .unwrap(),
+                            jsonb::parse_value(r#"true"#.as_bytes())
+                                .unwrap()
+                                .to_vec()
+                                .unwrap(),
+                            jsonb::parse_value(r#""xyz""#.as_bytes())
+                                .unwrap()
+                                .to_vec()
+                                .unwrap(),
                         ]),
                     },
                     Buffer::<u64>::from(vec![0, 2, 3]),

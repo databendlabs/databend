@@ -332,8 +332,8 @@ fn test_arrow_ipc_geo_text_payloads() -> anyhow::Result<()> {
 
 #[test]
 fn test_arrow_ipc_variant_json_string_payloads() -> anyhow::Result<()> {
-    let value1 = jsonb::parse_value(r#"{"a":1,"b":[true,null,"x"]}"#.as_bytes())?.to_vec();
-    let value2 = jsonb::parse_value(r#""plain string""#.as_bytes())?.to_vec();
+    let value1 = jsonb::parse_value(r#"{"a":1,"b":[true,null,"x"]}"#.as_bytes())?.to_vec()?;
+    let value2 = jsonb::parse_value(r#""plain string""#.as_bytes())?.to_vec()?;
 
     let schema = DataSchema::new(vec![DataField::new("v", DataType::Variant)]);
     let mut collector = BlocksCollector::new();
@@ -370,11 +370,11 @@ fn test_arrow_ipc_variant_json_string_payloads() -> anyhow::Result<()> {
 
 #[test]
 fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
-    let value1 = jsonb::parse_value(r#"{"k":[1,2,3]}"#.as_bytes())?.to_vec();
-    let value2 = jsonb::parse_value(r#"{"nested":{"x":"y"}}"#.as_bytes())?.to_vec();
-    let value3 = jsonb::parse_value(r#"[1,{"z":false}]"#.as_bytes())?.to_vec();
-    let value4 = jsonb::parse_value(r#"{"m":null}"#.as_bytes())?.to_vec();
-    let value5 = jsonb::parse_value(r#"123"#.as_bytes())?.to_vec();
+    let value1 = jsonb::parse_value(r#"{"k":[1,2,3]}"#.as_bytes())?.to_vec()?;
+    let value2 = jsonb::parse_value(r#"{"nested":{"x":"y"}}"#.as_bytes())?.to_vec()?;
+    let value3 = jsonb::parse_value(r#"[1,{"z":false}]"#.as_bytes())?.to_vec()?;
+    let value4 = jsonb::parse_value(r#"{"m":null}"#.as_bytes())?.to_vec()?;
+    let value5 = jsonb::parse_value(r#"123"#.as_bytes())?.to_vec()?;
 
     let schema = DataSchema::new(vec![
         DataField::new(
@@ -498,7 +498,7 @@ fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
 
 #[test]
 fn test_arrow_ipc_nullable_variant_distinguishes_sql_null_and_json_null() -> anyhow::Result<()> {
-    let json_null = jsonb::parse_value(b"null")?.to_vec();
+    let json_null = jsonb::parse_value(b"null")?.to_vec()?;
 
     let schema = DataSchema::new(vec![DataField::new(
         "nullable_variant",
@@ -537,7 +537,7 @@ fn test_arrow_ipc_nullable_variant_distinguishes_sql_null_and_json_null() -> any
 #[test]
 fn test_arrow_ipc_nested_nullable_variant_distinguishes_sql_null_and_json_null()
 -> anyhow::Result<()> {
-    let json_null = jsonb::parse_value(b"null")?.to_vec();
+    let json_null = jsonb::parse_value(b"null")?.to_vec()?;
 
     let schema = DataSchema::new(vec![DataField::new(
         "tuple_nullable_variant",
@@ -582,8 +582,8 @@ fn test_arrow_ipc_nested_nullable_variant_distinguishes_sql_null_and_json_null()
 
 #[test]
 fn test_arrow_ipc_variant_jsonb_payloads_for_legacy_bendsql_python() -> anyhow::Result<()> {
-    let value1 = jsonb::parse_value(r#"{"a":1,"b":[true,null,"x"]}"#.as_bytes())?.to_vec();
-    let value2 = jsonb::parse_value(r#""plain string""#.as_bytes())?.to_vec();
+    let value1 = jsonb::parse_value(r#"{"a":1,"b":[true,null,"x"]}"#.as_bytes())?.to_vec()?;
+    let value2 = jsonb::parse_value(r#""plain string""#.as_bytes())?.to_vec()?;
 
     let schema = DataSchema::new(vec![DataField::new("v", DataType::Variant)]);
     let mut collector = BlocksCollector::new();
@@ -613,11 +613,11 @@ fn test_arrow_ipc_variant_jsonb_payloads_for_legacy_bendsql_python() -> anyhow::
 
 #[test]
 fn test_arrow_ipc_nested_variant_jsonb_payloads_for_legacy_bendsql_python() -> anyhow::Result<()> {
-    let value1 = jsonb::parse_value(r#"{"k":[1,2,3]}"#.as_bytes())?.to_vec();
-    let value2 = jsonb::parse_value(r#"{"nested":{"x":"y"}}"#.as_bytes())?.to_vec();
-    let value3 = jsonb::parse_value(r#"[1,{"z":false}]"#.as_bytes())?.to_vec();
-    let value4 = jsonb::parse_value(r#"{"m":null}"#.as_bytes())?.to_vec();
-    let value5 = jsonb::parse_value(r#"123"#.as_bytes())?.to_vec();
+    let value1 = jsonb::parse_value(r#"{"k":[1,2,3]}"#.as_bytes())?.to_vec()?;
+    let value2 = jsonb::parse_value(r#"{"nested":{"x":"y"}}"#.as_bytes())?.to_vec()?;
+    let value3 = jsonb::parse_value(r#"[1,{"z":false}]"#.as_bytes())?.to_vec()?;
+    let value4 = jsonb::parse_value(r#"{"m":null}"#.as_bytes())?.to_vec()?;
+    let value5 = jsonb::parse_value(r#"123"#.as_bytes())?.to_vec()?;
 
     let schema = DataSchema::new(vec![
         DataField::new(

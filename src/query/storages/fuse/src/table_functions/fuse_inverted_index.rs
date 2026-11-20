@@ -412,7 +412,9 @@ fn footer_to_jsonb(footer: InvertedIndexBundleFooter) -> Vec<u8> {
         inline_json(managed_json.as_ref()),
     );
     object.insert("meta_json".to_string(), inline_json(meta_json.as_ref()));
-    JsonbValue::Object(object).to_vec()
+    JsonbValue::Object(object)
+        .to_vec()
+        .expect("failed to encode inverted index footer as jsonb")
 }
 
 fn inline_json(bytes: &[u8]) -> JsonbValue<'_> {

@@ -223,7 +223,8 @@ impl VariantType {
     pub fn create_column_from_variants(variants: &[Value]) -> BinaryColumn {
         let mut builder = BinaryColumnBuilder::with_capacity(variants.len(), 0);
         for v in variants {
-            v.write_to_vec(&mut builder.data);
+            v.write_to_vec(&mut builder.data)
+                .expect("failed to encode jsonb value");
             builder.commit_row();
         }
         builder.build()
@@ -346,7 +347,8 @@ pub fn cast_scalar_to_variant(
                     .map(|x| x.into())
                     .collect(),
             )
-            .write_to_vec(buf);
+            .write_to_vec(buf)
+            .expect("failed to encode bitmap as jsonb array");
             return;
         }
         ScalarRef::Tuple(fields) => {
@@ -422,7 +424,9 @@ pub fn cast_scalar_to_variant(
             }
         }),
     };
-    value.write_to_vec(buf);
+    value
+        .write_to_vec(buf)
+        .expect("failed to encode scalar as jsonb");
 }
 
 pub fn cast_scalars_to_variants(
