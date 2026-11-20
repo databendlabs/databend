@@ -217,6 +217,7 @@ impl StorageParams {
                 current.access_key_id = update.access_key_id;
                 current.access_key_secret = update.access_key_secret;
                 current.role_arn = update.role_arn;
+                current.network_config = update.network_config;
                 Ok(Self::Oss(current))
             }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
@@ -1030,7 +1031,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn apply_oss_update_changes_only_credentials() {
+    fn apply_oss_update_preserves_storage_location() {
         let current = StorageOssConfig {
             endpoint_url: "https://oss.example.com".to_string(),
             presign_endpoint_url: "https://oss-public.example.com".to_string(),
@@ -1056,18 +1057,31 @@ mod tests {
             ..Default::default()
         };
 
-        let result = StorageParams::Oss(current.clone())
-            .apply_update(StorageParams::Oss(update.clone()))
-            .unwrap();
-        assert_eq!(
-            result,
-            StorageParams::Oss(StorageOssConfig {
-                access_key_id: update.access_key_id,
-                access_key_secret: update.access_key_secret,
-                role_arn: update.role_arn,
-                ..current
-            })
-        );
+        // SQL currently supplies None. Match S3's replacement semantics for both cases.
+        for network_config in [
+            None,
+            Some(StorageNetworkParams {
+                connect_timeout: 10,
+                ..Default::default()
+            }),
+        ] {
+            let result = StorageParams::Oss(current.clone())
+                .apply_update(StorageParams::Oss(StorageOssConfig {
+                    network_config: network_config.clone(),
+                    ..update.clone()
+                }))
+                .unwrap();
+            assert_eq!(
+                result,
+                StorageParams::Oss(StorageOssConfig {
+                    access_key_id: update.access_key_id.clone(),
+                    access_key_secret: update.access_key_secret.clone(),
+                    role_arn: update.role_arn.clone(),
+                    network_config,
+                    ..current.clone()
+                })
+            );
+        }
     }
 
     #[test]
