@@ -169,6 +169,7 @@ use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
 use crate::pruning::PartitionPruningInfo;
+use crate::segment_format_from_location;
 use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
@@ -1461,25 +1462,38 @@ impl Table for FuseTable {
         let mut reduced = None;
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
+            // The compact segment reader below only supports row-oriented metadata.
+            // Fall back to a scan rather than attempting to decode the wrong format.
+            if chunk.iter().any(|(location, _)| {
+                segment_format_from_location(location) == FuseSegmentFormat::Column
+            }) {
+                return Ok(None);
+            }
             let segments = segments_io
                 .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
                 .await?;
-            let mut partial_col_stats = Vec::with_capacity(chunk_size);
-            // Only carry a previous result after processing at least one chunk.
-            // An empty result from an earlier chunk means no column has complete stats.
+            let mut partial_col_stats =
+                Vec::with_capacity(chunk_size + usize::from(reduced.is_some()));
             if let Some(previous) = reduced {
                 partial_col_stats.push(previous);
             }
-            // 2. Append ranges of this chunk
-            for compacted_seg in segments.into_iter() {
+            for compacted_seg in segments {
                 let segment = compacted_seg?;
                 let mut cols_stats = segment.summary.col_stats.clone();
                 cols_stats.retain(|k, _| column_ids.contains(k));
                 partial_col_stats.push(cols_stats);
             }
-            // 3. Reduces them
-            reduced = Some(reduce_block_statistics(&partial_col_stats));
-            ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
+            let ranges = reduce_block_statistics(&partial_col_stats);
+            let no_complete_ranges = ranges.is_empty();
+            reduced = Some(ranges);
+            ctx.set_status_info(&format!(
+                "processed {} segments",
+                idx * chunk_size + chunk.len()
+            ));
+            // Later segments cannot restore complete coverage for any column.
+            if no_complete_ranges {
+                break;
+            }
         }
 
         let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;

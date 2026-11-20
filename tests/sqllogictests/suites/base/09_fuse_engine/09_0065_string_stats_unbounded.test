@@ -58,7 +58,79 @@ f48fbfbff48fbfbff48fbfbff48fbfbf7a
 statement ok
 DROP TABLE t_string_stats_unbounded;
 
+# ADD COLUMN knows the historical default; a subsequent INSERT must not
+# mistake it for an unknown range. Test both NULL and a non-NULL default.
+statement ok
+CREATE OR REPLACE TABLE t_string_stats_add (id INT) STORAGE_FORMAT = 'parquet';
+
+statement ok
+INSERT INTO t_string_stats_add VALUES (0), (1);
+
+statement ok
+ALTER TABLE t_string_stats_add ADD COLUMN s STRING NULL FIRST;
+
+statement ok
+ALTER TABLE t_string_stats_add ADD COLUMN d STRING NOT NULL DEFAULT 'abc';
+
+query TII
+SELECT column_name, null_count, distinct_count
+FROM fuse_statistic('default', 't_string_stats_add') WHERE column_name IN ('s', 'd')
+ORDER BY column_name;
+----
+d 0 1
+s 2 0
+
+statement ok
+INSERT INTO t_string_stats_add (id, s, d) VALUES (2, 'xyz', 'def');
+
+query TI
+SELECT column_name, null_count
+FROM fuse_statistic('default', 't_string_stats_add') WHERE column_name IN ('s', 'd')
+ORDER BY column_name;
+----
+d 0
+s 2
+
+statement ok
+DROP TABLE t_string_stats_add;
+
+# The adaptive budget is at most 32. An unbounded deterministic default
+# must not enable a later append to invent stats for the historical rows.
+statement ok
+CREATE OR REPLACE TABLE t_string_stats_add_unbounded (id INT) STORAGE_FORMAT = 'parquet';
+
+statement ok
+INSERT INTO t_string_stats_add_unbounded VALUES (0);
+
+statement ok
+ALTER TABLE t_string_stats_add_unbounded ADD COLUMN s STRING DEFAULT (repeat(char(0x10FFFF), 32) || 'z');
+
+query T
+SELECT column_name FROM fuse_statistic('default', 't_string_stats_add_unbounded');
+----
+id
+
+statement ok
+INSERT INTO t_string_stats_add_unbounded VALUES (1, 'abc');
+
+query T
+SELECT column_name FROM fuse_statistic('default', 't_string_stats_add_unbounded');
+----
+id
+
+query II
+SELECT id, char_length(s) FROM t_string_stats_add_unbounded WHERE s > 'abc';
+----
+0 33
+
+statement ok
+DROP TABLE t_string_stats_add_unbounded;
+
 # Column-oriented segment metadata also has to accept incomplete stats.
+# Disable cached pruning results so both SELECTs read segment metadata.
+statement ok
+SET enable_prune_cache = 0;
+
 statement ok
 CREATE OR REPLACE TABLE t_string_stats_unbounded_column (
     id INT, s STRING NULL STATS_TRUNCATE_LEN 4
@@ -67,16 +139,40 @@ CREATE OR REPLACE TABLE t_string_stats_unbounded_column (
 
 statement ok
 INSERT INTO t_string_stats_unbounded_column
-SELECT number, if(number = 0, 'abc', repeat(char(0x10FFFF), 4) || 'z')
+SELECT number, if(number = 0, repeat(char(0x10FFFF), 4) || 'z', 'abc')
 FROM numbers(2);
+
+query III
+SELECT count(*), count(DISTINCT _block_name), count(DISTINCT _segment_name)
+FROM t_string_stats_unbounded_column;
+----
+2 2 1
 
 query IT
 SELECT id, to_hex(s) FROM t_string_stats_unbounded_column WHERE s > 'abc';
 ----
-1 f48fbfbff48fbfbff48fbfbff48fbfbf7a
+0 f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+query IT
+SELECT id, to_hex(s) FROM t_string_stats_unbounded_column WHERE s > 'abc';
+----
+0 f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+query T
+SELECT to_hex(max(s)) FROM t_string_stats_unbounded_column;
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+query T
+SELECT column_name FROM fuse_statistic('default', 't_string_stats_unbounded_column');
+----
+id
 
 statement ok
 DROP TABLE t_string_stats_unbounded_column;
+
+statement ok
+UNSET enable_prune_cache;
 
 statement ok
 UNSET enable_compact_after_write;

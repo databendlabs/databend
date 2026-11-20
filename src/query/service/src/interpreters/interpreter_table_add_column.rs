@@ -22,6 +22,8 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
@@ -36,9 +38,13 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::statistics::trim_column_min_max;
 use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_index::Index;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
@@ -141,9 +147,11 @@ impl Interpreter for AddTableColumnInterpreter {
                     self.plan.field.name, self.plan.table
                 )));
             }
-            if field.default_expr().is_some() {
-                let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
-            }
+            let default_value = if field.default_expr().is_some() {
+                Some(DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?)
+            } else {
+                None
+            };
             is_valid_column(field.name())?;
             table_info
                 .meta
@@ -203,9 +211,44 @@ impl Interpreter for AddTableColumnInterpreter {
                 tbl.as_ref(),
                 table_info.meta.clone(),
                 catalog,
-                |snapshot_opt, _| {
-                    if let Some(snapshot) = snapshot_opt {
-                        snapshot.schema = table_info.meta.schema.as_ref().clone();
+                |snapshot_opt, table_meta| {
+                    let Some(snapshot) = snapshot_opt else {
+                        return;
+                    };
+                    snapshot.schema = table_meta.schema.as_ref().clone();
+                    let field = snapshot.schema.field(index);
+                    let data_type = DataType::from(field.data_type());
+                    let row_count = snapshot.summary.row_count;
+                    if row_count == 0
+                        || !self.plan.is_deterministic
+                        || field.computed_expr().is_some()
+                        || !RangeIndex::supported_type(&data_type)
+                    {
+                        return;
+                    }
+
+                    // The old blocks read this new column as the default. An append cannot
+                    // distinguish that from a physical column whose stats are missing.
+                    let value = default_value.unwrap_or_else(|| Scalar::default_value(&data_type));
+                    let is_null = value.is_null();
+                    let column_id = field.column_id();
+                    let truncate_len = table_meta
+                        .field_stats_truncate_len
+                        .get(&column_id)
+                        .map(|&len| len as usize);
+                    if let Some((min, max)) =
+                        trim_column_min_max(value.clone(), value, truncate_len)
+                    {
+                        let null_count = if is_null { row_count } else { 0 };
+                        // No data for the new column is stored in the old blocks.
+                        let stats = ColumnStatistics::new(
+                            min,
+                            max,
+                            null_count,
+                            0,
+                            Some(u64::from(!is_null)),
+                        );
+                        snapshot.summary.col_stats.insert(column_id, stats);
                     }
                 },
             )

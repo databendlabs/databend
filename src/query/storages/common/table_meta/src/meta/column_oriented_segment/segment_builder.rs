@@ -456,3 +456,114 @@ impl LocationsWithOption {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::DateTime;
+    use databend_common_expression::TableField;
+
+    use super::*;
+    use crate::meta::ColumnMeta;
+    use crate::meta::ColumnMetaV0;
+    use crate::meta::Compression;
+    use crate::meta::column_oriented_segment::deserialize_column_oriented_segment;
+
+    #[test]
+    fn test_column_oriented_segment_omits_incomplete_stats() -> Result<()> {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("missing", TableDataType::String),
+            TableField::new("retained", TableDataType::String),
+        ]));
+        let missing = schema.field(0).column_id();
+        let retained = schema.field(1).column_id();
+        let stat = |s: &str| {
+            let value = Scalar::String(s.to_string());
+            ColumnStatistics::new(value.clone(), value, 0, 1, Some(1))
+        };
+        let block = |index, include_missing| {
+            let mut stats = HashMap::from([(retained, stat(if index == 0 { "a" } else { "z" }))]);
+            if include_missing {
+                stats.insert(missing, stat("abc"));
+            }
+            let metas = [missing, retained]
+                .into_iter()
+                .map(|id| {
+                    (
+                        id,
+                        ColumnMeta::Parquet(ColumnMetaV0 {
+                            offset: 0,
+                            len: 1,
+                            num_values: 1,
+                        }),
+                    )
+                })
+                .collect();
+            BlockMeta::new(
+                1,
+                2,
+                2,
+                stats,
+                metas,
+                None,
+                (format!("block-{index}"), 0),
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Compression::Zstd,
+                DateTime::from_timestamp(0, 0),
+            )
+        };
+
+        for present_in_first_block in [true, false] {
+            let mut builder = ColumnOrientedSegmentBuilder::new(schema.clone(), 2);
+            builder.add_block(block(0, present_in_first_block), VirtualBlockInput::None)?;
+            builder.add_block(block(1, !present_in_first_block), VirtualBlockInput::None)?;
+            let segment = builder.build(BlockThresholds::default(), None, None)?;
+            assert!(!segment.contains_col(&stat_name(missing)));
+            assert!(!segment.summary.col_stats.contains_key(&missing));
+            assert_eq!(segment.stat_col(retained).unwrap().len(), 2);
+            assert_eq!(segment.block_metas.num_rows(), 2);
+            assert_eq!(
+                segment.block_metas.num_columns(),
+                segment.segment_schema.num_fields()
+            );
+            assert_eq!(
+                segment.summary.col_stats[&retained].min(),
+                &Scalar::String("a".to_string())
+            );
+            assert_eq!(
+                segment.summary.col_stats[&retained].max(),
+                &Scalar::String("z".to_string())
+            );
+
+            // Request the full metadata schema, including the deliberately absent stat field.
+            let projection = segment_schema(&schema)
+                .fields()
+                .iter()
+                .map(|field| field.name.clone())
+                .collect();
+            let (block_metas, segment_schema, summary) = deserialize_column_oriented_segment(
+                segment.serialize()?.into(),
+                &projection,
+                true,
+            )?;
+            let restored = ColumnOrientedSegment {
+                block_metas,
+                segment_schema,
+                summary: summary.unwrap(),
+            };
+            assert!(restored.stat_col(missing).is_none());
+            assert_eq!(restored.stat_col(retained), segment.stat_col(retained));
+            assert_eq!(restored.summary.col_stats, segment.summary.col_stats);
+            assert_eq!(restored.location_path_col(), segment.location_path_col());
+        }
+        Ok(())
+    }
+}

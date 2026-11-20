@@ -239,6 +239,42 @@ mod tests {
     }
 
     #[test]
+    fn test_column_stats_state_omits_unbounded_string() -> Result<()> {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("s", TableDataType::String),
+            TableField::new("id", TableDataType::Number(NumberDataType::UInt64)),
+        ]));
+        let [s, id] = [schema.field(0).column_id(), schema.field(1).column_id()];
+        let truncate_lens = BTreeMap::from([(s, 4)]);
+        let stats_columns = [
+            (s, DataType::String),
+            (id, DataType::Number(NumberDataType::UInt64)),
+        ];
+        let input = "\u{10FFFF}\u{10FFFF}\u{10FFFF}\u{10FFFF}z";
+        for string_entry in [
+            BlockEntry::from(StringType::from_data(vec!["abc", input])),
+            BlockEntry::new_const_column(DataType::String, Scalar::String(input.to_string()), 2),
+        ] {
+            let block = DataBlock::new(
+                vec![string_entry, UInt64Type::from_data(vec![1, 2]).into()],
+                2,
+            );
+            let mut state =
+                ColumnStatisticsState::new(&stats_columns, &stats_columns, &truncate_lens);
+            state.add_block(&schema, &block)?;
+            let actual = state.finalize(HashMap::new());
+
+            assert!(!actual.contains_key(&s));
+            assert!(actual.contains_key(&id));
+            assert_eq!(
+                actual,
+                gen_columns_statistics(&block, None, &schema, &truncate_lens, HashMap::new())?
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_column_stats_state_string_successor_multiple_chunks() -> Result<()> {
         let data_type = DataType::Nullable(Box::new(DataType::String));
         let schema = Arc::new(TableSchema::new(vec![TableField::new(
