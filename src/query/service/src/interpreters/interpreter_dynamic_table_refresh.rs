@@ -147,7 +147,6 @@ impl Interpreter for RefreshDynamicTableInterpreter {
                 catalog: self.plan.catalog.clone(),
                 database: self.plan.database.clone(),
                 table: self.plan.table.clone(),
-                branch: None,
                 schema: table.schema(),
                 overwrite: true,
                 source: InsertInputSource::SelectPlan(Box::new(select_plan)),

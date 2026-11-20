@@ -22,12 +22,15 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Aggregate;
@@ -36,16 +39,18 @@ use databend_common_sql::plans::ConstantTableScan;
 use databend_common_sql::plans::GroupingSets;
 use databend_common_sql::plans::PhysicalAggregate;
 use databend_common_sql::plans::ScalarItem;
-use itertools::Itertools;
 
 use super::AggregateExpand;
 use super::AggregatePartial;
+use super::EvalScalar;
 use super::Exchange;
 use super::ExchangeSource;
 use super::PhysicalPlanCast;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregateFinalFormatter;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::physical_aggregate_partial::aggregate_desc;
+use crate::physical_plans::physical_aggregate_partial::aggregate_labels;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -53,8 +58,7 @@ use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
-use crate::sessions::TableContext;
+use crate::pipelines::processors::transforms::aggregator::build_final_aggregates;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -67,7 +71,17 @@ pub struct AggregateFinal {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
-    pub shuffle_mode: AggregateShuffleMode,
+    /// The input comes through a global shuffle, which delivers each final aggregate its
+    /// partition, rather than scattered on this node.
+    pub global_shuffled: bool,
+
+    /// Set when the output feeds a top N of `limit` rows ordered by these output columns.
+    pub top_n: Option<(Vec<SortDesc>, usize)>,
+
+    /// The consumer merges a group it receives more than once, so the final aggregate may
+    /// output the groups aggregated so far instead of spilling them when it runs out of
+    /// memory. See [`AggregateFinal::allow_duplicate_groups`].
+    pub allow_duplicate_groups: bool,
 }
 
 #[typetag::serde]
@@ -114,23 +128,11 @@ impl IPhysicalPlan for AggregateFinal {
     }
 
     fn get_desc(&self) -> Result<String> {
-        Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
+        Ok(aggregate_desc(&self.agg_funcs))
     }
 
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        let mut labels = HashMap::with_capacity(2);
-        if !self.group_by_display.is_empty() {
-            labels.insert(String::from("Grouping keys"), self.group_by_display.clone());
-        }
-
-        if !self.agg_funcs.is_empty() {
-            labels.insert(
-                String::from("Aggregate Functions"),
-                self.agg_funcs.iter().map(|x| x.display.clone()).collect(),
-            );
-        }
-
-        Ok(labels)
+        Ok(aggregate_labels(&self.group_by_display, &self.agg_funcs))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -144,7 +146,9 @@ impl IPhysicalPlan for AggregateFinal {
             before_group_by_schema: self.before_group_by_schema.clone(),
             group_by_display: self.group_by_display.clone(),
             stat_info: self.stat_info.clone(),
-            shuffle_mode: self.shuffle_mode.clone(),
+            global_shuffled: self.global_shuffled,
+            top_n: self.top_n.clone(),
+            allow_duplicate_groups: self.allow_duplicate_groups,
         })
     }
 
@@ -152,20 +156,32 @@ impl IPhysicalPlan for AggregateFinal {
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
 
-        let mut is_cluster_aggregate = false;
-        if ExchangeSource::check_physical_plan(&self.input) {
-            is_cluster_aggregate = true;
-        }
-
-        let params = PipelineBuilder::build_aggregator_params(
+        let mut params = PipelineBuilder::build_aggregator_params(
             &builder.ctx,
             self.before_group_by_schema.clone(),
             &self.group_by,
             &self.agg_funcs,
-            is_cluster_aggregate,
             max_block_rows,
             max_block_bytes,
         )?;
+        if let Some((order_by, limit)) = &self.top_n {
+            let schema = self.output_schema()?;
+            let order_by = order_by
+                .iter()
+                .map(|desc| {
+                    Ok(SortColumnDescription {
+                        offset: schema.index_of(&desc.order_by.to_string())?,
+                        asc: desc.asc,
+                        nulls_first: desc.nulls_first,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            // Just created, so not shared yet.
+            Arc::get_mut(&mut params).unwrap().top_n = Some((order_by, *limit));
+        }
+        if self.allow_duplicate_groups {
+            Arc::get_mut(&mut params).unwrap().allow_duplicate_groups = true;
+        }
 
         if params.group_columns.is_empty() {
             self.input.build_pipeline(builder)?;
@@ -183,11 +199,7 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector = AggregateInjector::create(
-                builder.ctx.clone(),
-                params.clone(),
-                self.shuffle_mode.clone(),
-            );
+            builder.exchange_injector = AggregateInjector::create(params.clone());
         }
 
         self.input.build_pipeline(builder)?;
@@ -200,13 +212,46 @@ impl IPhysicalPlan for AggregateFinal {
         };
 
         builder.exchange_injector = old_inject;
-        build_partition_bucket(
+        build_final_aggregates(
             &mut builder.main_pipeline,
             params.clone(),
             after_group_parallel,
             builder.ctx.clone(),
-            self.shuffle_mode.clone(),
+            self.global_shuffled,
         )
+    }
+}
+
+impl AggregateFinal {
+    /// Let the final aggregate at the root of `plan`, below any row-wise operators and
+    /// exchanges, output a group more than once rather than spill when it runs out of memory,
+    /// see `AggregatorParams::allow_duplicate_groups`.
+    ///
+    /// Only for an aggregate whose every function writes an aggregate state, as the physical
+    /// query of a materialized view does: the consumer of the states merges them per group
+    /// anyway, so it is indifferent to how many rows a group is spread over. Returns whether such
+    /// an aggregate was found.
+    pub fn allow_duplicate_groups(plan: &mut PhysicalPlan) -> bool {
+        if let Some(aggregate) = AggregateFinal::from_mut_physical_plan(plan) {
+            let states_only = aggregate.agg_funcs.iter().all(|func| {
+                matches!(
+                    func.sig.return_type.remove_nullable(),
+                    DataType::AggregateState(_)
+                )
+            });
+            if !states_only || aggregate.top_n.is_some() {
+                return false;
+            }
+            aggregate.allow_duplicate_groups = true;
+            return true;
+        }
+        if EvalScalar::check_physical_plan(plan) || Exchange::check_physical_plan(plan) {
+            return plan
+                .children_mut()
+                .next()
+                .is_some_and(Self::allow_duplicate_groups);
+        }
+        false
     }
 }
 
@@ -250,12 +295,24 @@ impl PhysicalPlanBuilder {
             from_distinct: agg.from_distinct,
             rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
+            adaptive_topk_count: agg.adaptive_topk_count,
         };
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, required).await?;
-        let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
+        let rank_limit = agg.rank_limit.map(|(item, limit)| {
+            let desc = item
+                .iter()
+                .map(|v| SortDesc {
+                    asc: v.asc,
+                    nulls_first: v.nulls_first,
+                    order_by: v.index,
+                    display_name: self.metadata.read().column(v.index).name(),
+                })
+                .collect::<Vec<_>>();
+            (desc, limit)
+        });
 
         let result: PhysicalPlan = match mode {
             AggregateMode::Partial => {
@@ -266,16 +323,13 @@ impl PhysicalPlanBuilder {
                     .collect::<Result<Vec<_>>>()?;
 
                 let mut agg_funcs =
-                    build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
+                    build_aggregate_function(&agg.aggregate_functions, &input.output_schema()?)?;
 
                 let settings = self.ctx.get_settings();
                 let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
                 if agg.grouping_sets.is_some() {
                     group_by_shuffle_mode = "before_merge".to_string();
                 }
-
-                let is_cluster_aggregate = Exchange::check_physical_plan(&input);
-                let shuffle_mode = determine_shuffle_mode(self.ctx.clone(), is_cluster_aggregate)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // AggregateExpand makes grouping columns nullable and fills in dummy
@@ -292,131 +346,99 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
-                let rank_limit = agg.rank_limit.map(|(item, limit)| {
-                    let desc = item
-                        .iter()
-                        .map(|v| SortDesc {
-                            asc: v.asc,
-                            nulls_first: v.nulls_first,
-                            order_by: v.index,
-                            display_name: self.metadata.read().column(v.index).name(),
-                        })
-                        .collect::<Vec<_>>();
-                    (desc, limit)
-                });
+                // Ranking the input rows needs the order to be by group keys only.
+                let rank_limit = rank_limit
+                    .filter(|(descs, _)| descs.iter().all(|d| group_items.contains(&d.order_by)));
 
-                if group_by_shuffle_mode == "before_merge"
-                    && let Some(exchange) = Exchange::from_physical_plan(&input)
-                {
-                    let kind = exchange.kind.clone();
-                    let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
+                // Partial aggregates shuffle states and raw rows straight to the threads of the
+                // final aggregates, see `AggregateScatter`: the partial aggregate moves below the
+                // exchange of its input, a hash exchange becoming the global shuffle.
+                let hoisted = match Exchange::from_physical_plan(&input) {
+                    Some(exchange) if group_by_shuffle_mode == "before_merge" => {
+                        let kind = match exchange.kind {
+                            FragmentKind::Normal | FragmentKind::GlobalShuffle => {
+                                FragmentKind::GlobalShuffle
+                            }
+                            ref kind => kind.clone(),
+                        };
+                        Some((exchange.input.clone(), kind))
+                    }
+                    _ => None,
+                };
+                let (partial_input, kind) = match hoisted {
+                    Some((exchange_input, kind)) => (exchange_input, Some(kind)),
+                    None => (input, None),
+                };
+                let (partial_input, rank_limit) = match agg.grouping_sets {
+                    Some(grouping_sets) => {
                         let expand = PhysicalPlan::new(AggregateExpand {
+                            input: partial_input,
                             grouping_sets,
-                            input: exchange.input.clone(),
                             group_bys: group_items.clone(),
                             stat_info: Some(stat_info.clone()),
                             meta: PhysicalPlanMeta::new("AggregateExpand"),
                         });
-
-                        AggregatePartial {
-                            input: expand,
-                            agg_funcs,
-                            group_by_display,
-                            group_by: group_items,
-                            stat_info: Some(stat_info),
-                            rank_limit: None,
-                            meta: PhysicalPlanMeta::new("AggregatePartial"),
-                            shuffle_mode: shuffle_mode.clone(),
-                        }
-                    } else {
-                        AggregatePartial {
-                            input: exchange.input.clone(),
-                            agg_funcs,
-                            rank_limit,
-                            group_by_display,
-                            group_by: group_items,
-                            stat_info: Some(stat_info),
-                            meta: PhysicalPlanMeta::new("AggregatePartial"),
-                            shuffle_mode: shuffle_mode.clone(),
-                        }
-                    };
-
-                    let keys = {
-                        let schema = aggregate_partial.output_schema()?;
-                        let end = schema.num_fields();
-                        let start = end - aggregate_partial.group_by.len();
-                        (start..end)
-                            .map(|id| RemoteExpr::ColumnRef {
-                                span: None,
-                                id,
-                                data_type: schema.field(id).data_type().clone(),
-                                display_name: (id - start).to_string(),
-                            })
-                            .collect()
-                    };
-
-                    PhysicalPlan::new(Exchange {
-                        keys,
-                        kind,
-                        ignore_exchange: false,
-                        allow_adjust_parallelism: true,
-                        meta: PhysicalPlanMeta::new("Exchange"),
-                        input: PhysicalPlan::new(aggregate_partial),
-                    })
-                } else if let Some(grouping_sets) = agg.grouping_sets {
-                    let expand = AggregateExpand {
-                        input,
-                        grouping_sets,
-                        group_bys: group_items.clone(),
-                        stat_info: Some(stat_info.clone()),
-                        meta: PhysicalPlanMeta::new("AggregateExpand"),
-                    };
-
-                    PhysicalPlan::new(AggregatePartial {
-                        agg_funcs,
-                        group_by_display,
-                        rank_limit: None,
-                        group_by: group_items,
-                        input: PhysicalPlan::new(expand),
-                        stat_info: Some(stat_info),
-                        meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        shuffle_mode: shuffle_mode.clone(),
-                    })
-                } else {
-                    PhysicalPlan::new(AggregatePartial {
-                        input,
-                        agg_funcs,
-                        group_by_display,
-                        group_by: group_items,
-                        stat_info: Some(stat_info),
-                        rank_limit,
-                        meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        shuffle_mode: shuffle_mode.clone(),
-                    })
-                }
-            }
-
-            // Hack to get before group by schema, we should refactor this
-            AggregateMode::Final => {
-                let input_schema = {
-                    let mut plan = &input;
-
-                    if let Some(exchange) = Exchange::from_physical_plan(plan) {
-                        plan = &exchange.input;
+                        (expand, None)
                     }
-
-                    let Some(aggregate) = AggregatePartial::from_physical_plan(plan) else {
-                        return Err(ErrorCode::Internal(format!(
-                            "invalid input physical plan: {}",
-                            input.get_name(),
-                        )));
-                    };
-
-                    aggregate.input.output_schema()?
+                    None => (partial_input, rank_limit),
+                };
+                let aggregate_partial = AggregatePartial {
+                    input: partial_input,
+                    agg_funcs,
+                    rank_limit,
+                    group_by_display,
+                    group_by: group_items,
+                    stat_info: Some(stat_info),
+                    meta: PhysicalPlanMeta::new("AggregatePartial"),
+                };
+                let Some(kind) = kind else {
+                    return Ok(PhysicalPlan::new(aggregate_partial));
                 };
 
+                let keys = {
+                    let schema = aggregate_partial.output_schema()?;
+                    let end = schema.num_fields();
+                    let start = end - aggregate_partial.group_by.len();
+                    (start..end)
+                        .map(|id| RemoteExpr::ColumnRef {
+                            span: None,
+                            id,
+                            data_type: schema.field(id).data_type().clone(),
+                            display_name: (id - start).to_string(),
+                        })
+                        .collect()
+                };
+
+                PhysicalPlan::new(Exchange {
+                    keys,
+                    kind,
+                    ignore_exchange: false,
+                    allow_adjust_parallelism: true,
+                    meta: PhysicalPlanMeta::new("Exchange"),
+                    input: PhysicalPlan::new(aggregate_partial),
+                })
+            }
+
+            AggregateMode::Final => {
+                // The partial aggregate is the input, or below the exchange of the input.
+                let (partial, global_shuffled) = match Exchange::from_physical_plan(&input) {
+                    Some(exchange) => (
+                        AggregatePartial::from_physical_plan(&exchange.input),
+                        exchange.kind == FragmentKind::GlobalShuffle,
+                    ),
+                    None => (AggregatePartial::from_physical_plan(&input), false),
+                };
+                let Some(partial) = partial else {
+                    return Err(ErrorCode::Internal(format!(
+                        "invalid input physical plan: {}",
+                        input.get_name(),
+                    )));
+                };
+                let group_by_display = partial.group_by_display.clone();
+                let before_group_by_schema = partial.input.output_schema()?;
+
                 let mut agg_funcs =
-                    build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
+                    build_aggregate_function(&agg.aggregate_functions, &before_group_by_schema)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // Recover aggregate arguments and ORDER BY keys to the original,
@@ -432,108 +454,37 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
-                if let Some(partial) = AggregatePartial::from_physical_plan(&input) {
-                    let group_by_display = partial.group_by_display.clone();
-                    let before_group_by_schema = partial.input.output_schema()?;
-                    let shuffle_mode = partial.shuffle_mode.clone();
-
-                    PhysicalPlan::new(AggregateFinal {
-                        input,
-                        agg_funcs,
-                        group_by_display,
-                        before_group_by_schema,
-                        group_by: group_items,
-                        stat_info: Some(stat_info),
-                        meta: PhysicalPlanMeta::new("AggregateFinal"),
-                        shuffle_mode,
-                    })
-                } else {
-                    let Some(exchange) = Exchange::from_physical_plan(&input) else {
-                        return Err(ErrorCode::Internal(format!(
-                            "invalid input physical plan: {}",
-                            input.get_name(),
-                        )));
-                    };
-
-                    let Some(partial) = AggregatePartial::from_physical_plan(&exchange.input)
-                    else {
-                        return Err(ErrorCode::Internal(format!(
-                            "invalid input physical plan: {}",
-                            input.get_name(),
-                        )));
-                    };
-
-                    let group_by_display = partial.group_by_display.clone();
-                    let before_group_by_schema = partial.input.output_schema()?;
-                    let shuffle_mode = partial.shuffle_mode.clone();
-
-                    PhysicalPlan::new(AggregateFinal {
-                        input,
-                        agg_funcs,
-                        group_by_display,
-                        before_group_by_schema,
-                        group_by: group_items,
-                        stat_info: Some(stat_info),
-                        meta: PhysicalPlanMeta::new("AggregateFinal"),
-                        shuffle_mode,
-                    })
-                }
+                let top_n = rank_limit.filter(|_| agg.grouping_sets.is_none());
+                PhysicalPlan::new(AggregateFinal {
+                    input,
+                    agg_funcs,
+                    group_by_display,
+                    before_group_by_schema,
+                    group_by: group_items,
+                    stat_info: Some(stat_info),
+                    meta: PhysicalPlanMeta::new("AggregateFinal"),
+                    global_shuffled,
+                    top_n,
+                    allow_duplicate_groups: false,
+                })
             }
         };
 
+        if mode == AggregateMode::Final
+            && let Some(info) = agg.adaptive_topk_count
+            && !result.is_distributed_plan()
+        {
+            return Ok(PhysicalPlan::new(
+                super::physical_adaptive_topk_count::AdaptiveTopKCount {
+                    meta: PhysicalPlanMeta::new("AdaptiveTopKCount"),
+                    fallback: result,
+                    limit: info.limit,
+                    likely_candidates: info.likely_candidates,
+                },
+            ));
+        }
         Ok(result)
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub enum AggregateShuffleMode {
-    // calculate shuffle destination based on hash of rows
-    Row,
-    // calculate shuffle destination based on id of bucket
-    // cpu_nums in cluster stored in it
-    Bucket(u64),
-}
-
-impl AggregateShuffleMode {
-    pub fn determine_radix_bits(&self) -> u64 {
-        match &self {
-            AggregateShuffleMode::Row => 0,
-            AggregateShuffleMode::Bucket(hint) => hint.trailing_zeros() as u64,
-        }
-    }
-}
-
-// TODO: ROW_SHUFFLE_ENABLE_THRESHOLD need to find
-const ROW_SHUFFLE_ENABLE_THRESHOLD: u64 = 256;
-
-fn determine_shuffle_mode(
-    ctx: Arc<dyn TableContext>,
-    is_cluster_aggregate: bool,
-) -> Result<AggregateShuffleMode> {
-    let settings = ctx.get_settings();
-    let force_shuffle_mode = settings.get_force_aggregate_shuffle_mode()?;
-    let thread_nums = settings.get_max_threads()?;
-
-    let parallelism = if is_cluster_aggregate {
-        (ctx.get_cluster().nodes.len() as u64 * thread_nums).next_power_of_two()
-    } else {
-        thread_nums.next_power_of_two()
-    };
-
-    let use_bucket = match force_shuffle_mode.as_str() {
-        "row" => false,
-        "bucket" => true,
-        "auto" => parallelism <= ROW_SHUFFLE_ENABLE_THRESHOLD,
-        _ => false,
-    };
-
-    let shuffle_mode = if use_bucket {
-        AggregateShuffleMode::Bucket(parallelism)
-    } else {
-        AggregateShuffleMode::Row
-    };
-
-    Ok(shuffle_mode)
 }
 
 // Use the original grouping columns and types, not AggregateExpand's masked keys.

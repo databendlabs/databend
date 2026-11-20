@@ -93,7 +93,7 @@ EXPLAIN SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE id = 2;
 Filter
 ├── output columns: [t_rename_after_write.id (#0), t_rename_after_write.s:w (#2)]
 ├── filters: [is_true(t_rename_after_write.id (#0) = 2)]
-├── estimated rows: 3.00
+├── estimated rows: 0.60
 └── TableScan
     ├── table: ctl.test.t_rename_after_write
     ├── scan id: 0

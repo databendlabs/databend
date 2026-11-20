@@ -73,22 +73,24 @@ impl<T: AsyncSink + 'static> AsyncSinker<T> {
 impl<T: AsyncSink + 'static> Drop for AsyncSinker<T> {
     fn drop(&mut self) {
         drop_guard(move || {
-            if !self.called_on_start || !self.called_on_finish {
-                if let Some(mut inner) = self.inner.take() {
-                    GlobalIORuntime::instance().spawn({
-                        let called_on_start = self.called_on_start;
-                        let called_on_finish = self.called_on_finish;
-                        async move {
-                            if !called_on_start && T::CALL_ON_START_ON_ERROR {
-                                let _ = inner.on_start().await;
-                            }
+            let run_on_start = !self.called_on_start && T::CALL_ON_START_ON_ERROR;
+            let run_on_finish = !self.called_on_finish && T::CALL_ON_FINISH_ON_ERROR;
+            // Nothing to run: do not touch the global runtime, which a sink
+            // dropped late may outlive.
+            if !run_on_start && !run_on_finish {
+                return;
+            }
 
-                            if !called_on_finish && T::CALL_ON_FINISH_ON_ERROR {
-                                let _ = inner.on_finish().await;
-                            }
-                        }
-                    });
-                }
+            if let Some(mut inner) = self.inner.take() {
+                GlobalIORuntime::instance().spawn(async move {
+                    if run_on_start {
+                        let _ = inner.on_start().await;
+                    }
+
+                    if run_on_finish {
+                        let _ = inner.on_finish().await;
+                    }
+                });
             }
         })
     }

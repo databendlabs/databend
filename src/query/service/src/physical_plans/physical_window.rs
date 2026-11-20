@@ -13,20 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::borrow::Cow;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::Expr;
+use databend_common_expression::FoldRules;
 use databend_common_expression::RawExpr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::type_check;
@@ -35,6 +32,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
@@ -71,10 +69,10 @@ use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindow;
+use crate::pipelines::processors::transforms::TransformWindowPartitionBatch;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
-use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 use crate::pipelines::processors::transforms::WindowSortDesc;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -452,23 +450,20 @@ fn apply_window_partition(
         .map(|index| input_schema.index_of(&index.to_string()))
         .collect::<Result<Vec<_>>>()?;
 
-    if let Some((top, func)) = window_top_n(window) {
-        builder.main_pipeline.exchange(
-            num_processors,
-            WindowPartitionTopNExchange::create(
-                partition_by.clone(),
-                sort_desc.clone(),
-                top,
-                func,
-                num_partitions as u64,
-            ),
-        )?;
-    } else {
-        builder.main_pipeline.exchange(
-            num_processors,
-            WindowPartitionExchange::create(partition_by.clone(), num_partitions),
-        )?;
-    }
+    let top_n = window_top_n(window);
+    builder.main_pipeline.add_accumulating_transformer(|| {
+        let transform = TransformWindowPartitionBatch::create(num_partitions);
+        match top_n {
+            Some((top, func)) => {
+                transform.with_top_n(partition_by.clone(), sort_desc.clone(), top, func)
+            }
+            None => transform,
+        }
+    });
+    builder.main_pipeline.exchange(
+        num_processors,
+        WindowPartitionExchange::create(partition_by.clone(), num_partitions),
+    )?;
 
     let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
     let plan_schema = DataSchemaRefExt::create(input_schema.fields().clone());
@@ -739,12 +734,8 @@ impl PhysicalPlanBuilder {
                         dest_type: common_ty.clone(),
                     };
                     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                    let (expr, _) =
-                        ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
-                    let expr = expr.into_owned();
-                    if let Expr::Constant(Constant {
-                        scalar: new_scalar, ..
-                    }) = expr
+                    if let Some(new_scalar) =
+                        FoldRules::eval_constant(&func_ctx, &BUILTIN_FUNCTIONS, &expr)
                     {
                         if new_scalar.is_positive() {
                             **scalar = new_scalar;

@@ -37,21 +37,21 @@ create stage s1
 statement ok
 remove @s1
 
-# ESCAPE is input-only. With minimal quoting, a literal NULL marker can collide
-# with NULL, so this output contract does not promise a lossless round trip.
+# Minimal quoting protects both empty strings and literal NULL markers.
+# ESCAPE is input-only and does not change this output.
 query TII
 copy into @s1/default_null_display.csv
 from t_quote_minimal_roundtrip
 file_format = (type = 'csv', quote_style = 'quote_minimal', escape='\\')
 single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
 ----
-default_null_display.csv 21 4
+default_null_display.csv 25 4
 
 query T
 select $1 from @s1/default_null_display.csv (file_format => 'text') order by metadata$file_row_number
 ----
-1,
-2,\N
+1,""
+2,"\N"
 3,\N
 4,plain
 
@@ -61,12 +61,12 @@ from t_quote_minimal_custom_null
 file_format = (type = 'csv', quote_style = 'quote_minimal', null_display = 'NULL', escape='\\')
 single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
 ----
-custom_null_display.csv 14 2
+custom_null_display.csv 16 2
 
 query T
 select $1 from @s1/custom_null_display.csv (file_format => 'text') order by metadata$file_row_number
 ----
-1,NULL
+1,"NULL"
 2,NULL
 
 statement ok

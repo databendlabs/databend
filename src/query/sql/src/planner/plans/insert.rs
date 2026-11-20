@@ -83,7 +83,6 @@ pub struct Insert {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub branch: Option<String>,
     pub schema: TableSchemaRef,
     pub overwrite: bool,
     pub source: InsertInputSource,
@@ -103,7 +102,6 @@ impl PartialEq for Insert {
             && self.database == other.database
             && self.table == other.table
             && self.schema == other.schema
-            && self.branch == other.branch
     }
 }
 
@@ -128,7 +126,6 @@ impl Insert {
             catalog,
             database,
             table,
-            branch,
             schema,
             overwrite,
             // table_info only used create table as select.
@@ -138,11 +135,7 @@ impl Insert {
             source,
         } = self;
 
-        let table_name = if let Some(branch) = branch {
-            format!("{}.{}.{}/{}", catalog, database, table, branch)
-        } else {
-            format!("{}.{}.{}", catalog, database, table)
-        };
+        let table_name = format!("{}.{}.{}", catalog, database, table);
         let inserted_columns = schema
             .fields
             .iter()
@@ -277,7 +270,6 @@ impl std::fmt::Debug for Insert {
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
-            .field("branch", &self.branch)
             .field("schema", &self.schema)
             .field("overwrite", &self.overwrite)
             .finish()

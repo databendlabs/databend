@@ -1,0 +1,121 @@
+# Issue #20781: scale the exact binary float, not an already-rounded f64 product.
+statement ok
+SET numeric_cast_option = 'rounding'
+
+query RRR
+SELECT 415210.34::DOUBLE::DECIMAL(38,10), 363955.09::DOUBLE::DECIMAL(38,10), (-415210.34)::DOUBLE::DECIMAL(38,10)
+----
+415210.3400000000 363955.0900000000 -415210.3400000000
+
+# Preserve the actual binary value, not the shortest round-trip decimal string.
+query RRR
+SELECT 135968.86::DOUBLE::DECIMAL(38,12), 284957.46::DOUBLE::DECIMAL(38,12), 1.1::DOUBLE::DECIMAL(38,18)
+----
+135968.859999999986 284957.460000000021 1.100000000000000089
+
+query RR
+SELECT 0.1::FLOAT::DECIMAL(38,18), 0.1::DOUBLE::DECIMAL(76,76)
+----
+0.100000001490116119 0.1000000000000000055511151231257827021181583404541015625000000000000000000000
+
+# Binary shifts may be positive, negative, or far beyond the coefficient width.
+query RRR
+SELECT 1e30::DOUBLE::DECIMAL(76,0), 5e-324::DOUBLE::DECIMAL(76,76), (-0.0)::DOUBLE::DECIMAL(18,10)
+----
+1000000000000000019884624838656 0.0000000000000000000000000000000000000000000000000000000000000000000000000000 0.0000000000
+
+query RRRR
+SELECT 0.5::DOUBLE::DECIMAL(1,0), (-0.5)::DOUBLE::DECIMAL(1,0), 0.125::DOUBLE::DECIMAL(18,2), (-0.125)::DOUBLE::DECIMAL(18,2)
+----
+1 -1 0.13 -0.13
+
+# Overflow is checked after rounding; non-finite inputs must not become zero.
+query RRRRR
+SELECT TRY_CAST(9.5::DOUBLE AS DECIMAL(1,0)), TRY_CAST('NaN'::DOUBLE AS DECIMAL(38,10)), TRY_CAST('inf'::DOUBLE AS DECIMAL(76,0)), TRY_CAST('-inf'::DOUBLE AS DECIMAL(18,0)), TRY_CAST(1e100 AS DECIMAL(76,0))
+----
+NULL NULL NULL NULL NULL
+
+statement error Decimal overflow
+SELECT CAST('NaN'::DOUBLE AS DECIMAL(38,10))
+
+# Nullable columns and inactive rows keep their normal error/null semantics.
+query R
+SELECT TRY_CAST(a AS DECIMAL(38,18))
+FROM (
+  VALUES
+    (1, 1.1::DOUBLE),
+    (2, (-1.1)::DOUBLE),
+    (3, NULL::DOUBLE),
+    (4, 'NaN'::DOUBLE),
+    (5, 'inf'::DOUBLE)
+) AS t(id, a)
+ORDER BY id
+----
+1.100000000000000089
+-1.100000000000000089
+NULL
+NULL
+NULL
+
+query R
+SELECT if(number = 0, NULL, CAST(if(number = 0, 'NaN'::DOUBLE, 415210.34::DOUBLE) AS DECIMAL(38,10))) FROM numbers(2) ORDER BY number
+----
+NULL
+415210.3400000000
+
+# Float64 stored inside VARIANT uses the same exact conversion.
+query RR
+SELECT (415210.34::DOUBLE::VARIANT)::DECIMAL(38,10), (1.1::DOUBLE::VARIANT)::DECIMAL(38,18)
+----
+415210.3400000000 1.100000000000000089
+
+statement ok
+CREATE OR REPLACE TABLE issue_20781_migration (id INT, amount DOUBLE)
+
+statement ok
+INSERT INTO issue_20781_migration VALUES (1, 415210.34), (2, 363955.09), (3, 0.1), (4, 237964.63)
+
+statement ok
+ALTER TABLE issue_20781_migration MODIFY COLUMN amount DECIMAL(38,10)
+
+query IR
+SELECT id, amount FROM issue_20781_migration ORDER BY id
+----
+1 415210.3400000000
+2 363955.0900000000
+3 0.1000000000
+4 237964.6300000000
+
+query I
+SELECT id FROM issue_20781_migration WHERE amount = 415210.34
+----
+1
+
+statement ok
+DROP TABLE issue_20781_migration
+
+statement ok
+CREATE OR REPLACE TABLE issue_20781_insert (id INT, amount DECIMAL(38,12))
+
+statement ok
+INSERT INTO issue_20781_insert VALUES (1, 135968.86::DOUBLE), (2, 284957.46::DOUBLE)
+
+query IR
+SELECT id, amount FROM issue_20781_insert ORDER BY id
+----
+1 135968.859999999986
+2 284957.460000000021
+
+statement ok
+DROP TABLE issue_20781_insert
+
+statement ok
+SET numeric_cast_option = 'truncating'
+
+query RRRRR
+SELECT 0.125::DOUBLE::DECIMAL(18,2), (-0.125)::DOUBLE::DECIMAL(18,2), 9.5::DOUBLE::DECIMAL(1,0), 415210.34::DOUBLE::DECIMAL(38,10), 135968.86::DOUBLE::DECIMAL(38,12)
+----
+0.12 -0.12 9 415210.3400000000 135968.859999999986
+
+statement ok
+UNSET numeric_cast_option

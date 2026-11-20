@@ -7482,7 +7482,8 @@ impl SchemaApiTestSuite {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     name: "idx".to_string(),
-                    index_type: 4,
+                    // No `TableIndexType` variant has this value.
+                    index_type: 99,
                     ..Default::default()
                 });
                 let table_key = TableId::new(table_id);
@@ -7709,7 +7710,8 @@ impl SchemaApiTestSuite {
                     ver: VER,
                     min_reader_ver: MIN_READER_VER,
                     name: "idx".to_string(),
-                    index_type: 4,
+                    // No `TableIndexType` variant has this value.
+                    index_type: 99,
                     ..Default::default()
                 });
                 upsert_test_data(mt, &TableId::new(table_id), table_pb.encode_to_vec()).await?;
@@ -8305,6 +8307,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -8321,6 +8324,7 @@ impl SchemaApiTestSuite {
                 increment: 2,
                 comment: Some("seq2".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -8346,6 +8350,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;
@@ -8398,6 +8403,7 @@ impl SchemaApiTestSuite {
                 increment: 1,
                 comment: Some("seq1".to_string()),
                 storage_version,
+                owner_role: None,
             };
 
             let resp = mt.create_sequence(req).await?;

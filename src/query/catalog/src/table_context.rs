@@ -31,8 +31,11 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFileInfo;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 
 mod authorization;
+mod cache_policy;
 mod execution;
 mod materialization;
 mod partitions;
@@ -45,6 +48,7 @@ mod table_access;
 mod table_management;
 
 pub use authorization::TableContextAuthorization;
+pub use cache_policy::TableContextCachePolicy;
 pub use databend_common_component::BroadcastChannel;
 pub use execution::TableContextPerf;
 pub use execution::TableContextProgress;
@@ -81,6 +85,7 @@ pub mod prelude {
     pub use super::SegmentLocationsState;
     pub use super::TableContext;
     pub use super::TableContextAuthorization;
+    pub use super::TableContextCachePolicy;
     pub use super::TableContextCluster;
     pub use super::TableContextCopy;
     pub use super::TableContextCte;
@@ -167,6 +172,7 @@ pub struct FilteredCopyFiles {
 #[async_trait::async_trait]
 pub trait TableContext:
     TableContextAuthorization
+    + TableContextCachePolicy
     + TableContextCluster
     + TableContextCopy
     + TableContextCte
@@ -207,6 +213,32 @@ pub trait TableContext:
     fn result_cache_state(&self) -> &ResultCacheState;
 
     fn written_segment_locations(&self) -> &SegmentLocationsState;
+
+    /// The internal history stage must not bypass authorization in compatibility mode.
+    fn should_check_stage_privilege(&self, stage_name: &str) -> Result<bool> {
+        Ok(self.get_settings().get_enable_experimental_rbac_check()?
+            || stage_name.eq_ignore_ascii_case(
+                &databend_common_config::GlobalConfig::instance()
+                    .log
+                    .history
+                    .stage_name,
+            ))
+    }
+
+    /// Returns the checker for using or listing sequences when sequence object checks
+    /// are enabled, or `None` in legacy mode.
+    async fn sequence_usage_checker(&self) -> Result<Option<Arc<GrantObjectVisibilityChecker>>> {
+        if self
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            return self
+                .get_visibility_checker(false, Object::Sequence)
+                .await
+                .map(Some);
+        }
+        Ok(None)
+    }
 
     fn as_any(&self) -> &dyn Any;
 }

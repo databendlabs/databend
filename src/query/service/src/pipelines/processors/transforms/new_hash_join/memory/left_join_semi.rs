@@ -26,7 +26,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_pipeline::core::check_interrupt;
 
@@ -80,7 +79,6 @@ impl SemiLeftHashJoin {
             method,
             desc.clone(),
             state.clone(),
-            0,
         )?;
 
         Ok(SemiLeftHashJoin {
@@ -143,9 +141,6 @@ impl Join for SemiLeftHashJoin {
 
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe_matched(probe_data)
-            }
-            HashJoinHashTable::NestedLoop(_) => {
-                unreachable!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
@@ -317,10 +312,7 @@ impl<'a> JoinStream for LeftSemiFilterHashJoinStream<'a> {
 
                             match col.is_null() || col.is_nullable() {
                                 true => entry.clone(),
-                                false => BlockEntry::from(NullableColumn::new_column(
-                                    col,
-                                    Bitmap::new_constant(true, result_block.num_rows()),
-                                )),
+                                false => BlockEntry::from(col.wrap_nullable(None)),
                             }
                         }
                     };

@@ -25,6 +25,7 @@ use std::time::Duration;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
@@ -51,7 +52,6 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_settings::Settings;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_sql::binder::parse_stage_location;
 use databend_common_sql::binder::parse_stage_name;
@@ -207,41 +207,10 @@ pub enum AsyncFunctionState {
 
 pub type AsyncFunctionStates = Vec<AsyncFunctionState>;
 
-enum VisibilityCheckerState {
-    Disabled,
-    Pending,
-    Ready(Arc<GrantObjectVisibilityChecker>),
-}
-
-impl VisibilityCheckerState {
-    fn try_new(settings: &Settings) -> Result<Self> {
-        if settings.get_enable_experimental_rbac_check()? {
-            Ok(Self::Pending)
-        } else {
-            Ok(Self::Disabled)
-        }
-    }
-
-    async fn get(&mut self, ctx: &QueryContext) -> Result<Option<&GrantObjectVisibilityChecker>> {
-        match self {
-            Self::Disabled => Ok(None),
-            Self::Pending => {
-                let checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-                *self = Self::Ready(checker);
-                match self {
-                    Self::Ready(checker) => Ok(Some(checker)),
-                    _ => Ok(None),
-                }
-            }
-            Self::Ready(checker) => Ok(Some(checker)),
-        }
-    }
-}
-
 pub struct ReadFileContext {
     thread_num: usize,
     permit_num: usize,
-    visibility_checker: VisibilityCheckerState,
+    visibility_checker: OnceCell<Arc<GrantObjectVisibilityChecker>>,
     stage_infos: HashMap<String, StageInfo>,
     stage_operators: HashMap<String, Operator>,
 }
@@ -255,7 +224,7 @@ impl ReadFileContext {
         Ok(Self {
             thread_num: 2,
             permit_num,
-            visibility_checker: VisibilityCheckerState::try_new(settings.as_ref())?,
+            visibility_checker: OnceCell::new(),
             stage_infos: HashMap::new(),
             stage_operators: HashMap::new(),
         })
@@ -286,10 +255,13 @@ impl ReadFileContext {
     }
 
     async fn visibility_checker(
-        &mut self,
+        &self,
         ctx: &QueryContext,
-    ) -> Result<Option<&GrantObjectVisibilityChecker>> {
-        self.visibility_checker.get(ctx).await
+    ) -> Result<&GrantObjectVisibilityChecker> {
+        self.visibility_checker
+            .get_or_try_init(|| ctx.get_visibility_checker(false, Object::Stage))
+            .await
+            .map(Arc::as_ref)
     }
 
     fn operator_for_stage(&mut self, stage_info: &StageInfo) -> Result<Operator> {
@@ -363,7 +335,8 @@ impl ReadFileContext {
             stage_info.allow_credential_chain = true;
         }
 
-        if let Some(visibility_checker) = self.visibility_checker(ctx).await? {
+        if ctx.should_check_stage_privilege(&stage_info.stage_name)? {
+            let visibility_checker = self.visibility_checker(ctx).await?;
             if !(stage_info.is_temporary
                 || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
                 || stage_info.stage_type == StageType::User
@@ -904,13 +877,14 @@ impl NextValFetcher for SequenceNextValFetcher {
 
         // Calculate batch size - take the larger of count or step_size
         let req = GetSequenceNextValueReq {
-            ident: self.sequence_ident,
+            ident: self.sequence_ident.clone(),
             count: batch_size,
         };
 
         let resp = catalog
             .get_sequence_next_value(req, &visibility_checker)
             .await?;
+        ctx.record_sequence_access(self.sequence_ident.name());
         Ok(NextValFetchResult {
             start: resp.start,
             batch_size,
@@ -931,14 +905,7 @@ impl SequenceNextValFetcher {
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
     ) -> Result<(GetSequenceReply, Option<Arc<GrantObjectVisibilityChecker>>)> {
-        let visibility_checker = if ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            Some(ctx.get_visibility_checker(false, Object::Sequence).await?)
-        } else {
-            None
-        };
+        let visibility_checker = ctx.sequence_usage_checker().await?;
 
         let req = GetSequenceReq {
             ident: self.sequence_ident.clone(),

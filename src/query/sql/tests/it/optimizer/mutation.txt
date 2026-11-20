@@ -265,6 +265,7 @@ target_table: default.default.target
     ├── build keys: [source.k (#2)]
     ├── probe keys: [target.k (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: source.k (#2) -> target.k (#0)]
     ├── Scan
     │   ├── table: default.source (#1)
     │   ├── filters: []
@@ -274,7 +275,8 @@ target_table: default.default.target
         ├── table: default.target (#0)
         ├── filters: []
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: target.k (#0)]
 
 mutation_state: strategy=MatchedOnly, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
 
@@ -290,6 +292,7 @@ target_table: default.default.target
     ├── build keys: [source.k (#2)]
     ├── probe keys: [target.k (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: source.k (#2) -> target.k (#0)]
     ├── Exchange(Broadcast)
     │   └── Scan
     │       ├── table: default.source (#1)
@@ -302,7 +305,8 @@ target_table: default.default.target
             ├── table: default.target (#0)
             ├── filters: []
             ├── order by: []
-            └── limit: NONE
+            ├── limit: NONE
+            └── runtime filters: [#0: target.k (#0)]
 
 mutation_state: strategy=MatchedOnly, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
 
@@ -347,6 +351,7 @@ target_table: default.default.target
     ├── build keys: [source.k (#2)]
     ├── probe keys: [target.k (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: source.k (#2) -> target.k (#0)]
     ├── Scan
     │   ├── table: default.source (#1)
     │   ├── filters: []
@@ -356,7 +361,8 @@ target_table: default.default.target
         ├── table: default.target (#0)
         ├── filters: []
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: target.k (#0)]
 
 mutation_state: strategy=MatchedOnly, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
 
@@ -372,6 +378,7 @@ target_table: default.default.target
     ├── build keys: [source.k (#2)]
     ├── probe keys: [target.k (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: source.k (#2) -> target.k (#0)]
     ├── Exchange(Broadcast)
     │   └── Scan
     │       ├── table: default.source (#1)
@@ -384,7 +391,8 @@ target_table: default.default.target
             ├── table: default.target (#0)
             ├── filters: []
             ├── order by: []
-            └── limit: NONE
+            ├── limit: NONE
+            └── runtime filters: [#0: target.k (#0)]
 
 mutation_state: strategy=MatchedOnly, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
 
@@ -425,6 +433,7 @@ target_table: default.default.target
     ├── build keys: [source.k (#0)]
     ├── probe keys: [target.k (#2)]
     ├── other filters: []
+    ├── runtime filters: [#0: source.k (#0) -> target.k (#2)]
     ├── Scan
     │   ├── table: default.source (#0)
     │   ├── filters: []
@@ -434,7 +443,8 @@ target_table: default.default.target
         ├── table: default.target (#1)
         ├── filters: []
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: target.k (#2)]
 
 mutation_state: strategy=MatchedOnly, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
 
@@ -450,6 +460,7 @@ target_table: default.default.target
     ├── build keys: [source.k (#0)]
     ├── probe keys: [target.k (#2)]
     ├── other filters: []
+    ├── runtime filters: [#0: source.k (#0) -> target.k (#2)]
     ├── Exchange(Broadcast)
     │   └── Scan
     │       ├── table: default.source (#0)
@@ -462,7 +473,8 @@ target_table: default.default.target
             ├── table: default.target (#1)
             ├── filters: []
             ├── order by: []
-            └── limit: NONE
+            ├── limit: NONE
+            └── runtime filters: [#0: target.k (#2)]
 
 mutation_state: strategy=MatchedOnly, distributed=true, row_id_shuffle=false, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
 

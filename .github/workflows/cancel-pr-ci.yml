@@ -1,0 +1,28 @@
+name: Cancel Closed PR CI
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # This job has a write token: never check out or execute the PR's code.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Cancel unfinished runs for the closed PR
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { cancelClosedPRRuns } = require('./.github/scripts/pr_ci_lifecycle.js');
+            await cancelClosedPRRuns({ github, context, core });

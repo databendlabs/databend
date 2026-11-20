@@ -71,18 +71,15 @@ Sort(Final)
                                 │       ├── partitions scanned: 0
                                 │       ├── push downs: [filters: [customer.c_mktsegment (#15) = 'BUILDING'], limit: NONE]
                                 │       └── estimated rows: 0.00
-                                └── Exchange(Probe)
-                                    ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderdate (#4), orders.o_shippriority (#7)]
-                                    ├── exchange type: Hash(orders.o_custkey (#1))
-                                    └── TableScan
-                                        ├── table: default.default.orders
-                                        ├── scan id: 0
-                                        ├── output columns: [o_orderkey (#0), o_custkey (#1), o_orderdate (#4), o_shippriority (#7)]
-                                        ├── read rows: 0
-                                        ├── read size: 0
-                                        ├── partitions total: 0
-                                        ├── partitions scanned: 0
-                                        ├── push downs: [filters: [orders.o_orderdate (#4) < '1995-03-15'], limit: NONE]
-                                        ├── apply join filters: [#1, #0]
-                                        └── estimated rows: 0.00
+                                └── TableScan(Probe)
+                                    ├── table: default.default.orders
+                                    ├── scan id: 0
+                                    ├── output columns: [o_orderkey (#0), o_custkey (#1), o_orderdate (#4), o_shippriority (#7)]
+                                    ├── read rows: 0
+                                    ├── read size: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [orders.o_orderdate (#4) < '1995-03-15'], limit: NONE]
+                                    ├── apply join filters: [#1, #0]
+                                    └── estimated rows: 0.00
 

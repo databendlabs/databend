@@ -46,6 +46,34 @@ AggregateFinal
         └── estimated rows: 10.00
 
 
+# Group items computed from other group items, constants included, are computed after the aggregation
+query T
+explain select number, number + 1, number * 2 + 3, count() from numbers(10) group by number, number + 1, number * 2 + 3;
+----
+EvalScalar
+├── output columns: [count() (#3), numbers.number (#0), number + 1 (#4), number * 2 + 3 (#5)]
+├── expressions: [numbers.number (#0) + 1, numbers.number (#0) * 2 + 3]
+├── estimated rows: 3.33
+└── AggregateFinal
+    ├── output columns: [count() (#3), numbers.number (#0)]
+    ├── group by: [number]
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 3.33
+    └── AggregatePartial
+        ├── group by: [number]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 3.33
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── scan id: 0
+            ├── output columns: [number (#0)]
+            ├── read rows: 10
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 10.00
+
 ## TODO optimize group by constant
 query T
 explain select 1 a from numbers(10) group by a;
@@ -417,7 +445,7 @@ AggregateFinal
         │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        │   ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         │   ├── push downs: [filters: [], limit: NONE]
         │   └── estimated rows: 10.00
         └── TableScan(Right)
@@ -428,7 +456,7 @@ AggregateFinal
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: NONE]
             └── estimated rows: 100.00
 
@@ -629,7 +657,7 @@ TopN(Final)
                         │           ├── read size: < 1 KiB
                         │           ├── partitions total: 1
                         │           ├── partitions scanned: 1
-                        │           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                        │           ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                         │           ├── push downs: [filters: [is_true(explain_agg_rank_r.flag (#3))], limit: NONE]
                         │           └── estimated rows: 4.50
                         └── AggregateFinal(Probe)
@@ -649,7 +677,7 @@ TopN(Final)
                                     ├── read size: < 1 KiB
                                     ├── partitions total: 1
                                     ├── partitions scanned: 1
-                                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                                    ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                                     ├── push downs: [filters: [], limit: NONE]
                                     ├── apply join filters: [#0]
                                     └── estimated rows: 9.00

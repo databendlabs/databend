@@ -406,6 +406,15 @@ fn last_integer_satisfying(
 }
 
 impl Histogram {
+    pub fn memory_size(&self) -> usize {
+        match self {
+            Histogram::Int(h) => h.memory_size(|_| 0),
+            Histogram::UInt(h) => h.memory_size(|_| 0),
+            Histogram::Float(h) => h.memory_size(|_| 0),
+            Histogram::Bytes(h) => h.memory_size(Vec::capacity),
+        }
+    }
+
     /// Build a histogram from ANALYZE buckets or persisted snapshot buckets.
     /// These are observed histograms, so their initial retention is 1.
     pub fn try_from_buckets(buckets: Vec<HistogramBucket>) -> Result<Self, &'static str> {

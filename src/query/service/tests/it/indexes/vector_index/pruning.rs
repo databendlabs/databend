@@ -741,13 +741,13 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         // Third query: l2_distance with query_values1
         vec![
             vec![
-                VectorScoreResult::new(0, 0, 0, 3.5187712),
-                VectorScoreResult::new(0, 0, 9, 3.5518785),
+                VectorScoreResult::new(0, 0, 0, 0.0),
+                VectorScoreResult::new(0, 0, 9, 0.4838298),
+                VectorScoreResult::new(0, 0, 1, 0.59597003),
             ],
             vec![
-                VectorScoreResult::new(1, 3, 6, 3.4702706),
-                VectorScoreResult::new(1, 3, 7, 3.5206928),
-                VectorScoreResult::new(1, 3, 1, 3.556445),
+                VectorScoreResult::new(1, 0, 9, 0.51379997),
+                VectorScoreResult::new(1, 0, 5, 0.58313537),
             ],
         ],
         // Fourth query: cosine_distance with query_values2
@@ -771,12 +771,17 @@ async fn test_block_pruner() -> anyhow::Result<()> {
             ],
         ],
         // Sixth query: l2_distance with query_values2
-        vec![vec![VectorScoreResult::new(1, 1, 8, 3.4763064)], vec![
-            VectorScoreResult::new(1, 3, 5, 3.4903116),
-            VectorScoreResult::new(1, 3, 9, 3.4926815),
-            VectorScoreResult::new(1, 3, 0, 3.527872),
-            VectorScoreResult::new(1, 3, 8, 3.560473),
-        ]],
+        vec![
+            vec![
+                VectorScoreResult::new(0, 1, 6, 0.48633155),
+                VectorScoreResult::new(0, 1, 5, 0.7715289),
+            ],
+            vec![VectorScoreResult::new(1, 1, 8, 0.0)],
+            vec![
+                VectorScoreResult::new(1, 4, 8, 0.47685158),
+                VectorScoreResult::new(1, 4, 7, 0.71438366),
+            ],
+        ],
     ];
 
     let mut extras = Vec::new();
@@ -792,7 +797,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
             vector_index: Some(vector_index),
             ..Default::default()
         };
-        extras.push((Some(extra), result));
+        extras.push((Some(extra), result, false));
     }
 
     // Add a filter to test filter pushdown
@@ -887,32 +892,17 @@ async fn test_block_pruner() -> anyhow::Result<()> {
                 VectorScoreResult::new(1, 0, 9, 0.7167929),
             ],
         ],
-        // Third query: l2_distance with filter and query_values1
+        // Third query: l2_distance with filter and query_values1. L2 scores are
+        // small, so few rows pass `> 2.0`; these are the TopN rows themselves,
+        // which `filtered_topn` leaves unchanged.
         vec![
+            vec![VectorScoreResult::new(0, 0, 7, 2.1106725)],
             vec![
-                VectorScoreResult::new(0, 0, 0, 3.5187712),
-                VectorScoreResult::new(0, 0, 1, 3.5688834),
-                VectorScoreResult::new(0, 0, 2, 4.158467),
-                VectorScoreResult::new(0, 0, 3, 3.8972623),
-                VectorScoreResult::new(0, 0, 4, 3.9402654),
-                VectorScoreResult::new(0, 0, 5, 3.8295133),
-                VectorScoreResult::new(0, 0, 6, 4.16049),
-                VectorScoreResult::new(0, 0, 7, 4.1032534),
-                VectorScoreResult::new(0, 0, 8, 4.2184787),
-                VectorScoreResult::new(0, 0, 9, 3.5518785),
+                VectorScoreResult::new(0, 3, 6, 2.0039008),
+                VectorScoreResult::new(0, 3, 1, 2.0506036),
             ],
-            vec![
-                VectorScoreResult::new(1, 3, 0, 3.9212408),
-                VectorScoreResult::new(1, 3, 1, 3.556445),
-                VectorScoreResult::new(1, 3, 2, 3.7241573),
-                VectorScoreResult::new(1, 3, 3, 4.1835504),
-                VectorScoreResult::new(1, 3, 4, 3.6078227),
-                VectorScoreResult::new(1, 3, 5, 3.5779395),
-                VectorScoreResult::new(1, 3, 6, 3.4702706),
-                VectorScoreResult::new(1, 3, 7, 3.5206928),
-                VectorScoreResult::new(1, 3, 8, 3.8251386),
-                VectorScoreResult::new(1, 3, 9, 3.616931),
-            ],
+            vec![VectorScoreResult::new(1, 0, 6, 2.0104616)],
+            vec![VectorScoreResult::new(1, 1, 4, 2.070966)],
         ],
         // Fourth query: cosine_distance with filter and query_values2
         vec![],
@@ -967,32 +957,15 @@ async fn test_block_pruner() -> anyhow::Result<()> {
                 VectorScoreResult::new(1, 3, 9, 2.011335),
             ],
         ],
-        // Sixth query: l2_distance with filter and query_values2
+        // Sixth query: l2_distance with filter and query_values2, TopN rows as above.
         vec![
             vec![
-                VectorScoreResult::new(1, 1, 0, 3.819309),
-                VectorScoreResult::new(1, 1, 1, 3.8105543),
-                VectorScoreResult::new(1, 1, 2, 3.8291273),
-                VectorScoreResult::new(1, 1, 3, 3.7389958),
-                VectorScoreResult::new(1, 1, 4, 3.5913217),
-                VectorScoreResult::new(1, 1, 5, 3.870244),
-                VectorScoreResult::new(1, 1, 6, 3.7941854),
-                VectorScoreResult::new(1, 1, 7, 3.585766),
-                VectorScoreResult::new(1, 1, 8, 3.4763064),
-                VectorScoreResult::new(1, 1, 9, 3.709784),
+                VectorScoreResult::new(0, 0, 6, 2.1145003),
+                VectorScoreResult::new(0, 0, 5, 2.1355345),
             ],
-            vec![
-                VectorScoreResult::new(1, 3, 0, 3.527872),
-                VectorScoreResult::new(1, 3, 1, 3.5928586),
-                VectorScoreResult::new(1, 3, 2, 3.5736349),
-                VectorScoreResult::new(1, 3, 3, 3.6239994),
-                VectorScoreResult::new(1, 3, 4, 3.8320742),
-                VectorScoreResult::new(1, 3, 5, 3.4903116),
-                VectorScoreResult::new(1, 3, 6, 3.70468),
-                VectorScoreResult::new(1, 3, 7, 3.586185),
-                VectorScoreResult::new(1, 3, 8, 3.560473),
-                VectorScoreResult::new(1, 3, 9, 3.4926815),
-            ],
+            vec![VectorScoreResult::new(0, 1, 7, 2.1002038)],
+            vec![VectorScoreResult::new(0, 3, 1, 2.0905113)],
+            vec![VectorScoreResult::new(1, 2, 0, 2.0362694)],
         ],
     ];
 
@@ -1009,10 +982,18 @@ async fn test_block_pruner() -> anyhow::Result<()> {
             vector_index: Some(vector_index),
             ..Default::default()
         };
-        extras.push((Some(extra), result));
+        extras.push((Some(extra), result, true));
     }
 
-    for (extra, expected_results) in extras {
+    for (extra, expected_results, filtered) in extras {
+        // The expected results of filtered queries are the scores of all rows of
+        // the blocks. Once the rows that pass the filter fill the limit, the pruner
+        // keeps only the TopN rows: the 5 lowest scores above 2.0.
+        let expected_results = if filtered {
+            filtered_topn(expected_results, |score| score > 2.0, 5)
+        } else {
+            expected_results
+        };
         let block_metas = apply_block_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
@@ -1027,10 +1008,24 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         for ((block_meta_index, _), expected_scores) in
             block_metas.iter().zip(expected_results.iter())
         {
-            assert!(block_meta_index.vector_scores.is_some());
-            let vector_scores = block_meta_index.vector_scores.clone().unwrap();
+            // The pruner attaches the scored rows; compare them in row order.
+            let matches = block_meta_index
+                .vector_index_matches
+                .as_ref()
+                .expect("missing vector scores");
+            let scores = matches.scores.as_ref().expect("missing vector scores");
+            assert_eq!(scores.len(), matches.rows.len());
+            let mut vector_scores: Vec<(usize, F32)> = matches
+                .rows
+                .iter()
+                .map(|row| *row as usize)
+                .zip(scores.iter().copied())
+                .collect();
+            vector_scores.sort_by_key(|(row, _)| *row);
+            let mut expected_scores = expected_scores.clone();
+            expected_scores.sort_by_key(|expected| expected.vector_idx);
             assert_eq!(vector_scores.len(), expected_scores.len());
-            for (vector_score, expected_score) in vector_scores.iter().zip(expected_scores) {
+            for (vector_score, expected_score) in vector_scores.iter().zip(&expected_scores) {
                 assert_eq!(block_meta_index.segment_idx, expected_score.segment_idx);
                 assert_eq!(block_meta_index.block_idx, expected_score.block_idx);
                 assert_eq!(vector_score.0, expected_score.vector_idx);
@@ -1040,6 +1035,37 @@ async fn test_block_pruner() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// The rows of `blocks` among the `limit` lowest scores that pass `filter`, if
+/// they fill the limit; otherwise `blocks` unchanged. Blocks without such rows
+/// are removed.
+fn filtered_topn(
+    blocks: Vec<Vec<VectorScoreResult>>,
+    filter: impl Fn(f32) -> bool,
+    limit: usize,
+) -> Vec<Vec<VectorScoreResult>> {
+    let mut passed: Vec<f32> = blocks
+        .iter()
+        .flatten()
+        .map(|result| result.score)
+        .filter(|&score| filter(score))
+        .collect();
+    if passed.len() < limit {
+        return blocks;
+    }
+    passed.sort_by(f32::total_cmp);
+    let last = passed[limit - 1];
+    blocks
+        .into_iter()
+        .map(|block| {
+            block
+                .into_iter()
+                .filter(|result| filter(result.score) && result.score <= last)
+                .collect::<Vec<_>>()
+        })
+        .filter(|block| !block.is_empty())
+        .collect()
 }
 
 #[derive(Debug, Clone)]

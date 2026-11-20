@@ -14,8 +14,8 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserDefinedConnection;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 
@@ -24,19 +24,22 @@ use crate::meta_service_error;
 
 /// user connection operations.
 impl UserApiProvider {
-    // Add a new connection.
+    /// Writes the connection and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     pub async fn add_connection(
         &self,
         tenant: &Tenant,
         connection: UserDefinedConnection,
-        create_option: &CreateOption,
-    ) -> Result<()> {
-        let connection_api_provider = self.connection_api(tenant);
-        connection_api_provider
-            .add(connection, create_option)
-            .await?;
-        Ok(())
+        replace: bool,
+        owner: Option<&str>,
+    ) -> Result<bool> {
+        let object = OwnershipObject::Connection {
+            name: connection.name.clone(),
+        };
+        self.connection_api(tenant)
+            .add_with_ownership(connection, replace, object, owner)
+            .await
+            .map_err(meta_service_error)
     }
 
     // Get one connection from by tenant.
@@ -63,22 +66,22 @@ impl UserApiProvider {
         }
     }
 
-    // Drop a connection by name.
+    /// Drop a connection by name, returning whether a connection was dropped.
     #[async_backtrace::framed]
     pub async fn drop_connection(
         &self,
         tenant: &Tenant,
         name: &str,
         if_exists: bool,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let connection_api_provider = self.connection_api(tenant);
         let drop_connection = connection_api_provider.remove(name, MatchSeq::GE(1));
         match drop_connection.await {
-            Ok(res) => Ok(res),
+            Ok(()) => Ok(true),
             Err(e) => {
                 let e = ErrorCode::from(e);
                 if if_exists && e.code() == ErrorCode::UNKNOWN_CONNECTION {
-                    Ok(())
+                    Ok(false)
                 } else {
                     Err(e.add_message_back(" (while drop connection)"))
                 }

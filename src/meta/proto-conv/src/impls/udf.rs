@@ -171,6 +171,7 @@ impl FromToProto for mt::UDFScript {
         })?)?;
 
         Ok(mt::UDFScript {
+            external_access_integrations: p.external_access_integrations,
             code: p.code,
             arg_types,
             return_type,
@@ -193,7 +194,13 @@ impl FromToProto for mt::UDFScript {
 
         pb::UdfScript {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            // Older workers must not ignore a script's network policy.
+            min_reader_ver: if self.external_access_integrations.is_empty() {
+                MIN_READER_VER
+            } else {
+                192
+            },
+            external_access_integrations: self.external_access_integrations.clone(),
             code: self.code.clone(),
             handler: self.handler.clone(),
             language: self.language.clone(),
@@ -232,6 +239,7 @@ impl FromToProto for mt::UDAFScript {
         })?)?;
 
         Ok(mt::UDAFScript {
+            external_access_integrations: p.external_access_integrations,
             code: p.code,
             arg_types,
             return_type,
@@ -256,7 +264,12 @@ impl FromToProto for mt::UDAFScript {
 
         pb::UdafScript {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            min_reader_ver: if self.external_access_integrations.is_empty() {
+                MIN_READER_VER
+            } else {
+                192
+            },
+            external_access_integrations: self.external_access_integrations.clone(),
             code: self.code.clone(),
             language: self.language.clone(),
             runtime_version: self.runtime_version.clone(),

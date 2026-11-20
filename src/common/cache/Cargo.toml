@@ -7,10 +7,11 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-hashbrown = { workspace = true }
+hashbrown = { workspace = true, features = ["default-hasher", "equivalent"] }
 hashlink = { workspace = true }
 
 [dev-dependencies]
+rand = { workspace = true }
 
 [lints]
 workspace = true

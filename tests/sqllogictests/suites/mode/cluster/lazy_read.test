@@ -51,7 +51,7 @@ RowFetch
                 ├── read size: < 1 KiB
                 ├── partitions total: 3
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: 2]
                 └── estimated rows: 300.00
 
@@ -83,7 +83,7 @@ RowFetch
                 ├── read size: < 1 KiB
                 ├── partitions total: 3
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: 2]
                 └── estimated rows: 150.00
 
@@ -116,7 +116,7 @@ TopN(Final)
             ├── read size: 1.73 KiB
             ├── partitions total: 3
             ├── partitions scanned: 3
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 2]
             └── estimated rows: 300.00
 
@@ -144,7 +144,7 @@ Limit
             ├── read size: < 1 KiB
             ├── partitions total: 3
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: 2]
             └── estimated rows: 150.00
 
@@ -172,7 +172,7 @@ Limit
             ├── read size: < 1 KiB
             ├── partitions total: 3
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 2]
             └── estimated rows: 300.00
 

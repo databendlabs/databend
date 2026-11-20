@@ -14,7 +14,7 @@ evaluation (internal):
 | Column | Data                                                                 |
 +--------+----------------------------------------------------------------------+
 | d      | Column(Decimal64([4.00, 3.00, 2.00, 1.00]))                          |
-| Output | NullableColumn { column: Decimal64([2.00]), validity: [0b_______1] } |
+| Output | NullableColumn { column: Decimal64([2.50]), validity: [0b_______1] } |
 +--------+----------------------------------------------------------------------+
 
 

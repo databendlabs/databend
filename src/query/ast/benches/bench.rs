@@ -25,6 +25,31 @@ fn main() {
 // ├─ wide_embedding      2.435 ms      │ 2.8 ms        │ 2.503 ms      │ 2.514 ms      │ 100     │ 100
 // ╰─ wide_expr           30.73 µs      │ 45.14 µs      │ 31.18 µs      │ 31.78 µs      │ 100     │ 100
 
+#[divan::bench_group(max_time = 1)]
+mod log_sql {
+    use databend_common_ast::parser::format_sql_for_log;
+
+    fn query(case: &str) -> String {
+        match case {
+            "vector" => format!(
+                "SELECT id FROM t ORDER BY cosine_distance(v, [{}]) LIMIT 10",
+                vec!["-0.123456"; 1536].join(", ")
+            ),
+            "values" => format!(
+                "INSERT INTO t VALUES {}",
+                vec!["(1, 'abc')"; 500].join(", ")
+            ),
+            _ => "SELECT id FROM t WHERE id = 42".to_owned(),
+        }
+    }
+
+    #[divan::bench(args = ["short", "vector", "values"])]
+    fn format_for_log(b: divan::Bencher, case: &str) {
+        let sql = query(case);
+        b.bench_local(|| format_sql_for_log(divan::black_box(&sql)));
+    }
+}
+
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {
     use databend_common_ast::parser::Dialect;
@@ -78,6 +103,44 @@ mod dummy {
         let tokens = tokenize_sql(case).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
         divan::black_box(expr);
+    }
+}
+
+#[divan::bench_group(max_time = 0.5)]
+mod trailing_vector_argument {
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::parse_sql;
+    use databend_common_ast::parser::tokenize_sql;
+
+    fn vector_cast() -> String {
+        let values = ["0.1973208636045456", "-0.2610067129135132"];
+        format!("CAST([{}] AS VECTOR(768))", values.repeat(384).join(", "))
+    }
+
+    // Isolate parsing from tokenization and check that nesting a final
+    // argument does not multiply the work required to parse its vector.
+    #[divan::bench(args = [0, 1, 2, 4])]
+    fn nested_expression(bencher: divan::Bencher, depth: usize) {
+        let mut sql = vector_cast();
+        for _ in 0..depth {
+            sql = format!("cosine_distance(embedding, {sql})");
+        }
+        let tokens = tokenize_sql(&sql).unwrap();
+        bencher.bench_local(|| parse_expr(divan::black_box(&tokens), Dialect::PostgreSQL).unwrap());
+    }
+
+    #[divan::bench]
+    fn order_by_query(bencher: divan::Bencher) {
+        let sql = format!(
+            "SELECT id FROM vdb_lake_km.t512 ORDER BY COSINE_DISTANCE(embedding, {}) ASC LIMIT 100",
+            vector_cast()
+        );
+        let tokens = tokenize_sql(&sql).unwrap();
+        // parse_sql also performs a round-trip check with debug assertions
+        // enabled. Use CARGO_PROFILE_BENCH_DEBUG_ASSERTIONS=false for timings
+        // representative of a release build.
+        bencher.bench_local(|| parse_sql(divan::black_box(&tokens), Dialect::PostgreSQL).unwrap());
     }
 }
 

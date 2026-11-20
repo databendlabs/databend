@@ -14,5 +14,6 @@
 
 mod data_sharing;
 mod license;
+mod materialized_view;
 mod storages;
 mod stream;

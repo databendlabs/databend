@@ -39,6 +39,7 @@ use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransformer;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::RangeIndexInput;
@@ -151,7 +152,7 @@ impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for MutationSegmen
         let block_metas = ExtractSegmentTransform::extract_block_metas(
             &segment_location.location.0,
             &info,
-            false,
+            CachePolicy::READ_ONLY,
             &self.pruning_ctx.pruning_cost,
         )?;
         if block_metas.is_empty() {

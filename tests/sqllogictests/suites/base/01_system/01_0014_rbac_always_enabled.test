@@ -1,0 +1,43 @@
+# The restored upgrade switches use their legacy defaults and are global-only.
+query TT
+SELECT name, value FROM system.settings WHERE name IN ('enable_experimental_rbac_check', 'enable_experimental_connection_privilege_check', 'enable_experimental_sequence_privilege_check') ORDER BY name
+----
+enable_experimental_connection_privilege_check 0
+enable_experimental_rbac_check 1
+enable_experimental_sequence_privilege_check 0
+
+statement error Variable scope mismatch
+SET enable_experimental_rbac_check = 0
+
+statement error Variable scope mismatch
+UNSET enable_experimental_rbac_check
+
+statement error Variable scope mismatch
+SETTINGS (enable_experimental_rbac_check = 0) SELECT 1
+
+statement error Variable scope mismatch
+SELECT /*+ SET_VAR(enable_experimental_rbac_check = 0) */ 1
+
+statement error Variable scope mismatch
+SET enable_experimental_connection_privilege_check = 1
+
+statement error Variable scope mismatch
+UNSET enable_experimental_connection_privilege_check
+
+statement error Variable scope mismatch
+SETTINGS (enable_experimental_connection_privilege_check = 1) SELECT 1
+
+statement error Variable scope mismatch
+SELECT /*+ SET_VAR(enable_experimental_connection_privilege_check = 1) */ 1
+
+statement error Variable scope mismatch
+SET enable_experimental_sequence_privilege_check = 0
+
+statement error Variable scope mismatch
+UNSET enable_experimental_sequence_privilege_check
+
+statement error Variable scope mismatch
+SETTINGS (enable_experimental_sequence_privilege_check = 0) SELECT 1
+
+statement error Variable scope mismatch
+SELECT /*+ SET_VAR(enable_experimental_sequence_privilege_check = 0) */ 1

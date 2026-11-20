@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use binary::BinaryColumnBuilder;
-use databend_common_base::vec_ext::VecExt;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 
@@ -25,13 +26,10 @@ use crate::DataBlock;
 use crate::TakeIndex;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
-use crate::types::date::CoreDate;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
-use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
-use crate::with_number_mapped_type;
 use crate::with_opaque_mapped_type;
 
 impl DataBlock {
@@ -104,18 +102,16 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        self.visit_boolean(column.validity.clone())?;
+        let (column, validity) = column.destructure();
+        self.visit_boolean(validity)?;
         let validity =
             BooleanType::try_downcast_column(self.result.take().unwrap().as_column().unwrap())
                 .unwrap();
 
-        self.visit_column(column.column)?;
+        self.visit_column(column)?;
         let result = self.result.take().unwrap();
         let result = result.as_column().unwrap();
-        self.result = Some(Value::Column(NullableColumn::new_column(
-            result.clone(),
-            validity,
-        )));
+        self.result = Some(Value::Column(result.clone().wrap_nullable(Some(validity))));
         Ok(())
     }
 
@@ -125,17 +121,44 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
         data_type: &DataType,
     ) -> Result<()> {
         let c = T::upcast_column_with_type(column.clone(), data_type);
-        let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
+        let mut builder = ColumnBuilder::with_capacity(&c.data_type(), self.num_rows);
         let mut inner_builder = T::downcast_builder(&mut builder);
 
+        // Reads each row once and pushes it `count` times.
         for repeat in self.indices {
-            for _ in 0..repeat.count as usize {
-                inner_builder
-                    .push_item(unsafe { T::index_column_unchecked(&column, repeat.row as usize) });
+            let item = unsafe { T::index_column_unchecked(&column, repeat.row as usize) };
+            if repeat.count == 1 {
+                inner_builder.push_item(item);
+            } else {
+                inner_builder.push_repeat(item, repeat.count as usize);
             }
         }
         drop(inner_builder);
         self.result = Some(Value::Column(builder.build()));
+        Ok(())
+    }
+
+    fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<()> {
+        // Fast path: a bitmap of one value repeats that value.
+        let unset_bits = bitmap.null_count();
+        if unset_bits == 0 || unset_bits == bitmap.len() {
+            self.result = Some(Value::Column(BooleanType::upcast_column(
+                Bitmap::new_constant(unset_bits == 0, self.num_rows),
+            )));
+            return Ok(());
+        }
+
+        // Reads each bit once and extends the result by `count` copies of it.
+        let mut builder = MutableBitmap::with_capacity(self.num_rows);
+        for repeat in self.indices {
+            let value = bitmap.get_bit(repeat.row as usize);
+            if repeat.count == 1 {
+                builder.push(value);
+            } else {
+                builder.extend_constant(repeat.count as usize, value);
+            }
+        }
+        self.result = Some(Value::Column(BooleanType::upcast_column(builder.into())));
         Ok(())
     }
 
@@ -170,13 +193,11 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
     }
 
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
-        self.result = Some(Value::Column(
-            (with_opaque_mapped_type!(|T| match column {
-                OpaqueColumn::T(column) => {
-                    OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
-                }
-            })),
-        ));
+        self.result = Some(Value::Column(with_opaque_mapped_type!(|T| match column {
+            OpaqueColumn::T(column) => {
+                OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
+            }
+        })));
         Ok(())
     }
 }
@@ -193,15 +214,16 @@ impl TakeCompactVisitor<'_> {
         builder.into()
     }
 
+    /// Reads each value once and appends it `count` times.
     fn take_binary_types(&mut self, col: &BinaryColumn) -> BinaryColumn {
-        let num_rows = self.num_rows;
-        let mut builder = BinaryColumnBuilder::with_capacity(num_rows, 0);
+        let mut builder = BinaryColumnBuilder::with_capacity(self.num_rows, 0);
         for repeat in self.indices.iter() {
-            for _ in 0..repeat.count as usize {
-                unsafe {
-                    builder.put_slice(col.index_unchecked(repeat.row as usize));
-                    builder.commit_row();
-                }
+            let value = unsafe { col.index_unchecked(repeat.row as usize) };
+            if repeat.count == 1 {
+                builder.put_slice(value);
+                builder.commit_row();
+            } else {
+                builder.push_repeat(value, repeat.count as usize);
             }
         }
         builder.build()

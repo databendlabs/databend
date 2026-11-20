@@ -222,8 +222,9 @@ pub trait KVPbApi: KVApi {
 
     /// Same as `get_pb_stream` but does not return keys, only values.
     ///
-    /// It guaranteed to return the same number of results as the input keys.
-    /// If the backend stream closed before all keys are processed, the following items is filled with `StreamReadEof` Error.
+    /// Returns one result per input key on success. The final result is not
+    /// yielded until the backend stream ends successfully, including gRPC trailers.
+    /// Missing or extra items produce a `StreamReadEof` count-mismatch error.
     fn get_pb_values<K, I>(
         &self,
         keys: I,
@@ -285,8 +286,10 @@ pub trait KVPbApi: KVApi {
     /// It returns the same error as `KVApi::Error`,
     /// thus it requires KVApi::Error can describe a decoding error, i.e., `impl From<PbApiReadError>`.
     ///
-    /// It guaranteed to return the same number of results as the input keys.
-    /// If the backend stream closed before all keys are processed, the following items is filled with `StreamReadEof` Error.
+    /// Returns one result per input key on success. The final result is not
+    /// yielded until the backend stream ends successfully, including gRPC trailers.
+    /// Missing or extra items produce a `StreamReadEof` count-mismatch error.
+    /// Dropping the stream before completion cancels the remaining read.
     fn get_pb_stream<K, I>(
         &self,
         keys: I,
@@ -334,11 +337,45 @@ pub trait KVPbApi: KVApi {
 
         async move {
             let sent = keys.len();
+            let state = if sent == 0 {
+                None
+            } else {
+                Some((self.get_kv_stream(&keys).await?, 0))
+            };
 
-            let strm = self.get_kv_stream(&keys).await?;
+            let strm = stream::unfold(state, move |state| async move {
+                let (mut strm, received) = state?;
+                let item = match strm.next().await {
+                    Some(Ok(item)) => item,
+                    Some(Err(e)) => return Some((Err(PbApiReadError::KvApiError(e)), None)),
+                    None => {
+                        let error = StreamReadEof::new(sent as u64, received as u64);
+                        return Some((Err(PbApiReadError::StreamReadEof(error)), None));
+                    }
+                };
 
-            let strm = strm.map(|r: Result<StreamItem, Self::Error>| {
-                let item = r.map_err(PbApiReadError::KvApiError)?;
+                let received = received + 1;
+                if received == sent {
+                    // A final data item is not proof that the RPC succeeded.
+                    // Wait for the real EOF so trailers are checked before
+                    // yielding the last item. Keep terminal errors within the
+                    // requested item count: callers may zip results with keys.
+                    let error = match strm.next().await {
+                        None => return Some((Ok(item), None)),
+                        Some(Err(e)) => PbApiReadError::KvApiError(e),
+                        Some(Ok(_)) => PbApiReadError::StreamReadEof(StreamReadEof::new(
+                            sent as u64,
+                            (received + 1) as u64,
+                        )),
+                    };
+                    return Some((Err(error), None));
+                }
+
+                Some((Ok(item), Some((strm, received))))
+            });
+
+            let strm = strm.map(|r: Result<StreamItem, PbApiReadError<Self::Error>>| {
+                let item = r?;
 
                 let k = K::from_str_key(&item.key).map_err(PbApiReadError::KeyError)?;
 
@@ -353,26 +390,6 @@ pub trait KVPbApi: KVApi {
 
                 Ok((k, v))
             });
-
-            // If the backend stream is closed, fill it with `StreamReadEof` error.
-
-            let strm = strm
-                // chain with a stream of `StreamReadEof` error but without received count set.
-                .chain(stream::once(async move {
-                    Err(PbApiReadError::StreamReadEof(StreamReadEof::new(
-                        sent as u64,
-                        0,
-                    )))
-                }))
-                .take(sent)
-                // set received count for `StreamReadEof` error after `sent`
-                .enumerate()
-                .map(move |(i, mut r)| {
-                    if let Err(PbApiReadError::StreamReadEof(e)) = &mut r {
-                        e.set_received(i as u64)
-                    }
-                    r
-                });
 
             Ok(strm.boxed())
         }
@@ -492,6 +509,8 @@ impl<T> KVPbApi for T where T: KVApi + ?Sized {}
 
 #[cfg(test)]
 mod tests {
+    mod grpc;
+
     use std::collections::BTreeMap;
 
     use async_trait::async_trait;

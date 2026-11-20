@@ -69,6 +69,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::QuerySpecificValues;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -99,6 +100,7 @@ use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::NdvEstimate;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -301,7 +303,7 @@ impl ColumnStatisticsProvider for FakeColumnStatisticsProvider {
         }
         self.column_stats
             .get(&column_id)
-            .map(|stats| stats.in_memory_size / num_rows)
+            .map(|stats| stats.in_memory_size() / num_rows)
     }
 
     fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {
@@ -764,6 +766,7 @@ pub struct LiteTableContext {
     queued_duration: RwLock<Duration>,
     next_table_id: AtomicU64,
     license_key: RwLock<String>,
+    query_specific_values: QuerySpecificValues,
 }
 
 impl LiteTableContext {
@@ -1013,6 +1016,7 @@ impl LiteTableContext {
             queued_duration: RwLock::new(Duration::default()),
             next_table_id: AtomicU64::new(1),
             license_key: RwLock::new(String::new()),
+            query_specific_values: QuerySpecificValues::tracked(),
         });
         ctx.reset_user_api_state().await?;
         Ok(ctx)
@@ -1311,7 +1315,7 @@ impl LiteTableContext {
 
     pub async fn register_udf(self: &Arc<Self>, udf: UserDefinedFunction) -> Result<()> {
         UserApiProvider::instance()
-            .add_udf(&self.tenant, udf, &CreateOption::CreateOrReplace)
+            .add_udf_with_owner(&self.tenant, udf, true, None)
             .await?;
         Ok(())
     }
@@ -1340,7 +1344,12 @@ impl LiteTableContext {
                 match binder.bind(&extras.statement).await? {
                     Plan::CreateUDF(plan) => {
                         UserApiProvider::instance()
-                            .add_udf(&self.tenant, plan.udf.clone(), &plan.create_option)
+                            .add_udf_with_owner(
+                                &self.tenant,
+                                plan.udf.clone(),
+                                plan.create_option.is_overriding(),
+                                None,
+                            )
                             .await?;
                         Ok(())
                     }
@@ -1440,13 +1449,15 @@ impl LiteTableContext {
 
                                     column_stats.insert(
                                         column_name.to_string(),
-                                        BasicColumnStatistics {
-                                            min: Some(Datum::UInt(0)),
-                                            max: Some(Datum::UInt(num_rows.saturating_sub(1))),
-                                            ndv: Some(num_rows),
-                                            null_count: 0,
-                                            in_memory_size: num_rows.saturating_mul(8),
-                                        },
+                                        BasicColumnStatistics::new(
+                                            Some(Datum::UInt(0)),
+                                            Some(Datum::UInt(num_rows.saturating_sub(1))),
+                                            0,
+                                            num_rows.saturating_mul(8),
+                                            NdvEstimate::exact(num_rows as f64),
+                                            Some(num_rows),
+                                        )
+                                        .map_err(ErrorCode::Internal)?,
                                     );
                                 }
                             }
@@ -1561,7 +1572,10 @@ impl TableContextSession for LiteTableContext {
 
 impl TableContextSettings for LiteTableContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
-        Ok(FunctionContext::default())
+        Ok(FunctionContext {
+            query_specific_values: self.query_specific_values.clone(),
+            ..Default::default()
+        })
     }
 
     fn get_settings(&self) -> Arc<Settings> {
@@ -1582,6 +1596,8 @@ impl TableContextSettings for LiteTableContext {
         self.shared_settings.clone()
     }
 }
+
+impl TableContextCachePolicy for LiteTableContext {}
 
 impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {
@@ -1912,26 +1928,14 @@ impl TableContextTableAccess for LiteTableContext {
             .await
     }
 
-    async fn get_table_with_branch(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        _branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table(catalog, database, table).await
-    }
-
     async fn resolve_data_source(
         &self,
         catalog: &str,
         database: &str,
         table: &str,
-        branch: Option<&str>,
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        self.get_table_with_branch(catalog, database, table, branch)
-            .await
+        self.get_table(catalog, database, table).await
     }
 
     async fn acquire_table_lock(

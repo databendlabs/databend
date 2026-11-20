@@ -43,6 +43,14 @@ impl Filter {
         }
         Ok(used_columns)
     }
+
+    /// Whether a predicate may depend on other input rows. Removing input rows before this
+    /// filter can then change which of the remaining rows it keeps.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.predicates
+            .iter()
+            .any(ScalarExpr::depends_on_other_rows)
+    }
 }
 
 impl Operator for Filter {
@@ -93,6 +101,8 @@ impl Operator for Filter {
                 .with_count_min_sketch(stat_info.statistics.count_min_sketch.clone())
                 .with_and_strategy(stat_ctx.filter_and_strategy);
         let cardinality = sb.apply(&self.predicates, &stat_ctx.function_context)?;
+        // Only a proven-empty result is precise; an estimated zero stays imprecise.
+        let precise_cardinality = sb.is_proven_empty().then_some(0);
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
             HashMap::new()
@@ -102,7 +112,7 @@ impl Operator for Filter {
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
-                precise_cardinality: None,
+                precise_cardinality,
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),

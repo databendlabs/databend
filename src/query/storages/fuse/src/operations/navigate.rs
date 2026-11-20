@@ -38,6 +38,7 @@ use databend_common_sql::binder::validate_constraints_by_schema;
 use databend_common_sql::binder::validate_security_policies_by_schema;
 use databend_common_sql::binder::validate_table_indexes_by_schema;
 use databend_common_sql::validate_stored_ttl_expr;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -56,10 +57,10 @@ use opendal::EntryMode;
 
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 use crate::operations::check_table_ref_access;
 
 impl FuseTable {
@@ -270,7 +271,7 @@ impl FuseTable {
         for vac_prefix in &vacuum_prefixes {
             for suffix in &suffixes {
                 let location = format!("{}{}{}{}", prefix, vac_prefix, snapshot_id, suffix);
-                match SnapshotsIO::read_snapshot(location, op.clone(), true).await {
+                match SnapshotsIO::read_snapshot(location, op.clone(), CachePolicy::DEFAULT).await {
                     Ok((snapshot, format_version)) => {
                         return self.load_table_by_snapshot(
                             snapshot.as_ref(),
@@ -415,7 +416,7 @@ impl FuseTable {
         op: opendal::Operator,
         point: &str,
     ) -> Result<(Arc<TableSnapshot>, u64)> {
-        match SnapshotsIO::read_snapshot(location.clone(), op, true).await {
+        match SnapshotsIO::read_snapshot(location.clone(), op, CachePolicy::DEFAULT).await {
             Ok(v) => Ok(v),
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
                 Err(ErrorCode::TableHistoricalDataNotFound(format!(
@@ -493,7 +494,6 @@ impl FuseTable {
         }
     }
 
-    // Only used when the table branch is none.
     #[async_backtrace::framed]
     pub async fn find_location<P>(
         &self,
@@ -552,10 +552,14 @@ impl FuseTable {
     {
         let abort_checker = ctx.clone().get_abort_checker();
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let snapshots = FuseCaches::instance()
+            .snapshots
+            .with_policy(ctx.cache_policy());
         // grab the table history as stream
         // snapshots are order by timestamp DESC.
-        let mut snapshot_stream = reader.snapshot_history(
+        let mut snapshot_stream = snapshot_history(
+            &snapshots,
+            self.get_operator(),
             location,
             snapshot_version,
             self.meta_location_generator().clone(),

@@ -311,47 +311,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
-    async fn get_table_with_branch(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        match branch {
-            Some(branch_name) => {
-                self.get_table_branch(tenant, db_name, table_name, branch_name)
-                    .await
-            }
-            None => self.get_table(tenant, db_name, table_name).await,
-        }
-    }
-
-    async fn get_table_branch(
-        &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table_branch_with_expire_ctl(tenant, db_name, table_name, branch_name, false)
-            .await
-    }
-
-    async fn get_table_branch_with_expire_ctl(
-        &self,
-        _tenant: &Tenant,
-        _db_name: &str,
-        _table_name: &str,
-        _branch_name: &str,
-        _include_expired: bool,
-    ) -> Result<Arc<dyn Table>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'get_table_branch_no_expire' not implemented for catalog {}",
-            self.name()
-        )))
-    }
-
     async fn create_table_tag(&self, _req: CreateTableTagReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "'create_table_tag' not implemented for catalog {}",

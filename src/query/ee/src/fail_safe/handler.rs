@@ -23,10 +23,11 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentInfoReader;
 use databend_enterprise_fail_safe::FailSafeHandler;
 use databend_enterprise_fail_safe::FailSafeHandlerWrapper;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use log::info;
@@ -108,16 +109,10 @@ impl Amender {
         schema: Arc<TableSchema>,
         operator: Operator,
     ) -> Result<()> {
-        let segment_reader =
-            MetaReaders::segment_info_reader_without_cache(operator.clone(), schema);
+        let segment_reader = SegmentInfoReader::new(operator.clone(), schema);
         for (path, ver) in segment_locations {
             let segment = segment_reader
-                .read(&LoadParams {
-                    location: path.to_string(),
-                    len_hint: None,
-                    ver: *ver,
-                    put_cache: false,
-                })
+                .read(&(path.to_string(), *ver), &CachePolicy::BYPASS)
                 .await;
 
             match segment {
@@ -130,12 +125,7 @@ impl Amender {
                         self.recover_object(path).await?;
                         // load the segment again
                         let segment = segment_reader
-                            .read(&LoadParams {
-                                location: path.to_string(),
-                                len_hint: None,
-                                ver: *ver,
-                                put_cache: false,
-                            })
+                            .read(&(path.to_string(), *ver), &CachePolicy::BYPASS)
                             .await?;
                         self.recover_segment(segment.as_ref(), operator.clone())
                             .await?;

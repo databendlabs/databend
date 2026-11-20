@@ -31,6 +31,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
@@ -125,14 +126,14 @@ impl FuseColumn {
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let chunk_refs: Vec<&_> = chunk.iter().collect();
             let segments = segments_io
-                .generic_read_compact_segments::<R>(&chunk_refs, true, &projection)
+                .generic_read_compact_segments::<R>(&chunk_refs, CachePolicy::DEFAULT, &projection)
                 .await?;
             for segment in segments {
                 let segment = segment?;
                 for block in segment.block_metas()? {
                     for (id, column) in block.col_metas(&col_ids).iter() {
                         if let Some(f) = leaf_fields.iter().find(|f| f.column_id == *id) {
-                            block_location.put_and_commit(block.location_path());
+                            block_location.put_and_commit(block.column_location_path(id));
                             block_size.push(block.block_size());
                             file_size.push(block.file_size());
                             row_count.push(column.total_rows() as u64);

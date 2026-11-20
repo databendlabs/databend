@@ -18,7 +18,9 @@ use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use lindera::dictionary::UserDictionary;
 use opendal::Operator;
@@ -30,7 +32,6 @@ use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::create_index_schema;
 use crate::io::create_tokenizer_manager;
-use crate::io::read::InvertedIndexFilterResult;
 use crate::io::read::InvertedIndexReader;
 use crate::io::read::InvertedIndexWarmupInfo;
 use crate::io::resolve_inverted_index_user_dictionary_blocking;
@@ -64,11 +65,15 @@ pub struct InvertedIndexPruner {
     index_version: String,
     reader: InvertedIndexReader,
     query: Box<dyn Query>,
+    /// The filter of the query is the index match alone: the rows the index did
+    /// not match fail it, so the scan outputs only the matched rows.
+    rows_only: bool,
 }
 
 impl InvertedIndexPruner {
     pub fn try_create(
         dal: Operator,
+        cache_policy: CachePolicy,
         push_down: &Option<PushDownInfo>,
     ) -> Result<Option<Arc<InvertedIndexPruner>>> {
         let inverted_index_info = push_down.as_ref().and_then(|p| p.inverted_index.as_ref());
@@ -83,6 +88,7 @@ impl InvertedIndexPruner {
             let index_version = inverted_index_info.index_version.clone();
             let reader = InvertedIndexReader::create(
                 dal,
+                cache_policy,
                 has_score,
                 prepared.tokenizer_manager,
                 prepared.warmup,
@@ -93,11 +99,16 @@ impl InvertedIndexPruner {
                     .and_then(PushDownInfo::inverted_index_top_k),
             );
 
+            let rows_only = push_down
+                .as_ref()
+                .is_some_and(PushDownInfo::filter_only_use_index);
+
             return Ok(Some(Arc::new(InvertedIndexPruner {
                 index_name,
                 index_version,
                 reader,
                 query: prepared.query,
+                rows_only,
             })));
         }
         Ok(None)
@@ -109,7 +120,7 @@ impl InvertedIndexPruner {
         block_location: &str,
         inverted_index_metas: Option<&[BlockIndexMeta]>,
         row_count: u64,
-    ) -> Result<InvertedIndexFilterResult> {
+    ) -> Result<Option<IndexMatches>> {
         let index_meta = inverted_index_metas.and_then(|index_metas| {
             index_metas
                 .binary_search_by(|meta| meta.index_name.as_str().cmp(&self.index_name))
@@ -127,7 +138,8 @@ impl InvertedIndexPruner {
             )));
         };
 
-        self.reader
+        let matches = self
+            .reader
             .do_filter(
                 self.query.box_clone(),
                 &index_meta.location.0,
@@ -135,7 +147,12 @@ impl InvertedIndexPruner {
                 index_meta.size,
                 row_count,
             )
-            .await
+            .await?;
+        Ok(matches.map(|(rows, scores)| IndexMatches {
+            rows,
+            scores,
+            rows_only: self.rows_only,
+        }))
     }
 }
 

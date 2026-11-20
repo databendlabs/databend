@@ -556,11 +556,11 @@ impl Binder {
             join_type,
             marker_index: None,
             from_correlated_subquery: false,
-            need_hold_hash_table: false,
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
             spatial_join: None,
+            runtime_filters: vec![],
         };
 
         let s_expr = if logical_join.join_type.is_asof_join() {

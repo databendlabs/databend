@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::Entry;
+use std::sync::Arc;
 use std::time::Duration;
 
 use databend_base::uniq_id::GlobalUniq;
@@ -25,6 +26,7 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_store::MetaStore;
+use databend_meta_client::ClientHandle;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
@@ -44,6 +46,8 @@ use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
 use databend_meta_client::types::anyerror::AnyError;
 use databend_meta_client::types::txn_op_response::Response;
+use databend_meta_plugin_cache::Cache;
+use databend_meta_runtime::DatabendRuntime;
 use log::error;
 use log::info;
 
@@ -79,6 +83,18 @@ pub struct WarehouseMgr {
     cluster_node_key_prefix: String,
     warehouse_info_key_prefix: String,
     version: BuildInfoRef,
+    /// The watched copy of the online nodes of one cluster, if any: see `watch_cluster_nodes`.
+    cluster_nodes: Option<WatchedClusterNodes>,
+}
+
+/// A watched copy of the online nodes of one cluster,
+/// `{cluster_node_key_prefix}/{warehouse}/{cluster}/...`.
+struct WatchedClusterNodes {
+    cache: Cache,
+    /// The node this manager runs on, a node of the watched cluster. A copy that lists the
+    /// cluster without it is behind: right after the node joins, or when the watch stopped
+    /// receiving changes.
+    local_node_id: String,
 }
 
 impl WarehouseMgr {
@@ -116,7 +132,32 @@ impl WarehouseMgr {
                 WAREHOUSE_META_KEY_PREFIX,
                 escape_for_key(tenant)?,
             ),
+            cluster_nodes: None,
         })
+    }
+
+    /// List the nodes of `cluster` in `warehouse`, `list_warehouse_cluster_nodes`, from a copy
+    /// watched through `client`; the other clusters are read from meta-service. A node joining
+    /// or leaving shows by the watch delay, far below the heartbeat lift time a node that stopped
+    /// stays listed for anyway. `local_node_id` is the node this manager runs on, a node of
+    /// `cluster`: a copy that lists the cluster without it is not used.
+    ///
+    /// Only that cluster is watched, so a watching node receives the heartbeats of its own
+    /// cluster, not those of every cluster of the tenant.
+    pub async fn watch_cluster_nodes(
+        mut self,
+        client: Arc<ClientHandle<DatabendRuntime>>,
+        warehouse: &str,
+        cluster: &str,
+        local_node_id: &str,
+    ) -> Result<Self> {
+        let dir = self.cluster_nodes_dir(warehouse, cluster)?;
+        let cache = Cache::new(client, &dir, "cluster nodes").await;
+        self.cluster_nodes = Some(WatchedClusterNodes {
+            cache,
+            local_node_id: local_node_id.to_string(),
+        });
+        Ok(self)
     }
 
     async fn shutdown_system_managed(&self, node_info: &NodeInfo) -> Result<()> {
@@ -192,6 +233,69 @@ impl WarehouseMgr {
             self.warehouse_info_key_prefix,
             escape_for_key(warehouse)?
         ))
+    }
+
+    /// The directory of the nodes of a cluster: its nodes are the keys under `{dir}/`.
+    fn cluster_nodes_dir(&self, warehouse: &str, cluster: &str) -> Result<String> {
+        Ok(format!(
+            "{}/{}/{}",
+            self.cluster_node_key_prefix,
+            escape_for_key(warehouse)?,
+            escape_for_key(cluster)?
+        ))
+    }
+
+    /// The nodes of a cluster in the watched copy. `None` if this cluster is not the watched one,
+    /// or if the copy cannot answer now, see `Cache::try_list_dir_ready`.
+    pub fn try_list_watched_cluster_nodes(
+        &self,
+        warehouse: &str,
+        cluster: &str,
+    ) -> Result<Option<Vec<NodeInfo>>> {
+        let Some(watched) = &self.cluster_nodes else {
+            return Ok(None);
+        };
+        let dir = self.cluster_nodes_dir(warehouse, cluster)?;
+        let local = watched.cache.try_list_dir_ready(&dir);
+        local
+            .map(|values| Self::decode_cluster_nodes(&dir, warehouse, cluster, values))
+            .transpose()
+    }
+
+    /// The nodes of a cluster, from meta-service.
+    async fn list_cluster_nodes_from_meta(
+        &self,
+        warehouse: &str,
+        cluster: &str,
+    ) -> Result<Vec<NodeInfo>> {
+        let dir = self.cluster_nodes_dir(warehouse, cluster)?;
+        let values = self
+            .metastore
+            .list_kv_collect(ListOptions::unlimited(&format!("{dir}/")))
+            .await
+            .map_err(meta_service_error)?;
+        Self::decode_cluster_nodes(&dir, warehouse, cluster, values)
+    }
+
+    /// The nodes of a cluster from the key-values under `{dir}/`, `dir` its `cluster_nodes_dir`.
+    fn decode_cluster_nodes(
+        dir: &str,
+        warehouse: &str,
+        cluster: &str,
+        values: Vec<(String, SeqV)>,
+    ) -> Result<Vec<NodeInfo>> {
+        let mut nodes_info = Vec::with_capacity(values.len());
+        for (node_key, value) in values {
+            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
+
+            // The key is `{dir}/{node id}`.
+            node_info.id = unescape_for_key(&node_key[dir.len() + 1..])?;
+            node_info.cluster_id = cluster.to_string();
+            node_info.warehouse_id = warehouse.to_string();
+            nodes_info.push(node_info);
+        }
+
+        Ok(nodes_info)
     }
 
     async fn start_self_managed(&self, node_with_wh: NodeInfo) -> Result<TxnReply> {
@@ -2253,30 +2357,14 @@ impl WarehouseApi for WarehouseMgr {
         warehouse: &str,
         cluster: &str,
     ) -> Result<Vec<NodeInfo>> {
-        let cluster_nodes_prefix = format!(
-            "{}/{}/{}/",
-            self.cluster_node_key_prefix,
-            escape_for_key(warehouse)?,
-            escape_for_key(cluster)?
-        );
-
-        let values = self
-            .metastore
-            .list_kv_collect(ListOptions::unlimited(&cluster_nodes_prefix))
-            .await
-            .map_err(meta_service_error)?;
-
-        let mut nodes_info = Vec::with_capacity(values.len());
-        for (node_key, value) in values {
-            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
-
-            node_info.id = unescape_for_key(&node_key[cluster_nodes_prefix.len()..])?;
-            node_info.cluster_id = cluster.to_string();
-            node_info.warehouse_id = warehouse.to_string();
-            nodes_info.push(node_info);
+        let Some(watched) = &self.cluster_nodes else {
+            return self.list_cluster_nodes_from_meta(warehouse, cluster).await;
+        };
+        match self.try_list_watched_cluster_nodes(warehouse, cluster)? {
+            // A copy without this node is behind, see `WatchedClusterNodes::local_node_id`.
+            Some(nodes) if nodes.iter().any(|x| x.id == watched.local_node_id) => Ok(nodes),
+            _ => self.list_cluster_nodes_from_meta(warehouse, cluster).await,
         }
-
-        Ok(nodes_info)
     }
 
     #[async_backtrace::framed]

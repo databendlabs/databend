@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
@@ -29,7 +27,7 @@ use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::OrderedFloat;
-use databend_common_expression::ConstantFolder;
+use databend_common_expression::FoldRules;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RawExpr;
@@ -174,12 +172,8 @@ fn transform_expr(
                 .map(|param| {
                     let raw_expr = transform_expr(param, &[], builtin_functions);
                     let expr = type_check::check(&raw_expr, builtin_functions).unwrap();
-                    let (expr, _) = ConstantFolder::fold(
-                        Cow::Owned(expr),
-                        &FunctionContext::default(),
-                        builtin_functions,
-                    );
-                    expr.into_owned().into_constant().unwrap().scalar
+                    FoldRules::eval_constant(&FunctionContext::default(), builtin_functions, &expr)
+                        .unwrap()
                 })
                 .collect(),
         },

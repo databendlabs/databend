@@ -130,6 +130,52 @@ fn test_range(file: &mut impl Write) {
     run_ast(file, "range(-1, -10, -2)", &[]);
 }
 
+#[test]
+fn test_range_overflow() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("range_overflow.txt").unwrap();
+
+    for expr in [
+        "range(10, 20, 9223372036854775806)",
+        "range(10, 20, 9223372036854775798)",
+        "range(-10, -20, -9223372036854775806)",
+        "array_generate_range(10, 20, 9223372036854775806)",
+        "range(10, 20, 9223372036854775797)",
+        "range(10, 20, 100)",
+        "range(0, 9223372036854775807, 4611686018427387904)",
+        "range(0, -9223372036854775808, -4611686018427387904)",
+        "range(-9223372036854775808, 9223372036854775807, 9223372036854775807)",
+        "range(9223372036854775807, -9223372036854775808, -9223372036854775808)",
+        "range(0, -9223372036854775808, -9223372036854775808)",
+        "range(-9223372036854775808, 0, -1)",
+        "range(9223372036854775807, -9223372036854775808)",
+        "range(9223372036854775807, -9223372036854775808, 1)",
+        "range(1, 1, -9223372036854775808)",
+        "range(0, 1, 0)",
+        "range(-9223372036854775808, 9223372036854775807)",
+        "range(-9223372036854775808, 9223372036854775807, 1)",
+        "range(9223372036854775807, -9223372036854775808, -1)",
+        "range(-9223372036854775808, 0, 1)",
+        "range(0, -9223372036854775808, -1)",
+        // The limit applies to the actual length, not the truncated quotient.
+        "range(0, 1000000001, 2)",
+        "range(0, -1000000001, -2)",
+    ] {
+        run_ast(file, expr, &[]);
+    }
+
+    let columns = &[
+        ("a", Int64Type::from_data(vec![10, -10, i64::MIN, i64::MAX])),
+        ("b", Int64Type::from_data(vec![20, -20, i64::MAX, i64::MIN])),
+        (
+            "c",
+            Int64Type::from_data(vec![i64::MAX - 1, i64::MIN + 2, i64::MAX, i64::MIN]),
+        ),
+    ];
+    run_ast(file, "range(a, b, c)", columns);
+    run_ast(file, "array_generate_range(a, b, c)", columns);
+}
+
 fn test_get(file: &mut impl Write) {
     run_ast(file, "[1, 2]['a']", &[]);
     run_ast(file, "[][1]", &[]);

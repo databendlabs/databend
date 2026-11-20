@@ -1,0 +1,24 @@
+# Bare %f formats microseconds through all aliases.
+query TTTT
+settings(date_format_style='MySQL')
+SELECT strftime(TIMESTAMP '2020-08-10 10:10:10.123456', '%f'),
+       date_format(TIMESTAMP '2020-08-10 10:10:10.123456', '%f'),
+       to_char(TIMESTAMP '2020-08-10 10:10:10.123456', '%f'),
+       to_string(TIMESTAMP '2020-08-10 10:10:10.123456', '%Y-%m-%d %H:%M:%S.%f')
+----
+123456 123456 123456 2020-08-10 10:10:10.123456
+
+# Preserve escaped percent signs and explicit precision.
+query T
+settings(date_format_style='MySQL')
+SELECT strftime(TIMESTAMP '2020-08-10 10:10:10.123456', '%%f|%%%f|%3f|%9f')
+----
+%f|%123456|123|123456000
+
+# Oracle FF shares the output fix without changing variable-length parsing.
+query TT
+settings(date_format_style='Oracle')
+SELECT to_char(TIMESTAMP '2020-08-10 10:10:10.123456', 'YYYY-MM-DD HH24:MI:SS.FF'),
+       to_string(to_timestamp('1', 'FF'))
+----
+2020-08-10 10:10:10.123456 1970-01-01 00:00:00.100000

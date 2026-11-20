@@ -26,6 +26,8 @@ use databend_common_expression::aggregate::AggrState;
 pub use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::types::DataType;
 
+use super::serialized_scalar_at;
+
 mod array_collect;
 mod build_context;
 mod combinator;
@@ -229,17 +231,6 @@ fn project_serialized_fields(state: &BlockEntry, start: usize, end: usize) -> Bl
             debug_assert_eq!(start, 0);
             debug_assert_eq!(end, 1);
             state.clone()
-        }
-    }
-}
-
-pub(crate) fn serialized_scalar_at(state: &BlockEntry, row: usize, field: usize) -> ScalarRef<'_> {
-    let scalar = state.index(row).unwrap();
-    match scalar {
-        ScalarRef::Tuple(fields) => fields[field].clone(),
-        _ => {
-            debug_assert_eq!(field, 0);
-            scalar
         }
     }
 }

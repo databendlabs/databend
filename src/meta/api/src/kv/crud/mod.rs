@@ -19,6 +19,10 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_app::principal::OwnershipInfo;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
@@ -34,6 +38,8 @@ use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MatchSeqExt;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
+use databend_meta_client::types::TxnOp;
+use databend_meta_client::types::TxnRequest;
 use databend_meta_client::types::With;
 pub use errors::CrudError;
 use futures::TryStreamExt;
@@ -42,6 +48,10 @@ use seq_marked::SeqValue;
 
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
+use crate::send_txn;
+use crate::txn_cond_eq_seq;
+use crate::txn_del;
+use crate::txn_put_pb;
 
 /// A generic CRUD interface for meta data operations.
 ///
@@ -128,6 +138,28 @@ where
         }
 
         Ok(())
+    }
+
+    /// Writes the record and its owner in one transaction; returns whether it was written.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn add_with_ownership(
+        &self,
+        value: ValueOf<R>,
+        replace: bool,
+        object: OwnershipObject,
+        owner: Option<&str>,
+    ) -> Result<bool, MetaError> {
+        create_owned_object(
+            self.kv_api.as_ref(),
+            &self.ident(value.name()),
+            &value,
+            replace,
+            &object,
+            owner,
+            &[],
+        )
+        .await
     }
 
     #[async_backtrace::framed]
@@ -271,4 +303,42 @@ where
 
         Ok(values)
     }
+}
+
+/// Writes an object, `extra_ops` and its owner in one transaction; returns whether it was written.
+///
+/// A new object never inherits an ownership left under its name by a dropped object.
+/// An existing object is overwritten only with `replace`; with no `owner` it keeps its owner.
+pub async fn create_owned_object<K>(
+    kv: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    key: &K,
+    value: &K::ValueType,
+    replace: bool,
+    object: &OwnershipObject,
+    owner: Option<&str>,
+    extra_ops: &[TxnOp],
+) -> Result<bool, MetaError>
+where
+    K: kvapi::Key + KeyWithTenant,
+    K::ValueType: FromToProto + 'static,
+{
+    let ownership = TenantOwnershipObjectIdent::new(key.tenant(), object.clone());
+    let set_owner = owner.map(|role| {
+        txn_put_pb(&ownership, &OwnershipInfo {
+            object: object.clone(),
+            role: role.to_string(),
+        })
+    });
+    let mut write = vec![txn_put_pb(key, value)];
+    write.extend(extra_ops.iter().cloned());
+
+    let mut txn = TxnRequest::new(vec![txn_cond_eq_seq(key, 0)], write.clone());
+    txn.if_then
+        .push(set_owner.clone().unwrap_or_else(|| txn_del(&ownership)));
+    if replace {
+        txn.else_then = write;
+        txn.else_then.extend(set_owner);
+    }
+    let (absent, _) = send_txn(kv, txn).await?;
+    Ok(absent || replace)
 }

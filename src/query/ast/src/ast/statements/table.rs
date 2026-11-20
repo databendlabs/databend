@@ -514,11 +514,6 @@ pub enum AlterTableAction {
     RemoveTableTtl,
     /// Apply the current TTL definition to existing rows.
     MaterializeTableTtl,
-    ReclusterTable {
-        is_final: bool,
-        selection: Option<Expr>,
-        limit: Option<u64>,
-    },
     FlashbackTo {
         point: TimeTravelPoint,
     },
@@ -532,14 +527,8 @@ pub enum AlterTableAction {
     ModifyConnection {
         new_connection: BTreeMap<String, String>,
     },
-    CreateTableBranch {
-        spec: CreateTableRefSpec,
-    },
     CreateTableTag {
         spec: CreateTableRefSpec,
-    },
-    DropTableBranch {
-        branch_name: Identifier,
     },
     DropTableTag {
         tag_name: Identifier,
@@ -615,22 +604,6 @@ impl Display for AlterTableAction {
             AlterTableAction::MaterializeTableTtl => {
                 write!(f, "MATERIALIZE TTL")?;
             }
-            AlterTableAction::ReclusterTable {
-                is_final,
-                selection,
-                limit,
-            } => {
-                write!(f, "RECLUSTER")?;
-                if *is_final {
-                    write!(f, " FINAL")?;
-                }
-                if let Some(conditions) = selection {
-                    write!(f, " WHERE {conditions}")?;
-                }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
-                }
-            }
             AlterTableAction::FlashbackTo { point } => {
                 write!(f, "FLASHBACK TO {}", point)?;
             }
@@ -665,14 +638,8 @@ impl Display for AlterTableAction {
             AlterTableAction::DropAllRowAccessPolicies => {
                 write!(f, "DROP ALL ROW ACCESS POLICIES")?
             }
-            AlterTableAction::CreateTableBranch { spec } => {
-                write!(f, "CREATE BRANCH {spec}")?;
-            }
             AlterTableAction::CreateTableTag { spec } => {
                 write!(f, "CREATE TAG {spec}")?;
-            }
-            AlterTableAction::DropTableBranch { branch_name } => {
-                write!(f, "DROP BRANCH {branch_name}")?;
             }
             AlterTableAction::DropTableTag { tag_name } => {
                 write!(f, "DROP TAG {tag_name}")?;
@@ -1017,7 +984,13 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
-    Compact { target: CompactTarget },
+    Compact {
+        target: CompactTarget,
+    },
+    Recluster {
+        is_final: bool,
+        selection: Option<Box<Expr>>,
+    },
 }
 
 impl Display for OptimizeTableAction {
@@ -1027,6 +1000,19 @@ impl Display for OptimizeTableAction {
                 CompactTarget::Block => write!(f, "COMPACT"),
                 CompactTarget::Segment => write!(f, "COMPACT SEGMENT"),
             },
+            OptimizeTableAction::Recluster {
+                is_final,
+                selection,
+            } => {
+                write!(f, "RECLUSTER")?;
+                if *is_final {
+                    write!(f, " FINAL")?;
+                }
+                if let Some(selection) = selection {
+                    write!(f, " WHERE {selection}")?;
+                }
+                Ok(())
+            }
         }
     }
 }

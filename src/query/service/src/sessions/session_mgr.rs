@@ -114,7 +114,7 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
-        settings.load_changes().await?;
+        settings.load_session_changes().await?;
 
         let session = self.create_with_settings_with_conn_id(typ, settings, None, mysql_conn_id)?;
 
@@ -157,7 +157,11 @@ impl SessionManager {
         user: Option<UserInfo>,
         mysql_conn_id: Option<u32>,
     ) -> Result<Session> {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = format!(
+            "{}{}",
+            super::INTERNAL_SESSION_ID_PREFIX,
+            uuid::Uuid::new_v4()
+        );
         let mysql_conn_id = match typ {
             SessionType::MySQL => Some(
                 mysql_conn_id
@@ -205,6 +209,24 @@ impl SessionManager {
     pub fn get_session_by_id(&self, id: &str) -> Option<Arc<Session>> {
         let sessions = self.active_sessions.read();
         sessions.get(id).and_then(|weak_ptr| weak_ptr.upgrade())
+    }
+
+    /// Find coordinator/client queries within the requester's tenant. Client query
+    /// IDs may be reused even within a tenant; callers must authorize candidates.
+    /// FlightRPC fragments are not in active_sessions.
+    pub fn get_sessions_by_query_id<'a>(
+        &'a self,
+        tenant: &'a str,
+        query_id: &'a str,
+    ) -> impl Iterator<Item = Arc<Session>> + 'a {
+        self.active_sessions_snapshot()
+            .into_iter()
+            .filter_map(|session| session.upgrade())
+            .filter(move |session| {
+                !tenant.is_empty()
+                    && session.get_current_tenant().tenant_name() == tenant
+                    && session.get_current_query_id().as_deref() == Some(query_id)
+            })
     }
 
     pub fn get_id_by_mysql_conn_id(&self, mysql_conn_id: &Option<u32>) -> Option<String> {
@@ -405,6 +427,24 @@ impl SessionManager {
             "Unknown query {}",
             query_id
         )))
+    }
+
+    pub fn get_query_perf_token(&self, query_id: &str) -> Option<u64> {
+        for weak_ptr in self.active_sessions_snapshot() {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_session.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                if query_id == *context_shared.init_query_id.as_ref().read() {
+                    return Some(context_shared.get_perf_query_token());
+                }
+            }
+        }
+
+        None
     }
 
     pub fn get_running_graph_dump(&self, query_id: &str) -> Result<String> {

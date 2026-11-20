@@ -34,7 +34,6 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::arrow::and_validities;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::Interval;
@@ -44,6 +43,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::sync::Barrier;
 
+use super::PendingProbe;
 use super::ProbeState;
 use super::ProcessState;
 use crate::pipelines::processors::HashJoinState;
@@ -153,25 +153,29 @@ impl HashJoinProbeState {
 
     /// Probe the hash table and retrieve matched rows as DataBlocks.
     pub fn probe(&self, input: DataBlock, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        match self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Cross => self.cross_join(input, probe_state),
-            _ => self.probe_join(input, probe_state),
+        if self.hash_join_state.probes_all_pairs() {
+            self.cross_join(input, probe_state)
+        } else {
+            self.probe_join(input, probe_state)
         }
     }
 
     pub fn next_probe(&self, probe_state: &mut ProbeState) -> Result<Vec<DataBlock>> {
-        let process_state = probe_state.process_state.as_ref().unwrap();
+        let process_state = match probe_state.pending.take() {
+            Some(PendingProbe::Hash(process_state)) => process_state,
+            Some(PendingProbe::Cross(cursor)) => return self.next_cross_join(cursor, probe_state),
+            None => unreachable!("no pending probe"),
+        };
+        let keys_state = process_state.keys_state.clone();
+        probe_state.pending = Some(PendingProbe::Hash(process_state));
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
         with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {
                 // Build `keys` and get the hashes of `keys`.
-                let keys = table
-                    .hash_method
-                    .build_keys_accessor(process_state.keys_state.clone())?;
+                let keys = table.hash_method.build_keys_accessor(keys_state)?;
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
             }
-            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
@@ -329,12 +333,12 @@ impl HashJoinProbeState {
                     .build_keys_hashes(&keys_state, &mut probe_state.hashes);
                 let keys = table.hash_method.build_keys_accessor(keys_state.clone())?;
 
-                probe_state.process_state = Some(ProcessState {
+                probe_state.pending = Some(PendingProbe::Hash(ProcessState {
                     input,
                     probe_has_null,
                     keys_state,
                     next_idx: 0,
-                });
+                }));
 
                 // Perform a round of hash table probe.
                 probe_state.probe_with_selection = prefer_early_filtering;
@@ -380,7 +384,6 @@ impl HashJoinProbeState {
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
             }
-            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
@@ -717,7 +720,7 @@ impl HashJoinProbeState {
             check_interrupt()?;
 
             let boolean_column = Column::Boolean(boolean_bit_map.into());
-            let marker_column = NullableColumn::new_column(boolean_column, validity.into());
+            let marker_column = boolean_column.wrap_nullable(Some(validity.into()));
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
             let build_block = self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],

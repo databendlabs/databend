@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use databend_common_expression::BlockConcatStream;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
@@ -105,6 +106,118 @@ fn assert_same_as_expanded(
         output.extend(actual.map(|block| (id, block)));
     }
     output
+}
+
+#[test]
+fn test_concat_stream_cuts_as_one_partition() {
+    // Columns, runs of one constant, a new constant and a slice, cut at 10
+    // rows as a `BlockPartitionStream` with one partition cuts them.
+    let blocks = [
+        column_block(5, 0),
+        const_block(4, 5, "a"),
+        const_block(3, 9, "a"),
+        column_block(8, 10).slice(2..6),
+        const_block(2, 20, "b"),
+        column_block(7, 30),
+        const_block(1, 40, "b"),
+    ];
+    let mut stream = BlockConcatStream::create(10, 0);
+    let mut reference = BlockPartitionStream::create(10, 0, 1);
+    for block in &blocks {
+        let actual = stream.push(block.clone());
+        let mut expected = reference.partition(vec![0; block.num_rows()], block.clone(), true);
+        assert_eq!(actual.is_some(), expected.len() == 1);
+        if let (Some(a), Some((_, e))) = (&actual, expected.pop()) {
+            assert_same_values(a, &e);
+        }
+    }
+    let actual = stream.finish();
+    let expected = reference.finalize_partition(0);
+    assert_eq!(actual.is_some(), expected.is_some());
+    if let (Some(a), Some(e)) = (&actual, &expected) {
+        assert_same_values(a, e);
+    }
+    assert!(stream.finish().is_none());
+}
+
+#[test]
+fn test_concat_stream_keeps_one_constant() {
+    let mut stream = BlockConcatStream::create(0, 0);
+    assert!(stream.push(const_block(3, 0, "a")).is_none());
+    assert!(stream.push(const_block(4, 3, "a")).is_none());
+    assert_eq!(stream.num_rows(), 7);
+
+    let block = stream.finish().unwrap();
+    assert_eq!(block.num_rows(), 7);
+    assert_eq!(block.get_by_offset(1).as_scalar(), Some(&Scalar::Null));
+    assert_eq!(
+        block.get_by_offset(2).as_scalar(),
+        Some(&Scalar::String("a".to_string()))
+    );
+    assert_same_values(
+        &block,
+        &DataBlock::concat(&[
+            expanded(&const_block(3, 0, "a")),
+            expanded(&const_block(4, 3, "a")),
+        ])
+        .unwrap(),
+    );
+}
+
+#[test]
+fn test_partition_preserves_timezone_representations() {
+    use databend_common_column::types::timestamp_tz;
+    use databend_common_expression::Column;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::ArrayColumn;
+
+    // Equal instants in successive constant blocks must not coalesce their offsets.
+    for nested in [false, true] {
+        let make_block = |offset, constant| {
+            let value = timestamp_tz::new(13, offset);
+            let mut column = Column::TimestampTz(vec![value; 2].into());
+            if nested {
+                column = Column::Array(Box::new(ArrayColumn::new(column, vec![0, 1, 2].into())));
+            }
+            let entry = if constant {
+                BlockEntry::new_const_column(
+                    column.data_type(),
+                    column.index(0).unwrap().to_owned(),
+                    2,
+                )
+            } else {
+                column.into()
+            };
+            DataBlock::new(vec![entry], 2)
+        };
+        for constant in [false, true] {
+            let mut stream = BlockPartitionStream::create(0, 0, 2);
+            for offset in [-7200, 1800] {
+                assert!(
+                    stream
+                        .partition(vec![0, 1], make_block(offset, constant), false)
+                        .is_empty()
+                );
+            }
+            for id in 0..2 {
+                let output = stream.finalize_partition(id).unwrap();
+                assert_eq!(output.num_rows(), 2);
+                let column = output.get_by_offset(0).to_column();
+                let values = if let Column::Array(array) = &column {
+                    array.values()
+                } else {
+                    &column
+                };
+                for (row, expected_offset) in [-7200, 1800].into_iter().enumerate() {
+                    let ScalarRef::TimestampTz(value) = values.index(row).unwrap() else {
+                        unreachable!()
+                    };
+                    assert_eq!(value.timestamp(), 13);
+                    assert_eq!(value.seconds_offset(), expected_offset);
+                }
+            }
+        }
+    }
 }
 
 #[test]

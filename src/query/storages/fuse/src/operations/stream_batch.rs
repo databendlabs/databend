@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_app::storage::S3StorageClass;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -33,10 +34,10 @@ use opendal::EntryMode;
 use super::changes::estimate_change_rows;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::FuseTable;
-use crate::io::MetaReaders;
-use crate::io::SnapshotHistoryReader;
+use crate::io::FuseCaches;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::snapshot_history;
 
 const V4_SNAPSHOT_SUFFIX: &str = "_v4.mpk";
 
@@ -215,8 +216,10 @@ impl FuseTable {
                     .and_then(|snapshot| snapshot.timestamp);
                 let snapshot_version =
                     TableMetaLocationGenerator::snapshot_version(&latest_location);
-                let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-                let mut snapshot_stream = reader.snapshot_history(
+                let caches = FuseCaches::instance();
+                let mut snapshot_stream = snapshot_history(
+                    &caches.snapshots,
+                    self.get_operator(),
                     latest_location,
                     snapshot_version,
                     self.meta_location_generator().clone(),
@@ -334,7 +337,8 @@ impl FuseTable {
             let (snapshot, format_version) = if location == latest_location {
                 (latest_snapshot.clone(), latest_version)
             } else {
-                SnapshotsIO::read_snapshot(location.clone(), operator.clone(), true).await?
+                SnapshotsIO::read_snapshot(location.clone(), operator.clone(), CachePolicy::DEFAULT)
+                    .await?
             };
             if format_version != TableSnapshot::VERSION || !is_uuid_v7(&snapshot.snapshot_id) {
                 return Ok(None);
@@ -350,9 +354,12 @@ impl FuseTable {
                     if candidate.snapshot_id == latest_snapshot.snapshot_id {
                         return Ok(Some((latest_snapshot, latest_version)));
                     }
-                    let (snapshot, _) =
-                        SnapshotsIO::read_snapshot(candidate.location, operator.clone(), true)
-                            .await?;
+                    let (snapshot, _) = SnapshotsIO::read_snapshot(
+                        candidate.location,
+                        operator.clone(),
+                        CachePolicy::DEFAULT,
+                    )
+                    .await?;
                     return Ok(Some((snapshot, candidate.format_version)));
                 }
             }

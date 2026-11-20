@@ -1,0 +1,61 @@
+# Synthetic equal instants cross a hash exchange without losing their offsets.
+statement ok
+SET enforce_shuffle_join = 1;
+
+statement ok
+CREATE OR REPLACE TABLE tz_east AS
+SELECT to_timestamp_tz('2003-04-05 02:00:00 +0200') AS k, number % 2 AS bucket
+FROM numbers(8);
+
+statement ok
+CREATE OR REPLACE TABLE tz_west AS
+SELECT to_timestamp_tz('2003-04-04 23:00:00 -0100') AS k, number % 2 AS bucket
+FROM numbers(8);
+
+query III
+SELECT count(*),
+       count_if(right(to_string(l.k), 5) = '+0200'),
+       count_if(right(to_string(r.k), 5) = '-0100')
+FROM tz_east l JOIN tz_west r ON l.k = r.k AND l.bucket = r.bucket;
+----
+32 32 32
+
+query I
+SELECT count(*) FROM tz_east l JOIN tz_west r ON l.k = r.k
+WHERE to_string(l.k) LIKE '%+0200';
+----
+64
+
+statement ok
+SET group_by_shuffle_mode = 'before_partial';
+
+query I rowsort
+SELECT count(*) FROM (
+    SELECT k, bucket FROM tz_east UNION ALL SELECT k, bucket FROM tz_west
+) v GROUP BY k, bucket;
+----
+8
+8
+
+statement ok
+SET group_by_shuffle_mode = 'before_merge';
+
+query I rowsort
+SELECT count(*) FROM (
+    SELECT k, bucket FROM tz_east UNION ALL SELECT k, bucket FROM tz_west
+) v GROUP BY [k], bucket;
+----
+8
+8
+
+statement ok
+DROP TABLE tz_east;
+
+statement ok
+DROP TABLE tz_west;
+
+statement ok
+UNSET enforce_shuffle_join;
+
+statement ok
+UNSET group_by_shuffle_mode;

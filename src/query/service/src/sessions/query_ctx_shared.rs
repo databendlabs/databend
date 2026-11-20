@@ -36,9 +36,11 @@ use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
+use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
@@ -51,9 +53,11 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
+use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::QuerySpecificValues;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -72,6 +76,7 @@ use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
+use crate::interpreters::access_log::ObjectDomain;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
@@ -116,6 +121,8 @@ pub struct QueryContextShared {
     pub(super) session: Arc<Session>,
     runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(super) init_query_id: Arc<RwLock<String>>,
+    /// Immutable queue identity, independent of client-supplied/reused query IDs.
+    pub(super) queue_entry_key: Uuid,
     cluster_cache: Arc<RwLock<Arc<Cluster>>>,
     warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     running_query: Arc<RwLock<Option<String>>>,
@@ -125,6 +132,9 @@ pub struct QueryContextShared {
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     query_lineage: Arc<RwLock<Option<QueryLineage>>>,
     pending_lineage_logs: Arc<RwLock<Vec<String>>>,
+    pub(super) audited_named_objects: Mutex<HashMap<ObjectDomain, HashSet<String>>>,
+    /// The coordinator's role for audit attribution only, never for authorization.
+    pub(super) remote_audit_role: OnceLock<Option<String>>,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
@@ -141,10 +151,14 @@ pub struct QueryContextShared {
     /// Do not combine it with worker-local wall-clock timestamps to calculate
     /// elapsed time; use `created_time` for local context timing instead.
     pub(super) query_created_time: SystemTime,
+    /// Shared by every function context of this query, for the planner cache.
+    pub(super) query_specific_values: QuerySpecificValues,
     // now it is only set in query_log::log_query_finished
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
     pub(super) mutation_state: MutationState,
+    // Commit sinks in local fragments and the outer refresh hook must see the same hints.
+    pub(super) written_segment_locs: SegmentLocationsState,
     pub(super) result_cache_state: ResultCacheState,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
@@ -184,11 +198,16 @@ pub struct QueryContextShared {
     /// IO reported by remote nodes for this query. Remote nodes send deltas
     /// (see `StatisticsSender::send_io_stats`), so they are accumulated here.
     pub(super) remote_io_stats: Arc<IoStats>,
+    /// Identifies this query on this node for on-demand profiling. Carried in
+    /// the `TrackingPayload.perf_query_token` of the threads executing it.
+    pub(super) perf_query_token: u64,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
+    /// What the reads of the statement may do with the caches (`TableContextCachePolicy`).
+    pub(super) cache_policy: RwLock<CachePolicy>,
     pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
@@ -204,6 +223,11 @@ pub struct QueryContextShared {
     /// Cached full visibility checker (ignore_ownership=false, Object::All).
     /// Shared across all QueryContext instances within this query.
     pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
+
+    /// Sequence visibility checker shared by the query: `nextval` asks for it per VALUES row
+    /// and per block, and building it lists all sequence ownerships.
+    pub(super) sequence_visibility_checker_cache:
+        tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
 
     /// Limits concurrent RowFetch reads and decodes across all pipelines and
     /// QueryContext instances belonging to this query on the local node.
@@ -223,13 +247,15 @@ impl QueryContextShared {
     ) -> Result<Arc<QueryContextShared>> {
         let created_time = SystemTime::now();
         let query_created_time = query_created_time.unwrap_or(created_time);
+        let queue_entry_key = Uuid::new_v4();
         Ok(Arc::new(QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
             session,
             cluster_cache: Arc::new(RwLock::new(cluster_cache)),
             data_operator: DataOperator::instance(),
-            init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+            init_query_id: Arc::new(RwLock::new(queue_entry_key.to_string())),
+            queue_entry_key,
             total_scan_values: Arc::new(Progress::create()),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
@@ -244,6 +270,8 @@ impl QueryContextShared {
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             query_lineage: Arc::new(RwLock::new(None)),
+            audited_named_objects: Mutex::default(),
+            remote_audit_role: OnceLock::new(),
             pending_lineage_logs: Arc::new(RwLock::new(Vec::new())),
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),
@@ -254,9 +282,11 @@ impl QueryContextShared {
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time,
             query_created_time,
+            query_specific_values: QuerySpecificValues::tracked(),
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
+            written_segment_locs: Default::default(),
             result_cache_state: Default::default(),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
@@ -282,14 +312,20 @@ impl QueryContextShared {
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
             remote_io_stats: Default::default(),
+            perf_query_token: match ThreadTracker::perf_query_token() {
+                0 => QueryPerf::next_query_token(),
+                inherited => inherited,
+            },
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
+            cache_policy: RwLock::new(CachePolicy::DEFAULT),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
+            sequence_visibility_checker_cache: Default::default(),
             row_fetch_io_semaphore: Default::default(),
             #[cfg(feature = "python-udf")]
             python_udf_workers: Default::default(),
@@ -447,6 +483,13 @@ impl QueryContextShared {
     /// must carry it in their `TrackingPayload.io_stats`.
     pub fn get_local_io_stats(&self) -> Arc<IoStats> {
         self.local_io_stats.clone()
+    }
+
+    /// The on-demand profiling token of this query on this node. Threads
+    /// executing the query must carry it in their
+    /// `TrackingPayload.perf_query_token`.
+    pub fn get_perf_query_token(&self) -> u64 {
+        self.perf_query_token
     }
 
     /// Add an IO delta reported by a remote node.
@@ -668,24 +711,26 @@ impl QueryContextShared {
     }
 
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
+        self.attach_query_kind(kind);
+
         // `create view as view_query` the view_query should not cover create view
         if !self.get_query_str().is_empty() {
             return;
         }
-        {
-            let mut running_query = self.running_query.write();
-            // Callers attach masked SQL, see `Statement::to_mask_sql`.
-            *running_query = Some(short_sql(
-                query,
-                self.get_settings()
-                    .get_short_sql_max_length()
-                    .unwrap_or(1000),
-            ));
-        }
+        let mut running_query = self.running_query.write();
+        // Callers attach masked SQL, see `Statement::to_mask_sql`.
+        *running_query = Some(short_sql(
+            query,
+            self.get_settings()
+                .get_short_sql_max_length()
+                .unwrap_or(1000),
+        ));
+    }
 
-        {
-            let mut running_query_kind = self.running_query_kind.write();
-            *running_query_kind = Some(kind);
+    /// The first known kind wins, see `TableContextQueryIdentity::attach_query_kind`.
+    pub fn attach_query_kind(&self, kind: QueryKind) {
+        if kind != QueryKind::Unknown {
+            self.running_query_kind.write().get_or_insert(kind);
         }
     }
 

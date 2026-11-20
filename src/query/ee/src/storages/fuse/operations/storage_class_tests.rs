@@ -24,7 +24,6 @@ mod real_s3 {
     use databend_common_catalog::table::Table;
     use databend_common_catalog::table_context::TableContextTableAccess;
     use databend_common_meta_app::principal::UserDefinedConnection;
-    use databend_common_meta_app::schema::CreateOption;
     use databend_common_meta_app::storage::S3StorageClass;
     use databend_common_meta_app::storage::StorageParams;
     use databend_common_meta_app::storage::StorageS3Config;
@@ -33,6 +32,7 @@ mod real_s3 {
     use databend_common_storages_fuse::io::SegmentsIO;
     use databend_common_users::UserApiProvider;
     use databend_query::test_kits::TestFixture;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_table_meta::meta::CompactSegmentInfo;
     use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
     use opendal::Buffer;
@@ -173,7 +173,10 @@ mod real_s3 {
             anyhow::ensure!(!snapshot.segments.is_empty(), "INSERT must create segments");
             let segments_io = SegmentsIO::create(ctx, table.get_operator(), table.schema());
             let segments = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(&snapshot.segments, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(
+                    &snapshot.segments,
+                    CachePolicy::READ_ONLY,
+                )
                 .await?;
             for ((location, _), segment) in snapshot.segments.iter().zip(segments) {
                 objects.insert(format!("{prefix}{location}"));
@@ -263,7 +266,8 @@ mod real_s3 {
                 .add_connection(
                     &fixture.default_tenant(),
                     UserDefinedConnection::new("storage_class_s3", "s3".to_owned(), params),
-                    &CreateOption::Create,
+                    false,
+                    None,
                 )
                 .await?;
             let case = AwsCase {

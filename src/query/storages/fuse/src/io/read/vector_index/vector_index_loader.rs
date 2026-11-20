@@ -28,8 +28,11 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_read_milliseconds;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::VectorRefineDataCache;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
+use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::kinds::vector;
 use databend_storages_common_index::VectorBundleEntry;
 use databend_storages_common_index::VectorBundleFooter;
 use databend_storages_common_index::VectorBundlePageRead;
@@ -42,13 +45,15 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS;
 use opendal::Operator;
 
+use super::vector_index_bundle_loader::BundleReadCache;
+use super::vector_index_bundle_loader::full_read_settings;
 use super::vector_index_bundle_loader::load_bundle_components;
 use super::vector_index_bundle_loader::load_bundle_footer;
 use super::vector_index_bundle_loader::load_bundle_reads;
 use crate::index::VectorIndexFile;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::IndexMetaCache;
 use crate::io::read::index_loader::IndexLoadSpec;
-use crate::io::read::index_loader::MetaRead;
 use crate::io::read::index_loader::load_index_files;
 use crate::io::read::index_loader::load_index_meta;
 
@@ -57,15 +62,18 @@ struct VectorIndexLoadSpec;
 impl IndexLoadSpec for VectorIndexLoadSpec {
     type Meta = VectorIndexMeta;
     type File = VectorIndexFile;
-    type FileCache = Option<VectorRefineDataCache>;
 
-    fn meta_reader(dal: Operator) -> Box<dyn MetaRead<Self::Meta> + Send + Sync> {
-        Box::new(MetaReaders::vector_index_meta_reader(dal))
+    fn file_kind() -> CacheKind {
+        CacheKind::of::<vector::Refine>()
+    }
+
+    fn meta_cache(caches: &IndexMetaCache) -> &MemCache<Arc<Self::Meta>> {
+        &caches.vector
     }
 
     // Raw HNSW component bytes are not cached: the decoded index is kept in
-    // `VectorIndexCache`, so caching the bytes as well would store it twice.
-    fn file_cache() -> Self::FileCache {
+    // `FuseCaches::vector_indexes`, so caching the bytes as well would store it twice.
+    fn file_cache(_caches: &FuseCaches) -> Option<&MemCache<Self::File>> {
         None
     }
 
@@ -103,8 +111,12 @@ impl IndexLoadSpec for VectorIndexLoadSpec {
 /// Loads vector index meta data
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-pub async fn load_vector_index_meta(dal: Operator, path: &str) -> Result<Arc<VectorIndexMeta>> {
-    load_index_meta::<VectorIndexLoadSpec>(dal, path).await
+pub async fn load_vector_index_meta(
+    dal: Operator,
+    path: &str,
+    policy: CachePolicy,
+) -> Result<Arc<VectorIndexMeta>> {
+    load_index_meta::<VectorIndexLoadSpec>(dal, path, policy).await
 }
 
 /// The vector index a reader expects, checked against the file it reads.
@@ -122,8 +134,9 @@ pub async fn load_vector_index_files(
     settings: &ReadSettings,
     column_names: &[String],
     location: &str,
+    policy: CachePolicy,
 ) -> Result<Vec<Bytes>> {
-    load_index_files::<VectorIndexLoadSpec>(operator, settings, column_names, location)
+    load_index_files::<VectorIndexLoadSpec>(operator, settings, column_names, location, policy)
         .await?
         .into_iter()
         .map(legacy_component_bytes)
@@ -147,11 +160,12 @@ pub(super) async fn check_index_current(
     operator: &Operator,
     location: &IndexFileLocation,
     identity: &VectorIndexIdentity,
+    policy: CachePolicy,
 ) -> Result<()> {
     let IndexFileLocation::Legacy { path } = location else {
         return Ok(());
     };
-    let meta = load_vector_index_meta(operator.clone(), path).await?;
+    let meta = load_vector_index_meta(operator.clone(), path, policy).await?;
     let current = matches!(meta.as_ref(), VectorIndexMeta::Legacy(meta)
         if meta.metadata.get(&identity.name) == Some(&identity.version));
     if current {
@@ -173,22 +187,30 @@ pub(super) async fn load_hnsw(
     identity: &VectorIndexIdentity,
     names: &[String],
     row_count: usize,
+    policy: CachePolicy,
 ) -> Result<(Vec<Bytes>, Option<Bytes>)> {
     match location {
         IndexFileLocation::Legacy { path } => {
-            let data = load_vector_index_files(operator.clone(), settings, names, path).await?;
+            let data =
+                load_vector_index_files(operator.clone(), settings, names, path, policy).await?;
             Ok((data, None))
         }
         IndexFileLocation::Bundle { path, size } => {
-            let footer = load_footer(operator, path, *size, identity, row_count).await?;
+            let footer = load_footer(operator, path, *size, identity, row_count, policy).await?;
             // The bitmap exists only when the column has NULLs.
             let validity = Some(vector_validity_name(identity.column_id))
                 .filter(|name| footer.components.contains_key(name));
             let mut selected = names.to_vec();
             selected.extend(validity.iter().cloned());
-            let mut data =
-                load_bundle_components(operator.clone(), settings, path, &footer, &selected)
-                    .await?;
+            let mut data = load_bundle_components(
+                operator.clone(),
+                settings,
+                path,
+                &footer,
+                &selected,
+                policy,
+            )
+            .await?;
             // The validity was requested last.
             let validity = validity.and_then(|_| data.pop());
             if validity
@@ -211,6 +233,7 @@ pub(super) struct RefineData {
     name: String,
     entry: VectorBundleEntry,
     row_count: u64,
+    policy: CachePolicy,
     /// Read granularity, chosen by the reader: FP16 rows are plain and fixed-width.
     pub rows_per_page: usize,
     pub dimension: usize,
@@ -222,13 +245,14 @@ impl RefineData {
         location: &IndexFileLocation,
         identity: &VectorIndexIdentity,
         row_count: usize,
+        policy: CachePolicy,
     ) -> Result<Self> {
         let IndexFileLocation::Bundle { path, size } = location else {
             return Err(ErrorCode::StorageUnavailable(
                 "Legacy SQ8 index has no FP16 data; refresh the vector index before enabling refinement",
             ));
         };
-        let footer = load_footer(operator, path, *size, identity, row_count).await?;
+        let footer = load_footer(operator, path, *size, identity, row_count, policy).await?;
         let name = vector_fp16_data_name(identity.column_id);
         let entry = footer.components.get(&name).ok_or_else(|| {
             ErrorCode::StorageUnavailable("FP16 refine store missing; refresh vector index")
@@ -239,6 +263,7 @@ impl RefineData {
             entry: entry.clone(),
             name,
             row_count: row_count as u64,
+            policy,
             rows_per_page: VECTOR_REFINE_PAGE_ROWS,
             dimension: entry.dimension(row_count as u64)? as usize,
         })
@@ -253,14 +278,26 @@ impl RefineData {
         Ok(start..start.saturating_add(rows_per_page).min(self.row_count))
     }
 
-    /// Reads the whole FP16 data in one request, checked against its checksum and
-    /// not cached: a full scan would evict the pages that TopN refinement reuses.
-    pub async fn read_all(&self, settings: &ReadSettings) -> Result<Bytes> {
-        let requests = vec![(self.name.clone(), self.entry.component_read())];
-        let mut data =
-            load_bundle_reads(self.operator.clone(), settings, &self.path, requests, None).await?;
-        data.pop()
-            .ok_or_else(|| ErrorCode::Internal("Missing FP16 component read"))
+    /// Reads the whole FP16 data as its pages, in order, checked together against the
+    /// component checksum; the pages are not joined. They are the pages `read_pages` reads,
+    /// merged into one storage request, and kept in the disk cache page by page, so that
+    /// later full reads and TopN refinement of the block read them from local disk. They are
+    /// not kept in memory: a full scan would evict the pages that TopN refinement reuses.
+    pub async fn read_all(&self, settings: &ReadSettings) -> Result<Vec<Bytes>> {
+        let pages = self.row_count.div_ceil(self.rows_per_page as u64) as usize;
+        let requests = (0..pages)
+            .map(|page| self.page_request(page))
+            .collect::<Result<Vec<_>>>()?;
+        let cache = BundleReadCache {
+            kind: CacheKind::of::<vector::Refine>(),
+            disk: self.policy.disk,
+            memory: None,
+        };
+        let settings = full_read_settings(settings, self.entry.length);
+        let storage = DiskCachedStorage::new(self.operator.clone());
+        let pages = load_bundle_reads(storage, &settings, &self.path, requests, cache).await?;
+        self.entry.check_rows(&pages)?;
+        Ok(pages)
     }
 
     /// The read of `page`, named for the cache by its byte range in the file, so
@@ -284,8 +321,16 @@ impl RefineData {
             .iter()
             .map(|&page| self.page_request(page))
             .collect::<Result<Vec<_>>>()?;
-        let cache = CacheManager::instance().get_vector_refine_data_cache();
-        load_bundle_reads(self.operator.clone(), settings, &self.path, requests, cache).await
+        let memory = FuseCaches::instance()
+            .vector_refine_pages
+            .with_policy(self.policy);
+        let cache = BundleReadCache {
+            kind: CacheKind::of::<vector::Refine>(),
+            disk: memory.policy().disk,
+            memory: Some(memory),
+        };
+        let storage = DiskCachedStorage::new(self.operator.clone());
+        load_bundle_reads(storage, settings, &self.path, requests, cache).await
     }
 }
 
@@ -297,8 +342,9 @@ async fn load_footer(
     size: u64,
     identity: &VectorIndexIdentity,
     row_count: usize,
+    policy: CachePolicy,
 ) -> Result<Arc<VectorBundleFooter>> {
-    let footer = load_bundle_footer(operator.clone(), path, size).await?;
+    let footer = load_bundle_footer(operator.clone(), path, size, policy).await?;
     if footer.index_name != identity.name || footer.index_version != identity.version {
         return Err(ErrorCode::StorageOther(
             "Vector bundle index identity mismatch",

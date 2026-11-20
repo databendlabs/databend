@@ -185,7 +185,7 @@ where
                 .collect::<Vec<_>>();
             for idx in indices {
                 if idx < value_len {
-                    self.value.as_mut_slice().select_nth_unstable(idx);
+                    self.value.select_nth_unstable(idx);
                     let value = self.value.get(idx).unwrap();
                     builder.put_item(T::to_scalar_ref(value));
                 } else {
@@ -258,7 +258,7 @@ where
         if idx >= value_len {
             builder.push_default();
         } else {
-            self.value.as_mut_slice().select_nth_unstable(idx);
+            self.value.select_nth_unstable(idx);
             let value = self.value.get(idx).unwrap();
             builder.push_item(T::to_scalar_ref(value));
         }

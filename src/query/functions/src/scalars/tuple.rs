@@ -28,7 +28,6 @@ use databend_common_expression::Value;
 use databend_common_expression::domain_evaluator;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -161,17 +160,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: scalar_evaluator(move |args, _| match &args[0] {
                     Value::Scalar(Scalar::Null) => Value::Scalar(Scalar::Null),
                     Value::Scalar(Scalar::Tuple(fields)) => Value::Scalar(fields[idx].to_owned()),
-                    Value::Column(Column::Nullable(
-                        deref!(NullableColumn {
-                            column: Column::Tuple(fields),
-                            validity,
-                        }),
-                    )) => {
-                        let field_col = fields[idx].as_nullable().unwrap();
-                        Value::Column(NullableColumn::new_column(
-                            field_col.column.clone(),
-                            (&field_col.validity) & validity,
-                        ))
+                    Value::Column(Column::Nullable(column)) => {
+                        let Column::Tuple(fields) = column.column() else {
+                            unreachable!()
+                        };
+                        Value::Column(
+                            fields[idx]
+                                .clone()
+                                .wrap_nullable(Some(column.validity().clone())),
+                        )
                     }
                     _ => unreachable!(),
                 }),

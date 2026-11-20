@@ -30,12 +30,12 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_io::ReadSettings;
 use tokio::sync::Semaphore;
 
@@ -51,7 +51,7 @@ pub fn row_fetch_processor(
     source: &DataSourcePlan,
     projection: Projection,
     need_wrap_nullable: bool,
-    populate_cache: bool,
+    cache_policy: CachePolicy,
     io_semaphore: Arc<Semaphore>,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
@@ -69,7 +69,7 @@ pub fn row_fetch_processor(
         .map(|field| DataType::from(field.data_type()))
         .collect::<Vec<_>>();
     let block_reader =
-        fuse_table.create_block_reader(ctx.clone(), projection.clone(), populate_cache)?;
+        fuse_table.create_block_reader(ctx.clone(), projection.clone(), cache_policy)?;
 
     match &fuse_table.storage_format {
         FuseStorageFormat::Parquet => {
@@ -266,10 +266,11 @@ impl<F: RowsFetcher + Send + Sync + 'static> Processor for TransformRowsFetcher<
                 {
                     let column = entry.to_column();
                     let value = column.into_nullable().unwrap();
-                    let row_id_column = value.column.into_number().unwrap().into_u_int64().unwrap();
+                    let (column, validity) = value.destructure();
+                    let row_id_column = column.into_number().unwrap().into_u_int64().unwrap();
 
                     for (idx, (row_id, is_valid)) in
-                        row_id_column.iter().zip(value.validity.iter()).enumerate()
+                        row_id_column.iter().zip(validity.iter()).enumerate()
                     {
                         if !is_valid {
                             if self.block_threshold.acc(1, fetched_columns_bytes) {
@@ -331,8 +332,14 @@ impl<F: RowsFetcher + Send + Sync + 'static> TransformRowsFetcher<F> {
         } else {
             // From merge into matched data, the row id column is nullable but has no null value.
             let value = *column.into_nullable().unwrap();
-            debug_assert!(value.validity.null_count() == 0);
-            value.column.into_number().unwrap().into_u_int64().unwrap()
+            debug_assert!(value.validity().null_count() == 0);
+            value
+                .destructure()
+                .0
+                .into_number()
+                .unwrap()
+                .into_u_int64()
+                .unwrap()
         }
     }
 
@@ -391,7 +398,7 @@ impl<F: RowsFetcher + Sync + Send + 'static> TransformRowsFetcher<F> {
             {
                 let column = entry.to_column();
                 let value = column.into_nullable().unwrap();
-                Some(value.validity)
+                Some(value.destructure().1)
             }
             _ => None,
         };
@@ -458,6 +465,6 @@ fn wrap_true_validity(column: &BlockEntry, num_rows: usize) -> BlockEntry {
     if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
         column.clone()
     } else {
-        NullableColumn::new_column(col, Bitmap::new_trued(num_rows)).into()
+        col.wrap_nullable(Some(Bitmap::new_trued(num_rows))).into()
     }
 }

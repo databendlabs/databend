@@ -25,8 +25,6 @@ use crate::types::binary::BinaryColumnBuilder;
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr(*mut u8);
 
-pub type StateAddrs = Vec<StateAddr>;
-
 impl StateAddr {
     #[inline]
     pub fn null() -> StateAddr {
@@ -46,6 +44,11 @@ impl StateAddr {
     }
 
     #[inline]
+    pub(super) fn as_ptr(&self) -> *mut u8 {
+        self.0
+    }
+
+    #[inline]
     #[must_use]
     pub fn next(&self, offset: usize) -> Self {
         unsafe { Self(self.0.add(offset)) }
@@ -57,10 +60,7 @@ impl StateAddr {
         F: FnOnce() -> T,
         T: Send + 'static,
     {
-        unsafe {
-            let ptr = self.0.cast::<T>();
-            std::ptr::write(ptr, f());
-        }
+        self.write_state(f())
     }
 
     #[inline]
@@ -148,10 +148,6 @@ pub struct StatesLayout {
 }
 
 impl StatesLayout {
-    pub fn num_aggr_func(&self) -> usize {
-        self.states_loc.len()
-    }
-
     pub fn serialize_builders(&self, num_rows: usize) -> Vec<ColumnBuilder> {
         self.serialize_type
             .iter()

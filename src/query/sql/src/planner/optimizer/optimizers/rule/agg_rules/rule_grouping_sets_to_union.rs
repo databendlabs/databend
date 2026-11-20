@@ -22,6 +22,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 
 use super::grouping_sets_common::ensure_group_items_are_projected;
+use super::grouping_sets_common::grouping_id;
 use super::grouping_sets_common::union_output_indexes;
 use crate::ScalarExpr;
 use crate::Symbol;
@@ -162,34 +163,9 @@ impl Rule for RuleGroupingSetsToUnion {
                     stat_info: None,
                 });
 
-                let mask = (1 << grouping_sets.dup_group_items.len()) - 1;
-                let group_bys = agg
-                    .group_items
-                    .iter()
-                    .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
-                    .map(|i| {
-                        agg_input_columns
-                            .iter()
-                            .position(|t| *t == i.index)
-                            .unwrap()
-                    })
-                    .collect::<Vec<_>>();
-
                 for set in &grouping_sets.sets {
-                    let mut id = 0;
-
-                    // For element in `group_bys`,
-                    // if it is in current grouping set: set 0, else: set 1. (1 represents it will be NULL in grouping)
-                    // Example: GROUP BY GROUPING SETS ((a, b), (a), (b), ())
-                    // group_bys: [a, b]
-                    // grouping_sets: [[0, 1], [0], [1], []]
-                    // grouping_ids: 00, 01, 10, 11
-
-                    for g in set {
-                        let i = group_bys.iter().position(|t| *t == g.as_usize()).unwrap();
-                        id |= 1 << i;
-                    }
-                    let grouping_id = !id & mask;
+                    let grouping_id =
+                        grouping_id(&agg.group_items, grouping_sets.grouping_id_index, set);
 
                     let mut eval_scalar = eval_scalar.clone();
                     let mut agg = agg.clone();

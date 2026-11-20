@@ -63,7 +63,7 @@ impl EliminateEvalScalarOptimizer {
 
     fn eliminate(&self, expr: &PExpr) -> Result<Option<PExpr>> {
         let id = RuleID::EliminateEvalScalar;
-        if self.ctx.is_optimizer_disabled(&id.to_string()) {
+        if self.ctx.is_rule_disabled(id) {
             return Ok(None);
         }
         let start = Instant::now();

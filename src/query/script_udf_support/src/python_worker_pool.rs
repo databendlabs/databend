@@ -17,6 +17,7 @@
 /// A query-owned pool. Neither idle workers nor interpreter state cross queries.
 pub struct PythonRuntime {
     function: PythonFunction,
+    external_access_integrations: Vec<String>,
     query: Arc<PythonQueryWorkers>,
     directory: Option<TempDir>,
     pool: Mutex<PoolState>,
@@ -53,10 +54,12 @@ impl PythonRuntime {
         function: PythonFunction,
         query: Arc<PythonQueryWorkers>,
         directory: Option<TempDir>,
+        external_access_integrations: Vec<String>,
     ) -> Result<Arc<Self>> {
         query.register()?;
         let runtime = Arc::new(Self {
             function,
+            external_access_integrations,
             query: query.clone(),
             directory,
             pool: Mutex::new(PoolState::default()),
@@ -287,6 +290,10 @@ impl WorkerLease {
                     self.reservation.as_ref().unwrap().clone(),
                     runtime.directory.clone(),
                     &runtime.function,
+                    crate::python_udf_network_proxy(
+                        &runtime.query.tenant,
+                        &runtime.external_access_integrations,
+                    )?,
                     runtime
                         .query
                         .manager

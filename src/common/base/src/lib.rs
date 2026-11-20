@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(incomplete_features)]
-#![feature(allocator_api)]
 #![feature(thread_local)]
 #![cfg_attr(all(target_os = "linux", feature = "jemalloc"), feature(ptr_metadata))]
 #![feature(alloc_error_hook)]

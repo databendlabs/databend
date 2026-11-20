@@ -17,8 +17,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateStagePlan;
@@ -98,7 +96,8 @@ impl Interpreter for CreateUserStageInterpreter {
                 _ => None,
             };
 
-            // when create or replace stage success, if old stage is not External stage, remove stage files
+            // Remove the old files first: the prefix is name-based, so files left behind would be
+            // visible to the new owner. If the replace then fails, retrying completes it.
             if let Some(stage) = old_stage {
                 if stage.stage_type != StageType::External {
                     let op = init_stage_operator(&stage)?;
@@ -113,29 +112,29 @@ impl Interpreter for CreateUserStageInterpreter {
             let mut user_stage = user_stage;
             user_stage.creator = Some(self.ctx.get_current_user()?.identity());
             user_stage.created_on = Utc::now();
-            user_mgr
-                .add_stage(tenant, user_stage.clone(), &plan.create_option)
+            // An existing stage is left with its owner unless replaced.
+            let owner = self.ctx.get_current_role().map(|role| role.name);
+            let written = user_mgr
+                .add_stage(
+                    tenant,
+                    user_stage.clone(),
+                    plan.create_option.is_overriding(),
+                    owner.as_deref(),
+                )
                 .await?;
+            if written {
+                RoleCacheManager::instance().invalidate_cache(tenant);
+            } else if plan.create_option.if_return_error() {
+                return Err(ErrorCode::StageAlreadyExists(format!(
+                    "Stage '{}' already exists.",
+                    user_stage.stage_name
+                )));
+            }
 
-            // create dir if new stage if not external stage
+            // Create the dir of an internal stage; this is a no-op if it exists.
             if user_stage.stage_type != StageType::External {
                 let op = self.ctx.get_application_level_data_operator()?.operator();
                 op.create_dir(&user_stage.stage_prefix()).await?
-            }
-
-            // Grant ownership as the current role
-            let tenant = self.ctx.get_tenant();
-            if let Some(current_role) = self.ctx.get_current_role() {
-                let role_api = UserApiProvider::instance().role_api(&tenant);
-                role_api
-                    .grant_ownership(
-                        &OwnershipObject::Stage {
-                            name: self.plan.stage_info.stage_name.clone(),
-                        },
-                        &current_role.name,
-                    )
-                    .await?;
-                RoleCacheManager::instance().invalidate_cache(&tenant);
             }
 
             Ok(PipelineBuildResult::create())

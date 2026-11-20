@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -29,14 +30,13 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::TableFiles;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
 use databend_common_storages_fuse::operations::slice_summary;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_index::ExternalFile;
-use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
@@ -104,6 +104,8 @@ struct GcRootSnapshotCtx {
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
+    /// Segment zone map files referenced by the gc root or by tagged snapshots.
+    protected_segment_zone_maps: HashSet<String>,
     snapshots_to_gc: Vec<String>,
 }
 
@@ -113,6 +115,9 @@ pub async fn do_vacuum2(
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<()> {
+    // Maintenance, also from a table function or procedure: `CachePolicy::MAINTENANCE` for the
+    // rest of the statement, whose reads are this vacuum's.
+    ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
     let table_info = table.get_table_info();
     {
         if ctx.txn_mgr().lock().is_active() {
@@ -130,6 +135,7 @@ pub async fn do_vacuum2(
         gc_root_timestamp,
         gc_root_meta_ts,
         protected_segments,
+        protected_segment_zone_maps,
         snapshots_to_gc,
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
@@ -188,6 +194,29 @@ pub async fn do_vacuum2(
         slice_summary(&stats_to_gc)
     ));
 
+    // Segment zone map files are named like segments (UUID v7 under a vacuum2
+    // prefix) and referenced only by snapshots, so the same selection applies:
+    // everything before the gc root that no protected snapshot points to.
+    let start = std::time::Instant::now();
+    let prefix = fuse_table
+        .meta_location_generator()
+        .segment_zone_map_location_prefix();
+    let mut segment_zone_maps_to_gc = Vec::new();
+    for entry in fuse_table
+        .list_files_until_timestamp(prefix, gc_root_timestamp, false, Some(gc_root_meta_ts))
+        .await?
+    {
+        if !protected_segment_zone_maps.contains(entry.path()) {
+            segment_zone_maps_to_gc.push(entry.path().to_owned());
+        }
+    }
+    ctx.set_status_info(&format!(
+        "Listed segment zone maps before gc_root for table {}, elapsed: {:?}, segment_zone_maps_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&segment_zone_maps_to_gc)
+    ));
+
     let start = std::time::Instant::now();
     let segments_io =
         SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
@@ -226,7 +255,7 @@ pub async fn do_vacuum2(
         }
 
         let segments = segments_io
-            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
+            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, CachePolicy::READ_ONLY)
             .await?;
         for segment in segments {
             let blocks = segment?.block_metas()?;
@@ -383,7 +412,7 @@ pub async fn do_vacuum2(
         block_gc_stats.removed_files,
     ));
 
-    let file_remover = Files::create(ctx.clone(), fuse_table.get_operator());
+    let file_remover = TableFiles::create(ctx.clone(), fuse_table.get_operator());
 
     // segment stats should be removed before segments.
     if !stats_to_gc.is_empty() {
@@ -392,6 +421,12 @@ pub async fn do_vacuum2(
 
     if !segments_to_gc.is_empty() {
         file_remover.remove_file_in_batch(&segments_to_gc).await?;
+    }
+
+    if !segment_zone_maps_to_gc.is_empty() {
+        file_remover
+            .remove_file_in_batch(&segment_zone_maps_to_gc)
+            .await?;
     }
 
     // Evict snapshot caches from the local node.
@@ -403,26 +438,19 @@ pub async fn do_vacuum2(
     // - TODO: To ensure correctness in such cases, the table's Least Visible Timestamp (LVT),
     //   stored in the meta-server, should be utilized to determine snapshot visibility and
     //   resolve potential issues.
-    if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
-        for path in snapshots_to_gc.iter() {
-            snapshot_cache.evict(path);
-        }
+    // The disk cache drops them with the delete.
+    let snapshot_cache = &FuseCaches::instance().snapshots;
+    for path in snapshots_to_gc.iter() {
+        snapshot_cache.evict(path);
     }
     file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
-
-    // Legacy branch/tag refs were removed without compatibility guarantees.
-    // Vacuum2 cleans up the old ref snapshot prefix opportunistically, and the
-    // operation is idempotent even if the prefix is already absent.
-    let legacy_ref_dir = fuse_table
-        .meta_location_generator()
-        .ref_snapshot_location_prefix();
-    let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
     let removed_files = removed_inverted_index_v2
         + removed_vector_index
         + block_gc_stats.removed_files
         + stats_to_gc.len()
         + segments_to_gc.len()
+        + segment_zone_maps_to_gc.len()
         + snapshots_to_gc.len();
     ctx.set_status_info(&format!(
         "Removed files for table {}, elapsed: {:?}, files removed: {}",
@@ -444,7 +472,7 @@ async fn purge_inverted_index_dict_objects(
     protected_locations: &HashSet<String>,
     gc_root_timestamp: DateTime<Utc>,
 ) -> Result<usize> {
-    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
     let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut removed = 0;
@@ -507,7 +535,7 @@ async fn purge_vector_index_objects(
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<usize> {
-    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
     let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut removed = 0;
@@ -560,7 +588,7 @@ async fn purge_inverted_index_v2_objects(
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<usize> {
-    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let file_remover = TableFiles::create(Arc::clone(ctx), operator.clone());
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
     let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut removed = 0;
@@ -640,7 +668,7 @@ async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<Bl
 }
 
 async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
-    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let file_remover = TableFiles::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let blocks_before_gc_root = list_gc_candidate_paths_until_prefix_fs(
         block_gc.dal,
         block_gc.block_location_prefix,
@@ -686,7 +714,7 @@ async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result
 async fn purge_blocks_before_gc_root_object_store_streaming(
     block_gc: &BlockGcContext<'_>,
 ) -> Result<BlockGcStats> {
-    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let file_remover = TableFiles::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
     let mut lister = block_gc.dal.lister(block_gc.block_location_prefix).await?;
     let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut stats = BlockGcStats {
@@ -763,7 +791,7 @@ async fn list_gc_candidate_paths_until_prefix_fs(
 }
 
 async fn purge_block_chunk(
-    file_remover: &Files,
+    file_remover: &TableFiles,
     block_gc: &BlockGcContext<'_>,
     block_chunk: &[String],
     stats: &mut BlockGcStats,
@@ -887,6 +915,15 @@ async fn vacuum_base_snapshot_phase(
         return Ok(None);
     };
     protected_segments.extend(selection.gc_root.segments.iter().cloned());
+    // Snapshots after the gc root only point at its zone map or at ones built
+    // later, so protecting it covers every live reference.
+    let mut protected_segment_zone_maps = HashSet::new();
+    protected_segment_zone_maps.extend(
+        selection
+            .gc_root
+            .segment_zone_map_path()
+            .map(str::to_string),
+    );
     let mut updates = std::mem::take(&mut mark.lvt_updates);
     // Validate the owner's original fence too: FLASHBACK can change its head while descendants
     // are being marked. Existing clone bindings always use this one LVT publication protocol.
@@ -924,6 +961,7 @@ async fn vacuum_base_snapshot_phase(
             &mark.descendant_ids,
             concurrency,
             &mut protected_segments,
+            ctx.cache_policy(),
         )
         .await?;
     fuse_table
@@ -932,6 +970,8 @@ async fn vacuum_base_snapshot_phase(
             &selection.gc_root_path,
             &mut selection.snapshots_to_gc,
             &mut protected_segments,
+            &mut protected_segment_zone_maps,
+            ctx.cache_policy(),
         )
         .await?;
 
@@ -944,6 +984,7 @@ async fn vacuum_base_snapshot_phase(
         gc_root_timestamp: selection.gc_root_lvt.time,
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,
+        protected_segment_zone_maps,
         snapshots_to_gc: selection.snapshots_to_gc,
     }))
 }

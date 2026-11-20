@@ -19,6 +19,7 @@ use databend_common_ast::parser::parse_database_ref;
 use databend_common_ast::parser::parse_procedure_ref;
 use databend_common_ast::parser::parse_table_ref;
 use databend_common_ast::parser::parse_udf_ref;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -150,7 +151,7 @@ impl Table for TagReferencesTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         pipeline.add_source(
             |output| {
@@ -293,7 +294,7 @@ async fn collect_tag_references(
                 .get_stage(&tenant, stage_name)
                 .await?;
             // Check stage visibility
-            if ctx.get_settings().get_enable_experimental_rbac_check()? {
+            if ctx.should_check_stage_privilege(&stage_info.stage_name)? {
                 let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
                 let is_visible = stage_info.is_temporary
                     || visibility_checker.check_stage_visibility(&stage_info.stage_name)
@@ -381,7 +382,6 @@ async fn collect_tag_references(
         }
         "CONNECTION" => {
             let conn_name = object_name.trim();
-            // Check connection visibility
             if ctx
                 .get_settings()
                 .get_enable_experimental_connection_privilege_check()?
@@ -397,10 +397,10 @@ async fn collect_tag_references(
                     )));
                 }
             }
-            // Validate connection exists
-            UserApiProvider::instance()
+            let connection = UserApiProvider::instance()
                 .get_connection(&tenant, conn_name)
                 .await?;
+            ctx.record_connection_access(&connection.name);
             (
                 TaggableObject::Connection {
                     name: conn_name.to_string(),

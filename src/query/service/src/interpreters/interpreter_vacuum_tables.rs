@@ -44,6 +44,10 @@ impl Interpreter for VacuumTablesInterpreter {
         "VacuumTablesInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         true
     }

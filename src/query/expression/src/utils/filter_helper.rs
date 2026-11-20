@@ -32,7 +32,6 @@ use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::StringColumn;
-use crate::types::nullable::NullableColumn;
 use crate::values::Column;
 
 pub struct FilterHelpers;
@@ -59,7 +58,8 @@ impl FilterHelpers {
         match value {
             Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => Value::Scalar(false),
             Value::Scalar(Scalar::Boolean(true)) => Value::Scalar(true),
-            Value::Column(Column::Nullable(deref!(NullableColumn { column, validity }))) => {
+            Value::Column(Column::Nullable(column)) => {
+                let (column, validity) = column.destructure();
                 let boolean_column = column.into_boolean().unwrap();
                 Value::Column(&boolean_column & &validity)
             }
@@ -87,7 +87,10 @@ impl FilterHelpers {
     #[inline]
     pub fn split_nullable_column(column: Column) -> (Column, Option<Bitmap>) {
         match column.into_nullable() {
-            Ok(nullable) => (nullable.column, Some(nullable.validity)),
+            Ok(nullable) => {
+                let (column, validity) = nullable.destructure();
+                (column, Some(validity))
+            }
             Err(column) => (column, None),
         }
     }

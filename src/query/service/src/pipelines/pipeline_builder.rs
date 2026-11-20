@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
@@ -25,11 +24,9 @@ use databend_common_pipeline::core::always_callback;
 use databend_common_settings::Settings;
 use databend_common_sql::Symbol;
 
-use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::physical_plans::PhysicalPlan;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
@@ -50,16 +47,11 @@ pub struct PipelineBuilder {
 
     pub pipelines: Vec<Pipeline>,
 
-    // probe data_fields for distributed merge into when source build
-    pub merge_into_probe_data_fields: Option<Vec<DataField>>,
-    pub join_state: Option<Arc<HashJoinBuildState>>,
-
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
     pub hash_join_states: HashMap<usize, HashJoinStateRef>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
-    pub(crate) is_exchange_stack: Vec<bool>,
 }
 
 impl PipelineBuilder {
@@ -75,11 +67,8 @@ impl PipelineBuilder {
             pipelines: vec![],
             main_pipeline: Pipeline::create(),
             exchange_injector: DefaultExchangeInjector::create(),
-            merge_into_probe_data_fields: None,
-            join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
-            is_exchange_stack: vec![],
         }
     }
 
@@ -117,20 +106,8 @@ impl PipelineBuilder {
             main_pipeline: self.main_pipeline,
             sources_pipelines: self.pipelines,
             exchange_injector: self.exchange_injector,
-            builder_data: PipelineBuilderData {
-                input_join_state: self.join_state,
-                input_probe_schema: self.merge_into_probe_data_fields,
-            },
             r_cte_scan_interpreters: self.r_cte_scan_interpreters,
         })
-    }
-
-    pub(crate) fn is_exchange_parent(&self) -> bool {
-        if self.is_exchange_stack.len() >= 2 {
-            return self.is_exchange_stack[self.is_exchange_stack.len() - 2];
-        }
-
-        false
     }
 
     #[recursive::recursive]

@@ -20,6 +20,7 @@ use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
 
 impl Binder {
+    #[recursive::recursive]
     pub(crate) fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,

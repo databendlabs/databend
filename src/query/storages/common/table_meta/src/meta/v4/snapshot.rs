@@ -34,6 +34,7 @@ use crate::meta::ClusterKeyInfo;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::MetaEncoding;
+use crate::meta::SegmentZoneMapMeta;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::TableMetaTimestamps;
@@ -49,7 +50,7 @@ use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::ClusterType;
 
-#[frozen_api("9de02316")]
+#[frozen_api("40e6d4dd")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -105,6 +106,11 @@ pub struct TableSnapshot {
     // Also cleared by transaction retry when the complete delta is unknown.
     #[serde(default)]
     logical_change_counters: Option<LogicalChangeCounters>,
+
+    /// Segment zone map built from this or an earlier snapshot. It is only used to
+    /// exclude segments, so carrying a stale pointer forward is safe.
+    #[serde(default)]
+    pub segment_zone_map: Option<SegmentZoneMapMeta>,
 }
 
 /// Cumulative UPDATE/DELETE counters. Only endpoints with the same known epoch
@@ -212,6 +218,9 @@ impl TableSnapshot {
                 epoch: None,
             });
         counters.epoch = counters.epoch.or(prev_table_seq);
+        let segment_zone_map = prev_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.segment_zone_map.clone());
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -225,6 +234,7 @@ impl TableSnapshot {
             cluster_type,
             table_statistics_location,
             logical_change_counters: Some(counters),
+            segment_zone_map,
         })
     }
 
@@ -319,6 +329,14 @@ impl TableSnapshot {
         self.table_statistics_location.clone()
     }
 
+    /// Path of the segment zone map file this snapshot points to, if any.
+    #[inline]
+    pub fn segment_zone_map_path(&self) -> Option<&str> {
+        self.segment_zone_map
+            .as_ref()
+            .map(|meta| meta.location.0.as_str())
+    }
+
     #[inline]
     pub fn ensure_segments_unique(&self) -> Result<()> {
         ensure_segments_unique(&self.segments)
@@ -411,6 +429,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
             logical_change_counters: None,
+            segment_zone_map: None,
         }
     }
 }
@@ -437,6 +456,7 @@ where T: Into<v3::TableSnapshot>
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
             logical_change_counters: None,
+            segment_zone_map: None,
         }
     }
 }
@@ -460,6 +480,8 @@ pub struct TableSnapshotLite {
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
     pub segment_count: u64,
+    /// Path of the segment zone map file the snapshot points to, if any.
+    pub segment_zone_map_location: Option<String>,
 }
 
 impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
@@ -480,6 +502,7 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
             uncompressed_byte_size: value.summary.uncompressed_byte_size,
             segment_count: value.segments.len() as u64,
             compressed_byte_size: value.summary.compressed_byte_size,
+            segment_zone_map_location: value.segment_zone_map_path().map(str::to_string),
         }
     }
 }
@@ -733,6 +756,94 @@ mod tests {
             assert_eq!(counters.deleted_rows_total, 2);
             assert_eq!(counters.delta_from(&counters), None);
         }
+    }
+
+    fn segment_zone_map_meta() -> SegmentZoneMapMeta {
+        SegmentZoneMapMeta {
+            location: ("t/_zm/h01_v1.parquet".to_string(), 1),
+            footer_offset: 1024,
+        }
+    }
+
+    /// Every new snapshot goes through `try_new`, which carries the pointer of
+    /// its predecessor; writers that invalidate it clear the field afterwards.
+    #[test]
+    fn test_segment_zone_map_inherited_from_previous() {
+        let mut previous = snapshot_at(Some(10), None);
+        previous.segment_zone_map = Some(segment_zone_map_meta());
+        let previous = Arc::new(previous);
+
+        let next = snapshot_at(Some(11), Some(previous.clone()));
+        assert_eq!(next.segment_zone_map, Some(segment_zone_map_meta()));
+        let timestamps = TableMetaTimestamps::new(None, TimeDelta::hours(1));
+        let next = TableSnapshot::try_from_previous(previous, None, Some(11), timestamps).unwrap();
+        assert_eq!(next.segment_zone_map, Some(segment_zone_map_meta()));
+    }
+
+    /// A snapshot written before the segment zone map existed has no such field
+    /// and reads back without a zone map; a new snapshot derived from it starts
+    /// without one too.
+    #[test]
+    fn test_segment_zone_map_absent_in_old_snapshot() {
+        let mut current = snapshot_at(Some(10), None);
+        current.segment_zone_map = Some(segment_zone_map_meta());
+
+        let mut value = serde_json::to_value(&current).unwrap();
+        value.as_object_mut().unwrap().remove("segment_zone_map");
+        let old: TableSnapshot = serde_json::from_value(value).unwrap();
+        assert_eq!(old.segment_zone_map, None);
+        assert_eq!(old.segment_zone_map_path(), None);
+
+        let decoded = TableSnapshot::from_slice(&old.to_bytes().unwrap()).unwrap();
+        assert_eq!(decoded.segment_zone_map, None);
+
+        let next = snapshot_at(Some(11), Some(Arc::new(decoded)));
+        assert_eq!(next.segment_zone_map, None);
+    }
+
+    /// An older reader of the on-disk encoding does not know the field and
+    /// must skip its nested value; an older writer rebuilding the snapshot from
+    /// what it read cannot carry the pointer, which the current reader then sees
+    /// as "no zone map".
+    #[test]
+    fn test_segment_zone_map_skipped_by_old_reader() {
+        // The fields an older reader knows about, with the same encoding.
+        #[derive(Serialize, Deserialize)]
+        struct OldReaderSnapshot {
+            format_version: FormatVersion,
+            snapshot_id: SnapshotId,
+            segments: Vec<Location>,
+            summary: Statistics,
+        }
+
+        let mut current = snapshot_at(Some(10), None);
+        current.segments = vec![("t/_sg/h01_v4.mpk".to_string(), 4)];
+        current.segment_zone_map = Some(segment_zone_map_meta());
+
+        let encoded = encode(&MetaEncoding::MessagePack, &current).unwrap();
+        let old: OldReaderSnapshot = rmp_serde::from_slice(&encoded).unwrap();
+        assert_eq!(old.snapshot_id, current.snapshot_id);
+        assert_eq!(old.segments, current.segments);
+
+        // What an older writer re-encodes from its view carries no pointer.
+        let rewritten = encode(&MetaEncoding::MessagePack, &old).unwrap();
+        let mut value = serde_json::to_value(&current).unwrap();
+        value.as_object_mut().unwrap().remove("segment_zone_map");
+        let expected_without_zone_map: TableSnapshot = serde_json::from_value(value).unwrap();
+        let reread: OldReaderSnapshot = rmp_serde::from_slice(&rewritten).unwrap();
+        assert_eq!(reread.segments, expected_without_zone_map.segments);
+
+        // The current encoding round-trips the pointer intact.
+        let decoded = TableSnapshot::from_slice(&current.to_bytes().unwrap()).unwrap();
+        assert_eq!(decoded.segment_zone_map, Some(segment_zone_map_meta()));
+        assert_eq!(
+            decoded.segment_zone_map_path(),
+            Some("t/_zm/h01_v1.parquet")
+        );
+        assert_eq!(
+            TableSnapshotLite::from((&decoded, TableSnapshot::VERSION)).segment_zone_map_location,
+            Some("t/_zm/h01_v1.parquet".to_string())
+        );
     }
 
     #[test]

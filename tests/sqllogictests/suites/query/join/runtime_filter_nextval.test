@@ -1,0 +1,67 @@
+# Each nextval() call advances the sequence. A runtime filter below nextval()
+# skips the calls for the rows that the join removes, so the remaining rows get
+# other sequence values. Keep nextval() on the probe side and evaluate the rows
+# in key order.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set max_threads = 1;
+
+statement ok
+create or replace table rf_seq_input(k INT NOT NULL);
+
+statement ok
+create or replace table rf_seq_keep(k INT NOT NULL);
+
+# Separate INSERTs put 1 and 2 in separate blocks: a runtime filter on the
+# build key 2 can prune the block of key 1.
+statement ok
+insert into rf_seq_input values (1);
+
+statement ok
+insert into rf_seq_input values (2);
+
+statement ok
+insert into rf_seq_keep values (2);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+statement ok
+create or replace sequence rf_nextval_seq start = 1 increment = 1;
+
+query II
+select q.k, q.v from (select k, nextval(rf_nextval_seq) as v from (select k from rf_seq_input order by k) s) q join rf_seq_keep c on q.k = c.k;
+----
+2 2
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+create or replace sequence rf_nextval_seq start = 1 increment = 1;
+
+# Before the fix the runtime filter prunes key 1 below nextval(), returning 2 1.
+query II
+select q.k, q.v from (select k, nextval(rf_nextval_seq) as v from (select k from rf_seq_input order by k) s) q join rf_seq_keep c on q.k = c.k;
+----
+2 2
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset max_threads;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop sequence rf_nextval_seq;
+
+statement ok
+drop table rf_seq_input;
+
+statement ok
+drop table rf_seq_keep;

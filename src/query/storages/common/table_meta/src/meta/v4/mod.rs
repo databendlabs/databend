@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod segment;
+mod segment_zone_map;
 mod snapshot;
 mod table_snapshot_statistics;
 
 pub use segment::CompactSegmentInfo;
 pub use segment::RawBlockMeta;
 pub use segment::SegmentInfo;
+pub use segment_zone_map::SegmentZoneMapMeta;
 pub use snapshot::LogicalChangeCounters;
 pub use snapshot::TableSnapshot;
 pub use snapshot::TableSnapshotLite;

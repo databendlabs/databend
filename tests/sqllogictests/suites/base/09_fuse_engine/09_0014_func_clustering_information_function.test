@@ -22,6 +22,10 @@ select *  from t09_0014 order by b, a
 1 3
 4 4
 
+# A removed table branch suffix must not resolve to the base table.
+statement error 1025
+select * from clustering_information('default','t09_0014/removed')
+
 query TTII
 select min, max, level, block_depth from clustering_statistics('default','t09_0014') order by min
 ----

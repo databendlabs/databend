@@ -620,6 +620,7 @@ mod tests {
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::StringType;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_index::BundleSizes;
     use opendal::services::Memory;
     use tantivy::query::QueryParser;
@@ -706,6 +707,7 @@ mod tests {
                 .unwrap();
         let reader = InvertedIndexReader::create(
             operator.clone(),
+            CachePolicy::DEFAULT,
             false,
             create_tokenizer_manager(&index_options(), None),
             warmup,
@@ -720,7 +722,8 @@ mod tests {
             )
             .await
             .unwrap();
-        let (mut rows, _) = result.unwrap_or_default();
+        let (rows, _) = result.unwrap_or_default();
+        let mut rows = rows.into_iter().map(|row| row as usize).collect::<Vec<_>>();
         rows.sort_unstable();
         rows
     }
@@ -770,9 +773,14 @@ mod tests {
                 fuzziness,
             )
             .unwrap();
-            let reader =
-                InvertedIndexReader::create(operator.clone(), false, tokenizers.clone(), warmup);
-            let (mut rows, _) = reader
+            let reader = InvertedIndexReader::create(
+                operator.clone(),
+                CachePolicy::DEFAULT,
+                false,
+                tokenizers.clone(),
+                warmup,
+            );
+            let (rows, _) = reader
                 .do_filter(
                     query,
                     location,
@@ -783,6 +791,7 @@ mod tests {
                 .await
                 .unwrap()
                 .unwrap();
+            let mut rows = rows.into_iter().map(|row| row as usize).collect::<Vec<_>>();
             rows.sort_unstable();
             assert_eq!(rows, expected, "{text}");
         }
@@ -843,6 +852,7 @@ mod merge_tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::VariantType;
+    use databend_storages_common_cache::CachePolicy;
     use databend_storages_common_index::BundleSizes;
     use databend_storages_common_index::InvertedIndexMerger;
     use databend_storages_common_index::MergeOutput;
@@ -933,6 +943,7 @@ mod merge_tests {
                 .unwrap();
         let reader = InvertedIndexReader::create(
             operator.clone(),
+            CachePolicy::DEFAULT,
             false,
             create_tokenizer_manager(&index_options(), None),
             warmup,
@@ -947,7 +958,11 @@ mod merge_tests {
             )
             .await
             .unwrap();
-        let (mut matched, _) = result.unwrap_or_default();
+        let (matched, _) = result.unwrap_or_default();
+        let mut matched = matched
+            .into_iter()
+            .map(|row| row as usize)
+            .collect::<Vec<_>>();
         matched.sort_unstable();
         matched
     }

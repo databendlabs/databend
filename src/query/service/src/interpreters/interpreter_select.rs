@@ -312,9 +312,7 @@ impl Interpreter for SelectInterpreter {
 
             let query_plan = {
                 let metadata = self.metadata.read();
-                physical_plan
-                    .format(&metadata, Default::default())?
-                    .format_pretty()?
+                physical_plan.format_for_log(&metadata)?
             };
 
             info!("Query physical plan:\n{}", query_plan);

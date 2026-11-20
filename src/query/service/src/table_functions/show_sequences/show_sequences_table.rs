@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -44,7 +45,6 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
-use databend_common_users::Object;
 
 use crate::sessions::TableContext;
 
@@ -124,7 +124,7 @@ impl Table for ShowSequences {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         pipeline.add_source(|output| ShowSequencesSource::create(ctx.clone(), output), 1)?;
 
@@ -172,11 +172,8 @@ async fn show_sequences(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>>
         .await?
         .info;
 
-    let enable_seq_rbac_check = ctx
-        .get_settings()
-        .get_enable_experimental_sequence_privilege_check()?;
-    if enable_seq_rbac_check {
-        let visibility_checker = ctx.get_visibility_checker(false, Object::Sequence).await?;
+    let visibility_checker = ctx.sequence_usage_checker().await?;
+    if let Some(visibility_checker) = visibility_checker {
         seqs.retain(|c| visibility_checker.check_seq_visibility(&c.0));
     }
 

@@ -22,7 +22,7 @@ Exchange(Merge)
 └── Sequence(Sequence)
     ├── MaterializedCTE
     │   ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0_1
-    │   ├── ref_count: 3
+    │   ├── ref_count: 2
     │   ├── channel_size: Some(2)
     │   └── Aggregate(Final)
     │       ├── group items: [mcte_input.a (#0) AS (#0), mcte_input.b (#1) AS (#1)]
@@ -40,7 +40,7 @@ Exchange(Merge)
     └── Sequence(Sequence)
         ├── MaterializedCTE
         │   ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0
-        │   ├── ref_count: 1
+        │   ├── ref_count: 2
         │   ├── channel_size: Some(2)
         │   └── Aggregate(Final)
         │       ├── group items: [mcte_input.a (#0) AS (#0)]
@@ -69,9 +69,9 @@ Exchange(Merge)
             │                   ├── group items: []
             │                   ├── aggregate functions: [sum(sum(v) (#6)) AS (#6)]
             │                   └── MaterializedCTERef
-            │                       ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0_1
-            │                       ├── output columns: [sum(v) (#6), mcte_input.a (#0), mcte_input.b (#1)]
-            │                       └── column mapping: [mcte_input.a (#0) -> mcte_input.a (#0), mcte_input.b (#1) -> mcte_input.b (#1), sum(v) (#6) -> sum(v) (#6)]
+            │                       ├── cte_name: cte_hierarchical_groupingsets_3903119124984149517_cols_0
+            │                       ├── output columns: [sum(v) (#6), mcte_input.a (#0)]
+            │                       └── column mapping: [mcte_input.a (#0) -> mcte_input.a (#0), sum(v) (#6) -> sum(v) (#6)]
             └── UnionAll
                 ├── output: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]
                 ├── left: [mcte_input.a (#0), mcte_input.b (#1), sum(v) (#6), _grouping_id (#5)]

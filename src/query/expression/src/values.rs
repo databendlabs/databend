@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
@@ -55,11 +54,11 @@ use serde::Serializer;
 use serde::de::Visitor;
 use string::StringColumnBuilder;
 
-use crate::BlockEntry;
-use crate::ColumnView;
+use crate::bitmap::hash_bitmap;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::EncodedColumn;
+use crate::types::NarrowBuffer;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -264,6 +263,11 @@ pub enum ColumnVec {
     Geography(Vec<GeographyColumn>),
     Vector(VectorColumnVec),
     Opaque(OpaqueColumnVec),
+    /// Dictionary encoded chunks whose keys index one shared dictionary.
+    Dict {
+        keys: Vec<NarrowBuffer>,
+        values: Column,
+    },
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -362,7 +366,7 @@ impl<T: AccessType> Value<NullableType<T>> {
         match self {
             Value::Scalar(None) => Bitmap::new_zeroed(num_rows),
             Value::Scalar(Some(_)) => Bitmap::new_trued(num_rows),
-            Value::Column(col) => col.validity.clone(),
+            Value::Column(col) => col.validity().clone(),
         }
     }
 
@@ -370,7 +374,7 @@ impl<T: AccessType> Value<NullableType<T>> {
         match self {
             Value::Scalar(None) => None,
             Value::Scalar(Some(s)) => Some(Value::Scalar(s.clone())),
-            Value::Column(col) => Some(Value::Column(col.column.clone())),
+            Value::Column(col) => Some(Value::Column(col.column().clone())),
         }
     }
 }
@@ -405,10 +409,26 @@ impl Value<AnyType> {
         }
     }
 
+    /// Applies validity, expanding a scalar only when row validity is mixed.
     pub fn wrap_nullable(self, validity: Option<Bitmap>) -> Self {
         match self {
             Value::Column(c) => Value::Column(c.wrap_nullable(validity)),
-            scalar => scalar,
+            Value::Scalar(scalar) => match validity {
+                None => Value::Scalar(scalar),
+                Some(validity) if scalar.is_null() || validity.null_count() == 0 => {
+                    Value::Scalar(scalar)
+                }
+                Some(validity) if validity.true_count() == 0 => Value::Scalar(Scalar::Null),
+                Some(validity) => {
+                    let column = ColumnBuilder::repeat(
+                        &scalar.as_ref(),
+                        validity.len(),
+                        &scalar.as_ref().infer_data_type(),
+                    )
+                    .build();
+                    Value::Column(column.wrap_nullable(Some(validity)))
+                }
+            },
         }
     }
 
@@ -416,10 +436,10 @@ impl Value<AnyType> {
     pub fn remove_nullable(self) -> (Self, bool) {
         match self {
             Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
-            Value::Column(Column::Nullable(deref!(nullable_column))) => (
-                Value::Column(nullable_column.column),
-                nullable_column.validity.null_count() > 0,
-            ),
+            Value::Column(Column::Nullable(nullable_column)) => {
+                let (column, validity) = nullable_column.destructure();
+                (Value::Column(column), validity.null_count() > 0)
+            }
             other => (other, false),
         }
     }
@@ -1016,7 +1036,11 @@ impl PartialOrd for Scalar {
                 let Ok(map_2) = deserialize_bitmap(b2) else {
                     return None;
                 };
-                map_1.eq(&map_2).then_some(Ordering::Equal)
+                // Roaring's equality distinguishes array and bitset stores.
+                // Decoding a run can leave an oversized array at the threshold,
+                // so compare members through compressed intersection instead.
+                (map_1.len() == map_2.len() && map_1.intersection_len(&map_2) == map_1.len())
+                    .then_some(Ordering::Equal)
             }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
@@ -1138,7 +1162,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Timestamp(v) => v.hash(state),
             ScalarRef::TimestampTz(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
-            ScalarRef::Interval(v) => v.0.hash(state),
+            ScalarRef::Interval(v) => v.hash(state),
             ScalarRef::Array(v) | ScalarRef::Map(v) => {
                 v.len().hash(state);
                 for value in v.iter() {
@@ -1148,15 +1172,7 @@ impl Hash for ScalarRef<'_> {
             // `Scalar::eq` compares bitmaps by their decoded members, so the
             // hash must not depend on the encoding. Undecodable payloads only
             // compare equal bytewise and fall back to hashing the bytes.
-            ScalarRef::Bitmap(v) => match deserialize_bitmap(v) {
-                Ok(bitmap) => {
-                    bitmap.len().hash(state);
-                    for member in bitmap.iter() {
-                        member.hash(state);
-                    }
-                }
-                Err(_) => v.hash(state),
-            },
+            ScalarRef::Bitmap(v) => hash_bitmap(v, state),
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
@@ -1505,15 +1521,15 @@ impl Column {
                 }
             }
             Column::Nullable(col) => {
-                let inner_domain = if col.validity.null_count() > 0 {
+                let inner_domain = if col.validity().null_count() > 0 {
                     // goes into the slower path, we will create a new column without nulls
-                    let inner = col.column.clone().filter(&col.validity);
+                    let inner = col.column().clone().filter(col.validity());
                     inner.domain()
                 } else {
-                    col.column.domain()
+                    col.column().domain()
                 };
                 Domain::Nullable(NullableDomain {
-                    has_null: col.validity.null_count() > 0,
+                    has_null: col.validity().null_count() > 0,
                     value: Some(Box::new(inner_domain)),
                 })
             }
@@ -1560,7 +1576,7 @@ impl Column {
             }
             Column::Bitmap(_) => DataType::Bitmap,
             Column::Nullable(inner) => {
-                let inner = inner.column.data_type();
+                let inner = inner.column().data_type();
                 inner.wrap_nullable()
             }
             Column::Tuple(fields) => {
@@ -1591,12 +1607,12 @@ impl Column {
             }
             Column::Array(x) => x.check_valid(),
             Column::Nullable(x) => {
-                if x.column.len() != x.validity.len() {
+                if x.column().len() != x.validity().len() {
                     return Err(ErrorCode::Internal(
                         "column and validity length mismatch".to_string(),
                     ));
                 }
-                x.column.check_valid()
+                x.column().check_valid()
             }
             Column::Tuple(x) => {
                 for y in x.iter() {
@@ -1732,7 +1748,7 @@ impl Column {
                     }
                 }
                 let new_column = builder.build();
-                NullableColumn::new_column(new_column, bitmap)
+                new_column.wrap_nullable(Some(bitmap))
             }
             DataType::Array(inner_ty) => {
                 let mut inner_len = 0;
@@ -1852,24 +1868,28 @@ impl Column {
 
     pub fn remove_nullable(&self) -> Self {
         match self {
-            Column::Nullable(inner) => inner.column.clone(),
+            Column::Nullable(inner) => inner.column().clone(),
             _ => self.clone(),
         }
     }
 
+    /// Wraps a column in a single nullable layer, intersecting any existing validity.
+    /// Null columns remain unchanged; without a bitmap, non-nullable columns are all valid.
     pub fn wrap_nullable(self, validity: Option<Bitmap>) -> Self {
+        if let Some(validity) = &validity {
+            assert_eq!(self.len(), validity.len());
+        }
         match self {
             c @ Column::Null { .. } => c,
-            Column::Nullable(null_column) => {
-                let validity = match validity {
-                    Some(v) => &v & (&null_column.validity),
-                    None => null_column.validity.clone(),
-                };
-                NullableColumn::new_column(null_column.column, validity)
+            Column::Nullable(mut column) => {
+                if let Some(validity) = validity {
+                    column.merge_validity(&validity);
+                }
+                Column::Nullable(column)
             }
-            _ => {
-                let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, self.len()));
-                NullableColumn::new_column(self, validity)
+            column => {
+                let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, column.len()));
+                Column::Nullable(Box::new(NullableColumn::new(column, validity)))
             }
         }
     }
@@ -1902,7 +1922,7 @@ impl Column {
             Column::Array(col) => col.memory_size(gc),
             Column::Map(col) => col.memory_size(gc),
             Column::Bitmap(col) => col.memory_size(),
-            Column::Nullable(c) => c.column.memory_size(gc) + c.validity.as_slice().0.len(),
+            Column::Nullable(c) => c.memory_size(gc),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size(gc)).sum(),
             Column::Variant(col) => col.memory_size(),
             Column::Geometry(col) => col.memory_size(),
@@ -1942,17 +1962,25 @@ impl Column {
             Column::Array(col) | Column::Map(col) => {
                 col.underlying_column().serialize_size() + col.len() * 8
             }
-            Column::Nullable(c) => c.column.serialize_size() + c.len(),
+            Column::Nullable(c) => c.column().serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(), // Same as memory size for opaque types
             // Encoded columns are decoded before serialization.
             Column::Encoded(col) => match col.as_ref() {
                 EncodedColumn::For(c) => c.len() * c.decoded_width(),
-                EncodedColumn::Dict(c) => {
-                    let values = c.values.len().max(1);
-                    c.values.serialize_size() * c.len() / values
-                }
+                // Rows can select some values more often than others: the size of variable
+                // size values is summed over the rows.
+                EncodedColumn::Dict(c) => match &c.values {
+                    Column::String(values) => {
+                        c.len() * 8
+                            + c.keys
+                                .iter()
+                                .map(|key| values.index(key as usize).unwrap().len())
+                                .sum::<usize>()
+                    }
+                    values => values.serialize_size() / values.len().max(1) * c.len(),
+                },
             },
         }
     }
@@ -1961,13 +1989,7 @@ impl Column {
     pub fn validity(&self) -> (bool, Option<&Bitmap>) {
         match self {
             Column::Null { .. } => (true, None),
-            Column::Nullable(c) => {
-                if c.validity.null_count() == c.validity.len() {
-                    (true, Some(&c.validity))
-                } else {
-                    (false, Some(&c.validity))
-                }
-            }
+            Column::Nullable(c) => (c.validity().null_count() == c.len(), Some(c.validity())),
             _ => (false, None),
         }
     }
@@ -1976,7 +1998,7 @@ impl Column {
     /// If it does, the bloom index for the column will not be established.
     pub fn check_large_string(&self) -> bool {
         let (inner, len) = if let Column::Nullable(c) = self {
-            (&c.column, c.validity.true_count())
+            (c.column(), c.validity().true_count())
         } else {
             (self, self.len())
         };
@@ -2089,6 +2111,9 @@ impl ColumnBuilder {
     }
 
     pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
+        if let DataType::Nullable(inner) = data_type {
+            assert!(!inner.is_nullable_or_null(), "invalid nullable inner type");
+        }
         if let DataType::AggregateState(state) = data_type {
             return Self::repeat(scalar, n, state.physical_type());
         }
@@ -2302,10 +2327,13 @@ impl ColumnBuilder {
             DataType::TimestampTz => ColumnBuilder::TimestampTz(Vec::with_capacity(capacity)),
             DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
             DataType::Interval => ColumnBuilder::Interval(Vec::with_capacity(capacity)),
-            DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
-                builder: Self::with_capacity_hint(ty, capacity, enable_datasize_hint),
-                validity: MutableBitmap::with_capacity(capacity),
-            })),
+            DataType::Nullable(ty) => {
+                assert!(!ty.is_nullable_or_null(), "invalid nullable inner type");
+                ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                    builder: Self::with_capacity_hint(ty, capacity, enable_datasize_hint),
+                    validity: MutableBitmap::with_capacity(capacity),
+                }))
+            }
             DataType::Array(ty) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
                 offsets.push(0);
@@ -2381,10 +2409,13 @@ impl ColumnBuilder {
             DataType::EmptyMap => ColumnBuilder::EmptyMap { len },
 
             // bitmap
-            DataType::Nullable(inner) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
-                builder: Self::repeat_default(inner, len),
-                validity: MutableBitmap::from_len_zeroed(len),
-            })),
+            DataType::Nullable(inner) => {
+                assert!(!inner.is_nullable_or_null(), "invalid nullable inner type");
+                ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                    builder: Self::repeat_default(inner, len),
+                    validity: MutableBitmap::from_len_zeroed(len),
+                }))
+            }
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::from_len_zeroed(len)),
 
             // number based
@@ -2589,6 +2620,14 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Vector(builder), ScalarRef::Vector(value)) => {
                 builder.push_repeat(value, n);
+            }
+            (ColumnBuilder::Opaque(builder), ScalarRef::Opaque(value)) => {
+                with_opaque_type!(|T| match (builder, value) {
+                    (OpaqueColumnBuilder::T(builder), OpaqueScalarRef::T(value)) => {
+                        builder.extend(std::iter::repeat_n(*value, n));
+                    }
+                    _ => unreachable!("Mismatched Opaque types"),
+                })
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         };

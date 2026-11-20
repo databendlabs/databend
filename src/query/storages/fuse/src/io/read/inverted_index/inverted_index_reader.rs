@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use opendal::Operator;
 use tantivy::Index;
@@ -29,11 +30,13 @@ use tantivy::tokenizer::TokenizerManager;
 use crate::io::read::inverted_index::inverted_index_bundle_loader::load_bundle_search_directory;
 use crate::io::read::inverted_index::inverted_index_warmup::InvertedIndexWarmupInfo;
 
-pub type InvertedIndexFilterResult = Option<(Vec<usize>, Option<Vec<F32>>)>;
+/// The matched rows of a block, with their scores when the reader scores them.
+pub type InvertedIndexFilterResult = Option<(Vec<u32>, Option<Vec<F32>>)>;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
     dal: Operator,
+    policy: CachePolicy,
     has_score: bool,
     top_k: Option<usize>,
     tokenizer_manager: TokenizerManager,
@@ -43,12 +46,14 @@ pub struct InvertedIndexReader {
 impl InvertedIndexReader {
     pub fn create(
         dal: Operator,
+        policy: CachePolicy,
         has_score: bool,
         tokenizer_manager: TokenizerManager,
         warmup: InvertedIndexWarmupInfo,
     ) -> Self {
         Self {
             dal,
+            policy,
             has_score,
             top_k: None,
             tokenizer_manager,
@@ -90,7 +95,8 @@ impl InvertedIndexReader {
         query: Box<dyn Query>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
-        let bundle = load_bundle_search_directory(&self.dal, index_path, object_size).await?;
+        let bundle =
+            load_bundle_search_directory(&self.dal, index_path, object_size, self.policy).await?;
         let mut index = Index::open(bundle.directory.clone())?;
         index.set_tokenizers(self.tokenizer_manager.clone());
 
@@ -131,9 +137,7 @@ impl InvertedIndexReader {
             let mut matched_rows = Vec::with_capacity(docs.len());
             let mut matched_scores = Vec::with_capacity(docs.len());
             for (score, doc_addr) in docs {
-                matched_rows.push(usize::try_from(doc_addr.doc_id).map_err(|_| {
-                    ErrorCode::StorageOther("inverted-index document id exceeds this platform")
-                })?);
+                matched_rows.push(doc_addr.doc_id);
                 matched_scores.push(F32::from(score));
             }
             (matched_rows, Some(matched_scores))
@@ -141,12 +145,8 @@ impl InvertedIndexReader {
             let docs = searcher.search(&query, &DocSetCollector)?;
             let matched_rows = docs
                 .into_iter()
-                .map(|doc_addr| {
-                    usize::try_from(doc_addr.doc_id).map_err(|_| {
-                        ErrorCode::StorageOther("inverted-index document id exceeds this platform")
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
+                .map(|doc_addr| doc_addr.doc_id)
+                .collect::<Vec<_>>();
             (matched_rows, None)
         };
         metrics_inc_block_inverted_index_search_milliseconds(
@@ -196,6 +196,7 @@ mod tests {
     fn reader(has_score: bool, top_k: Option<usize>) -> InvertedIndexReader {
         InvertedIndexReader::create(
             Operator::new(Memory::default()).unwrap().finish(),
+            CachePolicy::DEFAULT,
             has_score,
             TokenizerManager::default(),
             InvertedIndexWarmupInfo::default(),

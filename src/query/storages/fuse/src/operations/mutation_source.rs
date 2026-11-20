@@ -35,6 +35,7 @@ use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
@@ -82,7 +83,8 @@ impl FuseTable {
             };
         let projection = Projection::Columns(col_indices.clone());
         let update_stream_columns = self.change_tracking_enabled();
-        let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
+        let block_reader =
+            self.create_block_reader(ctx.clone(), projection, CachePolicy::READ_ONLY)?;
 
         let schema = block_reader.schema().as_ref().clone();
         let filter_expr = Arc::new(filter.map(|v| {
@@ -110,7 +112,7 @@ impl FuseTable {
                 (*self.create_block_reader(
                     ctx.clone(),
                     Projection::Columns(remain_column_indices),
-                    false,
+                    CachePolicy::READ_ONLY,
                 )?)
                 .clone(),
             ))

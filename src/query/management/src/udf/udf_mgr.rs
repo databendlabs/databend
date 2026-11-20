@@ -16,11 +16,12 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_functions::is_builtin_function;
+use databend_common_meta_api::crud::create_owned_object;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UdfIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
@@ -48,36 +49,34 @@ impl UdfMgr {
         }
     }
 
-    /// Add a UDF to /tenant/udf-name.
+    /// Writes the UDF and its owner in one transaction; returns whether it was written.
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn add_udf(
+    pub async fn add_udf_with_owner(
         &self,
         info: UserDefinedFunction,
-        create_option: &CreateOption,
+        replace: bool,
+        owner: Option<&str>,
     ) -> Result<Result<bool, UdfError>, UdfApiError> {
         if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
             return Ok(Err(e));
         }
 
-        let seq = MatchSeq::from(*create_option);
-
         let key = UdfIdent::new(&self.tenant, &info.name);
-        let req = UpsertPB::insert(key, info.clone()).with(seq);
-        let res = self.kv_api.upsert_pb(&req).await?;
-
-        if let CreateOption::Create = create_option {
-            if res.prev.is_some() {
-                let err = UdfError::Exists {
-                    tenant: self.tenant.tenant_name().to_string(),
-                    name: info.name.to_string(),
-                    reason: "".to_string(),
-                };
-                return Ok(Err(err));
-            }
-        }
-
-        Ok(Ok(res.is_changed()))
+        let object = OwnershipObject::UDF {
+            name: info.name.clone(),
+        };
+        let written = create_owned_object(
+            self.kv_api.as_ref(),
+            &key,
+            &info,
+            replace,
+            &object,
+            owner,
+            &[],
+        )
+        .await?;
+        Ok(Ok(written))
     }
 
     /// Update a UDF to /tenant/udf-name.

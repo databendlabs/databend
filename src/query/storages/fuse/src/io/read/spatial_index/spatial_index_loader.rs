@@ -21,17 +21,19 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_read_bytes;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_read_milliseconds;
-use databend_storages_common_cache::CacheManager;
-use databend_storages_common_cache::SpatialIndexFileCache;
+use databend_storages_common_cache::CacheKind;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::kinds::spatial;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
 
 use crate::index::SpatialIndexFile;
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::IndexMetaCache;
 use crate::io::read::index_loader::IndexLoadSpec;
-use crate::io::read::index_loader::MetaRead;
 use crate::io::read::index_loader::load_index_files;
 use crate::io::read::index_loader::load_index_meta;
 
@@ -40,14 +42,17 @@ struct SpatialIndexLoadSpec;
 impl IndexLoadSpec for SpatialIndexLoadSpec {
     type Meta = SpatialIndexMeta;
     type File = SpatialIndexFile;
-    type FileCache = Option<SpatialIndexFileCache>;
 
-    fn meta_reader(dal: Operator) -> Box<dyn MetaRead<Self::Meta> + Send + Sync> {
-        Box::new(MetaReaders::spatial_index_meta_reader(dal))
+    fn file_kind() -> CacheKind {
+        CacheKind::of::<spatial::Index>()
     }
 
-    fn file_cache() -> Self::FileCache {
-        CacheManager::instance().get_spatial_index_file_cache()
+    fn meta_cache(caches: &IndexMetaCache) -> &MemCache<Arc<Self::Meta>> {
+        &caches.spatial
+    }
+
+    fn file_cache(caches: &FuseCaches) -> Option<&MemCache<Self::File>> {
+        Some(&caches.spatial_files)
     }
 
     fn meta_columns(meta: &Self::Meta) -> &Vec<(String, SingleColumnMeta)> {
@@ -87,8 +92,12 @@ impl IndexLoadSpec for SpatialIndexLoadSpec {
 /// Loads spatial index meta data
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-pub async fn load_spatial_index_meta(dal: Operator, path: &str) -> Result<Arc<SpatialIndexMeta>> {
-    load_index_meta::<SpatialIndexLoadSpec>(dal, path).await
+pub async fn load_spatial_index_meta(
+    dal: Operator,
+    path: &str,
+    policy: CachePolicy,
+) -> Result<Arc<SpatialIndexMeta>> {
+    load_index_meta::<SpatialIndexLoadSpec>(dal, path, policy).await
 }
 
 /// load index column data
@@ -98,6 +107,8 @@ pub async fn load_spatial_index_files(
     settings: &ReadSettings,
     column_names: &[String],
     location: &str,
+    policy: CachePolicy,
 ) -> Result<Vec<Column>> {
-    load_index_files::<SpatialIndexLoadSpec>(operator, settings, column_names, location).await
+    load_index_files::<SpatialIndexLoadSpec>(operator, settings, column_names, location, policy)
+        .await
 }

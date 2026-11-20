@@ -86,7 +86,7 @@ impl Interpreter for ShowConnectionsInterpreter {
                 names.push(c.name.clone());
                 types.push(c.storage_type.clone());
 
-                let conn = Connection::new(c.storage_params.clone()).mask();
+                let conn = Connection::new(c.storage_params.clone()).mask_secrets();
                 c.storage_params = conn.conns;
                 options.push(c.storage_params_display().clone());
             }

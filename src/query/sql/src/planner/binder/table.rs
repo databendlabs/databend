@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
@@ -43,7 +42,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::TableField;
 use databend_common_expression::is_stream_column;
@@ -156,7 +154,6 @@ impl Binder {
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
             table.clone(),
-            None,
             table_alias_name,
             false,
             true,
@@ -182,7 +179,12 @@ impl Binder {
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
         let mut new_bind_context = BindContext {
-            parent: Some(Box::new(bind_context.clone())),
+            // A CTE definition is bound at the point of its `WITH` clause, not at the point
+            // where it is referenced. Chaining the referencing context as a parent would let
+            // the body bind its columns — a CTE referenced from a lateral subquery would
+            // silently correlate with whatever the subquery's left side produces. Earlier
+            // CTEs still resolve through the cloned `cte_context`.
+            parent: None,
             binding_depth: bind_context.next_depth()?,
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -210,6 +212,10 @@ impl Binder {
 
         let (s_expr, mut res_bind_context) =
             self.bind_query(&mut new_bind_context, &cte_info.query)?;
+        // The body above was bound without the referencing scope, but the scan it produced is
+        // part of the referencing query: a correlated subquery that reads the CTE still has to
+        // reach the columns of the query it sits in.
+        res_bind_context.parent = Some(Box::new(bind_context.clone()));
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -660,7 +666,6 @@ impl Binder {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
-        branch: Option<&str>,
         navigation: Option<&TimeNavigation>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
@@ -671,13 +676,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .resolve_data_source(
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    branch,
-                    max_batch_size,
-                )
+                .resolve_data_source(catalog_name, database_name, table_name, max_batch_size)
                 .await?;
 
             if let Some(desc) = navigation {
@@ -731,13 +730,15 @@ impl Binder {
             false,
         )?;
         let deref!((scalar, _)) = type_checker.resolve(expr)?;
-        let scalar_expr = scalar.as_expr()?;
-        let (new_expr, _) = ConstantFolder::fold(
-            Cow::Owned(scalar_expr),
-            &self.ctx.get_function_context()?,
-            &BUILTIN_FUNCTIONS,
-        );
-        Ok(new_expr.into_owned())
+        match scalar.constant_value(&self.ctx.get_function_context()?) {
+            Some((scalar, data_type)) => Ok(Constant {
+                span: expr.span(),
+                scalar,
+                data_type,
+            }
+            .into()),
+            None => scalar.as_expr(),
+        }
     }
 
     pub(crate) fn resolve_data_travel_point(

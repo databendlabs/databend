@@ -22,7 +22,6 @@ log = { workspace = true }
 num_cpus = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true }
-sys-info = { workspace = true }
 
 [dev-dependencies]
 databend-common-version = { workspace = true }

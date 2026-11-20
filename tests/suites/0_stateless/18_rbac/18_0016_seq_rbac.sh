@@ -35,6 +35,8 @@ for seq in $(echo "select name from show_sequences();" | bendsql_connect_root); 
   echo "drop sequence if exists \`$seq\`;" | bendsql_connect_root
 done
 
+trap 'bendsql_connect_root_null --query="UNSET GLOBAL enable_experimental_sequence_privilege_check"' EXIT
+
 echo "=== OLD LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=0 ==="
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
 run_root_sql "

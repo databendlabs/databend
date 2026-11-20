@@ -147,6 +147,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
         "VacuumDropTablesInterpreter"
     }
 
+    fn is_maintenance(&self) -> bool {
+        true
+    }
+
     fn is_ddl(&self) -> bool {
         true
     }

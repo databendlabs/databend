@@ -41,7 +41,6 @@ use crate::servers::flight::v1::exchange::exchange_sink::exchange_send_buffer_co
 use crate::servers::flight::v1::exchange::hash_shuffle_writer::hash_shuffle_send_budget;
 use crate::servers::flight::v1::network::inbound::ExchangeQueueReceiver;
 use crate::servers::flight::v1::network::outbound::create_local_block_senders;
-use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
@@ -232,14 +231,7 @@ impl ExchangeTransform {
 
         let local_senders = create_local_block_senders(&receive_channels);
         let nodes = build_hash_shuffle_nodes(params, local_senders, compression, buffer_config)?;
-        let num_partitions = nodes.last().map(|x| x.partitions.end).unwrap_or_default();
-
-        let scatter = Arc::new(HashFlightScatter::try_create(
-            ctx.get_function_context()?,
-            params.shuffle_keys.clone(),
-            num_partitions,
-            local_pos,
-        )?);
+        let scatter = params.shuffle_scatter.clone();
 
         let mut items = Vec::with_capacity(local_threads);
         for idx in 0..local_threads {

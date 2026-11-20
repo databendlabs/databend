@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
@@ -30,7 +31,6 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
@@ -153,6 +153,13 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         block_meta: BlockMeta,
         _virtual_input: VirtualBlockInput,
     ) -> Result<()> {
+        if block_meta.is_split() {
+            // A column-oriented segment has no place for the column groups.
+            return Err(ErrorCode::Unimplemented(format!(
+                "column-oriented segments cannot store split block {}",
+                block_meta.location.0
+            )));
+        }
         self.row_count.push(block_meta.row_count);
         self.block_size.push(block_meta.block_size);
         self.file_size.push(block_meta.file_size);
@@ -223,13 +230,11 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
                 StringType::from_data(this.location.0),
                 UInt64Type::from_data(this.location.1),
             ]),
-            Column::Nullable(Box::new(NullableColumn::new(
-                Column::Tuple(vec![
-                    StringType::from_data(this.bloom_filter_index_location.locations),
-                    UInt64Type::from_data(this.bloom_filter_index_location.versions),
-                ]),
-                this.bloom_filter_index_location.validity.into(),
-            ))),
+            Column::Tuple(vec![
+                StringType::from_data(this.bloom_filter_index_location.locations),
+                UInt64Type::from_data(this.bloom_filter_index_location.versions),
+            ])
+            .wrap_nullable(Some(this.bloom_filter_index_location.validity.into())),
             UInt64Type::from_data(this.bloom_filter_index_size),
             UInt64Type::from_opt_data(this.inverted_index_size),
             BinaryType::from_opt_data(this.inverted_index_metas),

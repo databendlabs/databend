@@ -235,14 +235,18 @@ where
     Ok(())
 }
 
-fn flush_writer(writer: &mut HashShuffleWriter) -> Result<()> {
-    let (own, mut pending) = writer.flush(None)?;
-    assert!(own.is_none());
-    while pending {
+fn wait_sending(writer: &mut HashShuffleWriter) -> Result<()> {
+    while writer.poll_sending(true)? {
         std::thread::park_timeout(Duration::from_millis(5));
-        pending = writer.poll_sending(true)?;
     }
     Ok(())
+}
+
+fn flush_writer(writer: &mut HashShuffleWriter) -> Result<()> {
+    wait_sending(writer)?;
+    let (own, _) = writer.flush(None)?;
+    assert!(own.is_none());
+    wait_sending(writer)
 }
 
 fn send(
@@ -254,8 +258,12 @@ fn send(
 ) -> Result<()> {
     let mut writer = HashShuffleWriter::create(thread, thread_waker(), scatter, nodes, budget);
     for block in blocks {
+        // Like the processors: keep buffering the next round while one is sending,
+        // and wait only when that round reaches the budget too.
         if writer.add_block(block)? {
-            flush_writer(&mut writer)?;
+            wait_sending(&mut writer)?;
+            let (own, _) = writer.flush(None)?;
+            assert!(own.is_none());
         }
         flush_mem_stat();
     }
@@ -483,59 +491,154 @@ fn test_hash_senders_flush_tail_and_release_channels_before_processor_drop() -> 
     Ok(())
 }
 
+/// The receiver may finish the direct output after it asked for data, which
+/// leaves `can_push` true. The sender must keep pulling its input and sending the
+/// other partitions instead of waiting on a block pushed to the finished port.
 #[test]
 fn test_hash_transform_closed_output_keeps_sending_other_partitions() -> Result<()> {
-    let channels = ExchangeReceiveChannels::new(2);
-    let receivers = channels.receivers.clone();
-    let nodes = vec![ShuffleNode {
-        partitions: 0..2,
-        dispatcher: HashShuffleDispatcher::local(create_local_block_senders(&channels)),
-    }];
-    drop(channels);
-    let scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
-    let item = HashSendTransform::create_item(0, 0, scatter, nodes, ExecutorWaker::create(), 1);
-    let upstream = OutputPort::create();
-    let downstream = InputPort::create();
-    // Ports are connected before use; this test alone drives the processor sequentially.
-    unsafe {
-        connect(&item.inputs_port[0], &upstream);
-        connect(&downstream, &item.outputs_port[0]);
+    for need_data_before_finish in [false, true] {
+        let channels = ExchangeReceiveChannels::new(2);
+        let receivers = channels.receivers.clone();
+        let nodes = vec![ShuffleNode {
+            partitions: 0..2,
+            dispatcher: HashShuffleDispatcher::local(create_local_block_senders(&channels)),
+        }];
+        drop(channels);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
+        let item = HashSendTransform::create_item(0, 0, scatter, nodes, ExecutorWaker::create(), 1);
+        let upstream = OutputPort::create();
+        let downstream = InputPort::create();
+        // Ports are connected before use; this test alone drives the processor sequentially.
+        unsafe {
+            connect(&item.inputs_port[0], &upstream);
+            connect(&downstream, &item.outputs_port[0]);
+        }
+        if need_data_before_finish {
+            downstream.set_need_data();
+        }
+        downstream.finish();
+        assert!(matches!(
+            unsafe { item.processor.event(EventCause::Output(0))? },
+            Event::NeedData
+        ));
+        assert!(receivers[0].is_closed());
+        assert!(!receivers[1].is_closed());
+
+        for keys in [vec![0, 1, 2, 3], vec![4, 5, 6, 7]] {
+            upstream.push_data(Ok(DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(keys.clone()),
+            ])));
+            assert!(matches!(
+                unsafe { item.processor.event(EventCause::Input(0))? },
+                Event::NeedData
+            ));
+            assert!(!item.outputs_port[0].has_data());
+            let QueueItem::LocalData(data) = receivers[1].try_recv().unwrap() else {
+                panic!("expected local data");
+            };
+            let column = data.into_data().get_by_offset(0).to_column();
+            let received = UInt64Type::try_downcast_column(&column).unwrap();
+            assert_eq!(
+                received.iter().copied().collect::<Vec<_>>(),
+                keys.into_iter().filter(|x| x % 2 == 1).collect::<Vec<_>>()
+            );
+        }
+        assert!(matches!(
+            receivers[0].try_recv(),
+            Err(async_channel::TryRecvError::Closed)
+        ));
+
+        upstream.finish();
+        assert!(matches!(
+            unsafe { item.processor.event(EventCause::Input(0))? },
+            Event::Finished
+        ));
+        assert!(matches!(
+            receivers[1].try_recv(),
+            Err(async_channel::TryRecvError::Closed)
+        ));
     }
-    downstream.finish();
-    assert!(matches!(
-        unsafe { item.processor.event(EventCause::Output(0))? },
-        Event::NeedData
-    ));
-    assert!(receivers[0].is_closed());
-    assert!(!receivers[1].is_closed());
+    Ok(())
+}
 
-    upstream.push_data(Ok(DataBlock::new_from_columns(vec![
-        UInt64Type::from_data(vec![0, 1, 2, 3]),
-    ])));
-    assert!(matches!(
-        unsafe { item.processor.event(EventCause::Input(0))? },
-        Event::NeedData
-    ));
-    let QueueItem::LocalData(data) = receivers[1].try_recv().unwrap() else {
-        panic!("expected local data");
+/// While a round waits for the receive quota, the sender keeps pulling its input
+/// into the next round and waits only when that round reaches the budget too. The
+/// rounds arrive in order.
+#[test]
+fn test_hash_senders_buffer_next_round_while_sending() -> Result<()> {
+    let block = |key: u64, bytes: usize| {
+        DataBlock::new_from_columns(vec![
+            UInt64Type::from_data(vec![key]),
+            StringType::from_data(vec!["x".repeat(bytes)]),
+        ])
     };
-    let column = data.into_data().get_by_offset(0).to_column();
-    let keys = UInt64Type::try_downcast_column(&column).unwrap();
-    assert_eq!(keys.iter().copied().collect::<Vec<_>>(), vec![1, 3]);
-    assert!(matches!(
-        receivers[0].try_recv(),
-        Err(async_channel::TryRecvError::Closed)
-    ));
 
-    upstream.finish();
-    assert!(matches!(
-        unsafe { item.processor.event(EventCause::Input(0))? },
-        Event::Finished
-    ));
-    assert!(matches!(
-        receivers[1].try_recv(),
-        Err(async_channel::TryRecvError::Closed)
-    ));
+    for has_output in [false, true] {
+        let channels = ExchangeReceiveChannels::new(2);
+        let receivers = channels.receivers.clone();
+        let nodes = vec![ShuffleNode {
+            partitions: 0..2,
+            dispatcher: HashShuffleDispatcher::local(create_local_block_senders(&channels)),
+        }];
+        drop(channels);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(KeyScatter { num_partitions: 2 }));
+        // Every block reaches the budget, and every key is even, so partition 0
+        // receives all rows through its channel.
+        let item = if has_output {
+            HashSendTransform::create_item(0, 1, scatter, nodes, ExecutorWaker::create(), 1)
+        } else {
+            HashSendSink::create_item(0, scatter, nodes, ExecutorWaker::create(), 1)
+        };
+        let upstream = OutputPort::create();
+        let downstream = InputPort::create();
+        // Ports are connected before use; this test alone drives the processor sequentially.
+        unsafe {
+            connect(&item.inputs_port[0], &upstream);
+            if has_output {
+                connect(&downstream, &item.outputs_port[0]);
+            }
+        }
+        let event = |cause| unsafe { item.processor.event(cause) };
+        assert!(matches!(event(EventCause::Other)?, Event::NeedData));
+
+        // This round takes the whole receive quota.
+        upstream.push_data(Ok(block(0, LOCAL_CHANNEL_MAX_BYTES)));
+        assert!(matches!(event(EventCause::Input(0))?, Event::NeedData));
+        // This round waits for the quota, and the input is still pulled.
+        upstream.push_data(Ok(block(2, 8)));
+        assert!(matches!(event(EventCause::Input(0))?, Event::NeedData));
+        // The next round reaches the budget, so the sender waits.
+        upstream.push_data(Ok(block(4, 8)));
+        assert!(matches!(event(EventCause::Input(0))?, Event::NeedConsume));
+        upstream.push_data(Ok(block(6, 8)));
+        assert!(matches!(event(EventCause::Input(0))?, Event::NeedConsume));
+        assert!(item.inputs_port[0].has_data());
+
+        let key = |item: QueueItem| {
+            let QueueItem::LocalData(data) = item else {
+                panic!("expected local data");
+            };
+            let column = data.into_data().get_by_offset(0).to_column();
+            UInt64Type::try_downcast_column(&column)
+                .unwrap()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>()
+        };
+        // Consuming the first round releases the quota for the waiting round.
+        let mut keys = key(receivers[0].try_recv().unwrap());
+        assert!(matches!(event(EventCause::Other)?, Event::NeedData));
+        upstream.finish();
+        assert!(matches!(event(EventCause::Input(0))?, Event::Finished));
+
+        while let Ok(item) = receivers[0].try_recv() {
+            keys.extend(key(item));
+        }
+        assert_eq!(keys, vec![0, 2, 4, 6]);
+        assert!(receivers[1].is_empty());
+    }
     Ok(())
 }
 
@@ -1178,14 +1281,15 @@ fn check_node_memory(nodes: usize) -> Result<()> {
         "every row must arrive exactly once"
     );
 
-    // Sending: the rows buffered by the senders, the send queue and the local
-    // channels. The budget counts the bytes of the buffered rows, while partition
-    // builders grow their buffers geometrically and reserve the next round's
-    // capacity when flushed, so they may allocate up to about twice the budget.
+    // Sending: the rows buffered by the senders, the round they are sending, the
+    // send queue and the local channels. The budget counts the bytes of the
+    // buffered rows, while partition builders grow their buffers geometrically
+    // and reserve the next round's capacity when flushed, so they may allocate up
+    // to about twice the budget besides the round being sent.
     // Receiving: the receive quota of every peer and the blocks each receiver
     // coalesces, twice while concatenating. The slack covers the block each
     // thread works on and unpublished per-thread stats.
-    let send_bound = 2 * node_budget + buffer_config.max_queued_bytes + LOCAL_CHANNEL_MAX_BYTES;
+    let send_bound = 3 * node_budget + buffer_config.max_queued_bytes + LOCAL_CHANNEL_MAX_BYTES;
     let recv_bound = peers * recv_quota + 2 * threads * coalesce.bytes;
     let slack = 64 * MIB;
     let bound = send_bound + recv_bound + slack;

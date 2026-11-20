@@ -41,6 +41,12 @@ pub trait TableContextQueryIdentity: Send + Sync {
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
 
+    /// Records the kind of the query as soon as it is known, before its text
+    /// is attached, so that failures in between keep it. The first known kind
+    /// wins: statements planned later on a shared context, such as
+    /// subqueries, do not replace it.
+    fn attach_query_kind(&self, _kind: QueryKind) {}
+
     /// Records credential values hidden from the query text, so that error
     /// messages of this query can be scrubbed instead of discarded.
     fn add_query_secrets(&self, _secrets: SqlSecrets) {}

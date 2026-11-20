@@ -8,6 +8,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::aggregate::aggregate_function::*;
 use databend_common_expression::aggregate_function::AggregateStateWritePolicy;
 use databend_common_expression::types::ArgType;
@@ -16,12 +17,12 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -192,6 +193,143 @@ fn test_sum_group_by() {
     run_sum_cases(file, simulate_two_groups_group_by);
 }
 
+// Decimal64 aggregates retain Decimal64 states/results, so overflow must be
+// reported even when the average or a later cancellation would fit.
+#[test]
+fn test_decimal64_aggregate_overflow() -> Result<()> {
+    let max = 999_999_999_999_999_999_i64;
+    for name in ["sum", "sum_distinct", "avg", "avg_distinct"] {
+        for scale in [0, 17] {
+            for sign in [1, -1] {
+                let size = DecimalSize::new_unchecked(18, scale);
+                // The second value is distinct; both SUM variants must overflow.
+                let values = vec![sign * max, sign * (max - 1)];
+                let entries = [Decimal64Type::from_data_with_size(values, Some(size)).into()];
+                for serialized in [false, true] {
+                    let error = eval_v2_aggr(name, &entries, 2, serialized).unwrap_err();
+                    assert_eq!(error.code(), 1049, "{name}: {error}");
+                    assert!(error.message().contains("Decimal overflow"));
+                }
+            }
+        }
+    }
+
+    // Match the issue's ten-row native-i64 wraparound, including constants.
+    let size = DecimalSize::new_unchecked(18, 17);
+    for entry in [
+        Decimal64Type::from_data_with_size(vec![max; 10], Some(size)).into(),
+        BlockEntry::new_const_column(
+            DataType::Decimal(size),
+            Scalar::Decimal(DecimalScalar::Decimal64(max, size)),
+            10,
+        ),
+    ] {
+        for name in ["sum", "avg"] {
+            let error = eval_v2_aggr(name, std::slice::from_ref(&entry), 10, false).unwrap_err();
+            assert_eq!(error.code(), 1049);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_decimal64_aggregate_boundaries_and_nulls() -> Result<()> {
+    let max = 999_999_999_999_999_999_i64;
+    let size = DecimalSize::new_unchecked(18, 17);
+    for name in ["sum", "sum_distinct", "avg", "avg_distinct"] {
+        for sign in [1, -1] {
+            // The masked-out value would overflow if it were accumulated.
+            let entries =
+                [
+                    Decimal64Type::from_data_with_size(vec![sign * max, sign * max], Some(size))
+                        .wrap_nullable(Some(Bitmap::from([true, false])))
+                        .into(),
+                ];
+            for serialized in [false, true] {
+                let (column, ty) = eval_v2_aggr(name, &entries, 2, serialized)?;
+                assert_eq!(ty, DataType::Decimal(size).wrap_nullable());
+                assert_eq!(
+                    column.index(0).unwrap(),
+                    ScalarRef::Decimal(DecimalScalar::Decimal64(sign * max, size))
+                );
+            }
+        }
+        for values in [vec![], vec![None, None]] {
+            let rows = values.len();
+            let entries = [Decimal64Type::from_opt_data_with_size(values, Some(size)).into()];
+            let (column, _) = eval_v2_aggr(name, &entries, rows, false)?;
+            assert_eq!(column.index(0).unwrap(), ScalarRef::Null);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_decimal64_aggregate_row_and_merge_overflow() -> Result<()> {
+    let size = DecimalSize::new_unchecked(18, 17);
+    let value = 500_000_000_000_000_000_i64;
+    let entries = [Decimal64Type::from_data_with_size(vec![value, value], Some(size)).into()];
+    let args_type = [DataType::Decimal(size)];
+    for name in ["sum", "avg"] {
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name,
+            params: &[],
+            args_type: &args_type,
+            distinct: false,
+            order_by: &[],
+        })?;
+        let left = AggregateStateOwner::new(vec![function.clone()])?;
+        let right = AggregateStateOwner::new(vec![function.clone()])?;
+        function.accumulate_row(left.state(0), (&entries).into(), 0)?;
+        function.accumulate_row(right.state(0), (&entries).into(), 1)?;
+
+        // Both partial states fit; merging them must check the combined sum.
+        let error = function
+            .merge_states(left.state(0), right.state(0))
+            .unwrap_err();
+        assert_eq!(error.code(), 1049, "{name}: {error}");
+
+        let target = AggregateStateOwner::new(vec![function.clone()])?;
+        function.accumulate_row(target.state(0), (&entries).into(), 0)?;
+        let error = function
+            .accumulate_row(target.state(0), (&entries).into(), 1)
+            .unwrap_err();
+        assert_eq!(error.code(), 1049, "{name}: {error}");
+
+        let target = AggregateStateOwner::new(vec![function.clone()])?;
+        let places = [target.state(0).addr; 2];
+        let error = function
+            .accumulate_keys(
+                AggregateStateSet::new(&places, target.state(0).loc),
+                (&entries).into(),
+            )
+            .unwrap_err();
+        assert_eq!(error.code(), 1049, "{name}: {error}");
+
+        let mut builders = function
+            .state()
+            .serde_items()
+            .iter()
+            .map(|item| {
+                let StateSerdeItem::DataType(ty) = item else {
+                    panic!("decimal aggregates use typed state fields");
+                };
+                ColumnBuilder::with_capacity(ty, 1)
+            })
+            .collect::<Vec<_>>();
+        function.serialize(right.state_set(0), &mut builders)?;
+        let state: BlockEntry =
+            Column::Tuple(builders.into_iter().map(ColumnBuilder::build).collect()).into();
+        let target = AggregateStateOwner::new(vec![function.clone()])?;
+        function.accumulate_row(target.state(0), (&entries).into(), 0)?;
+        let error = function
+            .merge_serialized(target.state_set(0), &state)
+            .unwrap_err();
+        assert_eq!(error.code(), 1049, "{name}: {error}");
+    }
+    Ok(())
+}
+
 #[test]
 fn test_v2_sum_dictionary_preserves_row_order() -> Result<()> {
     use databend_common_expression::types::DictColumn;
@@ -254,10 +392,8 @@ fn test_v2_sum_if_always_false_returns_null() -> Result<()> {
 
 #[test]
 fn test_v2_sum_if_suffix_names_are_case_insensitive() -> Result<()> {
-    let values = NullableColumn::new_column(
-        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
-        Bitmap::from([true, false, true, true, true]),
-    );
+    let values = UInt64Type::from_data(vec![10, 20, 10, 40, 20])
+        .wrap_nullable(Some(Bitmap::from([true, false, true, true, true])));
     let conditions = BooleanType::from_data(vec![true, false, true, true, false]);
     let entries = [values.into(), conditions.into()];
 
@@ -266,10 +402,8 @@ fn test_v2_sum_if_suffix_names_are_case_insensitive() -> Result<()> {
 
 #[test]
 fn test_v2_sum_suffix_names_are_case_insensitive() -> Result<()> {
-    let values = NullableColumn::new_column(
-        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
-        Bitmap::from([true, false, true, true, true]),
-    );
+    let values = UInt64Type::from_data(vec![10, 20, 10, 40, 20])
+        .wrap_nullable(Some(Bitmap::from([true, false, true, true, true])));
     let entries = [values.into()];
 
     assert_v2_direct_matches_serialized("Sum_State", &entries, 5)
@@ -277,10 +411,8 @@ fn test_v2_sum_suffix_names_are_case_insensitive() -> Result<()> {
 
 #[test]
 fn test_v2_sum_decorator_read_only_finalization_preserves_result() -> Result<()> {
-    let values = NullableColumn::new_column(
-        UInt64Type::from_data(vec![10, 20, 10, 40, 20]),
-        Bitmap::from([true, false, true, true, true]),
-    );
+    let values = UInt64Type::from_data(vec![10, 20, 10, 40, 20])
+        .wrap_nullable(Some(Bitmap::from([true, false, true, true, true])));
     let values: BlockEntry = values.into();
     let if_values: BlockEntry = UInt64Type::from_data(vec![10, 20, 10, 40, 20]).into();
     let conditions: BlockEntry =

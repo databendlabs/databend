@@ -492,7 +492,11 @@ fn test_dict_column_like() {
                         .iter()
                         .map(|value| pattern.compare(value.as_bytes()) ^ not)
                         .collect::<Bitmap>();
-                    assert_eq!(dict.like(&pattern, not), Some(expected), "{text} {not}");
+                    assert_eq!(
+                        dict.like(&pattern, not, None),
+                        Some(expected),
+                        "{text} {not}"
+                    );
                 }
             }
         }
@@ -503,9 +507,9 @@ fn test_dict_column_like() {
         NarrowBuffer::U8(Vec::<u8>::new().into()),
         StringType::from_data(Vec::<String>::new()),
     );
-    assert_eq!(empty.like(&pattern, false), Some(Bitmap::new()));
+    assert_eq!(empty.like(&pattern, false, None), Some(Bitmap::new()));
     let numbers = DictColumn::try_encode(&Int32Type::from_data(vec![1, 2, 1]), 2).unwrap();
-    assert_eq!(numbers.like(&pattern, false), None);
+    assert_eq!(numbers.like(&pattern, false, None), None);
 }
 
 /// `value <op> constant` on a dictionary column, evaluated once per dictionary value, gives the
@@ -590,8 +594,8 @@ fn test_nullable_encoded_consumers() {
             Bitmap::new_constant(false, 8),
             Bitmap::from_iter([true, false, true, false, true, true, false, true]),
         ] {
-            let column = NullableColumn::new_column(encoded.clone(), validity.clone());
-            let plain = NullableColumn::new_column(decoded.clone(), validity);
+            let column = encoded.clone().wrap_nullable(Some(validity.clone()));
+            let plain = decoded.clone().wrap_nullable(Some(validity));
             let block = DataBlock::new_from_columns(vec![column.clone()]);
             let expected = DataBlock::new_from_columns(vec![plain.clone()]);
             let mut hashes = vec![0; 8];
@@ -650,19 +654,19 @@ fn test_nullable_wraps_encoded_column() {
     let validity = Bitmap::from_iter([true, false, true]);
     for column in [
         encode(&plain),
-        NullableColumn::new_column(dict_column(&["a", "b"], &[1, 0, 1]), validity.clone()),
+        dict_column(&["a", "b"], &[1, 0, 1]).wrap_nullable(Some(validity.clone())),
     ] {
         let wrapped = match column {
             Column::Nullable(c) => *c,
             column => NullableColumn::new(column, validity.clone()),
         };
-        assert!(matches!(wrapped.column, Column::Encoded(_)));
+        assert!(matches!(wrapped.column(), Column::Encoded(_)));
     }
     let Column::Nullable(wrapped) = encode(&plain).wrap_nullable(None) else {
         unreachable!()
     };
-    assert!(wrapped.column.is_encoded());
-    let expected = NullableColumn::new_column(plain, wrapped.validity.clone());
+    assert!(wrapped.column().is_encoded());
+    let expected = plain.wrap_nullable(Some(wrapped.validity().clone()));
     let value = Value::Column(Column::Nullable(wrapped));
     assert!(value.is_encoded());
     assert_eq!(*value.decoded(), Value::Column(expected.clone()));
@@ -687,11 +691,8 @@ fn test_encoded_row_serialization() {
     };
     let mut decoded = plain.to_vec();
     let mut columns = plain.iter().map(encoded).collect::<Vec<_>>();
-    decoded.push(NullableColumn::new_column(
-        plain[0].clone(),
-        validity.clone(),
-    ));
-    columns.push(NullableColumn::new_column(encoded(&plain[0]), validity));
+    decoded.push(plain[0].clone().wrap_nullable(Some(validity.clone())));
+    columns.push(encoded(&plain[0]).wrap_nullable(Some(validity)));
 
     let keys = |columns: &[Column]| {
         let entries = columns
@@ -708,4 +709,70 @@ fn test_encoded_row_serialization() {
         }
     };
     assert_eq!(keys(&columns), keys(&decoded));
+
+    // Rows selecting a long value more often than the others: the serialized keys must fit
+    // the size reserved for them.
+    let long = "x".repeat(100);
+    let skewed = StringType::from_data(vec!["a", "b", long.as_str(), long.as_str(), long.as_str()]);
+    let column = build_dict(&skewed);
+    assert!(column.serialize_size() >= skewed.serialize_size());
+    assert_eq!(keys(&[column]), keys(&[skewed]));
+}
+
+/// Dictionary encoded chunks, e.g. of a hash join build side, keep one merged dictionary and
+/// produce encoded columns; other chunks are decoded as before.
+#[test]
+fn test_take_column_vec_merges_dictionaries() {
+    use databend_common_expression::ColumnVec;
+    use databend_common_hashtable::RowPtr;
+
+    let plain = [
+        StringType::from_data(vec!["a", "b", "a"]),
+        StringType::from_data(vec!["c", "b"]),
+    ];
+    let indices = [(1, 1), (0, 0), (1, 0), (0, 2), (0, 1)].map(|(chunk_index, row_index)| RowPtr {
+        chunk_index,
+        row_index,
+    });
+    let expected = StringType::from_data(vec!["b", "a", "c", "a", "b"]);
+    let take = |chunks: &[Column]| {
+        let columns = Column::take_downcast_column_vec(chunks);
+        let result = Column::take_column_vec_indices(&columns, chunks[0].data_type(), &indices);
+        (columns, result)
+    };
+
+    let (columns, result) = take(&plain.each_ref().map(build_dict));
+    let ColumnVec::Dict { values, .. } = &columns else {
+        panic!("expected merged dictionaries, got {columns:?}");
+    };
+    assert_eq!(values, &StringType::from_data(vec!["a", "b", "c"]));
+    assert_same(&result, &expected);
+
+    // A regular chunk decodes all of them.
+    let (columns, result) = take(&[build_dict(&plain[0]), plain[1].clone()]);
+    assert!(matches!(columns, ColumnVec::String(_)));
+    assert_eq!(result, expected);
+
+    // Nullable chunks keep the dictionary under the validity.
+    let validity = [
+        Bitmap::from_iter([true, false, true]),
+        Bitmap::from_iter([true, true]),
+    ];
+    let nullable = |i: usize, column: Column| column.wrap_nullable(Some(validity[i].clone()));
+    let (_, result) = take(&[
+        nullable(0, build_dict(&plain[0])),
+        nullable(1, build_dict(&plain[1])),
+    ]);
+    let decoded = Column::take_column_vec_indices(
+        &Column::take_downcast_column_vec(&[
+            nullable(0, plain[0].clone()),
+            nullable(1, plain[1].clone()),
+        ]),
+        result.data_type(),
+        &indices,
+    );
+    assert!(matches!(&result, Column::Nullable(c) if c.column().is_encoded()));
+    for i in 0..indices.len() {
+        assert_eq!(result.index(i), decoded.index(i));
+    }
 }

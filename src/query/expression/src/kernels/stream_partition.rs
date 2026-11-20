@@ -120,7 +120,11 @@ impl PendingColumn {
                 data_type: pending_type,
                 rows: pending_rows,
                 ..
-            } if pending == scalar && pending_type == data_type => {
+            } if pending == scalar
+                && pending_type == data_type
+                // SQL equality alone cannot prove that presentation offsets are identical.
+                && !data_type.contains_timestamp_tz() =>
+            {
                 *pending_rows += rows;
                 true
             }
@@ -130,6 +134,33 @@ impl PendingColumn {
 
     fn push_column<I: Index>(&mut self, indices: &[I], column: &Column) {
         copy_column(indices, column, self.builder(indices.len()));
+    }
+
+    /// Add every row of `column`, in order.
+    fn append_column(&mut self, column: &Column) {
+        let builder = self.builder(column.len());
+        if builder.data_type() == column.data_type() {
+            builder.append_column(column);
+        } else {
+            // Such as an `Array` column into an `EmptyArray` builder, which
+            // only `copy_column` turns into an `Array` builder.
+            let indices = (0..column.len() as u32).collect::<Vec<_>>();
+            copy_column(&indices, column, builder);
+        }
+    }
+
+    /// Add `rows` of a constant, kept a constant when it can be.
+    fn append_const(
+        &mut self,
+        scalar: &Scalar,
+        data_type: &DataType,
+        rows: usize,
+        size: &mut impl FnMut() -> ExpandedSize,
+    ) {
+        if !self.try_push_const(scalar, data_type, rows, size) {
+            let column = ColumnBuilder::repeat(&scalar.as_ref(), rows, data_type).build();
+            self.append_column(&column);
+        }
     }
 
     /// Turn the pending rows into a builder with room for `additional` more.
@@ -211,6 +242,21 @@ fn copy_const(scalar: &Scalar, data_type: &DataType, rows: usize, to: &mut Colum
     copy_column(&indices, &column, to);
 }
 
+/// The expanded size of the last constant seen in a column.
+type ConstSize = Option<(Scalar, DataType, ExpandedSize)>;
+
+fn cached_const_size(cache: &mut ConstSize, scalar: &Scalar, data_type: &DataType) -> ExpandedSize {
+    if let Some((s, t, size)) = cache.as_ref()
+        && s == scalar
+        && t == data_type
+    {
+        return *size;
+    }
+    let size = ExpandedSize::measure(scalar, data_type);
+    *cache = Some((scalar.clone(), data_type.clone(), size));
+    size
+}
+
 struct PartitionBlockBuilder {
     num_rows: usize,
     columns: Vec<PendingColumn>,
@@ -240,7 +286,7 @@ pub struct BlockPartitionStream {
     partitions: Vec<PartitionBlockBuilder>,
     // The expanded size of the last constant seen in each column, as the same
     // constant usually comes in every block.
-    const_sizes: Vec<Option<(Scalar, DataType, ExpandedSize)>>,
+    const_sizes: Vec<ConstSize>,
 }
 
 impl BlockPartitionStream {
@@ -309,17 +355,7 @@ impl BlockPartitionStream {
             match entry {
                 BlockEntry::Const(scalar, data_type, num_rows) => {
                     let const_size = &mut self.const_sizes[column_idx];
-                    let mut size = || {
-                        if let Some((s, t, size)) = const_size.as_ref()
-                            && *s == scalar
-                            && *t == data_type
-                        {
-                            return *size;
-                        }
-                        let size = ExpandedSize::measure(&scalar, &data_type);
-                        *const_size = Some((scalar.clone(), data_type.clone(), size));
-                        size
-                    };
+                    let mut size = || cached_const_size(const_size, &scalar, &data_type);
                     // Expanded once for the partitions that already hold other
                     // rows, as every block used to be.
                     let mut expanded = None;
@@ -428,6 +464,97 @@ impl BlockPartitionStream {
         }
 
         Some(partition.take_block(false))
+    }
+}
+
+/// Concatenates blocks into blocks of `rows_threshold` rows or
+/// `bytes_threshold` bytes, whichever is reached first: a
+/// `BlockPartitionStream` with one partition, without row indices.
+///
+/// The rows of each block are appended to the column builders as it arrives,
+/// so the block, which can be a slice of a larger one, is not kept. A column
+/// that has been the same constant in every block so far stays a constant,
+/// counted as if expanded. Once a block is sent, the builders of the next one
+/// reserve as many rows.
+pub struct BlockConcatStream {
+    rows_threshold: usize,
+    bytes_threshold: usize,
+    pending: PartitionBlockBuilder,
+    const_sizes: Vec<ConstSize>,
+}
+
+impl BlockConcatStream {
+    pub fn create(rows_threshold: usize, bytes_threshold: usize) -> BlockConcatStream {
+        BlockConcatStream {
+            rows_threshold: if rows_threshold == 0 {
+                usize::MAX
+            } else {
+                rows_threshold
+            },
+            bytes_threshold: if bytes_threshold == 0 {
+                usize::MAX
+            } else {
+                bytes_threshold
+            },
+            pending: PartitionBlockBuilder {
+                num_rows: 0,
+                columns: vec![],
+            },
+            const_sizes: vec![],
+        }
+    }
+
+    /// Appends the rows of `block`, and returns the concatenated block once
+    /// it reaches a threshold.
+    pub fn push(&mut self, block: DataBlock) -> Option<DataBlock> {
+        if block.is_empty() {
+            return None;
+        }
+
+        if self.pending.columns.is_empty() {
+            self.pending.columns = block
+                .columns()
+                .iter()
+                .map(|entry| PendingColumn::Empty {
+                    data_type: entry.data_type(),
+                    capacity: 0,
+                })
+                .collect();
+            self.const_sizes = vec![None; block.num_columns()];
+        }
+
+        let rows = block.num_rows();
+        self.pending.num_rows += rows;
+        let columns = self.pending.columns.iter_mut().zip(&mut self.const_sizes);
+        for ((column, const_size), entry) in columns.zip(block.take_columns()) {
+            match entry {
+                BlockEntry::Const(scalar, data_type, _) => {
+                    let mut size = || cached_const_size(const_size, &scalar, &data_type);
+                    column.append_const(&scalar, &data_type, rows, &mut size);
+                }
+                BlockEntry::Column(entry) => column.append_column(&entry),
+            }
+        }
+
+        if self.pending.num_rows >= self.rows_threshold
+            || self.pending.memory_size() >= self.bytes_threshold
+        {
+            return Some(self.pending.take_block(true));
+        }
+        None
+    }
+
+    /// Rows appended and not sent yet.
+    pub fn num_rows(&self) -> usize {
+        self.pending.num_rows
+    }
+
+    /// Returns the rows not sent yet. Call once the input ends.
+    pub fn finish(&mut self) -> Option<DataBlock> {
+        if self.pending.num_rows == 0 {
+            return None;
+        }
+        Some(self.pending.take_block(false))
     }
 }
 
@@ -575,6 +702,9 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
             (ColumnBuilder::Interval(builder), Column::Interval(column)) => {
                 copy_primitive_type(builder, column, indices);
             }
+            (ColumnBuilder::TimestampTz(builder), Column::TimestampTz(column)) => {
+                copy_primitive_type(builder, column, indices);
+            }
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(column)) => {
                 copy_primitive_type(builder, column, indices);
             }
@@ -672,8 +802,8 @@ fn copy_nullable<I: Index>(
     from: &NullableColumn<AnyType>,
     indices: &[I],
 ) {
-    copy_boolean(&mut to.validity, &from.validity, indices);
-    copy_column(indices, &from.column, &mut to.builder)
+    copy_boolean(&mut to.validity, from.validity(), indices);
+    copy_column(indices, from.column(), &mut to.builder)
 }
 
 fn copy_opaque<I: Index>(indices: &[I], builder: &mut OpaqueColumnBuilder, column: &OpaqueColumn) {

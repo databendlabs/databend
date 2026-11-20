@@ -17,9 +17,6 @@ statement ok
 insert into t_recluster select 10-number from numbers(20)
 
 statement ok
-set enable_distributed_recluster = 1
-
-statement ok
 alter table t_recluster recluster
 
 # query I
@@ -44,9 +41,6 @@ query III
 select count(), min(a), max(a) from t_recluster
 ----
 60 -9 10
-
-statement ok
-set enable_distributed_recluster = 0
 
 statement ok
 drop table if exists t_recluster

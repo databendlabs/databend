@@ -134,6 +134,7 @@ def test_query():
     }
     resp = requests.get(next_uri, auth=auth, headers=headers)
     assert resp.status_code == 400, resp.text
+    assert resp.json()["error"]["code"] == 5113, resp.text
 
 
 def test_initial_response():

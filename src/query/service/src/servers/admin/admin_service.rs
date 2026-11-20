@@ -54,6 +54,7 @@ impl AdminService {
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
             .at("/v1/config", get(super::v1::config::config_handler))
+            .at("/v1/caches", get(super::v1::caches::caches_handler))
             .at("/v1/system", get(super::v1::system::system_handler))
             .at(
                 "/v1/status",
@@ -119,6 +120,34 @@ impl AdminService {
             .at(
                 "v1/queries/:query_id/graph_dump",
                 get(super::v1::query_dump::running_query_dump),
+            )
+            .at(
+                "/v1/queries/:query_id/perf",
+                get(super::v1::perf::query_perf_page),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/start",
+                post(super::v1::perf::start_query_perf),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/stop",
+                post(super::v1::perf::stop_query_perf),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/status",
+                get(super::v1::perf::query_perf_status),
+            )
+            .at(
+                "/v1/queries/:query_id/perf/flamegraph",
+                get(super::v1::perf::query_perf_flamegraph),
+            )
+            .at("/v1/perf", get(super::v1::perf::process_perf_page))
+            .at("/v1/perf/start", post(super::v1::perf::start_process_perf))
+            .at("/v1/perf/stop", post(super::v1::perf::stop_process_perf))
+            .at("/v1/perf/status", get(super::v1::perf::process_perf_status))
+            .at(
+                "/v1/perf/flamegraph",
+                get(super::v1::perf::process_perf_flamegraph),
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))

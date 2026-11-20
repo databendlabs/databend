@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -129,7 +130,7 @@ impl Table for IcebergInspectTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> databend_common_exception::Result<()> {
         pipeline.add_source(|output| self.create_source(ctx.clone(), output, None), 1)?;
         Ok(())

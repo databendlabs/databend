@@ -398,31 +398,27 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             )));
         }
 
-        // Cache path: only cache the expensive full checker.
-        if matches!(&object, Object::All) {
-            if let Some(shared) = self.session_ctx.get_query_context_shared() {
-                if let Some(checker) = shared.visibility_checker_cache.get() {
-                    return Ok(checker.clone());
-                }
-
-                return shared
-                    .visibility_checker_cache
+        // Cache path: checkers that load ownerships and are requested repeatedly in a query.
+        if let Some(shared) = self.session_ctx.get_query_context_shared() {
+            let cell = match &object {
+                Object::All => Some(&shared.visibility_checker_cache),
+                Object::Sequence => Some(&shared.sequence_visibility_checker_cache),
+                _ => None,
+            };
+            if let Some(cell) = cell {
+                return cell
                     .get_or_try_init(|| async move {
                         let checker = self
-                            .build_visibility_checker_with_roles(roles, false, &Object::All)
+                            .build_visibility_checker_with_roles(roles, false, &object)
                             .await?;
                         Ok(Arc::new(checker))
                     })
                     .await
                     .cloned();
             }
-            // No query context shared available: fallback to uncached build.
-            return Ok(Arc::new(
-                self.build_visibility_checker_with_roles(roles, false, &Object::All)
-                    .await?,
-            ));
         }
 
+        // No query context shared available, or an uncached object: build directly.
         Ok(Arc::new(
             self.build_visibility_checker_with_roles(roles, false, &object)
                 .await?,

@@ -363,9 +363,19 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        // Only the bits of the rows to select are read.
+        let rows = match select_strategy {
+            SelectStrategy::True => {
+                Some(&true_selection[*mutable_true_idx..*mutable_true_idx + count])
+            }
+            SelectStrategy::False => {
+                Some(&false_selection.0[*mutable_false_idx..*mutable_false_idx + count])
+            }
+            SelectStrategy::All => None,
+        };
         if let Some(bitmap) = self
             .evaluator
-            .try_like_encoded(column_ref, like_pattern, not)
+            .try_like_encoded(column_ref, like_pattern, not, rows)
         {
             let buffers = SelectionBuffers {
                 true_selection,
@@ -558,6 +568,7 @@ impl<'a> Selector<'a> {
                     strict_eval: eval_options.strict_eval,
                 };
                 let (_, _, eval) = function.eval.as_scalar().unwrap();
+                self.evaluator.record_eval(function);
                 let result = eval.eval(&args, &mut ctx);
                 if !ctx.suppress_error {
                     EvalContext::render_error(

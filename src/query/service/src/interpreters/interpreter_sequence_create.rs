@@ -16,17 +16,14 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::SequenceError;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_sql::plans::CreateSequencePlan;
 use databend_common_users::RoleCacheManager;
-use databend_common_users::UserApiProvider;
 use fastrace::func_name;
 
 use crate::interpreters::Interpreter;
@@ -68,6 +65,17 @@ impl Interpreter for CreateSequenceInterpreter {
                 comment: self.plan.comment.clone(),
                 create_on: Utc::now(),
                 storage_version: 0,
+                // Written in the same transaction as the sequence. Without sequence object
+                // checks, a new sequence has no owner and a replaced one keeps its owner.
+                owner_role: if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_sequence_privilege_check()?
+                {
+                    self.ctx.get_current_role().map(|role| role.name)
+                } else {
+                    None
+                },
             };
             let catalog = self.ctx.get_default_catalog()?;
             let reply = catalog.create_sequence(req).await?;
@@ -84,22 +92,7 @@ impl Interpreter for CreateSequenceInterpreter {
                 return Ok(PipelineBuildResult::create());
             }
 
-            // Grant ownership as the current role
-            if self
-                .ctx
-                .get_settings()
-                .get_enable_experimental_sequence_privilege_check()?
-            {
-                let tenant = self.plan.ident.tenant();
-                let name = self.plan.ident.name().to_string();
-                if let Some(current_role) = self.ctx.get_current_role() {
-                    let role_api = UserApiProvider::instance().role_api(tenant);
-                    role_api
-                        .grant_ownership(&OwnershipObject::Sequence { name }, &current_role.name)
-                        .await?;
-                    RoleCacheManager::instance().invalidate_cache(tenant);
-                }
-            }
+            RoleCacheManager::instance().invalidate_cache(self.plan.ident.tenant());
 
             Ok(PipelineBuildResult::create())
         })

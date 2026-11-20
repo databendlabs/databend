@@ -425,29 +425,6 @@ impl StringColumnBuilder {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::StringColumn;
-    use super::StringColumnBuilder;
-
-    #[test]
-    fn test_append_column_copies_sparse_string_buffers() {
-        let long = "x".repeat(20_000);
-        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
-        let sparse = source.sliced(7, 1);
-
-        let mut builder = StringColumnBuilder::with_capacity(1);
-        builder.append_column(&sparse);
-        let result = builder.build();
-
-        assert_eq!(result.iter().collect::<Vec<_>>(), vec![format!("7-{long}")]);
-        assert!(
-            result.total_buffer_len() < sparse.total_buffer_len(),
-            "append_column should not retain the full source buffers"
-        );
-    }
-}
-
 impl NullableColumnBuilder<StringType> {
     pub fn take_from_views(
         views: &[ColumnView<NullableType<StringType>>],
@@ -514,4 +491,27 @@ pub struct StringDomain {
     pub min: String,
     // max value is None for full domain
     pub max: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StringColumn;
+    use super::StringColumnBuilder;
+
+    #[test]
+    fn test_append_column_copies_sparse_string_buffers() {
+        let long = "x".repeat(20_000);
+        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
+        let sparse = source.sliced(7, 1);
+
+        let mut builder = StringColumnBuilder::with_capacity(1);
+        builder.append_column(&sparse);
+        let result = builder.build();
+
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![format!("7-{long}")]);
+        assert!(
+            result.total_buffer_len() < sparse.total_buffer_len(),
+            "append_column should not retain the full source buffers"
+        );
+    }
 }

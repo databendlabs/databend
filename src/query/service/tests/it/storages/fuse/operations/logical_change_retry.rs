@@ -21,13 +21,12 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::FuseCaches;
 use databend_common_version::BUILD_INFO;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::Session;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CacheManager;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use futures::TryStreamExt;
@@ -105,9 +104,7 @@ async fn make_epochless(fixture: &TestFixture, name: &str) -> anyhow::Result<()>
         .get_operator()
         .write(&location, snapshot.to_bytes()?)
         .await?;
-    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
-        cache.evict(&location);
-    }
+    FuseCaches::instance().snapshots.evict(&location);
     Ok(())
 }
 

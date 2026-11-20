@@ -27,11 +27,11 @@ use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::FuseCaches;
+use databend_common_storages_fuse::io::SnapshotReader;
 use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_enterprise_attach_table::AttachTableHandler;
 use databend_enterprise_attach_table::AttachTableHandlerWrapper;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -59,8 +59,6 @@ impl AttachTableHandler for RealAttachTableHandler {
                 ))
             })?;
 
-        let reader = MetaReaders::table_snapshot_reader(operator.clone());
-
         // TODO duplicated code
         let snapshot_full_path = snapshot_hint.snapshot_full_path;
         let info = operator.info();
@@ -69,14 +67,11 @@ impl AttachTableHandler for RealAttachTableHandler {
         let mut options = plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
 
-        let params = LoadParams {
-            location: snapshot_loc.clone(),
-            len_hint: None,
-            ver: TableSnapshot::VERSION,
-            put_cache: true,
-        };
-
-        let snapshot = reader.read(&params).await?;
+        let reader = SnapshotReader::new(operator.clone());
+        let snapshot = FuseCaches::instance()
+            .snapshots
+            .get(&reader, snapshot_loc.clone(), TableSnapshot::VERSION)
+            .await?;
         let stat = TableStatistics {
             number_of_rows: snapshot.summary.row_count,
             data_bytes: snapshot.summary.uncompressed_byte_size,

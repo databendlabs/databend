@@ -732,10 +732,15 @@ build_exceptions! {
 build_exceptions! {
     /// Session Idle too long, only used for worksheet for now
     SessionTimeout(5110),
-    /// Server side state lost, mainly because server restarted
+    /// Server side state lost, because the server restarted or the request was
+    /// routed to a node other than the one holding the state
     SessionLost(5111),
     /// Unexpected session state, maybe bug of client or server
     InvalidSessionState(5112),
+    /// The node the session is pinned to (X-DATABEND-STICKY-NODE) is no longer
+    /// in the cluster, so its session state (temp tables, transaction) is gone
+    /// for sure. Clients should drop the sticky state and reconnect.
+    SessionNodeLost(5113),
 }
 
 #[cfg(test)]

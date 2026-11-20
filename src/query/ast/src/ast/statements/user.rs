@@ -28,6 +28,7 @@ use crate::ast::ProcedureIdentity;
 use crate::ast::ShowOptions;
 use crate::ast::UserIdentity;
 use crate::ast::UserPrivilegeType;
+use crate::ast::quote::QuotedIdent;
 use crate::ast::write_comma_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -268,6 +269,7 @@ pub enum AccountMgrLevel {
     Global,
     Database(Option<String>),
     Table(Option<String>, String),
+    MaterializedView(Option<String>, String),
     UDF(String),
     Stage(String),
     Warehouse(String),
@@ -295,6 +297,13 @@ impl Display for AccountMgrLevel {
                 } else {
                     write!(f, " {table_name}")
                 }
+            }
+            AccountMgrLevel::MaterializedView(database_name, view_name) => {
+                write!(f, " MATERIALIZED VIEW ")?;
+                if let Some(database_name) = database_name {
+                    write!(f, "{}.", QuotedIdent(database_name, '"'))?;
+                }
+                write!(f, "{}", QuotedIdent(view_name, '"'))
             }
             AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}"),
             AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}"),

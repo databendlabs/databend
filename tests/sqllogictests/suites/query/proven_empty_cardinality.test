@@ -1,0 +1,78 @@
+## A filter or join is only treated as exactly empty when that can be proven
+## without column statistics. COUNT(*) over a non-empty result must not be
+## folded to 0.
+
+statement ok
+CREATE OR REPLACE DATABASE proven_empty_cardinality
+
+statement ok
+USE proven_empty_cardinality
+
+statement ok
+CREATE TABLE w AS
+SELECT number AS k,
+       add_minutes(to_timestamp('2020-01-01 00:00:00'), number) AS ts,
+       add_days(to_date('2020-01-01'), number % 365) AS d
+FROM numbers(600)
+
+statement ok
+CREATE TABLE e(k UInt64 NOT NULL, v UInt64 NOT NULL)
+
+## All rows are in the past, so these time windows keep every row.
+
+query I
+SELECT count(*) FROM w WHERE ts >= '2020-01-01 00:00:00' AND ts < now()
+----
+600
+
+query I
+SELECT count(*) FROM w WHERE d >= '2020-01-01' AND d < today()
+----
+600
+
+query I
+SELECT count(*) FROM w WHERE d BETWEEN '2020-01-01' AND today()
+----
+600
+
+## Exactly empty inputs.
+
+query I
+SELECT count(*) FROM e WHERE v > 10
+----
+0
+
+query I
+SELECT count(*) FROM e LEFT JOIN w ON e.k = w.k
+----
+0
+
+query I
+SELECT count(*) FROM w RIGHT JOIN (SELECT * FROM e WHERE v > 10) AS f ON w.k = f.k
+----
+0
+
+query I
+SELECT count(*) FROM w INNER JOIN e ON w.k = e.k
+----
+0
+
+## The empty side is not the preserved side, so every row of w is kept.
+
+query I
+SELECT count(*) FROM w LEFT JOIN e ON w.k = e.k
+----
+600
+
+query I
+SELECT count(*) FROM w FULL JOIN e ON w.k = e.k
+----
+600
+
+query I
+SELECT count(*) FROM w LEFT JOIN (SELECT * FROM e WHERE v > 10) AS f ON w.k = f.k WHERE w.k < 10
+----
+10
+
+statement ok
+DROP DATABASE proven_empty_cardinality

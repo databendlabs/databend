@@ -70,6 +70,7 @@ message UDFScript {
   repeated string imports = 7;
   repeated string packages = 8;
   optional bool immutable = 9;
+  repeated string external_access_integrations = 10;
 }
 
 message UDAFScript {
@@ -84,6 +85,7 @@ message UDAFScript {
   repeated DataField state_fields = 6;
   repeated string imports = 7;
   repeated string packages = 8;
+  repeated string external_access_integrations = 9;
 }
 
 message UDTFArg {

@@ -252,6 +252,30 @@ where
     }
 }
 
+/// For number convert
+pub type NumberConvertView<F, T> = ComputeView<NumberConvert<F, T>, NumberType<F>, NumberType<T>>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NumberConvert<F, T>(std::marker::PhantomData<(F, T)>);
+
+impl<F, T> Compute<NumberType<F>, NumberType<T>> for NumberConvert<F, T>
+where
+    F: Number + AsPrimitive<T>,
+    T: Number,
+{
+    fn compute<'a>(
+        value: <NumberType<F> as AccessType>::ScalarRef<'a>,
+    ) -> <NumberType<T> as AccessType>::ScalarRef<'a> {
+        value.as_()
+    }
+
+    fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
+        let min = domain.min.as_();
+        let max = domain.max.as_();
+        SimpleDomain { min, max }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,29 +367,5 @@ mod tests {
                 expected.iter().rev().copied().collect::<Vec<_>>()
             );
         }
-    }
-}
-
-/// For number convert
-pub type NumberConvertView<F, T> = ComputeView<NumberConvert<F, T>, NumberType<F>, NumberType<T>>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NumberConvert<F, T>(std::marker::PhantomData<(F, T)>);
-
-impl<F, T> Compute<NumberType<F>, NumberType<T>> for NumberConvert<F, T>
-where
-    F: Number + AsPrimitive<T>,
-    T: Number,
-{
-    fn compute<'a>(
-        value: <NumberType<F> as AccessType>::ScalarRef<'a>,
-    ) -> <NumberType<T> as AccessType>::ScalarRef<'a> {
-        value.as_()
-    }
-
-    fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
-        let min = domain.min.as_();
-        let max = domain.max.as_();
-        SimpleDomain { min, max }
     }
 }

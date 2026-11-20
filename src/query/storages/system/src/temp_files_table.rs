@@ -16,6 +16,7 @@ use std::any::Any;
 use std::future::Future;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -94,7 +95,7 @@ impl Table for TempFilesTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         // avoid duplicate read in cluster mode.
         if plan.parts.partitions.is_empty() {

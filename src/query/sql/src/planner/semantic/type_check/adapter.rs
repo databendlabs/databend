@@ -185,18 +185,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.to_string()),
         };
 
-        let visibility_checker = if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            let ctx = self.ctx.clone();
-            Some(self.block_on(async move {
-                ctx.get_visibility_checker(false, Object::Sequence).await
-            })?)
-        } else {
-            None
-        };
+        let visibility_checker = self.block_on(self.ctx.sequence_usage_checker())?;
         self.block_on(catalog.get_sequence(req, &visibility_checker))?;
         Ok(())
     }
@@ -306,8 +295,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             .await?;
             if self
                 .ctx
-                .get_settings()
-                .get_enable_experimental_rbac_check()?
+                .should_check_stage_privilege(&stage_info.stage_name)?
             {
                 let visibility_checker = self
                     .ctx

@@ -84,6 +84,37 @@ select regexp_extract('foo-bar-baz', '([a-z]+)-([a-z]+)-([a-z]+)', 4)
 statement error
 select regexp_extract('foo-bar-baz', '([a-z]+)-([a-z]+)-([a-z]+)', 10)
 
+# Invalid patterns must report regex errors, not panic while building the result.
+statement error unrecognized escape sequence
+SELECT regexp_extract('a', '\C');
+
+statement error unrecognized escape sequence
+SELECT regexp_extract('ä', '\C');
+
+statement error unrecognized escape sequence
+SELECT regexp_extract('a', '\C', 0);
+
+statement error unrecognized escape sequence
+SELECT regexp_extract('ä', '\C', 0);
+
+statement error unclosed character class
+SELECT regexp_extract('a', '[');
+
+statement error unclosed character class
+SELECT regexp_extract('a', '[', 0);
+
+statement error unrecognized escape sequence
+SELECT regexp_extract(text_string, '\C') FROM regex_test;
+
+statement error unclosed character class
+SELECT regexp_extract(text_string, pattern, group_index)
+FROM (VALUES ('a', '[', 0), ('b', 'b', 0)) AS t(text_string, pattern, group_index);
+
+query T
+SELECT regexp_extract('ä', '.');
+----
+ä
+
 # regexp_extract_all(string, regex[, group = 0])
 query IT rowsort
 SELECT id, regexp_extract_all(text_string, pattern, group_index) FROM regex_test;

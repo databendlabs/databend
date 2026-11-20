@@ -248,6 +248,17 @@ where
     A::Target: TableContextAuthorization,
 {
     pub async fn resolve_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        let connection = self.get_connection(name).await?;
+        self.authorization
+            .record_connection_access(&connection.name);
+        Ok(connection)
+    }
+
+    pub async fn check_connection_exists(&self, name: &str) -> Result<()> {
+        self.get_connection(name).await.map(|_| ())
+    }
+
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
         if self
             .settings
             .get_enable_experimental_connection_privilege_check()?

@@ -23,6 +23,6 @@ TableScan
 ├── read size: 0
 ├── partitions total: 1
 ├── partitions scanned: 0
-├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
+├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(t.c (#0) = 99)], limit: NONE]
 └── estimated rows: 1.04

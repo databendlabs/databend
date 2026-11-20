@@ -21,21 +21,36 @@ use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::hnsw_index::common::hugepage::HugePageBytes;
+use crate::hnsw_index::common::prefetch::MIN_PREFETCH_STORAGE_BYTES;
+use crate::hnsw_index::common::prefetch::prefetch_slice;
+use crate::hnsw_index::common::prefetch::prefetch_slice_l2;
+use crate::hnsw_index::common::prefetch::prefetch_windows;
 use crate::hnsw_index::quantization::encoded_storage::EncodedStorage;
 use crate::hnsw_index::quantization::encoded_storage::EncodedStorageBuilder;
 use crate::hnsw_index::quantization::encoded_vectors::DistanceType;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 use crate::hnsw_index::quantization::encoded_vectors::VectorParameters;
+use crate::hnsw_index::quantization::encoded_vectors::calibration_vectors;
 use crate::hnsw_index::quantization::encoded_vectors::validate_vector_parameters;
 use crate::hnsw_index::quantization::quantile::find_min_max_from_iter;
 use crate::hnsw_index::quantization::quantile::find_quantile_interval;
+
+// Ported from qdrant `lib/quantization/src/encoded_vectors_u8.rs`. Deviation: a
+// constant range is widened in `alpha_offset_from_min_max`, qdrant quantizes it
+// with `alpha = 0`.
 
 pub const ALIGNMENT: usize = 16;
 
 pub struct EncodedVectorsU8<TStorage: EncodedStorage> {
     encoded_vectors: TStorage,
     metadata: Metadata,
+    /// The SIMD kernel of `score_point_simple`, see `select_score_kernel`.
+    score_kernel: Option<ScoreKernel>,
 }
+
+/// A SIMD kernel scoring an encoded query against an encoded vector.
+type ScoreKernel = unsafe extern "C" fn(*const u8, *const u8, u32) -> f32;
 
 pub struct EncodedQueryU8 {
     offset: f32,
@@ -51,15 +66,59 @@ struct Metadata {
     vector_parameters: VectorParameters,
 }
 
-impl EncodedVectorsU8<Vec<u8>> {
+impl Metadata {
+    #[inline]
+    fn postprocess_score(&self, score: f32, query_offset: f32, vector_offset: f32) -> f32 {
+        self.multiplier * score + query_offset + vector_offset
+    }
+
+    #[inline]
+    fn postprocess_internal_score(
+        &self,
+        score: f32,
+        vector_1_offset: f32,
+        vector_2_offset: f32,
+    ) -> f32 {
+        let query_offset = vector_1_offset - self.get_shift();
+        self.postprocess_score(score, query_offset, vector_2_offset)
+    }
+
+    fn get_shift(&self) -> f32 {
+        // Dotprod after shifting produces a number which is not related to vector and query
+        // (x - a)(y - a) = xy - ax - ay + a^2
+        // this a^2 is returned here
+        let shift = match self.vector_parameters.distance_type {
+            DistanceType::Dot => self.actual_dim as f32 * self.offset * self.offset,
+            // L2 is computed from squared code differences. The common quantizer offset cancels
+            // before squaring, so adding an absolute offset^2 shift would make scores depend on
+            // translating all vectors and the query by the same constant.
+            DistanceType::L1 | DistanceType::L2 => 0.0,
+        };
+        if self.vector_parameters.invert {
+            -shift
+        } else {
+            shift
+        }
+    }
+}
+
+impl EncodedVectorsU8<HugePageBytes> {
     pub(crate) fn memory_size(&self) -> usize {
         std::mem::size_of::<Self>() + self.encoded_vectors.capacity()
     }
 }
 
 impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
+    /// Encode vector data using scalar quantization.
+    ///
+    /// Every vector of `orig_data` is encoded, but the value range (min/max or quantile) is
+    /// fitted only on the vectors whose flag in `keep` is set. `keep` holds one flag per vector;
+    /// clear the flags of vectors that are not real (e.g. the placeholders of NULL vectors).
+    /// If no flag is set while `orig_data` is not empty, no vector is real, so no score matters,
+    /// and a zero range is used.
     pub fn encode<'a>(
         orig_data: impl Iterator<Item = impl AsRef<[f32]> + 'a> + Clone,
+        keep: impl Iterator<Item = bool> + Clone,
         mut storage_builder: impl EncodedStorageBuilder<TStorage>,
         vector_parameters: &VectorParameters,
         quantile: Option<f32>,
@@ -70,6 +129,7 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
         if vector_parameters.count == 0 {
             return Ok(EncodedVectorsU8 {
                 encoded_vectors: storage_builder.build(),
+                score_kernel: select_score_kernel(vector_parameters.distance_type, actual_dim),
                 metadata: Metadata {
                     actual_dim,
                     alpha: 0.0,
@@ -81,12 +141,17 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
         }
 
         debug_assert!(validate_vector_parameters(orig_data.clone(), vector_parameters).is_ok());
-        let (alpha, offset) = Self::find_alpha_offset_size_dim(orig_data.clone());
+        let (calibration_data, calibration_count) = calibration_vectors(orig_data.clone(), keep);
+        let (alpha, offset) = if calibration_count == 0 {
+            (0.0, 0.0)
+        } else {
+            Self::find_alpha_offset_size_dim(calibration_data.clone())
+        };
         let (alpha, offset) = if let Some(quantile) = quantile {
             if let Some((min, max)) = find_quantile_interval(
-                orig_data.clone(),
+                calibration_data,
                 vector_parameters.dim,
-                vector_parameters.count,
+                calibration_count,
                 quantile,
             ) {
                 Self::alpha_offset_from_min_max(min, max)
@@ -95,6 +160,30 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
             }
         } else {
             (alpha, offset)
+        };
+
+        let multiplier = match vector_parameters.distance_type {
+            // (alpha*x - offset) * (alpha*y - offset) = alpha^2*x*y - alpha*offset*x - alpha*offset*y + offset^2
+            // multiplier is applied to xy term only, so we need to multiply score by alpha^2
+            DistanceType::Dot => alpha * alpha,
+            // |(alpha*x - offset) - (alpha*y - offset)| = alpha*|x - y|
+            // multiplier is applied to |x - y| term only, so we need to multiply score by alpha
+            DistanceType::L1 => alpha,
+            // ((alpha*x - offset) - (alpha*y - offset))^2 = alpha^2*(x - y)^2 = alpha^2*x^2 - 2*alpha^2*xy + alpha^2*y^2
+            // multiplier is applied to (x - y)^2 term only, so we need to multiply score by -2*alpha^2
+            DistanceType::L2 => -2.0 * alpha * alpha,
+        };
+        let multiplier = if vector_parameters.invert {
+            -multiplier
+        } else {
+            multiplier
+        };
+        let metadata = Metadata {
+            actual_dim,
+            alpha,
+            offset,
+            multiplier,
+            vector_parameters: vector_parameters.clone(),
         };
 
         for vector in orig_data {
@@ -120,18 +209,16 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
             }
             let vector_offset = match vector_parameters.distance_type {
                 DistanceType::Dot => {
-                    actual_dim as f32 * offset * offset
-                        + encoded_vector.iter().map(|&x| f32::from(x)).sum::<f32>() * alpha * offset
+                    let elements_sum = encoded_vector.iter().map(|&x| f32::from(x)).sum::<f32>();
+                    elements_sum * alpha * offset
                 }
                 DistanceType::L1 => 0.0,
                 DistanceType::L2 => {
-                    actual_dim as f32 * offset * offset
-                        + encoded_vector
-                            .iter()
-                            .map(|&x| f32::from(x) * f32::from(x))
-                            .sum::<f32>()
-                            * alpha
-                            * alpha
+                    let elements_sqr_sum = encoded_vector
+                        .iter()
+                        .map(|&x| f32::from(x) * f32::from(x))
+                        .sum::<f32>();
+                    elements_sqr_sum * alpha * alpha
                 }
             };
             let vector_offset = if vector_parameters.invert {
@@ -139,99 +226,65 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
             } else {
                 vector_offset
             };
+            // apply `a^2` shift
+            let vector_offset = metadata.get_shift() + vector_offset;
             encoded_vector[0..std::mem::size_of::<f32>()]
                 .copy_from_slice(&vector_offset.to_ne_bytes());
             storage_builder.push_vector_data(&encoded_vector);
         }
-        let multiplier = match vector_parameters.distance_type {
-            DistanceType::Dot => alpha * alpha,
-            DistanceType::L1 => alpha,
-            DistanceType::L2 => -2.0 * alpha * alpha,
-        };
-        let multiplier = if vector_parameters.invert {
-            -multiplier
-        } else {
-            multiplier
-        };
 
         Ok(EncodedVectorsU8 {
             encoded_vectors: storage_builder.build(),
-            metadata: Metadata {
-                actual_dim,
-                alpha,
-                offset,
-                multiplier,
-                vector_parameters: vector_parameters.clone(),
-            },
+            score_kernel: select_score_kernel(vector_parameters.distance_type, actual_dim),
+            metadata,
         })
     }
 
     pub fn score_point_simple(&self, query: &EncodedQueryU8, i: u32) -> f32 {
         let (vector_offset, v_ptr) = self.get_vec_ptr(i);
-
         let q_ptr = query.encoded_query.as_ptr();
-        #[cfg(target_arch = "x86_64")]
-        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-            unsafe {
+        let score = match self.score_kernel {
+            Some(kernel) => unsafe { kernel(q_ptr, v_ptr, self.metadata.actual_dim as u32) },
+            None => {
                 let score = match self.metadata.vector_parameters.distance_type {
                     DistanceType::Dot | DistanceType::L2 => {
-                        impl_score_dot_avx(q_ptr, v_ptr, self.metadata.actual_dim as u32)
+                        impl_score_dot(q_ptr, v_ptr, self.metadata.actual_dim)
                     }
-                    DistanceType::L1 => {
-                        impl_score_l1_avx(q_ptr, v_ptr, self.metadata.actual_dim as u32)
-                    }
+                    DistanceType::L1 => impl_score_l1(q_ptr, v_ptr, self.metadata.actual_dim),
                 };
-
-                return self.metadata.multiplier * score + query.offset + vector_offset;
+                score as f32
             }
-        }
-
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        if is_x86_feature_detected!("sse4.1") {
-            unsafe {
-                let score = match self.metadata.vector_parameters.distance_type {
-                    DistanceType::Dot | DistanceType::L2 => {
-                        impl_score_dot_sse(q_ptr, v_ptr, self.metadata.actual_dim as u32)
-                    }
-                    DistanceType::L1 => {
-                        impl_score_l1_sse(q_ptr, v_ptr, self.metadata.actual_dim as u32)
-                    }
-                };
-
-                return self.metadata.multiplier * score + query.offset + vector_offset;
-            }
-        }
-
-        #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-        if std::arch::is_aarch64_feature_detected!("neon") {
-            unsafe {
-                let score = match self.metadata.vector_parameters.distance_type {
-                    DistanceType::Dot | DistanceType::L2 => {
-                        impl_score_dot_neon(q_ptr, v_ptr, self.metadata.actual_dim as u32)
-                    }
-                    DistanceType::L1 => {
-                        impl_score_l1_neon(q_ptr, v_ptr, self.metadata.actual_dim as u32)
-                    }
-                };
-
-                return self.metadata.multiplier * score + query.offset + vector_offset;
-            }
-        }
-
-        let score = match self.metadata.vector_parameters.distance_type {
-            DistanceType::Dot | DistanceType::L2 => impl_score_dot(
-                query.encoded_query.as_ptr(),
-                v_ptr,
-                self.metadata.actual_dim,
-            ),
-            DistanceType::L1 => impl_score_l1(
-                query.encoded_query.as_ptr(),
-                v_ptr,
-                self.metadata.actual_dim,
-            ),
         };
+        self.metadata
+            .postprocess_score(score, query.offset, vector_offset)
+    }
 
-        self.metadata.multiplier * score as f32 + query.offset + vector_offset
+    /// Hints the CPU to load vector `i` into the cache, ahead of scoring it. HNSW
+    /// search scores the neighbors of a node in an order unrelated to memory, so
+    /// each vector is otherwise read from memory when it is scored.
+    #[inline]
+    pub fn prefetch(&self, i: u32) {
+        prefetch_slice(self.vector_data(i));
+    }
+
+    /// Like [`Self::prefetch`], but no deeper than L2.
+    #[inline]
+    pub fn prefetch_l2(&self, i: u32) {
+        prefetch_slice_l2(self.vector_data(i));
+    }
+
+    /// The near and far prefetch windows for scoring a batch of vectors (see
+    /// `prefetch_windows`), or `None` when the vectors fit in the cache.
+    pub fn prefetch_windows(&self) -> Option<(usize, usize)> {
+        let vector_size = self.metadata.actual_dim + std::mem::size_of::<f32>();
+        let storage_bytes = vector_size.saturating_mul(self.metadata.vector_parameters.count);
+        (storage_bytes >= MIN_PREFETCH_STORAGE_BYTES).then(|| prefetch_windows(vector_size))
+    }
+
+    #[inline]
+    fn vector_data(&self, i: u32) -> &[u8] {
+        let size = self.metadata.actual_dim + std::mem::size_of::<f32>();
+        self.encoded_vectors.get_vector_data(i as usize, size)
     }
 
     fn find_alpha_offset_size_dim<'a>(
@@ -242,6 +295,14 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
     }
 
     fn alpha_offset_from_min_max(min: f32, max: f32) -> (f32, f32) {
+        // A constant range would give `alpha = 0`: every code and multiplier is 0,
+        // and every query is at distance 0 from the block. Widen it around the
+        // constant so a query at another value gets a nonzero distance.
+        let (min, max) = if max > min {
+            (min, max)
+        } else {
+            (min - 0.5, max + 0.5)
+        };
         let alpha = (max - min) / 127.0;
         let offset = min;
         (alpha, offset)
@@ -286,12 +347,7 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
 
     #[allow(dead_code)]
     pub fn get_diff(&self) -> f32 {
-        let diff = self.metadata.actual_dim as f32 * self.metadata.offset * self.metadata.offset;
-        if self.metadata.vector_parameters.invert {
-            -diff
-        } else {
-            diff
-        }
+        self.metadata.get_shift()
     }
 
     pub fn get_actual_dim(vector_parameters: &VectorParameters) -> usize {
@@ -321,9 +377,14 @@ impl<TStorage: EncodedStorage> EncodedVectors<EncodedQueryU8> for EncodedVectors
         let quantized_vector_size = Self::get_quantized_vector_size(vector_parameters);
         let encoded_vectors =
             TStorage::from_slice(data, quantized_vector_size, vector_parameters.count)?;
+        let score_kernel = select_score_kernel(
+            metadata.vector_parameters.distance_type,
+            metadata.actual_dim,
+        );
         let result = Self {
             encoded_vectors,
             metadata,
+            score_kernel,
         };
         Ok(result)
     }
@@ -379,23 +440,70 @@ impl<TStorage: EncodedStorage> EncodedVectors<EncodedQueryU8> for EncodedVectors
     fn score_internal(&self, i: u32, j: u32) -> f32 {
         let (query_offset, q_ptr) = self.get_vec_ptr(i);
         let (vector_offset, v_ptr) = self.get_vec_ptr(j);
-        let diff = self.metadata.actual_dim as f32 * self.metadata.offset * self.metadata.offset;
-        let diff = if self.metadata.vector_parameters.invert {
-            -diff
-        } else {
-            diff
-        };
-        let offset = query_offset + vector_offset - diff;
-
         let score = match self.metadata.vector_parameters.distance_type {
             DistanceType::Dot | DistanceType::L2 => {
                 impl_score_dot(q_ptr, v_ptr, self.metadata.actual_dim)
             }
             DistanceType::L1 => impl_score_l1(q_ptr, v_ptr, self.metadata.actual_dim),
         };
-
-        self.metadata.multiplier * score as f32 + offset
+        self.metadata
+            .postprocess_internal_score(score as f32, query_offset, vector_offset)
     }
+}
+
+/// Largest `actual_dim` for the VNNI kernels: up to it, a dot product of codes
+/// up to 127 is at most 2^24, so the f32 lane sums of `impl_score_dot_avx` are
+/// exact and its scores match the integer sums of the VNNI kernels. Above it,
+/// AVX2 rounds partial sums and can differ by a few ULPs.
+#[cfg(target_arch = "x86_64")]
+const MAX_VNNI_DIM: usize = (1 << 24) / (127 * 127);
+
+/// The SIMD kernel for `distance_type` and `actual_dim` that the CPU supports,
+/// chosen once per index instead of on every score; `None` uses the scalar
+/// implementation. Every kernel scores exactly like the one it replaces.
+#[allow(unused_variables)]
+fn select_score_kernel(distance_type: DistanceType, actual_dim: usize) -> Option<ScoreKernel> {
+    #[cfg(target_arch = "x86_64")]
+    {
+        // One `vpdpbusd` multiplies and sums 64 or 32 bytes; L1 has no VNNI form.
+        if distance_type != DistanceType::L1 && actual_dim <= MAX_VNNI_DIM {
+            if is_x86_feature_detected!("avx512vnni") && is_x86_feature_detected!("avx512bw") {
+                return Some(impl_score_dot_avx512_vnni);
+            }
+            if is_x86_feature_detected!("avxvnni") && is_x86_feature_detected!("avx2") {
+                return Some(impl_score_dot_avx_vnni);
+            }
+        }
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            return Some(match distance_type {
+                DistanceType::Dot | DistanceType::L2 => impl_score_dot_avx,
+                DistanceType::L1 => impl_score_l1_avx,
+            });
+        }
+        if is_x86_feature_detected!("sse4.1") {
+            return Some(match distance_type {
+                DistanceType::Dot | DistanceType::L2 => impl_score_dot_sse,
+                DistanceType::L1 => impl_score_l1_sse,
+            });
+        }
+    }
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    if std::arch::is_aarch64_feature_detected!("dotprod") {
+        // One `udot` multiplies or sums 16 bytes into 4 lanes (FEAT_DotProd, on
+        // Graviton 2 and later).
+        return Some(match distance_type {
+            DistanceType::Dot | DistanceType::L2 => impl_score_dot_neon_dotprod,
+            DistanceType::L1 => impl_score_l1_neon_dotprod,
+        });
+    }
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    if std::arch::is_aarch64_feature_detected!("neon") {
+        return Some(match distance_type {
+            DistanceType::Dot | DistanceType::L2 => impl_score_dot_neon,
+            DistanceType::L1 => impl_score_l1_neon,
+        });
+    }
+    None
 }
 
 fn impl_score_dot(q_ptr: *const u8, v_ptr: *const u8, actual_dim: usize) -> i32 {
@@ -427,8 +535,612 @@ unsafe extern "C" {
     fn impl_score_l1_sse(query_ptr: *const u8, vector_ptr: *const u8, dim: u32) -> f32;
 }
 
+/// The dot product with AVX-512 VNNI: 64 bytes per `vpdpbusd`, two
+/// accumulators, and a masked load for the last 16 to 48 bytes. Codes are in
+/// `0..=127`, so the unsigned-by-signed byte products are exact, and the sum is
+/// the integer of `impl_score_dot`. `dim` is a multiple of `ALIGNMENT`.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx512f,avx512bw,avx512vnni")]
+unsafe extern "C" fn impl_score_dot_avx512_vnni(
+    q_ptr: *const u8,
+    v_ptr: *const u8,
+    dim: u32,
+) -> f32 {
+    use std::arch::x86_64::*;
+    let dim = dim as usize;
+    unsafe {
+        let mut acc0 = _mm512_setzero_si512();
+        let mut acc1 = _mm512_setzero_si512();
+        let mut i = 0;
+        while i + 128 <= dim {
+            acc0 = _mm512_dpbusd_epi32(
+                acc0,
+                _mm512_loadu_si512(v_ptr.add(i).cast()),
+                _mm512_loadu_si512(q_ptr.add(i).cast()),
+            );
+            acc1 = _mm512_dpbusd_epi32(
+                acc1,
+                _mm512_loadu_si512(v_ptr.add(i + 64).cast()),
+                _mm512_loadu_si512(q_ptr.add(i + 64).cast()),
+            );
+            i += 128;
+        }
+        if i + 64 <= dim {
+            acc0 = _mm512_dpbusd_epi32(
+                acc0,
+                _mm512_loadu_si512(v_ptr.add(i).cast()),
+                _mm512_loadu_si512(q_ptr.add(i).cast()),
+            );
+            i += 64;
+        }
+        if i < dim {
+            let mask: __mmask64 = (1u64 << (dim - i)) - 1;
+            acc1 = _mm512_dpbusd_epi32(
+                acc1,
+                _mm512_maskz_loadu_epi8(mask, v_ptr.add(i).cast()),
+                _mm512_maskz_loadu_epi8(mask, q_ptr.add(i).cast()),
+            );
+        }
+        _mm512_reduce_add_epi32(_mm512_add_epi32(acc0, acc1)) as f32
+    }
+}
+
+/// The dot product with AVX-VNNI, for CPUs without AVX-512: 32 bytes per
+/// `vpdpbusd`, two accumulators, and one 128-bit step for the last 16 bytes.
+/// Exact as [`impl_score_dot_avx512_vnni`].
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,avxvnni")]
+unsafe extern "C" fn impl_score_dot_avx_vnni(q_ptr: *const u8, v_ptr: *const u8, dim: u32) -> f32 {
+    use std::arch::x86_64::*;
+    let dim = dim as usize;
+    unsafe {
+        let mut acc0 = _mm256_setzero_si256();
+        let mut acc1 = _mm256_setzero_si256();
+        let mut i = 0;
+        while i + 64 <= dim {
+            acc0 = _mm256_dpbusd_avx_epi32(
+                acc0,
+                _mm256_loadu_si256(v_ptr.add(i).cast()),
+                _mm256_loadu_si256(q_ptr.add(i).cast()),
+            );
+            acc1 = _mm256_dpbusd_avx_epi32(
+                acc1,
+                _mm256_loadu_si256(v_ptr.add(i + 32).cast()),
+                _mm256_loadu_si256(q_ptr.add(i + 32).cast()),
+            );
+            i += 64;
+        }
+        if i + 32 <= dim {
+            acc0 = _mm256_dpbusd_avx_epi32(
+                acc0,
+                _mm256_loadu_si256(v_ptr.add(i).cast()),
+                _mm256_loadu_si256(q_ptr.add(i).cast()),
+            );
+            i += 32;
+        }
+        let acc = _mm256_add_epi32(acc0, acc1);
+        let mut sum = _mm_add_epi32(
+            _mm256_castsi256_si128(acc),
+            _mm256_extracti128_si256(acc, 1),
+        );
+        if i < dim {
+            sum = _mm_dpbusd_avx_epi32(
+                sum,
+                _mm_loadu_si128(v_ptr.add(i).cast()),
+                _mm_loadu_si128(q_ptr.add(i).cast()),
+            );
+        }
+        sum = _mm_add_epi32(sum, _mm_shuffle_epi32(sum, 0b01_00_11_10));
+        sum = _mm_add_epi32(sum, _mm_shuffle_epi32(sum, 0b10_11_00_01));
+        _mm_cvtsi128_si32(sum) as f32
+    }
+}
+
+/// The dot product with NEON `udot`: 16 bytes per instruction, four
+/// accumulators. Codes are in `0..=127`, so the unsigned products and their u32
+/// sum are exact, the integer of `impl_score_dot`. `dim` is a multiple of
+/// `ALIGNMENT`.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[target_feature(enable = "neon,dotprod")]
+unsafe extern "C" fn impl_score_dot_neon_dotprod(
+    q_ptr: *const u8,
+    v_ptr: *const u8,
+    dim: u32,
+) -> f32 {
+    use std::arch::aarch64::*;
+    let dim = dim as usize;
+    unsafe {
+        let mut acc = [vdupq_n_u32(0); 4];
+        let mut i = 0;
+        while i + 64 <= dim {
+            for (j, acc) in acc.iter_mut().enumerate() {
+                let offset = i + 16 * j;
+                *acc = vdotq_u32(
+                    *acc,
+                    vld1q_u8(q_ptr.add(offset)),
+                    vld1q_u8(v_ptr.add(offset)),
+                );
+            }
+            i += 64;
+        }
+        while i < dim {
+            acc[0] = vdotq_u32(acc[0], vld1q_u8(q_ptr.add(i)), vld1q_u8(v_ptr.add(i)));
+            i += 16;
+        }
+        let sum = vaddq_u32(vaddq_u32(acc[0], acc[1]), vaddq_u32(acc[2], acc[3]));
+        vaddvq_u32(sum) as f32
+    }
+}
+
+/// The L1 distance with NEON: `vabdq_u8` gives the absolute differences, and a
+/// `udot` with ones sums them into u32 lanes, exactly as `impl_score_l1`. `dim`
+/// is a multiple of `ALIGNMENT`.
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[target_feature(enable = "neon,dotprod")]
+unsafe extern "C" fn impl_score_l1_neon_dotprod(
+    q_ptr: *const u8,
+    v_ptr: *const u8,
+    dim: u32,
+) -> f32 {
+    use std::arch::aarch64::*;
+    let dim = dim as usize;
+    unsafe {
+        let ones = vdupq_n_u8(1);
+        let mut acc = [vdupq_n_u32(0); 4];
+        let mut i = 0;
+        while i + 64 <= dim {
+            for (j, acc) in acc.iter_mut().enumerate() {
+                let offset = i + 16 * j;
+                let diff = vabdq_u8(vld1q_u8(q_ptr.add(offset)), vld1q_u8(v_ptr.add(offset)));
+                *acc = vdotq_u32(*acc, diff, ones);
+            }
+            i += 64;
+        }
+        while i < dim {
+            let diff = vabdq_u8(vld1q_u8(q_ptr.add(i)), vld1q_u8(v_ptr.add(i)));
+            acc[0] = vdotq_u32(acc[0], diff, ones);
+            i += 16;
+        }
+        let sum = vaddq_u32(vaddq_u32(acc[0], acc[1]), vaddq_u32(acc[2], acc[3]));
+        vaddvq_u32(sum) as f32
+    }
+}
+
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
 unsafe extern "C" {
     fn impl_score_dot_neon(query_ptr: *const u8, vector_ptr: *const u8, dim: u32) -> f32;
     fn impl_score_l1_neon(query_ptr: *const u8, vector_ptr: *const u8, dim: u32) -> f32;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The kernel chosen once scores like the scalar implementation, and every
+    /// vector, including the last one, can be prefetched.
+    #[test]
+    fn test_score_kernel_and_prefetch() -> Result<()> {
+        // 20 dimensions are padded to 32, and vectors of 36 bytes do not start on
+        // cache lines.
+        let (dim, count) = (20, 50);
+        let data: Vec<f32> = (0..dim * count)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 25.0)
+            .collect();
+        let query: Vec<f32> = (0..dim).map(|i| (i as f32 - 10.0) / 7.0).collect();
+        for (distance_type, invert) in [
+            (DistanceType::Dot, false),
+            (DistanceType::L1, true),
+            (DistanceType::L2, true),
+        ] {
+            let params = VectorParameters {
+                dim,
+                count,
+                distance_type,
+                invert,
+            };
+            let vectors = EncodedVectorsU8::encode(
+                data.chunks(dim),
+                std::iter::repeat_n(true, count),
+                Vec::new(),
+                &params,
+                None,
+                &AtomicBool::new(false),
+            )?;
+            let mut scalar = EncodedVectorsU8::<Vec<u8>>::load(
+                &vectors.build_data()?,
+                &vectors.build_meta()?,
+                &params,
+            )?;
+            scalar.score_kernel = None;
+            let encoded = vectors.encode_query(&query);
+            for i in 0..count as u32 {
+                vectors.prefetch(i);
+                assert_eq!(
+                    vectors.score_point(&encoded, i),
+                    scalar.score_point(&encoded, i)
+                );
+            }
+            // 50 vectors of 36 bytes fit in the cache.
+            assert_eq!(vectors.prefetch_windows(), None);
+        }
+        Ok(())
+    }
+
+    fn scalar_quantized_scores_for(
+        distance_type: DistanceType,
+        invert: bool,
+        vector_data: &[Vec<f32>],
+        query: &[f32],
+    ) -> Vec<f32> {
+        let vector_parameters = VectorParameters {
+            dim: query.len(),
+            count: vector_data.len(),
+            distance_type,
+            invert,
+        };
+        let encoded = EncodedVectorsU8::encode(
+            vector_data.iter(),
+            std::iter::repeat_n(true, vector_data.len()),
+            Vec::new(),
+            &vector_parameters,
+            Some(0.99),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let query_u8 = encoded.encode_query(query);
+
+        (0..vector_data.len())
+            .map(|index| encoded.score_point_simple(&query_u8, index as u32))
+            .collect()
+    }
+
+    fn deterministic_affine_vectors() -> (Vec<Vec<f32>>, Vec<f32>) {
+        use rand::Rng as _;
+        use rand::SeedableRng as _;
+
+        let vectors_count = 129;
+        let vector_dim = 8;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(1008);
+        let vector_data = (0..vectors_count)
+            .map(|_| {
+                (0..vector_dim)
+                    .map(|_| rng.gen_range(-100.0..=100.0))
+                    .collect()
+            })
+            .collect();
+        let query = (0..vector_dim)
+            .map(|_| rng.gen_range(-100.0..=100.0))
+            .collect();
+
+        (vector_data, query)
+    }
+
+    fn map_affine(
+        vector_data: &[Vec<f32>],
+        query: &[f32],
+        scale: f32,
+        offset: f32,
+    ) -> (Vec<Vec<f32>>, Vec<f32>) {
+        let mapped_vectors = vector_data
+            .iter()
+            .map(|vector| vector.iter().map(|value| value * scale + offset).collect())
+            .collect();
+        let mapped_query = query.iter().map(|value| value * scale + offset).collect();
+
+        (mapped_vectors, mapped_query)
+    }
+
+    fn assert_scores_match_transform(
+        base_scores: &[f32],
+        transformed_scores: &[f32],
+        expected_scale: f32,
+        tolerance: f32,
+    ) {
+        for (index, (&score, &transformed_score)) in
+            base_scores.iter().zip(transformed_scores).enumerate()
+        {
+            let expected = score * expected_scale;
+            assert!(
+                (expected - transformed_score).abs() < tolerance,
+                "score transform drifted at index {index}: expected {expected}, got {transformed_score}"
+            );
+        }
+    }
+
+    /// The value range is fitted on the vectors flagged in `keep` only: the
+    /// zero placeholders of NULL vectors must not stretch it (qdrant#11110).
+    #[test]
+    fn test_calibration_skips_unkept_vectors() -> Result<()> {
+        // Real vectors in [0.5, 1.5], and a zero placeholder for a NULL row.
+        let (dim, count) = (8, 20);
+        let mut data: Vec<f32> = (0..dim * count)
+            .map(|i| 0.5 + (i * 37 % 101) as f32 / 100.0)
+            .collect();
+        let null_row = 7;
+        data[null_row * dim..(null_row + 1) * dim].fill(0.0);
+        let keep: Vec<bool> = (0..count).map(|row| row != null_row).collect();
+        let query: Vec<f32> = (0..dim)
+            .map(|i| 0.5 + (i * 53 % 101) as f32 / 100.0)
+            .collect();
+        let params = VectorParameters {
+            dim,
+            count,
+            distance_type: DistanceType::L2,
+            invert: true,
+        };
+
+        let kept = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            keep.iter().copied(),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        let all = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            std::iter::repeat_n(true, count),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+
+        // The range of the real vectors, not one stretched down to the placeholder.
+        assert!(
+            (kept.metadata.offset - 0.5).abs() < 0.02,
+            "{}",
+            kept.metadata.offset
+        );
+        assert!(all.metadata.offset.abs() < 0.02, "{}", all.metadata.offset);
+        assert!(kept.metadata.alpha < all.metadata.alpha);
+
+        // Hence the real vectors are scored more precisely.
+        let exact = |vector: &[f32]| -> f32 {
+            vector
+                .iter()
+                .zip(&query)
+                .map(|(a, b)| (a - b) * (a - b))
+                .sum()
+        };
+        let error = |encoded: &EncodedVectorsU8<Vec<u8>>| -> f32 {
+            let encoded_query = encoded.encode_query(&query);
+            data.chunks(dim)
+                .enumerate()
+                .filter(|(row, _)| *row != null_row)
+                .map(|(row, vector)| {
+                    (-encoded.score_point(&encoded_query, row as u32) - exact(vector)).abs()
+                })
+                .sum()
+        };
+        assert!(
+            error(&kept) < error(&all),
+            "{} vs {}",
+            error(&kept),
+            error(&all)
+        );
+
+        // No real vector: no score matters, and the zero range must not fail.
+        let none = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            std::iter::repeat_n(false, count),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        assert_eq!((none.metadata.alpha, none.metadata.offset), (0.0, 0.0));
+        Ok(())
+    }
+
+    /// A block whose real vectors are all the same value has a range of width 0.
+    /// With `alpha = 0` every code was 0 and every query was at distance 0 from
+    /// the block, so it won every TopN.
+    #[test]
+    fn test_constant_range_keeps_distances_nonzero() -> Result<()> {
+        let (dim, count) = (4, 8);
+        let mut data = vec![0.5_f32; dim * count];
+        let null_row = 3;
+        data[null_row * dim..(null_row + 1) * dim].fill(0.0);
+        let keep: Vec<bool> = (0..count).map(|row| row != null_row).collect();
+        let params = VectorParameters {
+            dim,
+            count,
+            distance_type: DistanceType::L2,
+            invert: true,
+        };
+        let encoded = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            keep.iter().copied(),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        assert!(encoded.metadata.alpha > 0.0, "{}", encoded.metadata.alpha);
+
+        // The constant itself is exact, a query at another value is at a distance.
+        let same = encoded.encode_query(&[0.5; 4]);
+        assert!(encoded.score_point(&same, 0).abs() < 1e-6);
+        let other = encoded.encode_query(&[0.9; 4]);
+        let distance = -encoded.score_point(&other, 0);
+        assert!((distance - 4.0 * 0.4 * 0.4).abs() < 0.02, "{distance}");
+
+        // A query beyond the widened range is clamped, and still at a distance.
+        let far = encoded.encode_query(&[5.0; 4]);
+        assert!(
+            -encoded.score_point(&far, 0) > 0.9,
+            "{}",
+            encoded.score_point(&far, 0)
+        );
+        Ok(())
+    }
+
+    /// Ported from qdrant `lib/quantization/tests/integration/test_simple.rs`
+    /// (qdrant#9518). L2 used to add `actual_dim * offset^2` to every score, so
+    /// translating all vectors and the query by 1000 changed the distances.
+    #[test]
+    fn test_scalar_quantized_distance_scores_are_translation_invariant() {
+        for (distance_type, invert) in [
+            (DistanceType::L1, false),
+            (DistanceType::L1, true),
+            (DistanceType::L2, false),
+            (DistanceType::L2, true),
+        ] {
+            let (vector_data, query) = deterministic_affine_vectors();
+            let (shifted_vector_data, shifted_query) =
+                map_affine(&vector_data, &query, 1.0, 1000.0);
+
+            let base_scores =
+                scalar_quantized_scores_for(distance_type, invert, &vector_data, &query);
+            let shifted_scores = scalar_quantized_scores_for(
+                distance_type,
+                invert,
+                &shifted_vector_data,
+                &shifted_query,
+            );
+
+            assert_scores_match_transform(&base_scores, &shifted_scores, 1.0, 0.25);
+        }
+    }
+
+    #[test]
+    fn test_scalar_quantized_scores_follow_positive_scaling() {
+        for (distance_type, invert, expected_scale) in [
+            (DistanceType::Dot, false, 6.25),
+            (DistanceType::Dot, true, 6.25),
+            (DistanceType::L1, false, 2.5),
+            (DistanceType::L1, true, 2.5),
+            (DistanceType::L2, false, 6.25),
+            (DistanceType::L2, true, 6.25),
+        ] {
+            let scale = 2.5;
+            let (vector_data, query) = deterministic_affine_vectors();
+            let (scaled_vector_data, scaled_query) = map_affine(&vector_data, &query, scale, 0.0);
+
+            let base_scores =
+                scalar_quantized_scores_for(distance_type, invert, &vector_data, &query);
+            let scaled_scores = scalar_quantized_scores_for(
+                distance_type,
+                invert,
+                &scaled_vector_data,
+                &scaled_query,
+            );
+
+            assert_scores_match_transform(&base_scores, &scaled_scores, expected_scale, 1.0);
+        }
+    }
+
+    /// The dotprod kernels give the exact integers of the scalar dot product and
+    /// L1 distance, for every length that is a multiple of `ALIGNMENT`, with
+    /// codes up to 127.
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn test_score_neon_dotprod() {
+        if !std::arch::is_aarch64_feature_detected!("dotprod") {
+            return;
+        }
+        for dim in (ALIGNMENT..=320).step_by(ALIGNMENT) {
+            let q: Vec<u8> = (0..dim).map(|i| (i * 37 % 128) as u8).collect();
+            let v: Vec<u8> = (0..dim).map(|i| 127 - (i * 11 % 128) as u8).collect();
+            let (q, v) = (q.as_ptr(), v.as_ptr());
+            let dot = unsafe { impl_score_dot_neon_dotprod(q, v, dim as u32) };
+            assert_eq!(dot, impl_score_dot(q, v, dim) as f32, "dot, dim {dim}");
+            let l1 = unsafe { impl_score_l1_neon_dotprod(q, v, dim as u32) };
+            assert_eq!(l1, impl_score_l1(q, v, dim) as f32, "l1, dim {dim}");
+        }
+    }
+
+    /// Codes in `64..=127` from an LCG, high enough that 4,096-dimensional dot
+    /// products exceed 2^24.
+    #[cfg(any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
+    fn high_codes(dim: usize, seed: u64) -> Vec<u8> {
+        let mut x = seed;
+        (0..dim)
+            .map(|_| {
+                x = x
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                64 + (x >> 58) as u8
+            })
+            .collect()
+    }
+
+    /// The kernel chosen for every distance and dimension scores exactly like
+    /// the kernel main uses on this CPU (AVX2 on x86, NEON on arm), including
+    /// dot products above 2^24, where AVX2 rounds its f32 partial sums.
+    #[cfg(any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
+    #[test]
+    fn test_score_kernel_matches_main() {
+        #[cfg(target_arch = "x86_64")]
+        {
+            if !(is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma")) {
+                return;
+            }
+        }
+        #[cfg(target_arch = "x86_64")]
+        let (main_dot, main_l1): (ScoreKernel, ScoreKernel) =
+            (impl_score_dot_avx, impl_score_l1_avx);
+        #[cfg(target_arch = "aarch64")]
+        let (main_dot, main_l1): (ScoreKernel, ScoreKernel) =
+            (impl_score_dot_neon, impl_score_l1_neon);
+        let main_kernel = |distance_type| match distance_type {
+            DistanceType::Dot | DistanceType::L2 => main_dot,
+            DistanceType::L1 => main_l1,
+        };
+        let mut rounded = 0;
+        for dim in [16, 1024, 1040, 1056, 1536, 4080, 4096] {
+            let mut cases = vec![
+                (vec![127u8; dim], vec![127u8; dim]),
+                (vec![0; dim], vec![127; dim]),
+            ];
+            cases.extend((1..40).map(|seed| (high_codes(dim, seed), high_codes(dim, seed + 1000))));
+            for (q, v) in &cases {
+                let (q, v) = (q.as_ptr(), v.as_ptr());
+                for distance_type in [DistanceType::Dot, DistanceType::L1, DistanceType::L2] {
+                    let kernel = select_score_kernel(distance_type, dim).unwrap();
+                    let expected = unsafe { main_kernel(distance_type)(q, v, dim as u32) };
+                    let score = unsafe { kernel(q, v, dim as u32) };
+                    assert_eq!(score, expected, "{distance_type:?}, dim {dim}");
+                }
+                let dot = unsafe { main_dot(q, v, dim as u32) };
+                rounded += usize::from(dot != impl_score_dot(q, v, dim) as f32);
+            }
+        }
+        // The cases include sums that AVX2 rounds (arm sums exactly).
+        if cfg!(target_arch = "x86_64") {
+            assert!(rounded > 0);
+        } else {
+            assert_eq!(rounded, 0);
+        }
+    }
+
+    /// The VNNI kernels give the exact integer of the scalar dot product, for
+    /// every length that is a multiple of `ALIGNMENT`, with codes up to 127.
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn test_score_dot_vnni() {
+        let avx512 = is_x86_feature_detected!("avx512vnni") && is_x86_feature_detected!("avx512bw");
+        let avx = is_x86_feature_detected!("avxvnni") && is_x86_feature_detected!("avx2");
+        for dim in (ALIGNMENT..=320).step_by(ALIGNMENT) {
+            let q: Vec<u8> = (0..dim).map(|i| (i * 37 % 128) as u8).collect();
+            let v: Vec<u8> = (0..dim).map(|i| 127 - (i * 11 % 128) as u8).collect();
+            let expected = impl_score_dot(q.as_ptr(), v.as_ptr(), dim) as f32;
+            if avx512 {
+                let score =
+                    unsafe { impl_score_dot_avx512_vnni(q.as_ptr(), v.as_ptr(), dim as u32) };
+                assert_eq!(score, expected, "avx512 vnni, dim {dim}");
+            }
+            if avx {
+                let score = unsafe { impl_score_dot_avx_vnni(q.as_ptr(), v.as_ptr(), dim as u32) };
+                assert_eq!(score, expected, "avx vnni, dim {dim}");
+            }
+        }
+    }
 }

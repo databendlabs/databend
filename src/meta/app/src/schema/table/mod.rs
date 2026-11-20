@@ -230,9 +230,9 @@ pub struct TableMeta {
 }
 
 impl TableMeta {
-    /// Returns the cluster key defined on the main branch, if any.
+    /// Returns the table's cluster key, if any.
     pub fn cluster_key_meta(&self) -> Option<(u32, String)> {
-        // - Prefer `cluster_key_v2` if present (branch-aware)
+        // - Prefer `cluster_key_v2` if present
         // - Otherwise fallback to old `cluster_key` + global `cluster_key_seq`
         self.cluster_key_v2.clone().or_else(|| {
             self.cluster_key
@@ -290,6 +290,11 @@ pub enum TableIndexType {
     Ngram = 1,
     Vector = 2,
     Spatial = 3,
+    /// Granule-level Bloom index written by newer releases.
+    ///
+    /// This release only decodes the variant so table metadata that carries it
+    /// remains readable; creating or refreshing such an index is rejected.
+    Bloom = 4,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -385,7 +390,7 @@ impl TableInfo {
         self
     }
 
-    /// Returns the cluster key defined on the main branch, if any.
+    /// Returns the table's cluster key, if any.
     pub fn cluster_key(&self) -> Option<(u32, String)> {
         self.meta.cluster_key_meta()
     }
@@ -489,6 +494,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Spatial => {
                 write!(f, "SPATIAL")
+            }
+            TableIndexType::Bloom => {
+                write!(f, "BLOOM")
             }
         }
     }

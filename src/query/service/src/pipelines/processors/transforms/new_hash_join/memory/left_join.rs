@@ -26,7 +26,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_pipeline::core::check_interrupt;
 
@@ -74,7 +73,6 @@ impl OuterLeftHashJoin {
             method,
             desc.clone(),
             state.clone(),
-            0,
         )?;
 
         Ok(OuterLeftHashJoin {
@@ -140,7 +138,6 @@ impl Join for OuterLeftHashJoin {
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe(probe_data)
             }
-            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
@@ -351,10 +348,7 @@ pub fn final_result_block(
 
                     match col.is_null() || col.is_nullable() {
                         true => entry.clone(),
-                        false => BlockEntry::from(NullableColumn::new_column(
-                            col,
-                            Bitmap::new_constant(true, result_block.num_rows()),
-                        )),
+                        false => BlockEntry::from(col.wrap_nullable(None)),
                     }
                 }
             };

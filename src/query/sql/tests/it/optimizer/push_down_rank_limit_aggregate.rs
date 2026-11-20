@@ -93,22 +93,34 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             sql: "SELECT category, sum(value * value) FROM events GROUP BY category ORDER BY category LIMIT 3",
         },
         SqlTestCase {
-            name: "multiple_group_keys_do_not_push_scan_order",
-            description: "Rank limits with multiple group keys must not install scan ordering for the runtime single-key filter.",
+            name: "multiple_group_keys_push_scan_order",
+            description: "Rank limits with multiple group keys push all rank keys as scan ordering, so the scan can prune by the runtime boundary on the first key.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY category LIMIT 3",
         },
         SqlTestCase {
             name: "rank_limit_follows_order_by_key_order",
-            description: "When ORDER BY lists the group keys in a different order, the rank limit keys must follow the ORDER BY order.",
+            description: "When ORDER BY lists the group keys in a different order, the rank limit keys and the scan ordering must follow the ORDER BY order.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY value DESC, category LIMIT 3",
         },
         SqlTestCase {
             name: "repeated_order_key_keeps_single_rank_key",
-            description: "A repeated ORDER BY column keeps only its first occurrence, so the single-key rank limit still pushes scan ordering.",
+            description: "A repeated ORDER BY column keeps only its first occurrence, so the rank limit and the scan ordering have a single key.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, count(*) FROM events GROUP BY category ORDER BY category ASC, category DESC LIMIT 3",
+        },
+        SqlTestCase {
+            name: "group_by_limit_pushes_group_key_order",
+            description: "A limited aggregate without ORDER BY ranks by its group keys and pushes them as scan ordering.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, value, count(*) FROM events GROUP BY category, value LIMIT 3",
+        },
+        SqlTestCase {
+            name: "order_by_aggregate_output_does_not_push_scan_order",
+            description: "Ordering by an aggregate result cannot bound the group keys, so no scan ordering is pushed.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, count(*) AS c FROM events GROUP BY category ORDER BY c DESC LIMIT 3",
         },
         SqlTestCase {
             name: "join_input_does_not_push_scan_order",
@@ -122,6 +134,48 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, count(*) FROM (SELECT category, value FROM events ORDER BY value) ordered_events GROUP BY category ORDER BY category LIMIT 3",
         },
+        SqlTestCase {
+            name: "union_all_input_pushes_order_to_branch_scans",
+            description: "An aggregate over UNION ALL should push the group-key ordering to every branch scan, translated into the branch columns.",
+            setup_sqls: &[EVENTS_TABLE, CATEGORIES_TABLE],
+            sql: "SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM categories) u GROUP BY k ORDER BY k LIMIT 3",
+        },
+        SqlTestCase {
+            name: "union_all_widened_branch_keeps_no_order",
+            description: "A UNION ALL branch cast to a wider type must not receive the ordering, while the uncast branch still does.",
+            setup_sqls: &[EVENTS_TABLE, WIDE_EVENTS_TABLE],
+            sql: "SELECT k, count(*) FROM (SELECT category AS k FROM events UNION ALL SELECT category FROM wide_events) u GROUP BY k ORDER BY k DESC LIMIT 3",
+        },
+        SqlTestCase {
+            name: "order_by_prefix_breaks_ties_by_unselected_group_key",
+            description: "ORDER BY covers only part of the group keys: the TopN must break ties by the remaining group keys, even one that is not selected, since only the first groups by all the rank keys are whole.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, count(*) FROM events GROUP BY category, value ORDER BY category DESC LIMIT 3",
+        },
+        SqlTestCase {
+            name: "order_by_prefix_with_unsortable_group_key_is_not_pushed",
+            description: "The TopN cannot break ties by a group key it cannot sort by, so the rank limit must not be pushed.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT category, tags, count(*) FROM tagged_events GROUP BY category, tags ORDER BY category LIMIT 3",
+        },
+        SqlTestCase {
+            name: "limit_with_unsortable_group_key_is_not_pushed",
+            description: "Without a sort by every group key the limit could keep a group that lost rows to the rank limit, so the rank limit must not be pushed.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT category, tags, count(*) FROM tagged_events GROUP BY category, tags LIMIT 3",
+        },
+        SqlTestCase {
+            name: "limit_without_aggregate_functions_keeps_unsortable_group_key",
+            description: "Without aggregate functions a group that lost rows to the rank limit is still the same group, so the rank limit is pushed even with a group key the sort cannot order by.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT DISTINCT category, tags FROM tagged_events LIMIT 3",
+        },
+        SqlTestCase {
+            name: "order_by_prefix_without_aggregate_functions_needs_no_tie_breaker",
+            description: "Without aggregate functions any group tied on the ORDER BY keys is a right answer, so the TopN keeps its sort keys.",
+            setup_sqls: &[TAGGED_EVENTS_TABLE],
+            sql: "SELECT DISTINCT category, tags FROM tagged_events ORDER BY category LIMIT 3",
+        },
     ];
 
     for case in &cases {
@@ -133,3 +187,5 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
 
 const EVENTS_TABLE: &str = "CREATE TABLE events(category INT, value INT)";
 const CATEGORIES_TABLE: &str = "CREATE TABLE categories(category INT, name STRING)";
+const WIDE_EVENTS_TABLE: &str = "CREATE TABLE wide_events(category BIGINT)";
+const TAGGED_EVENTS_TABLE: &str = "CREATE TABLE tagged_events(category INT, tags ARRAY(INT))";

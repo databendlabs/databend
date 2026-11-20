@@ -19,113 +19,22 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Instant;
 
 use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::lock::LockTableOption;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use log::info;
 use log::warn;
 use parking_lot::Mutex;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-use crate::interpreters::hook::analyze_hook::AnalyzeDesc;
-use crate::interpreters::hook::analyze_hook::execute_analyze_hook;
-use crate::interpreters::hook::compact_hook::CompactHookTraceCtx;
-use crate::interpreters::hook::compact_hook::CompactTargetTableDescription;
-use crate::interpreters::hook::compact_hook::compact_after_write_enabled;
-use crate::interpreters::hook::compact_hook::execute_compact_hook;
-use crate::interpreters::hook::refresh_hook::RefreshDesc;
-use crate::interpreters::hook::refresh_hook::execute_refresh_hook;
-use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
-use crate::sessions::TableContextPartitionStats;
-
-pub struct TableHookTask {
-    pub ctx: Arc<QueryContext>,
-    pub table_id: u64,
-    pub compact_target: CompactTargetTableDescription,
-    pub hook_settings: TableHookTaskSettings,
-    pub lock_opt: LockTableOption,
-    pub operation_name: String,
-    pub main_operation_start: Instant,
-}
-
-#[derive(Clone, Copy)]
-pub struct TableHookTaskSettings {
-    pub compact_after_write: bool,
-}
-
-impl TableHookTaskSettings {
-    pub fn create(ctx: &Arc<QueryContext>) -> Self {
-        Self {
-            compact_after_write: compact_after_write_enabled(ctx),
-        }
-    }
-
-    fn merge(&mut self, other: Self) {
-        self.compact_after_write |= other.compact_after_write;
-    }
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct TableHookTaskKey {
-    catalog: String,
-    table_id: u64,
-}
-
-trait SchedulerTask: Send + 'static {
-    fn key(&self) -> TableHookTaskKey;
-
-    fn merge(&mut self, other: Self);
-}
-
-impl SchedulerTask for TableHookTask {
-    fn key(&self) -> TableHookTaskKey {
-        TableHookTaskKey {
-            catalog: self.compact_target.catalog.clone(),
-            table_id: self.table_id,
-        }
-    }
-
-    fn merge(&mut self, mut other: Self) {
-        other.hook_settings.merge(self.hook_settings);
-
-        other
-            .ctx
-            .written_segment_locations()
-            .extend(self.ctx.written_segment_locations().list());
-
-        let compaction_num_block_hint = self
-            .ctx
-            .get_compaction_num_block_hint(&self.compact_target.table)
-            .saturating_add(
-                other
-                    .ctx
-                    .get_compaction_num_block_hint(&other.compact_target.table),
-            );
-        if compaction_num_block_hint > 0 {
-            other.ctx.set_compaction_num_block_hint(
-                &other.compact_target.table,
-                compaction_num_block_hint,
-            );
-        }
-
-        if self.ctx.get_enable_auto_analyze() {
-            other.ctx.set_enable_auto_analyze(true);
-        }
-
-        other.main_operation_start = self.main_operation_start;
-        other.operation_name = self.operation_name.clone();
-
-        *self = other;
-    }
-}
+use crate::interpreters::hook::table_hook_task::SchedulerTask;
+use crate::interpreters::hook::table_hook_task::TableHookTask;
+use crate::interpreters::hook::table_hook_task::TableHookTaskKey;
 
 type SchedulerFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 type SchedulerRunner<T> = Arc<dyn Fn(T) -> SchedulerFuture + Send + Sync>;
@@ -150,8 +59,7 @@ enum TableHookState<T> {
 
 impl TableHookScheduler {
     pub fn init(max_concurrency: usize) -> Result<()> {
-        let runner: SchedulerRunner<TableHookTask> =
-            Arc::new(|task| Box::pin(Self::execute_task(task)));
+        let runner: SchedulerRunner<TableHookTask> = Arc::new(|task| Box::pin(task.execute(true)));
         let spawner: SchedulerSpawner = Arc::new(|future, name| {
             GlobalIORuntime::instance().spawn_named(future, name);
         });
@@ -174,62 +82,6 @@ impl TableHookScheduler {
 
     pub fn enqueue(&self, task: TableHookTask) {
         self.core.enqueue(task);
-    }
-
-    async fn execute_task(task: TableHookTask) {
-        info!(
-            "Start async table hook job for operation {}, table_id={}, table={}",
-            task.operation_name, task.table_id, task.compact_target.table
-        );
-
-        Self::execute_compact(&task).await;
-        Self::execute_refresh(&task).await;
-        Self::execute_analyze(&task).await;
-
-        info!(
-            "Async table hook job completed for operation {}, table_id={}, table={}",
-            task.operation_name, task.table_id, task.compact_target.table
-        );
-    }
-
-    async fn execute_compact(task: &TableHookTask) {
-        if !task.hook_settings.compact_after_write {
-            return;
-        }
-
-        execute_compact_hook(
-            task.ctx.clone(),
-            task.compact_target.clone(),
-            CompactHookTraceCtx {
-                start: task.main_operation_start,
-                operation_name: task.operation_name.clone(),
-            },
-            task.lock_opt.clone(),
-        )
-        .await
-        .ok();
-    }
-
-    async fn execute_refresh(task: &TableHookTask) {
-        execute_refresh_hook(task.ctx.clone(), RefreshDesc {
-            catalog: task.compact_target.catalog.clone(),
-            database: task.compact_target.database.clone(),
-            table: task.compact_target.table.clone(),
-            table_id: Some(task.table_id),
-        })
-        .await
-        .ok();
-    }
-
-    async fn execute_analyze(task: &TableHookTask) {
-        execute_analyze_hook(task.ctx.clone(), AnalyzeDesc {
-            catalog: task.compact_target.catalog.clone(),
-            database: task.compact_target.database.clone(),
-            table: task.compact_target.table.clone(),
-            table_id: Some(task.table_id),
-        })
-        .await
-        .ok();
     }
 }
 
@@ -314,7 +166,17 @@ impl<T: SchedulerTask> SchedulerCore<T> {
             return;
         };
 
-        (scheduler.runner)(task).await;
+        // Catch both runner invocation and polling so a panic cannot strand this key in Running.
+        let result = CatchUnwindFuture::create(async {
+            (scheduler.runner)(task).await;
+        })
+        .await;
+        if let Err(e) = result {
+            warn!(
+                "Async table hook job panicked, table_id={}, catalog={}: {e}",
+                key.table_id, key.catalog,
+            );
+        }
         drop(permit);
 
         scheduler.finish_table_job(key);
@@ -388,7 +250,6 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::time::Duration;
 
-    use databend_common_catalog::table_context::TableContextSettings;
     use tokio::sync::Notify;
     use tokio::time::sleep;
     use tokio::time::timeout;
@@ -766,59 +627,6 @@ mod tests {
             (2..=32).collect::<Vec<_>>(),
             "same-table queued payloads should be coalesced into a single follow-up job"
         );
-    }
-
-    fn table_hook_task(ctx: Arc<QueryContext>, table: &str) -> TableHookTask {
-        let hook_settings = TableHookTaskSettings::create(&ctx);
-        TableHookTask {
-            ctx,
-            table_id: 1,
-            compact_target: CompactTargetTableDescription {
-                catalog: "default".to_string(),
-                database: "default".to_string(),
-                table: table.to_string(),
-                table_id: Some(1),
-            },
-            hook_settings,
-            lock_opt: LockTableOption::NoLock,
-            operation_name: "insert".to_string(),
-            main_operation_start: Instant::now(),
-        }
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_table_hook_task_merge_accumulates_compaction_hint() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let old_ctx = fixture.new_query_ctx().await?;
-        let latest_ctx = fixture.new_query_ctx().await?;
-
-        old_ctx.set_compaction_num_block_hint("t", 7);
-        latest_ctx.set_compaction_num_block_hint("t", 5);
-        let mut task = table_hook_task(old_ctx, "t");
-        task.merge(table_hook_task(latest_ctx, "t"));
-
-        assert_eq!(task.ctx.get_compaction_num_block_hint("t"), 12);
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_table_hook_task_merge_preserves_hook_settings() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let old_ctx = fixture.new_query_ctx().await?;
-        let latest_ctx = fixture.new_query_ctx().await?;
-
-        old_ctx
-            .get_settings()
-            .set_setting("enable_compact_after_write".to_string(), "1".to_string())?;
-        latest_ctx
-            .get_settings()
-            .set_setting("enable_compact_after_write".to_string(), "0".to_string())?;
-
-        let mut task = table_hook_task(old_ctx, "t");
-        task.merge(table_hook_task(latest_ctx, "t"));
-
-        assert!(task.hook_settings.compact_after_write);
-        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

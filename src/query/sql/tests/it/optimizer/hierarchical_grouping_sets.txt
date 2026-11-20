@@ -1,5 +1,5 @@
 === rollup_shared_base ===
-description: The default hierarchy derives every lower ROLLUP level from the most detailed grouping.
+description: The shared-base hierarchy derives every lower ROLLUP level from the most detailed grouping.
 sql: SELECT a, b, c, sum(v), count(v), min(v), max(v)
 FROM t
 GROUP BY ROLLUP(a, b, c)
@@ -134,7 +134,7 @@ Exchange(Merge)
 
 
 === rollup_nearest_parent_cascade ===
-description: The optional cascade derives every lower ROLLUP level from its closest strict superset.
+description: The default cascade derives every lower ROLLUP level from its closest strict superset.
 sql: SELECT a, b, c, sum(v), count(v), min(v), max(v)
 FROM t
 GROUP BY ROLLUP(a, b, c)

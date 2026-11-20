@@ -28,12 +28,26 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_storages_common_cache::size::btree_map;
+use databend_storages_common_cache::size::column_statistics;
+use databend_storages_common_cache::size::hash_map;
+use databend_storages_common_cache::size::location;
+use databend_storages_common_cache::size::none;
+use databend_storages_common_cache::size::option;
+use databend_storages_common_cache::size::scalar;
+use databend_storages_common_cache::size::vec;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::IndexMatches;
+use databend_storages_common_table_meta::meta::BlockDataFile;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::Versioned;
 
 /// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
@@ -51,6 +65,78 @@ pub struct FuseBlockPartInfo {
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
+
+    /// The group files of a split block, holding the chunks this part reads. Empty for a
+    /// legacy block, whose chunks are all in the file at `location`. For a split block,
+    /// `columns_meta` holds the chunks of all groups, and `location` only identifies the block.
+    #[serde(default)]
+    pub column_groups: Vec<PartColumnGroup>,
+}
+
+/// A group file of a split block, with the chunks a part reads from it.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PartColumnGroup {
+    pub location: String,
+    pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub compression: Compression,
+}
+
+impl PartColumnGroup {
+    /// The files to read: the legacy file at `location`, or the `groups` of a split block.
+    pub fn data_files<'a>(
+        location: &'a str,
+        columns_meta: &'a HashMap<ColumnId, ColumnMeta>,
+        compression: Compression,
+        groups: &'a [PartColumnGroup],
+    ) -> Vec<BlockDataFile<'a>> {
+        if groups.is_empty() {
+            return vec![BlockDataFile {
+                location,
+                col_metas: columns_meta,
+                compression,
+            }];
+        }
+        groups
+            .iter()
+            .map(|group| BlockDataFile {
+                location: &group.location,
+                col_metas: &group.columns_meta,
+                compression: group.compression,
+            })
+            .collect()
+    }
+
+    /// The group as block metadata a reader can read the group from. The file size and the
+    /// Bloom index are not known from a part.
+    pub fn to_file_meta(&self) -> ColumnGroupFileMeta {
+        ColumnGroupFileMeta {
+            location: (self.location.clone(), DataBlock::VERSION),
+            file_size: 0,
+            leaf_column_metas: self.columns_meta.clone(),
+            bloom: None,
+            compression: self.compression,
+        }
+    }
+
+    /// The groups of `meta` that store a column `keep` accepts, with only those columns.
+    pub fn from_block(meta: &BlockMeta, keep: impl Fn(&ColumnId) -> bool) -> Vec<Self> {
+        meta.column_groups
+            .iter()
+            .filter_map(|group| {
+                let columns_meta: HashMap<_, _> = group
+                    .leaf_column_metas
+                    .iter()
+                    .filter(|(id, _)| keep(id))
+                    .map(|(id, meta)| (*id, meta.clone()))
+                    .collect();
+                (!columns_meta.is_empty()).then(|| PartColumnGroup {
+                    location: group.location.0.clone(),
+                    columns_meta,
+                    compression: group.compression,
+                })
+            })
+            .collect()
+    }
 }
 
 #[typetag::serde(name = "fuse")]
@@ -74,6 +160,40 @@ impl PartInfo for FuseBlockPartInfo {
     fn part_type(&self) -> PartInfoType {
         PartInfoType::BlockLevel
     }
+
+    /// Column metas own no heap memory, as in `BlockMeta`'s estimate.
+    fn mem_bytes(&self) -> usize {
+        size_of::<Self>()
+            + self.location.capacity()
+            + option(&self.bloom_filter_index_location, location)
+            + hash_map(&self.columns_meta, |_, _| 0)
+            + option(&self.columns_stat, |stats| {
+                hash_map(stats, |_, s| column_statistics(s))
+            })
+            + option(&self.sort_min_max, |(min, max)| scalar(min) + scalar(max))
+            + option(&self.block_meta_index, block_meta_index)
+            + vec(&self.column_groups, |g| {
+                g.location.capacity() + hash_map(&g.columns_meta, |_, _| 0)
+            })
+    }
+}
+
+fn block_meta_index(b: &BlockMetaIndex) -> usize {
+    b.block_location.capacity()
+        + b.segment_location.capacity()
+        + option(&b.snapshot_location, |s| s.capacity())
+        + option(&b.inverted_index_matches, index_matches)
+        + option(&b.vector_index_matches, index_matches)
+        + option(&b.virtual_block_meta, |v| {
+            v.virtual_block_location.capacity()
+                + btree_map(&v.fields, |_, _| 0)
+                + vec(&v.read_slots, none)
+                + hash_map(&v.virtual_column_stats, |_, s| column_statistics(s))
+        })
+}
+
+fn index_matches(m: &IndexMatches) -> usize {
+    vec(&m.rows, none) + option(&m.scores, |v| vec(v, none))
 }
 
 impl FuseBlockPartInfo {
@@ -89,8 +209,10 @@ impl FuseBlockPartInfo {
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
+        column_groups: Vec<PartColumnGroup>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FuseBlockPartInfo {
+            column_groups,
             location,
             bloom_filter_index_location,
             bloom_filter_index_size,
@@ -120,6 +242,16 @@ impl FuseBlockPartInfo {
 
     pub fn block_meta_index(&self) -> Option<&BlockMetaIndex> {
         self.block_meta_index.as_ref()
+    }
+
+    /// The files this part reads its column chunks from.
+    pub fn data_files(&self) -> Vec<BlockDataFile<'_>> {
+        PartColumnGroup::data_files(
+            &self.location,
+            &self.columns_meta,
+            self.compression,
+            &self.column_groups,
+        )
     }
 }
 
@@ -153,6 +285,10 @@ impl PartInfo for FuseLazyPartInfo {
     fn part_type(&self) -> PartInfoType {
         PartInfoType::LazyLevel
     }
+
+    fn mem_bytes(&self) -> usize {
+        size_of::<Self>() + location(&self.segment_location)
+    }
 }
 
 impl FuseLazyPartInfo {
@@ -169,5 +305,92 @@ impl FuseLazyPartInfo {
             .ok_or_else(|| {
                 ErrorCode::Internal("Cannot downcast from PartInfo to FuseLazyPartInfo.")
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::plan::PartStatistics;
+    use databend_common_catalog::plan::Partitions;
+    use databend_common_catalog::plan::PartitionsShuffleKind;
+    use databend_storages_common_cache::CacheKind;
+    use databend_storages_common_cache::CachedItem;
+    use databend_storages_common_cache::MemCache;
+    use databend_storages_common_cache::PoolCaps;
+    use databend_storages_common_cache::backend::KindStore;
+    use databend_storages_common_cache::kinds::table;
+    use databend_storages_common_cache::shared::SharedStore;
+    use databend_storages_common_table_meta::meta::SingleColumnMeta;
+
+    use super::*;
+
+    fn part(columns: u32) -> PartInfoPtr {
+        let meta = SingleColumnMeta {
+            offset: 0,
+            len: 0,
+            num_values: 0,
+        };
+        let stat = || {
+            let (min, max) = ("a".repeat(100), "b".repeat(100));
+            ColumnStatistics::new(Scalar::String(min), Scalar::String(max), 0, 0, None)
+        };
+        FuseBlockPartInfo::create(
+            "1/2/_b/block.parquet".to_string(),
+            None,
+            0,
+            0,
+            (0..columns)
+                .map(|id| (id, ColumnMeta::Parquet(meta.clone())))
+                .collect(),
+            Some((0..columns).map(|id| (id, stat())).collect()),
+            Compression::Lz4Raw,
+            None,
+            None,
+            None,
+            vec![],
+        )
+    }
+
+    /// Columns make most of a part: their metas and statistics, with the strings of the
+    /// statistics, are counted.
+    #[test]
+    fn test_part_mem_bytes_counts_columns() {
+        let per_column =
+            size_of::<(ColumnId, ColumnMeta)>() + size_of::<(ColumnId, ColumnStatistics)>() + 200;
+        let (one, many) = (part(1).mem_bytes(), part(101).mem_bytes());
+        assert!(many - one >= 100 * per_column, "{one} {many}");
+        assert!(many - one <= 300 * per_column, "{one} {many}");
+    }
+
+    #[test]
+    fn test_nonempty_prune_result_is_charged_until_last_reader() {
+        let parts = (0..4).map(|_| part(101)).collect::<Vec<_>>();
+        let part_bytes: usize = parts.iter().map(|p| p.mem_bytes()).sum();
+        let value = (
+            PartStatistics::default(),
+            Partitions::create(PartitionsShuffleKind::Seq, parts),
+        );
+        let bytes = value.mem_bytes();
+        assert!(bytes >= part_bytes);
+        assert_eq!(value.legacy_bytes(), 0);
+        let store = Arc::new(SharedStore::new(
+            PoolCaps {
+                meta: bytes * 4,
+                index: 0,
+                data: 0,
+            },
+            [],
+            1,
+        ));
+        let kind = CacheKind::of::<table::PruneResult>();
+        let cache = MemCache::new(store.clone(), kind);
+        let held = cache.put("prune", value);
+        assert!(held.is_charged());
+        assert_eq!(store.kind_stats(kind).resident, bytes);
+        assert!(cache.evict("prune"));
+        let stats = store.kind_stats(kind);
+        assert_eq!((stats.in_cache, stats.resident), (0, bytes));
+        drop(held);
+        assert_eq!(store.kind_stats(kind).resident, 0);
     }
 }

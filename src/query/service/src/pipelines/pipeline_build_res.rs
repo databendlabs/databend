@@ -16,22 +16,14 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::SourcePipeBuilder;
 use databend_common_pipeline::sources::OneBlockSource;
 
 use crate::interpreters::CreateTableInterpreter;
-use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
-
-#[derive(Clone)]
-pub struct PipelineBuilderData {
-    pub input_join_state: Option<Arc<HashJoinBuildState>>,
-    pub input_probe_schema: Option<Vec<DataField>>,
-}
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,
@@ -39,8 +31,6 @@ pub struct PipelineBuildResult {
     pub sources_pipelines: Vec<Pipeline>,
 
     pub exchange_injector: Arc<dyn ExchangeInjector>,
-    /// for local fragment data sharing
-    pub builder_data: PipelineBuilderData,
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
 }
 
@@ -50,10 +40,6 @@ impl PipelineBuildResult {
             main_pipeline: Pipeline::create(),
             sources_pipelines: vec![],
             exchange_injector: DefaultExchangeInjector::create(),
-            builder_data: PipelineBuilderData {
-                input_join_state: None,
-                input_probe_schema: None,
-            },
             r_cte_scan_interpreters: vec![],
         }
     }
@@ -73,10 +59,6 @@ impl PipelineBuildResult {
             main_pipeline,
             sources_pipelines: vec![],
             exchange_injector: DefaultExchangeInjector::create(),
-            builder_data: PipelineBuilderData {
-                input_join_state: None,
-                input_probe_schema: None,
-            },
             r_cte_scan_interpreters: vec![],
         })
     }

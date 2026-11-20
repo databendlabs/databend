@@ -33,7 +33,6 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +63,7 @@ pub fn series_type_from_data_type(data_type: &DataType) -> Option<DataType> {
 pub fn normalize_series_params(
     series_type: &DataType,
     start: i64,
-    mut end: i64,
+    end: i64,
     mut step: i64,
     inclusive: bool,
 ) -> Result<NormalizedSeries> {
@@ -81,20 +80,14 @@ pub fn normalize_series_params(
         return Err(ErrorCode::BadArguments("step must not be zero".to_string()));
     }
 
-    if inclusive {
-        if step > 0 {
-            end += 1;
-        } else {
-            end -= 1;
-        }
-    }
-
-    if step > 0 && start > end {
+    // Preserve empty inclusive ranges with adjacent, reversed bounds.
+    let adjacent_inclusive = inclusive && start.abs_diff(end) == 1;
+    if step > 0 && start > end && !adjacent_inclusive {
         return Err(ErrorCode::BadArguments(
             "start must be less than or equal to end when step is positive".to_string(),
         ));
     }
-    if step < 0 && start < end {
+    if step < 0 && start < end && !adjacent_inclusive {
         return Err(ErrorCode::BadArguments(
             "start must be greater than or equal to end when step is negative".to_string(),
         ));
@@ -264,16 +257,15 @@ fn build_series_row(
 
     let mut values = Vec::new();
     let mut current = start;
-    if step > 0 {
-        while current < end {
-            values.push(current);
-            current += step;
-        }
-    } else {
-        while current > end {
-            values.push(current);
-            current += step;
-        }
+    while (step > 0 && current < end)
+        || (step < 0 && current > end)
+        || (inclusive && current == end)
+    {
+        values.push(current);
+        let Some(next) = current.checked_add(step) else {
+            break;
+        };
+        current = next;
     }
 
     let len = values.len();
@@ -288,7 +280,7 @@ fn build_series_row(
         }
         _ => unreachable!(),
     };
-    let column = NullableColumn::new_column(column, Bitmap::new_constant(true, len));
+    let column = column.wrap_nullable(Some(Bitmap::new_constant(true, len)));
     (Value::Column(Column::Tuple(vec![column])), len)
 }
 

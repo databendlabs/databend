@@ -224,11 +224,11 @@ impl FieldEncoderBytes {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) -> Result<()> {
-        if !column.validity.get_bit(row_index) {
+        if !column.validity().get_bit(row_index) {
             self.write_null(out_buf);
             Ok(())
         } else {
-            self.write_field(&column.column, row_index, out_buf, in_nested)
+            self.write_field(column.column(), row_index, out_buf, in_nested)
         }
     }
 

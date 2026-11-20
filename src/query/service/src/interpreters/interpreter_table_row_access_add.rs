@@ -30,6 +30,7 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_policy_target_without_materialized_view;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
@@ -151,6 +152,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
             }
 
             let table_id = table_info.ident.table_id;
+            check_policy_target_without_materialized_view(&self.ctx, table.as_ref()).await?;
 
             let req = SetTableRowAccessPolicyReq {
                 tenant: self.ctx.get_tenant(),

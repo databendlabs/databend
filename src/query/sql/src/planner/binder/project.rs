@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -36,10 +35,7 @@ use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
@@ -698,18 +694,8 @@ impl Binder {
                 true,
             )?;
             let (scalar, _) = *type_checker.resolve(&expr)?;
-            let expr = scalar.as_expr()?;
-            let (new_expr, _) = ConstantFolder::fold(
-                Cow::Owned(expr),
-                &self.ctx.get_function_context()?,
-                &BUILTIN_FUNCTIONS,
-            );
-
-            match new_expr.into_owned() {
-                databend_common_expression::Expr::Constant(Constant {
-                    scalar: Scalar::Array(Column::Boolean(bitmap)),
-                    ..
-                }) => {
+            match scalar.constant_value(&self.ctx.get_function_context()?) {
+                Some((Scalar::Array(Column::Boolean(bitmap)), _)) => {
                     let mut new_column_idx = Vec::new();
                     for (index, val) in bitmap.iter().enumerate() {
                         if val {

@@ -169,6 +169,7 @@ impl<M: PrunedSegmentMeta + BlockMetaInfo> AccumulatingTransform for RuntimeTopN
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
     use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
     use databend_common_expression::types::NumberScalar;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -224,7 +225,10 @@ mod tests {
 
     #[test]
     fn test_window_releases_most_promising_segment_first() -> Result<()> {
-        let filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        let filter = Arc::new(RuntimeTopNFilter::new(
+            3,
+            Arc::new(RuntimeTopNBoundary::new(true, false)),
+        ));
         let order = filter.preferred_order().unwrap();
         let mut reorder =
             RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 2);
@@ -245,7 +249,10 @@ mod tests {
 
     #[test]
     fn test_nulls_first_ranks_null_bearing_segments_best() -> Result<()> {
-        let filter = Arc::new(RuntimeTopNFilter::new(3, true, true));
+        let filter = Arc::new(RuntimeTopNFilter::new(
+            3,
+            Arc::new(RuntimeTopNBoundary::new(true, true)),
+        ));
         let order = filter.preferred_order().unwrap();
         let mut reorder =
             RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 1);
@@ -263,10 +270,11 @@ mod tests {
 
     #[test]
     fn test_boundary_prunes_segments_at_entry_and_emission() -> Result<()> {
-        let filter = Arc::new(RuntimeTopNFilter::new(3, true, false));
+        let boundary = Arc::new(RuntimeTopNBoundary::new(true, false));
+        let filter = Arc::new(RuntimeTopNFilter::new(3, boundary.clone()));
         let order = filter.preferred_order().unwrap();
         let mut reorder =
-            RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter.clone(), order, 8);
+            RuntimeTopNSegmentReorder::<PrunedCompactSegmentMeta>::new(filter, order, 8);
 
         assert!(reorder.transform(segment_block("keep", 1, 9))?.is_empty());
         assert!(
@@ -275,7 +283,7 @@ mod tests {
                 .is_empty()
         );
 
-        filter.update(&Scalar::Number(NumberScalar::Int64(10)));
+        boundary.update(&Scalar::Number(NumberScalar::Int64(10)));
 
         // Entry-time filter drops segments the boundary already excludes.
         assert!(

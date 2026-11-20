@@ -17,7 +17,6 @@
 #![allow(clippy::missing_transmute_annotations)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(internal_features)]
-#![allow(unused)]
 // FIXME: we should avoid this by implementing Ord correctly.
 #![allow(clippy::non_canonical_partial_ord_impl)]
 #![allow(clippy::collapsible_if)]
@@ -26,25 +25,16 @@
 #![allow(clippy::cloned_ref_to_slice_refs)]
 #![allow(clippy::useless_vec)]
 #![allow(incomplete_features)]
-#![feature(fmt_internals)]
-#![feature(const_try)]
 #![feature(trivial_bounds)]
 #![feature(iterator_try_reduce)]
 #![feature(deref_patterns)]
-#![feature(type_ascription)]
 #![allow(clippy::type_complexity)]
 #![feature(associated_type_defaults)]
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(trait_alias)]
-#![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
-#![feature(int_roundings)]
-#![feature(try_blocks)]
-#![feature(debug_closure_helpers)]
-#![feature(iter_map_windows)]
-#![feature(likely_unlikely)]
 #![feature(portable_simd)]
 
 #[allow(dead_code)]
@@ -86,7 +76,6 @@ pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::filter::*;
 pub use crate::function::function_factory::*;
-pub use crate::function::register::*;
 pub use crate::function::register_comparison::*;
 pub use crate::function::register_vectorize::*;
 pub use crate::function::*;

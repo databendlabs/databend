@@ -34,7 +34,9 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -47,15 +49,6 @@ pub struct TxnManager {
     state: TxnState,
     txn_buffer: TxnBuffer,
     txn_id: String,
-
-    /// Tables that need to be vacuumed after the transaction completes.
-    ///
-    /// A single table may trigger multiple vacuum actions within the same transaction, especially
-    /// when auto-vacuum is enabled.
-    /// While we store the complete TableInfo here, only table_id and catalog_info are
-    /// actually used in subsequent vacuum operations. The table object itself will be reloaded
-    /// when the vacuum is eventually performed after transaction commit.
-    tables_need_purge: HashMap<u64, TableInfo>,
 }
 
 pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
@@ -86,6 +79,19 @@ pub struct TxnTableDelta {
     pub statistics_row_count: u64,
 }
 
+/// Inputs for an automatic table hook, never an execution context or a held lock.
+/// Repeated writes to the same table are merged until a successful COMMIT takes them.
+#[derive(Debug, Clone)]
+pub struct TxnTableHook {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub table_id: u64,
+    pub compaction_num_block_hint: u64,
+    pub written_segments: HashSet<Location>,
+    pub enable_auto_analyze: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TxnBuffer {
     tenant: Option<Tenant>,
@@ -98,6 +104,9 @@ pub struct TxnBuffer {
     deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
+    // These must be discarded with the buffer on rollback or failure as well.
+    tables_need_purge: HashMap<u64, TableInfo>,
+    table_hooks: BTreeMap<(String, u64), TxnTableHook>,
     // Only successfully buffered writes contribute.
     table_deltas: HashMap<u64, TxnTableDelta>,
 
@@ -223,7 +232,6 @@ impl TxnManager {
             state: TxnState::AutoCommit,
             txn_buffer: TxnBuffer::default(),
             txn_id: "".to_string(),
-            tables_need_purge: HashMap::new(),
         }))
     }
 
@@ -562,11 +570,51 @@ impl TxnManager {
     }
 
     pub fn defer_table_purge(&mut self, table_info: TableInfo) {
-        self.tables_need_purge
+        self.txn_buffer
+            .tables_need_purge
             .insert(table_info.ident.table_id, table_info);
     }
     pub fn table_need_purge(&mut self) -> Vec<TableInfo> {
-        std::mem::take(&mut self.tables_need_purge)
+        std::mem::take(&mut self.txn_buffer.tables_need_purge)
+            .into_values()
+            .collect()
+    }
+
+    /// Unlike get_base_snapshot_location, this is safe for a table with no buffered write.
+    pub fn buffered_snapshot_location(&self, table_id: u64) -> Option<String> {
+        let meta = if let Some(table) = self.txn_buffer.mutated_tables.get(&table_id) {
+            &table.meta
+        } else {
+            &self.txn_buffer.mutated_temp_tables.get(&table_id)?.meta
+        };
+        meta.options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned()
+    }
+
+    /// Register only if this statement actually buffered a new snapshot. A successful no-op
+    /// must not contribute maintenance requests or hints.
+    pub fn defer_table_hook(&mut self, mut hook: TxnTableHook, before: Option<&str>) {
+        if !self.is_active() {
+            return;
+        }
+        let after = self.buffered_snapshot_location(hook.table_id);
+        if after.is_none() || after.as_deref() == before {
+            return;
+        }
+        let key = (hook.catalog.clone(), hook.table_id);
+        if let Some(previous) = self.txn_buffer.table_hooks.remove(&key) {
+            // Each hint describes the whole snapshot, not a statement-local increment.
+            hook.compaction_num_block_hint = hook
+                .compaction_num_block_hint
+                .max(previous.compaction_num_block_hint);
+            hook.written_segments.extend(previous.written_segments);
+            hook.enable_auto_analyze |= previous.enable_auto_analyze;
+        }
+        self.txn_buffer.table_hooks.insert(key, hook);
+    }
+
+    /// COMMIT switches to AutoCommit before this transfer, but must not clear the buffer first.
+    pub fn take_table_hooks(&mut self) -> Vec<TxnTableHook> {
+        std::mem::take(&mut self.txn_buffer.table_hooks)
             .into_values()
             .collect()
     }

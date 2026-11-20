@@ -22,6 +22,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
@@ -700,7 +701,7 @@ impl ReclusterMergeFactory {
             table.get_operator(),
             schema.clone(),
             Projection::Columns((0..schema.num_fields()).collect()),
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let defaults = block_reader.default_values().to_vec();
         let read_settings = ReadSettings {
@@ -712,7 +713,7 @@ impl ReclusterMergeFactory {
         let mut input_blocks = Vec::with_capacity(task.parts.len());
         for (ordinal, part) in task.parts.partitions.iter().enumerate() {
             let part = FuseBlockPartInfo::from_part(part)?;
-            let meta = BlockMeta::new(
+            let mut meta = BlockMeta::new(
                 part.nums_rows as _,
                 0,
                 0,
@@ -733,6 +734,14 @@ impl ReclusterMergeFactory {
                 part.compression,
                 part.create_on,
             );
+            if !part.column_groups.is_empty() {
+                meta.col_metas.clear();
+                meta.column_groups = part
+                    .column_groups
+                    .iter()
+                    .map(|group| group.to_file_meta())
+                    .collect();
+            }
             input_blocks.push(ReclusterMergeInputBlock {
                 meta: Arc::new(meta),
                 ordinal: u32::try_from(ordinal)
@@ -1469,7 +1478,7 @@ mod tests {
         let snapshot = fuse.read_table_snapshot().await?.unwrap();
         let segments =
             SegmentsIO::create(admission_ctx.clone(), fuse.get_operator(), fuse.schema())
-                .read_segments::<SegmentInfo>(&snapshot.segments, true)
+                .read_segments::<SegmentInfo>(&snapshot.segments, CachePolicy::DEFAULT)
                 .await?;
         let mut blocks = Vec::new();
         for segment in segments {
@@ -1600,7 +1609,7 @@ mod tests {
         let fuse = FuseTable::try_from_table(table.as_ref())?;
         let snapshot = fuse.read_table_snapshot().await?.unwrap();
         let segments = SegmentsIO::create(ctx.clone(), fuse.get_operator(), fuse.schema())
-            .read_segments::<SegmentInfo>(&snapshot.segments, true)
+            .read_segments::<SegmentInfo>(&snapshot.segments, CachePolicy::DEFAULT)
             .await?;
         let mut source_index = None;
         for segment in segments {

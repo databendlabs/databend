@@ -57,10 +57,13 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::SemiToInnerJoin,
         RuleID::FoldCountAggregate,
         RuleID::TryApplyMaterializedView,
+        // After TryApplyMaterializedView, which matches the aggregate as written.
+        RuleID::SplitGroupedCountDistinct,
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
         RuleID::PushDownSortFilterScan, // PushDownSortFilterScan should be after PushDownFilterScan
+        RuleID::PushDownTopNUnionScan,
         RuleID::PushDownLimitFilterScan,
         RuleID::HierarchicalGroupingSetsToUnion, // Hierarchical grouping sets optimization
         RuleID::GroupingSetsToUnion,             // Fall back to union approach
@@ -104,6 +107,7 @@ pub enum RuleID {
     PushDownFilterScan,
     PushDownFilterSort,
     PushDownFilterProjectSet,
+    PushDownFilterAsyncFunction,
     PushDownFilterWindow,
     PushDownFilterWindowTopN,
     MergeLimit,
@@ -118,6 +122,7 @@ pub enum RuleID {
     PushDownSortEvalScalar,
     PushDownSortScan,
     PushDownSortFilterScan,
+    PushDownTopNUnionScan,
     PushDownLimitFilterScan,
     SemiToInnerJoin,
     EliminateEvalScalar,
@@ -129,6 +134,7 @@ pub enum RuleID {
     GroupingSetsToUnion,
     HierarchicalGroupingSetsToUnion,
     FoldCountAggregate,
+    SplitGroupedCountDistinct,
     PushDownPrewhere,
     TryApplyMaterializedView,
     EliminateSelfJoin,
@@ -153,6 +159,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterScan => write!(f, "PushDownFilterScan"),
             RuleID::PushDownFilterSort => write!(f, "PushDownFilterSort"),
             RuleID::PushDownFilterProjectSet => write!(f, "PushDownFilterProjectSet"),
+            RuleID::PushDownFilterAsyncFunction => write!(f, "PushDownFilterAsyncFunction"),
             RuleID::MergeLimit => write!(f, "MergeLimit"),
             RuleID::PushDownLimit => write!(f, "PushDownLimit"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
@@ -164,6 +171,7 @@ impl Display for RuleID {
             RuleID::PushDownLimitScan => write!(f, "PushDownLimitScan"),
             RuleID::PushDownSortScan => write!(f, "PushDownSortScan"),
             RuleID::PushDownSortFilterScan => write!(f, "PushDownSortFilterScan"),
+            RuleID::PushDownTopNUnionScan => write!(f, "PushDownTopNUnionScan"),
             RuleID::PushDownLimitFilterScan => write!(f, "PushDownLimitFilterScan"),
             RuleID::PushDownSortEvalScalar => write!(f, "PushDownSortEvalScalar"),
             RuleID::PushDownLimitWindow => write!(f, "PushDownLimitWindow"),
@@ -179,6 +187,7 @@ impl Display for RuleID {
             RuleID::GroupingSetsToUnion => write!(f, "GroupingSetsToUnion"),
             RuleID::HierarchicalGroupingSetsToUnion => write!(f, "HierarchicalGroupingSetsToUnion"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
+            RuleID::SplitGroupedCountDistinct => write!(f, "SplitGroupedCountDistinct"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
             RuleID::EliminateSelfJoin => write!(f, "EliminateSelfJoin"),
 

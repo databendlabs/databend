@@ -1,7 +1,7 @@
 # Ordered aggregates must read the original grouping columns, not the NULLs
 # introduced by AggregateExpand. Expected orders are computed from the input.
-# Also check the UNION ALL rewrite and single-/multi-threaded aggregation.
-# run-with-settings: grouping_sets_to_union=1
+# Also check the legacy Expand path and single-/multi-threaded aggregation.
+# run-with-settings: grouping_sets_to_union=0
 # run-with-settings: max_threads=1
 # run-with-settings: max_threads=4
 

@@ -12,19 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use smallvec::smallvec;
 
@@ -42,10 +38,12 @@ use super::TypeChecker;
 use super::date::AdjacentDayFunction;
 use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
+use super::scalar_fold::BoundScalar;
 use super::scalar_rewrite::binary_op_core_function;
 use super::scalar_rewrite::can_lower_binary_op;
 use super::variant::json_op_core_function;
 use super::with_semantic_span;
+use crate::binder::ExprContext;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryType;
@@ -511,6 +509,9 @@ impl<'a> CoreExprArena<'a> {
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
+    /// Drive ordinary child traversal before invoking bound-child node kernels.
+    /// Order-sensitive rewrites run first; aggregate/window/lambda and other
+    /// specialized traversals keep their existing context and validation order.
     #[recursive::recursive]
     pub(super) fn resolve_core(
         &mut self,
@@ -518,16 +519,37 @@ where A: TypeCheckAdapter
         id: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match arena.get(id) {
-            CoreExpr::Literal { span, value } => {
-                let (value, data_type) = infer_literal_data_type(value.clone());
-                Ok(Box::new((
-                    crate::plans::ConstantExpr { span: *span, value }.into(),
-                    data_type,
-                )))
+            CoreExpr::Literal { .. }
+            | CoreExpr::Call { .. }
+            | CoreExpr::ScalarFunction { .. }
+            | CoreExpr::Cast { .. } => self
+                .resolve_core_bound(arena, id)
+                .map(BoundScalar::into_pair),
+            CoreExpr::Array { span, exprs } => {
+                let arguments = exprs
+                    .iter()
+                    .map(|expr| self.resolve_core(arena, *expr).map(|resolved| *resolved))
+                    .collect::<Result<Vec<_>>>()?;
+                self.resolve_array(*span, arguments)
             }
-            CoreExpr::Array { span, exprs } => self.resolve_array(arena, *span, exprs),
-            CoreExpr::Map { span, kvs } => self.resolve_map(arena, *span, kvs),
-            CoreExpr::Tuple { span, exprs } => self.resolve_tuple(arena, *span, exprs),
+            CoreExpr::Map { span, kvs } => {
+                let mut keys = Vec::with_capacity(kvs.len());
+                let mut vals = Vec::with_capacity(kvs.len());
+                for (key, value) in kvs {
+                    let deref!((key, _)) = self.resolve_literal(*span, key)?;
+                    keys.push(key);
+                    let deref!((value, _)) = self.resolve_core(arena, *value)?;
+                    vals.push(value);
+                }
+                self.resolve_map(*span, keys, vals)
+            }
+            CoreExpr::Tuple { span, exprs } => {
+                let arguments = exprs
+                    .iter()
+                    .map(|expr| self.resolve_core(arena, *expr).map(|resolved| resolved.0))
+                    .collect::<Result<Vec<_>>>()?;
+                self.resolve_tuple(*span, arguments)
+            }
             CoreExpr::MapAccess {
                 span,
                 expr_span,
@@ -543,39 +565,19 @@ where A: TypeCheckAdapter
                     paths.clone(),
                 )
             }
-            CoreExpr::Call {
-                span,
-                func_name,
-                args,
-            } => self.resolve_call(arena, *span, func_name, args),
             CoreExpr::SetReturningFunction {
                 span,
                 func_name,
                 args,
-            } => self.resolve_set_returning_function(arena, *span, func_name, args),
-            CoreExpr::ScalarFunction {
-                span,
-                func_name,
-                params,
-                args,
-            } => self.resolve_scalar_function(arena, *span, func_name, params, args),
-            CoreExpr::Cast {
-                span,
-                is_try,
-                expr,
-                target_type,
             } => {
-                if let Some(result) = self.try_resolve_variant_cast_pushdown(
-                    arena,
-                    *span,
-                    *expr,
-                    target_type,
-                    *is_try,
-                )? {
-                    return Ok(result);
-                }
-                let deref!((scalar, data_type)) = self.resolve_core(arena, *expr)?;
-                self.resolve_cast_expr(*span, scalar, data_type, target_type, *is_try)
+                self.check_set_returning_function(*span)?;
+                let original_context = self
+                    .bind_context
+                    .replace_expr_context(ExprContext::InSetReturningFunction);
+                let arguments_result = self.resolve_expr_args(arena, args);
+                self.bind_context.expr_context = original_context;
+                let (arguments, argument_types) = arguments_result?;
+                self.resolve_set_returning_function(*span, func_name, arguments, argument_types)
             }
             CoreExpr::AggregateFunction {
                 display_name,
@@ -705,6 +707,84 @@ where A: TypeCheckAdapter
         }
     }
 
+    /// Like `resolve_core`, and also returns facts used to fold the parent.
+    /// Ordinary scalar nodes carry facts from their children; other nodes
+    /// derive them from the bound result.
+    #[recursive::recursive]
+    pub(super) fn resolve_core_bound(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        id: CoreExprId,
+    ) -> Result<BoundScalar> {
+        match arena.get(id) {
+            CoreExpr::Literal { span, value } => {
+                let (value, data_type) = infer_literal_data_type(value.clone());
+                Ok(BoundScalar::constant(
+                    crate::plans::ConstantExpr { span: *span, value },
+                    data_type,
+                ))
+            }
+            CoreExpr::Call {
+                span,
+                func_name,
+                args,
+            } => {
+                if let Some(result) = self.try_resolve_call(arena, *span, func_name, args) {
+                    return result.map(|pair| self.bind_derived_pair(pair));
+                }
+                let is_grouping = func_name.eq_ignore_ascii_case("grouping");
+                let mut bound_args = Vec::with_capacity(args.len());
+                for arg in args {
+                    let mut bound = self.resolve_core_bound(arena, *arg)?;
+                    if is_grouping
+                        && let Some(group_item) =
+                            self.grouping_argument_group_item(arena, *arg, &bound.scalar)
+                    {
+                        let data_type = group_item.data_type().into_owned();
+                        bound = self.bind_derived(group_item, data_type);
+                    }
+                    bound_args.push(bound);
+                }
+                self.resolve_call(*span, func_name, bound_args)
+            }
+            CoreExpr::ScalarFunction {
+                span,
+                func_name,
+                params,
+                args,
+            } => {
+                let params = self.resolve_core_function_params(arena, *span, params, "scalar")?;
+                let args = args
+                    .iter()
+                    .map(|arg| self.resolve_core_bound(arena, *arg))
+                    .collect::<Result<Vec<_>>>()?;
+                self.resolve_bound_function_call(*span, func_name, params, args)
+            }
+            CoreExpr::Cast {
+                span,
+                is_try,
+                expr,
+                target_type,
+            } => {
+                if let Some(result) = self.try_resolve_variant_cast_pushdown(
+                    arena,
+                    *span,
+                    *expr,
+                    target_type,
+                    *is_try,
+                )? {
+                    return Ok(self.bind_derived_pair(result));
+                }
+                let child = self.resolve_core_bound(arena, *expr)?;
+                self.resolve_bound_cast(*span, child, target_type, *is_try)
+            }
+            _ => {
+                let result = self.resolve_core(arena, id)?;
+                Ok(self.bind_derived_pair(result))
+            }
+        }
+    }
+
     pub(super) fn resolve_expr_args(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -729,20 +809,15 @@ where A: TypeCheckAdapter
     ) -> Result<Vec<Scalar>> {
         let mut new_params = Vec::with_capacity(params.len());
         for (display_name, param) in params {
-            let deref!((scalar, _)) = self.resolve_core(arena, *param)?;
-            let expr = scalar.as_expr()?;
-            let (expr, _) =
-                ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-            let constant = expr
-                .into_owned()
-                .into_constant()
-                .map_err(|_| {
+            let param = self.resolve_core_bound(arena, *param)?;
+            let (constant, _) = self
+                .bound_constant_value(&param.scalar, &param.facts)
+                .ok_or_else(|| {
                     ErrorCode::SemanticError(format!(
                         "invalid parameter {display_name} for {kind} function, expected constant",
                     ))
                     .set_span(span)
-                })?
-                .scalar;
+                })?;
             new_params.push(constant);
         }
         Ok(new_params)

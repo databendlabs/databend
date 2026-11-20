@@ -33,6 +33,7 @@ use databend_common_expression::types::DataType;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
+use databend_storages_common_cache::CachePolicy;
 use opendal::Operator;
 
 use crate::BlockReadResult;
@@ -50,7 +51,7 @@ pub struct BlockReader {
     pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
     pub(crate) default_vals: Vec<Scalar>,
     pub(crate) all_field_default_vals: Vec<Scalar>,
-    pub put_cache: bool,
+    pub policy: CachePolicy,
     /// In-memory encoding of the projected columns that are kept encoded, by column id; see
     /// `enable_encoded_columns`. Nested columns are never encoded. Fixed per reader, so computed
     /// once here and shared with [`BlockReadContext`], which builds the cache keys.
@@ -74,7 +75,7 @@ pub struct BlockReadContext {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
     projection: BlockReadProjection,
-    put_cache: bool,
+    policy: CachePolicy,
     column_encodings: Arc<HashMap<ColumnId, ColumnEncoding>>,
 }
 
@@ -140,7 +141,7 @@ impl BlockReader {
         original_schema: TableSchemaRef,
         all_field_default_vals: Vec<Scalar>,
         projection: Projection,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<BlockReader>> {
         let arrow_schema = Arc::new(original_schema.as_ref().into());
         let (projected_schema, default_vals) = Self::project_schema_and_default_vals(
@@ -157,8 +158,11 @@ impl BlockReader {
             .collect();
         let project_indices = Arc::new(Self::build_projection_indices(&project_column_nodes));
         let project_column_nodes = Arc::new(project_column_nodes);
-        // Only query scans (which populate the cache) produce encoded columns.
-        let encode_columns = put_cache && ctx.get_settings().get_enable_encoded_columns()?;
+        // The statement's policy applies too, as for every reader built from its context.
+        let policy = policy.at_most(ctx.cache_policy());
+        // Only query scans (which populate the memory cache) produce encoded columns.
+        let encode_columns =
+            policy.memory.writes() && ctx.get_settings().get_enable_encoded_columns()?;
         let column_encodings = projected_schema
             .fields
             .iter()
@@ -203,7 +207,7 @@ impl BlockReader {
             project_column_nodes,
             default_vals,
             all_field_default_vals,
-            put_cache,
+            policy,
             column_encodings: Arc::new(column_encodings),
             dictionary_ndv_ratio,
             parquet_hint_fields,
@@ -216,7 +220,7 @@ impl BlockReader {
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
-        put_cache: bool,
+        policy: CachePolicy,
     ) -> Result<Arc<BlockReader>> {
         let mut all_field_default_vals = Vec::with_capacity(schema.fields().len());
         let mut default_exprs_binder = DefaultExprBinder::try_new(ctx.clone())?;
@@ -230,7 +234,7 @@ impl BlockReader {
             schema,
             all_field_default_vals,
             projection,
-            put_cache,
+            policy,
         )
     }
 
@@ -241,7 +245,7 @@ impl BlockReader {
             self.original_schema.clone(),
             self.all_field_default_vals.clone(),
             projection,
-            self.put_cache,
+            self.policy,
         )
     }
 
@@ -293,7 +297,7 @@ impl BlockReader {
             projection: BlockReadProjection {
                 project_indices: self.project_indices.clone(),
             },
-            put_cache: self.put_cache,
+            policy: self.policy,
             column_encodings: self.column_encodings.clone(),
         }
     }
@@ -308,8 +312,8 @@ impl BlockReadContext {
         self.projection.project_indices.as_ref()
     }
 
-    pub(crate) fn put_cache(&self) -> bool {
-        self.put_cache
+    pub(crate) fn policy(&self) -> CachePolicy {
+        self.policy
     }
 
     pub(crate) fn column_encoding(&self, column_id: ColumnId) -> Option<ColumnEncoding> {
@@ -327,9 +331,9 @@ impl BlockReadContext {
 
         let cache_metrics = self.ctx.get_data_cache_metrics();
         let read_from_disk_cache: usize = block_read_res
-            .cached_column_data
+            .disk_column_data
             .iter()
-            .map(|(_, bytes)| bytes.size())
+            .map(|(_, bytes)| bytes.len())
             .sum();
 
         let read_from_in_mem_cache_array: usize = block_read_res

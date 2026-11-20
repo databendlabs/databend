@@ -50,6 +50,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
+use crate::cache_policy::CachePolicy;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
@@ -242,9 +243,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        put_cache: bool,
+        cache_policy: CachePolicy,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, plan, pipeline, put_cache);
+        let (_, _, _, _) = (ctx, plan, pipeline, cache_policy);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'read_data' operation is not implemented for the table '{}'. Table engine type: '{}'.",
@@ -620,6 +621,15 @@ pub trait ColumnStatisticsProvider: Send {
     fn count_min_sketch(&self, _column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         None
     }
+
+    /// Returns top-N frequency stats and the number of rows they summarize,
+    /// even when they were collected from an older snapshot of the table.
+    ///
+    /// The stats may not describe the current rows, so they are only a hint
+    /// for heuristics, never a bound for correctness.
+    fn approx_top_n(&self, column_id: ColumnId) -> Option<(ColumnTopN, u64)> {
+        self.top_n(column_id).zip(self.stats_num_rows())
+    }
 }
 
 pub struct DummyColumnStatisticsProvider;
@@ -647,7 +657,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ParquetTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
     num_rows: u64,
@@ -681,7 +691,7 @@ impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
     fn average_size(&self, column_id: ColumnId) -> Option<u64> {
         self.column_stats.get(&column_id).and_then(|v| {
             v.as_ref()
-                .and_then(|s| s.in_memory_size.checked_div(self.num_rows))
+                .and_then(|s| s.in_memory_size().checked_div(self.num_rows))
         })
     }
 }

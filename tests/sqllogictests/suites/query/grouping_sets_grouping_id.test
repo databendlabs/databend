@@ -1,0 +1,83 @@
+# Compare the default cascade, shared-base hierarchy, ordinary UNION and Expand.
+# Expected values are independently checked with DuckDB.
+# Explicit modes keep these regressions covered if the default switch is deferred.
+# run-with-settings: grouping_sets_to_union=1,enable_cascading_grouping_sets=0
+# run-with-settings: grouping_sets_to_union=1,enable_cascading_grouping_sets=1
+# run-with-settings: grouping_sets_to_union=1,optimizer_skip_list=HierarchicalGroupingSetsToUnion
+# run-with-settings: grouping_sets_to_union=0
+
+# Aggregation removes input columns, leaving symbols distinct from positions.
+# AVG forces the ordinary UNION rewrite, which must compare symbols to symbols.
+query IIR rowsort
+WITH c AS (
+    SELECT a, b, sum(v) AS s
+    FROM (VALUES (1, 2, 3), (1, 3, 4)) t(a, b, v)
+    GROUP BY a, b
+)
+SELECT s, grouping(s), avg(a) FROM c GROUP BY ROLLUP(s)
+----
+3 0 1.0
+4 0 1.0
+NULL 1 1.0
+
+query IIR rowsort
+WITH c AS (
+    SELECT a, b, sum(v) AS s
+    FROM (VALUES (1, 2, 3), (1, 3, 4)) t(a, b, v)
+    GROUP BY ROLLUP(a, b)
+)
+SELECT s, grouping(s), avg(a) FROM c GROUP BY ROLLUP(s)
+----
+3 0 1.0
+4 0 1.0
+7 0 1.0
+NULL 1 1.0
+
+# Reordered keys must retain their grouping() bit order after pruning.
+query IIIR rowsort
+WITH c AS (
+    SELECT a, b, sum(v) AS s
+    FROM (VALUES (1, 2, 3), (1, 3, 4)) t(a, b, v)
+    GROUP BY a, b
+)
+SELECT s, a, grouping(s, a), avg(b)
+FROM c GROUP BY GROUPING SETS ((s, a), (s), (a), ())
+----
+3 1 0 2.0
+3 NULL 1 2.0
+4 1 0 3.0
+4 NULL 1 3.0
+NULL 1 2 2.5
+NULL NULL 3 2.5
+
+# All 32 bits of _grouping_id are valid. Both UNION rules must avoid 1 << 32.
+# Include a grand total to exercise the all-ones mask and the highest bit.
+query III rowsort
+SELECT grouping(a), grouping(a + 31), count(*)
+FROM (VALUES (1), (2)) t(a)
+GROUP BY GROUPING SETS (
+    (a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7,
+     a + 8, a + 9, a + 10, a + 11, a + 12, a + 13, a + 14, a + 15,
+     a + 16, a + 17, a + 18, a + 19, a + 20, a + 21, a + 22, a + 23,
+     a + 24, a + 25, a + 26, a + 27, a + 28, a + 29, a + 30, a + 31),
+    ()
+)
+----
+0 0 1
+0 0 1
+1 1 2
+
+# Individual sets also exercise non-prefix grouping bits.
+query I
+SELECT count(*) FROM (
+    SELECT grouping(a + 31) AS g
+    FROM (VALUES (1), (2)) t(a)
+    GROUP BY GROUPING SETS (
+        a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7,
+        a + 8, a + 9, a + 10, a + 11, a + 12, a + 13, a + 14, a + 15,
+        a + 16, a + 17, a + 18, a + 19, a + 20, a + 21, a + 22, a + 23,
+        a + 24, a + 25, a + 26, a + 27, a + 28, a + 29, a + 30, a + 31
+    )
+) c WHERE g = 0
+----
+2

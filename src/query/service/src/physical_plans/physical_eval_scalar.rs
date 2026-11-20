@@ -283,6 +283,11 @@ impl PhysicalPlanBuilder {
 
         let mut projections = BTreeSet::new();
         for column in column_projections.iter() {
+            // An item may redefine a child column under the same symbol, for example
+            // to make a grouping key nullable. Project only the new value, not both.
+            if exprs.iter().any(|(_, index)| index == column) {
+                continue;
+            }
             if let Some((index, _)) = input_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }

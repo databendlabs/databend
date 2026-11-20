@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -351,7 +351,7 @@ struct PartialTopNParams {
     writer_pool_bytes: usize,
     read_settings: ReadSettings,
     enable_fixed_rows: bool,
-    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNFilter>)>,
+    runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
 }
 
 impl PartialTopNParams {

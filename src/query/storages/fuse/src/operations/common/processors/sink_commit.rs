@@ -607,7 +607,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let schema = self.table.schema();
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
-                let previous = fuse_table.read_table_snapshot().await.map_err(|e| {
+                let previous = fuse_table
+                    .read_table_snapshot_with_policy(self.ctx.cache_policy())
+                    .await
+                    .map_err(|e| {
                     if e.code() == ErrorCode::STORAGE_NOT_FOUND {
                         e.add_message(
                             "Previous table snapshot not found. This could indicate the table is currently being vacuumed. Please check the settings for `data_retention_time_in_days` and the table option `data_retention_period_in_hours` to ensure they are not set too low.",
@@ -672,6 +675,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             self.statistics_rows,
                             &self.insert_top_n,
                             self.has_insert_top_n_input(),
+                            self.ctx.cache_policy(),
                         )
                         .await?;
                     self.state = State::GenerateSnapshot {
@@ -924,7 +928,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     }
                 }
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
-                let previous = fuse_table.read_table_snapshot().await?;
+                let previous = fuse_table
+                    .read_table_snapshot_with_policy(self.ctx.cache_policy())
+                    .await?;
                 let table_stats_gen = fuse_table
                     .generate_table_stats(
                         &previous,
@@ -932,6 +938,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         self.statistics_rows,
                         &self.insert_top_n,
                         self.has_insert_top_n_input(),
+                        self.ctx.cache_policy(),
                     )
                     .await?;
 

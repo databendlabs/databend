@@ -294,6 +294,7 @@ mod tests {
             ),
             query,
             None,
+            vec![],
         )
         .unwrap();
         let minimum = runtime.query.admit().await.unwrap();

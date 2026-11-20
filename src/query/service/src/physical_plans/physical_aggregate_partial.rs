@@ -16,15 +16,15 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_exception::Result;
-#[allow(unused_imports)]
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::partial_table_bytes;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -38,7 +38,6 @@ use itertools::Itertools;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregatePartialFormatter;
 use crate::physical_plans::format::PhysicalFormat;
-use crate::physical_plans::physical_aggregate_final::AggregateShuffleMode;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -46,8 +45,8 @@ use crate::physical_plans::runtime_scan_filter::register_runtime_top_n_filter;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
+use crate::pipelines::processors::transforms::aggregator::parse_partial_aggregate_mode;
 use crate::sessions::TableContextCluster;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -62,8 +61,6 @@ pub struct AggregatePartial {
     pub rank_limit: Option<(Vec<SortDesc>, usize)>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
-
-    pub shuffle_mode: AggregateShuffleMode,
 }
 
 #[typetag::serde]
@@ -132,24 +129,11 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn get_desc(&self) -> Result<String> {
-        Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
+        Ok(aggregate_desc(&self.agg_funcs))
     }
 
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        let mut labels = HashMap::with_capacity(2);
-
-        if !self.group_by_display.is_empty() {
-            labels.insert(String::from("Grouping keys"), self.group_by_display.clone());
-        }
-
-        if !self.agg_funcs.is_empty() {
-            labels.insert(
-                String::from("Aggregate Functions"),
-                self.agg_funcs.iter().map(|x| x.display.clone()).collect(),
-            );
-        }
-
-        Ok(labels)
+        Ok(aggregate_labels(&self.group_by_display, &self.agg_funcs))
     }
 
     fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -163,15 +147,13 @@ impl IPhysicalPlan for AggregatePartial {
             group_by_display: self.group_by_display.clone(),
             rank_limit: self.rank_limit.clone(),
             stat_info: self.stat_info.clone(),
-            shuffle_mode: self.shuffle_mode.clone(),
         })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let runtime_top_n_filter = self.rank_limit.as_ref().and_then(|(order_by, limit)| {
-            let [desc] = order_by.as_slice() else {
-                return None;
-            };
+            // The scans prune by the first sort key, see `TransformRankLimitSort`.
+            let desc = order_by.first()?;
             if !self.group_by.contains(&desc.order_by) {
                 return None;
             }
@@ -182,15 +164,12 @@ impl IPhysicalPlan for AggregatePartial {
 
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
-        let max_threads = builder.settings.get_max_threads()?;
-        let cluster = &builder.ctx.get_cluster();
 
         let params = PipelineBuilder::build_aggregator_params(
             &builder.ctx,
             self.input.output_schema()?,
             &self.group_by,
             &self.agg_funcs,
-            builder.is_exchange_parent(),
             max_block_rows,
             max_block_bytes,
         )?;
@@ -203,42 +182,43 @@ impl IPhysicalPlan for AggregatePartial {
 
         let schema_before_group_by = params.input_schema.clone();
 
-        let radix_bits = self.shuffle_mode.determine_radix_bits();
-        let partial_agg_config = HashTableConfig::partial_aggregate(
-            radix_bits,
-            cluster.nodes.len(),
-            max_threads as usize,
+        let partial_mode =
+            parse_partial_aggregate_mode(&builder.settings.get_partial_aggregate_mode()?)?;
+        let max_table_bytes = partial_table_bytes(
+            builder.settings.get_max_memory_usage()? as usize,
+            builder.main_pipeline.output_len(),
         );
+        // On one node the states are scattered by group hash among the `max_threads` final
+        // aggregates (see `build_final_aggregates`): split the partial tables the same way, so
+        // that each partition is handed over without copying its rows. A cluster scatters among
+        // the final aggregates of all nodes and copies the rows anyway, so routing would only
+        // cost.
+        let mut partial_agg_config = HashTableConfig::partial_aggregate();
+        if builder.ctx.get_cluster().is_empty() {
+            partial_agg_config =
+                partial_agg_config.with_route_partitions(builder.settings.get_max_threads()?);
+        }
 
         // For rank limit, we can filter data using sort with rank before partial.
         if let Some((sort_desc, limit)) =
             self.resolve_rank_limit_descriptions(&schema_before_group_by)
         {
-            let filter = runtime_top_n_filter
-                .as_ref()
-                .map(|filter| (sort_desc[0].offset, filter.clone()));
+            // Share the boundary between the streams even when no scan prunes by it.
+            let boundary = runtime_top_n_filter.unwrap_or_else(|| {
+                Arc::new(RuntimeTopNBoundary::new(
+                    sort_desc[0].asc,
+                    sort_desc[0].nulls_first,
+                ))
+            });
             builder.main_pipeline.add_accumulating_transformer(|| {
                 TransformRankLimitSort::new(
                     limit,
                     sort_desc.clone(),
                     max_block_rows,
-                    filter.clone(),
+                    boundary.clone(),
                 )
             });
         }
-
-        let is_row_shuffle = matches!(self.shuffle_mode, AggregateShuffleMode::Row);
-        let bucket_num = if is_row_shuffle {
-            cluster.nodes.len()
-        } else {
-            2_usize.pow(partial_agg_config.initial_radix_bits as u32)
-        };
-        let shared_partition_streams = SharedPartitionStream::new(
-            builder.main_pipeline.output_len(),
-            0,
-            max_block_bytes,
-            bucket_num,
-        );
 
         builder.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
@@ -247,17 +227,12 @@ impl IPhysicalPlan for AggregatePartial {
                 output,
                 params.clone(),
                 partial_agg_config.clone(),
-                shared_partition_streams.clone(),
-                bucket_num,
-                is_row_shuffle,
+                partial_mode,
+                max_table_bytes,
             )?))
         })?;
 
-        builder.exchange_injector = AggregateInjector::create(
-            builder.ctx.clone(),
-            params.clone(),
-            self.shuffle_mode.clone(),
-        );
+        builder.exchange_injector = AggregateInjector::create(params.clone());
         Ok(())
     }
 }
@@ -285,4 +260,27 @@ impl AggregatePartial {
         }
         Some((resolved.into(), *limit))
     }
+}
+
+/// The description of a partial or final aggregate in a profile.
+pub(crate) fn aggregate_desc(agg_funcs: &[AggregateFunctionDesc]) -> String {
+    agg_funcs.iter().map(|x| x.display.clone()).join(", ")
+}
+
+/// The labels of a partial or final aggregate in a profile.
+pub(crate) fn aggregate_labels(
+    group_by_display: &[String],
+    agg_funcs: &[AggregateFunctionDesc],
+) -> HashMap<String, Vec<String>> {
+    let mut labels = HashMap::with_capacity(2);
+    if !group_by_display.is_empty() {
+        labels.insert(String::from("Grouping keys"), group_by_display.to_vec());
+    }
+    if !agg_funcs.is_empty() {
+        labels.insert(
+            String::from("Aggregate Functions"),
+            agg_funcs.iter().map(|x| x.display.clone()).collect(),
+        );
+    }
+    labels
 }

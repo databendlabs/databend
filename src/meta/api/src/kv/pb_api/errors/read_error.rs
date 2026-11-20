@@ -34,8 +34,12 @@ impl NoneValue {
     }
 }
 
+/// A response stream returned fewer or more items than requested.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
-#[error("StreamReadEOF: expected {expected} items but only received {received} items")]
+#[error("{}: expected {expected} items but {}received {received} items",
+    if .received > .expected { "StreamReadOverflow" } else { "StreamReadEOF" },
+    if .received < .expected { "only " } else { "" }
+)]
 pub struct StreamReadEof {
     expected: u64,
     received: u64,

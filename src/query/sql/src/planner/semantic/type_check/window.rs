@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
@@ -24,15 +22,11 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::ast::WindowSpec;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::expr;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use smallvec::SmallVec;
@@ -558,18 +552,13 @@ where A: TypeCheckAdapter
         match bound {
             CoreWindowFrameBound::Following(Some(expr))
             | CoreWindowFrameBound::Preceding(Some(expr)) => {
-                let deref!((expr, _)) = self.resolve_core(arena, *expr)?;
-                let (expr, _) = ConstantFolder::fold(
-                    Cow::Owned(expr.as_expr()?),
-                    &self.func_ctx,
-                    &BUILTIN_FUNCTIONS,
-                );
-                match expr.into_owned().into_constant() {
-                    Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
-                    Err(expr) => Err(ErrorCode::SemanticError(
+                let offset = self.resolve_core_bound(arena, *expr)?;
+                match self.bound_constant_value(&offset.scalar, &offset.facts) {
+                    Some((scalar, _)) => Ok(Some(scalar)),
+                    None => Err(ErrorCode::SemanticError(
                         "Only constant is allowed in RANGE offset".to_string(),
                     )
-                    .set_span(expr.span())),
+                    .set_span(offset.scalar.span())),
                 }
             }
             _ => Ok(None),
@@ -701,14 +690,8 @@ where A: TypeCheckAdapter
         }
 
         let offset = if args.len() >= 2 {
-            let off = args[1].as_expr()?;
-            match off {
-                EExpr::Constant(_) => Some(check_number::<i64, _>(
-                    off.span(),
-                    &self.func_ctx,
-                    off,
-                    &BUILTIN_FUNCTIONS,
-                )?),
+            match args[1].as_expr()? {
+                EExpr::Constant(_) => Some(self.constant_number::<i64>(args[1].span(), &args[1])?),
                 _ => {
                     return Err(ErrorCode::InvalidArgument(format!(
                         "The second argument to the function {:?} must be a constant",
@@ -800,14 +783,8 @@ where A: TypeCheckAdapter
                     ));
                 }
                 let return_type = arg_types[0].wrap_nullable();
-                let n_expr = args[1].as_expr()?;
-                let n = match n_expr {
-                    EExpr::Constant(_) => check_number::<u64, _>(
-                        n_expr.span(),
-                        &self.func_ctx,
-                        n_expr,
-                        &BUILTIN_FUNCTIONS,
-                    )?,
+                let n = match args[1].as_expr()? {
+                    EExpr::Constant(_) => self.constant_number::<u64>(args[1].span(), &args[1])?,
                     _ => {
                         return Err(ErrorCode::InvalidArgument(
                             "The count of `nth_value` must be constant positive integer",
@@ -839,12 +816,9 @@ where A: TypeCheckAdapter
                 "Function ntile can only take one argument".to_string(),
             ));
         }
-        let n_expr = args[0].as_expr()?;
         let return_type = DataType::Number(NumberDataType::UInt64);
-        let n = match n_expr {
-            EExpr::Constant(_) => {
-                check_number::<u64, _>(n_expr.span(), &self.func_ctx, n_expr, &BUILTIN_FUNCTIONS)?
-            }
+        let n = match args[0].as_expr()? {
+            EExpr::Constant(_) => self.constant_number::<u64>(args[0].span(), &args[0])?,
             _ => {
                 return Err(ErrorCode::InvalidArgument(
                     "The argument of `ntile` must be constant".to_string(),

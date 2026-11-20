@@ -22,6 +22,7 @@ mod limit_rules;
 mod rule;
 mod rule_set;
 mod scalar_rules;
+mod scan_order;
 mod sort_rules;
 mod transform_result;
 mod union_rules;

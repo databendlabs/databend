@@ -1735,90 +1735,162 @@ EvalScalar
 
 
 === grouping_sets_are_not_eager ===
-description: Grouping-set descriptors must not be copied to pruned join inputs.
+description: Grouping-set UNION branches must aggregate the materialized join result, not pruned join inputs.
 sql: SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
 FROM orders JOIN lineitem ON o_orderkey = l_orderkey
 GROUP BY GROUPING SETS ((o_custkey), ())
 before_plan:
-EvalScalar
-├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
-└── Aggregate(Initial)
-    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
-    ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: cte_groupingsets_17613279253490583133
+│   ├── ref_count: 0
+│   ├── channel_size: Some(2)
+│   └── EvalScalar
+│       ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+│       └── Join(Inner)
+│           ├── build keys: [lineitem.l_orderkey (#9)]
+│           ├── probe keys: [orders.o_orderkey (#0)]
+│           ├── other filters: []
+│           ├── Scan
+│           │   ├── table: default.lineitem (#1)
+│           │   ├── filters: []
+│           │   ├── order by: []
+│           │   └── limit: NONE
+│           └── Scan
+│               ├── table: default.orders (#0)
+│               ├── filters: []
+│               ├── order by: []
+│               └── limit: NONE
+└── UnionAll
+    ├── output: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── left: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── right: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [CAST(orders.o_custkey (#1) AS Int64 NULL) AS (#1), 0 AS (#26), sum(l_extendedprice) (#27) AS (#27), grouping(0)(0) AS (#28)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: [orders.o_custkey (#1) AS (#1)]
+    │       ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+    │       └── MaterializedCTERef
+    │           ├── cte_name: cte_groupingsets_17613279253490583133
+    │           ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderstatus (#2), orders.o_totalprice (#3), orders.o_orderdate (#4), orders.o_orderpriority (#5), orders.o_clerk (#6), orders.o_shippriority (#7), orders.o_comment (#8), lineitem.l_orderkey (#9), lineitem.l_partkey (#10), lineitem.l_suppkey (#11), lineitem.l_linenumber (#12), lineitem.l_quantity (#13), lineitem.l_extendedprice (#14), lineitem.l_discount (#15), lineitem.l_tax (#16), lineitem.l_returnflag (#17), lineitem.l_linestatus (#18), lineitem.l_shipdate (#19), lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23), lineitem.l_comment (#24), o_orderkey (#29), l_orderkey (#30)]
+    │           └── column mapping: [orders.o_orderkey (#0) -> orders.o_orderkey (#0), orders.o_custkey (#1) -> orders.o_custkey (#1), orders.o_orderstatus (#2) -> orders.o_orderstatus (#2), orders.o_totalprice (#3) -> orders.o_totalprice (#3), orders.o_orderdate (#4) -> orders.o_orderdate (#4), orders.o_orderpriority (#5) -> orders.o_orderpriority (#5), orders.o_clerk (#6) -> orders.o_clerk (#6), orders.o_shippriority (#7) -> orders.o_shippriority (#7), orders.o_comment (#8) -> orders.o_comment (#8), lineitem.l_orderkey (#9) -> lineitem.l_orderkey (#9), lineitem.l_partkey (#10) -> lineitem.l_partkey (#10), lineitem.l_suppkey (#11) -> lineitem.l_suppkey (#11), lineitem.l_linenumber (#12) -> lineitem.l_linenumber (#12), lineitem.l_quantity (#13) -> lineitem.l_quantity (#13), lineitem.l_extendedprice (#14) -> lineitem.l_extendedprice (#14), lineitem.l_discount (#15) -> lineitem.l_discount (#15), lineitem.l_tax (#16) -> lineitem.l_tax (#16), lineitem.l_returnflag (#17) -> lineitem.l_returnflag (#17), lineitem.l_linestatus (#18) -> lineitem.l_linestatus (#18), lineitem.l_shipdate (#19) -> lineitem.l_shipdate (#19), lineitem.l_commitdate (#20) -> lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21) -> lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22) -> lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23) -> lineitem.l_shipmode (#23), lineitem.l_comment (#24) -> lineitem.l_comment (#24), o_orderkey (#29) -> o_orderkey (#29), l_orderkey (#30) -> l_orderkey (#30)]
     └── EvalScalar
-        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
-        └── Join(Inner)
-            ├── build keys: [lineitem.l_orderkey (#9)]
-            ├── probe keys: [orders.o_orderkey (#0)]
-            ├── other filters: []
-            ├── Scan
-            │   ├── table: default.lineitem (#1)
-            │   ├── filters: []
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── Scan
-                ├── table: default.orders (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+        ├── scalars: [NULL AS (#1), 1 AS (#26), sum(l_extendedprice) (#27) AS (#27), grouping(0)(1) AS (#28)]
+        └── Aggregate(Initial)
+            ├── group items: []
+            ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+            └── MaterializedCTERef
+                ├── cte_name: cte_groupingsets_17613279253490583133
+                ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderstatus (#2), orders.o_totalprice (#3), orders.o_orderdate (#4), orders.o_orderpriority (#5), orders.o_clerk (#6), orders.o_shippriority (#7), orders.o_comment (#8), lineitem.l_orderkey (#9), lineitem.l_partkey (#10), lineitem.l_suppkey (#11), lineitem.l_linenumber (#12), lineitem.l_quantity (#13), lineitem.l_extendedprice (#14), lineitem.l_discount (#15), lineitem.l_tax (#16), lineitem.l_returnflag (#17), lineitem.l_linestatus (#18), lineitem.l_shipdate (#19), lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23), lineitem.l_comment (#24), o_orderkey (#29), l_orderkey (#30)]
+                └── column mapping: [orders.o_orderkey (#0) -> orders.o_orderkey (#0), orders.o_custkey (#1) -> orders.o_custkey (#1), orders.o_orderstatus (#2) -> orders.o_orderstatus (#2), orders.o_totalprice (#3) -> orders.o_totalprice (#3), orders.o_orderdate (#4) -> orders.o_orderdate (#4), orders.o_orderpriority (#5) -> orders.o_orderpriority (#5), orders.o_clerk (#6) -> orders.o_clerk (#6), orders.o_shippriority (#7) -> orders.o_shippriority (#7), orders.o_comment (#8) -> orders.o_comment (#8), lineitem.l_orderkey (#9) -> lineitem.l_orderkey (#9), lineitem.l_partkey (#10) -> lineitem.l_partkey (#10), lineitem.l_suppkey (#11) -> lineitem.l_suppkey (#11), lineitem.l_linenumber (#12) -> lineitem.l_linenumber (#12), lineitem.l_quantity (#13) -> lineitem.l_quantity (#13), lineitem.l_extendedprice (#14) -> lineitem.l_extendedprice (#14), lineitem.l_discount (#15) -> lineitem.l_discount (#15), lineitem.l_tax (#16) -> lineitem.l_tax (#16), lineitem.l_returnflag (#17) -> lineitem.l_returnflag (#17), lineitem.l_linestatus (#18) -> lineitem.l_linestatus (#18), lineitem.l_shipdate (#19) -> lineitem.l_shipdate (#19), lineitem.l_commitdate (#20) -> lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21) -> lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22) -> lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23) -> lineitem.l_shipmode (#23), lineitem.l_comment (#24) -> lineitem.l_comment (#24), o_orderkey (#29) -> o_orderkey (#29), l_orderkey (#30) -> l_orderkey (#30)]
 
 
 === rollup_is_not_eager ===
-description: ROLLUP must retain its grouping-set expansion above the join.
+description: ROLLUP must aggregate UNION branches above the materialized join.
 sql: SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
 FROM orders JOIN lineitem ON o_orderkey = l_orderkey
 GROUP BY ROLLUP (o_custkey)
 before_plan:
-EvalScalar
-├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
-└── Aggregate(Initial)
-    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
-    ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: cte_groupingsets_17613279253490583133
+│   ├── ref_count: 0
+│   ├── channel_size: Some(2)
+│   └── EvalScalar
+│       ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+│       └── Join(Inner)
+│           ├── build keys: [lineitem.l_orderkey (#9)]
+│           ├── probe keys: [orders.o_orderkey (#0)]
+│           ├── other filters: []
+│           ├── Scan
+│           │   ├── table: default.lineitem (#1)
+│           │   ├── filters: []
+│           │   ├── order by: []
+│           │   └── limit: NONE
+│           └── Scan
+│               ├── table: default.orders (#0)
+│               ├── filters: []
+│               ├── order by: []
+│               └── limit: NONE
+└── UnionAll
+    ├── output: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── left: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── right: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [CAST(orders.o_custkey (#1) AS Int64 NULL) AS (#1), 0 AS (#26), sum(l_extendedprice) (#27) AS (#27), grouping(0)(0) AS (#28)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: [orders.o_custkey (#1) AS (#1)]
+    │       ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+    │       └── MaterializedCTERef
+    │           ├── cte_name: cte_groupingsets_17613279253490583133
+    │           ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderstatus (#2), orders.o_totalprice (#3), orders.o_orderdate (#4), orders.o_orderpriority (#5), orders.o_clerk (#6), orders.o_shippriority (#7), orders.o_comment (#8), lineitem.l_orderkey (#9), lineitem.l_partkey (#10), lineitem.l_suppkey (#11), lineitem.l_linenumber (#12), lineitem.l_quantity (#13), lineitem.l_extendedprice (#14), lineitem.l_discount (#15), lineitem.l_tax (#16), lineitem.l_returnflag (#17), lineitem.l_linestatus (#18), lineitem.l_shipdate (#19), lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23), lineitem.l_comment (#24), o_orderkey (#29), l_orderkey (#30)]
+    │           └── column mapping: [orders.o_orderkey (#0) -> orders.o_orderkey (#0), orders.o_custkey (#1) -> orders.o_custkey (#1), orders.o_orderstatus (#2) -> orders.o_orderstatus (#2), orders.o_totalprice (#3) -> orders.o_totalprice (#3), orders.o_orderdate (#4) -> orders.o_orderdate (#4), orders.o_orderpriority (#5) -> orders.o_orderpriority (#5), orders.o_clerk (#6) -> orders.o_clerk (#6), orders.o_shippriority (#7) -> orders.o_shippriority (#7), orders.o_comment (#8) -> orders.o_comment (#8), lineitem.l_orderkey (#9) -> lineitem.l_orderkey (#9), lineitem.l_partkey (#10) -> lineitem.l_partkey (#10), lineitem.l_suppkey (#11) -> lineitem.l_suppkey (#11), lineitem.l_linenumber (#12) -> lineitem.l_linenumber (#12), lineitem.l_quantity (#13) -> lineitem.l_quantity (#13), lineitem.l_extendedprice (#14) -> lineitem.l_extendedprice (#14), lineitem.l_discount (#15) -> lineitem.l_discount (#15), lineitem.l_tax (#16) -> lineitem.l_tax (#16), lineitem.l_returnflag (#17) -> lineitem.l_returnflag (#17), lineitem.l_linestatus (#18) -> lineitem.l_linestatus (#18), lineitem.l_shipdate (#19) -> lineitem.l_shipdate (#19), lineitem.l_commitdate (#20) -> lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21) -> lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22) -> lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23) -> lineitem.l_shipmode (#23), lineitem.l_comment (#24) -> lineitem.l_comment (#24), o_orderkey (#29) -> o_orderkey (#29), l_orderkey (#30) -> l_orderkey (#30)]
     └── EvalScalar
-        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
-        └── Join(Inner)
-            ├── build keys: [lineitem.l_orderkey (#9)]
-            ├── probe keys: [orders.o_orderkey (#0)]
-            ├── other filters: []
-            ├── Scan
-            │   ├── table: default.lineitem (#1)
-            │   ├── filters: []
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── Scan
-                ├── table: default.orders (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+        ├── scalars: [NULL AS (#1), 1 AS (#26), sum(l_extendedprice) (#27) AS (#27), grouping(0)(1) AS (#28)]
+        └── Aggregate(Initial)
+            ├── group items: []
+            ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+            └── MaterializedCTERef
+                ├── cte_name: cte_groupingsets_17613279253490583133
+                ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderstatus (#2), orders.o_totalprice (#3), orders.o_orderdate (#4), orders.o_orderpriority (#5), orders.o_clerk (#6), orders.o_shippriority (#7), orders.o_comment (#8), lineitem.l_orderkey (#9), lineitem.l_partkey (#10), lineitem.l_suppkey (#11), lineitem.l_linenumber (#12), lineitem.l_quantity (#13), lineitem.l_extendedprice (#14), lineitem.l_discount (#15), lineitem.l_tax (#16), lineitem.l_returnflag (#17), lineitem.l_linestatus (#18), lineitem.l_shipdate (#19), lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23), lineitem.l_comment (#24), o_orderkey (#29), l_orderkey (#30)]
+                └── column mapping: [orders.o_orderkey (#0) -> orders.o_orderkey (#0), orders.o_custkey (#1) -> orders.o_custkey (#1), orders.o_orderstatus (#2) -> orders.o_orderstatus (#2), orders.o_totalprice (#3) -> orders.o_totalprice (#3), orders.o_orderdate (#4) -> orders.o_orderdate (#4), orders.o_orderpriority (#5) -> orders.o_orderpriority (#5), orders.o_clerk (#6) -> orders.o_clerk (#6), orders.o_shippriority (#7) -> orders.o_shippriority (#7), orders.o_comment (#8) -> orders.o_comment (#8), lineitem.l_orderkey (#9) -> lineitem.l_orderkey (#9), lineitem.l_partkey (#10) -> lineitem.l_partkey (#10), lineitem.l_suppkey (#11) -> lineitem.l_suppkey (#11), lineitem.l_linenumber (#12) -> lineitem.l_linenumber (#12), lineitem.l_quantity (#13) -> lineitem.l_quantity (#13), lineitem.l_extendedprice (#14) -> lineitem.l_extendedprice (#14), lineitem.l_discount (#15) -> lineitem.l_discount (#15), lineitem.l_tax (#16) -> lineitem.l_tax (#16), lineitem.l_returnflag (#17) -> lineitem.l_returnflag (#17), lineitem.l_linestatus (#18) -> lineitem.l_linestatus (#18), lineitem.l_shipdate (#19) -> lineitem.l_shipdate (#19), lineitem.l_commitdate (#20) -> lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21) -> lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22) -> lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23) -> lineitem.l_shipmode (#23), lineitem.l_comment (#24) -> lineitem.l_comment (#24), o_orderkey (#29) -> o_orderkey (#29), l_orderkey (#30) -> l_orderkey (#30)]
 
 
 === cube_is_not_eager ===
-description: CUBE must retain its grouping-set expansion above the join.
+description: CUBE must aggregate UNION branches above the materialized join.
 sql: SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
 FROM orders JOIN lineitem ON o_orderkey = l_orderkey
 GROUP BY CUBE (o_custkey)
 before_plan:
-EvalScalar
-├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
-└── Aggregate(Initial)
-    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
-    ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+Sequence(Sequence)
+├── MaterializedCTE
+│   ├── cte_name: cte_groupingsets_2566690608515955977
+│   ├── ref_count: 0
+│   ├── channel_size: Some(2)
+│   └── EvalScalar
+│       ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+│       └── Join(Inner)
+│           ├── build keys: [lineitem.l_orderkey (#9)]
+│           ├── probe keys: [orders.o_orderkey (#0)]
+│           ├── other filters: []
+│           ├── Scan
+│           │   ├── table: default.lineitem (#1)
+│           │   ├── filters: []
+│           │   ├── order by: []
+│           │   └── limit: NONE
+│           └── Scan
+│               ├── table: default.orders (#0)
+│               ├── filters: []
+│               ├── order by: []
+│               └── limit: NONE
+└── UnionAll
+    ├── output: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── left: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── right: [orders.o_custkey (#1), sum(l_extendedprice) (#27), grouping(o_custkey) (#28), _grouping_id (#26)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [NULL AS (#1), 1 AS (#26), sum(l_extendedprice) (#27) AS (#27), grouping(0)(1) AS (#28)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: []
+    │       ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+    │       └── MaterializedCTERef
+    │           ├── cte_name: cte_groupingsets_2566690608515955977
+    │           ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderstatus (#2), orders.o_totalprice (#3), orders.o_orderdate (#4), orders.o_orderpriority (#5), orders.o_clerk (#6), orders.o_shippriority (#7), orders.o_comment (#8), lineitem.l_orderkey (#9), lineitem.l_partkey (#10), lineitem.l_suppkey (#11), lineitem.l_linenumber (#12), lineitem.l_quantity (#13), lineitem.l_extendedprice (#14), lineitem.l_discount (#15), lineitem.l_tax (#16), lineitem.l_returnflag (#17), lineitem.l_linestatus (#18), lineitem.l_shipdate (#19), lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23), lineitem.l_comment (#24), o_orderkey (#29), l_orderkey (#30)]
+    │           └── column mapping: [orders.o_orderkey (#0) -> orders.o_orderkey (#0), orders.o_custkey (#1) -> orders.o_custkey (#1), orders.o_orderstatus (#2) -> orders.o_orderstatus (#2), orders.o_totalprice (#3) -> orders.o_totalprice (#3), orders.o_orderdate (#4) -> orders.o_orderdate (#4), orders.o_orderpriority (#5) -> orders.o_orderpriority (#5), orders.o_clerk (#6) -> orders.o_clerk (#6), orders.o_shippriority (#7) -> orders.o_shippriority (#7), orders.o_comment (#8) -> orders.o_comment (#8), lineitem.l_orderkey (#9) -> lineitem.l_orderkey (#9), lineitem.l_partkey (#10) -> lineitem.l_partkey (#10), lineitem.l_suppkey (#11) -> lineitem.l_suppkey (#11), lineitem.l_linenumber (#12) -> lineitem.l_linenumber (#12), lineitem.l_quantity (#13) -> lineitem.l_quantity (#13), lineitem.l_extendedprice (#14) -> lineitem.l_extendedprice (#14), lineitem.l_discount (#15) -> lineitem.l_discount (#15), lineitem.l_tax (#16) -> lineitem.l_tax (#16), lineitem.l_returnflag (#17) -> lineitem.l_returnflag (#17), lineitem.l_linestatus (#18) -> lineitem.l_linestatus (#18), lineitem.l_shipdate (#19) -> lineitem.l_shipdate (#19), lineitem.l_commitdate (#20) -> lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21) -> lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22) -> lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23) -> lineitem.l_shipmode (#23), lineitem.l_comment (#24) -> lineitem.l_comment (#24), o_orderkey (#29) -> o_orderkey (#29), l_orderkey (#30) -> l_orderkey (#30)]
     └── EvalScalar
-        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
-        └── Join(Inner)
-            ├── build keys: [lineitem.l_orderkey (#9)]
-            ├── probe keys: [orders.o_orderkey (#0)]
-            ├── other filters: []
-            ├── Scan
-            │   ├── table: default.lineitem (#1)
-            │   ├── filters: []
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── Scan
-                ├── table: default.orders (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+        ├── scalars: [CAST(orders.o_custkey (#1) AS Int64 NULL) AS (#1), 0 AS (#26), sum(l_extendedprice) (#27) AS (#27), grouping(0)(0) AS (#28)]
+        └── Aggregate(Initial)
+            ├── group items: [orders.o_custkey (#1) AS (#1)]
+            ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+            └── MaterializedCTERef
+                ├── cte_name: cte_groupingsets_2566690608515955977
+                ├── output columns: [orders.o_orderkey (#0), orders.o_custkey (#1), orders.o_orderstatus (#2), orders.o_totalprice (#3), orders.o_orderdate (#4), orders.o_orderpriority (#5), orders.o_clerk (#6), orders.o_shippriority (#7), orders.o_comment (#8), lineitem.l_orderkey (#9), lineitem.l_partkey (#10), lineitem.l_suppkey (#11), lineitem.l_linenumber (#12), lineitem.l_quantity (#13), lineitem.l_extendedprice (#14), lineitem.l_discount (#15), lineitem.l_tax (#16), lineitem.l_returnflag (#17), lineitem.l_linestatus (#18), lineitem.l_shipdate (#19), lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23), lineitem.l_comment (#24), o_orderkey (#29), l_orderkey (#30)]
+                └── column mapping: [orders.o_orderkey (#0) -> orders.o_orderkey (#0), orders.o_custkey (#1) -> orders.o_custkey (#1), orders.o_orderstatus (#2) -> orders.o_orderstatus (#2), orders.o_totalprice (#3) -> orders.o_totalprice (#3), orders.o_orderdate (#4) -> orders.o_orderdate (#4), orders.o_orderpriority (#5) -> orders.o_orderpriority (#5), orders.o_clerk (#6) -> orders.o_clerk (#6), orders.o_shippriority (#7) -> orders.o_shippriority (#7), orders.o_comment (#8) -> orders.o_comment (#8), lineitem.l_orderkey (#9) -> lineitem.l_orderkey (#9), lineitem.l_partkey (#10) -> lineitem.l_partkey (#10), lineitem.l_suppkey (#11) -> lineitem.l_suppkey (#11), lineitem.l_linenumber (#12) -> lineitem.l_linenumber (#12), lineitem.l_quantity (#13) -> lineitem.l_quantity (#13), lineitem.l_extendedprice (#14) -> lineitem.l_extendedprice (#14), lineitem.l_discount (#15) -> lineitem.l_discount (#15), lineitem.l_tax (#16) -> lineitem.l_tax (#16), lineitem.l_returnflag (#17) -> lineitem.l_returnflag (#17), lineitem.l_linestatus (#18) -> lineitem.l_linestatus (#18), lineitem.l_shipdate (#19) -> lineitem.l_shipdate (#19), lineitem.l_commitdate (#20) -> lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21) -> lineitem.l_receiptdate (#21), lineitem.l_shipinstruct (#22) -> lineitem.l_shipinstruct (#22), lineitem.l_shipmode (#23) -> lineitem.l_shipmode (#23), lineitem.l_comment (#24) -> lineitem.l_comment (#24), o_orderkey (#29) -> o_orderkey (#29), l_orderkey (#30) -> l_orderkey (#30)]
 
 
 === q12_rank_limit_on_group_key ===

@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashSet;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -42,6 +43,7 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::interpreters::common::check_expected_table_id;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
@@ -153,7 +155,7 @@ impl IPhysicalPlan for CompactSource {
         let block_reader = table.create_block_reader(
             builder.ctx.clone(),
             Projection::Columns(table.all_column_indices()),
-            false,
+            CachePolicy::READ_ONLY,
         )?;
         let stream_ctx = if table.change_tracking_enabled() {
             Some(StreamContext::try_create(
@@ -240,12 +242,14 @@ impl PhysicalPlanBuilder {
             catalog,
             database,
             table,
+            expected_table_id,
             limit,
         } = compact_block;
 
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog).await?;
         let tbl = catalog.get_table(&tenant, database, table).await?;
+        check_expected_table_id(tbl.get_id(), *expected_table_id)?;
         tbl.check_mutable_for_maintenance()?;
 
         let table_info = tbl.get_table_info().clone();
@@ -270,8 +274,7 @@ impl PhysicalPlanBuilder {
             meta: PhysicalPlanMeta::new("ConstantTableScan"),
         });
 
-        let is_distributed = (!self.ctx.get_cluster().is_empty())
-            && self.ctx.get_settings().get_enable_distributed_compact()?;
+        let is_distributed = !self.ctx.get_cluster().is_empty();
         if is_distributed {
             root = PhysicalPlan::new(Exchange {
                 input: root,

@@ -18,10 +18,9 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
+use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
-use databend_common_base::runtime::QueryPerf;
-use databend_common_base::runtime::QueryPerfGuard;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -56,7 +55,7 @@ impl StatisticsSender {
         ctx: Arc<QueryContext>,
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
-        perf_guard: Option<QueryPerfGuard>,
+        perf_guard: Option<CpuProfiler>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
@@ -298,11 +297,11 @@ impl StatisticsSender {
     }
 
     async fn send_perf(
-        perf_guard: &Option<QueryPerfGuard>,
+        perf_guard: &Option<CpuProfiler>,
         flight_sender: &FlightSender,
     ) -> Result<()> {
-        if let Some((_flag_guard, profiler_guard)) = perf_guard {
-            let dumped = QueryPerf::dump(profiler_guard)?;
+        if let Some(profiler) = perf_guard {
+            let dumped = profiler.dump_svg()?;
             let data_packet = DataPacket::QueryPerf(dumped);
             flight_sender.send(data_packet).await?;
         }

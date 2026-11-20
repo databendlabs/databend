@@ -598,8 +598,6 @@ pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
         rule! { "(" ~ OFFSET ~ "=>" ~ #expr ~ ")" },
         |(_, _, _, e, _)| TimeTravelPoint::Offset(Box::new(e)),
     );
-    // `AT (BRANCH => ...)` is intentionally unsupported. The future branch
-    // redesign will use the canonical `<db>.<table>/<branch>` syntax instead.
     let at_tag = map(
         rule! { "(" ~ TAG ~ "=>" ~  #ident ~ ")" },
         |(_, _, _, name, _)| TimeTravelPoint::TableTag(name),

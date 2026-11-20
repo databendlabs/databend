@@ -463,19 +463,6 @@ impl AggregateStateDescription {
     }
 }
 
-pub(crate) fn state_at<T>(state: AggrState<'_>, index: usize) -> &mut T
-where T: Send + 'static {
-    state.addr.next(state.loc[index].offset()).get::<T>()
-}
-
-pub(crate) fn write_state_at<T>(state: AggrState<'_>, index: usize, value: T)
-where T: Send + 'static {
-    state
-        .addr
-        .next(state.loc[index].offset())
-        .write_state(value)
-}
-
 pub struct AggregateStateSet<'a> {
     places: &'a [StateAddr],
     loc: &'a [AggrStateLoc],
@@ -929,6 +916,14 @@ pub trait AggregateCall: fmt::Display + Send + Sync + 'static {
     fn merge_serialized(&self, states: AggregateStateSet<'_>, state: &BlockEntry) -> Result<()>;
 
     fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()>;
+
+    /// Merges the states at `rhs[i]` into `states[i]`, with a single dynamic call.
+    fn merge_states_keys(&self, states: AggregateStateSet<'_>, rhs: &[StateAddr]) -> Result<()> {
+        for (state, rhs) in states.iter().zip(rhs) {
+            self.merge_states(state, AggrState::new(*rhs, states.loc))?;
+        }
+        Ok(())
+    }
 
     fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()>;
 

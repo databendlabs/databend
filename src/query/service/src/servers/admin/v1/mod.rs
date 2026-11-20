@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod caches;
 pub mod cluster;
 pub mod clustering_information;
 pub mod config;
 pub mod instance_status;
+pub mod perf;
 pub mod procedures;
 pub mod processes;
 pub mod query_dump;

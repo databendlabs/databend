@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -145,7 +146,7 @@ impl Table for CopyHistoryTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
-        _put_cache: bool,
+        _cache_policy: CachePolicy,
     ) -> Result<()> {
         let table_name = self.parse_args()?;
 

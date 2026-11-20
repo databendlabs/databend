@@ -23,6 +23,7 @@ mod http_query;
 mod http_query_context;
 mod http_query_manager;
 mod page_manager;
+mod query_token;
 pub mod sized_spsc;
 
 pub(crate) use execute_state::ExecuteState;
@@ -42,4 +43,5 @@ pub(crate) use http_query_manager::CloseReason;
 pub use http_query_manager::HttpQueryManager;
 pub use page_manager::PageManager;
 pub use page_manager::ResponseData;
+pub use query_token::QueryToken;
 pub use sized_spsc::Wait;

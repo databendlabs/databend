@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Read;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -33,13 +30,11 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_storages_common_blocks::iter_parquet_page_headers;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
-use parquet::format::PageHeader;
-use parquet::format::PageType;
-use parquet::thrift::TSerializable;
-use thrift::protocol::TCompactInputProtocol;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -50,18 +45,6 @@ use crate::table_functions::function_template::TableMetaFunc;
 
 pub struct FusePage;
 pub type FusePageFunc = TableMetaFuncTemplate<FusePage>;
-
-struct PageMetaRow<'a> {
-    column_name: &'a str,
-    page_type: &'static str,
-    encoding: &'static str,
-    num_values: u64,
-    num_rows: Option<u64>,
-    compressed_size: u64,
-    uncompressed_size: u64,
-    header_size: u64,
-    page_offset: u64,
-}
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FusePage {
@@ -138,7 +121,7 @@ impl TableMetaFunc for FusePage {
 
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for segment in segments {
                 let segment = segment?;
@@ -149,40 +132,43 @@ impl TableMetaFunc for FusePage {
                             continue;
                         }
                         let column_id = field.column_id;
-                        let Some(column_meta) = block.col_metas.get(&column_id) else {
+                        let Some(chunk) = block.column_chunk(&column_id) else {
                             continue;
                         };
-                        let Some(parquet_meta) = column_meta.as_parquet() else {
+                        let Some(parquet_meta) = chunk.meta.as_parquet() else {
                             continue;
                         };
 
                         let column_bytes = read_parquet_column_chunk(
                             &tbl.operator,
-                            &block.location.0,
+                            chunk.location,
                             parquet_meta.offset,
                             parquet_meta.len,
                         )
                         .await?;
-                        for (page_ordinal_in_column, page) in parse_page_headers(
+                        let mut page_ordinal_in_column = 0u64;
+                        for page in iter_parquet_page_headers(
                             field.name(),
                             parquet_meta.offset,
-                            column_bytes.as_slice(),
-                        )?
-                        .into_iter()
-                        .enumerate()
-                        {
-                            block_location.put_and_commit(&block.location.0);
-                            column_name.put_and_commit(page.column_name);
-                            page_type.put_and_commit(page.page_type);
-                            encoding.put_and_commit(page.encoding);
-                            page_ordinal.push(page_ordinal_in_column as u64);
-                            num_values.push(page.num_values);
-                            num_rows.push(page.num_rows);
+                            column_bytes.as_ref(),
+                        ) {
+                            let page = page?;
+                            if page.is_index_page() {
+                                continue;
+                            }
+                            block_location.put_and_commit(chunk.location);
+                            column_name.put_and_commit(field.name());
+                            page_type.put_and_commit(page.page_type_name());
+                            encoding.put_and_commit(page.encoding_name());
+                            page_ordinal.push(page_ordinal_in_column);
+                            num_values.push(page.num_values());
+                            num_rows.push(page.num_rows());
                             compressed_size.push(page.compressed_size);
                             uncompressed_size.push(page.uncompressed_size);
                             header_size.push(page.header_size);
                             page_offset.push(page.page_offset);
 
+                            page_ordinal_in_column += 1;
                             rows += 1;
                             if rows >= limit {
                                 break 'FOR;
@@ -219,7 +205,7 @@ async fn read_parquet_column_chunk(
     location: &str,
     offset: u64,
     len: u64,
-) -> Result<Vec<u8>> {
+) -> Result<bytes::Bytes> {
     let end = offset.checked_add(len).ok_or_else(|| {
         ErrorCode::ParquetFileInvalid(format!(
             "invalid parquet file {}, column chunk length overflow",
@@ -231,161 +217,5 @@ async fn read_parquet_column_chunk(
         .range(offset..end)
         .await
         .map_err(|err| ErrorCode::StorageOther(err.to_string()))?;
-    Ok(buffer.to_vec())
-}
-
-fn parse_page_headers<'a>(
-    column_name: &'a str,
-    column_offset: u64,
-    column_bytes: &'a [u8],
-) -> Result<Vec<PageMetaRow<'a>>> {
-    let mut cursor = std::io::Cursor::new(column_bytes);
-    let total_len = column_bytes.len() as u64;
-    let mut pages = Vec::new();
-
-    while cursor.position() < total_len {
-        let header_offset = cursor.position();
-        let (header_len, header) = read_page_header_len(&mut cursor)?;
-        let compressed_size =
-            convert_i32_to_u64(header.compressed_page_size, "compressed_page_size")?;
-        let uncompressed_size =
-            convert_i32_to_u64(header.uncompressed_page_size, "uncompressed_page_size")?;
-        let data_end = cursor.position() + compressed_size;
-        if data_end > total_len {
-            return Err(ErrorCode::ParquetFileInvalid(format!(
-                "invalid parquet column chunk for {}, page data exceeds chunk size",
-                column_name
-            )));
-        }
-        if header_len == 0 && compressed_size == 0 {
-            return Err(ErrorCode::ParquetFileInvalid(format!(
-                "invalid parquet column chunk for {}, empty page header",
-                column_name
-            )));
-        }
-
-        cursor.set_position(data_end);
-
-        let page_type_str = page_type_to_string(header.type_);
-        if page_type_str == "index_page" {
-            continue;
-        }
-
-        let (encoding, num_values, num_rows) = page_header_fields(&header, column_name)?;
-        pages.push(PageMetaRow {
-            column_name,
-            page_type: page_type_str,
-            encoding,
-            num_values,
-            num_rows,
-            compressed_size,
-            uncompressed_size,
-            header_size: header_len as u64,
-            page_offset: column_offset + header_offset,
-        });
-    }
-
-    Ok(pages)
-}
-
-fn read_page_header_len<R: Read>(input: &mut R) -> Result<(usize, PageHeader)> {
-    struct TrackedRead<R>(R, usize);
-
-    impl<R: Read> Read for TrackedRead<R> {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            let read = self.0.read(buf)?;
-            self.1 += read;
-            Ok(read)
-        }
-    }
-
-    let mut tracked = TrackedRead(input, 0);
-    let mut prot = TCompactInputProtocol::new(&mut tracked);
-    let header = PageHeader::read_from_in_protocol(&mut prot)
-        .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-    Ok((tracked.1, header))
-}
-
-fn page_type_to_string(page_type: PageType) -> &'static str {
-    match page_type {
-        PageType::DATA_PAGE => "data_page_v1",
-        PageType::DATA_PAGE_V2 => "data_page_v2",
-        PageType::DICTIONARY_PAGE => "dictionary",
-        PageType::INDEX_PAGE => "index_page",
-        _ => "unknown",
-    }
-}
-
-fn page_header_fields(
-    header: &PageHeader,
-    column_name: &str,
-) -> Result<(&'static str, u64, Option<u64>)> {
-    match header.type_ {
-        PageType::DATA_PAGE => {
-            let data_page = header.data_page_header.as_ref().ok_or_else(|| {
-                ErrorCode::ParquetFileInvalid(format!(
-                    "invalid parquet column chunk for {}, missing data_page_header",
-                    column_name
-                ))
-            })?;
-            let num_values = convert_i32_to_u64(data_page.num_values, "num_values")?;
-            Ok((
-                encoding_to_string(data_page.encoding.0),
-                num_values,
-                Some(num_values),
-            ))
-        }
-        PageType::DATA_PAGE_V2 => {
-            let data_page = header.data_page_header_v2.as_ref().ok_or_else(|| {
-                ErrorCode::ParquetFileInvalid(format!(
-                    "invalid parquet column chunk for {}, missing data_page_header_v2",
-                    column_name
-                ))
-            })?;
-            let num_values = convert_i32_to_u64(data_page.num_values, "num_values")?;
-            let num_rows = convert_i32_to_u64(data_page.num_rows, "num_rows")?;
-            Ok((
-                encoding_to_string(data_page.encoding.0),
-                num_values,
-                Some(num_rows),
-            ))
-        }
-        PageType::DICTIONARY_PAGE => {
-            let dict_page = header.dictionary_page_header.as_ref().ok_or_else(|| {
-                ErrorCode::ParquetFileInvalid(format!(
-                    "invalid parquet column chunk for {}, missing dictionary_page_header",
-                    column_name
-                ))
-            })?;
-            let num_values = convert_i32_to_u64(dict_page.num_values, "num_values")?;
-            Ok((encoding_to_string(dict_page.encoding.0), num_values, None))
-        }
-        PageType::INDEX_PAGE => Ok(("unknown", 0, None)),
-        _ => Ok(("unknown", 0, None)),
-    }
-}
-
-fn encoding_to_string(encoding: i32) -> &'static str {
-    match encoding {
-        0 => "plain",
-        2 => "plain_dictionary",
-        3 => "rle",
-        4 => "bit_packed",
-        5 => "delta_binary_packed",
-        6 => "delta_length_byte_array",
-        7 => "delta_byte_array",
-        8 => "rle_dictionary",
-        9 => "byte_stream_split",
-        _ => "unknown",
-    }
-}
-
-fn convert_i32_to_u64(value: i32, field: &str) -> Result<u64> {
-    if value < 0 {
-        return Err(ErrorCode::ParquetFileInvalid(format!(
-            "invalid parquet page header: {} is negative",
-            field
-        )));
-    }
-    Ok(value as u64)
+    Ok(buffer.to_bytes())
 }

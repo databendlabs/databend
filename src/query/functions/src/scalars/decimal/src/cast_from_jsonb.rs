@@ -19,15 +19,12 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::DecimalType;
-use databend_common_expression::types::F64;
 use databend_common_expression::types::NullableType;
-use databend_common_expression::types::Number;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use jsonb::Number as JsonbNumber;
 use jsonb::Value as JsonbValue;
-use num_traits::AsPrimitive;
 
 use crate::cast::ScaleReduction;
 use crate::decimal::DecimalExt;
@@ -45,7 +42,6 @@ where
 {
     let size = dest_type.size();
     let multiplier = T::e(size.scale());
-    let multiplier_f64: f64 = (10_f64).powi(size.scale() as i32).as_();
     let min = T::min_for_precision(size.precision());
     let max = T::max_for_precision(size.precision());
 
@@ -55,7 +51,6 @@ where
             min,
             max,
             multiplier,
-            multiplier_f64,
             size,
             dest_type,
             ctx.func_ctx.rounding_mode,
@@ -77,7 +72,6 @@ fn cast_to_decimal<T>(
     min: T,
     max: T,
     multiplier: T,
-    multiplier_f64: f64,
     dest_size: DecimalSize,
     dest_type: DecimalDataType,
     rounding_mode: bool,
@@ -107,10 +101,9 @@ where
                     None => Err(format!("Decimal overflow, value `{n}`")),
                 }
             }
-            JsonbNumber::Float64(v) => {
-                float_to_decimal(F64::from(v), min, max, multiplier_f64, rounding_mode)
-                    .map(|v| Some(v))
-            }
+            JsonbNumber::Float64(v) => T::from_float(v, dest_size, rounding_mode)
+                .map(Some)
+                .ok_or_else(|| format!("Decimal overflow, value `{v}`")),
             JsonbNumber::Decimal64(d) => {
                 let from_size = DecimalSize::new_unchecked(i64::MAX_PRECISION, d.scale);
                 match dest_type {
@@ -192,28 +185,6 @@ where
             }
         }
     }
-}
-
-fn float_to_decimal<T, N>(
-    x: N,
-    min: T,
-    max: T,
-    multiplier: f64,
-    rounding_mode: bool,
-) -> Result<T, String>
-where
-    T: DecimalExt,
-    N: Number + AsPrimitive<f64> + std::fmt::Display,
-{
-    let mut value = x.as_() * multiplier;
-    if rounding_mode {
-        value = value.round();
-    }
-    let y = T::from_float(value);
-    if y <= max && y >= min {
-        return Ok(y);
-    }
-    Err(format!("Decimal overflow, value `{x}`"))
 }
 
 fn decimal_to_decimal<T: DecimalExt>(

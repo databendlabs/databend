@@ -100,6 +100,7 @@ pub struct Metadata {
     /// materialized view. Capturing here keeps those execution rewrites out of lineage.
     bound_query_lineage: Option<BoundQueryLineage>,
     next_runtime_filter_id: usize,
+    next_join_runtime_filter_key: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
 }
@@ -269,6 +270,23 @@ impl Metadata {
             .filter(move |column| column.table_index() == Some(index))
     }
 
+    /// Returns the index of an internal column already bound for the table, if any.
+    pub fn internal_column_index(
+        &self,
+        table_index: IndexType,
+        column_id: ColumnId,
+    ) -> Option<Symbol> {
+        self.columns_by_table_index(table_index)
+            .find_map(|column| match column {
+                ColumnEntry::InternalColumn(column)
+                    if column.internal_column.column_id() == column_id =>
+                {
+                    Some(column.column_index)
+                }
+                _ => None,
+            })
+    }
+
     pub fn virtual_columns_by_table_index(
         &self,
         index: IndexType,
@@ -418,7 +436,6 @@ impl Metadata {
         catalog: String,
         database: String,
         table_meta: Arc<dyn Table>,
-        branch: Option<String>,
         table_alias_name: Option<String>,
         source_of_view: bool,
         source_of_stage: bool,
@@ -435,7 +452,6 @@ impl Metadata {
             database,
             catalog,
             table: table_meta.clone(),
-            branch,
             alias_name: table_alias_name,
             source_of_view,
             source_of_stage,
@@ -559,6 +575,14 @@ impl Metadata {
         next_runtime_filter_id
     }
 
+    /// Allocate the planner key that links a join runtime filter to the scans it reaches.
+    /// The execution id is allocated separately when the hash join is built.
+    pub fn next_join_runtime_filter_key(&mut self) -> usize {
+        let key = self.next_join_runtime_filter_key;
+        self.next_join_runtime_filter_key += 1;
+        key
+    }
+
     pub fn add_base_column_scan_id(&mut self, base_column_scan_id: HashMap<Symbol, usize>) {
         self.base_column_scan_id.extend(base_column_scan_id);
     }
@@ -673,7 +697,6 @@ pub struct TableEntry {
     catalog: String,
     database: String,
     name: String,
-    branch: Option<String>,
     alias_name: Option<String>,
     index: IndexType,
     source_of_view: bool,
@@ -733,10 +756,6 @@ impl TableEntry {
         &self.name
     }
 
-    pub fn branch(&self) -> &Option<String> {
-        &self.branch
-    }
-
     /// Get the alias name of this table entry.
     pub fn alias_name(&self) -> &Option<String> {
         &self.alias_name
@@ -771,13 +790,7 @@ impl TableEntry {
     }
 
     pub fn qualified_name(&self) -> String {
-        match &self.branch {
-            None => format!("{}.{}.{}", self.catalog, self.database, self.name),
-            Some(branch) => format!(
-                "{}.{}.{}/{}",
-                self.catalog, self.database, self.name, branch
-            ),
-        }
+        format!("{}.{}.{}", self.catalog, self.database, self.name)
     }
 }
 

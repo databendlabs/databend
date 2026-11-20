@@ -27,6 +27,11 @@ fn run_arg_max_cases(file: &mut impl Write, simulator: impl AggregationSimulator
         ),
         ("date_col", DateType::from_data(vec![1, 2, 3, 4]).into()),
         ("ts", TimestampType::from_data(vec![10, 20, 30, 40]).into()),
+        // NaN is the largest Float64, so a = 3 is the max.
+        (
+            "f",
+            Float64Type::from_data(vec![1.0, f64::NAN, 0.0, -0.0]).into(),
+        ),
         (
             "json",
             StringType::from_data(vec![r#"{"k":1}"#, r#"{"k":2}"#, r#"{"k":3}"#, r#"{"k":4}"#])
@@ -72,6 +77,7 @@ fn run_arg_max_cases(file: &mut impl Write, simulator: impl AggregationSimulator
     write_aggregate_expr_case(file, "arg_max(a, event)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "arg_max(a, date_col)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "arg_max(a, ts)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "arg_max(a, f)", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "arg_max(a, [])", columns, simulator, vec![]);
     write_aggregate_expr_case(file, "arg_max(a, {})", columns, simulator, vec![]);
     write_aggregate_expr_case(

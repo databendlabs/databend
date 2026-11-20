@@ -1,0 +1,126 @@
+=== few_groups ===
+description: 10 groups over 1M rows: deduplicate (g, x) first, then count x, which skips NULL.
+sql: SELECT g, count(DISTINCT x) FROM t GROUP BY g
+raw_plan:
+EvalScalar
+├── scalars: [t.g (#0) AS (#0), count(DISTINCT x) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.g (#0) AS (#0)]
+    ├── aggregate functions: [count_distinct(t.x (#2)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t.g (#0) AS (#0), t.x (#2) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [t.g (#0) AS (#0)]
+├── aggregate functions: [count(t.x (#2)) AS (#4)]
+└── Aggregate(Partial)
+    ├── group items: [t.g (#0) AS (#0)]
+    ├── aggregate functions: [count(t.x (#2)) AS (#4)]
+    └── Aggregate(Final)
+        ├── group items: [t.g (#0) AS (#0), t.x (#2) AS (#2)]
+        ├── aggregate functions: []
+        └── Aggregate(Partial)
+            ├── group items: [t.g (#0) AS (#0), t.x (#2) AS (#2)]
+            ├── aggregate functions: []
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+=== many_groups ===
+description: 100K groups over 1M rows keep small sets: unchanged.
+sql: SELECT h, count(DISTINCT x) FROM t GROUP BY h
+raw_plan:
+EvalScalar
+├── scalars: [t.h (#1) AS (#1), count(DISTINCT x) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.h (#1) AS (#1)]
+    ├── aggregate functions: [count_distinct(t.x (#2)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t.h (#1) AS (#1), t.x (#2) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [t.h (#1) AS (#1)]
+├── aggregate functions: [count_distinct(t.x (#2)) AS (#4)]
+└── Aggregate(Partial)
+    ├── group items: [t.h (#1) AS (#1)]
+    ├── aggregate functions: [count_distinct(t.x (#2)) AS (#4)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+=== other_aggregate ===
+description: Another aggregate would be computed over the pairs: unchanged.
+sql: SELECT g, count(DISTINCT x), count(*) FROM t GROUP BY g
+raw_plan:
+EvalScalar
+├── scalars: [t.g (#0) AS (#0), count(DISTINCT x) (#4) AS (#4), COUNT(*) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [t.g (#0) AS (#0)]
+    ├── aggregate functions: [count_distinct(t.x (#2)) AS (#4), count() AS (#5)]
+    └── EvalScalar
+        ├── scalars: [t.g (#0) AS (#0), t.x (#2) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [t.g (#0) AS (#0)]
+├── aggregate functions: [count_distinct(t.x (#2)) AS (#4), count() AS (#5)]
+└── Aggregate(Partial)
+    ├── group items: [t.g (#0) AS (#0)]
+    ├── aggregate functions: [count_distinct(t.x (#2)) AS (#4), count() AS (#5)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+=== bitmap_argument ===
+description: Group keys compare legacy bitmaps by their raw bytes, unlike the distinct set: unchanged.
+sql: SELECT g, count(DISTINCT b) FROM t GROUP BY g
+raw_plan:
+EvalScalar
+├── scalars: [t.g (#0) AS (#0), count(DISTINCT b) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: [t.g (#0) AS (#0)]
+    ├── aggregate functions: [count_distinct(t.b (#3)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t.g (#0) AS (#0), t.b (#3) AS (#3)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Aggregate(Final)
+├── group items: [t.g (#0) AS (#0)]
+├── aggregate functions: [count_distinct(t.b (#3)) AS (#4)]
+└── Aggregate(Partial)
+    ├── group items: [t.g (#0) AS (#0)]
+    ├── aggregate functions: [count_distinct(t.b (#3)) AS (#4)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+

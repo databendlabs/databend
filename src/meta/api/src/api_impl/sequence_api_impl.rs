@@ -17,6 +17,7 @@ use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
 use databend_common_meta_app::app_error::WrongSequenceCount;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -42,10 +43,10 @@ use log::debug;
 
 use super::sequence_nextval_impl::NextVal;
 use crate::SequenceApi;
+use crate::crud::create_owned_object;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_del;
@@ -65,20 +66,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
         let storage_value = ValueId::<SequenceStorageValue>::new(req.start);
 
-        let conditions = if req.override_existing {
-            vec![]
-        } else {
-            vec![txn_cond_eq_seq(&req.ident, 0)]
+        // An existing sequence is not an error here; callers report it themselves.
+        let object = OwnershipObject::Sequence {
+            name: req.ident.name().to_string(),
         };
+        let success = create_owned_object(
+            self,
+            &req.ident,
+            &meta,
+            req.override_existing,
+            &object,
+            req.owner_role.as_deref(),
+            &[txn_put_pb(&storage_ident, &storage_value)],
+        )
+        .await?;
 
-        let txn = TxnRequest::new(conditions, vec![
-            txn_put_pb(&req.ident, &meta),
-            txn_put_pb(&storage_ident, &storage_value),
-        ]);
-
-        let (succ, _response) = send_txn(self, txn).await?;
-
-        Ok(CreateSequenceReply { success: succ })
+        Ok(CreateSequenceReply { success })
     }
 
     async fn get_sequence(

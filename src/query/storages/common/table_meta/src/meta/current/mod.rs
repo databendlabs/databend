@@ -14,9 +14,13 @@
 
 pub use v0::ColumnMeta as SingleColumnMeta;
 pub use v2::AdditionalStatsMeta;
+pub use v2::BlockDataFile;
 pub use v2::BlockIndexMeta;
 pub use v2::BlockMeta;
 pub use v2::ClusterStatistics;
+pub use v2::ColumnChunkRef;
+pub use v2::ColumnGroupBloomMeta;
+pub use v2::ColumnGroupFileMeta;
 pub use v2::ColumnMeta;
 pub use v2::ColumnStatistics;
 pub use v2::DraftVirtualBlockMeta;
@@ -44,6 +48,7 @@ pub use v4::CompactSegmentInfo;
 pub use v4::LogicalChangeCounters;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;
+pub use v4::SegmentZoneMapMeta;
 pub use v4::TableSnapshot;
 pub use v4::TableSnapshotLite;
 pub use v4::TableSnapshotStatistics;

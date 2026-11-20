@@ -1,0 +1,258 @@
+=== union_branches_get_branch_column_order ===
+description: A TopN over UNION ALL should order every branch scan by the column that branch outputs.
+sql: SELECT a FROM (SELECT a FROM t1 UNION ALL SELECT b FROM t2) u ORDER BY a LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#3) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [a (#3)]
+    ├── left: [t1.a (#0)]
+    ├── right: [t2.b (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── Scan
+    │   ├── table: default.t1 (#0)
+    │   ├── filters: []
+    │   ├── order by: [t1.a (#0) ASC]
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t2 (#1)
+        ├── filters: []
+        ├── order by: [t2.b (#2) ASC]
+        └── limit: NONE
+
+
+=== filtered_branch_pushes_through_eval_scalar ===
+description: A filtered branch keeps an EvalScalar above its scan, which the push-down crosses.
+sql: SELECT a FROM (SELECT a FROM t1 WHERE x > 0 UNION ALL SELECT b FROM t2) u ORDER BY a DESC LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#3) DESC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [a (#3)]
+    ├── left: [t1.a (#0)]
+    ├── right: [t2.b (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── EvalScalar
+    │   ├── scalars: [t1.a (#0) AS (#0), t1.x (#1) AS (#4)]
+    │   └── Scan
+    │       ├── table: default.t1 (#0)
+    │       ├── filters: [gt(t1.x (#1), 0)]
+    │       ├── order by: [t1.a (#0) DESC]
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.t2 (#1)
+        ├── filters: []
+        ├── order by: [t2.b (#2) DESC]
+        └── limit: NONE
+
+
+=== derived_branch_column_does_not_push ===
+description: A branch whose column is computed above its scan keeps no scan order; the other branch still gets it.
+sql: SELECT d FROM (SELECT d FROM t4 UNION ALL SELECT b + 1 FROM t2) u ORDER BY d LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [d (#3) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [d (#3)]
+    ├── left: [t4.d (#0)]
+    ├── right: [b + 1 (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── Scan
+    │   ├── table: default.t4 (#0)
+    │   ├── filters: []
+    │   ├── order by: [t4.d (#0) ASC]
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [plus(t2.b (#1), 1) AS (#2)]
+        └── Scan
+            ├── table: default.t2 (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== nested_unions_push_to_all_scans ===
+description: Nested UNION ALL branches should all receive the scan order.
+sql: SELECT a FROM (SELECT a FROM t1 UNION ALL SELECT b FROM t2 UNION ALL SELECT x FROM t1) u ORDER BY a LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#6) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [a (#6)]
+    ├── left: [a (#3)]
+    ├── right: [t1.x (#5)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── UnionAll
+    │   ├── output: [a (#3)]
+    │   ├── left: [t1.a (#0)]
+    │   ├── right: [t2.b (#2)]
+    │   ├── cte_scan_names: []
+    │   ├── logical_recursive_cte_id: None
+    │   ├── Scan
+    │   │   ├── table: default.t1 (#0)
+    │   │   ├── filters: []
+    │   │   ├── order by: [t1.a (#0) ASC]
+    │   │   └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.t2 (#1)
+    │       ├── filters: []
+    │       ├── order by: [t2.b (#2) ASC]
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.t1 (#2)
+        ├── filters: []
+        ├── order by: [t1.x (#5) ASC]
+        └── limit: NONE
+
+
+=== nullable_coercion_keeps_branch_order ===
+description: A branch cast only to the nullable type keeps its values, so it still receives the scan order.
+sql: SELECT a FROM (SELECT a FROM t1 UNION ALL SELECT c FROM t3) u ORDER BY a LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#3) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [a (#3)]
+    ├── left: [t1.a (#0)]
+    ├── right: [CAST(t3.c (#2) AS Int32 NULL)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── Scan
+    │   ├── table: default.t1 (#0)
+    │   ├── filters: []
+    │   ├── order by: [t1.a (#0) ASC]
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t3 (#1)
+        ├── filters: []
+        ├── order by: [t3.c (#2) ASC]
+        └── limit: NONE
+
+
+=== widening_coercion_skips_branch ===
+description: A branch cast to a wider type changes its values, so only the uncast branch receives the scan order.
+sql: SELECT a FROM (SELECT a FROM t1 UNION ALL SELECT d FROM t4) u ORDER BY a LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#3) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [a (#3)]
+    ├── left: [CAST(t1.a (#0) AS Int64 NULL)]
+    ├── right: [t4.d (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── Scan
+    │   ├── table: default.t1 (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t4 (#1)
+        ├── filters: []
+        ├── order by: [t4.d (#2) ASC]
+        └── limit: NONE
+
+
+=== multiple_sort_keys_push_all_keys ===
+description: A multi-key TopN pushes every key, translated per branch; the runtime filter prunes by the first key.
+sql: SELECT a, x FROM (SELECT a, x FROM t1 UNION ALL SELECT b, b FROM t2) u ORDER BY a, x LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#3) ASC NULLS LAST, x (#4) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [a (#3), x (#4)]
+    ├── left: [t1.a (#0), t1.x (#1)]
+    ├── right: [t2.b (#2), t2.b (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── Scan
+    │   ├── table: default.t1 (#0)
+    │   ├── filters: []
+    │   ├── order by: [t1.a (#0) ASC, t1.x (#1) ASC]
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.t2 (#1)
+        ├── filters: []
+        ├── order by: [t2.b (#2) ASC, t2.b (#2) ASC]
+        └── limit: NONE
+
+
+=== limited_branch_does_not_push ===
+description: A Limit inside a branch stops the push-down for that branch only.
+sql: SELECT a FROM ((SELECT a FROM t1 LIMIT 10) UNION ALL SELECT b FROM t2) u ORDER BY a LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#3) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── UnionAll
+    ├── output: [a (#3)]
+    ├── left: [t1.a (#0)]
+    ├── right: [t2.b (#2)]
+    ├── cte_scan_names: []
+    ├── logical_recursive_cte_id: None
+    ├── Limit
+    │   ├── limit: [10]
+    │   ├── offset: [0]
+    │   └── Scan
+    │       ├── table: default.t1 (#0)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: 10
+    └── Scan
+        ├── table: default.t2 (#1)
+        ├── filters: []
+        ├── order by: [t2.b (#2) ASC]
+        └── limit: NONE
+
+
+=== union_distinct_does_not_push ===
+description: UNION DISTINCT aggregates above the union, so the TopN does not see the union directly.
+sql: SELECT a FROM (SELECT a FROM t1 UNION SELECT b FROM t2) u ORDER BY a LIMIT 3
+optimized_plan:
+TopN
+├── sort keys: [a (#3) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [a (#3) AS (#3)]
+    ├── aggregate functions: []
+    └── Aggregate(Partial)
+        ├── group items: [a (#3) AS (#3)]
+        ├── aggregate functions: []
+        └── UnionAll
+            ├── output: [a (#3)]
+            ├── left: [t1.a (#0)]
+            ├── right: [t2.b (#2)]
+            ├── cte_scan_names: []
+            ├── logical_recursive_cte_id: None
+            ├── Scan
+            │   ├── table: default.t1 (#0)
+            │   ├── filters: []
+            │   ├── order by: [t1.a (#0) ASC]
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.t2 (#1)
+                ├── filters: []
+                ├── order by: [t2.b (#2) ASC]
+                └── limit: NONE
+
+

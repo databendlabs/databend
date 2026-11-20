@@ -33,6 +33,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
@@ -102,7 +103,7 @@ impl TableMetaFunc for FuseBlockStatistics {
         .max(1);
         'outer: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, CachePolicy::DEFAULT)
                 .await?;
             for segment in segments {
                 let segment = segment?;

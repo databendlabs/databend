@@ -1,0 +1,54 @@
+# Written by the current query: a clustered table whose recluster built a segment
+# zone map. The zone map pointer is a new field of the table snapshot; an older
+# reader must skip it.
+
+statement ok
+DROP TABLE IF EXISTS compat_segment_zone_map
+
+statement ok
+SET enable_compact_after_write = 0
+
+# With one block per segment every segment is full, and the threshold 0
+# refreshes the zone map after every recluster round.
+statement ok
+SET segment_zone_map_full_segment_threshold = 0
+
+statement ok
+CREATE TABLE compat_segment_zone_map(id INT, label STRING) CLUSTER BY (id) block_per_segment = 1 enable_segment_zone_map = 1
+
+# Each pair of overlapping inserts gives a recluster round one block to merge.
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (1, 'a'), (3, 'c')
+
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (2, 'b'), (4, 'd')
+
+statement ok
+OPTIMIZE TABLE compat_segment_zone_map RECLUSTER
+
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (11, 'e'), (13, 'g')
+
+statement ok
+INSERT INTO compat_segment_zone_map VALUES (12, 'f'), (14, 'h')
+
+statement ok
+OPTIMIZE TABLE compat_segment_zone_map RECLUSTER
+
+# The latest snapshot points at a zone map covering both segments.
+query BI
+SELECT segment_zone_map_location IS NOT NULL, segment_count FROM fuse_snapshot('default', 'compat_segment_zone_map') ORDER BY timestamp DESC LIMIT 1
+----
+1 2
+
+query T
+EXPLAIN SELECT id FROM compat_segment_zone_map WHERE id = 3
+----
+<slt:ignore>zone map pruning: 2 to 1<slt:ignore>
+
+query IT
+SELECT id, label FROM compat_segment_zone_map WHERE id >= 12 ORDER BY id
+----
+12 f
+13 g
+14 h

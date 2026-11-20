@@ -50,6 +50,7 @@ use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_CTE;
 use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use log::info;
@@ -104,6 +105,18 @@ impl TempTblMgr {
 
     pub fn is_empty(&self) -> bool {
         self.id_to_table.is_empty() && self.staged_tables.is_empty()
+    }
+
+    /// Whether the session holds temporary state that outlives the current
+    /// query and therefore requires follow-up requests to reach this node:
+    /// user-created temporary tables or unpublished atomic CTAS tables.
+    /// Materialized CTE scratch tables (`OPT_KEY_MATERIALIZED_CTE`) are dropped
+    /// when their query finishes and are excluded.
+    pub fn has_session_scoped_tables(&self) -> bool {
+        self.id_to_table
+            .values()
+            .chain(self.staged_tables.values())
+            .any(|table| !table.meta.options.contains_key(OPT_KEY_MATERIALIZED_CTE))
     }
 
     pub fn create_table(
@@ -631,6 +644,16 @@ mod tests {
         create_option: CreateOption,
         as_dropped: bool,
     ) -> CreateTableReq {
+        create_table_req_with_options(table_name, engine, create_option, as_dropped, &[])
+    }
+
+    fn create_table_req_with_options(
+        table_name: &str,
+        engine: &str,
+        create_option: CreateOption,
+        as_dropped: bool,
+        options: &[(&str, &str)],
+    ) -> CreateTableReq {
         let mut table_meta = TableMeta {
             engine: engine.to_string(),
             ..Default::default()
@@ -638,6 +661,9 @@ mod tests {
         table_meta
             .options
             .insert(OPT_KEY_DATABASE_ID.to_string(), "1".to_string());
+        for (k, v) in options {
+            table_meta.options.insert(k.to_string(), v.to_string());
+        }
 
         CreateTableReq {
             create_option,
@@ -849,5 +875,88 @@ mod tests {
                 .get(&TempTblMgr::temp_table_desc("db", "renamed")),
             Some(&created.table_id)
         );
+    }
+
+    fn drop_memory_table_req(table_name: &str, table_id: u64) -> DropTableByIdReq {
+        DropTableByIdReq {
+            if_exists: true,
+            tenant: Tenant::new_literal("tenant"),
+            tb_id: table_id,
+            table_name: table_name.to_string(),
+            db_id: 1,
+            db_name: "db".to_string(),
+            engine: "MEMORY".to_string(),
+            temp_prefix: "session".to_string(),
+        }
+    }
+
+    fn create_memory_table(
+        mgr: &TempTblMgrRef,
+        table_name: &str,
+        as_dropped: bool,
+        options: &[(&str, &str)],
+    ) -> u64 {
+        let reply = mgr
+            .lock()
+            .create_table(
+                create_table_req_with_options(
+                    table_name,
+                    "MEMORY",
+                    CreateOption::Create,
+                    as_dropped,
+                    options,
+                ),
+                "session".to_string(),
+            )
+            .unwrap();
+        IN_MEMORY_DATA.write().insert(
+            InMemoryDataKey {
+                temp_prefix: Some("session".to_string()),
+                table_id: reply.table_id,
+            },
+            Default::default(),
+        );
+        reply.table_id
+    }
+
+    #[tokio::test]
+    async fn test_materialized_cte_tables_do_not_count_as_session_scoped() {
+        let cte_opt = [(OPT_KEY_MATERIALIZED_CTE, "1")];
+        let mgr = TempTblMgr::init();
+        assert!(!mgr.lock().has_session_scoped_tables());
+
+        // A materialized CTE scratch table alone is not session state.
+        let cte_id = create_memory_table(&mgr, "cte$query", false, &cte_opt);
+        assert!(!mgr.lock().is_empty());
+        assert!(!mgr.lock().has_session_scoped_tables());
+
+        // A user temporary table alongside it makes the session sticky.
+        let user_id = create_memory_table(&mgr, "t", false, &[]);
+        assert!(mgr.lock().has_session_scoped_tables());
+
+        drop_table_by_id(mgr.clone(), drop_memory_table_req("cte$query", cte_id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(mgr.lock().has_session_scoped_tables());
+
+        drop_table_by_id(mgr.clone(), drop_memory_table_req("t", user_id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!mgr.lock().has_session_scoped_tables());
+        assert!(mgr.lock().is_empty());
+
+        // Atomic CTAS stages the table by id while the pipeline runs; a
+        // staged CTE table must not count either, a staged user table must.
+        let staged_cte = create_memory_table(&mgr, "cte_ctas$query", true, &cte_opt);
+        assert!(!mgr.lock().is_empty());
+        assert!(!mgr.lock().has_session_scoped_tables());
+        let staged_user = create_memory_table(&mgr, "t_ctas", true, &[]);
+        assert!(mgr.lock().has_session_scoped_tables());
+        mgr.lock().abort_staged_table(staged_user);
+        assert!(!mgr.lock().has_session_scoped_tables());
+        mgr.lock().abort_staged_table(staged_cte);
+        assert!(mgr.lock().is_empty());
     }
 }

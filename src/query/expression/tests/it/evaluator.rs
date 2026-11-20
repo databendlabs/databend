@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FromData;
@@ -23,7 +22,6 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::array::ArrayColumn;
-use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::values::Column;
 use databend_common_expression::values::Value;
@@ -37,10 +35,7 @@ fn test_run_lambda_ignores_physical_nullable_wrapper_for_non_nullable_array() {
 
     let inner_ty = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)));
     let array_ty = DataType::Array(Box::new(inner_ty.clone()));
-    let inner_column = NullableColumn::new_column(
-        Int64Type::from_data(vec![1i64, 2, 3]),
-        Bitmap::new_constant(true, 3),
-    );
+    let inner_column = Int64Type::from_data(vec![1i64, 2, 3]).wrap_nullable(None);
     let array_column = Column::Array(Box::new(ArrayColumn::new(
         inner_column,
         vec![0_u64, 3].into(),
@@ -48,10 +43,7 @@ fn test_run_lambda_ignores_physical_nullable_wrapper_for_non_nullable_array() {
 
     // Arrays with nullable elements may arrive wrapped physically, even when the
     // logical argument type is not nullable.
-    let arg = Value::Column(NullableColumn::new_column(
-        array_column,
-        Bitmap::new_constant(true, 1),
-    ));
+    let arg = Value::Column(array_column.wrap_nullable(None));
     let lambda_expr = RemoteExpr::ColumnRef {
         span: None,
         id: 0,

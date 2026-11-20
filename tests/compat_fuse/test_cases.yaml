@@ -33,6 +33,19 @@
 - { writer: current, reader: "1.2.680", meta: [1.2.770], suite: udf }
 - { writer: current, reader: "1.2.833", meta: [1.2.833], suite: rbac_current }
 
+# --- Backward compat: segment zone map built on a table an old writer created ---
+# The old snapshot has no pointer; the current reader's recluster builds one and
+# prunes every covered type with it.
+- { writer: "1.2.46", reader: current, meta: [1.2.527, 1.2.677, 1.2.833], suite: segment_zone_map_backward }
+
+# --- Forward compat: segment zone map pointer (TableSnapshot field segment_zone_map) ---
+# Shared-data group: the current query's recluster builds a zone map, an older
+# query reads and writes the table while skipping the unknown snapshot field
+# (its commits drop the pointer), and the current query then reads without a
+# zone map and reclusters again to rebuild it over segments of both versions.
+- - { writer: current, reader: "1.2.954", meta: [1.2.833], suite: segment_zone_map_forward }
+  - { writer: "1.2.954", reader: current, meta: [1.2.833], suite: segment_zone_map_rewrite }
+
 # --- Forward compat: masking WHERE authorization (TableMeta field 43) ---
 # Shared-data group: the current query enables the option, an older query keeps
 # masked WHERE semantics and stays able to read and rewrite the table, and the

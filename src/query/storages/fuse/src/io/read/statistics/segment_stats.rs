@@ -16,27 +16,29 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_exception::Result;
-use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
 
-use crate::io::MetaReaders;
+use crate::io::FuseCaches;
+use crate::io::SegmentStatsReader;
 
 #[async_backtrace::framed]
 #[fastrace::trace]
-pub async fn read_segment_stats(dal: Operator, loc: Location) -> Result<Arc<SegmentStatistics>> {
-    let reader = MetaReaders::segment_stats_reader(dal);
-    let (location, ver) = loc;
-    let load_params = LoadParams {
-        location,
-        len_hint: None,
-        ver,
-        put_cache: true,
-    };
-    reader.read(&load_params).await
+pub async fn read_segment_stats(
+    dal: Operator,
+    loc: Location,
+    policy: CachePolicy,
+) -> Result<Arc<SegmentStatistics>> {
+    let reader = SegmentStatsReader::new(dal);
+    FuseCaches::instance()
+        .segments
+        .with_policy(policy)
+        .get_stats(&reader, loc)
+        .await
 }
 
 #[async_backtrace::framed]
@@ -45,6 +47,7 @@ pub async fn read_segment_stats_in_parallel(
     dal: Operator,
     locations: &[Location],
     threads_nums: usize,
+    policy: CachePolicy,
 ) -> Result<Vec<Arc<SegmentStatistics>>> {
     // combine all the tasks.
     let mut iter = locations.iter();
@@ -52,7 +55,7 @@ pub async fn read_segment_stats_in_parallel(
         iter.next().map(|location| {
             let dal = dal.clone();
             let loc = location.clone();
-            async move { read_segment_stats(dal, loc).await }
+            async move { read_segment_stats(dal, loc, policy).await }
                 .in_span(Span::enter_with_local_parent(func_path!()))
         })
     });

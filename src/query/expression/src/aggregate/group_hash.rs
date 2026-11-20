@@ -23,6 +23,7 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::BATCH_SIZE;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;
@@ -33,7 +34,6 @@ use crate::types::decimal::Decimal;
 use crate::types::i256;
 use crate::types::number::Number;
 use crate::types::*;
-use crate::utils::bitmap::normalize_bitmap_column;
 use crate::visitor::ValueVisitor;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -75,6 +75,112 @@ pub fn group_hash_entry(entry: &BlockEntry, values: &mut [u64], is_first: bool) 
     }
 }
 
+/// The hashes of the dictionary values of the group columns that are dictionaries of strings,
+/// to hash the batches of a block by their keys.
+///
+/// The batches of a block carry its whole dictionary, so hashing the batches one by one hashes
+/// the dictionary again for each, or decodes the batch when the dictionary has more values
+/// than the batch has rows. These hashes are computed once per block and looked up by the keys
+/// of each batch. A fixed size value hashes per row as cheaply as its hash is looked up.
+pub struct DictValueHashes {
+    /// For each group column, the hashes of its dictionary values if it is a dictionary of
+    /// strings.
+    columns: Vec<Option<Vec<u64>>>,
+}
+
+impl DictValueHashes {
+    /// `None` when the block fits in one batch or has no dictionary of strings to hash.
+    pub fn new(entries: ProjectedBlock, row_count: usize) -> Option<Self> {
+        if row_count <= BATCH_SIZE {
+            return None;
+        }
+        let columns = entries
+            .iter()
+            .map(|entry| {
+                let dict = string_dict(entry)?.0;
+                // Hashing more values than the block has rows does not pay.
+                (dict.values.len() <= row_count).then(|| {
+                    let mut hashes = vec![0; dict.values.len()];
+                    group_hash_entry(&BlockEntry::from(dict.values.clone()), &mut hashes, true);
+                    hashes
+                })
+            })
+            .collect::<Vec<_>>();
+        columns
+            .iter()
+            .any(Option::is_some)
+            .then_some(DictValueHashes { columns })
+    }
+
+    /// Hash the rows of `entries`, a slice of the block `self` was built from, into `values`,
+    /// as `group_hash_entries` does.
+    pub fn group_hash_entries(&self, entries: ProjectedBlock, values: &mut [u64]) {
+        debug_assert_eq!(entries.len(), self.columns.len());
+        for (i, (entry, hashes)) in entries.iter().zip(&self.columns).enumerate() {
+            match (hashes, string_dict(entry)) {
+                // A slice keeps the dictionary of its block.
+                (Some(hashes), Some((dict, validity))) if dict.values.len() == hashes.len() => {
+                    combine_dict_hashes(dict, validity, hashes, values, i == 0)
+                }
+                _ => group_hash_entry(entry, values, i == 0),
+            }
+        }
+    }
+}
+
+/// The dictionary of `entry` and its validity, if `entry` is a dictionary of strings.
+fn string_dict(entry: &BlockEntry) -> Option<(&DictColumn, Option<&Bitmap>)> {
+    let BlockEntry::Column(column) = entry else {
+        return None;
+    };
+    let (column, validity) = match column {
+        Column::Nullable(nullable) => (nullable.column(), Some(nullable.validity())),
+        column => (column, None),
+    };
+    let Column::Encoded(encoded) = column else {
+        return None;
+    };
+    let dict = encoded.as_dict()?;
+    matches!(dict.values, Column::String(_)).then_some((dict, validity))
+}
+
+/// Hash the rows of a dictionary column by the `hashes` of its values, as `HashVisitor` does
+/// for the dictionary and the `Nullable` around it.
+fn combine_dict_hashes(
+    dict: &DictColumn,
+    validity: Option<&Bitmap>,
+    hashes: &[u64],
+    values: &mut [u64],
+    is_first: bool,
+) {
+    let key_hash = |key: u64| hashes[key as usize];
+    match (is_first, validity) {
+        (true, None) => {
+            for (val, key) in values.iter_mut().zip(dict.keys.iter()) {
+                *val = key_hash(key);
+            }
+        }
+        (false, None) => {
+            for (val, key) in values.iter_mut().zip(dict.keys.iter()) {
+                *val = merge_hash(*val, key_hash(key));
+            }
+        }
+        (true, Some(validity)) => {
+            for ((val, key), valid) in values.iter_mut().zip(dict.keys.iter()).zip(validity.iter())
+            {
+                *val = if valid { key_hash(key) } else { NULL_HASH_VAL };
+            }
+        }
+        (false, Some(validity)) => {
+            for ((val, key), valid) in values.iter_mut().zip(dict.keys.iter()).zip(validity.iter())
+            {
+                let hash = if valid { key_hash(key) } else { NULL_HASH_VAL };
+                *val = merge_hash(*val, hash);
+            }
+        }
+    }
+}
+
 fn combine_group_hash_entry<const IS_FIRST: bool>(entry: &BlockEntry, values: &mut [u64]) {
     match entry {
         BlockEntry::Const(scalar, data_type, _) => {
@@ -99,22 +205,18 @@ fn combine_group_hash_const<const IS_FIRST: bool>(
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {
             apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
         }
-        DataType::Nullable(inner) => {
+        DataType::Nullable(_) => {
             if scalar.is_null() {
                 apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
             } else {
-                combine_group_hash_const_nonnull::<IS_FIRST>(scalar, inner, values);
+                combine_group_hash_const_nonnull::<IS_FIRST>(scalar, values);
             }
         }
-        _ => combine_group_hash_const_nonnull::<IS_FIRST>(scalar, data_type, values),
+        _ => combine_group_hash_const_nonnull::<IS_FIRST>(scalar, values),
     }
 }
 
-fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(
-    scalar: &Scalar,
-    _data_type: &DataType,
-    values: &mut [u64],
-) {
+fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(scalar: &Scalar, values: &mut [u64]) {
     let hash = match scalar {
         Scalar::Null => unreachable!(),
         Scalar::EmptyArray | Scalar::EmptyMap => return,
@@ -136,10 +238,7 @@ fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(
         Scalar::Date(value) => value.agg_hash(),
         Scalar::Boolean(value) => value.agg_hash(),
         Scalar::String(value) => value.as_bytes().agg_hash(),
-        Scalar::Binary(value)
-        | Scalar::Bitmap(value)
-        | Scalar::Variant(value)
-        | Scalar::Geometry(value) => value.agg_hash(),
+        Scalar::Binary(value) | Scalar::Variant(value) => value.agg_hash(),
         Scalar::Geography(value) => value.0.agg_hash(),
         _ => scalar.as_ref().agg_hash(),
     };
@@ -204,23 +303,24 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
+        let (column, validity) = column.destructure();
         if IS_FIRST {
-            self.visit_column(column.column)?;
-            for (val, ok) in self.values.iter_mut().zip(column.validity.iter()) {
+            self.visit_column(column)?;
+            for (val, ok) in self.values.iter_mut().zip(validity.iter()) {
                 if !ok {
                     *val = NULL_HASH_VAL;
                 }
             }
         } else {
-            let mut values2 = vec![0; column.len()];
+            let mut values2 = vec![0; validity.len()];
             HashVisitor::<true> {
                 values: &mut values2,
             }
-            .visit_column(column.column)?;
+            .visit_column(column)?;
             for ((x, val), ok) in values2
                 .iter()
                 .zip(self.values.iter_mut())
-                .zip(column.validity.iter())
+                .zip(validity.iter())
             {
                 if ok {
                     *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ *x;
@@ -258,8 +358,8 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
-        self.combine_group_hash_string_column::<BitmapType>(column.as_ref());
+        // Equal bitmaps can have different encodings, including within the hybrid format.
+        self.combine_group_hash_type_column::<AnyType>(&Column::Bitmap(column));
         Ok(())
     }
 
@@ -269,7 +369,7 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_geometry(&mut self, column: BinaryColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<GeometryType>(&column);
+        self.combine_group_hash_type_column::<AnyType>(&Column::Geometry(column));
         Ok(())
     }
 
@@ -400,7 +500,6 @@ where I: Index
             Scalar::Binary(v) => v.agg_hash(),
             Scalar::String(v) => v.as_bytes().agg_hash(),
             Scalar::Variant(v) => v.agg_hash(),
-            Scalar::Geometry(v) => v.agg_hash(),
             Scalar::Geography(v) => v.0.agg_hash(),
             Scalar::Opaque(v) => v.as_ref().agg_hash(),
             v => v.as_ref().agg_hash(),
@@ -467,11 +566,7 @@ where I: Index
     }
 
     fn visit_bitmap(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
-        self.visit_indices(|i| {
-            let value = column.as_ref().index(i.to_usize()).unwrap();
-            value.agg_hash()
-        })
+        self.visit_typed_column::<BitmapType>(column, &DataType::Bitmap)
     }
 
     fn visit_string(&mut self, column: crate::types::StringColumn) -> Result<()> {
@@ -483,7 +578,7 @@ where I: Index
     }
 
     fn visit_geometry(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        self.visit_binary(column)
+        self.visit_typed_column::<GeometryType>(column, &DataType::Geometry)
     }
 
     fn visit_geography(&mut self, column: crate::types::GeographyColumn) -> Result<()> {
@@ -491,13 +586,14 @@ where I: Index
     }
 
     fn visit_nullable(&mut self, column: Box<crate::types::NullableColumn<AnyType>>) -> Result<()> {
+        let (column, validity) = column.destructure();
         let indices = self
             .indices
             .iter()
             .cloned()
             .filter(|&i| {
                 let i = i.to_usize();
-                let ok = column.validity.get(i).unwrap();
+                let ok = validity.get(i).unwrap();
                 if !ok {
                     let val = &mut self.target[i];
                     if IS_FIRST {
@@ -511,10 +607,10 @@ where I: Index
             .collect::<Vec<_>>();
         if IS_FIRST {
             let mut v = IndexHashVisitor::<true, _>::new(&indices, self.target);
-            v.visit_column(column.column)
+            v.visit_column(column)
         } else {
             let mut v = IndexHashVisitor::<false, _>::new(&indices, self.target);
-            v.visit_column(column.column)
+            v.visit_column(column)
         }
     }
 
@@ -562,7 +658,7 @@ fn merge_hash(a: u64, b: u64) -> u64 {
     a.wrapping_mul(NULL_HASH_VAL) ^ b
 }
 
-pub trait AggHash {
+trait AggHash {
     fn agg_hash(&self) -> u64;
 }
 
@@ -685,8 +781,6 @@ mod tests {
     use databend_common_column::bitmap::Bitmap;
     use databend_common_column::types::months_days_micros;
     use databend_common_column::types::timestamp_tz;
-    use databend_common_io::HybridBitmap;
-    use roaring::RoaringTreemap;
 
     use super::*;
     use crate::BlockEntry;
@@ -695,7 +789,6 @@ mod tests {
     use crate::ProjectedBlock;
     use crate::Value;
     use crate::types::ArgType;
-    use crate::types::BitmapType;
     use crate::types::DecimalSize;
     use crate::types::Int32Type;
     use crate::types::NullableColumn;
@@ -716,8 +809,8 @@ mod tests {
         let block = sample_block(num_rows);
         let full_block = block.convert_to_full();
 
-        for projection in (0..block.num_columns())
-            .map_windows(|[a, b]| vec![*a, *b])
+        for projection in (1..block.num_columns())
+            .map(|b| vec![b - 1, b])
             .chain(Some((0..block.num_columns()).collect()))
             .collect::<Vec<_>>()
         {
@@ -998,31 +1091,51 @@ mod tests {
     }
 
     #[test]
-    fn test_bitmap_group_hash_legacy_bytes_normalized() -> Result<()> {
-        let values = [1_u64, 5, 42];
-
-        let mut hybrid = HybridBitmap::new();
-        for v in values {
-            hybrid.insert(v);
+    fn test_dict_value_hashes_match_group_hash_entries() {
+        const ROWS: usize = 5000;
+        let dict = |ndv: usize| {
+            let values =
+                StringType::from_data((0..ndv).map(|i| format!("v{i}")).collect::<Vec<_>>());
+            let keys =
+                NarrowBuffer::pack((0..ROWS).map(|i| ((i * 7) % ndv) as u64), ndv as u64 - 1);
+            Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(keys, values))))
+        };
+        let validity = (0..ROWS).map(|i| i % 5 != 0).collect::<Bitmap>();
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::from(Int32Type::from_data(
+                    (0..ROWS as i32).map(|i| i % 13).collect(),
+                )),
+                BlockEntry::from(dict(300)),
+                BlockEntry::from(dict(4000).wrap_nullable(Some(validity))),
+                BlockEntry::from(dict(ROWS + 1)),
+            ],
+            ROWS,
+        );
+        for projection in [vec![0, 1, 2, 3], vec![2, 0], vec![1], vec![3, 1]] {
+            let entries = ProjectedBlock::project(&projection, &block);
+            let dict_hashes = DictValueHashes::new(entries, ROWS).unwrap();
+            for range in [0..2048, 2048..4096, 4096..ROWS, 100..3000] {
+                let slice = entries
+                    .iter()
+                    .map(|e| e.slice(range.clone()))
+                    .collect::<Vec<_>>();
+                let decoded = slice
+                    .iter()
+                    .map(|e| BlockEntry::from(e.to_column().decode_owned()))
+                    .collect::<Vec<_>>();
+                let mut expected = vec![0; range.len()];
+                group_hash_entries((&decoded).into(), &mut expected);
+                let mut actual = vec![u64::MAX; range.len()];
+                dict_hashes.group_hash_entries((&slice).into(), &mut actual);
+                assert_eq!(
+                    actual, expected,
+                    "projection {projection:?}, rows {range:?}"
+                );
+            }
         }
-        let mut hybrid_bytes = Vec::new();
-        hybrid.serialize_into(&mut hybrid_bytes).unwrap();
-
-        let mut tree = RoaringTreemap::new();
-        for v in values {
-            tree.insert(v);
-        }
-        let mut legacy_bytes = Vec::new();
-        tree.serialize_into(&mut legacy_bytes).unwrap();
-
-        let bitmap_column = BitmapType::from_data(vec![hybrid_bytes, legacy_bytes]);
-        let block = DataBlock::new(vec![bitmap_column.into()], 2);
-
-        let mut hashes = vec![0_u64; block.num_rows()];
-        group_hash_entries(ProjectedBlock::from(block.columns()), &mut hashes);
-
-        // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
-        assert_eq!(hashes[0], hashes[1]);
-        Ok(())
+        // One batch, or no dictionary of strings: nothing to hash ahead.
+        assert!(DictValueHashes::new(ProjectedBlock::project(&[1], &block), BATCH_SIZE).is_none());
+        assert!(DictValueHashes::new(ProjectedBlock::project(&[0, 3], &block), ROWS).is_none());
     }
 }
