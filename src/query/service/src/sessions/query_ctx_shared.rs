@@ -140,7 +140,7 @@ pub struct QueryContextShared {
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     /// The ids of the databases this query read its tables from, by catalog and database name:
     /// the privilege checks reuse them instead of reading the databases again.
-    database_ids: Arc<Mutex<HashMap<(String, String), u64>>>,
+    database_ids: Mutex<HashMap<(String, String), u64>>,
     pub(super) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
     affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(super) catalog_manager: Arc<CatalogManager>,
@@ -587,11 +587,7 @@ impl QueryContextShared {
         let (cache_table, db_id) = catalog
             .get_table_with_db_id(&tenant, database, table)
             .await?;
-        if let Some(db_id) = db_id {
-            self.database_ids
-                .lock()
-                .insert((catalog.name(), database.to_string()), db_id);
-        }
+        let database_id = db_id.map(|db_id| ((catalog.name(), database.to_string()), db_id));
         let cache_table = self
             .cache_stream_source_table(catalog, cache_table, max_batch_size)
             .await?;
@@ -600,7 +596,13 @@ impl QueryContextShared {
 
         match tables_refs.entry(table_meta_key) {
             Entry::Occupied(v) => Ok(v.get().clone()),
-            Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
+            Entry::Vacant(v) => {
+                // Keep the database id read with the table kept, not one of a concurrent read.
+                if let Some((key, db_id)) = database_id {
+                    self.database_ids.lock().insert(key, db_id);
+                }
+                Ok(v.insert(cache_table).clone())
+            }
         }
     }
 

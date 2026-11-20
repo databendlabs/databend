@@ -467,17 +467,10 @@ impl Catalog for DatabaseCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let res = self
-            .immutable_catalog
-            .get_table(tenant, db_name, table_name)
-            .await
-            .or_unknown_database()?;
-        if let Some(table) = res {
-            return Ok(table);
-        }
-        self.mutable_catalog
-            .get_table(tenant, db_name, table_name)
-            .await
+        Ok(self
+            .get_table_with_db_id(tenant, db_name, table_name)
+            .await?
+            .0)
     }
 
     #[async_backtrace::framed]

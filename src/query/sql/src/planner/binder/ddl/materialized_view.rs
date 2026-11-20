@@ -196,20 +196,28 @@ impl Binder {
                 continue;
             }
 
-            let catalog = self.ctx.get_catalog(source_entry.catalog()).await?;
             let source_table_id = source_table.get_id();
             let source_key = (source_entry.catalog().to_string(), source_table_id);
-            let snapshot = match self.pre_resolved_mv_bindings.get(&source_key) {
-                Some(snapshot) => snapshot.clone(),
-                None => Arc::new(
-                    catalog
-                        .get_mv_source_binding_snapshot(&tenant, source_table_id)
-                        .await?,
-                ),
+            // A table read twice in the statement, as in a self join, reads its bindings once.
+            let snapshot = match self.pre_resolved_mv_bindings.get(&source_key).cloned() {
+                Some(snapshot) => snapshot,
+                None => {
+                    let snapshot = Arc::new(
+                        self.ctx
+                            .get_catalog(source_entry.catalog())
+                            .await?
+                            .get_mv_source_binding_snapshot(&tenant, source_table_id)
+                            .await?,
+                    );
+                    self.pre_resolved_mv_bindings
+                        .insert(source_key, snapshot.clone());
+                    snapshot
+                }
             };
             if snapshot.materialized_views.is_empty() {
                 continue;
             }
+            let catalog = self.ctx.get_catalog(source_entry.catalog()).await?;
 
             let source_info = source_table.get_table_info();
             let source_table_seq = source_info.ident.seq;

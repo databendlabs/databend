@@ -311,9 +311,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
-    /// `get_table`, with the id of the database the table was read from when the catalog
-    /// resolved that database by name on the way: the id `get_database` would return. Callers
-    /// that need the database id too, as the privilege checks, then need not read it again.
+    /// `get_table`, plus the id of the database the table was read from, if the catalog read
+    /// that database on the way. Saves callers such as the privilege checks a `get_database`.
     async fn get_table_with_db_id(
         &self,
         tenant: &Tenant,

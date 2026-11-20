@@ -339,9 +339,10 @@ impl Planner {
 
         // The session-based cache key does not describe a definition scope: the same
         // SQL can bind differently in a stored definition and as an ordinary query.
-        let plan_cache_context =
+        let mut plan_cache_context =
             if enable_materialized_view_rewrite && self.definition_scope.is_session() {
-                self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
+                self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)
+                    .await?
             } else {
                 None
             };
@@ -369,8 +370,8 @@ impl Planner {
         .with_materialized_view_rewrite(enable_materialized_view_rewrite)
         .with_pre_resolved_mv_bindings(
             plan_cache_context
-                .as_ref()
-                .map(|cache_ctx| cache_ctx.mv_source_bindings().clone())
+                .as_mut()
+                .map(|cache_ctx| cache_ctx.take_mv_source_bindings())
                 .unwrap_or_default(),
         )
         .with_subquery_executor(

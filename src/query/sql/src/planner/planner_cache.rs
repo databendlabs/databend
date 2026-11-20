@@ -78,7 +78,7 @@ impl Planner {
         format!("{:x}", Sha256::digest(format_sql))
     }
 
-    pub(crate) fn build_plan_cache_context(
+    pub(crate) async fn build_plan_cache_context(
         &self,
         name_resolution_ctx: NameResolutionContext,
         stmt: &Statement,
@@ -102,7 +102,8 @@ impl Planner {
         if visitor.cache_miss || visitor.table_snapshots.is_empty() {
             return Ok(None);
         }
-        let Some(mv_source_bindings) = self.read_mv_source_bindings(&visitor.mv_sources) else {
+        let Some(mv_source_bindings) = self.read_mv_source_bindings(&visitor.mv_sources).await
+        else {
             return Ok(None);
         };
         let mv_fingerprints = visitor
@@ -123,26 +124,24 @@ impl Planner {
     /// The materialized-view bindings of each source table, once per table. `None` if one cannot
     /// be read; the statement is then not cached. Read only once the statement is known to be
     /// cacheable, as keying a plan that is not cached would read them for nothing.
-    fn read_mv_source_bindings(&self, sources: &[(String, u64)]) -> Option<MVSourceBindings> {
-        databend_common_base::runtime::block_on(async {
-            let tenant = self.ctx.get_tenant();
-            let mut bindings = MVSourceBindings::with_capacity(sources.len());
-            for source @ (catalog, source_table_id) in sources {
-                if bindings.contains_key(source) {
-                    continue;
-                }
-                let snapshot = self
-                    .ctx
-                    .get_catalog(catalog)
-                    .await
-                    .ok()?
-                    .get_mv_source_binding_snapshot(&tenant, *source_table_id)
-                    .await
-                    .ok()?;
-                bindings.insert(source.clone(), Arc::new(snapshot));
+    async fn read_mv_source_bindings(&self, sources: &[(String, u64)]) -> Option<MVSourceBindings> {
+        let tenant = self.ctx.get_tenant();
+        let mut bindings = MVSourceBindings::with_capacity(sources.len());
+        for source @ (catalog, source_table_id) in sources {
+            if bindings.contains_key(source) {
+                continue;
             }
-            Some(bindings)
-        })
+            let snapshot = self
+                .ctx
+                .get_catalog(catalog)
+                .await
+                .ok()?
+                .get_mv_source_binding_snapshot(&tenant, *source_table_id)
+                .await
+                .ok()?;
+            bindings.insert(source.clone(), Arc::new(snapshot));
+        }
+        Some(bindings)
     }
 
     fn planner_cache_key_for_stmt(
@@ -285,8 +284,9 @@ pub(crate) struct PlanCacheContext {
 }
 
 impl PlanCacheContext {
-    pub(crate) fn mv_source_bindings(&self) -> &MVSourceBindings {
-        &self.mv_source_bindings
+    /// Hands the bindings to the binder of the statement; the cache needs only the key.
+    pub(crate) fn take_mv_source_bindings(&mut self) -> MVSourceBindings {
+        std::mem::take(&mut self.mv_source_bindings)
     }
 
     fn matches_metadata_tables(&self, tables: &[TableEntry]) -> bool {
