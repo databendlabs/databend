@@ -599,6 +599,18 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_with_db_id(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<(Arc<dyn Table>, Option<u64>)> {
+        let db = self.get_database(tenant, db_name).await?;
+        let table = db.get_table(table_name).await?;
+        Ok((table, Some(db.get_db_info().database_id.db_id)))
+    }
+
+    #[async_backtrace::framed]
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
         self.ctx.meta.create_table_tag(req).await?;
         Ok(())

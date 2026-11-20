@@ -73,6 +73,7 @@ pub use bind_query::bind_values;
 pub use bind_table_reference::is_range_join_condition;
 pub use bind_table_reference::parse_result_scan_args;
 pub use binder::Binder;
+pub(crate) use binder::MVSourceBindings;
 pub use builders::*;
 pub use column_binding::ColumnBinding;
 pub use column_binding::ColumnBindingBuilder;

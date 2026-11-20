@@ -481,6 +481,26 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_with_db_id(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<(Arc<dyn Table>, Option<u64>)> {
+        let res = self
+            .immutable_catalog
+            .get_table(tenant, db_name, table_name)
+            .await
+            .or_unknown_database()?;
+        if let Some(table) = res {
+            return Ok((table, None));
+        }
+        self.mutable_catalog
+            .get_table_with_db_id(tenant, db_name, table_name)
+            .await
+    }
+
+    #[async_backtrace::framed]
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
         self.mutable_catalog.create_table_tag(req).await
     }

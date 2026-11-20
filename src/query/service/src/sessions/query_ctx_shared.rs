@@ -138,6 +138,9 @@ pub struct QueryContextShared {
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    /// The ids of the databases this query read its tables from, by catalog and database name:
+    /// the privilege checks reuse them instead of reading the databases again.
+    database_ids: Arc<Mutex<HashMap<(String, String), u64>>>,
     pub(super) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
     affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(super) catalog_manager: Arc<CatalogManager>,
@@ -276,6 +279,7 @@ impl QueryContextShared {
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
+            database_ids: Default::default(),
             streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
@@ -521,6 +525,15 @@ impl QueryContextShared {
         };
     }
 
+    /// The id of a database this query read a table from, by the catalog and database names it
+    /// was read by.
+    pub fn get_resolved_database_id(&self, catalog: &str, database: &str) -> Option<u64> {
+        self.database_ids
+            .lock()
+            .get(&(catalog.to_string(), database.to_string()))
+            .copied()
+    }
+
     #[async_backtrace::framed]
     pub async fn get_table(
         &self,
@@ -571,7 +584,14 @@ impl QueryContextShared {
                 self.session.session_ctx.session_state()?,
             )
             .await?;
-        let cache_table = catalog.get_table(&tenant, database, table).await?;
+        let (cache_table, db_id) = catalog
+            .get_table_with_db_id(&tenant, database, table)
+            .await?;
+        if let Some(db_id) = db_id {
+            self.database_ids
+                .lock()
+                .insert((catalog.name(), database.to_string()), db_id);
+        }
         let cache_table = self
             .cache_stream_source_table(catalog, cache_table, max_batch_size)
             .await?;
@@ -685,6 +705,7 @@ impl QueryContextShared {
     pub fn clear_tables_cache(&self) {
         let mut tables_refs = self.tables_refs.lock();
         tables_refs.clear();
+        self.database_ids.lock().clear();
     }
 
     /// Init runtime when first get

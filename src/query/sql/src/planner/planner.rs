@@ -367,6 +367,12 @@ impl Planner {
             metadata.clone(),
         )
         .with_materialized_view_rewrite(enable_materialized_view_rewrite)
+        .with_pre_resolved_mv_bindings(
+            plan_cache_context
+                .as_ref()
+                .map(|cache_ctx| cache_ctx.mv_source_bindings().clone())
+                .unwrap_or_default(),
+        )
         .with_subquery_executor(
             self.query_executor
                 .clone()

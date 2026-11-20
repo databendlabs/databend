@@ -368,8 +368,16 @@ impl PrivilegeAccess {
         catalog: &Arc<dyn Catalog>,
         database_name: &str,
     ) -> Result<u64> {
+        let catalog_name = catalog.name();
         self.cache
-            .get_or_load_database_id(&catalog.name(), database_name, || async {
+            .get_or_load_database_id(&catalog_name, database_name, || async {
+                // The database of a table this query read is the one its privileges apply to.
+                if let Some(db_id) = self
+                    .ctx
+                    .get_resolved_database_id(&catalog_name, database_name)
+                {
+                    return Ok(db_id);
+                }
                 Ok(catalog
                     .get_database(tenant, database_name)
                     .await?

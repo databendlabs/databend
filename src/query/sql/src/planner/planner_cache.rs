@@ -30,6 +30,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::is_cacheable_function;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_settings::ChangeValue;
@@ -49,6 +50,7 @@ use crate::NameResolutionContext;
 use crate::Planner;
 use crate::TableEntry;
 use crate::normalize_identifier;
+use crate::planner::binder::MVSourceBindings;
 use crate::plans::Plan;
 
 #[derive(Clone)]
@@ -93,23 +95,54 @@ impl Planner {
             name_resolution_ctx,
             cache_miss: false,
             has_security_policy: false,
-            mv_fingerprints: vec![],
+            mv_sources: vec![],
         };
         stmt.drive(&mut visitor);
 
         if visitor.cache_miss || visitor.table_snapshots.is_empty() {
             return Ok(None);
         }
+        let Some(mv_source_bindings) = self.read_mv_source_bindings(&visitor.mv_sources) else {
+            return Ok(None);
+        };
+        let mv_fingerprints = visitor
+            .mv_sources
+            .iter()
+            .map(|source| mv_fingerprint(source.1, &mv_source_bindings[source]))
+            .collect::<Vec<_>>();
 
-        let cache_key = self.planner_cache_key_for_stmt(
-            stmt,
-            visitor.has_security_policy,
-            &visitor.mv_fingerprints,
-        )?;
+        let cache_key =
+            self.planner_cache_key_for_stmt(stmt, visitor.has_security_policy, &mv_fingerprints)?;
         Ok(Some(PlanCacheContext {
             cache_key,
             table_snapshots: visitor.table_snapshots,
+            mv_source_bindings,
         }))
+    }
+
+    /// The materialized-view bindings of each source table, once per table. `None` if one cannot
+    /// be read; the statement is then not cached. Read only once the statement is known to be
+    /// cacheable, as keying a plan that is not cached would read them for nothing.
+    fn read_mv_source_bindings(&self, sources: &[(String, u64)]) -> Option<MVSourceBindings> {
+        databend_common_base::runtime::block_on(async {
+            let tenant = self.ctx.get_tenant();
+            let mut bindings = MVSourceBindings::with_capacity(sources.len());
+            for source @ (catalog, source_table_id) in sources {
+                if bindings.contains_key(source) {
+                    continue;
+                }
+                let snapshot = self
+                    .ctx
+                    .get_catalog(catalog)
+                    .await
+                    .ok()?
+                    .get_mv_source_binding_snapshot(&tenant, *source_table_id)
+                    .await
+                    .ok()?;
+                bindings.insert(source.clone(), Arc::new(snapshot));
+            }
+            Some(bindings)
+        })
     }
 
     fn planner_cache_key_for_stmt(
@@ -236,7 +269,8 @@ impl Planner {
 struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
     table_snapshots: Vec<TableSnapshot>,
-    mv_fingerprints: Vec<String>,
+    // The catalog and id of each table read, a possible source of materialized views.
+    mv_sources: Vec<(String, u64)>,
     name_resolution_ctx: NameResolutionContext,
     cache_miss: bool,
     has_security_policy: bool,
@@ -245,9 +279,16 @@ struct TableRefVisitor {
 pub(crate) struct PlanCacheContext {
     cache_key: String,
     table_snapshots: Vec<TableSnapshot>,
+    /// The bindings the key was built from. Binding the statement on a cache miss reuses them,
+    /// so the plan cached under the key is built from the same bindings.
+    mv_source_bindings: MVSourceBindings,
 }
 
 impl PlanCacheContext {
+    pub(crate) fn mv_source_bindings(&self) -> &MVSourceBindings {
+        &self.mv_source_bindings
+    }
+
     fn matches_metadata_tables(&self, tables: &[TableEntry]) -> bool {
         self.table_snapshots.iter().all(|snapshot| {
             tables
@@ -255,6 +296,32 @@ impl PlanCacheContext {
                 .any(|table| snapshot.matches_table_entry(table))
         })
     }
+}
+
+/// What of the materialized views of a source table a cached plan depends on: a plan rewritten
+/// to read one is stale once it changes.
+fn mv_fingerprint(source_table_id: u64, snapshot: &MVSourceBindingSnapshot) -> String {
+    let mut fingerprint = format!(
+        "source:{}:binding_generation:{}",
+        source_table_id, snapshot.generation
+    );
+    for mv in snapshot
+        .materialized_views
+        .iter()
+        .sorted_by_key(|mv| mv.mv_id)
+    {
+        let mv_options = &mv.table_meta.data.options;
+        fingerprint.push_str(&format!(
+            ":mv:{}:definition:{}:table_seq:{}:snapshot:{:?}:checkpoint_seq:{:?}:checkpoint_snapshot:{:?}",
+            mv.mv_id,
+            mv.definition.seq,
+            mv.table_meta.seq,
+            mv_options.get(OPT_KEY_SNAPSHOT_LOCATION),
+            mv_options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ),
+            mv_options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
+        ));
+    }
+    fingerprint
 }
 
 #[derive(Clone)]
@@ -385,40 +452,9 @@ impl TableRefVisitor {
                         self.cache_miss = true;
                         return;
                     }
-                    if let Ok(catalog) = self.ctx.get_catalog(&catalog_name).await {
-                        let tenant = self.ctx.get_tenant();
-                        let source_table_id = table.get_id();
-                        let Ok(snapshot) = catalog
-                            .get_mv_source_binding_snapshot(&tenant, source_table_id)
-                            .await
-                        else {
-                            self.cache_miss = true;
-                            return;
-                        };
-
-                        let mut materialized_views = snapshot.materialized_views;
-                        materialized_views.sort_by_key(|mv| mv.mv_id);
-                        let mut fingerprint = format!(
-                            "source:{}:binding_generation:{}",
-                            source_table_id, snapshot.generation
-                        );
-                        for mv in materialized_views {
-                            let mv_options = &mv.table_meta.data.options;
-                            fingerprint.push_str(&format!(
-                                ":mv:{}:definition:{}:table_seq:{}:snapshot:{:?}:checkpoint_seq:{:?}:checkpoint_snapshot:{:?}",
-                                mv.mv_id,
-                                mv.definition.seq,
-                                mv.table_meta.seq,
-                                mv.table_meta.data.options.get(OPT_KEY_SNAPSHOT_LOCATION),
-                                mv_options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ),
-                                mv_options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION),
-                            ));
-                        }
-                        self.mv_fingerprints.push(fingerprint);
-                    } else {
-                        self.cache_miss = true;
-                        return;
-                    }
+                    // Its materialized views are read once the whole statement is known to be
+                    // cacheable: see `read_mv_source_bindings`.
+                    self.mv_sources.push((catalog_name, table.get_id()));
                     if let Some(snapshot) = TableSnapshot::from_resolved_table(table.as_ref()) {
                         self.has_security_policy |= snapshot.has_security_policy();
                         self.table_snapshots.push(snapshot);
@@ -427,6 +463,66 @@ impl TableRefVisitor {
                 }
                 self.cache_miss = true;
             });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::TableSchema;
+    use databend_common_meta_app::schema::MVDefinition;
+    use databend_common_meta_app::schema::MVInfo;
+    use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+    use databend_common_meta_app::schema::TableMeta;
+    use databend_meta_client::types::SeqV;
+    use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+
+    use super::mv_fingerprint;
+
+    fn mv(mv_id: u64, table_seq: u64, snapshot_location: &str) -> MVInfo {
+        let mut table_meta = TableMeta::default();
+        table_meta.options.insert(
+            OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+            snapshot_location.to_string(),
+        );
+        MVInfo {
+            mv_id,
+            definition: SeqV::new(1, MVDefinition {
+                original_query: "SELECT a FROM t".to_string(),
+                query: "SELECT a FROM t".to_string(),
+                logical_schema: TableSchema::empty(),
+                sync_creation: false,
+            }),
+            table_meta: SeqV::new(table_seq, table_meta),
+        }
+    }
+
+    fn snapshot(generation: u64, materialized_views: Vec<MVInfo>) -> MVSourceBindingSnapshot {
+        MVSourceBindingSnapshot {
+            generation,
+            materialized_views,
+        }
+    }
+
+    #[test]
+    fn test_mv_fingerprint_ignores_listing_order() {
+        let listed = snapshot(3, vec![mv(7, 1, "s7"), mv(5, 1, "s5")]);
+        let sorted = snapshot(3, vec![mv(5, 1, "s5"), mv(7, 1, "s7")]);
+        assert_eq!(mv_fingerprint(10, &listed), mv_fingerprint(10, &sorted));
+    }
+
+    #[test]
+    fn test_mv_fingerprint_changes_with_bindings() {
+        let base = mv_fingerprint(10, &snapshot(3, vec![mv(5, 1, "s5")]));
+        // Another source table, a new binding generation, a refreshed MV, an MV added.
+        for changed in [
+            mv_fingerprint(11, &snapshot(3, vec![mv(5, 1, "s5")])),
+            mv_fingerprint(10, &snapshot(4, vec![mv(5, 1, "s5")])),
+            mv_fingerprint(10, &snapshot(3, vec![mv(5, 2, "s5")])),
+            mv_fingerprint(10, &snapshot(3, vec![mv(5, 1, "s5b")])),
+            mv_fingerprint(10, &snapshot(3, vec![mv(5, 1, "s5"), mv(6, 1, "s6")])),
+        ] {
+            assert_ne!(base, changed);
         }
     }
 }

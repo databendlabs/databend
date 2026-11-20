@@ -198,9 +198,15 @@ impl Binder {
 
             let catalog = self.ctx.get_catalog(source_entry.catalog()).await?;
             let source_table_id = source_table.get_id();
-            let snapshot = catalog
-                .get_mv_source_binding_snapshot(&tenant, source_table_id)
-                .await?;
+            let source_key = (source_entry.catalog().to_string(), source_table_id);
+            let snapshot = match self.pre_resolved_mv_bindings.get(&source_key) {
+                Some(snapshot) => snapshot.clone(),
+                None => Arc::new(
+                    catalog
+                        .get_mv_source_binding_snapshot(&tenant, source_table_id)
+                        .await?,
+                ),
+            };
             if snapshot.materialized_views.is_empty() {
                 continue;
             }
@@ -213,7 +219,7 @@ impl Binder {
                 .get(OPT_KEY_SNAPSHOT_LOCATION)
                 .cloned();
             let mut candidates = Vec::with_capacity(snapshot.materialized_views.len());
-            for mv in snapshot.materialized_views {
+            for mv in &snapshot.materialized_views {
                 if mv
                     .table_meta
                     .data
