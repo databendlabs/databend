@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod algorithm;
+mod batch;
 mod bounds;
 mod cursor;
 mod k_way_merge_sort_partition;

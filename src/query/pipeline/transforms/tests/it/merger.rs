@@ -29,6 +29,7 @@ use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
 use itertools::Itertools;
 use rand::Rng;
 use rand::rngs::ThreadRng;
+use rand::seq::SliceRandom;
 
 struct TestStream {
     data: VecDeque<DataBlock>,
@@ -230,12 +231,65 @@ fn create_test_merger<A: SortAlgorithm>(
     input: Vec<Vec<DataBlock>>,
     limit: Option<usize>,
 ) -> TestMerger<A> {
+    create_test_merger_with_batch::<A>(input, 4, limit)
+}
+
+fn create_test_merger_with_batch<A: SortAlgorithm>(
+    input: Vec<Vec<DataBlock>>,
+    batch_rows: usize,
+    limit: Option<usize>,
+) -> TestMerger<A> {
     let streams = input
         .into_iter()
         .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
         .collect::<Vec<_>>();
 
-    TestMerger::<A>::new(streams, 4, limit)
+    TestMerger::<A>::new(streams, batch_rows, limit)
+}
+
+/// Returns (input, expected, limit).
+///
+/// Produces inputs with *long* runs of rows that are `<=` the next cursor, so the
+/// merger's batch detection (linear → last-row check → galloping → binary search) is
+/// exercised well past the 16-row linear budget. Blocks are large and the value
+/// domain is narrow (`0..=key_range`). Streams come in three shapes:
+///   - dense:    full-range values (interleaves with everyone)
+///   - narrow:   values restricted to a small sub-range (long runs vs. others)
+///   - disjoint: values above everyone else's range (whole-block drains)
+fn long_run_test_data(rng: &mut ThreadRng) -> (Vec<Vec<DataBlock>>, DataBlock, Option<usize>) {
+    let num_streams = rng.gen_range(2..=16);
+    // 64 rows exercises linear → last-row → galloping (1 probe) → binary search;
+    // 300 rows reaches the third galloping probe (18 → 34 → 67 → 132 → 261).
+    let block_rows = *[64usize, 300].choose(rng).unwrap();
+    let key_range = rng.gen_range(1..=40i32);
+
+    let data = (0..num_streams)
+        .map(|s| {
+            let num_blocks = rng.gen_range(1..=3);
+            let (lo, hi) = match s % 3 {
+                0 => (0, key_range),
+                1 => {
+                    let lo = rng.gen_range(0..=key_range);
+                    (lo, (lo + rng.gen_range(0..=3)).min(key_range))
+                }
+                _ => (key_range + 1, key_range + 1 + rng.gen_range(0..=5)),
+            };
+            let mut v: Vec<i32> = (0..num_blocks * block_rows)
+                .map(|_| rng.gen_range(lo..=hi))
+                .collect();
+            v.sort_unstable();
+            v.chunks(block_rows).map(|c| c.to_vec()).collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let total: usize = data.iter().flatten().map(|b| b.len()).sum();
+    let limit = if rng.gen_bool(0.3) {
+        Some(rng.gen_range(0..=total))
+    } else {
+        None
+    };
+    let (input, expected) = prepare_input_and_result(data, limit);
+    (input, expected, limit)
 }
 
 fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
@@ -348,6 +402,31 @@ fn test_fuzz() -> anyhow::Result<()> {
         let (input, expected, limit) = random_test_data(&mut rng);
         let merger = create_test_merger::<TestLoserTreeSort>(input, limit);
         test(merger, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_long_runs() -> anyhow::Result<()> {
+    let mut rng = rand::thread_rng();
+
+    for _ in 0..20 {
+        let (input, expected, limit) = long_run_test_data(&mut rng);
+        // Output batch sizes spanning "inside the linear budget" to "larger than a
+        // block", so `row_index_limit` clamps at every phase of batch detection.
+        for batch_rows in [7usize, 17, 100, 1024] {
+            let merger =
+                create_test_merger_with_batch::<TestHeapSort>(input.clone(), batch_rows, limit);
+            test(merger, expected.clone())?;
+
+            let merger = create_test_merger_with_batch::<TestLoserTreeSort>(
+                input.clone(),
+                batch_rows,
+                limit,
+            );
+            test(merger, expected.clone())?;
+        }
     }
 
     Ok(())
