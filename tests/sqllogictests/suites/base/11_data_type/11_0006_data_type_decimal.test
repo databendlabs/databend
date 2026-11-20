@@ -1378,6 +1378,24 @@ SELECT try_to_numeric(4294967299, 1)(3)
 statement error Decimal precision must be between 1 and 76
 SELECT to_decimal(3, 9223372036854775808, 0)
 
+# NULL is allowed as the value, not as an explicit Decimal type parameter.
+query ?
+SELECT to_decimal(CAST(NULL AS INT64 NULL), 3, 0);
+----
+NULL
+
+statement error Decimal scale must be an integer, got NULL
+SELECT to_decimal(3, 3, NULL)
+
+statement error Decimal precision must be an integer, got NULL
+SELECT to_decimal(3, NULL, 2)
+
+statement error Decimal scale must be an integer, got NULL
+SELECT try_to_numeric(3, 3, CAST(NULL AS INT64))
+
+statement error Decimal scale must be an integer, got NULL
+SELECT to_decimal(3, NULL)(3)
+
 query I
 SELECT TO_DECIMAL('123456789', 9);
 ----

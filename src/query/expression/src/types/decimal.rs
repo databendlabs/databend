@@ -523,13 +523,16 @@ impl DecimalSize {
     }
 
     pub fn try_from_scalars(precision: &Scalar, scale: &Scalar) -> Result<Self> {
-        let to_u8 = |value: &Scalar| {
-            crate::with_integer_mapped_type!(|NUM_TYPE| match value.as_number()? {
-                NumberScalar::NUM_TYPE(value) => value.to_u8(),
-                _ => None,
+        let to_u8 = |value: &Scalar, name: &str| -> Result<Option<u8>> {
+            crate::with_integer_mapped_type!(|NUM_TYPE| match value.as_number() {
+                Some(NumberScalar::NUM_TYPE(value)) => Ok(value.to_u8()),
+                _ => Err(ErrorCode::IllegalDataType(format!(
+                    "Decimal {name} must be an integer, got {}",
+                    value.as_ref().infer_data_type()
+                ))),
             })
         };
-        Self::from_checked_params(to_u8(precision), to_u8(scale))
+        Self::from_checked_params(to_u8(precision, "precision")?, to_u8(scale, "scale")?)
     }
 
     pub fn validate(&self) -> Result<()> {
