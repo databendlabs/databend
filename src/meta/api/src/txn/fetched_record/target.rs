@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_proto_conv::FromToProto;
-use databend_meta_client::kvapi::kvapi;
+use databend_meta_client::kvapi;
 
 use crate::MetaTxn;
 

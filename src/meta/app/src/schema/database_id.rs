@@ -71,7 +71,7 @@ mod kvapi_key_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::testing::assert_round_trip;
+    use structkey::testing::assert_round_trip;
 
     use super::DatabaseId;
     use crate::KeyUnknownBuilder;

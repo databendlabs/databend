@@ -587,13 +587,6 @@ mod tests {
             Ok(limit_stream(strm, opts.limit))
         }
 
-        async fn upsert_kv(
-            &self,
-            _req: databend_meta_client::types::UpsertKV,
-        ) -> Result<databend_meta_client::types::Change<Vec<u8>>, Self::Error> {
-            unimplemented!()
-        }
-
         async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
             unimplemented!()
         }

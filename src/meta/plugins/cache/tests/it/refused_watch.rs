@@ -24,6 +24,7 @@ use databend_meta_client::ClientHandle;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MIN_SERVER_VERSION;
 use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::runtime_api::SpawnApi;
 use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::protobuf::ClientInfo;
@@ -37,6 +38,8 @@ use databend_meta_client::types::protobuf::KeysCount;
 use databend_meta_client::types::protobuf::KeysLayoutRequest;
 use databend_meta_client::types::protobuf::KvGetManyRequest;
 use databend_meta_client::types::protobuf::KvListRequest;
+use databend_meta_client::types::protobuf::KvTransactionReply;
+use databend_meta_client::types::protobuf::KvTransactionRequest;
 use databend_meta_client::types::protobuf::MemberListReply;
 use databend_meta_client::types::protobuf::MemberListRequest;
 use databend_meta_client::types::protobuf::RaftReply;
@@ -166,6 +169,13 @@ impl MetaService for RefusingLeader {
         &self,
         _request: Request<KeysLayoutRequest>,
     ) -> Result<Response<Self::SnapshotKeysLayoutStream>, Status> {
+        unimplemented()
+    }
+
+    async fn kv_transaction(
+        &self,
+        _request: Request<KvTransactionRequest>,
+    ) -> Result<Response<KvTransactionReply>, Status> {
         unimplemented()
     }
 

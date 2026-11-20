@@ -19,8 +19,8 @@ use std::time::UNIX_EPOCH;
 
 use databend_meta_client::ClientHandle;
 use databend_meta_client::types::SeqV;
-use databend_meta_client::types::SeqValue;
 use databend_meta_runtime::DatabendRuntime;
+use seq_marked::SeqValue;
 
 use crate::meta_cache_types::MetaCacheTypes;
 use crate::meta_client_source;

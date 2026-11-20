@@ -18,6 +18,7 @@ use anyhow::Result;
 use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::types::UpsertKV;
 use databend_meta_runtime::DatabendRuntime;
 
@@ -28,7 +29,6 @@ fn make_role_key(role: &str) -> String {
 mod add {
 
     use databend_common_meta_app::principal::RoleInfo;
-    use databend_meta_client::kvapi::KVApi;
     use databend_meta_client::types::MatchSeq;
     use databend_meta_client::types::Operation;
 

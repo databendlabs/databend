@@ -22,7 +22,6 @@ use async_trait::async_trait;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KVStream;
 use databend_meta_client::kvapi::ListOptions;
-use databend_meta_client::types::Change;
 use databend_meta_client::types::ConditionResult;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
@@ -30,7 +29,6 @@ use databend_meta_client::types::TxnCondition;
 use databend_meta_client::types::TxnOpResponse;
 use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::protobuf::StreamItem;
 use databend_meta_client::types::protobuf::txn_condition::Target;
 use databend_meta_client::types::protobuf::txn_op::Request;
@@ -111,10 +109,6 @@ impl KVApi for MemKV {
         _opts: ListOptions<'_, str>,
     ) -> Result<KVStream<Self::Error>, Self::Error> {
         Ok(futures::stream::empty::<Result<StreamItem, Self::Error>>().boxed())
-    }
-
-    async fn upsert_kv(&self, _req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error> {
-        unimplemented!("MemKV does not support upsert_kv")
     }
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {

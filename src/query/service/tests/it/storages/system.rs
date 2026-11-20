@@ -756,7 +756,7 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
 async fn test_history_etl_reads_tenant_meta() -> anyhow::Result<()> {
     use databend_common_expression::DataBlock;
     use databend_common_expression::ScalarRef;
-    use databend_meta_client::kvapi::KVApi;
+    use databend_meta_client::kvapi::KvApiExt;
     use databend_meta_client::types::UpsertKV;
 
     let fixture = TestFixture::setup().await?;

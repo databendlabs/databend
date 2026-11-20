@@ -30,7 +30,6 @@ use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi::StructKey;
-use databend_meta_client::types::KVMeta;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnCondition;
 
@@ -253,11 +252,12 @@ async fn test_meta_is_cached() -> anyhow::Result<()> {
     let k = key(1);
 
     // Seed a record carrying meta (expire_at + proposed_at_ms).
-    let seeded_meta = KVMeta::new(Some(1_700_000_000), Some(1_700_000_000_000));
-    mem.seed_seqv(
-        &k.to_string_key(),
-        SeqV::new_with_meta(7, Some(seeded_meta.clone()), encoded()),
-    );
+    let mut seeded = SeqV::new(7, encoded());
+    let meta = seeded.meta.get_or_insert_default();
+    meta.expire_at = Some(1_700_000_000);
+    meta.proposed_at_ms = Some(1_700_000_000_000);
+    let seeded_meta = meta.clone();
+    mem.seed_seqv(&k.to_string_key(), seeded);
 
     let txn = MetaTxn::new(&mem);
 

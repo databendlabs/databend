@@ -18,6 +18,7 @@ use std::time::Duration;
 use databend_common_base::runtime::block_on;
 use databend_common_exception::Result;
 use databend_meta_client::ClientHandle;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::Operation;
 use databend_meta_client::types::UpsertKV;

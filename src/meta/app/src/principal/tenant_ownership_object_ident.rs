@@ -97,7 +97,7 @@ mod kvapi_impl {
 mod tests {
     use databend_meta_client::kvapi;
     use databend_meta_client::kvapi::StructKey;
-    use databend_meta_client::kvapi::testing::assert_round_trip;
+    use structkey::testing::assert_round_trip;
 
     use crate::KeyWithTenant;
     use crate::principal::OwnershipObject;

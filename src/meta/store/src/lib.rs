@@ -36,11 +36,9 @@ use databend_meta_client::kvapi::KVStream;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::kvapi::fail_fast;
 use databend_meta_client::kvapi::limit_stream;
-use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::WatchResponse;
 use databend_meta_plugin_semaphore::Semaphore;
@@ -257,11 +255,6 @@ impl MetaStoreProvider {
 #[tonic::async_trait]
 impl kvapi::KVApi for MetaStore {
     type Error = MetaError;
-
-    #[fastrace::trace]
-    async fn upsert_kv(&self, req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error> {
-        self.inner().upsert_kv(req).await
-    }
 
     #[fastrace::trace]
     async fn list_kv(

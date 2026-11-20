@@ -59,7 +59,7 @@ mod kvapi_impl {
 #[cfg(test)]
 mod tests {
 
-    use databend_meta_client::kvapi::testing::assert_round_trip;
+    use structkey::testing::assert_round_trip;
 
     use crate::principal::user_defined_file_format_ident::UserDefinedFileFormatIdent;
     use crate::tenant::Tenant;

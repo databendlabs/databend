@@ -420,13 +420,6 @@ mod tests {
     impl KVApi for Foo {
         type Error = MetaError;
 
-        async fn upsert_kv(
-            &self,
-            _req: databend_meta_client::types::UpsertKV,
-        ) -> Result<databend_meta_client::types::Change<Vec<u8>>, Self::Error> {
-            unimplemented!()
-        }
-
         async fn get_many_kv(
             &self,
             keys: BoxStream<'static, Result<String, Self::Error>>,

@@ -20,7 +20,6 @@
 //! runtime features (memory tracking, thread tracking, etc.) while keeping the meta-service
 //! core decoupled from the query runtime.
 
-mod client_bridge;
 mod in_process_grpc;
 mod metrics;
 
