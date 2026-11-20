@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -23,14 +24,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::types::number::NumberDataType;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_common_sql::binder::DefaultExprBinder;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -62,6 +62,7 @@ use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_column_statistics;
 use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
+use crate::statistics::trim_column_min_max;
 
 // A segment taking part in compaction: base snapshot index, summary, location.
 type SegmentEntry = (usize, Arc<CompactSegmentInfo>, Location);
@@ -91,6 +92,7 @@ pub struct SegmentCompactMutator {
     pub(crate) partition_key_count: usize,
     pub(crate) partition_key_id: Option<u32>,
     table_meta_timestamps: TableMetaTimestamps,
+    stats_truncate_lens: BTreeMap<ColumnId, u64>,
 }
 
 impl SegmentCompactMutator {
@@ -101,6 +103,7 @@ impl SegmentCompactMutator {
         operator: Operator,
         cluster_key_info: Option<ClusterKeyInfo>,
         table_meta_timestamps: TableMetaTimestamps,
+        stats_truncate_lens: BTreeMap<ColumnId, u64>,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -112,6 +115,7 @@ impl SegmentCompactMutator {
             partition_key_count: 0,
             partition_key_id: None,
             table_meta_timestamps,
+            stats_truncate_lens,
         })
     }
 
@@ -145,6 +149,7 @@ impl SegmentCompactMutator {
             &self.location_generator,
             self.table_meta_timestamps,
             self.ctx.clone(),
+            &self.stats_truncate_lens,
         );
         compactor.partition_key_count = self.partition_key_count;
         compactor.partition_key_id = self.partition_key_id;
@@ -207,11 +212,12 @@ impl<'a> SegmentCompactor<'a> {
         location_generator: &'a TableMetaLocationGenerator,
         table_meta_timestamps: TableMetaTimestamps,
         ctx: Arc<dyn TableContext>,
+        stats_truncate_lens: &BTreeMap<ColumnId, u64>,
     ) -> Self {
         let merge_tasks = MergeTasks {
             operator: operator.clone(),
             cache_policy: ctx.cache_policy(),
-            int_columns: Arc::new(IntColumns::new(&schema, ctx)),
+            range_columns: Arc::new(RangeColumns::new(&schema, ctx, stats_truncate_lens)),
             io_permits: Arc::new(Semaphore::new(max_io_requests)),
             decode_permits: Arc::new(Semaphore::new(max_threads)),
             cluster_key_info: cluster_key_info.clone(),
@@ -424,7 +430,7 @@ struct MergeTasks {
     operator: Operator,
     // How the source statistics are read: the policy of the compaction.
     cache_policy: CachePolicy,
-    int_columns: Arc<IntColumns>,
+    range_columns: Arc<RangeColumns>,
     // Bounds all storage requests of one compaction: segment reads, stats
     // reads and merge output writes.
     io_permits: Arc<Semaphore>,
@@ -457,37 +463,42 @@ struct MergeResult {
 }
 
 // The schema and lazy defaults are shared by all merge groups of this compaction.
-struct IntColumns {
+struct RangeColumns {
     ctx: Arc<dyn TableContext>,
-    columns: Vec<IntColumn>,
+    columns: Vec<RangeColumn>,
 }
 
-struct IntColumn {
+struct RangeColumn {
     field: TableField,
-    default: OnceLock<Option<Scalar>>,
+    stats_truncate_len: Option<usize>,
+    default_bounds: OnceLock<Option<(Scalar, Scalar)>>,
 }
 
-impl IntColumns {
-    fn new(schema: &TableSchemaRef, ctx: Arc<dyn TableContext>) -> Self {
+impl RangeColumns {
+    fn new(
+        schema: &TableSchemaRef,
+        ctx: Arc<dyn TableContext>,
+        stats_truncate_lens: &BTreeMap<ColumnId, u64>,
+    ) -> Self {
         let columns = schema
             .fields()
             .iter()
             .filter(|field| {
                 field.computed_expr().is_none()
-                    && matches!(
-                        field.data_type().remove_nullable(),
-                        TableDataType::Number(NumberDataType::Int32)
-                    )
+                    && RangeIndex::supported_table_type(field.data_type())
             })
-            .map(|field| IntColumn {
+            .map(|field| RangeColumn {
                 field: field.clone(),
-                default: OnceLock::new(),
+                stats_truncate_len: stats_truncate_lens
+                    .get(&field.column_id())
+                    .map(|&len| len as usize),
+                default_bounds: OnceLock::new(),
             })
             .collect();
         Self { ctx, columns }
     }
 
-    fn rebuild(&self, column: &IntColumn, blocks: &[Arc<BlockMeta>]) -> Option<ColumnStatistics> {
+    fn rebuild(&self, column: &RangeColumn, blocks: &[Arc<BlockMeta>]) -> Option<ColumnStatistics> {
         let id = column.field.column_id();
         let mut inputs = Vec::new();
         let mut default_rows = 0;
@@ -503,23 +514,26 @@ impl IntColumns {
             return (!inputs.is_empty()).then(|| reduce_column_statistics(&inputs));
         }
 
-        let default = column
-            .default
+        let (min, max) = column
+            .default_bounds
             .get_or_init(|| {
-                DefaultExprBinder::try_new(self.ctx.clone())
+                let default = DefaultExprBinder::try_new(self.ctx.clone())
                     .and_then(|mut binder| binder.get_deterministic_scalar(&column.field))
                     .ok()
-                    .flatten()
+                    .flatten()?;
+                // Use the same bounds as a block containing the constant. If no
+                // safe string upper bound fits, omit the column statistics.
+                trim_column_min_max(default.clone(), default, column.stats_truncate_len)
             })
             .as_ref()?;
         // All missing blocks contribute the same value. Combine their row counts
         // before reduction; the default has no physical storage in these blocks.
         let default_stats = ColumnStatistics::new(
-            default.clone(),
-            default.clone(),
-            if default.is_null() { default_rows } else { 0 },
+            min.clone(),
+            max.clone(),
+            if min.is_null() { default_rows } else { 0 },
             0,
-            Some(u64::from(!default.is_null())),
+            Some(u64::from(!min.is_null())),
         );
         inputs.push(&default_stats);
         Some(reduce_column_statistics(&inputs))
@@ -546,7 +560,7 @@ impl MergeTasks {
             fragments,
             location,
             self.cluster_key_info.clone(),
-            self.int_columns.clone(),
+            self.range_columns.clone(),
             self.io_permits.clone(),
             self.stats_read_window,
             self.decode_permits.clone(),
@@ -559,7 +573,7 @@ impl MergeTasks {
     async fn decode_fragments(
         fragments: Vec<SegmentEntry>,
         cluster_key_info: Option<ClusterKeyInfo>,
-        int_columns: Arc<IntColumns>,
+        range_columns: Arc<RangeColumns>,
         decode_permits: Arc<Semaphore>,
     ) -> Result<DecodedGroup> {
         // Decode in parallel. Acquire before spawning to bound blocking work.
@@ -596,7 +610,7 @@ impl MergeTasks {
             let mut blocks = Vec::with_capacity(block_count);
             let mut virtual_inputs = Vec::with_capacity(block_count);
             let mut statistics = Statistics::default();
-            let mut covered = int_columns.columns.iter().collect::<Vec<_>>();
+            let mut covered = range_columns.columns.iter().collect::<Vec<_>>();
             let mut incomplete = Vec::new();
             // A merged stats file is only valid if every source has stats.
             let mut stats_locations = Some(Vec::new());
@@ -660,7 +674,7 @@ impl MergeTasks {
                 .map(|column| {
                     (
                         column.field.column_id(),
-                        int_columns.rebuild(column, &blocks),
+                        range_columns.rebuild(column, &blocks),
                     )
                 })
                 .collect();
@@ -681,7 +695,7 @@ impl MergeTasks {
         fragments: Vec<SegmentEntry>,
         location: String,
         cluster_key_info: Option<ClusterKeyInfo>,
-        int_columns: Arc<IntColumns>,
+        range_columns: Arc<RangeColumns>,
         io_permits: Arc<Semaphore>,
         stats_read_window: usize,
         decode_permits: Arc<Semaphore>,
@@ -695,7 +709,7 @@ impl MergeTasks {
         } = Self::decode_fragments(
             fragments,
             cluster_key_info,
-            int_columns,
+            range_columns,
             decode_permits.clone(),
         )
         .await?;

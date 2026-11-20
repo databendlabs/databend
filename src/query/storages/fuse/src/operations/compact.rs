@@ -76,6 +76,7 @@ impl FuseTable {
             self.operator.clone(),
             self.cluster_key_info(),
             table_meta_timestamps,
+            self.table_info.meta.field_stats_truncate_len.clone(),
         )?;
         segment_compactor.partition_key_count = self.partition_key_count();
         segment_compactor.partition_key_id = self.partition_key_id();

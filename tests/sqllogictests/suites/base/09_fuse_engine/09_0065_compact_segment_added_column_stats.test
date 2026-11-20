@@ -1,0 +1,102 @@
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+create table compact_segment_added_stats (a int)
+  storage_format = 'parquet' segment_format = 'row_oriented' block_per_segment = 10
+
+statement ok
+insert into compact_segment_added_stats values (1)
+
+statement ok
+alter table compact_segment_added_stats add column b int not null default 7
+
+statement ok
+alter table compact_segment_added_stats add column c int null
+
+statement ok
+alter table compact_segment_added_stats add column d decimal(10, 2) not null default 9.25
+
+statement ok
+alter table compact_segment_added_stats add column dt date not null default '2001-01-01'
+
+statement ok
+alter table compact_segment_added_stats add column ts timestamp not null default '2001-01-01 12:00:00'
+
+statement ok
+alter table compact_segment_added_stats add column tz timestamp_tz null
+
+statement ok
+alter table compact_segment_added_stats add column s string not null default repeat('z', 40)
+
+statement ok
+insert into compact_segment_added_stats values
+  (2, 100, 100, 1.25, '2020-01-01', '2020-01-01 12:00:00', '2020-01-01 12:00:00+0000'::timestamp_tz, 'a')
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('default', 'compact_segment_added_stats') limit 1
+----
+2 2 2
+
+# Neither column is covered by the older segment's statistics.
+query III
+select min(b), max(b), (max(d) = 9.25)::int from compact_segment_added_stats
+----
+7 100 1
+
+statement ok
+optimize table compact_segment_added_stats compact segment
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('default', 'compact_segment_added_stats') limit 1
+----
+1 2 2
+
+query I
+select a from compact_segment_added_stats where b = 7
+----
+1
+
+query I
+select a from compact_segment_added_stats where c is null
+----
+1
+
+query I
+select a from compact_segment_added_stats where d = 9.25
+----
+1
+
+query I
+select a from compact_segment_added_stats where dt = '2001-01-01'::date
+----
+1
+
+query I
+select a from compact_segment_added_stats where ts = '2001-01-01 12:00:00'::timestamp
+----
+1
+
+query I
+select a from compact_segment_added_stats where tz is null
+----
+1
+
+# The default's string upper bound must include the full 40-character value.
+query I
+select a from compact_segment_added_stats where s = repeat('z', 40)
+----
+1
+
+# The truncated bound must never be used as an exact MAX result.
+query IIII
+select min(b), max(b), (max(d) = 9.25)::int, length(max(s))
+from compact_segment_added_stats
+----
+7 100 1 40
+
+statement ok
+drop table compact_segment_added_stats
+
+statement ok
+unset enable_compact_after_write

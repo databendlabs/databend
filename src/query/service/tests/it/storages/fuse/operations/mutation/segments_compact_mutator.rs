@@ -121,7 +121,7 @@ async fn test_compact_segment_normal_case() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_compact_segment_added_int_column_statistics() -> anyhow::Result<()> {
+async fn test_compact_segment_added_column_statistics() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture
         .default_session()
@@ -133,8 +133,10 @@ async fn test_compact_segment_added_int_column_statistics() -> anyhow::Result<()
         "alter table evolved add column b int not null default 7",
         "alter table evolved add column c int null",
         "alter table evolved add column d int not null default 9",
-        "insert into evolved values (3, 100, 100, 100)",
-        "insert into evolved values (4, 100, 100, 100)",
+        "alter table evolved add column s string not null default 'abcdefghijklmnopqrstuvwxy'",
+        "alter table evolved add column u string not null default repeat('\u{10FFFF}', 2)",
+        "insert into evolved values (3, 100, 100, 100, 'a', 'z')",
+        "insert into evolved values (4, 100, 100, 100, 'a', 'z')",
     ] {
         fixture.execute_command(sql).await?;
     }
@@ -153,6 +155,8 @@ async fn test_compact_segment_added_int_column_statistics() -> anyhow::Result<()
     let b = schema.column_id_of("b")?;
     let c = schema.column_id_of("c")?;
     let d = schema.column_id_of("d")?;
+    let s = schema.column_id_of("s")?;
+    let u = schema.column_id_of("u")?;
     let int = |v| Scalar::Number(NumberScalar::Int32(v));
     let reader = SegmentInfoReader::new(operator.clone(), schema.clone());
     let newest = SegmentInfo::try_from(reader.read(newest, &CachePolicy::BYPASS).await?)?;
@@ -194,8 +198,19 @@ async fn test_compact_segment_added_int_column_statistics() -> anyhow::Result<()
         segment.write_meta(&operator, &path).await?;
         locations.push((path, SegmentInfo::VERSION));
     }
+    // Exercise explicit limits: the older rows use a string longer than the
+    // configured limit, and u has no representable upper bound at its limit.
     let state = SegmentCompactor::new(
-        10, None, 1, 1, schema, &operator, generator, timestamps, ctx,
+        10,
+        None,
+        1,
+        1,
+        schema,
+        &operator,
+        generator,
+        timestamps,
+        ctx,
+        &BTreeMap::from([(s, 20), (u, 1)]),
     )
     .compact(&locations, None, |_| {})
     .await?;
@@ -207,6 +222,12 @@ async fn test_compact_segment_added_int_column_statistics() -> anyhow::Result<()
     assert_eq!((stats[&c].min(), stats[&c].max()), (&int(100), &int(100)));
     assert_eq!(stats[&c].null_count, 2);
     assert!(!stats.contains_key(&d));
+    assert_eq!(stats[&s].min(), &Scalar::String("a".into()));
+    assert_eq!(
+        stats[&s].max(),
+        &Scalar::String("abcdefghijklmnopqrsu".into())
+    );
+    assert!(!stats.contains_key(&u));
     assert_eq!(merged.summary.row_count, 4);
     assert_eq!(merged.block_metas()?.len(), 3);
 
@@ -525,6 +546,7 @@ async fn compact_segments(
         &location_gen,
         TestFixture::default_table_meta_timestamps(),
         ctx.clone(),
+        &BTreeMap::new(),
     )
     .compact(segments, limit, |_| {})
     .await
@@ -833,6 +855,7 @@ async fn build_mutator(
         tbl.get_operator(),
         tbl.cluster_key_info(),
         table_meta_timestamps,
+        tbl.get_table_info().meta.field_stats_truncate_len.clone(),
     )?;
 
     if segment_mutator.target_select().await? {
@@ -1233,6 +1256,7 @@ impl CompactSegmentTestFixture {
             location_gen,
             TestFixture::default_table_meta_timestamps(),
             self.ctx.clone(),
+            &BTreeMap::new(),
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -1604,6 +1628,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             &location_gen,
             TestFixture::default_table_meta_timestamps(),
             ctx.clone(),
+            &BTreeMap::new(),
         );
         let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
         let state = seg_acc
