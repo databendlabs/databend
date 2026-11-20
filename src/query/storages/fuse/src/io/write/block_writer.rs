@@ -332,6 +332,7 @@ impl BlockBuilder {
             inverted_index_size,
             inverted_index_metas: Some(inverted_index_metas),
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta: None,
             create_on: Some(Utc::now()),
         };

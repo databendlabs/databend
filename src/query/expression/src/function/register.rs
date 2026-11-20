@@ -436,8 +436,8 @@ impl FunctionRegistry {
 
         self.register_1_arg_core::<NullableType<I1>, NullableType<O>, _, _>(
             name,
-            move |ctx, arg1| match (&arg1.value) {
-                (Some(value1)) => {
+            move |ctx, arg1| match &arg1.value {
+                Some(value1) => {
                     if let Some(domain) = calc_domain(ctx, value1).normalize() {
                         FunctionDomain::Domain(NullableDomain {
                             has_null: arg1.has_null || domain.has_null,
@@ -700,20 +700,6 @@ impl FunctionRegistry {
     }
 }
 
-struct EraseCalcDomainGeneric0Arg<F> {
-    func: F,
-}
-
-impl<O, F> ScalarFunctionDomain for EraseCalcDomainGeneric0Arg<F>
-where
-    O: ArgType,
-    F: Fn(&FunctionContext) -> FunctionDomain<O> + Send + Sync + 'static,
-{
-    fn domain_eval(&self, ctx: &FunctionContext, _domains: &[Domain]) -> FunctionDomain<AnyType> {
-        (self.func)(ctx).map(|d| O::upcast_domain(d))
-    }
-}
-
 struct EraseCalcDomainGeneric1Arg<I1, O, F> {
     calc_domain: F,
     _marker: PhantomData<fn(I1, O)>,
@@ -803,20 +789,6 @@ where
         let arg3 = I3::try_downcast_domain(&domains[2]).unwrap();
         let arg4 = I4::try_downcast_domain(&domains[3]).unwrap();
         (self.calc_domain)(ctx, &arg1, &arg2, &arg3, &arg4).map(|d| O::upcast_domain(d))
-    }
-}
-
-struct EraseFunctionGeneric0Arg<F> {
-    func: F,
-}
-
-impl<O, F> ScalarFunction for EraseFunctionGeneric0Arg<F>
-where
-    O: ArgType,
-    F: Fn(&mut EvalContext) -> Value<O> + Send + Sync + 'static,
-{
-    fn eval(&self, _args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-        Value::upcast((self.func)(ctx))
     }
 }
 

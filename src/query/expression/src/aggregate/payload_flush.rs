@@ -33,23 +33,14 @@ use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
-use crate::types::DateType;
-use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
-use crate::types::IntervalType;
-use crate::types::NumberDataType;
-use crate::types::NumberType;
 use crate::types::ReturnType;
-use crate::types::TimestampType;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
-use crate::types::i256;
-use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
-use crate::with_number_mapped_type;
 
 pub struct PayloadFlushState {
     pub(super) probe_state: Box<ProbeState>,
@@ -57,7 +48,6 @@ pub struct PayloadFlushState {
     pub(super) aggregate_results: Vec<BlockEntry>,
     pub(super) row_count: usize,
 
-    flush_partition: usize,
     pub(super) flush_page: usize,
     pub(super) flush_page_row: usize,
 
@@ -72,7 +62,6 @@ impl Default for PayloadFlushState {
             group_columns: Vec::new(),
             aggregate_results: Vec::new(),
             row_count: 0,
-            flush_partition: 0,
             flush_page: 0,
             flush_page_row: 0,
             addresses: [RowPtr::null(); BATCH_SIZE],
@@ -87,7 +76,6 @@ unsafe impl Sync for PayloadFlushState {}
 impl PayloadFlushState {
     pub fn clear(&mut self) {
         self.row_count = 0;
-        self.flush_partition = 0;
         self.flush_page = 0;
         self.flush_page_row = 0;
     }
@@ -100,17 +88,66 @@ impl PayloadFlushState {
     }
 }
 
+/// Builds a group column out of `rows`, from the values at `offset` in each row.
+#[derive(Clone, Copy)]
 struct FlushColumn<'a> {
-    payload: &'a Payload,
-    state: &'a mut PayloadFlushState,
+    rows: &'a [RowPtr],
     offset: usize,
+}
+
+impl FlushColumn<'_> {
+    fn fixed<T: ArgType>(self) -> Column {
+        let iter = self
+            .rows
+            .iter()
+            .map(|row| unsafe { row.read::<T::Scalar>(self.offset) });
+        T::upcast_column(T::column_from_iter(iter, &[]))
+    }
+
+    fn decimal<Num: Decimal>(self, decimal_size: DecimalSize) -> Column {
+        let iter = self.rows.iter().map(|row| unsafe {
+            row.read::<<DecimalType<Num> as AccessType>::Scalar>(self.offset)
+        });
+        let col = DecimalType::<Num>::column_from_iter(iter, &[]);
+        Num::upcast_column(col, decimal_size)
+    }
+
+    fn binary(self) -> BinaryColumn {
+        let len = self.rows.len();
+        let mut builder = BinaryColumnBuilder::with_capacity(len, len * 4);
+        for row in self.rows {
+            builder.put_slice(unsafe { row.read_bytes(self.offset) });
+            builder.commit_row();
+        }
+        builder.build()
+    }
+
+    fn string(self) -> StringColumn {
+        let mut builder = StringColumnBuilder::with_capacity(self.rows.len());
+        for row in self.rows {
+            builder.put_and_commit(unsafe {
+                std::str::from_utf8_unchecked(row.read_bytes(self.offset))
+            });
+        }
+        builder.build()
+    }
+
+    fn generic(self, data_type: &DataType) -> Column {
+        let mut builder = ColumnBuilder::with_capacity(data_type, self.rows.len());
+        for row in self.rows {
+            let scalar: Scalar =
+                bincode_deserialize_from_slice(unsafe { row.read_bytes(self.offset) }).unwrap();
+            builder.push(scalar.as_ref());
+        }
+        builder.build()
+    }
 }
 
 impl RowTypeVisitor for FlushColumn<'_> {
     type Output = Column;
 
     fn visit_empty(self, data_type: &DataType) -> Column {
-        let len = self.state.probe_state.row_count;
+        let len = self.rows.len();
         match data_type {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
@@ -120,37 +157,30 @@ impl RowTypeVisitor for FlushColumn<'_> {
     }
 
     fn visit_fixed<T: ArgType>(self) -> Column {
-        self.payload.flush_type_column::<T>(self.offset, self.state)
+        self.fixed::<T>()
     }
 
     fn visit_decimal<Num: Decimal>(self, size: DecimalSize) -> Column {
-        self.payload
-            .flush_decimal_column::<Num>(self.offset, self.state, size)
+        self.decimal::<Num>(size)
     }
 
     fn visit_bytes(self, data_type: &DataType) -> Column {
-        let (payload, offset, state) = (self.payload, self.offset, self.state);
         match data_type {
-            DataType::String => Column::String(payload.flush_string_column(offset, state)),
-            DataType::Binary => Column::Binary(payload.flush_binary_column(offset, state)),
-            DataType::Bitmap => Column::Bitmap(payload.flush_binary_column(offset, state)),
-            DataType::Variant => Column::Variant(payload.flush_binary_column(offset, state)),
-            DataType::Geometry => Column::Geometry(payload.flush_binary_column(offset, state)),
+            DataType::String => Column::String(self.string()),
+            DataType::Binary => Column::Binary(self.binary()),
+            DataType::Bitmap => Column::Bitmap(self.binary()),
+            DataType::Variant => Column::Variant(self.binary()),
+            DataType::Geometry => Column::Geometry(self.binary()),
             _ => unreachable!(),
         }
     }
 
     fn visit_serialized(self, data_type: &DataType) -> Column {
-        self.payload
-            .flush_generic_column(data_type, self.offset, self.state)
+        self.generic(data_type)
     }
 }
 
 impl PartitionedPayload {
-    pub fn aggregate_flush_bucket(&self, bucket: usize) -> Result<DataBlock> {
-        self.payloads[bucket].aggregate_flush_all()
-    }
-
     pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
         let mut blocks = Vec::with_capacity(self.partition_count());
 
@@ -161,25 +191,9 @@ impl PartitionedPayload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.payloads[0].empty_block(0));
+            return Ok(self.payloads[0].empty_block());
         }
         DataBlock::concat(&blocks)
-    }
-
-    pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
-        if state.flush_partition >= self.payloads.len() {
-            return false;
-        }
-
-        let p = &self.payloads[state.flush_partition];
-        if p.flush(state) {
-            true
-        } else {
-            let partition_idx = state.flush_partition + 1;
-            state.clear();
-            state.flush_partition = partition_idx;
-            self.flush(state)
-        }
     }
 }
 
@@ -187,7 +201,7 @@ impl Payload {
     pub fn aggregate_flush_all(&self) -> Result<DataBlock> {
         // A PayloadFlushState is over 100KB, do not allocate one for an empty payload.
         if self.len() == 0 {
-            return Ok(self.empty_block(0));
+            return Ok(self.empty_block());
         }
 
         let mut state = PayloadFlushState::default();
@@ -208,12 +222,12 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block(0));
+            return Ok(self.empty_block());
         }
         DataBlock::concat(&blocks)
     }
 
-    pub fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
+    fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
         if !self.flush(state) {
             return Ok(None);
         }
@@ -244,34 +258,15 @@ impl Payload {
         Ok(Some(DataBlock::new(entries, row_count)))
     }
 
-    pub fn group_by_flush_all(&self) -> Result<DataBlock> {
-        if self.len() == 0 {
-            return Ok(self.empty_block(0));
-        }
-
-        let mut state = PayloadFlushState::default();
-        let mut blocks = vec![];
-
-        while self.flush(&mut state) {
-            let entries = state.take_group_columns();
-            blocks.push(DataBlock::new(entries, state.row_count));
-        }
-
-        if blocks.is_empty() {
-            return Ok(self.empty_block(0));
-        }
-
-        DataBlock::concat(&blocks)
-    }
-
-    pub fn flush(&self, flush_state: &mut PayloadFlushState) -> bool {
+    pub(super) fn flush(&self, flush_state: &mut PayloadFlushState) -> bool {
         if !self.scan_rows(flush_state) {
             return false;
         }
 
         flush_state.group_columns.clear();
         for col_index in 0..self.group_types.len() {
-            let col = self.flush_column(col_index, flush_state);
+            let rows = &flush_state.addresses[..flush_state.row_count];
+            let col = self.flush_column(col_index, rows);
             flush_state.group_columns.push(col.into());
         }
         true
@@ -295,7 +290,6 @@ impl Payload {
         let rows = end - flush_state.flush_page_row;
         flush_state.row_count = rows;
         let state = &mut *flush_state.probe_state;
-        state.row_count = rows;
 
         for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
             *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
@@ -310,108 +304,26 @@ impl Payload {
         true
     }
 
-    fn flush_column(&self, col_index: usize, state: &mut PayloadFlushState) -> Column {
+    fn flush_column(&self, col_index: usize, rows: &[RowPtr]) -> Column {
         let col = visit_row_type(
             &self.group_types[col_index].remove_nullable(),
             FlushColumn {
-                payload: self,
-                state,
+                rows,
                 offset: self.row_layout.group_offsets[col_index],
             },
         );
 
-        let validity_offset = self.row_layout.validity_offsets[col_index];
         if self.group_types[col_index].is_nullable() {
-            let b = self.flush_type_column::<BooleanType>(validity_offset, state);
-            let validity = b.into_boolean().unwrap();
-
-            NullableColumn::new_column(col, validity)
+            let validity = FlushColumn {
+                rows,
+                offset: self.row_layout.validity_offsets[col_index],
+            }
+            .fixed::<BooleanType>()
+            .into_boolean()
+            .unwrap();
+            col.wrap_nullable(Some(validity))
         } else {
             col
         }
-    }
-
-    fn flush_type_column<T: ArgType>(
-        &self,
-        col_offset: usize,
-        state: &mut PayloadFlushState,
-    ) -> Column {
-        let len = state.probe_state.row_count;
-        let iter =
-            (0..len).map(|idx| unsafe { state.addresses[idx].read::<T::Scalar>(col_offset) });
-        let col = T::column_from_iter(iter, &[]);
-        T::upcast_column(col)
-    }
-
-    fn flush_decimal_column<Num: Decimal>(
-        &self,
-        col_offset: usize,
-        state: &mut PayloadFlushState,
-        decimal_size: DecimalSize,
-    ) -> Column {
-        let len = state.probe_state.row_count;
-        let iter = (0..len).map(|idx| unsafe {
-            state.addresses[idx].read::<<DecimalType<Num> as AccessType>::Scalar>(col_offset)
-        });
-        let col = DecimalType::<Num>::column_from_iter(iter, &[]);
-        Num::upcast_column(col, decimal_size)
-    }
-
-    fn flush_binary_column(
-        &self,
-        col_offset: usize,
-        state: &mut PayloadFlushState,
-    ) -> BinaryColumn {
-        let len = state.probe_state.row_count;
-        let mut binary_builder = BinaryColumnBuilder::with_capacity(len, len * 4);
-
-        unsafe {
-            for address in &state.addresses[..len] {
-                let scalar = address.read_bytes(col_offset);
-                binary_builder.put_slice(scalar);
-                binary_builder.commit_row();
-            }
-        }
-        binary_builder.build()
-    }
-
-    fn flush_string_column(
-        &self,
-        col_offset: usize,
-        state: &mut PayloadFlushState,
-    ) -> StringColumn {
-        let len = state.probe_state.row_count;
-        let mut binary_builder = StringColumnBuilder::with_capacity(len);
-
-        unsafe {
-            for address in &state.addresses[..len] {
-                let scalar = address.read_bytes(col_offset);
-                binary_builder.put_and_commit(std::str::from_utf8_unchecked(scalar));
-            }
-        }
-        binary_builder.build()
-    }
-
-    fn flush_generic_column(
-        &self,
-        data_type: &DataType,
-        col_offset: usize,
-        state: &mut PayloadFlushState,
-    ) -> Column {
-        let len = state.probe_state.row_count;
-        let mut builder = ColumnBuilder::with_capacity(data_type, len);
-
-        unsafe {
-            for address in &state.addresses[..len] {
-                let str_len = address.read::<u32>(col_offset) as usize;
-                let data_address = address.read::<u64>(col_offset + 4) as usize as *const u8;
-
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
-                let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
-
-                builder.push(scalar.as_ref());
-            }
-        }
-        builder.build()
     }
 }

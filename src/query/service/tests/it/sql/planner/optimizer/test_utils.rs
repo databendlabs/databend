@@ -571,6 +571,7 @@ impl ExprBuilder {
         aggregate_functions: Vec<ScalarItem>,
     ) -> SExpr {
         let agg = Aggregate {
+            adaptive_topk_count: None,
             aggregate_functions,
             group_items,
             grouping_sets: None,

@@ -24,7 +24,6 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DictColumn;
 use databend_common_expression::types::EncodedColumn;
 use databend_common_expression::types::NarrowBuffer;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VectorColumn;
@@ -53,7 +52,7 @@ fn test_float_equality_class_keys() -> anyhow::Result<()> {
         ),
     ];
     for floats in classes.into_iter().flat_map(|(f32s, f64s)| [f32s, f64s]) {
-        let nullable = NullableColumn::new_column(floats.clone(), Bitmap::from([true; 3]));
+        let nullable = floats.clone().wrap_nullable(None);
         let array = Column::Array(Box::new(ArrayColumn::new(
             floats.clone(),
             vec![0, 1, 2, 3].into(),
@@ -121,11 +120,9 @@ fn serialize_keys(entries: &[BlockEntry], rows: usize) -> BinaryColumn {
 fn test_serialized_key_lengths_and_offsets() {
     let entries = vec![
         UInt16Type::from_data(vec![9, 256, 9, 0]).into(),
-        NullableColumn::new_column(
-            StringType::from_data(vec!["", "unused", "reef", "q"]),
-            Bitmap::from([true, false, true, true]),
-        )
-        .into(),
+        StringType::from_data(vec!["", "unused", "reef", "q"])
+            .wrap_nullable(Some(Bitmap::from([true, false, true, true])))
+            .into(),
         BinaryType::from_data(vec![vec![], vec![0, 254], vec![b'x'], vec![]]).into(),
     ];
     // Hand-computed native-endian layout: number, validity, optional string
@@ -271,7 +268,7 @@ fn test_serialized_nested_nullable_keys() {
         vec![0, 2, 2, 3].into(),
     )));
     let tuple = Column::Tuple(vec![
-        NullableColumn::new_column(arrays, Bitmap::from([true, false, true])),
+        arrays.wrap_nullable(Some(Bitmap::from([true, false, true]))),
         UInt8Type::from_data(vec![2, 3, 4]),
     ]);
     let expected = [
@@ -313,10 +310,8 @@ fn test_serialized_empty_and_null_keys() {
         assert!(keys.data().is_empty());
         assert_eq!(keys.iter().count(), 3);
     }
-    let all_null = NullableColumn::new_column(
-        StringType::from_data(vec!["hidden", "", "also hidden"]),
-        Bitmap::from([false; 3]),
-    );
+    let all_null = StringType::from_data(vec!["hidden", "", "also hidden"])
+        .wrap_nullable(Some(Bitmap::from([false; 3])));
     let keys = serialize_keys(&[all_null.into()], 3);
     assert_eq!(keys.offsets().as_slice(), &[0, 1, 2, 3]);
     assert_eq!(keys.data().as_slice(), &[0, 0, 0]);
@@ -368,7 +363,9 @@ fn test_timezone_equality_keys_keep_source_offsets() -> anyhow::Result<()> {
     )));
     for column in [
         timestamps.clone(),
-        NullableColumn::new_column(timestamps.clone(), Bitmap::from([true; 3])),
+        timestamps
+            .clone()
+            .wrap_nullable(Some(Bitmap::from([true; 3]))),
         arrays.clone(),
         maps,
         Column::Tuple(vec![arrays]),

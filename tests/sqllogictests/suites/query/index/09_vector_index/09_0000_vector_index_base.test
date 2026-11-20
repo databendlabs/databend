@@ -177,14 +177,16 @@ SELECT id, l1_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.3159103
 2 1.8405688
 11 1.8465419
 
+# Row 1 is the query vector: its SQ8 distance is the quantization error alone,
+# not shifted by the quantizer offset of its block.
 query IR
 SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
-1 0.052975703
-10 0.73442644
-12 0.84724534
-8 0.92271036
-3 0.9368646
+1 0.00069053395
+10 0.6369769
+12 0.764318
+8 0.9160794
+3 0.9353659
 
 query IR
 SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
@@ -198,11 +200,11 @@ SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271
 query IR
 SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
 ----
-4 0.41017252
-16 0.69951516
-6 0.73418504
-2 0.7379028
-11 0.8144757
+4 0.4067377
+16 0.6988953
+6 0.72583383
+11 0.7278242
+2 0.73599905
 
 query IR
 SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;

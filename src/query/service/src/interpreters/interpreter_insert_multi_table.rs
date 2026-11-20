@@ -382,8 +382,26 @@ impl InsertMultiTableInterpreter {
                 let projections: BTreeSet<usize> =
                     (input_col_num..input_col_num + exprs.len()).collect();
 
-                let reordered =
-                    PhysicalPlan::new(EvalScalar::create(input_source, exprs, projections, None));
+                // `build_physical_plan` distributes the write only when the source root is a Merge
+                // exchange. The reorder is positional and the exchange output follows its input, so
+                // put the reorder below the exchange rather than wrapping (and hiding) it.
+                let reordered = match Exchange::from_physical_plan(&input_source) {
+                    Some(exchange) if exchange.kind == FragmentKind::Merge => {
+                        let input = exchange.input.clone();
+                        exchange.derive(vec![PhysicalPlan::new(EvalScalar::create(
+                            input,
+                            exprs,
+                            projections,
+                            None,
+                        ))])
+                    }
+                    _ => PhysicalPlan::new(EvalScalar::create(
+                        input_source,
+                        exprs,
+                        projections,
+                        None,
+                    )),
+                };
                 Ok((reordered, metadata.clone()))
             }
             _ => unreachable!(),

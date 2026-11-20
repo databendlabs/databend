@@ -54,6 +54,10 @@ impl Rule for RuleMergeFilter {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let up_filter = s_expr.plan().as_filter().unwrap();
         let down_filter = s_expr.unary_child().plan().as_filter().unwrap();
+        // The upper predicates would filter the input of the lower ones.
+        if down_filter.depends_on_other_rows() {
+            return Ok(());
+        }
 
         let predicates = up_filter
             .predicates

@@ -1715,15 +1715,17 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub global_statement_queue: bool,
 
-    /// The max total memory in bytes that can be used by this process.
+    /// The max total memory in bytes that can be used by this process. 0, the default, is 80%
+    /// of the memory of the machine, or of the cgroup the process runs in.
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
+    /// Enforce `max_server_memory_usage`: queries are killed when the process reaches it.
     #[clap(
         long,
         value_name = "VALUE",
         value_parser = clap::value_parser!(bool),
-        default_value = "false"
+        default_value = "true"
     )]
     pub max_memory_limit_enabled: bool,
 
@@ -3170,10 +3172,29 @@ impl Default for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
-    /// The data in meta-service using key `TenantOwnershipObjectIdent`
+    /// Deprecated: name `ownership` in `meta_service_caches` instead. When true, it enables
+    /// [`MetaServiceCache::Ownership`] as that name does.
     #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
+
+    /// The meta-service data that this node watches, to read it from a local copy: names of
+    /// [`MetaServiceCache`], such as `["user", "setting"]` in a config file or
+    /// `--cache-meta-service-caches user,setting`. Empty by default.
+    ///
+    /// A watched copy may lag a change by the watch delay, a change made through this node
+    /// included. Only the meta-service leader serves the watches: a copy can miss changes for up
+    /// to 5 s after the leader steps down. A leader cut off from the other meta nodes still leads
+    /// in its own view, and its copies stay stale with no time limit, until the cut heals
+    /// (databend-meta#193). What a stale copy can keep from taking effect is listed with each
+    /// [`MetaServiceCache`].
+    #[clap(
+        long = "cache-meta-service-caches",
+        value_name = "VALUE",
+        value_enum,
+        value_delimiter = ','
+    )]
+    pub meta_service_caches: Vec<MetaServiceCache>,
 
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
@@ -3551,15 +3572,15 @@ pub struct CacheConfig {
 
     /// Use the shared cache backend: three memory pools (meta, index and data), each sized as a
     /// percentage of the server memory limit, evicted with S3-FIFO and shrunk under memory
-    /// pressure before queries are killed. Requires a server memory limit
-    /// (`max_memory_limit_enabled` and `max_server_memory_usage`). The per-cache capacity options
-    /// above and `enable_table_meta_cache` are then ignored; disk cache options still apply.
+    /// pressure before queries are killed, which takes `max_memory_limit_enabled`. The per-cache
+    /// capacity options above and `enable_table_meta_cache` are then ignored; disk cache options
+    /// still apply. Set it to false for the legacy backend, sized by those options.
     #[clap(
         long = "cache-shared-memory-enabled",
         value_name = "VALUE",
-        default_value = "false"
+        default_value = "true"
     )]
-    #[serde(default = "bool_false")]
+    #[serde(default = "bool_true")]
     pub shared_memory_enabled: bool,
 
     /// Shared backend: percentage of the server memory limit for table, segment and index
@@ -3580,11 +3601,12 @@ pub struct CacheConfig {
     )]
     pub index_max_ratio: u64,
 
-    /// Shared backend: percentage of the server memory limit for column data.
+    /// Shared backend: percentage of the server memory limit for column data. 0 disables the
+    /// in-memory column data pool.
     #[clap(
         long = "cache-data-max-ratio",
         value_name = "VALUE",
-        default_value = "10"
+        default_value = "0"
     )]
     pub data_max_ratio: u64,
 
@@ -3605,6 +3627,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             meta_service_ownership_cache: false,
+            meta_service_caches: vec![],
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
@@ -3647,16 +3670,55 @@ impl Default for CacheConfig {
             table_data_deserialized_memory_ratio: 0,
             table_data_encoded_dictionary_ndv_ratio: 100,
             iceberg_table_meta_count: 1024,
-            shared_memory_enabled: false,
+            shared_memory_enabled: true,
             meta_max_ratio: 10,
             index_max_ratio: 40,
-            data_max_ratio: 10,
+            data_max_ratio: 0,
             kind_max_bytes: BTreeMap::new(),
 
             // ----- the following options/args are all deprecated               ----
             table_meta_segment_count: None,
         }
     }
+}
+
+impl CacheConfig {
+    /// Whether `cache` is listed in `meta_service_caches`, or, for
+    /// [`MetaServiceCache::Ownership`], enabled by the deprecated `meta_service_ownership_cache`.
+    pub fn is_meta_service_cache_enabled(&self, cache: MetaServiceCache) -> bool {
+        self.meta_service_caches.contains(&cache)
+            || (cache == MetaServiceCache::Ownership && self.meta_service_ownership_cache)
+    }
+}
+
+/// A watched copy of meta-service data, enabled by its snake_case name, such as
+/// `cluster_node`, in `cache.meta_service_caches`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+#[value(rename_all = "snake_case")]
+pub enum MetaServiceCache {
+    /// The users of the tenant, read by the HTTP password and key-pair logins, by the MySQL and
+    /// FlightSQL logins, and by the HTTP requests authenticated by a session token. A stale copy
+    /// can keep a `DROP USER`, a password or key change, `DISABLED`, a revoked grant or role, or
+    /// a new network policy of the user from taking effect for these on this node.
+    User,
+    /// The global settings of the tenant, read by every new session. A stale copy can keep a
+    /// change of a global setting, such as the `network_policy` that logins enforce, from taking
+    /// effect for the new sessions on this node.
+    Setting,
+    /// The online nodes of this node's cluster, read by cluster discovery. Only that cluster is
+    /// watched, so it needs a configured `cluster_id`: a system-managed node, whose cluster the
+    /// warehouse management assigns at runtime, reads its cluster from meta-service. A copy that
+    /// lists the cluster without this node is not used, and a stale copy stops listing this node
+    /// within the 60 s heartbeat lift time.
+    ClusterNode,
+    /// The ownership of the objects of every tenant, `__fd_object_owners/`, listed by the
+    /// privilege checks, the visibility of objects, `SHOW GRANTS`, and the transfer of the
+    /// objects of a dropped role to `account_admin`. A stale copy can keep a new owner, such as
+    /// that of an object just created or of a `GRANT OWNERSHIP`, from taking effect for these on
+    /// this node, and can leave an object it does not list owned by a dropped role. The
+    /// deprecated `meta_service_ownership_cache = true` enables it too.
+    Ownership,
 }
 
 #[inline]

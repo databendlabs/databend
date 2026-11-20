@@ -72,12 +72,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F32::from(0.0));
                     return;
                 }
-                calculate_array_distance(lhs.column, rhs.column, output, ctx, cosine_distance);
+                calculate_array_distance(lhs.destructure().0, rhs.destructure().0, output, ctx, cosine_distance);
             }
         ),
     );
@@ -97,12 +97,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F32::from(0.0));
                     return;
                 }
-                calculate_array_distance(lhs.column, rhs.column, output, ctx, l1_distance);
+                calculate_array_distance(lhs.destructure().0, rhs.destructure().0, output, ctx, l1_distance);
             }
         ),
     );
@@ -124,12 +124,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F32::from(0.0));
                     return;
                 }
-                calculate_array_distance(lhs.column, rhs.column, output, ctx, l2_distance);
+                calculate_array_distance(lhs.destructure().0, rhs.destructure().0, output, ctx, l2_distance);
             }
         ),
     );
@@ -149,12 +149,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float32Type>>, ArrayType<NullableType<Float32Type>>, Float32Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F32::from(0.0));
                     return;
                 }
-                calculate_array_distance(lhs.column, rhs.column, output, ctx, inner_product);
+                calculate_array_distance(lhs.destructure().0, rhs.destructure().0, output, ctx, inner_product);
             }
         ),
     );
@@ -174,12 +174,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F64::from(0.0));
                     return;
                 }
-                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, cosine_distance_64);
+                calculate_array_distance_64(lhs.destructure().0, rhs.destructure().0, output, ctx, cosine_distance_64);
             }
         ),
     );
@@ -199,12 +199,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F64::from(0.0));
                     return;
                 }
-                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, l1_distance_64);
+                calculate_array_distance_64(lhs.destructure().0, rhs.destructure().0, output, ctx, l1_distance_64);
             }
         ),
     );
@@ -224,12 +224,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F64::from(0.0));
                     return;
                 }
-                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, l2_distance_64);
+                calculate_array_distance_64(lhs.destructure().0, rhs.destructure().0, output, ctx, l2_distance_64);
             }
         ),
     );
@@ -249,12 +249,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<NullableType<Float64Type>>, ArrayType<NullableType<Float64Type>>, Float64Type>(
             |lhs, rhs, output, ctx| {
-                if lhs.validity.null_count() > 0 || rhs.validity.null_count() > 0 {
+                if lhs.validity().null_count() > 0 || rhs.validity().null_count() > 0 {
                     ctx.set_error(output.len(), "Vector contain null values");
                     output.push(F64::from(0.0));
                     return;
                 }
-                calculate_array_distance_64(lhs.column, rhs.column, output, ctx, inner_product_64);
+                calculate_array_distance_64(lhs.destructure().0, rhs.destructure().0, output, ctx, inner_product_64);
             }
         ),
     );

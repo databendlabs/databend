@@ -38,6 +38,13 @@ select * from iv
 1 null
 2 {"k":"v"}
 
+# The unparsable value is stored as JSON null.
+query TB
+select json_typeof(b), is_null_value(b) from iv order by a
+----
+NULL_VALUE 1
+OBJECT 0
+
 statement ok
 DROP TABLE if exists books;
 

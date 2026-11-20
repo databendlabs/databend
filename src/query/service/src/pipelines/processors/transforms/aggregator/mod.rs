@@ -14,10 +14,11 @@
 
 mod aggregate_exchange_injector;
 mod aggregate_meta;
+mod aggregate_scatter;
 mod aggregate_spiller;
+mod aggregate_states_meta;
 mod aggregator_params;
-mod build_partition_bucket;
-mod serde;
+mod build_final_aggregates;
 mod statistics;
 mod transform_aggregate_expand;
 mod transform_aggregate_final;
@@ -26,9 +27,11 @@ mod transform_single_key;
 
 pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
+pub use aggregate_scatter::*;
 pub use aggregate_spiller::*;
+pub use aggregate_states_meta::*;
 pub use aggregator_params::AggregatorParams;
-pub use build_partition_bucket::build_partition_bucket;
+pub use build_final_aggregates::build_final_aggregates;
 pub use databend_common_expression::aggregate::AggregatePayload;
 pub use databend_common_expression::aggregate::SerializedPayload;
 pub use databend_query_script_udf_support::create_udaf_script_function;
@@ -38,5 +41,3 @@ pub use transform_aggregate_partial::TransformPartialAggregate;
 pub use transform_aggregate_partial::parse_partial_aggregate_mode;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
-
-pub use self::serde::*;

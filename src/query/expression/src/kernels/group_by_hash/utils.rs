@@ -18,10 +18,8 @@ use databend_common_column::types::timestamp_tz;
 
 use crate::Column;
 use crate::ProjectedBlock;
-use crate::types::AnyType;
 use crate::types::BinaryColumn;
 use crate::types::EncodedColumn;
-use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::number::Number;
@@ -123,10 +121,10 @@ unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut G
                 }
             }
             Column::Nullable(c) => {
-                let valid = c.validity.get_bit(row);
+                let valid = c.validity().get_bit(row);
                 row_space.store(&(valid as u8));
                 if valid {
-                    serialize_column_binary(&c.column, row, row_space);
+                    serialize_column_binary(c.column(), row, row_space);
                 }
             }
             Column::Tuple(fields) => {
@@ -231,10 +229,7 @@ fn normalize_bitmap_in_column(column: Column) -> Column {
         },
         Column::Nullable(deref!(nullable)) => {
             let (col, validity) = nullable.destructure();
-            Column::Nullable(Box::new(NullableColumn::<AnyType> {
-                column: normalize_bitmap_in_column(col),
-                validity,
-            }))
+            normalize_bitmap_in_column(col).wrap_nullable(Some(validity))
         }
         Column::Tuple(columns) => Column::Tuple(
             columns

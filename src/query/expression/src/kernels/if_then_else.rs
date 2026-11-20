@@ -44,7 +44,6 @@ use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::DecimalType;
-use crate::types::NullableColumn;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -162,7 +161,7 @@ fn select_typed(
                 }
                 (None, None) => ColumnBuilder::repeat_default(inner, mask.len()).build(),
             };
-            Some(NullableColumn::new_column(column, validity))
+            Some(column.wrap_nullable(Some(validity)))
         }
         DataType::Boolean => {
             let then_value = then_value.try_downcast::<BooleanType>().ok()?;
@@ -210,8 +209,8 @@ fn split_nullable(value: &Value<AnyType>) -> Option<(Option<Value<AnyType>>, Val
         Value::Scalar(Scalar::Null) => Some((None, Value::Scalar(false))),
         Value::Scalar(scalar) => Some((Some(Value::Scalar(scalar.clone())), Value::Scalar(true))),
         Value::Column(Column::Nullable(column)) => Some((
-            Some(Value::Column(column.column.clone())),
-            Value::Column(column.validity.clone()),
+            Some(Value::Column(column.column().clone())),
+            Value::Column(column.validity().clone()),
         )),
         Value::Column(_) => None,
     }

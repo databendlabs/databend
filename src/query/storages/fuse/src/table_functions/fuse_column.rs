@@ -133,7 +133,7 @@ impl FuseColumn {
                 for block in segment.block_metas()? {
                     for (id, column) in block.col_metas(&col_ids).iter() {
                         if let Some(f) = leaf_fields.iter().find(|f| f.column_id == *id) {
-                            block_location.put_and_commit(block.location_path());
+                            block_location.put_and_commit(block.column_location_path(id));
                             block_size.push(block.block_size());
                             file_size.push(block.file_size());
                             row_count.push(column.total_rows() as u64);

@@ -88,7 +88,6 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
     }
 }
 
-/// This serialize column into row format by fixed size
 /// Runs `$body` with `$T` the value type of a frame of reference / dictionary encodable
 /// fixed size type, `$other` for other types.
 macro_rules! with_encoded_fixed_size_type {
@@ -277,7 +276,14 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Nullable(c) => unsafe {
-            serialize_column_to_rowformat(arena, &c.column, select_vector, address, offset, scratch)
+            serialize_column_to_rowformat(
+                arena,
+                c.column(),
+                select_vector,
+                address,
+                offset,
+                scratch,
+            )
         },
 
         // for complex column
@@ -469,20 +475,20 @@ impl<'s> CompareState<'s> {
             BlockEntry::Const(scalar, _, _) => self.match_const_column(scalar, col_offset, counts),
             BlockEntry::Column(column) => match column {
                 Column::Nullable(c) => {
-                    if c.validity.null_count() == 0 {
+                    if c.validity().null_count() == 0 {
                         let counts = self.match_with(counts, |_, row_ptr| unsafe {
                             row_ptr.read_bool(validity_offset)
                         });
-                        self.match_column(&c.column, col_offset, None, counts)
-                    } else if c.validity.true_count() == 0 {
+                        self.match_column(c.column(), col_offset, None, counts)
+                    } else if c.validity().true_count() == 0 {
                         self.match_with(counts, |_, row_ptr| unsafe {
                             !row_ptr.read_bool(validity_offset)
                         })
                     } else {
                         self.match_column(
-                            &c.column,
+                            c.column(),
                             col_offset,
-                            Some((&c.validity, validity_offset)),
+                            Some((c.validity(), validity_offset)),
                             counts,
                         )
                     }
@@ -963,7 +969,8 @@ mod tests {
 
         let mut row0 = vec![0u8; row_size];
         let mut row1 = vec![0u8; row_size];
-        let mut row_muts: [RowMut; BATCH_SIZE] = std::array::from_fn(|_| RowMut::dangling());
+        let mut row_muts: [RowMut; BATCH_SIZE] =
+            std::array::from_fn(|_| RowMut::new(std::ptr::NonNull::dangling().as_ptr()));
         row_muts[0] = RowMut::new(row0.as_mut_ptr());
         row_muts[1] = RowMut::new(row1.as_mut_ptr());
 
@@ -980,7 +987,7 @@ mod tests {
             );
         }
 
-        let row_refs = row_muts.map(RowMut::into_ref);
+        let row_refs = [RowPtr::new(row0.as_ptr()), RowPtr::new(row1.as_ptr())];
         let bytes0 = unsafe { row_refs[0].read_bytes(0) };
         let bytes1 = unsafe { row_refs[1].read_bytes(0) };
 

@@ -17,9 +17,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
-use std::ops::BitAnd;
-use std::ops::BitOr;
-use std::ops::Not;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -41,7 +38,6 @@ use serde::Serialize;
 use smallvec::SmallVec;
 
 use self::function_factory::FunctionFactoryHelper;
-use crate::Column;
 use crate::ColumnIndex;
 use crate::Expr;
 use crate::FunctionDomain;
@@ -51,8 +47,6 @@ use crate::function_stat::ScalarFunctionStat;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
-use crate::types::nullable::NullableColumn;
-use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 
@@ -727,20 +721,16 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
     debug_assert!(!O::data_type().is_nullable_or_null());
     move |val, ctx| {
         let output = func(val, ctx);
-        if let Some((validity, _)) = ctx.errors.take() {
-            match output {
-                Value::Scalar(_) => Value::Scalar(None),
-                Value::Column(column) => {
-                    Value::Column(NullableColumn::new_unchecked(column, validity.into()))
-                }
-            }
-        } else {
-            match output {
-                Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn::new_unchecked(
-                    column,
-                    Bitmap::new_constant(true, ctx.num_rows),
-                )),
+        match (output, ctx.errors.take()) {
+            // Scalar evaluation runs once; its error bitmap has not been broadcast yet.
+            (Value::Scalar(_), Some(_)) => Value::Scalar(None),
+            (Value::Scalar(scalar), None) => Value::Scalar(Some(scalar)),
+            (Value::Column(column), errors) => {
+                let validity = match errors {
+                    Some((validity, _)) => validity.into(),
+                    None => Bitmap::new_constant(true, ctx.num_rows),
+                };
+                NullableType::<O>::wrap_value(Value::Column(column), validity, ctx.generics)
             }
         }
     }

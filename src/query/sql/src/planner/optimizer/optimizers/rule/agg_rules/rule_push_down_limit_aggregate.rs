@@ -29,6 +29,7 @@ use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::TopN;
@@ -84,43 +85,36 @@ impl RulePushDownRankLimitAggregate {
         let agg = s_expr.unary_child();
         let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
 
+        // The rank limit drops rows of the groups that rank after `count`, so only the first
+        // `count` groups by all the group keys are whole. With aggregate functions, the sort
+        // injected below must pick exactly those, which it cannot do with a key it cannot
+        // sort by. Without any, a group that lost rows is still the same group.
+        let sortable = |item: &ScalarItem| is_sortable(&item.scalar.data_type());
+        if !agg_limit.aggregate_functions.is_empty() && !agg_limit.group_items.iter().all(sortable)
+        {
+            return Ok(());
+        }
+
+        let sort_item = |item: &ScalarItem| SortItem {
+            index: item.index,
+            asc: true,
+            nulls_first: false,
+        };
         let rank_items = agg_limit
             .group_items
             .iter()
-            .map(|g| SortItem {
-                index: g.index,
-                asc: true,
-                nulls_first: false,
-            })
+            .map(sort_item)
+            .collect::<Vec<_>>();
+        let sort_items = agg_limit
+            .group_items
+            .iter()
+            .filter(|item| sortable(item))
+            .map(sort_item)
             .collect::<Vec<_>>();
         // The scans below can prune by the runtime rank-limit boundary on the first key.
         let aggregate_input = push_down_scan_order(agg.unary_child(), &rank_items)
             .map_or_else(|| agg.unary_child_arc(), Arc::new);
         agg_limit.rank_limit = Some((rank_items, count));
-
-        let mut sort_items = Vec::new();
-        for item in &agg_limit.group_items {
-            match item.scalar.data_type().remove_nullable() {
-                DataType::Null
-                | DataType::Boolean
-                | DataType::Number(_)
-                | DataType::Decimal(_)
-                | DataType::Timestamp
-                | DataType::TimestampTz
-                | DataType::Interval
-                | DataType::Date
-                | DataType::Binary
-                | DataType::String
-                | DataType::Variant => {}
-                _ => continue,
-            }
-
-            sort_items.push(SortItem {
-                index: item.index,
-                asc: true,
-                nulls_first: false,
-            });
-        }
 
         let agg = aggregate_input.ref_build_unary(agg_limit);
         let mut result = if sort_items.is_empty() {
@@ -198,13 +192,34 @@ impl RulePushDownRankLimitAggregate {
                 sort_items.push(order_item.clone());
             }
         }
+        let ordered = sort_items.len();
+        // Ordered by group keys only, the rank limit drops rows of the groups that rank after
+        // `limit` before they are aggregated, so only the first `limit` groups by all the rank
+        // keys are whole. With aggregate functions, the operator above must pick exactly those:
+        // it breaks the ties of the ORDER BY keys by the group keys appended to the rank limit.
+        // Without any, a group that lost rows is still the same group.
+        let break_ties = is_order_subset && !agg_limit.aggregate_functions.is_empty();
         for group_item in &agg_limit.group_items {
-            if !sort_items.iter().any(|k| k.index == group_item.index) {
-                sort_items.push(SortItem {
-                    index: group_item.index,
-                    asc: true,
-                    nulls_first: false,
-                });
+            if sort_items.iter().any(|k| k.index == group_item.index) {
+                continue;
+            }
+            if break_ties && !is_sortable(&group_item.scalar.data_type()) {
+                return Ok(());
+            }
+            sort_items.push(SortItem {
+                index: group_item.index,
+                asc: true,
+                nulls_first: false,
+            });
+        }
+
+        let mut order_plan = s_expr.plan().clone();
+        if break_ties {
+            let tie_breakers = sort_items[ordered..].iter().cloned();
+            match &mut order_plan {
+                RelOperator::Sort(sort) => sort.items.extend(tie_breakers),
+                RelOperator::TopN(top_n) => top_n.items.extend(tie_breakers),
+                _ => {}
             }
         }
 
@@ -217,6 +232,7 @@ impl RulePushDownRankLimitAggregate {
             .flatten()
             .map_or_else(|| agg_limit_expr.unary_child_arc(), Arc::new);
         let agg = aggregate_input.ref_build_unary(agg_limit);
+        let s_expr = s_expr.replace_plan(order_plan);
         let mut result = if has_eval_scalar {
             let eval_scalar = s_expr.unary_child().replace_children(vec![Arc::new(agg)]);
             s_expr.replace_children(vec![Arc::new(eval_scalar)])
@@ -227,6 +243,25 @@ impl RulePushDownRankLimitAggregate {
         state.add_result(result);
         Ok(())
     }
+}
+
+/// Whether the sort operator can sort by a key of `data_type`: the types its row format
+/// supports.
+fn is_sortable(data_type: &DataType) -> bool {
+    matches!(
+        data_type.remove_nullable(),
+        DataType::Null
+            | DataType::Boolean
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::TimestampTz
+            | DataType::Interval
+            | DataType::Date
+            | DataType::Binary
+            | DataType::String
+            | DataType::Variant
+    )
 }
 
 impl Rule for RulePushDownRankLimitAggregate {

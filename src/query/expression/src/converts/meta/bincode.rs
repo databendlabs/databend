@@ -30,7 +30,6 @@ use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalScalar;
-use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberScalar;
 use crate::types::*;
@@ -156,10 +155,8 @@ impl From<LegacyColumn> for Column {
             ))),
             LegacyColumn::Bitmap(str_col) => Column::Bitmap(BinaryColumn::from(str_col)),
             LegacyColumn::Nullable(nullable_col) => {
-                Column::Nullable(Box::new(NullableColumn::<AnyType> {
-                    column: nullable_col.column.into(),
-                    validity: nullable_col.validity,
-                }))
+                let column: Column = nullable_col.column.into();
+                column.wrap_nullable(Some(nullable_col.validity))
             }
             LegacyColumn::Tuple(tuple) => {
                 Column::Tuple(tuple.into_iter().map(|c| c.into()).collect())
@@ -231,9 +228,10 @@ impl From<Column> for LegacyColumn {
             })),
             Column::Bitmap(str_col) => LegacyColumn::Bitmap(LegacyBinaryColumn::from(str_col)),
             Column::Nullable(nullable_col) => {
+                let (column, validity) = nullable_col.destructure();
                 LegacyColumn::Nullable(Box::new(LegacyNullableColumn {
-                    column: nullable_col.column.into(),
-                    validity: nullable_col.validity,
+                    column: column.into(),
+                    validity,
                 }))
             }
             Column::Tuple(tuple) => {

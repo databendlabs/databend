@@ -134,6 +134,72 @@ select range(-1, -20, -3)
 statement error
 select range(10, 5000000011)
 
+# Scalar range must stop before step addition overflows (issue #21109).
+query TTT
+select range(10, 20, 9223372036854775806), range(10, 20, 9223372036854775798), range(-10, -20, -9223372036854775806)
+----
+[10] [10] [-10]
+
+query TTT
+select array_generate_range(10, 20, 9223372036854775806), range(10, 20, 9223372036854775797), range(10, 20, 100)
+----
+[10] [10] [10]
+
+query TT
+select range(0, 9223372036854775807, 4611686018427387904), range(0, -9223372036854775808, -4611686018427387904)
+----
+[0,4611686018427387904] [0,-4611686018427387904]
+
+# The distance and the absolute value of step need not fit in Int64.
+query TT
+select range(-9223372036854775808, 9223372036854775807, 9223372036854775807), range(9223372036854775807, -9223372036854775808, -9223372036854775808)
+----
+[-9223372036854775808,-1,9223372036854775806] [9223372036854775807,-1]
+
+query T
+select range(0, -9223372036854775808, -9223372036854775808)
+----
+[0]
+
+# Exercise vectorized evaluation, not just constant folding.
+query TT
+select range(10, 20, 9223372036854775806::int64 - number::int64), array_generate_range(10, 20, 9223372036854775806::int64 - number::int64) from numbers(2) order by number
+----
+[10] [10]
+[10] [10]
+
+# Equal endpoints and a step pointing away from the endpoint produce empty arrays.
+query TTTT
+select range(9223372036854775807, -9223372036854775808), range(9223372036854775807, -9223372036854775808, 1), range(-9223372036854775808, 0, -1), range(1, 1, -9223372036854775808)
+----
+[] [] [] []
+
+statement error step cannot be zero
+select range(0, 1, 0)
+
+# Reject oversized ranges before allocating, even when the distance overflows Int64.
+statement error the allowed maximum values of range function is 500000000, but got 18446744073709551615
+select range(-9223372036854775808, 9223372036854775807)
+
+statement error the allowed maximum values of range function is 500000000, but got 18446744073709551615
+select range(-9223372036854775808, 9223372036854775807, 1)
+
+statement error the allowed maximum values of range function is 500000000, but got 18446744073709551615
+select range(9223372036854775807, -9223372036854775808, -1)
+
+statement error the allowed maximum values of range function is 500000000, but got 9223372036854775808
+select range(-9223372036854775808, 0, 1)
+
+statement error the allowed maximum values of range function is 500000000, but got 9223372036854775808
+select range(0, -9223372036854775808, -1)
+
+# Non-divisible distances must round the element count up, not down.
+statement error the allowed maximum values of range function is 500000000, but got 500000001
+select range(0, 1000000001, 2)
+
+statement error the allowed maximum values of range function is 500000000, but got 500000001
+select range(0, -1000000001, -2)
+
 statement ok
 DROP DATABASE IF EXISTS array_func_test
 

@@ -28,11 +28,9 @@ use crate::DataBlock;
 use crate::SELECTIVITY_THRESHOLD;
 use crate::Value;
 use crate::types::binary::BinaryColumn;
-use crate::types::date::CoreDate;
 use crate::types::nullable::NullableColumn;
 use crate::types::simple_type::SimpleType;
 use crate::types::string::StringColumn;
-use crate::types::timestamp::CoreTimestamp;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::with_opaque_mapped_type;
@@ -129,18 +127,16 @@ where I: TakeIndex + ?Sized
     }
 
     fn visit_nullable(&mut self, column: Box<NullableColumn<AnyType>>) -> Result<()> {
-        self.visit_boolean(column.validity.clone())?;
+        let (column, validity) = column.destructure();
+        self.visit_boolean(validity)?;
         let validity =
             BooleanType::try_downcast_column(self.result.take().unwrap().as_column().unwrap())
                 .unwrap();
 
-        self.visit_column(column.column)?;
+        self.visit_column(column)?;
         let result = self.result.take().unwrap();
         let result = result.as_column().unwrap();
-        self.result = Some(Value::Column(NullableColumn::new_column(
-            result.clone(),
-            validity,
-        )));
+        self.result = Some(Value::Column(result.clone().wrap_nullable(Some(validity))));
         Ok(())
     }
 
@@ -246,13 +242,11 @@ where I: TakeIndex + ?Sized
     }
 
     fn visit_opaque(&mut self, column: OpaqueColumn) -> Result<()> {
-        self.result = Some(Value::Column(
-            (with_opaque_mapped_type!(|T| match column {
-                OpaqueColumn::T(column) => {
-                    OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
-                }
-            })),
-        ));
+        self.result = Some(Value::Column(with_opaque_mapped_type!(|T| match column {
+            OpaqueColumn::T(column) => {
+                OpaqueType::<T>::upcast_column(self.take_primitive_types(column))
+            }
+        })));
         Ok(())
     }
 }
@@ -306,8 +300,8 @@ impl Column {
         match self {
             Column::String(c) => Column::String(c.maybe_gc()),
             Column::Nullable(n) => {
-                let c = n.column.maybe_gc();
-                NullableColumn::new_column(c, n.validity)
+                let (column, validity) = n.destructure();
+                column.maybe_gc().wrap_nullable(Some(validity))
             }
             other => other,
         }

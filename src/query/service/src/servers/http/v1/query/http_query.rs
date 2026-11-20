@@ -21,8 +21,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_ast::parser::mask_log_sql_secrets;
-use databend_common_base::base::short_sql;
+use databend_common_ast::parser::format_sql_for_log;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::IoStats;
@@ -37,6 +36,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
@@ -63,6 +63,7 @@ use super::ExecuteStateKind;
 use super::Executor;
 use super::HttpQueryContext;
 use super::PageManager;
+use super::QueryToken;
 use super::ResponseData;
 use super::Wait;
 use super::blocks_serializer::BlocksSerializer;
@@ -139,8 +140,7 @@ impl Debug for HttpQueryRequest {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
-            // Mask before Debug escapes quotes and line breaks, and before truncation.
-            .field("sql", &short_sql(mask_log_sql_secrets(&self.sql), 1000))
+            .field("sql", &format_sql_for_log(&self.sql))
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
@@ -609,6 +609,7 @@ pub struct ResponseState {
 }
 
 pub struct HttpQueryResponseInternal {
+    pub query_token: Option<QueryToken>,
     pub data: Option<ResponseData>,
     pub session_id: String,
     pub session: Option<HttpSessionConf>,
@@ -669,6 +670,8 @@ pub enum TimeoutResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
+    pub(crate) owner_tenant: Tenant,
+    pub(crate) query_token: QueryToken,
     pub(crate) user_name: String,
     pub(crate) client_session_id: Option<String>,
     pagination: PaginationConf,
@@ -731,7 +734,7 @@ impl HttpQuery {
     #[fastrace::trace(name = "HttpQuery::try_create")]
     pub async fn try_create(
         http_ctx: &HttpQueryContext,
-        req: HttpQueryRequest,
+        req: &HttpQueryRequest,
         arrow_result_version: Option<u64>,
         arrow_features: Option<ArrowFeatures>,
     ) -> Result<HttpQuery> {
@@ -741,10 +744,8 @@ impl HttpQuery {
             .await?;
         let query_id = http_ctx.query_id.clone();
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
-        let sql = &req.sql;
         let node_id = &GlobalConfig::instance().query.node_id;
-        let masked_sql = mask_log_sql_secrets(sql);
-        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql.as_str(); "Creating new query");
+        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = format_sql_for_log(&req.sql).as_str(); "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,
@@ -778,9 +779,11 @@ impl HttpQuery {
 
         Ok(HttpQuery {
             id: query_id,
+            owner_tenant: http_ctx.authenticated_tenant.clone(),
+            query_token: QueryToken::new(),
             user_name: http_ctx.user_name.clone(),
             client_session_id: http_ctx.client_session_id.clone(),
-            pagination: req.pagination,
+            pagination: req.pagination.clone(),
             execute_state: executor,
             page_manager: Arc::new(TokioMutex::new(page_manager)),
             result_timeout_secs,
@@ -815,6 +818,7 @@ impl HttpQuery {
         };
 
         Ok(HttpQueryResponseInternal {
+            query_token: None,
             data,
             state,
             session,
@@ -828,6 +832,7 @@ impl HttpQuery {
         let state = self.get_state();
 
         Ok(HttpQueryResponseInternal {
+            query_token: None,
             data: None,
             session_id: self.client_session_id.clone().unwrap_or_default(),
             node_id: HttpQueryManager::instance().server_info.id.clone(),
@@ -1107,13 +1112,22 @@ impl HttpQuery {
         }
     }
 
+    /// Query ownership is restricted to the originating tenant and user.
+    /// These fields are immutable, including after the executor releases its session.
+    pub(crate) fn check_owner(&self, ctx: &HttpQueryContext) -> poem::error::Result<()> {
+        if self.owner_tenant != ctx.authenticated_tenant || self.user_name != ctx.user_name {
+            return Err(poem::error::Error::from_string(
+                "Authentication error: query owner mismatch",
+                StatusCode::UNAUTHORIZED,
+            ));
+        }
+        Ok(())
+    }
+
     pub fn check_client_session_id(&self, id: &Option<String>) -> poem::error::Result<()> {
         if *id != self.client_session_id {
             return Err(poem::error::Error::from_string(
-                format!(
-                    "Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
-                    self.client_session_id
-                ),
+                "Authentication error: client session mismatch",
                 StatusCode::UNAUTHORIZED,
             ));
         }
@@ -1150,5 +1164,16 @@ mod tests {
         assert!(!logged.contains("variable_secret"), "{logged}");
         assert!(logged.contains(r#""max_threads": "8""#), "{logged}");
         assert!(logged.contains(r#"variables: ["p"]"#), "{logged}");
+    }
+
+    #[test]
+    fn debug_bounds_long_select_sql() {
+        let vector = vec!["0.123456"; 1536].join(", ");
+        let sql = format!("SELECT id FROM t ORDER BY cosine_distance(v, [{vector}]) LIMIT 10");
+        let request: HttpQueryRequest =
+            serde_json::from_value(serde_json::json!({ "sql": sql })).unwrap();
+        let logged = format!("{request:?}");
+        assert!(logged.contains("SELECT id FROM t ORDER BY"), "{logged}");
+        assert!(logged.contains("... (+1533 more)]) LIMIT 10"), "{logged}");
     }
 }

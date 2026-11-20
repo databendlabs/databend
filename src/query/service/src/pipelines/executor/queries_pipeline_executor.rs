@@ -94,11 +94,22 @@ impl QueriesPipelineExecutor {
     }
 
     pub fn send_graph(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
+        // No worker is left to run the graph: fail the query instead of
+        // leaving it in the queue forever.
+        if self.is_finished() {
+            let cause = self.finished_error.lock().clone();
+            return Err(cause
+                .unwrap_or_else(|| ErrorCode::Internal("The queries executor has been finished")));
+        }
+
         // Bind waker
         self.bind_waker_for_graph(&graph);
 
         unsafe {
-            let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
+            // It runs `Processor::event` on the thread of the query: a panic must
+            // fail the query, not unwind a thread that nobody waits for.
+            let mut init_schedule_queue =
+                catch_unwind(|| graph.clone().init_schedule_queue(self.threads_num)).flatten()?;
 
             let async_queue = std::mem::take(&mut init_schedule_queue.async_queue);
             self.global_tasks_queue
@@ -107,6 +118,12 @@ impl QueriesPipelineExecutor {
             let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
             self.global_tasks_queue
                 .init_sync_tasks(sync_queue, self.workers_condvar.clone());
+
+            // All its processors finished in their first event, so no worker runs
+            // a task of the graph that would finish it.
+            if graph.is_all_nodes_finished() {
+                graph.should_finish::<()>(Ok(()))?;
+            }
             Ok(())
         }
     }
@@ -211,6 +228,19 @@ impl QueriesPipelineExecutor {
 
                 while !self.global_tasks_queue.is_finished() && context.has_task() {
                     let task_info = context.get_task_info();
+                    // Counted before the check: a graph that finishes in between
+                    // waits for this task before running its finish callbacks.
+                    let _running_task = task_info
+                        .as_ref()
+                        .map(|(graph, _)| graph.track_running_task());
+                    if task_info
+                        .as_ref()
+                        .is_some_and(|(graph, _)| graph.is_should_finish())
+                    {
+                        drop(context.take_task());
+                        continue;
+                    }
+
                     let execute_res = catch_unwind(|| context.execute_task(Some(self)));
                     match execute_res {
                         Ok(res) => {
@@ -221,25 +251,27 @@ impl QueriesPipelineExecutor {
                                         && !graph.is_should_finish()
                                     {
                                         // We immediately schedule the processor again.
-                                        let schedule_queue_res =
-                                            graph.clone().schedule_queue(executed_pid);
-                                        match schedule_queue_res {
-                                            Ok(schedule_queue) => {
-                                                schedule_queue.schedule_with_condition(
-                                                    &self.global_tasks_queue,
-                                                    &mut context,
-                                                    self,
-                                                );
-                                            }
-                                            Err(cause) => {
-                                                graph.record_node_error(
-                                                    executed_pid,
-                                                    NodeErrorType::ScheduleEventError(
-                                                        cause.clone(),
-                                                    ),
-                                                );
-                                                graph.should_finish(Err(cause))?;
-                                            }
+                                        // It runs `Processor::event` and creates the
+                                        // async tasks: a panic of them must only fail
+                                        // its query, as one of `process` does, not
+                                        // finish the executor.
+                                        let schedule_res = catch_unwind(|| {
+                                            let schedule_queue =
+                                                graph.clone().schedule_queue(executed_pid)?;
+                                            schedule_queue.schedule_with_condition(
+                                                &self.global_tasks_queue,
+                                                &mut context,
+                                                self,
+                                            );
+                                            Ok(())
+                                        })
+                                        .flatten();
+                                        if let Err(cause) = schedule_res {
+                                            graph.record_node_error(
+                                                executed_pid,
+                                                NodeErrorType::ScheduleEventError(cause.clone()),
+                                            );
+                                            graph.should_finish(Err(cause))?;
                                         }
                                     }
                                     if graph.is_all_nodes_finished() {

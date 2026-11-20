@@ -53,8 +53,6 @@ use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::NullableType;
 use crate::types::ReturnType;
-use crate::types::ValueType;
-use crate::types::nullable::NullableDomain;
 use crate::values::Value;
 
 impl FunctionRegistry {
@@ -183,7 +181,7 @@ impl<'a> ScalarBuilder<'a> {
             "at least one function must be provided before registering"
         );
 
-        for mut function in functions.drain(..) {
+        for function in functions.drain(..) {
             assert_eq!(function.signature.name, name);
             registry.register_function(function);
         }

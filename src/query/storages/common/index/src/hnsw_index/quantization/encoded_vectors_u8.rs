@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::prefetch::MIN_PREFETCH_STORAGE_BYTES;
 use crate::hnsw_index::common::prefetch::prefetch_slice;
 use crate::hnsw_index::common::prefetch::prefetch_slice_l2;
@@ -30,9 +31,14 @@ use crate::hnsw_index::quantization::encoded_storage::EncodedStorageBuilder;
 use crate::hnsw_index::quantization::encoded_vectors::DistanceType;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 use crate::hnsw_index::quantization::encoded_vectors::VectorParameters;
+use crate::hnsw_index::quantization::encoded_vectors::calibration_vectors;
 use crate::hnsw_index::quantization::encoded_vectors::validate_vector_parameters;
 use crate::hnsw_index::quantization::quantile::find_min_max_from_iter;
 use crate::hnsw_index::quantization::quantile::find_quantile_interval;
+
+// Ported from qdrant `lib/quantization/src/encoded_vectors_u8.rs`. Deviation: a
+// constant range is widened in `alpha_offset_from_min_max`, qdrant quantizes it
+// with `alpha = 0`.
 
 pub const ALIGNMENT: usize = 16;
 
@@ -60,15 +66,59 @@ struct Metadata {
     vector_parameters: VectorParameters,
 }
 
-impl EncodedVectorsU8<Vec<u8>> {
+impl Metadata {
+    #[inline]
+    fn postprocess_score(&self, score: f32, query_offset: f32, vector_offset: f32) -> f32 {
+        self.multiplier * score + query_offset + vector_offset
+    }
+
+    #[inline]
+    fn postprocess_internal_score(
+        &self,
+        score: f32,
+        vector_1_offset: f32,
+        vector_2_offset: f32,
+    ) -> f32 {
+        let query_offset = vector_1_offset - self.get_shift();
+        self.postprocess_score(score, query_offset, vector_2_offset)
+    }
+
+    fn get_shift(&self) -> f32 {
+        // Dotprod after shifting produces a number which is not related to vector and query
+        // (x - a)(y - a) = xy - ax - ay + a^2
+        // this a^2 is returned here
+        let shift = match self.vector_parameters.distance_type {
+            DistanceType::Dot => self.actual_dim as f32 * self.offset * self.offset,
+            // L2 is computed from squared code differences. The common quantizer offset cancels
+            // before squaring, so adding an absolute offset^2 shift would make scores depend on
+            // translating all vectors and the query by the same constant.
+            DistanceType::L1 | DistanceType::L2 => 0.0,
+        };
+        if self.vector_parameters.invert {
+            -shift
+        } else {
+            shift
+        }
+    }
+}
+
+impl EncodedVectorsU8<HugePageBytes> {
     pub(crate) fn memory_size(&self) -> usize {
         std::mem::size_of::<Self>() + self.encoded_vectors.capacity()
     }
 }
 
 impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
+    /// Encode vector data using scalar quantization.
+    ///
+    /// Every vector of `orig_data` is encoded, but the value range (min/max or quantile) is
+    /// fitted only on the vectors whose flag in `keep` is set. `keep` holds one flag per vector;
+    /// clear the flags of vectors that are not real (e.g. the placeholders of NULL vectors).
+    /// If no flag is set while `orig_data` is not empty, no vector is real, so no score matters,
+    /// and a zero range is used.
     pub fn encode<'a>(
         orig_data: impl Iterator<Item = impl AsRef<[f32]> + 'a> + Clone,
+        keep: impl Iterator<Item = bool> + Clone,
         mut storage_builder: impl EncodedStorageBuilder<TStorage>,
         vector_parameters: &VectorParameters,
         quantile: Option<f32>,
@@ -91,12 +141,17 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
         }
 
         debug_assert!(validate_vector_parameters(orig_data.clone(), vector_parameters).is_ok());
-        let (alpha, offset) = Self::find_alpha_offset_size_dim(orig_data.clone());
+        let (calibration_data, calibration_count) = calibration_vectors(orig_data.clone(), keep);
+        let (alpha, offset) = if calibration_count == 0 {
+            (0.0, 0.0)
+        } else {
+            Self::find_alpha_offset_size_dim(calibration_data.clone())
+        };
         let (alpha, offset) = if let Some(quantile) = quantile {
             if let Some((min, max)) = find_quantile_interval(
-                orig_data.clone(),
+                calibration_data,
                 vector_parameters.dim,
-                vector_parameters.count,
+                calibration_count,
                 quantile,
             ) {
                 Self::alpha_offset_from_min_max(min, max)
@@ -105,6 +160,30 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
             }
         } else {
             (alpha, offset)
+        };
+
+        let multiplier = match vector_parameters.distance_type {
+            // (alpha*x - offset) * (alpha*y - offset) = alpha^2*x*y - alpha*offset*x - alpha*offset*y + offset^2
+            // multiplier is applied to xy term only, so we need to multiply score by alpha^2
+            DistanceType::Dot => alpha * alpha,
+            // |(alpha*x - offset) - (alpha*y - offset)| = alpha*|x - y|
+            // multiplier is applied to |x - y| term only, so we need to multiply score by alpha
+            DistanceType::L1 => alpha,
+            // ((alpha*x - offset) - (alpha*y - offset))^2 = alpha^2*(x - y)^2 = alpha^2*x^2 - 2*alpha^2*xy + alpha^2*y^2
+            // multiplier is applied to (x - y)^2 term only, so we need to multiply score by -2*alpha^2
+            DistanceType::L2 => -2.0 * alpha * alpha,
+        };
+        let multiplier = if vector_parameters.invert {
+            -multiplier
+        } else {
+            multiplier
+        };
+        let metadata = Metadata {
+            actual_dim,
+            alpha,
+            offset,
+            multiplier,
+            vector_parameters: vector_parameters.clone(),
         };
 
         for vector in orig_data {
@@ -130,18 +209,16 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
             }
             let vector_offset = match vector_parameters.distance_type {
                 DistanceType::Dot => {
-                    actual_dim as f32 * offset * offset
-                        + encoded_vector.iter().map(|&x| f32::from(x)).sum::<f32>() * alpha * offset
+                    let elements_sum = encoded_vector.iter().map(|&x| f32::from(x)).sum::<f32>();
+                    elements_sum * alpha * offset
                 }
                 DistanceType::L1 => 0.0,
                 DistanceType::L2 => {
-                    actual_dim as f32 * offset * offset
-                        + encoded_vector
-                            .iter()
-                            .map(|&x| f32::from(x) * f32::from(x))
-                            .sum::<f32>()
-                            * alpha
-                            * alpha
+                    let elements_sqr_sum = encoded_vector
+                        .iter()
+                        .map(|&x| f32::from(x) * f32::from(x))
+                        .sum::<f32>();
+                    elements_sqr_sum * alpha * alpha
                 }
             };
             let vector_offset = if vector_parameters.invert {
@@ -149,31 +226,17 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
             } else {
                 vector_offset
             };
+            // apply `a^2` shift
+            let vector_offset = metadata.get_shift() + vector_offset;
             encoded_vector[0..std::mem::size_of::<f32>()]
                 .copy_from_slice(&vector_offset.to_ne_bytes());
             storage_builder.push_vector_data(&encoded_vector);
         }
-        let multiplier = match vector_parameters.distance_type {
-            DistanceType::Dot => alpha * alpha,
-            DistanceType::L1 => alpha,
-            DistanceType::L2 => -2.0 * alpha * alpha,
-        };
-        let multiplier = if vector_parameters.invert {
-            -multiplier
-        } else {
-            multiplier
-        };
 
         Ok(EncodedVectorsU8 {
             encoded_vectors: storage_builder.build(),
             score_kernel: select_score_kernel(vector_parameters.distance_type, actual_dim),
-            metadata: Metadata {
-                actual_dim,
-                alpha,
-                offset,
-                multiplier,
-                vector_parameters: vector_parameters.clone(),
-            },
+            metadata,
         })
     }
 
@@ -192,7 +255,8 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
                 score as f32
             }
         };
-        self.metadata.multiplier * score + query.offset + vector_offset
+        self.metadata
+            .postprocess_score(score, query.offset, vector_offset)
     }
 
     /// Hints the CPU to load vector `i` into the cache, ahead of scoring it. HNSW
@@ -231,6 +295,14 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
     }
 
     fn alpha_offset_from_min_max(min: f32, max: f32) -> (f32, f32) {
+        // A constant range would give `alpha = 0`: every code and multiplier is 0,
+        // and every query is at distance 0 from the block. Widen it around the
+        // constant so a query at another value gets a nonzero distance.
+        let (min, max) = if max > min {
+            (min, max)
+        } else {
+            (min - 0.5, max + 0.5)
+        };
         let alpha = (max - min) / 127.0;
         let offset = min;
         (alpha, offset)
@@ -275,12 +347,7 @@ impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
 
     #[allow(dead_code)]
     pub fn get_diff(&self) -> f32 {
-        let diff = self.metadata.actual_dim as f32 * self.metadata.offset * self.metadata.offset;
-        if self.metadata.vector_parameters.invert {
-            -diff
-        } else {
-            diff
-        }
+        self.metadata.get_shift()
     }
 
     pub fn get_actual_dim(vector_parameters: &VectorParameters) -> usize {
@@ -373,22 +440,14 @@ impl<TStorage: EncodedStorage> EncodedVectors<EncodedQueryU8> for EncodedVectors
     fn score_internal(&self, i: u32, j: u32) -> f32 {
         let (query_offset, q_ptr) = self.get_vec_ptr(i);
         let (vector_offset, v_ptr) = self.get_vec_ptr(j);
-        let diff = self.metadata.actual_dim as f32 * self.metadata.offset * self.metadata.offset;
-        let diff = if self.metadata.vector_parameters.invert {
-            -diff
-        } else {
-            diff
-        };
-        let offset = query_offset + vector_offset - diff;
-
         let score = match self.metadata.vector_parameters.distance_type {
             DistanceType::Dot | DistanceType::L2 => {
                 impl_score_dot(q_ptr, v_ptr, self.metadata.actual_dim)
             }
             DistanceType::L1 => impl_score_l1(q_ptr, v_ptr, self.metadata.actual_dim),
         };
-
-        self.metadata.multiplier * score as f32 + offset
+        self.metadata
+            .postprocess_internal_score(score as f32, query_offset, vector_offset)
     }
 }
 
@@ -681,6 +740,7 @@ mod tests {
             };
             let vectors = EncodedVectorsU8::encode(
                 data.chunks(dim),
+                std::iter::repeat_n(true, count),
                 Vec::new(),
                 &params,
                 None,
@@ -704,6 +764,271 @@ mod tests {
             assert_eq!(vectors.prefetch_windows(), None);
         }
         Ok(())
+    }
+
+    fn scalar_quantized_scores_for(
+        distance_type: DistanceType,
+        invert: bool,
+        vector_data: &[Vec<f32>],
+        query: &[f32],
+    ) -> Vec<f32> {
+        let vector_parameters = VectorParameters {
+            dim: query.len(),
+            count: vector_data.len(),
+            distance_type,
+            invert,
+        };
+        let encoded = EncodedVectorsU8::encode(
+            vector_data.iter(),
+            std::iter::repeat_n(true, vector_data.len()),
+            Vec::new(),
+            &vector_parameters,
+            Some(0.99),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let query_u8 = encoded.encode_query(query);
+
+        (0..vector_data.len())
+            .map(|index| encoded.score_point_simple(&query_u8, index as u32))
+            .collect()
+    }
+
+    fn deterministic_affine_vectors() -> (Vec<Vec<f32>>, Vec<f32>) {
+        use rand::Rng as _;
+        use rand::SeedableRng as _;
+
+        let vectors_count = 129;
+        let vector_dim = 8;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(1008);
+        let vector_data = (0..vectors_count)
+            .map(|_| {
+                (0..vector_dim)
+                    .map(|_| rng.gen_range(-100.0..=100.0))
+                    .collect()
+            })
+            .collect();
+        let query = (0..vector_dim)
+            .map(|_| rng.gen_range(-100.0..=100.0))
+            .collect();
+
+        (vector_data, query)
+    }
+
+    fn map_affine(
+        vector_data: &[Vec<f32>],
+        query: &[f32],
+        scale: f32,
+        offset: f32,
+    ) -> (Vec<Vec<f32>>, Vec<f32>) {
+        let mapped_vectors = vector_data
+            .iter()
+            .map(|vector| vector.iter().map(|value| value * scale + offset).collect())
+            .collect();
+        let mapped_query = query.iter().map(|value| value * scale + offset).collect();
+
+        (mapped_vectors, mapped_query)
+    }
+
+    fn assert_scores_match_transform(
+        base_scores: &[f32],
+        transformed_scores: &[f32],
+        expected_scale: f32,
+        tolerance: f32,
+    ) {
+        for (index, (&score, &transformed_score)) in
+            base_scores.iter().zip(transformed_scores).enumerate()
+        {
+            let expected = score * expected_scale;
+            assert!(
+                (expected - transformed_score).abs() < tolerance,
+                "score transform drifted at index {index}: expected {expected}, got {transformed_score}"
+            );
+        }
+    }
+
+    /// The value range is fitted on the vectors flagged in `keep` only: the
+    /// zero placeholders of NULL vectors must not stretch it (qdrant#11110).
+    #[test]
+    fn test_calibration_skips_unkept_vectors() -> Result<()> {
+        // Real vectors in [0.5, 1.5], and a zero placeholder for a NULL row.
+        let (dim, count) = (8, 20);
+        let mut data: Vec<f32> = (0..dim * count)
+            .map(|i| 0.5 + (i * 37 % 101) as f32 / 100.0)
+            .collect();
+        let null_row = 7;
+        data[null_row * dim..(null_row + 1) * dim].fill(0.0);
+        let keep: Vec<bool> = (0..count).map(|row| row != null_row).collect();
+        let query: Vec<f32> = (0..dim)
+            .map(|i| 0.5 + (i * 53 % 101) as f32 / 100.0)
+            .collect();
+        let params = VectorParameters {
+            dim,
+            count,
+            distance_type: DistanceType::L2,
+            invert: true,
+        };
+
+        let kept = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            keep.iter().copied(),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        let all = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            std::iter::repeat_n(true, count),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+
+        // The range of the real vectors, not one stretched down to the placeholder.
+        assert!(
+            (kept.metadata.offset - 0.5).abs() < 0.02,
+            "{}",
+            kept.metadata.offset
+        );
+        assert!(all.metadata.offset.abs() < 0.02, "{}", all.metadata.offset);
+        assert!(kept.metadata.alpha < all.metadata.alpha);
+
+        // Hence the real vectors are scored more precisely.
+        let exact = |vector: &[f32]| -> f32 {
+            vector
+                .iter()
+                .zip(&query)
+                .map(|(a, b)| (a - b) * (a - b))
+                .sum()
+        };
+        let error = |encoded: &EncodedVectorsU8<Vec<u8>>| -> f32 {
+            let encoded_query = encoded.encode_query(&query);
+            data.chunks(dim)
+                .enumerate()
+                .filter(|(row, _)| *row != null_row)
+                .map(|(row, vector)| {
+                    (-encoded.score_point(&encoded_query, row as u32) - exact(vector)).abs()
+                })
+                .sum()
+        };
+        assert!(
+            error(&kept) < error(&all),
+            "{} vs {}",
+            error(&kept),
+            error(&all)
+        );
+
+        // No real vector: no score matters, and the zero range must not fail.
+        let none = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            std::iter::repeat_n(false, count),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        assert_eq!((none.metadata.alpha, none.metadata.offset), (0.0, 0.0));
+        Ok(())
+    }
+
+    /// A block whose real vectors are all the same value has a range of width 0.
+    /// With `alpha = 0` every code was 0 and every query was at distance 0 from
+    /// the block, so it won every TopN.
+    #[test]
+    fn test_constant_range_keeps_distances_nonzero() -> Result<()> {
+        let (dim, count) = (4, 8);
+        let mut data = vec![0.5_f32; dim * count];
+        let null_row = 3;
+        data[null_row * dim..(null_row + 1) * dim].fill(0.0);
+        let keep: Vec<bool> = (0..count).map(|row| row != null_row).collect();
+        let params = VectorParameters {
+            dim,
+            count,
+            distance_type: DistanceType::L2,
+            invert: true,
+        };
+        let encoded = EncodedVectorsU8::encode(
+            data.chunks(dim),
+            keep.iter().copied(),
+            Vec::new(),
+            &params,
+            None,
+            &AtomicBool::new(false),
+        )?;
+        assert!(encoded.metadata.alpha > 0.0, "{}", encoded.metadata.alpha);
+
+        // The constant itself is exact, a query at another value is at a distance.
+        let same = encoded.encode_query(&[0.5; 4]);
+        assert!(encoded.score_point(&same, 0).abs() < 1e-6);
+        let other = encoded.encode_query(&[0.9; 4]);
+        let distance = -encoded.score_point(&other, 0);
+        assert!((distance - 4.0 * 0.4 * 0.4).abs() < 0.02, "{distance}");
+
+        // A query beyond the widened range is clamped, and still at a distance.
+        let far = encoded.encode_query(&[5.0; 4]);
+        assert!(
+            -encoded.score_point(&far, 0) > 0.9,
+            "{}",
+            encoded.score_point(&far, 0)
+        );
+        Ok(())
+    }
+
+    /// Ported from qdrant `lib/quantization/tests/integration/test_simple.rs`
+    /// (qdrant#9518). L2 used to add `actual_dim * offset^2` to every score, so
+    /// translating all vectors and the query by 1000 changed the distances.
+    #[test]
+    fn test_scalar_quantized_distance_scores_are_translation_invariant() {
+        for (distance_type, invert) in [
+            (DistanceType::L1, false),
+            (DistanceType::L1, true),
+            (DistanceType::L2, false),
+            (DistanceType::L2, true),
+        ] {
+            let (vector_data, query) = deterministic_affine_vectors();
+            let (shifted_vector_data, shifted_query) =
+                map_affine(&vector_data, &query, 1.0, 1000.0);
+
+            let base_scores =
+                scalar_quantized_scores_for(distance_type, invert, &vector_data, &query);
+            let shifted_scores = scalar_quantized_scores_for(
+                distance_type,
+                invert,
+                &shifted_vector_data,
+                &shifted_query,
+            );
+
+            assert_scores_match_transform(&base_scores, &shifted_scores, 1.0, 0.25);
+        }
+    }
+
+    #[test]
+    fn test_scalar_quantized_scores_follow_positive_scaling() {
+        for (distance_type, invert, expected_scale) in [
+            (DistanceType::Dot, false, 6.25),
+            (DistanceType::Dot, true, 6.25),
+            (DistanceType::L1, false, 2.5),
+            (DistanceType::L1, true, 2.5),
+            (DistanceType::L2, false, 6.25),
+            (DistanceType::L2, true, 6.25),
+        ] {
+            let scale = 2.5;
+            let (vector_data, query) = deterministic_affine_vectors();
+            let (scaled_vector_data, scaled_query) = map_affine(&vector_data, &query, scale, 0.0);
+
+            let base_scores =
+                scalar_quantized_scores_for(distance_type, invert, &vector_data, &query);
+            let scaled_scores = scalar_quantized_scores_for(
+                distance_type,
+                invert,
+                &scaled_vector_data,
+                &scaled_query,
+            );
+
+            assert_scores_match_transform(&base_scores, &scaled_scores, expected_scale, 1.0);
+        }
     }
 
     /// The dotprod kernels give the exact integers of the scalar dot product and

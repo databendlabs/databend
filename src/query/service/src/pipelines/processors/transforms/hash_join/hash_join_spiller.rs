@@ -45,6 +45,8 @@ pub struct HashJoinSpiller {
     partition_buffer: PartitionBuffer,
     partition_threshold: usize,
     join_type: JoinType,
+    /// Spill and replay every pair in rounds rather than by hash partition.
+    probes_all_pairs: bool,
     join_state: Arc<HashJoinState>,
     is_build_side: bool,
     func_ctx: FunctionContext,
@@ -54,6 +56,9 @@ pub struct HashJoinSpiller {
     hash_method: HashMethodKind,
     /// Next restore file index, only used for cross join.
     next_restore_file: usize,
+    /// The retained probe buffer must be replayed once per build round, even
+    /// when it has no columns and therefore no spill files advance the cursor.
+    replay_buffer_restored: bool,
     block_partition_stream: BlockPartitionStream,
 }
 
@@ -100,6 +105,7 @@ impl HashJoinSpiller {
         let partition_buffer = PartitionBuffer::create(num_partitions);
 
         let join_type = join_state.join_type();
+        let probes_all_pairs = join_state.probes_all_pairs();
         Ok(Self {
             spiller,
             partition_buffer,
@@ -108,10 +114,12 @@ impl HashJoinSpiller {
             hash_keys,
             hash_method,
             join_type,
+            probes_all_pairs,
             join_state,
             func_ctx: ctx.get_function_context()?,
             is_build_side,
             next_restore_file: 0,
+            replay_buffer_restored: false,
             block_partition_stream: BlockPartitionStream::create(0, block_bytes, num_partitions),
         })
     }
@@ -122,7 +130,7 @@ impl HashJoinSpiller {
             return Ok(());
         }
 
-        if self.join_type == JoinType::Cross {
+        if self.probes_all_pairs {
             return self.cross_buffer(data_blocks);
         }
 
@@ -167,7 +175,7 @@ impl HashJoinSpiller {
         data_blocks: Vec<DataBlock>,
         partition_need_to_spill: Option<&HashSet<usize>>,
     ) -> Result<Vec<DataBlock>> {
-        if self.join_type == JoinType::Cross {
+        if self.probes_all_pairs {
             return self
                 .cross_spill(&data_blocks, partition_need_to_spill)
                 .await;
@@ -271,11 +279,15 @@ impl HashJoinSpiller {
                     unspilled_data_blocks.push(data_block);
                     continue;
                 }
+                // Parquet cannot preserve row counts without columns. Keep
+                // these blocks in the replay buffer even at a zero threshold.
+                let has_columns = data_block.num_columns() > 0;
                 self.partition_buffer
                     .add_data_block(partition_id, data_block);
-                if let Some(data_blocks) = self
-                    .partition_buffer
-                    .fetch_data_blocks(partition_id, &fetch_option)
+                if has_columns
+                    && let Some(data_blocks) = self
+                        .partition_buffer
+                        .fetch_data_blocks(partition_id, &fetch_option)
                 {
                     self.spiller
                         .spill_with_partition(partition_id, data_blocks)
@@ -291,10 +303,11 @@ impl HashJoinSpiller {
         let mut data_blocks = vec![];
         if self.need_read_buffer() {
             // 1. restore data from SpillBuffer.
-            if self.join_type == JoinType::Cross {
+            if self.probes_all_pairs {
                 if let Some(buffer_blocks) = self.restore_cross_buffer(partition_id)? {
                     data_blocks.extend(buffer_blocks);
                 }
+                self.replay_buffer_restored = true;
             } else if let Some(buffer_block) = self.restore_buffer(partition_id) {
                 data_blocks.push(buffer_block);
             }
@@ -310,7 +323,7 @@ impl HashJoinSpiller {
                 }
             }
         } else {
-            // Cross join.
+            // All-pairs probe.
             let spilled_files = self.spiller.private_spilled_files();
             let file_index = self.next_restore_file;
 
@@ -350,7 +363,7 @@ impl HashJoinSpiller {
         join_type: JoinType,
         partition_bits: usize,
     ) -> Result<Vec<DataBlock>> {
-        if join_type == JoinType::Cross {
+        if self.probes_all_pairs {
             Ok(vec![data_block.clone()])
         } else {
             let mut hashes = self.get_hashes(data_block, join_type)?;
@@ -407,22 +420,23 @@ impl HashJoinSpiller {
 
     pub fn has_next_restore_file(&self) -> bool {
         self.next_restore_file < self.spiller.private_spilled_files().len()
-            || (self.next_restore_file == 0 && !self.partition_buffer.is_partition_empty(0))
+            || (!self.replay_buffer_restored && !self.partition_buffer.is_partition_empty(0))
     }
 
     pub fn reset_next_restore_file(&mut self) {
         self.next_restore_file = 0;
+        self.replay_buffer_restored = false;
     }
 
     pub fn need_read_buffer(&self) -> bool {
-        self.join_type != JoinType::Cross || self.next_restore_file == 0
+        !self.probes_all_pairs || !self.replay_buffer_restored
     }
 
     pub fn need_read_partition(&self) -> bool {
-        self.join_type != JoinType::Cross
+        !self.probes_all_pairs
     }
 
     pub fn can_pick_buffer(&self) -> bool {
-        self.is_build_side || self.join_type != JoinType::Cross
+        self.is_build_side || !self.probes_all_pairs
     }
 }

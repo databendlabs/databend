@@ -23,12 +23,8 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
-use databend_common_expression::stat_distribution::StatCount;
-use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
-use databend_common_statistics::StatBounds;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -36,11 +32,9 @@ use databend_storages_common_table_meta::table::ChangeType;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::Symbol;
-use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::CountMinSketchSet;
 use crate::optimizer::ir::Distribution;
-use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -54,6 +48,7 @@ use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::ScanRuntimeFilter;
 use crate::plans::SortItem;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -83,6 +78,10 @@ pub struct Statistics {
     pub histograms: HashMap<Symbol, Option<Histogram>>,
     pub top_n: HashMap<Symbol, ColumnTopN>,
     pub count_min_sketch: HashMap<Symbol, ColumnCountMinSketch>,
+    /// Top-N stats that may come from an older snapshot, with the number of
+    /// rows they summarize. Only a hint for heuristics, see
+    /// `ColumnStatisticsProvider::approx_top_n`.
+    pub approx_top_n: HashMap<Symbol, (ColumnTopN, u64)>,
 }
 
 impl Statistics {
@@ -125,6 +124,8 @@ pub struct Scan {
     pub sample: Option<SampleConfig>,
     pub scan_id: usize,
     pub statistics: Arc<Statistics>,
+    /// Join runtime filters pushed down to this scan.
+    pub runtime_filters: Vec<ScanRuntimeFilter>,
 }
 
 impl Scan {
@@ -159,6 +160,13 @@ impl Scan {
             .filter(|(col, _)| columns.contains(*col))
             .map(|(col, count_min_sketch)| (*col, count_min_sketch.clone()))
             .collect();
+        let approx_top_n = self
+            .statistics
+            .approx_top_n
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, top_n)| (*col, top_n.clone()))
+            .collect();
 
         Scan {
             table_index: self.table_index,
@@ -173,6 +181,7 @@ impl Scan {
                 histograms,
                 top_n,
                 count_min_sketch,
+                approx_top_n,
             }),
             prewhere,
             change_type: self.change_type.clone(),
@@ -182,6 +191,7 @@ impl Scan {
             is_lazy_table: self.is_lazy_table,
             sample: self.sample.clone(),
             scan_id: self.scan_id,
+            runtime_filters: self.runtime_filters.clone(),
         }
     }
 
@@ -211,6 +221,7 @@ impl Scan {
             order_by: None,
             prewhere: None,
             statistics: Arc::new(Statistics::default()),
+            runtime_filters: vec![],
         }
     }
 
@@ -238,6 +249,21 @@ impl Scan {
         used_columns
     }
 
+    /// Whether a predicate evaluated by this scan may depend on other input rows. Adding
+    /// predicates to the scan can then change which rows those predicates keep.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.push_down_predicates
+            .iter()
+            .chain(self.secure_predicates.iter())
+            .flatten()
+            .chain(
+                self.prewhere
+                    .iter()
+                    .flat_map(|prewhere| &prewhere.predicates),
+            )
+            .any(ScalarExpr::depends_on_other_rows)
+    }
+
     pub fn has_secure_predicates_not_applied_by_prewhere(&self) -> bool {
         let Some(secure_predicates) = &self.secure_predicates else {
             return false;
@@ -256,23 +282,13 @@ impl Scan {
     }
 }
 
-fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> NdvEstimate {
-    let max_non_null_count = num_rows
-        .map(|num_rows| num_rows.saturating_sub(null_count) as f64)
-        .unwrap_or(u64::MAX as f64);
-
-    match ndv {
-        Some(ndv) => NdvEstimate::exact(ndv as f64),
-        None => NdvEstimate::upper_bound(max_non_null_count),
-    }
-}
-
 impl PartialEq for Scan {
     fn eq(&self, other: &Self) -> bool {
         self.table_index == other.table_index
             && self.columns == other.columns
             && self.push_down_predicates == other.push_down_predicates
             && self.secure_predicates == other.secure_predicates
+            && self.runtime_filters == other.runtime_filters
     }
 }
 
@@ -286,6 +302,7 @@ impl std::hash::Hash for Scan {
         }
         self.push_down_predicates.hash(state);
         self.secure_predicates.hash(state);
+        self.runtime_filters.hash(state);
     }
 }
 
@@ -342,43 +359,12 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(scan_col_stat) = v {
-                let col_stat = &scan_col_stat.basic;
-                let null_count = StatCount::exact(col_stat.null_count);
-                if num_rows.is_some_and(|num_rows| num_rows > 0 && col_stat.null_count == num_rows)
-                {
-                    column_stats.insert(*k, ColumnStat::AllNull { null_count });
-                    continue;
-                }
-                let (Some(min), Some(max)) = (col_stat.min.clone(), col_stat.max.clone()) else {
-                    continue;
-                };
-                let ndv = derive_scan_ndv(col_stat.ndv, col_stat.null_count, num_rows);
-
-                let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
-                    && histogram.is_some()
-                {
-                    histogram.clone()
-                } else {
-                    num_rows.and_then(|num_rows| {
-                        let num_rows = num_rows.saturating_sub(col_stat.null_count);
-                        if num_rows == 0 {
-                            return None;
-                        }
-                        let ndv = col_stat.ndv?;
-                        HistogramBuilder::from_ndv(
-                            ndv,
-                            num_rows,
-                            Some((min.clone(), max.clone())),
-                            DEFAULT_HISTOGRAM_BUCKETS,
-                            scan_col_stat.histogram_spacing_unit,
-                        )
-                        .ok()
-                    })
-                };
-                let Ok(bounds) = StatBounds::new(min, max) else {
-                    continue;
-                };
-                if let Ok(column_stat) = ColumnStat::new(bounds, ndv, null_count, histogram) {
+                let histogram = self.statistics.histograms.get(k).cloned().flatten();
+                if let Ok(Some(column_stat)) = scan_col_stat.basic.to_column_stat(
+                    num_rows,
+                    histogram,
+                    scan_col_stat.histogram_spacing_unit,
+                ) {
                     column_stats.insert(*k, column_stat);
                 }
             }
@@ -393,6 +379,7 @@ impl Operator for Scan {
             .as_ref()
             .and_then(|stat| stat.num_rows);
 
+        let mut proven_empty = false;
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(prewhere)) => {
                 // Derive cardinality
@@ -404,15 +391,23 @@ impl Operator for Scan {
                 .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch))
                 .with_and_strategy(stat_ctx.filter_and_strategy);
                 let cardinality = sb.apply(&prewhere.predicates, &stat_ctx.function_context)?;
-                column_stats = sb.into_column_stats();
+                proven_empty = sb.is_proven_empty();
+                column_stats = if proven_empty {
+                    Default::default()
+                } else {
+                    sb.into_column_stats()
+                };
                 cardinality
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,
             (_, _) => 0.0,
         };
 
-        // If prewhere is not none, we can't get precise cardinality
-        let precise_cardinality = if self.prewhere.is_none() && self.sample.is_none() {
+        // If prewhere is not none, we can't get precise cardinality unless the
+        // prewhere is proven to return no rows.
+        let precise_cardinality = if proven_empty {
+            Some(0)
+        } else if self.prewhere.is_none() && self.sample.is_none() {
             precise_cardinality
         } else {
             None
@@ -427,23 +422,28 @@ impl Operator for Scan {
         // join ordering), then suppress column statistics to prevent data
         // leakage through statistical inference.
         if self.secure_predicates.is_some() {
+            // Emptiness proofs do not use column statistics, so publishing one
+            // does not leak them.
+            let mut proven_empty = precise_cardinality == Some(0);
             let cardinality = match &self.secure_predicates {
                 Some(preds) if !preds.is_empty() => {
                     let input_cardinality = precise_cardinality
                         .map(StatCardinality::exact)
                         .unwrap_or_else(|| StatCardinality::estimate(cardinality));
-                    SelectivityEstimator::new(column_stats, input_cardinality)
+                    let mut sb = SelectivityEstimator::new(column_stats, input_cardinality)
                         .with_top_n(output_top_n)
                         .with_count_min_sketch(output_count_min_sketch)
-                        .with_and_strategy(stat_ctx.filter_and_strategy)
-                        .apply(preds, &stat_ctx.function_context)?
+                        .with_and_strategy(stat_ctx.filter_and_strategy);
+                    let cardinality = sb.apply(preds, &stat_ctx.function_context)?;
+                    proven_empty |= sb.is_proven_empty();
+                    cardinality
                 }
                 _ => cardinality,
             };
             return Ok(Arc::new(StatInfo {
                 cardinality,
                 statistics: OpStatistics {
-                    precise_cardinality: None,
+                    precise_cardinality: proven_empty.then_some(0),
                     column_stats: Default::default(),
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
@@ -487,13 +487,20 @@ impl PhysicalOperator for Scan {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
-    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::*;
+    use databend_common_statistics::Datum;
+    use databend_common_statistics::HistogramBuilder;
+    use databend_common_statistics::NdvEstimate;
     use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 
     use super::*;
     use crate::optimizer::ir::RelExpr;
     use crate::optimizer::ir::SExpr;
     use crate::plans::RelOperator;
+
+    fn empty_column_statistics() -> BasicColumnStatistics {
+        BasicColumnStatistics::new(None, None, 0, 0, NdvEstimate::upper_bound(0.0), None).unwrap()
+    }
 
     #[test]
     fn test_derive_scan_preserves_bind_time_metadata() {
@@ -507,19 +514,18 @@ mod tests {
                     (
                         Symbol::new(1),
                         Some(ScanColumnStatistics {
-                            basic: BasicColumnStatistics::default(),
+                            basic: empty_column_statistics(),
                             histogram_spacing_unit: Statistics::histogram_spacing_unit(
-                                &databend_common_expression::types::DataType::Timestamp,
+                                &DataType::Timestamp,
                             ),
                         }),
                     ),
                     (
                         Symbol::new(2),
                         Some(ScanColumnStatistics {
-                            basic: BasicColumnStatistics::default(),
+                            basic: empty_column_statistics(),
                             histogram_spacing_unit: Statistics::histogram_spacing_unit(
-                                &databend_common_expression::types::DataType::TimestampTz
-                                    .wrap_nullable(),
+                                &DataType::TimestampTz.wrap_nullable(),
                             ),
                         }),
                     ),
@@ -587,10 +593,7 @@ mod tests {
             86_400.0 * 1_000_000.0
         );
         assert!(pruned.statistics.column_stats[&Symbol::new(3)].is_none());
-        assert_eq!(
-            Statistics::histogram_spacing_unit(&databend_common_expression::types::DataType::Date),
-            1.0
-        );
+        assert_eq!(Statistics::histogram_spacing_unit(&DataType::Date), 1.0);
     }
 
     #[test]
@@ -643,6 +646,68 @@ mod tests {
         assert!(sampled_stats.statistics.top_n.is_empty());
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_derive_stats_passes_scan_inputs_to_column_stat() -> Result<()> {
+        // The provider row count is unknown, so only the scan's 3000 rows
+        // (20 NULL) can reduce the upper to 2980. An upper-only NDV cannot
+        // synthesize a histogram, so a histogram must be the supplied one.
+        let column = Symbol::new(1);
+        let basic = BasicColumnStatistics::new(
+            Some(Datum::Int(0)),
+            Some(Datum::Int(10_000)),
+            20,
+            24_000,
+            NdvEstimate::upper_bound(5000.0),
+            None,
+        )
+        .unwrap();
+        let histogram = HistogramBuilder::from_ndv(
+            12,
+            2980,
+            Some((Datum::Int(0), Datum::Int(10_000))),
+            32,
+            1.0,
+        )
+        .unwrap();
+        let scan = Scan {
+            columns: [column].into_iter().collect(),
+            statistics: Arc::new(Statistics {
+                table_stats: Some(TableStatistics {
+                    num_rows: Some(3000),
+                    ..Default::default()
+                }),
+                column_stats: [(
+                    column,
+                    Some(ScanColumnStatistics {
+                        basic,
+                        histogram_spacing_unit: 1.0,
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+                histograms: [(column, Some(histogram.clone()))].into_iter().collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
+        let stats = scan.derive_stats(
+            &RelExpr::with_s_expr(&s_expr),
+            &StatContext::without_settings(Default::default()),
+        )?;
+        let stat = &stats.statistics.column_stats[&column];
+        assert_eq!(stat.ndv(), NdvEstimate::upper_bound(2980.0));
+        let crate::optimizer::ir::ColumnStat::Int {
+            histogram: Some(actual),
+            ..
+        } = stat
+        else {
+            panic!("the supplied histogram must reach the column statistics");
+        };
+        assert_eq!(Histogram::Int(actual.clone()), histogram);
         Ok(())
     }
 }

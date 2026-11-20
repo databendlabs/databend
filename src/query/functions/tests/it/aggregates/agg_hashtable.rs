@@ -129,25 +129,9 @@ fn test_agg_hashtable() {
             .unwrap();
 
         let mut flush_state = PayloadFlushState::default();
-        let _ = hashtable.combine(hashtable2, &mut flush_state);
+        let _ = hashtable.combine_payloads(&hashtable2.payload, &mut flush_state);
 
-        let mut merge_state = PayloadFlushState::default();
-        let mut blocks = Vec::new();
-        loop {
-            match hashtable.merge_result(&mut merge_state) {
-                Ok(true) => {
-                    let mut entries = merge_state.take_group_columns();
-                    let agg_results = merge_state.take_aggregate_results();
-                    entries.extend(agg_results);
-
-                    let num_rows = entries[0].len();
-                    blocks.push(DataBlock::new(entries, num_rows));
-                }
-                Ok(false) => break,
-                Err(err) => panic!("{}", err),
-            }
-        }
-        let block = DataBlock::concat(&blocks).unwrap();
+        let block = merge_result_block(hashtable, aggrs.len());
 
         assert_eq!(block.num_columns(), group_columns.len() + aggrs.len());
         assert_eq!(block.num_rows(), m);
@@ -219,13 +203,22 @@ fn aggregate_into_block(
         )
         .unwrap();
 
+    merge_result_block(hashtable, aggrs.len())
+}
+
+/// The result of `hashtable` as the final aggregate outputs it, payload by payload, with the group
+/// columns moved before the `num_aggrs` aggregate results.
+pub(super) fn merge_result_block(hashtable: AggregateHashTable, num_aggrs: usize) -> DataBlock {
     let mut merge_state = PayloadFlushState::default();
     let mut blocks = Vec::new();
-    while hashtable.merge_result(&mut merge_state).unwrap() {
-        let mut entries = merge_state.take_group_columns();
-        entries.extend(merge_state.take_aggregate_results());
-        let num_rows = entries[0].len();
-        blocks.push(DataBlock::new(entries, num_rows));
+    for payload in hashtable.into_payloads() {
+        while let Some(block) = payload.merge_result(&mut merge_state).unwrap() {
+            let num_rows = block.num_rows();
+            let mut entries = block.take_columns();
+            entries.rotate_left(num_aggrs);
+            blocks.push(DataBlock::new(entries, num_rows));
+        }
+        merge_state.clear();
     }
     DataBlock::concat(&blocks).unwrap()
 }
@@ -360,17 +353,17 @@ fn test_agg_hashtable_combine_rows() {
     use databend_common_column::bitmap::Bitmap;
     use databend_common_expression::Column;
     use databend_common_expression::types::ArrayColumn;
-    use databend_common_expression::types::NullableColumn;
 
     // More keys per chunk than the partial index holds, so that it restarts.
-    let (n, chunk) = (120_000, 40_000);
-    let key = |i: usize| i % 36_000;
+    let keys = AggregateHashTable::capacity_for_groups(0);
+    let chunk = keys / 9 * 10;
+    let n = chunk * 3;
+    let key = |i: usize| i % keys;
     let columns = |rows: std::ops::Range<usize>| -> Vec<BlockEntry> {
         let strings = rows.clone().map(|i| format!("s{}", key(i) % 300));
-        let nullable = NullableColumn::new_column(
-            StringType::from_data(strings.collect_vec()),
+        let nullable = StringType::from_data(strings.collect_vec()).wrap_nullable(Some(
             Bitmap::from_iter(rows.clone().map(|i| key(i) % 5 != 0)),
-        );
+        ));
         // 0.0 and -0.0 are equal, but serialize differently.
         let sign = |i: usize| {
             if (i / chunk).is_multiple_of(2) {
@@ -429,22 +422,17 @@ fn test_agg_hashtable_combine_rows() {
                 chunk,
                 AggregateHashTable::capacity_for_groups(0),
                 None,
+                None,
             )
             .unwrap();
         assert!(stats.windows > 0 && partial.partial_restarted());
-        final_table.combine(partial, &mut flush_state).unwrap();
+        final_table
+            .combine_payloads(&partial.payload, &mut flush_state)
+            .unwrap();
     }
 
-    let mut merge_state = PayloadFlushState::default();
-    let mut blocks = Vec::new();
-    while final_table.merge_result(&mut merge_state).unwrap() {
-        let mut entries = merge_state.take_group_columns();
-        entries.extend(merge_state.take_aggregate_results());
-        let num_rows = entries[0].len();
-        blocks.push(DataBlock::new(entries, num_rows));
-    }
     assert_block_value_sort_eq(
-        &DataBlock::concat(&blocks).unwrap(),
+        &merge_result_block(final_table, aggrs.len()),
         &aggregate_into_block(&columns(0..n), &params(0..n), &aggrs, n),
     );
 }
@@ -621,9 +609,6 @@ fn test_payload_flush_all_with_reused_state() {
             assert_eq!(expected.num_columns(), group_types.len() + aggrs.len());
             assert_eq!(actual.num_columns(), expected.num_columns());
             assert_block_value_eq(&expected, &actual);
-
-            let group_by = payload.group_by_flush_all().unwrap();
-            assert_eq!(group_by.num_rows(), payload.len());
 
             if payload.len() == 0 {
                 empty_payloads += 1;

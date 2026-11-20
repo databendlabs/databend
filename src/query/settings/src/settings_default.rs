@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::default_server_memory_limit;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -130,7 +131,7 @@ impl DefaultSettings {
     pub fn instance() -> Result<Arc<DefaultSettings>> {
         Ok(Arc::clone(DEFAULT_SETTINGS.get_or_try_init(|| -> Result<Arc<DefaultSettings>> {
             let num_cpus = Self::num_cpus();
-            let max_memory_usage = Self::max_memory_usage()?;
+            let max_memory_usage = Self::max_memory_usage();
             let max_query_memory_usage = max_memory_usage / 2;
             let recluster_block_size = Self::recluster_block_size(max_memory_usage);
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
@@ -505,6 +506,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_heavy_hitter_aggregate", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Optimizes a local GROUP BY of one key ordered by COUNT(*) DESC with a LIMIT using bounded heavy-hitter counting: proven exact counts return after one pass, otherwise only candidate keys or, failing that, every row is aggregated. 0 disables it, 1 applies cost heuristics, 2 skips the cost heuristics.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=2)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -591,7 +599,7 @@ impl DefaultSettings {
                 }),
                 ("nested_loop_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),
-                    desc: "Set the threshold for use nested loop join. Setting it to 0 disable nested loop join.",
+                    desc: "Deprecated; retained for compatibility and has no effect.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -626,7 +634,7 @@ impl DefaultSettings {
                 }),
                 ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
-                    desc: "Selectivity threshold (percentage) for bloom join runtime filters. Bloom filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
+                    desc: "Initial bloom join runtime-filter threshold (percentage). Enable bloom if build rows are below this percentage of either known build-table rows or a single trusted probe target's table rows. Missing or zero denominators do not qualify. Default 10 means 10%; low-yield bloom may later be disabled by runtime sampling.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
@@ -1117,6 +1125,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_recluster_task_selection_v2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_parquet_page_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parquet page index",
@@ -1221,6 +1236,27 @@ impl DefaultSettings {
                     desc: "experiment setting enable row access policy(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_RBAC_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable stage and UDF privilege checks and object visibility filters.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Connection object privilege checks. At 0, retain legacy SUPER management and skip named Connection usage checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Sequence object privilege checks. At 0, retain legacy SUPER management, list all sequences and skip nextval checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_expand_roles", DefaultSettingValue {
@@ -1889,16 +1925,13 @@ impl DefaultSettings {
         }
     }
 
-    fn max_memory_usage() -> Result<u64> {
-        let memory_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-
-        Ok(match GlobalConfig::try_get_instance() {
-            None => 1024 * memory_info.total * 80 / 100,
-            Some(conf) => match conf.query.common.max_server_memory_usage {
-                0 => 1024 * memory_info.total * 80 / 100,
-                max_server_memory_usage => max_server_memory_usage,
-            },
-        })
+    /// The server memory limit, so that the spill thresholds derived from it stay below the
+    /// limit the allocator enforces.
+    fn max_memory_usage() -> u64 {
+        match GlobalConfig::try_get_instance() {
+            None => default_server_memory_limit(),
+            Some(conf) => conf.server_memory_limit(),
+        }
     }
 
     fn recluster_block_size(max_memory_usage: u64) -> u64 {

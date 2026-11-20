@@ -29,7 +29,7 @@ use crate::BlockMetaIndex;
 ///
 /// Only applies when the filter is fully answered by the inverted index
 /// (`PushDownInfo::filter_only_use_index`), so the exact number of matched
-/// rows per block (`BlockMetaIndex::matched_rows`) is known before reading:
+/// rows per block (`IndexMatches::rows`) is known before reading:
 /// - `LIMIT N`: keep blocks until N matched rows are covered.
 /// - `ORDER BY score() LIMIT N`: prune by the exact matched score range.
 /// - `ORDER BY col LIMIT N`: prune by column min/max and matched row counts.
@@ -214,7 +214,11 @@ impl TopNPruner {
 
         let mut score_stats = Vec::new();
         for (pos, (index, _)) in metas.iter().enumerate() {
-            let Some(scores) = &index.matched_scores else {
+            let Some(scores) = index
+                .inverted_index_matches
+                .as_ref()
+                .and_then(|matches| matches.scores.as_ref())
+            else {
                 return Ok(metas);
             };
             let Some((min_score, max_score)) = block_score_range(scores) else {
@@ -270,10 +274,10 @@ impl TopNPruner {
 }
 
 fn index_match_count(index: &BlockMetaIndex) -> usize {
-    if let Some(rows) = &index.matched_rows {
-        return rows.len();
-    }
-    0
+    index
+        .inverted_index_matches
+        .as_ref()
+        .map_or(0, |matches| matches.rows.len())
 }
 
 fn block_score_range(scores: &[F32]) -> Option<(F32, F32)> {
@@ -303,6 +307,7 @@ mod tests {
     use databend_storages_common_table_meta::meta::Compression;
 
     use super::*;
+    use crate::IndexMatches;
 
     #[test]
     fn test_filter_only_use_index_keeps_overlapping_ranges() {
@@ -445,11 +450,10 @@ mod tests {
             None,
         );
 
-        let matched = if matched_rows == 0 {
-            None
-        } else {
-            Some((0..matched_rows).collect::<Vec<_>>())
-        };
+        let inverted_index_matches = (matched_rows > 0).then(|| IndexMatches {
+            rows: (0..matched_rows as u32).collect(),
+            ..Default::default()
+        });
 
         let index = BlockMetaIndex {
             segment_idx: 0,
@@ -459,9 +463,8 @@ mod tests {
             block_location: format!("block_{block_id}"),
             segment_location: "segment".to_string(),
             snapshot_location: None,
-            matched_rows: matched,
-            matched_scores: None,
-            vector_scores: None,
+            inverted_index_matches,
+            vector_index_matches: None,
             virtual_block_meta: None,
         };
 
@@ -476,8 +479,11 @@ mod tests {
         scores: &[f32],
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
         let (mut index, meta) = build_block(column_id, block_id, min, max, scores.len());
-        let matched_scores = scores.iter().map(|v| (*v).into()).collect();
-        index.matched_scores = Some(matched_scores);
+        index.inverted_index_matches = Some(IndexMatches {
+            rows: (0..scores.len() as u32).collect(),
+            scores: Some(scores.iter().map(|v| (*v).into()).collect()),
+            rows_only: false,
+        });
         (index, meta)
     }
 }

@@ -49,7 +49,10 @@ async fn test_planning_records_query_specific_values() -> Result<()> {
                 Some(table_statistics(1000)),
                 HashMap::from([(
                     "ts".to_string(),
-                    column_stat(r#"{"min": 0, "max": 86400000000, "ndv": 1000, "null_count": 0}"#)?,
+                    column_stat(
+                        r#"{"min": 0, "max": 86400000000, "ndv": 1000, "null_count": 0}"#,
+                        1000,
+                    )?,
                 )]),
                 HashMap::new(),
             )

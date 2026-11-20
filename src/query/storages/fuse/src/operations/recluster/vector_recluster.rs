@@ -257,6 +257,20 @@ impl VectorReclusterStrategy {
     }
 }
 
+/// Recluster levels of the blocks of a table with a vector cluster key:
+/// - `VECTOR_LEVEL_NEW`: not clustered by recluster yet, such as INSERT output;
+/// - level 1: clustered among new data only, by a recluster that rewrites level-0
+///   blocks (the recluster after writes, or the rounds of a FINAL with `WHERE`), so
+///   its clusters may overlap those of other batches;
+/// - `VECTOR_LEVEL_MIXED`: rewritten by the full pass of RECLUSTER FINAL together with
+///   all other blocks.
+///
+/// Blocks at lower levels are not mixed yet, and decide when FINAL makes the full
+/// pass (see `vector_final_plan`). Higher levels written by earlier versions count as
+/// mixed.
+pub(crate) const VECTOR_LEVEL_NEW: i32 = 0;
+pub(crate) const VECTOR_LEVEL_MIXED: i32 = 2;
+
 impl ReclusterStrategy for VectorReclusterStrategy {
     fn select_segments(
         &self,
@@ -273,6 +287,24 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         }
     }
 
+    /// Only level-0 blocks, except in the full pass of RECLUSTER FINAL. Blocks
+    /// written by a recluster task always overlap in high dimensions; selecting them
+    /// again would rewrite the same rows every round.
+    fn eligible_blocks(
+        &self,
+        properties: &ReclusterProperties,
+        indices: Vec<usize>,
+        blocks: &[&ReclusterBlock],
+    ) -> Vec<usize> {
+        if properties.vector_full_pass.is_some() {
+            return indices;
+        }
+        indices
+            .into_iter()
+            .filter(|idx| blocks[*idx].stats().level == VECTOR_LEVEL_NEW)
+            .collect()
+    }
+
     fn fetch_task_candidates(
         &self,
         properties: &ReclusterProperties,
@@ -282,7 +314,8 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
         let block_count = indices.len();
-        if block_count < 2 || task_budget == 0 {
+        let full_pass = properties.vector_full_pass.is_some();
+        if block_count == 0 || task_budget == 0 || (block_count < 2 && !full_pass) {
             return Ok(Vec::new());
         }
 
@@ -326,7 +359,7 @@ impl ReclusterStrategy for VectorReclusterStrategy {
         let average_depth = (10000.0 * sum_depth as f64 / block_count as f64).round() / 10000.0;
         // Vector overlap uses pairwise spheres, so any overlapping pair qualifies.
         let depth_threshold = properties.depth_threshold.min(1.0);
-        if !passes_depth_gate(depth_threshold, average_depth, max_depth) {
+        if !full_pass && !passes_depth_gate(depth_threshold, average_depth, max_depth) {
             debug!(
                 "recluster: vector candidate selection group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=below_vector_depth_gate",
                 group, block_count, average_depth, max_depth,
@@ -375,6 +408,34 @@ impl ReclusterStrategy for VectorReclusterStrategy {
                 &task_indices,
                 blocks,
             ));
+        }
+        if full_pass {
+            // The full pass rewrites every block it holds: a block that overlaps no
+            // other block left, such as the only block of its partition, is rewritten
+            // on its own. Left at its level, it would count as not mixed, and start
+            // the full pass again at every FINAL. Blocks above the memory threshold
+            // are left out, as in every task.
+            for local_idx in 0..block_count {
+                if candidates.len() >= task_budget {
+                    break;
+                }
+                let block_size = blocks[indices[local_idx]].meta.block_size as usize;
+                if used[local_idx] || block_size > properties.memory_threshold {
+                    continue;
+                }
+                used[local_idx] = true;
+                candidates.push(task_candidate(
+                    self.supports_ordered_merge(),
+                    group,
+                    CandidateScore {
+                        selected_total_bytes: block_size,
+                        max_depth: 1,
+                        average_depth,
+                    },
+                    &[indices[local_idx]],
+                    blocks,
+                ));
+            }
         }
 
         debug!(

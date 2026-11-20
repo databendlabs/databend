@@ -279,7 +279,13 @@ where
             .collect());
     }
 
-    read_and_deserialize(reader, size, encoding, compression)
+    let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(reader, size, encoding, compression)?;
+    // A reader stitches the columns of a split block from its groups. Reject a split block that
+    // breaks the invariants this relies on before any reader sees it.
+    for block in &blocks {
+        block.check_column_groups()?;
+    }
+    Ok(blocks)
 }
 
 fn read_statistics<R>(
@@ -564,6 +570,7 @@ mod tests {
             spatial_stats: None,
             vector_stats: None,
             virtual_path_statistics: None,
+            column_groups: Vec::new(),
             virtual_block_meta: None,
             compression: Compression::None,
             create_on: None,

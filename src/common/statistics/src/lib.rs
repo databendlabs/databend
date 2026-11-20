@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod basic_column_statistics;
 mod bounds;
+mod column_stat;
 mod datum;
 mod histogram;
 mod histogram_builder;
@@ -20,7 +22,9 @@ mod kll_sketch;
 mod stat_estimate;
 mod typed_histogram;
 
+pub use basic_column_statistics::*;
 pub use bounds::*;
+pub use column_stat::*;
 pub use datum::*;
 pub use histogram::*;
 pub use histogram_builder::*;

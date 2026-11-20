@@ -164,4 +164,9 @@ pub(crate) fn block_meta(b: &BlockMeta) -> usize {
         + option(&b.virtual_path_statistics, |m| {
             hash_map(m, |_, s| vec(&s.path_counts, none))
         })
+        + vec(&b.column_groups, |g| {
+            location(&g.location)
+                + hash_map(&g.leaf_column_metas, |_, _| 0)
+                + option(&g.bloom, |bloom| location(&bloom.location))
+        })
 }

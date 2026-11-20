@@ -50,8 +50,8 @@ impl Selector<'_> {
     pub(super) fn select_values(
         &self,
         op: &SelectOp,
-        mut left: Value<AnyType>,
-        mut right: Value<AnyType>,
+        left: Value<AnyType>,
+        right: Value<AnyType>,
         left_data_type: DataType,
         right_data_type: DataType,
         buffers: SelectionBuffers,

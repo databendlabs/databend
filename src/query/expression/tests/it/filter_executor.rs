@@ -34,7 +34,6 @@ use databend_common_expression::types::DictColumn;
 use databend_common_expression::types::EncodedColumn;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NarrowBuffer;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression_test_support::parse_raw_expr;
@@ -53,10 +52,9 @@ fn test_select_like_over_dictionary() {
     let func_ctx = FunctionContext::default();
     for nullable in [false, true] {
         let url = if nullable {
-            NullableColumn::new_column(
-                encoded.clone(),
-                Bitmap::from_iter([true, true, false, true, false, true, true, true]),
-            )
+            encoded.clone().wrap_nullable(Some(Bitmap::from_iter([
+                true, true, false, true, false, true, true, true,
+            ])))
         } else {
             encoded.clone()
         };

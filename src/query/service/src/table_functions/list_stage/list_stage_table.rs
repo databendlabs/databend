@@ -193,20 +193,25 @@ impl ListStagesSource {
         )?
         .resolve_stage_location(&self.args_parsed.location, StagePathAccess::Read)
         .await?;
-        let visibility_checker = self
+        if self
             .ctx
-            .get_visibility_checker(false, Object::Stage)
-            .await?;
-        if !(stage_info.is_temporary
-            || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-            || stage_info.stage_type == StageType::User
-                && stage_info.stage_name == self.ctx.get_current_user()?.name)
+            .should_check_stage_privilege(&stage_info.stage_name)?
         {
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied: privilege READ is required on stage {} for user {}",
-                stage_info.stage_name.clone(),
-                self.ctx.get_current_user()?.identity().display(),
-            )));
+            let visibility_checker = self
+                .ctx
+                .get_visibility_checker(false, Object::Stage)
+                .await?;
+            if !(stage_info.is_temporary
+                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                || stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
+            {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege READ is required on stage {} for user {}",
+                    stage_info.stage_name.clone(),
+                    self.ctx.get_current_user()?.identity().display(),
+                )));
+            }
         }
         let op = init_stage_operator(&stage_info)?;
         let thread_num = self.ctx.get_settings().get_max_threads()? as usize;

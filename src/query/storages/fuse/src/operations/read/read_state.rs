@@ -41,7 +41,6 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_storages_common_pruner::VectorScores;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -54,6 +53,7 @@ pub struct BloomRuntimeFilterRef {
     pub probe_expr: Expr<FieldIndex>,
     pub filter: RuntimeBloomFilter,
     pub stats: Arc<RuntimeFilterStats>,
+    pub sample_rows: u64,
 }
 
 /// Build a selector executor for a prewhere predicate, or `None` to keep the evaluator.
@@ -205,6 +205,7 @@ impl ReadState {
                     probe_expr,
                     filter: bloom.filter,
                     stats: entry.stats,
+                    sample_rows: RuntimeFilterStats::bloom_sample_rows(entry.build_rows),
                 })
             })
             .collect();
@@ -279,6 +280,11 @@ impl ReadState {
         let mut bitmaps = vec![];
         let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for runtime_filter in &self.runtime_filters {
+            // The shared state is per target entry, not per RF id. Disabling
+            // only skips this Bloom optimization; other filters still apply.
+            if runtime_filter.stats.bloom_disabled() {
+                continue;
+            }
             let filter_start = Instant::now();
             // The bloom filter hashes encoded columns without decoding them.
             let probe_expr = &runtime_filter.probe_expr;
@@ -290,6 +296,8 @@ impl ReadState {
             runtime_filter.stats.record_bloom(
                 filter_start.elapsed().as_nanos() as u64,
                 bitmap.null_count() as u64,
+                bitmap.len() as u64,
+                runtime_filter.sample_rows,
             );
             bitmaps.push(bitmap);
         }
@@ -348,7 +356,7 @@ impl ReadState {
             (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
             (None, None) => None,
         };
-        let bitmap_selection = match (bitmap_selection, vector_topn_rows(part)) {
+        let bitmap_selection = match (bitmap_selection, selected_rows(part)) {
             (Some(selection), Some(rows)) => Some(&selection & &rows),
             (selection, rows) => selection.or(rows),
         };
@@ -436,23 +444,10 @@ fn runtime_filter_column_is_projectable(
     Projection::from_column_names(schema, &[name]).is_ok()
 }
 
-/// The rows of a vector TopN in a block (see `VectorScores::TopN`): the scan
-/// outputs only them. `None` when every row is output.
-fn vector_topn_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
-    let Some(VectorScores::TopN(scores)) = part.block_meta_index()?.vector_scores.as_ref() else {
-        return None;
-    };
-    if scores.len() >= part.nums_rows {
-        return None;
-    }
-    let mut rows = MutableBitmap::from_len_zeroed(part.nums_rows);
-    for &(row, _) in scores {
-        let row = row as usize;
-        if row < part.nums_rows {
-            rows.set(row, true);
-        }
-    }
-    Some(rows.into())
+/// The rows of the block that index pruning selected for output (see
+/// `BlockMetaIndex::selected_rows`). `None` when every row is output.
+fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
+    part.block_meta_index()?.selected_rows(part.nums_rows)
 }
 
 fn expand_runtime_filter_bitmap(

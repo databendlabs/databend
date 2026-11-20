@@ -16,18 +16,25 @@ use super::BATCH_SIZE;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::StateAddr;
+use super::partitioned_payload::RowReserver;
 use super::payload::GroupRows;
 use super::payload_row::CompareState;
+use super::row_ptr::RowDecoder;
 
 pub(super) trait TableAdapter {
     fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize);
 
-    fn compare(
-        &mut self,
-        state: &mut ProbeState,
-        need_compare_count: usize,
-        no_match_count: usize,
-    ) -> usize;
+    /// Start reserving the rows of new groups for a probe of `row_count` rows, see
+    /// `PartitionedPayload::begin_rows`.
+    fn begin_rows(&mut self, row_count: usize);
+
+    /// Decodes the row ids of the index, and reserves the rows of new groups.
+    fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>);
+
+    /// Compares the `need_compare_count` rows of `state.group_compare_vector` with the groups
+    /// they were matched to, and returns how many of them, put in `state.no_match_vector`,
+    /// differ.
+    fn compare(&mut self, state: &mut ProbeState, need_compare_count: usize) -> usize;
 }
 
 pub(super) struct AdapterImpl<'a> {
@@ -48,18 +55,22 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
             .append_rows(state, count, self.groups, self.source_states);
     }
 
-    fn compare(
-        &mut self,
-        state: &mut ProbeState,
-        need_compare_count: usize,
-        no_match_count: usize,
-    ) -> usize {
+    fn begin_rows(&mut self, row_count: usize) {
+        self.payload.begin_rows(row_count);
+    }
+
+    #[inline]
+    fn rows(&mut self) -> (RowDecoder<'_>, RowReserver<'_>) {
+        self.payload.rows()
+    }
+
+    fn compare(&mut self, state: &mut ProbeState, need_compare_count: usize) -> usize {
         let compare = CompareState {
             address: &state.addresses,
             compare: &mut state.group_compare_vector,
             no_matched: &mut state.no_match_vector,
         };
-        let counts = (need_compare_count, no_match_count);
+        let counts = (need_compare_count, 0);
         match self.groups {
             GroupRows::Columns(columns) => {
                 compare.row_match_entries(columns, &self.payload.row_layout, counts)

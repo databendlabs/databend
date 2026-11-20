@@ -28,6 +28,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -67,8 +68,18 @@ impl Interpreter for CreateConnectionInterpreter {
             );
 
             let tenant = self.ctx.get_tenant();
-            // An existing connection is left with its owner unless replaced.
-            let owner = self.ctx.get_current_role().map(|role| role.name);
+            // With object checks enabled, the current role owns the connection, also after
+            // CREATE OR REPLACE. In legacy mode a new connection has no owner and a replaced
+            // one keeps its owner.
+            let owner = if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
+            {
+                self.ctx.get_current_role().map(|role| role.name)
+            } else {
+                None
+            };
             let written = user_mgr
                 .add_connection(
                     &tenant,

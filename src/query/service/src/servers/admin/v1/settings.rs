@@ -17,6 +17,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
+use databend_common_settings::is_rbac_upgrade_setting;
 use fastrace::func_name;
 use poem::IntoResponse;
 use poem::web::Json;
@@ -62,6 +63,7 @@ async fn set_setting_impl(tenant: &str, key: &str, value: String) -> Result<Vec<
         ));
     }
 
+    check_admin_setting_mutation(key)?;
     let settings = Settings::create(Tenant::new_or_err(tenant, func_name!())?);
     settings.set_global_setting(key.to_string(), value).await?;
 
@@ -91,6 +93,7 @@ async fn unset_setting_impl(tenant: &str, key: &str) -> Result<Vec<SettingsItem>
         ));
     }
 
+    check_admin_setting_mutation(key)?;
     let settings = Settings::create(Tenant::new_or_err(tenant, func_name!())?);
     settings.try_drop_global_setting(key).await?;
 
@@ -105,6 +108,16 @@ async fn unset_setting_impl(tenant: &str, key: &str) -> Result<Vec<SettingsItem>
             range: item.range.map(|x| x.to_string()),
         })
         .collect::<Vec<_>>())
+}
+
+fn check_admin_setting_mutation(key: &str) -> Result<()> {
+    if is_rbac_upgrade_setting(key) {
+        // The admin listener does not authenticate a SQL user or role.
+        return Err(ErrorCode::PermissionDenied(format!(
+            "Use SET GLOBAL or UNSET GLOBAL with SUPER to change {key}",
+        )));
+    }
+    Ok(())
 }
 
 #[poem::handler]

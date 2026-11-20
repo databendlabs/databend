@@ -201,11 +201,11 @@ impl SubqueryDecorrelatorOptimizer {
             },
             marker_index: None,
             from_correlated_subquery: true,
-            need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: vec![],
         };
 
         // Rewrite plan to semi-join.
@@ -318,11 +318,11 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type,
                     marker_index: None,
                     from_correlated_subquery: true,
-                    need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -380,11 +380,11 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
-                    need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -467,11 +467,11 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
-                    need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 }
                 .into();
                 Ok((

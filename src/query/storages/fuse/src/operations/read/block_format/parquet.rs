@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::BlockDataFile;
 
 use crate::io::BlockReadContext;
 use crate::io::BlockReadResult;
@@ -30,17 +29,16 @@ impl FuseParquetBlockFormat {
         Self
     }
 
-    /// Reads raw column data from the given block location.
+    /// Reads raw column data from the data files of a block.
     pub async fn read_data_by_merge_io(
         &self,
         read_ctx: &BlockReadContext,
         settings: &ReadSettings,
-        location: &str,
-        columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        files: &[BlockDataFile<'_>],
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<BlockReadResult> {
         read_ctx
-            .read_columns_data_by_merge_io(settings, location, columns_meta, ignore_column_ids)
+            .read_files_by_merge_io(settings, files, ignore_column_ids)
             .await
     }
 }

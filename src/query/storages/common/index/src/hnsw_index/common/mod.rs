@@ -17,6 +17,7 @@ pub mod bitpacking;
 pub mod bitpacking_links;
 pub mod bitpacking_ordered;
 pub mod fixed_length_priority_queue;
+pub mod hugepage;
 pub mod prefetch;
 pub mod types;
 pub mod utils;

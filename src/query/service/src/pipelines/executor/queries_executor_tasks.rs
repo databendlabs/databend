@@ -46,6 +46,15 @@ impl WorkersTasks {
         }
     }
 
+    /// Takes all the queued tasks, so they are dropped out of the lock.
+    pub fn take_tasks(&mut self) -> (ExecutorTasks, ExecutorTasks) {
+        let workers_size = self.workers_waiting_status.total_size();
+        (
+            mem::replace(&mut self.current_tasks, ExecutorTasks::create(workers_size)),
+            mem::replace(&mut self.next_tasks, ExecutorTasks::create(workers_size)),
+        )
+    }
+
     pub fn swap_tasks(&mut self) {
         mem::swap(&mut self.current_tasks, &mut self.next_tasks);
     }
@@ -88,7 +97,14 @@ impl QueriesExecutorTasksQueue {
             wakeup_workers.push(worker_id);
         }
 
+        // No worker runs the queued tasks any more. They hold the graphs of the
+        // queries, whose processors must not be dropped with the executor: it may
+        // outlive what they need to shut down, e.g. the global runtimes. The flag
+        // is set before the lock is taken, so no task is queued after this.
+        let queued_tasks = workers_tasks.take_tasks();
         drop(workers_tasks);
+        drop(queued_tasks);
+
         for wakeup_worker in wakeup_workers {
             workers_condvar.wakeup(wakeup_worker);
         }
@@ -165,6 +181,9 @@ impl QueriesExecutorTasksQueue {
 
     pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorWrapper>, condvar: Arc<WorkersCondvar>) {
         let mut workers_tasks = self.workers_tasks.lock();
+        if self.is_finished() {
+            return;
+        }
 
         let mut worker_id = 0;
         for proc in tasks.into_iter() {
@@ -191,6 +210,9 @@ impl QueriesExecutorTasksQueue {
         condvar: Arc<WorkersCondvar>,
     ) {
         let mut workers_tasks = self.workers_tasks.lock();
+        if self.is_finished() {
+            return;
+        }
 
         let mut worker_id = 0;
         for proc in tasks.into_iter() {
@@ -208,7 +230,14 @@ impl QueriesExecutorTasksQueue {
 
     pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
         let mut workers_tasks = self.workers_tasks.lock();
-        let mut worker_id = task.worker_id;
+        if self.is_finished() {
+            condvar.dec_active_async_worker();
+            return;
+        }
+        // The worker id of a waker is not always the id of a worker of this
+        // executor, e.g. a fuse source passes its index among the sources.
+        let workers = workers_tasks.workers_waiting_status.total_size();
+        let mut worker_id = task.worker_id % workers;
         workers_tasks.current_tasks.tasks_size += 1;
         workers_tasks.current_tasks.workers_completed_async_tasks[worker_id].push_back(task);
 
@@ -245,6 +274,9 @@ impl QueriesExecutorTasksQueue {
         mut next_tasks: VecDeque<ExecutorTask>,
     ) {
         let mut workers_tasks = self.workers_tasks.lock();
+        if self.is_finished() {
+            return;
+        }
 
         if let Some(mut tasks) = current_tasks {
             while let Some(task) = tasks.pop_front() {

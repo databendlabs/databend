@@ -342,25 +342,17 @@ impl AvgBuilder {
                     DecimalDataKind::DECIMAL => {
                         let decimal_size =
                             DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, size.scale().max(4));
-                        let should_check_overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
-                            && size.precision() > i64::MAX_PRECISION;
                         let scale_add = decimal_size.scale() - size.scale();
                         let return_type = DataType::Decimal(decimal_size);
                         let function_info = DecimalAvgData { scale_add };
 
-                        if should_check_overflow {
-                            Self::create_decimal::<AggregateDecimalAvgState<true, DECIMAL>, DECIMAL>(
-                                build,
-                                return_type,
-                                function_info,
-                            )
-                        } else {
-                            Self::create_decimal::<AggregateDecimalAvgState<false, DECIMAL>, DECIMAL>(
-                                build,
-                                return_type,
-                                function_info,
-                            )
-                        }
+                        // Division cannot recover a sum that has already overflowed,
+                        // including when the input uses Decimal64 storage.
+                        Self::create_decimal::<AggregateDecimalAvgState<true, DECIMAL>, DECIMAL>(
+                            build,
+                            return_type,
+                            function_info,
+                        )
                     }
                 })
             }

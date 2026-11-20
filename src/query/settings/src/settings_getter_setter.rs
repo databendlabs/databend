@@ -435,6 +435,15 @@ impl Settings {
         Ok(self.try_get_u64("enable_aggregate_final_top_n")? != 0)
     }
 
+    pub fn get_enable_heavy_hitter_aggregate(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_heavy_hitter_aggregate")? != 0)
+    }
+
+    /// Whether the heavy hitter aggregation skips its cost heuristics.
+    pub fn get_force_heavy_hitter_aggregate(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_heavy_hitter_aggregate")? == 2)
+    }
+
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
@@ -465,10 +474,6 @@ impl Settings {
 
     pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
-    }
-
-    pub fn get_nested_loop_join_threshold(&self) -> Result<u64> {
-        self.try_get_u64("nested_loop_join_threshold")
     }
 
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
@@ -676,6 +681,18 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_row_access_policy")? != 0)
     }
 
+    pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64(crate::ENABLE_EXPERIMENTAL_RBAC_CHECK)? != 0)
+    }
+
+    pub fn get_enable_experimental_connection_privilege_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64(crate::ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK)? != 0)
+    }
+
+    pub fn get_enable_experimental_sequence_privilege_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64(crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK)? != 0)
+    }
+
     pub fn get_enable_expand_roles(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_expand_roles")? != 0)
     }
@@ -832,6 +849,10 @@ impl Settings {
 
     pub fn get_compact_max_block_selection(&self) -> Result<u64> {
         self.try_get_u64("compact_max_block_selection")
+    }
+
+    pub fn get_enable_recluster_task_selection_v2(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_recluster_task_selection_v2")? != 0)
     }
 
     pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {

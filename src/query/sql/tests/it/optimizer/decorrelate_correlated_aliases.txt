@@ -73,6 +73,7 @@ Exchange(Merge)
             │                               ├── build keys: [b (#3)]
             │                               ├── probe keys: [b (#6)]
             │                               ├── other filters: []
+            │                               ├── runtime filters: [#0: b (#3) -> b (#6)]
             │                               ├── Exchange(Broadcast)
             │                               │   └── ConstantTableScan
             │                               │       ├── columns: [a (#2), b (#3)]
@@ -165,6 +166,7 @@ Exchange(Merge)
             │               ├── build keys: [a (#2), b (#3)]
             │               ├── probe keys: [a (#6), b (#7)]
             │               ├── other filters: []
+            │               ├── runtime filters: [#0: a (#2) -> a (#6), #1: b (#3) -> b (#7)]
             │               ├── Exchange(Broadcast)
             │               │   └── ConstantTableScan
             │               │       ├── columns: [a (#2), b (#3)]
@@ -515,17 +517,17 @@ EvalScalar
 optimized_plan:
 EvalScalar
 ├── scalars: [udaf_outer.a (#0) AS (#0), weighted_avg(i.b, 1) (#3) AS (#4), weighted_avg(i.b, 1) (#3) AS (#5)]
-└── Join(Inner)
-    ├── build keys: [udaf_outer.a (#0)]
-    ├── probe keys: [udaf_inner.b (#1)]
-    ├── other filters: []
-    ├── Scan
-    │   ├── table: default.udaf_outer (#0)
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Filter
-        ├── filters: [gt(weighted_avg(i.b, 1) (#3), 0)]
+└── Filter
+    ├── filters: [gt(weighted_avg(i.b, 1) (#3), 0)]
+    └── Join(Inner)
+        ├── build keys: [udaf_outer.a (#0)]
+        ├── probe keys: [udaf_inner.b (#1)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.udaf_outer (#0)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
         └── Aggregate(Final)
             ├── group items: [udaf_inner.b (#1) AS (#1)]
             ├── aggregate functions: [weighted_avg(i.b, 1) AS (#3)]
@@ -574,6 +576,7 @@ EvalScalar
     ├── build keys: [b.id (#2), b.id (#2)]
     ├── probe keys: [a.id (#0), a.id (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: b.id (#2) -> a.id (#0)]
     ├── Scan
     │   ├── table: default.b (#1)
     │   ├── filters: [eq(b.id (#2), b.id (#2))]
@@ -583,6 +586,7 @@ EvalScalar
         ├── table: default.a (#0)
         ├── filters: []
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: a.id (#0)]
 
 

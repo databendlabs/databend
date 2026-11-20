@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::mem::MaybeUninit;
+use std::alloc::Layout;
+use std::alloc::alloc;
+use std::alloc::dealloc;
+use std::alloc::handle_alloc_error;
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -22,7 +26,6 @@ use log::info;
 
 use super::AggrState;
 use super::BATCH_SIZE;
-use super::MAX_PAGE_SIZE;
 use super::PayloadFlushState;
 use super::RowID;
 use super::StateAddr;
@@ -34,10 +37,11 @@ use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
 use super::payload_row::visit_row_type;
-use super::probe_state::SelectVector;
+use super::row_ptr::PageNumbering;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowMut;
 use super::row_ptr::RowPtr;
+use super::row_ptr::StatesRegion;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -46,11 +50,15 @@ use crate::ProjectedBlock;
 use crate::types::DataType;
 
 // payload layout
-// [VALIDITY][GROUPS][HASH][STATE_ADDRS]
+// A page holds its rows, then the aggregate states of its rows in the same order; see
+// `StatesRegion`. A row is
+// [VALIDITY][GROUPS][HASH]
 // [VALIDITY] is the validity bits of the data columns (including the HASH)
 // [GROUPS] is the group data, could be multiple values, fixed size, strings are elsewhere
 // [HASH] is the hash data of the groups
-// [STATE_ADDRS] is the state_addrs of the aggregate functions, 8 bytes each
+//
+// The states of a row are found from its address, so moving rows between payloads moves their
+// states bitwise: a state must never keep a pointer to itself.
 pub struct Payload {
     pub(super) arena: Arc<Bump>,
     pub(super) group_types: Vec<DataType>,
@@ -59,15 +67,34 @@ pub struct Payload {
 
     pub(super) pages: Vec<Page>,
     pub(super) tuple_size: usize,
-    row_per_page: usize,
+    pub(super) row_per_page: usize,
+    page_bytes: usize,
 
     total_rows: usize,
 
     // Starts from 1, zero means no page allocated
     current_write_page: usize,
+    /// Set to `n` when this is the partition of a table routed to `n` final aggregates, see
+    /// `PartitionMask::Route`: its rows all go to the final aggregate of its partition.
+    pub(super) routed_partitions: usize,
+    max_page_size: usize,
+}
 
-    // if set, the payload contains at least duplicate rows
-    min_cardinality: Option<usize>,
+/// The ids of the next rows of a page, reserved one by one by a probe: see `RowReserver`.
+#[derive(Clone, Copy)]
+pub(in crate::aggregate) struct RowCursor {
+    pub(super) id: u64,
+    pub(super) end: u64,
+    /// The index of the page in its payload.
+    pub(super) page: usize,
+}
+
+impl RowCursor {
+    pub(super) const EMPTY: RowCursor = RowCursor {
+        id: 0,
+        end: 0,
+        page: usize::MAX,
+    };
 }
 
 #[derive(Clone, Copy)]
@@ -76,132 +103,88 @@ pub(super) enum GroupRows<'a> {
     Rows(&'a [RowPtr; BATCH_SIZE]),
 }
 
-pub(super) struct PayloadTransferBatch<'a> {
-    rows: usize,
-    addresses: &'a [RowPtr; BATCH_SIZE],
-    partitions: &'a [(u16, SelectVector)],
-}
-
-#[derive(Default)]
-pub(super) struct PayloadTransferStateOffsets {
-    offsets: Vec<(usize, usize, usize)>,
-}
-
-impl PayloadTransferStateOffsets {
-    fn record(&mut self, payload_index: usize, offsets: Vec<(usize, usize)>) {
-        self.offsets.extend(
-            offsets
-                .into_iter()
-                .map(|(page_index, offset)| (payload_index, page_index, offset)),
-        );
-    }
-
-    fn commit(self, payloads: &mut [Payload]) {
-        for (payload_index, page_index, offset) in self.offsets {
-            let payload = payloads
-                .get_mut(payload_index)
-                .expect("transfer target payload index is out of bounds");
-
-            let page = payload
-                .pages
-                .get_mut(page_index)
-                .expect("transfer target page index is out of bounds");
-            let next_state_offsets = page
-                .state_offsets
-                .checked_add(offset)
-                .expect("transfer target state offsets overflow");
-            let initialized_states = page
-                .rows
-                .checked_mul(payload.aggrs.len())
-                .expect("transfer target initialized states overflow");
-
-            assert!(
-                next_state_offsets <= initialized_states,
-                "transfer target state offsets exceed initialized aggregate states"
-            );
-            page.state_offsets = next_state_offsets;
-        }
-    }
-}
-
-impl<'a> PayloadTransferBatch<'a> {
-    pub(super) fn from_flush_state(flush_state: &'a PayloadFlushState) -> Self {
-        Self {
-            rows: flush_state.row_count,
-            addresses: &flush_state.addresses,
-            partitions: &flush_state.probe_state.partition_entries,
-        }
-    }
-
-    pub(super) fn copy_all_partitions_to(
-        &self,
-        payloads: &mut [Payload],
-        state_offsets: &mut PayloadTransferStateOffsets,
-    ) {
-        debug_assert_eq!(payloads.len(), self.partitions.len());
-        debug_assert_eq!(
-            self.rows,
-            self.partitions
-                .iter()
-                .map(|(count, _)| *count as usize)
-                .sum::<usize>()
-        );
-
-        for (payload_index, (payload, (count, sel))) in
-            payloads.iter_mut().zip(self.partitions).enumerate()
-        {
-            if *count > 0 {
-                let offsets = payload
-                    .copy_state_addr_rows_for_transfer(&sel[..*count as usize], self.addresses);
-                state_offsets.record(payload_index, offsets);
-            }
-        }
-    }
-}
-
 unsafe impl Send for Payload {}
 unsafe impl Sync for Payload {}
 
 pub(super) struct Page {
-    // RowRef values into this buffer may be stored in hash indexes and flush
-    // state. A page must not reallocate after such row refs are published.
-    data: Vec<MaybeUninit<u8>>,
+    // Probe and flush states hold row pointers into this buffer, and hash indexes hold row
+    // ids of it. A page must not reallocate once its rows are published.
+    data: PageData,
     pub(super) rows: usize,
-    // state_offset = state_rows * agg_len
-    // which mark that the offset to clean the agg states
-    state_offsets: usize,
-    capacity: usize,
+    /// The aggregate states initialized, of the rows in order: `rows * aggregates` once every
+    /// row has its states. Only these are dropped with the page.
+    initialized_states: usize,
+}
+
+/// The bytes of a page, aligned to `StatesRegion::page_align`.
+struct PageData {
+    ptr: NonNull<u8>,
+    layout: Layout,
+}
+
+impl PageData {
+    fn with_capacity(capacity: usize, align: usize) -> Self {
+        let layout = Layout::from_size_align(capacity, align).expect("invalid page layout");
+        let ptr = match layout.size() {
+            0 => NonNull::new(align as *mut u8).expect("alignment is never zero"),
+            _ => {
+                NonNull::new(unsafe { alloc(layout) }).unwrap_or_else(|| handle_alloc_error(layout))
+            }
+        };
+        PageData { ptr, layout }
+    }
+
+    fn as_ptr(&self) -> *const u8 {
+        self.ptr.as_ptr()
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.ptr.as_ptr()
+    }
+}
+
+impl Drop for PageData {
+    fn drop(&mut self) {
+        if self.layout.size() != 0 {
+            unsafe { dealloc(self.ptr.as_ptr(), self.layout) };
+        }
+    }
 }
 
 impl Page {
     fn is_partial_state(&self, agg_len: usize) -> bool {
-        self.rows * agg_len != self.state_offsets
+        self.rows * agg_len != self.initialized_states
+    }
+
+    /// The address of the first row.
+    pub(super) fn base(&self) -> *const u8 {
+        self.data.as_ptr()
     }
 
     pub(super) fn row_ptr(&self, row: usize, row_size: usize) -> RowPtr {
         debug_assert!(row < self.rows);
-        debug_assert_eq!(self.data.len(), self.rows * row_size);
-        RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) as *const u8 })
+        RowPtr::new(unsafe { self.data.as_ptr().add(row * row_size) })
     }
 
     fn reserve_row(&mut self, row_size: usize) -> RowMut {
-        debug_assert!(self.rows < self.capacity);
-        let row_offset = self.data.len();
-        unsafe {
-            self.data.set_len(row_offset + row_size);
-        }
+        let row_offset = self.rows * row_size;
+        debug_assert!(row_offset + row_size <= self.data.layout.size());
         self.rows += 1;
-        let ptr = unsafe { self.data.as_mut_ptr().add(row_offset) as *mut u8 };
+        let ptr = unsafe { self.data.as_mut_ptr().add(row_offset) };
         RowMut::new(ptr)
     }
 }
 
 impl Payload {
+    /// A payload of pages of at most `max_page_size` bytes. A page is aligned to its size
+    /// rounded up to a power of two, see `StatesRegion`: the payloads a row is copied between
+    /// must have the same page size.
     pub fn new(
         arena: Arc<Bump>,
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateCallRef>,
         states_layout: Option<StatesLayout>,
+        max_page_size: usize,
     ) -> Self {
         let mut tuple_size = 0;
         let mut validity_offsets = Vec::with_capacity(group_types.len());
@@ -227,12 +210,24 @@ impl Payload {
         let hash_offset = tuple_size;
         tuple_size += size_of::<u64>();
 
-        let state_offset = tuple_size;
-        if !aggrs.is_empty() {
-            tuple_size += size_of::<StateAddr>();
-        }
-
-        let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
+        let (state_size, state_align) = match &states_layout {
+            Some(states_layout) if !aggrs.is_empty() => (
+                states_layout.layout.pad_to_align().size(),
+                states_layout.layout.align(),
+            ),
+            _ => (0, 1),
+        };
+        let row_per_page = (u16::MAX as usize)
+            .min(max_page_size.saturating_sub(state_align) / (tuple_size + state_size))
+            .max(1);
+        let states_offset = (row_per_page * tuple_size).next_multiple_of(state_align);
+        let page_bytes = states_offset + row_per_page * state_size;
+        let states = StatesRegion::new(
+            page_bytes.next_power_of_two(),
+            tuple_size,
+            states_offset,
+            state_size,
+        );
 
         Self {
             arena,
@@ -242,11 +237,13 @@ impl Payload {
             aggrs,
             tuple_size,
             row_per_page,
-            min_cardinality: None,
+            page_bytes,
             total_rows: 0,
+            routed_partitions: 0,
+            max_page_size,
             row_layout: RowLayout {
                 hash_offset,
-                state_offset,
+                states,
                 validity_offsets,
                 group_offsets,
                 group_sizes,
@@ -262,7 +259,7 @@ impl Payload {
 
     #[inline]
     pub fn memory_size(&self) -> usize {
-        self.total_rows * self.tuple_size
+        self.total_rows * (self.tuple_size + self.row_layout.states.size)
     }
 
     pub fn merge_result(&self, flush_state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
@@ -270,53 +267,26 @@ impl Payload {
             return Ok(None);
         }
 
-        let row_count = flush_state.row_count;
-        flush_state.aggregate_results.clear();
-        if let Some(states_layout) = self.row_layout.states_layout.as_ref() {
-            for (aggr, loc) in self
-                .aggrs
-                .iter()
-                .zip(states_layout.states_loc.iter().cloned())
-            {
-                let return_type = aggr.signature().return_type.clone();
-                let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
-                for place in &flush_state.state_places.as_slice()[0..row_count] {
-                    aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
-                }
-                flush_state.aggregate_results.push(builder.build().into());
-            }
-        }
-
+        merge_flushed_states(&self.row_layout, &self.aggrs, flush_state)?;
         let mut entries = flush_state.take_aggregate_results();
         entries.extend(flush_state.take_group_columns());
-        Ok(Some(DataBlock::new(entries, row_count)))
-    }
-
-    pub(super) fn commit_transferred_state_offsets(
-        mut self,
-        state_offsets: PayloadTransferStateOffsets,
-        payloads: &mut [Payload],
-    ) {
-        // Rows are shallow-copied and still point at the same aggregate states.
-        // The source must give up state-drop ownership before target offsets
-        // make those states visible to target payload drops.
-        self.row_layout.states_layout = None;
-        state_offsets.commit(payloads);
+        Ok(Some(DataBlock::new(entries, flush_state.row_count)))
     }
 
     #[inline]
     pub(super) fn writable_page(&mut self) -> (&mut Page, usize) {
         if self.current_write_page == 0
-            || self.pages[self.current_write_page - 1].rows
-                == self.pages[self.current_write_page - 1].capacity
+            || self.pages[self.current_write_page - 1].rows == self.row_per_page
         {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
                 self.pages.push(Page {
-                    data: Vec::with_capacity(self.row_per_page * self.tuple_size),
+                    data: PageData::with_capacity(
+                        self.page_bytes,
+                        self.row_layout.states.page_align(),
+                    ),
                     rows: 0,
-                    state_offsets: 0,
-                    capacity: self.row_per_page,
+                    initialized_states: 0,
                 });
             }
         }
@@ -337,7 +307,55 @@ impl Payload {
         }
     }
 
-    pub(super) fn reserve_append_rows(
+    /// The rows still free in the writable page, without opening a page.
+    pub(super) fn current_cursor(
+        &mut self,
+        ids: &mut PageNumbering,
+        partition: usize,
+    ) -> RowCursor {
+        match self.current_write_page.checked_sub(1) {
+            Some(page) if self.pages[page].rows < self.row_per_page => {
+                self.cursor_at(ids, partition, page)
+            }
+            _ => RowCursor::EMPTY,
+        }
+    }
+
+    /// The rows of the writable page, opening one if the current one is full.
+    pub(super) fn open_cursor(&mut self, ids: &mut PageNumbering, partition: usize) -> RowCursor {
+        let (_, page) = self.writable_page();
+        self.cursor_at(ids, partition, page)
+    }
+
+    fn cursor_at(
+        &mut self,
+        ids: &mut PageNumbering,
+        partition: usize,
+        page_index: usize,
+    ) -> RowCursor {
+        let page_id = ids.number_pages(partition, &self.pages, page_index);
+        let page = &self.pages[page_index];
+        RowCursor {
+            id: page_id | page.rows as u64,
+            end: page_id | self.row_per_page as u64,
+            page: page_index,
+        }
+    }
+
+    /// Count the rows reserved through `cursor` in its page.
+    pub(super) fn commit_cursor(&mut self, cursor: &RowCursor) {
+        if cursor.page == usize::MAX {
+            return;
+        }
+        let page = &mut self.pages[cursor.page];
+        let rows = self.row_per_page - (cursor.end - cursor.id) as usize;
+        debug_assert!(rows >= page.rows);
+        self.total_rows += rows - page.rows;
+        page.rows = rows;
+    }
+
+    /// Write the groups and the states of the rows of `select_vector`, reserved at `address`.
+    pub(super) fn write_rows(
         &mut self,
         select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
@@ -346,25 +364,13 @@ impl Payload {
         groups: GroupRows,
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
-        let tuple_size = self.tuple_size;
-        let (mut page, mut page_index_value) = self.writable_page();
         let address = unsafe {
-            // SAFETY: RowRef and RowMut are repr(transparent) wrappers over raw
+            // SAFETY: RowPtr and RowMut are repr(transparent) wrappers over raw
             // u8 pointers. Raw pointer mutability does not change layout, and
             // row_ptr.rs has compile-time size/alignment assertions for these
             // two wrappers.
             std::mem::transmute::<&mut [RowPtr; BATCH_SIZE], &mut [RowMut; BATCH_SIZE]>(address)
         };
-        for row in select_vector {
-            let row_mut = page.reserve_row(tuple_size);
-            address[*row] = row_mut;
-            page_index[*row] = page_index_value;
-
-            if page.rows == page.capacity {
-                (page, page_index_value) = self.writable_page();
-            }
-        }
-
         match groups {
             GroupRows::Columns(group_columns) => {
                 self.append_rows(select_vector, group_hashes, address, group_columns)
@@ -484,8 +490,6 @@ impl Payload {
         for row in select_vector {
             address[*row].set_hash(&self.row_layout, group_hashes[*row]);
         }
-
-        debug_assert!(write_offset + 8 == self.row_layout.state_offset);
     }
 
     fn append_states(
@@ -495,71 +499,47 @@ impl Payload {
         page_index: &mut [usize],
         source_states: Option<&[StateAddr; BATCH_SIZE]>,
     ) {
-        let states = self.row_layout.states_layout.as_ref().map(|states_layout| {
-            (
-                states_layout.layout.repeat(select_vector.len()).unwrap(),
-                states_layout.layout.size(),
-                states_layout.states_loc.clone(),
-                self.aggrs.clone(),
-            )
-        });
-
-        if let Some(((array_layout, padded_size), state_size, states_loc, aggrs)) = states {
-            // write states
-            // Bump only allocates but does not drop, so there is no use after free for any item.
-            let place = self.arena.alloc_layout(array_layout);
-            for (row, place) in select_vector
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(i, row)| (row, unsafe { place.add(padded_size * i) }))
-            {
-                let place = StateAddr::from(place);
-                address[row].set_state_addr(&self.row_layout, &place);
-                let page = &mut self.pages[page_index[row]];
+        if let Some(states_layout) = self.row_layout.states_layout.as_ref() {
+            let state_size = states_layout.layout.size();
+            // write states, in the states region of the page
+            for row in select_vector {
+                let place = StateAddr::from(
+                    self.row_layout
+                        .states
+                        .ptr(address[*row].as_mut_ptr().cast_const()),
+                );
+                let page = &mut self.pages[page_index[*row]];
                 // Copying a state that needs no manual drop equals initializing it and merging
                 // the source state into it. The caller merges the other states.
                 if let Some(source_states) = source_states {
                     unsafe {
                         std::ptr::copy_nonoverlapping(
-                            source_states[row].as_ptr(),
+                            source_states[*row].as_ptr(),
                             place.as_ptr(),
                             state_size,
                         )
                     };
                 }
-                for (aggr, loc) in aggrs.iter().zip(states_loc.iter()) {
+                for (aggr, loc) in self.aggrs.iter().zip(states_layout.states_loc.iter()) {
                     if source_states.is_none() || aggr.state().need_manual_drop() {
                         aggr.init_state(AggrState::new(place, loc));
                     }
-                    page.state_offsets += 1;
+                    page.initialized_states += 1;
                 }
             }
 
             #[cfg(debug_assertions)]
             {
                 for page in self.pages.iter() {
-                    assert_eq!(page.rows * self.aggrs.len(), page.state_offsets);
+                    assert_eq!(page.rows * self.aggrs.len(), page.initialized_states);
                 }
             }
         }
-
-        self.total_rows += select_vector.len();
 
         debug_assert_eq!(
             self.total_rows,
             self.pages.iter().map(|x| x.rows).sum::<usize>()
         );
-    }
-
-    pub(super) fn combine(&mut self, mut other: Payload) {
-        debug_assert_eq!(
-            other.total_rows,
-            other.pages.iter().map(|x| x.rows).sum::<usize>()
-        );
-
-        self.total_rows += other.total_rows;
-        self.pages.append(other.pages.as_mut());
     }
 
     /// Move the pages into payloads of at most `max_rows` rows and `max_bytes` bytes each,
@@ -577,7 +557,8 @@ impl Payload {
                 continue;
             }
             let rows = current.total_rows + page.rows;
-            if current.total_rows != 0 && (rows > max_rows || rows * self.tuple_size > max_bytes) {
+            let row_bytes = self.tuple_size + self.row_layout.states.size;
+            if current.total_rows != 0 && (rows > max_rows || rows * row_bytes > max_bytes) {
                 payloads.push(std::mem::replace(&mut current, self.empty_like()));
             }
             current.total_rows += page.rows;
@@ -593,52 +574,47 @@ impl Payload {
     }
 
     fn empty_like(&self) -> Payload {
-        Payload::new(
+        let mut payload = Payload::new(
             self.arena.clone(),
             self.group_types.clone(),
             self.aggrs.clone(),
             self.row_layout.states_layout.clone(),
-        )
+            self.max_page_size,
+        );
+        payload.routed_partitions = self.routed_partitions;
+        payload
     }
 
-    pub(super) fn mark_min_cardinality(&mut self) {
-        if self.min_cardinality.is_none() {
-            self.min_cardinality = Some(self.total_rows);
-        }
+    /// The number of final aggregates the rows of this payload were routed among when it is a
+    /// partition of a routed table, else 0.
+    pub fn routed_partitions(&self) -> usize {
+        self.routed_partitions
     }
 
-    fn copy_state_addr_rows_for_transfer(
-        &mut self,
-        select_vector: &[RowID],
-        row_refs: &[RowPtr; BATCH_SIZE],
-    ) -> Vec<(usize, usize)> {
+    /// Append copies of the rows of `select_vector` in `row_refs`, with their states. The states
+    /// are not counted as initialized in the pages: see `scatter_into_buckets`.
+    fn copy_rows_with_states(&mut self, select_vector: &[RowID], row_refs: &[RowPtr; BATCH_SIZE]) {
         let tuple_size = self.tuple_size;
-        let agg_len = self.aggrs.len();
-        let (mut page, mut page_index) = self.writable_page();
-        let mut state_offsets = Vec::new();
-        let mut page_state_offset = 0;
+        let states = self.row_layout.states;
+        let row_per_page = self.row_per_page;
+        let (mut page, _) = self.writable_page();
 
         for index in select_vector {
+            debug_assert!(page.rows < row_per_page);
             let mut row_mut = page.reserve_row(tuple_size);
             unsafe {
+                let source = row_refs[*index].as_ptr();
+                std::ptr::copy_nonoverlapping(source, row_mut.as_mut_ptr(), tuple_size);
                 std::ptr::copy_nonoverlapping(
-                    row_refs[*index].as_ptr(),
-                    row_mut.as_mut_ptr(),
-                    tuple_size,
-                )
+                    states.ptr(source),
+                    states.ptr(row_mut.as_mut_ptr().cast_const()),
+                    states.size,
+                );
             }
-            page_state_offset += agg_len;
 
-            if page.rows == page.capacity {
-                if page_state_offset > 0 {
-                    state_offsets.push((page_index, page_state_offset));
-                }
-                (page, page_index) = self.writable_page();
-                page_state_offset = 0;
+            if page.rows == row_per_page {
+                (page, _) = self.writable_page();
             }
-        }
-        if page_state_offset > 0 {
-            state_offsets.push((page_index, page_state_offset));
         }
 
         self.total_rows += select_vector.len();
@@ -647,19 +623,21 @@ impl Payload {
             self.total_rows,
             self.pages.iter().map(|x| x.rows).sum::<usize>()
         );
-
-        state_offsets
     }
 
-    pub(super) fn scan_hash_partition_transfer<'a>(
+    /// Scan the next rows into `flush_state` and select them by partition, of `partition_count`,
+    /// in its probe state. Returns whether there were rows left.
+    fn scan_hash_partitions(
         &self,
-        flush_state: &'a mut PayloadFlushState,
+        flush_state: &mut PayloadFlushState,
         partition_count: usize,
-    ) -> Option<PayloadTransferBatch<'a>> {
+    ) -> bool {
         debug_assert!(partition_count > 0);
 
         loop {
-            let page = self.pages.get(flush_state.flush_page)?;
+            let Some(page) = self.pages.get(flush_state.flush_page) else {
+                return false;
+            };
 
             if flush_state.flush_page_row >= page.rows {
                 flush_state.flush_page += 1;
@@ -689,7 +667,7 @@ impl Payload {
             }
 
             flush_state.flush_page_row = end;
-            return Some(PayloadTransferBatch::from_flush_state(flush_state));
+            return true;
         }
     }
 
@@ -702,41 +680,41 @@ impl Payload {
 
         let mut bucket_payloads = (0..buckets)
             .map(|_| {
-                Payload::new(
-                    self.arena.clone(),
-                    self.group_types.clone(),
-                    self.aggrs.clone(),
-                    self.row_layout.states_layout.clone(),
-                )
+                // Copying a row locates its states by the layout of the target.
+                let mut payload = self.empty_like();
+                payload.routed_partitions = 0;
+                payload
             })
             .collect::<Vec<_>>();
+        if self.len() == 0 {
+            return bucket_payloads;
+        }
 
-        let mut state = PayloadFlushState::default();
-        self.transfer_hash_partitioned_rows(&mut bucket_payloads, &mut state);
+        let mut flush_state = PayloadFlushState::default();
+        while self.scan_hash_partitions(&mut flush_state, buckets) {
+            let partitions = &flush_state.probe_state.partition_entries;
+            for (payload, (count, sel)) in bucket_payloads.iter_mut().zip(partitions) {
+                if *count > 0 {
+                    payload.copy_rows_with_states(&sel[..*count as usize], &flush_state.addresses);
+                }
+            }
+        }
+
+        // The states were copied with the rows, so they move to the bucket payloads, which only
+        // hold copied rows. The source gives up dropping them before the buckets count them as
+        // initialized: a panic in between drops no state twice.
+        self.row_layout.states_layout = None;
+        let agg_len = self.aggrs.len();
+        for payload in &mut bucket_payloads {
+            for page in &mut payload.pages {
+                page.initialized_states = page.rows * agg_len;
+            }
+        }
         bucket_payloads
     }
 
-    pub(super) fn transfer_hash_partitioned_rows(
-        mut self,
-        target_payloads: &mut [Payload],
-        flush_state: &mut PayloadFlushState,
-    ) {
-        if self.len() == 0 || target_payloads.is_empty() {
-            return;
-        }
-
-        flush_state.clear();
-        let mut state_offsets = PayloadTransferStateOffsets::default();
-        while let Some(batch) =
-            self.scan_hash_partition_transfer(flush_state, target_payloads.len())
-        {
-            batch.copy_all_partitions_to(target_payloads, &mut state_offsets);
-        }
-
-        self.commit_transferred_state_offsets(state_offsets, target_payloads);
-    }
-
-    pub fn empty_block(&self, fake_rows: usize) -> DataBlock {
+    /// A block of no rows with the columns of `aggregate_flush`.
+    pub(super) fn empty_block(&self) -> DataBlock {
         assert_eq!(
             self.aggrs.is_empty(),
             self.row_layout.states_layout.is_none()
@@ -748,18 +726,39 @@ impl Payload {
             .iter()
             .flat_map(|layout| layout.serialize_type.iter())
             .map(|serde_type| {
-                ColumnBuilder::repeat_default(&serde_type.data_type(), fake_rows)
+                ColumnBuilder::with_capacity(&serde_type.data_type(), 0)
                     .build()
                     .into()
             })
             .chain(
                 self.group_types
                     .iter()
-                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build().into()),
+                    .map(|t| ColumnBuilder::with_capacity(t, 0).build().into()),
             )
             .collect();
-        DataBlock::new(entries, fake_rows)
+        DataBlock::new(entries, 0)
     }
+}
+
+/// Finalize the states of the rows a flush left in `flush_state` into its aggregate results.
+pub(super) fn merge_flushed_states(
+    row_layout: &RowLayout,
+    aggrs: &[AggregateCallRef],
+    flush_state: &mut PayloadFlushState,
+) -> Result<()> {
+    let row_count = flush_state.row_count;
+    flush_state.aggregate_results.clear();
+    if let Some(states_layout) = row_layout.states_layout.as_ref() {
+        for (aggr, loc) in aggrs.iter().zip(states_layout.states_loc.iter().cloned()) {
+            let return_type = aggr.signature().return_type.clone();
+            let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
+            for place in &flush_state.state_places.as_slice()[0..row_count] {
+                aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
+            }
+            flush_state.aggregate_results.push(builder.build().into());
+        }
+    }
+    Ok(())
 }
 
 impl Drop for Payload {
@@ -785,14 +784,16 @@ impl Drop for Payload {
                     if is_partial_state && idx == 0 {
                         info!(
                             "Cleaning partial page, state_offsets: {}, row: {}, agg length: {}",
-                            page.state_offsets,
+                            page.initialized_states,
                             page.rows,
                             self.aggrs.len()
                         );
                     }
-                    for row in 0..page.state_offsets.div_ceil(self.aggrs.len()) {
+                    for row in 0..page.initialized_states.div_ceil(self.aggrs.len()) {
                         // When OOM, some states are not initialized, we don't need to destroy them
-                        if is_partial_state && row * self.aggrs.len() + idx >= page.state_offsets {
+                        if is_partial_state
+                            && row * self.aggrs.len() + idx >= page.initialized_states
+                        {
                             continue 'FOR;
                         }
                         let addr = self.data_ptr(page, row).state_addr(&self.row_layout);

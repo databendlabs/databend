@@ -51,7 +51,7 @@ fn extract_string_column(
 ) -> Option<&databend_common_expression::types::StringColumn> {
     match entry {
         BlockEntry::Column(Column::String(col)) => Some(col),
-        BlockEntry::Column(Column::Nullable(n)) => match &n.column {
+        BlockEntry::Column(Column::Nullable(n)) => match n.column() {
             Column::String(col) => Some(col),
             _ => None,
         },

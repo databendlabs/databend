@@ -185,11 +185,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.to_string()),
         };
 
-        let ctx = self.ctx.clone();
-        let visibility_checker =
-            Some(self.block_on(async move {
-                ctx.get_visibility_checker(false, Object::Sequence).await
-            })?);
+        let visibility_checker = self.block_on(self.ctx.sequence_usage_checker())?;
         self.block_on(catalog.get_sequence(req, &visibility_checker))?;
         Ok(())
     }
@@ -297,21 +293,26 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             )?
             .resolve_stage_location(stage_name, StagePathAccess::Read)
             .await?;
-            let visibility_checker = self
+            if self
                 .ctx
-                .get_visibility_checker(false, Object::Stage)
-                .await?;
-            if !(stage_info.is_temporary
-                || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-                || stage_info.stage_type == StageType::User
-                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
+                .should_check_stage_privilege(&stage_info.stage_name)?
             {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege READ is required on stage {} for user {}",
-                    stage_info.stage_name.clone(),
-                    self.ctx.get_current_user()?.identity().display(),
-                ))
-                .set_span(span));
+                let visibility_checker = self
+                    .ctx
+                    .get_visibility_checker(false, Object::Stage)
+                    .await?;
+                if !(stage_info.is_temporary
+                    || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                    || stage_info.stage_type == StageType::User
+                        && stage_info.stage_name == self.ctx.get_current_user()?.name)
+                {
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege READ is required on stage {} for user {}",
+                        stage_info.stage_name.clone(),
+                        self.ctx.get_current_user()?.identity().display(),
+                    ))
+                    .set_span(span));
+                }
             }
             Ok(stage_info)
         })

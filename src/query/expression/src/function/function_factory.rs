@@ -29,17 +29,14 @@ use super::FunctionFactory;
 use super::FunctionFactoryClosure;
 use super::ScalarFunction;
 use super::ScalarFunctionDomain;
-use crate::Column;
 use crate::Domain;
 use crate::FunctionDomain;
 use crate::FunctionSignature;
 use crate::Scalar;
 use crate::Value;
-use crate::function_stat::DeriveStat;
 use crate::function_stat::ScalarFunctionStat;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::types::NullableColumn;
 use crate::types::NullableType;
 use crate::types::ValueType;
 use crate::types::nullable::NullableDomain;
@@ -77,7 +74,7 @@ impl ScalarFunction for Box<dyn ScalarFunction> {
 }
 
 impl ScalarFunctionDomain for FunctionDomain<AnyType> {
-    fn domain_eval(&self, ctx: &FunctionContext, domains: &[Domain]) -> FunctionDomain<AnyType> {
+    fn domain_eval(&self, _ctx: &FunctionContext, _domains: &[Domain]) -> FunctionDomain<AnyType> {
         self.clone()
     }
 }
@@ -173,15 +170,12 @@ impl Function {
         });
         let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
             let output = eval.eval(val, ctx);
-            if let Some((validity, _)) = ctx.errors.take() {
-                match output {
-                    Value::Scalar(_) => Value::Scalar(Scalar::Null),
-                    Value::Column(column) => {
-                        Value::Column(column.wrap_nullable(Some(validity.into())))
-                    }
+            match (output, ctx.errors.take()) {
+                // Scalar errors apply to the whole result, not just bitmap row zero.
+                (Value::Scalar(_), Some(_)) => Value::Scalar(Scalar::Null),
+                (output, errors) => {
+                    output.wrap_nullable(errors.map(|(validity, _)| validity.into()))
                 }
-            } else {
-                output.wrap_nullable(None)
             }
         });
 
@@ -248,7 +242,7 @@ where T: ScalarFunction
         let mut bitmap: Option<MutableBitmap> = None;
         let mut nonull_args: Vec<Value<Result>> = Vec::with_capacity(args.len());
 
-        let mut len = 1;
+        let mut len = ctx.num_rows;
         for arg in args {
             let arg = arg.try_downcast::<T>().unwrap();
             match arg {
@@ -258,10 +252,11 @@ where T: ScalarFunction
                 }
                 Value::Column(v) => {
                     len = v.len();
-                    nonull_args.push(Value::Column(v.column.clone()));
+                    let (column, validity) = v.destructure();
+                    nonull_args.push(Value::Column(column));
                     bitmap = match bitmap {
-                        Some(m) => Some(m.bitand(&v.validity)),
-                        None => Some(v.validity.clone().make_mut()),
+                        Some(m) => Some(m.bitand(&validity)),
+                        None => Some(validity.make_mut()),
                     };
                 }
             }
@@ -271,12 +266,11 @@ where T: ScalarFunction
             Some(bitmap) => bitmap.freeze(),
             None => Bitmap::new_trued(len),
         };
-        if bitmap.null_count() > 0 {
-            ctx.validity = Some(match ctx.validity.as_ref() {
-                Some(validity) => validity & &bitmap,
-                None => bitmap.clone(),
-            });
-        }
+        let bitmap = match &ctx.validity {
+            Some(validity) => validity & &bitmap,
+            None => bitmap,
+        };
+        ctx.validity = Some(bitmap.clone());
         let results = self.0.eval(&nonull_args, ctx);
         if let Some((error_bitmap, _)) = ctx.errors.as_mut()
             && bitmap.null_count() != 0
@@ -292,32 +286,14 @@ where T: ScalarFunction
             }
         }
 
-        match results {
-            Value::Scalar(s) => {
-                if bitmap.get(0).unwrap() {
-                    Value::Scalar(s)
-                } else {
-                    Value::Scalar(Scalar::Null)
-                }
-            }
-            Value::Column(column) => {
-                let result = match column {
-                    Column::Nullable(deref!(nullable_column)) => NullableColumn::new_column(
-                        nullable_column.column,
-                        nullable_column.validity.bitand(&bitmap),
-                    ),
-                    _ => NullableColumn::new_column(column, bitmap),
-                };
-                Value::Column(result)
-            }
-        }
+        results.wrap_nullable(Some(bitmap))
     }
 }
 
 pub struct ImplByEvaluator(pub &'static str);
 
 impl ScalarFunction for ImplByEvaluator {
-    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    fn eval(&self, _args: &[Value<AnyType>], _ctx: &mut EvalContext) -> Value<AnyType> {
         unreachable!("`{}` should be handled by the `Evaluator`", self.0)
     }
 }

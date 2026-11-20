@@ -718,12 +718,7 @@ impl AggregationContext {
 
     async fn read_block(&self, reader: &BlockReader, block_meta: &BlockMeta) -> Result<DataBlock> {
         let merged_io_read_result = reader
-            .read_columns_data_by_merge_io(
-                &self.read_settings,
-                &block_meta.location.0,
-                &block_meta.col_metas,
-                &None,
-            )
+            .read_files_by_merge_io(&self.read_settings, &block_meta.data_files(), &None)
             .await?;
 
         // deserialize block data
@@ -734,11 +729,9 @@ impl AggregationContext {
         GlobalIORuntime::instance()
             .spawn(async move {
                 let column_chunks = merged_io_read_result.columns_chunks()?;
-                reader.deserialize_chunks(
-                    block_meta_ptr.location.0.as_str(),
+                reader.deserialize_files(
                     block_meta_ptr.row_count as usize,
-                    &block_meta_ptr.compression,
-                    &block_meta_ptr.col_metas,
+                    &block_meta_ptr.data_files(),
                     column_chunks,
                     &storage_format,
                 )
@@ -880,7 +873,6 @@ mod tests {
     use databend_common_expression::Value;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use databend_common_expression::types::nullable::NullableColumn;
     use databend_common_expression::types::number::Int32Type;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
 
@@ -946,10 +938,8 @@ mod tests {
 
     #[test]
     fn test_nullable_keys_are_not_deletion_candidates() -> Result<()> {
-        let nullable = NullableColumn::new_column(
-            Int32Type::from_data(vec![1_i32, 2_i32]),
-            [true, false].into_iter().collect(),
-        );
+        let nullable = Int32Type::from_data(vec![1_i32, 2_i32])
+            .wrap_nullable(Some([true, false].into_iter().collect()));
         let value = Value::Column(nullable);
         assert!(row_hash_of_columns(&[&value], 0)?.is_some());
         assert!(row_hash_of_columns(&[&value], 1)?.is_none());

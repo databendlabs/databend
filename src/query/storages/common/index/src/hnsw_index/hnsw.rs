@@ -39,6 +39,7 @@ use rayon::ThreadPoolBuilder;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 
+use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
 use crate::hnsw_index::common::utils::check_process_stopped;
@@ -129,7 +130,7 @@ pub fn hnsw_component_names(column_id: ColumnId, distance_type: DistanceType) ->
 pub struct HNSWIndex {
     graph_layers: GraphLayers,
     distance_type: DistanceType,
-    encoded_vectors: EncodedVectorsU8<Vec<u8>>,
+    encoded_vectors: EncodedVectorsU8<HugePageBytes>,
     // Column validity, present only when the column has NULLs (none in old files).
     // Only `generate_scores` needs it: NULL rows are not linked into the graph.
     validity: Option<Bitmap>,
@@ -161,7 +162,7 @@ impl HNSWIndex {
             invert,
         };
 
-        let encoded_vectors: EncodedVectorsU8<Vec<u8>> =
+        let encoded_vectors: EncodedVectorsU8<HugePageBytes> =
             EncodedVectorsU8::load(encoded_data.as_ref(), encoded_meta.as_ref(), &params)?;
 
         let validity = validity
@@ -191,7 +192,7 @@ impl HNSWIndex {
         std::mem::size_of::<Self>() + self.graph_layers.memory_size()
             - std::mem::size_of::<GraphLayers>()
             + self.encoded_vectors.memory_size()
-            - std::mem::size_of::<EncodedVectorsU8<Vec<u8>>>()
+            - std::mem::size_of::<EncodedVectorsU8<HugePageBytes>>()
             + self
                 .validity
                 .as_ref()
@@ -282,12 +283,17 @@ impl HNSWIndex {
         let num_vectors = column.len();
         let validity = column
             .as_nullable()
-            .map(|nullable| nullable.validity.clone())
+            .map(|nullable| nullable.validity().clone())
             .filter(|bitmap| bitmap.null_count() != 0);
 
         let column = column.remove_nullable();
         let vector_column = column.as_vector().unwrap();
         let vector_column = preprocess(distance_type, vector_column.clone());
+        // Link the graph with the vectors that queries are scored against. For
+        // cosine, those are normalized (the SQ8 codes, the query and the FP16
+        // refinement all use cosine); linking raw vectors would build an inner
+        // product graph that favours long vectors and loses recall.
+        let column = Column::Vector(vector_column.clone());
 
         let mut rng = thread_rng();
         let mut graph_layers_builder = GraphLayersBuilder::new(
@@ -391,8 +397,11 @@ impl HNSWIndex {
         };
 
         let builder = Vec::new();
+        // NULL rows hold a placeholder vector: encode them to keep point ids as
+        // block rows, but fit the value range on the real vectors only.
         let encoded_vectors = EncodedVectorsU8::encode(
             (0..params.count).map(|i| &data.as_ref()[i * params.dim..(i + 1) * params.dim]),
+            (0..params.count).map(|i| validity.as_ref().is_none_or(|bitmap| bitmap.get_bit(i))),
             builder,
             &params,
             None,
@@ -652,6 +661,63 @@ mod tests {
             let nearest = found.first().map(|point| point.idx as usize);
             assert_eq!(nearest, Some(row), "nearest row of {row}");
         }
+        Ok(())
+    }
+
+    /// A cosine graph is linked by the angles between rows, not their lengths:
+    /// with lengths from 1 to 1000, an inner product graph links rows to the
+    /// longest ones and a small ef misses most nearest neighbours.
+    #[test]
+    fn test_cosine_graph_ignores_vector_lengths() -> Result<()> {
+        use rand::Rng as _;
+        use rand::SeedableRng as _;
+        use rand::rngs::StdRng;
+
+        // Measured 0.904 with the normalized graph and 0.196 with the inner
+        // product graph; the threshold sits far from both.
+        const RECALL_THRESHOLD: f64 = 0.6;
+        let (dim, num_points, num_queries, limit, ef) = (16, 3000, 50, 10, 16);
+        let mut rng = StdRng::seed_from_u64(7);
+        let mut direction = || -> Vec<f32> { (0..dim).map(|_| rng.gen_range(-1.0..1.0)).collect() };
+        let queries: Vec<Vec<f32>> = (0..num_queries).map(|_| direction()).collect();
+        let directions: Vec<Vec<f32>> = (0..num_points).map(|_| direction()).collect();
+        let rows: Vec<Vec<f32>> = directions
+            .iter()
+            .enumerate()
+            .map(|(i, row)| {
+                // Lengths spread evenly over 1..1000 on a log scale.
+                let length = 10f32.powf(3.0 * (i * 7919 % num_points) as f32 / num_points as f32);
+                row.iter().map(|value| value * length).collect()
+            })
+            .collect();
+        let values: Vec<F32> = rows.iter().flatten().map(|&v| F32::from(v)).collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        let (_, entries) = HNSWIndex::build(8, 64, 0, column, DistanceType::Dot)?;
+        let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
+        let components: Vec<_> = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect();
+        let index = HNSWIndex::open(DistanceType::Dot, dim, num_points, &components, None)?;
+
+        let cosine = |a: &[f32], b: &[f32]| {
+            let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+            let norm = |v: &[f32]| v.iter().map(|x| x * x).sum::<f32>().sqrt();
+            dot / (norm(a) * norm(b))
+        };
+        let mut hits = 0;
+        for query in &queries {
+            let mut exact: Vec<usize> = (0..num_points).collect();
+            exact.sort_by(|&a, &b| cosine(query, &rows[b]).total_cmp(&cosine(query, &rows[a])));
+            let query = HNSWIndex::preprocess_query(DistanceType::Dot, query.clone());
+            let found = index.search_with_ef(limit, Some(ef), &query, false)?;
+            hits += found
+                .iter()
+                .filter(|point| exact[..limit].contains(&(point.idx as usize)))
+                .count();
+        }
+        let recall = hits as f64 / (num_queries * limit) as f64;
+        assert!(recall >= RECALL_THRESHOLD, "cosine recall {recall}");
         Ok(())
     }
 }

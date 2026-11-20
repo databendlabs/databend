@@ -333,11 +333,11 @@ impl SubqueryDecorrelatorOptimizer {
             join_type: JoinType::Left,
             marker_index: None,
             from_correlated_subquery: !is_lateral,
-            need_hold_hash_table: false,
             is_lateral,
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: vec![],
         };
         let mut s_expr = SExpr::create_binary(
             Arc::new(join.into()),
