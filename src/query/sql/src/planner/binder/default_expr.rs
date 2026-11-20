@@ -244,25 +244,8 @@ impl DefaultExprBinder {
     }
 
     pub fn get_scalar(&mut self, field: &TableField) -> Result<Scalar> {
-        let scalar_expr = self.parse_and_bind(&field.into())?;
-        self.evaluate_scalar(field, scalar_expr)
-    }
-
-    /// Like the block reader's default, but only when it can be persisted as a
-    /// range for future queries, independent of the time of evaluation.
-    pub fn get_deterministic_scalar(&mut self, field: &TableField) -> Result<Option<Scalar>> {
-        let scalar_expr = self.parse_and_bind(&field.into())?;
-        if !scalar_expr.is_deterministic() {
-            return Ok(None);
-        }
-        self.evaluate_scalar(field, scalar_expr).map(Some)
-    }
-
-    fn evaluate_scalar(
-        &mut self,
-        field: &TableField,
-        mut scalar_expr: ScalarExpr,
-    ) -> Result<Scalar> {
+        let data_field: DataField = field.into();
+        let mut scalar_expr = self.parse_and_bind(&data_field)?;
         self.rewriter.visit(&mut scalar_expr)?;
         let expr = scalar_expr.as_field_index_expr()?;
         let result = self.evaluator().run(&expr)?;

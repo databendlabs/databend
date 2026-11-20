@@ -82,21 +82,79 @@ select a from compact_segment_added_stats where tz is null
 ----
 1
 
-# The default's string upper bound must include the full 40-character value.
+# A partial range based only on the newer 'a' would prune the older string.
 query I
 select a from compact_segment_added_stats where s = repeat('z', 40)
 ----
 1
 
-# The truncated bound must never be used as an exact MAX result.
+# MIN/MAX must work even when the mixed segment has no range.
 query IIII
 select min(b), max(b), (max(d) = 9.25)::int, length(max(s))
 from compact_segment_added_stats
 ----
 7 100 1 40
 
+# Rewrite only the newer block. The rebuilt segment must still cover the old block.
+statement ok
+update compact_segment_added_stats set a = 3 where a = 2
+
+query II rowsort
+select a, b from compact_segment_added_stats
+----
+1 7
+3 100
+
+query I
+select a from compact_segment_added_stats where b = 7
+----
+1
+
+query I
+select a from compact_segment_added_stats where c is null
+----
+1
+
+query II
+select min(b), max(b) from compact_segment_added_stats
+----
+7 100
+
 statement ok
 drop table compact_segment_added_stats
+
+# All rows predate c and the snapshot does not count their implicit NULLs.
+# Compaction must not publish synthetic counts that UPDATE would subtract.
+statement ok
+create table mutate_added_null (a int) segment_format = 'row_oriented' block_per_segment = 10
+
+statement ok
+insert into mutate_added_null values (1)
+
+statement ok
+insert into mutate_added_null values (2)
+
+statement ok
+alter table mutate_added_null add column c int null
+
+statement ok
+optimize table mutate_added_null compact segment
+
+statement ok
+update mutate_added_null set c = 100 where a = 2
+
+query I
+select a from mutate_added_null where c is null
+----
+1
+
+query II
+select min(c), max(c) from mutate_added_null
+----
+100 100
+
+statement ok
+drop table mutate_added_null
 
 statement ok
 unset enable_compact_after_write
