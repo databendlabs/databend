@@ -58,6 +58,7 @@ serde_json = { workspace = true }
 tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 unicase = { workspace = true }
 xorf = { workspace = true }
 xorfilter-rs = { workspace = true }

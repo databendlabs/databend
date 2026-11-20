@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::io;
@@ -33,8 +34,10 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_mill
 use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_index::BundleExternalFiles;
 use databend_storages_common_index::BundleFileRanges;
@@ -44,6 +47,7 @@ use databend_storages_common_index::InvertedIndexBundleFooter;
 use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
+use databend_storages_common_index::InvertedIndexSearcher;
 use databend_storages_common_index::SearchPinDirectory;
 use databend_storages_common_index::inverted_index_meta_cache_key;
 use databend_storages_common_io::ReadSettings;
@@ -61,6 +65,7 @@ use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::LockError;
 use tantivy::directory::error::OpenReadError;
 use tantivy::directory::error::OpenWriteError;
+use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::FuseCaches;
 
@@ -822,10 +827,6 @@ impl Directory for RemoteBundleDirectory {
     }
 }
 
-pub(crate) struct BundleSearchDirectory {
-    pub directory: FooterDirectory,
-}
-
 struct FooterCacheState {
     meta_cache: MemCache<InvertedIndexMeta>,
     lookup_cache: MemCache<InvertedIndexLookupBytes>,
@@ -1011,12 +1012,64 @@ impl FooterCacheState {
     }
 }
 
-pub(crate) async fn load_bundle_search_directory(
+/// Opens bundles for search: the footer, through its cache, then the Tantivy index.
+struct BundleSearcherReader {
+    operator: Operator,
+    tokenizers: TokenizerManager,
+}
+
+impl Reader for BundleSearcherReader {
+    /// The location and size of the bundle object, and the policy its searches read under:
+    /// a searcher reads its pages under the policy it was opened with.
+    type Key = (String, u64, CachePolicy);
+    type Item = InvertedIndexSearcher;
+
+    fn cache_key<'a>(&self, (location, object_size, policy): &'a Self::Key) -> Cow<'a, str> {
+        Cow::Owned(format!(
+            "{location}:{object_size}:{:?}:{:?}",
+            policy.memory, policy.disk
+        ))
+    }
+
+    async fn read(
+        &self,
+        (location, object_size, policy): &Self::Key,
+        _: &CachePolicy,
+    ) -> Result<InvertedIndexSearcher> {
+        let directory =
+            load_bundle_directory(&self.operator, location, *object_size, *policy).await?;
+        InvertedIndexSearcher::open(directory, self.tokenizers.clone())
+    }
+}
+
+/// The searcher of a bundle, opened once for all its searches unless `policy` does not cache
+/// it. Index files are immutable, so the location and size identify one.
+pub(crate) async fn load_bundle_searcher(
     operator: &Operator,
     location: &str,
     object_size: u64,
     policy: CachePolicy,
-) -> Result<BundleSearchDirectory> {
+    tokenizers: &TokenizerManager,
+) -> Result<CacheRef<InvertedIndexSearcher>> {
+    let reader = BundleSearcherReader {
+        operator: operator.clone(),
+        tokenizers: tokenizers.clone(),
+    };
+    FuseCaches::instance()
+        .inverted
+        .searcher
+        .with_policy(policy)
+        .get(&reader, (location.to_string(), object_size, policy))
+        .await
+}
+
+/// The directory of a bundle, over a search pin shared by the searches of a searcher.
+async fn load_bundle_directory(
+    operator: &Operator,
+    location: &str,
+    object_size: u64,
+    policy: CachePolicy,
+) -> Result<FooterDirectory> {
     let caches = &FuseCaches::instance().inverted.with_policy(policy);
     let cache_state = FooterCacheState::new(
         location,
@@ -1036,9 +1089,8 @@ pub(crate) async fn load_bundle_search_directory(
         payload_cache: caches.payload.clone(),
         full_payload_cache: caches.full_payload.clone(),
     };
-    let search_pin = SearchPinDirectory::new(Arc::new(remote));
-    let directory = FooterDirectory::new(search_pin, footer);
-    Ok(BundleSearchDirectory { directory })
+    let pin = SearchPinDirectory::shared(Arc::new(remote), InvertedIndexSearcher::retains);
+    Ok(FooterDirectory::new(pin, footer))
 }
 
 #[cfg(test)]
@@ -1452,17 +1504,18 @@ mod tests {
         fuzziness: Option<u8>,
         has_score: bool,
     ) -> Result<Vec<u32>> {
-        use tantivy::Index;
+        use databend_storages_common_index::with_search_scope;
         use tantivy::collector::DocSetCollector;
         use tantivy::collector::TopDocs;
         use tantivy::query::QueryParser;
         use tantivy::query_grammar::parse_query;
 
         let directory = FooterDirectory::new(
-            SearchPinDirectory::new(Arc::new(remote.clone())),
+            SearchPinDirectory::shared(Arc::new(remote.clone()), InvertedIndexSearcher::retains),
             footer.clone(),
         );
-        let index = Index::open(directory.clone())?;
+        let searcher = InvertedIndexSearcher::open(directory, TokenizerManager::default())?;
+        let index = searcher.searcher().index();
         let schema = index.schema();
         let body = schema.get_field("body")?;
         let mut parser = QueryParser::new(schema.clone(), vec![body], index.tokenizers().clone());
@@ -1478,31 +1531,31 @@ mod tests {
             &[body],
             fuzziness,
         )?;
-        let reader = index.reader()?;
-        let searcher = reader.searcher();
-        warmup
-            .warm_searcher(&searcher, &directory, has_score)
-            .await?;
-        // Search is synchronous and must succeed using pinned data, without remote reads.
-        let mut rows = if has_score {
-            searcher
-                .search(
-                    query.as_ref(),
-                    &TopDocs::with_limit(searcher.num_docs() as usize).order_by_score(),
-                )?
-                .into_iter()
-                .map(|(score, address)| {
-                    assert!(score.is_finite());
-                    address.doc_id
-                })
-                .collect::<Vec<_>>()
-        } else {
-            searcher
-                .search(query.as_ref(), &DocSetCollector)?
-                .into_iter()
-                .map(|address| address.doc_id)
-                .collect::<Vec<_>>()
-        };
+        let mut rows = with_search_scope(async {
+            warmup.warm_searcher(&searcher, has_score).await?;
+            // Search is synchronous and must succeed using pinned data, without remote reads.
+            let searcher = searcher.searcher();
+            Ok::<_, ErrorCode>(if has_score {
+                searcher
+                    .search(
+                        query.as_ref(),
+                        &TopDocs::with_limit(searcher.num_docs() as usize).order_by_score(),
+                    )?
+                    .into_iter()
+                    .map(|(score, address)| {
+                        assert!(score.is_finite());
+                        address.doc_id
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                searcher
+                    .search(query.as_ref(), &DocSetCollector)?
+                    .into_iter()
+                    .map(|address| address.doc_id)
+                    .collect::<Vec<_>>()
+            })
+        })
+        .await?;
         rows.sort_unstable();
         Ok(rows)
     }
@@ -1596,6 +1649,84 @@ mod tests {
             assert_eq!(payload_reads(), first_reads, "partial query after {text}");
             assert_eq!(page_cache.stats().items, 0, "{text}");
         }
+        Ok(())
+    }
+
+    /// One searcher serves repeated searches. The second reads no term dictionary from
+    /// storage: the term infos are remembered and their dictionary blocks stay pinned. Scores
+    /// with the remembered document frequencies equal those of Tantivy's own statistics.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_shared_searcher_remembers_terms_across_searches() -> Result<()> {
+        use databend_storages_common_index::with_search_scope;
+        use tantivy::Term;
+        use tantivy::collector::TopDocs;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, footer, ranges) = expansion_bundle_fixture().await?;
+        let term_file = footer
+            .file_ranges
+            .files
+            .iter()
+            .find(|(path, _)| component_name(path) == "term")
+            .unwrap()
+            .1
+            .clone();
+        let pin = SearchPinDirectory::shared(Arc::new(remote), InvertedIndexSearcher::retains);
+        let directory = FooterDirectory::new(pin, footer);
+        let searcher = InvertedIndexSearcher::open(directory, TokenizerManager::default())?;
+        let index = searcher.searcher().index();
+        let schema = index.schema();
+        let body = schema.get_field("body")?;
+        let title = schema.get_field("title")?;
+        let parser = QueryParser::new(schema.clone(), vec![body], index.tokenizers().clone());
+        let text = "body:alpha OR title:needle OR body:absent";
+        let query = parser.parse_query(text)?;
+        let ast = parse_query(text).unwrap();
+        let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+            query.as_ref(),
+            &ast,
+            &schema,
+            &[body],
+            None,
+        )?;
+        let collector = TopDocs::with_limit(100).order_by_score();
+        let search = || {
+            with_search_scope(async {
+                warmup.warm_searcher(&searcher, true).await?;
+                let remembered = searcher.searcher().search_with_statistics_provider(
+                    query.as_ref(),
+                    &collector,
+                    &searcher,
+                )?;
+                let own = searcher.searcher().search(query.as_ref(), &collector)?;
+                Ok::<_, ErrorCode>((remembered, own))
+            })
+        };
+        let term_reads = || {
+            ranges
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|range| range.start < term_file.end && range.end > term_file.start)
+                .count()
+        };
+
+        let (first, own) = search().await?;
+        assert_eq!(first.len(), 100);
+        assert_eq!(first, own);
+        let first_reads = term_reads();
+        assert!(first_reads > 0);
+        let alpha = searcher.term_info(&Term::from_field_text(body, "alpha"));
+        assert_eq!(alpha.flatten().map(|info| info.doc_freq), Some(2000));
+        let needle = searcher.term_info(&Term::from_field_text(title, "needle"));
+        assert_eq!(needle.flatten().map(|info| info.doc_freq), Some(1334));
+        let absent = searcher.term_info(&Term::from_field_text(body, "absent"));
+        assert_eq!(absent, Some(None));
+
+        let (second, _) = search().await?;
+        assert_eq!(second, first);
+        assert_eq!(term_reads(), first_reads);
         Ok(())
     }
 

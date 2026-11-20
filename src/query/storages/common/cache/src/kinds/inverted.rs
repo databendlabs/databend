@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Inverted indexes: the footer of each index file, then whole lookup files or 64 KiB pages.
+//! Inverted indexes: the footer of each index file, then whole lookup files or 64 KiB pages, and
+//! the bundles opened for search.
 
 use std::mem::size_of;
 
 use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
+use databend_storages_common_index::InvertedIndexSearcher;
 
 use crate::CacheDef;
 use crate::CachedItem;
@@ -62,6 +64,24 @@ impl CacheDef for FullPayload {
     const NAME: &'static str = "memory_cache_inverted_index_full_payload";
     const POOL: Pool = Pool::Index;
     const DISK: bool = true;
+}
+
+/// Bundles opened once and shared by the searches of their block, by location and size. Each
+/// is charged the most its shared pin keeps: see `InvertedIndexSearcher`.
+pub struct Searcher;
+
+impl CacheDef for Searcher {
+    type Value = InvertedIndexSearcher;
+    const NAME: &'static str = "memory_cache_inverted_index_searcher";
+    const POOL: Pool = Pool::Index;
+    /// Index files are written once, under new locations.
+    const SHARE_LOADS: bool = true;
+}
+
+impl CachedItem for InvertedIndexSearcher {
+    fn mem_bytes(&self) -> usize {
+        self.memory_size()
+    }
 }
 
 impl CachedItem for InvertedIndexMeta {

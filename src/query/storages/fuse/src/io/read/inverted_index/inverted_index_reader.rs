@@ -20,14 +20,16 @@ use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+use databend_storages_common_index::with_search_scope;
 use opendal::Operator;
-use tantivy::Index;
+use tantivy::Searcher;
 use tantivy::collector::DocSetCollector;
 use tantivy::collector::TopDocs;
+use tantivy::query::Bm25StatisticsProvider;
 use tantivy::query::Query;
 use tantivy::tokenizer::TokenizerManager;
 
-use crate::io::read::inverted_index::inverted_index_bundle_loader::load_bundle_search_directory;
+use crate::io::read::inverted_index::inverted_index_bundle_loader::load_bundle_searcher;
 use crate::io::read::inverted_index::inverted_index_warmup::InvertedIndexWarmupInfo;
 
 /// The matched rows of a block, with their scores when the reader scores them.
@@ -95,29 +97,27 @@ impl InvertedIndexReader {
         query: Box<dyn Query>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
-        let bundle =
-            load_bundle_search_directory(&self.dal, index_path, object_size, self.policy).await?;
-        let mut index = Index::open(bundle.directory.clone())?;
-        index.set_tokenizers(self.tokenizer_manager.clone());
-
-        let reader = index.reader()?;
-        let searcher = reader.searcher();
-        if searcher.segment_readers().len() != 1 {
-            return Err(ErrorCode::StorageOther(format!(
-                "inverted index bundle expects one Tantivy segment, got {}",
-                searcher.segment_readers().len()
-            )));
-        }
-
-        self.warmup
-            .warm_searcher(&searcher, &bundle.directory, self.has_score)
-            .await?;
-        self.search(&searcher, query, row_count)
+        let searcher = load_bundle_searcher(
+            &self.dal,
+            index_path,
+            object_size,
+            self.policy,
+            &self.tokenizer_manager,
+        )
+        .await?;
+        // The postings warmed for this search stay pinned until it completes.
+        with_search_scope(async {
+            self.warmup.warm_searcher(&searcher, self.has_score).await?;
+            self.search(searcher.searcher(), &*searcher, query, row_count)
+        })
+        .await
     }
 
+    /// Scores with the BM25 statistics of `statistics`, by default those of `searcher`.
     fn search(
         &self,
-        searcher: &tantivy::Searcher,
+        searcher: &Searcher,
+        statistics: &dyn Bm25StatisticsProvider,
         query: Box<dyn Query>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
@@ -132,7 +132,11 @@ impl InvertedIndexReader {
         let start = Instant::now();
         let (matched_rows, matched_scores) = if self.has_score {
             let collector = TopDocs::with_limit(score_limit);
-            let docs = searcher.search(&query, &collector.order_by_score())?;
+            let docs = searcher.search_with_statistics_provider(
+                &query,
+                &collector.order_by_score(),
+                statistics,
+            )?;
 
             let mut matched_rows = Vec::with_capacity(docs.len());
             let mut matched_scores = Vec::with_capacity(docs.len());
@@ -162,6 +166,7 @@ mod tests {
     use std::cmp::Reverse;
 
     use opendal::services::Memory;
+    use tantivy::Index;
     use tantivy::query::QueryParser;
     use tantivy::schema::Field;
     use tantivy::schema::Schema;
@@ -213,9 +218,11 @@ mod tests {
         row_count: usize,
     ) -> InvertedIndexFilterResult {
         let parser = QueryParser::for_index(index, vec![body]);
+        let searcher = index.reader().unwrap().searcher();
         reader(has_score, top_k)
             .search(
-                &index.reader().unwrap().searcher(),
+                &searcher,
+                &searcher,
                 parser.parse_query(text).unwrap(),
                 row_count as u64,
             )

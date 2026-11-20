@@ -95,6 +95,7 @@ pub fn cases() -> Vec<Box<dyn KindCase>> {
         case::<inverted::Lookup>(),
         case::<inverted::Payload>(),
         case::<inverted::FullPayload>(),
+        case::<inverted::Searcher>(),
         case::<spatial::Index>(),
         case::<column::Data>(),
         case::<column::Array>(),

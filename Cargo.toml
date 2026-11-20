@@ -593,6 +593,16 @@ debug-assertions = true
 [profile.release.package]
 databend-query = { codegen-units = 4 }
 databend-binaries = { codegen-units = 4 }
+# Full-text search: postings decoding, term dictionary blocks and BM25 scoring run per query
+# and per block, so the release `opt-level = "s"` costs search throughput.
+tantivy = { opt-level = 3 }
+tantivy-bitpacker = { opt-level = 3 }
+tantivy-columnar = { opt-level = 3 }
+tantivy-common = { opt-level = 3 }
+tantivy-fst = { opt-level = 3 }
+tantivy-sstable = { opt-level = 3 }
+bitpacking = { opt-level = 3 }
+zstd-sys = { opt-level = 3 }
 
 [profile.dev]
 # Full debuginfo roughly doubles codegen and link time of the big crates and adds ~13GB to
