@@ -1,0 +1,58 @@
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+create table compact_segment_added_int (a int)
+  storage_format = 'parquet' segment_format = 'row_oriented' block_per_segment = 10
+
+statement ok
+insert into compact_segment_added_int values (1)
+
+statement ok
+alter table compact_segment_added_int add column b int not null default 7
+
+statement ok
+alter table compact_segment_added_int add column c int null
+
+statement ok
+insert into compact_segment_added_int values (2, 100, 100)
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('default', 'compact_segment_added_int') limit 1
+----
+2 2 2
+
+# The first segment has no range for b. MIN/MAX must scan b, not just use the second segment.
+query II
+select min(b), max(b) from compact_segment_added_int
+----
+7 100
+
+statement ok
+optimize table compact_segment_added_int compact segment
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('default', 'compact_segment_added_int') limit 1
+----
+1 2 2
+
+query I
+select a from compact_segment_added_int where b = 7
+----
+1
+
+query I
+select a from compact_segment_added_int where c is null
+----
+1
+
+query II
+select min(b), max(b) from compact_segment_added_int
+----
+7 100
+
+statement ok
+drop table compact_segment_added_int
+
+statement ok
+unset enable_compact_after_write

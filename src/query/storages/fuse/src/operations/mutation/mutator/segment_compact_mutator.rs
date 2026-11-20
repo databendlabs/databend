@@ -15,18 +15,26 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::number::NumberDataType;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
+use databend_common_sql::binder::DefaultExprBinder;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -51,6 +59,7 @@ use crate::io::read_segment_stats;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::generate_virtual_column_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::reducers::reduce_column_statistics;
 use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
 
@@ -135,7 +144,7 @@ impl SegmentCompactMutator {
             &self.data_accessor,
             &self.location_generator,
             self.table_meta_timestamps,
-            self.ctx.cache_policy(),
+            self.ctx.clone(),
         );
         compactor.partition_key_count = self.partition_key_count;
         compactor.partition_key_id = self.partition_key_id;
@@ -197,11 +206,12 @@ impl<'a> SegmentCompactor<'a> {
         operator: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
         table_meta_timestamps: TableMetaTimestamps,
-        cache_policy: CachePolicy,
+        ctx: Arc<dyn TableContext>,
     ) -> Self {
         let merge_tasks = MergeTasks {
             operator: operator.clone(),
-            cache_policy,
+            cache_policy: ctx.cache_policy(),
+            int_columns: Arc::new(IntColumns::new(&schema, ctx)),
             io_permits: Arc::new(Semaphore::new(max_io_requests)),
             decode_permits: Arc::new(Semaphore::new(max_threads)),
             cluster_key_info: cluster_key_info.clone(),
@@ -394,7 +404,7 @@ impl<'a> SegmentCompactor<'a> {
     fn apply_merge_result(&mut self, result: MergeResult) {
         merge_statistics_mut(
             &mut self.compacted_state.removed_statistics,
-            &result.statistics,
+            &result.removed_statistics,
             self.cluster_key_info.as_ref(),
         );
         let replace_idx = *result.indexes.iter().min().expect("nonempty merge group");
@@ -414,6 +424,7 @@ struct MergeTasks {
     operator: Operator,
     // How the source statistics are read: the policy of the compaction.
     cache_policy: CachePolicy,
+    int_columns: Arc<IntColumns>,
     // Bounds all storage requests of one compaction: segment reads, stats
     // reads and merge output writes.
     io_permits: Arc<Semaphore>,
@@ -434,6 +445,7 @@ struct MergeTasks {
 struct DecodedGroup {
     blocks: Vec<Arc<BlockMeta>>,
     statistics: Statistics,
+    column_stats_updates: Vec<(ColumnId, Option<ColumnStatistics>)>,
     // All source statistics locations, or None if any source has no file.
     stats_locations: Option<Vec<(Location, usize)>>,
 }
@@ -441,7 +453,77 @@ struct DecodedGroup {
 struct MergeResult {
     indexes: Vec<usize>,
     location: String,
-    statistics: Statistics,
+    removed_statistics: Statistics,
+}
+
+// The schema and lazy defaults are shared by all merge groups of this compaction.
+struct IntColumns {
+    ctx: Arc<dyn TableContext>,
+    columns: Vec<IntColumn>,
+}
+
+struct IntColumn {
+    field: TableField,
+    default: OnceLock<Option<Scalar>>,
+}
+
+impl IntColumns {
+    fn new(schema: &TableSchemaRef, ctx: Arc<dyn TableContext>) -> Self {
+        let columns = schema
+            .fields()
+            .iter()
+            .filter(|field| {
+                field.computed_expr().is_none()
+                    && matches!(
+                        field.data_type().remove_nullable(),
+                        TableDataType::Number(NumberDataType::Int32)
+                    )
+            })
+            .map(|field| IntColumn {
+                field: field.clone(),
+                default: OnceLock::new(),
+            })
+            .collect();
+        Self { ctx, columns }
+    }
+
+    fn rebuild(&self, column: &IntColumn, blocks: &[Arc<BlockMeta>]) -> Option<ColumnStatistics> {
+        let id = column.field.column_id();
+        let mut inputs = Vec::new();
+        let mut default_rows = 0;
+        for block in blocks.iter().filter(|block| block.row_count != 0) {
+            // column_meta also covers split blocks whose col_metas map is empty.
+            if block.column_meta(&id).is_some() {
+                inputs.push(block.col_stats.get(&id)?);
+            } else {
+                default_rows += block.row_count;
+            }
+        }
+        if default_rows == 0 {
+            return (!inputs.is_empty()).then(|| reduce_column_statistics(&inputs));
+        }
+
+        let default = column
+            .default
+            .get_or_init(|| {
+                DefaultExprBinder::try_new(self.ctx.clone())
+                    .and_then(|mut binder| binder.get_deterministic_scalar(&column.field))
+                    .ok()
+                    .flatten()
+            })
+            .as_ref()?;
+        // All missing blocks contribute the same value. Combine their row counts
+        // before reduction; the default has no physical storage in these blocks.
+        let default_stats = ColumnStatistics::new(
+            default.clone(),
+            default.clone(),
+            if default.is_null() { default_rows } else { 0 },
+            0,
+            Some(u64::from(!default.is_null())),
+        );
+        inputs.push(&default_stats);
+        Some(reduce_column_statistics(&inputs))
+    }
 }
 
 impl MergeTasks {
@@ -464,6 +546,7 @@ impl MergeTasks {
             fragments,
             location,
             self.cluster_key_info.clone(),
+            self.int_columns.clone(),
             self.io_permits.clone(),
             self.stats_read_window,
             self.decode_permits.clone(),
@@ -476,6 +559,7 @@ impl MergeTasks {
     async fn decode_fragments(
         fragments: Vec<SegmentEntry>,
         cluster_key_info: Option<ClusterKeyInfo>,
+        int_columns: Arc<IntColumns>,
         decode_permits: Arc<Semaphore>,
     ) -> Result<DecodedGroup> {
         // Decode in parallel. Acquire before spawning to bound blocking work.
@@ -507,23 +591,48 @@ impl MergeTasks {
             .collect::<Result<Vec<_>>>()?;
         // All decode permits have been released before assembly acquires one;
         // this also works with a single CPU permit.
-        let (blocks, statistics, stats_locations) = run_cpu(decode_permits, move || {
+        run_cpu(decode_permits, move || {
             let block_count = decoded.iter().map(|(_, blocks)| blocks.len()).sum();
             let mut blocks = Vec::with_capacity(block_count);
             let mut virtual_inputs = Vec::with_capacity(block_count);
             let mut statistics = Statistics::default();
+            let mut covered = int_columns.columns.iter().collect::<Vec<_>>();
+            let mut incomplete = Vec::new();
             // A merged stats file is only valid if every source has stats.
             let mut stats_locations = Some(Vec::new());
             // try_join_all preserves source order, independently of decode completion.
             for (segment, segment_blocks) in decoded {
                 merge_statistics_mut(&mut statistics, &segment.summary, cluster_key_info.as_ref());
                 let virtual_schema = segment.summary.virtual_segment_schema.clone().map(Arc::new);
-                virtual_inputs.extend((0..segment_blocks.len()).map(|_| {
-                    VirtualBlockInput::Existing {
-                        schema: virtual_schema.clone(),
+                covered.retain(|column| {
+                    let has_stats = segment
+                        .summary
+                        .col_stats
+                        .contains_key(&column.field.column_id());
+                    if !has_stats {
+                        incomplete.push(*column);
                     }
-                }));
-                blocks.extend(segment_blocks);
+                    has_stats
+                });
+                for block in segment_blocks {
+                    // An older compactor could write a partial summary with the
+                    // key present, so verify coverage from the decoded blocks.
+                    if block.row_count != 0 {
+                        covered.retain(|column| {
+                            let id = column.field.column_id();
+                            let has_stats = block.col_stats.contains_key(&id)
+                                && block.column_meta(&id).is_some();
+                            if !has_stats {
+                                incomplete.push(*column);
+                            }
+                            has_stats
+                        });
+                    }
+                    virtual_inputs.push(VirtualBlockInput::Existing {
+                        schema: virtual_schema.clone(),
+                    });
+                    blocks.push(block);
+                }
                 if let Some(locations) = &mut stats_locations {
                     if let Some(meta) = segment.summary.additional_stats_meta.as_ref() {
                         locations
@@ -546,22 +655,33 @@ impl MergeTasks {
             } else {
                 None
             };
-            Ok((blocks, statistics, stats_locations))
+            let column_stats_updates = incomplete
+                .into_iter()
+                .map(|column| {
+                    (
+                        column.field.column_id(),
+                        int_columns.rebuild(column, &blocks),
+                    )
+                })
+                .collect();
+            Ok(DecodedGroup {
+                blocks,
+                statistics,
+                column_stats_updates,
+                stats_locations,
+            })
         })
-        .await?;
-        Ok(DecodedGroup {
-            blocks,
-            statistics,
-            stats_locations,
-        })
+        .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn merge_group(
         operator: Operator,
         cache_policy: CachePolicy,
         fragments: Vec<SegmentEntry>,
         location: String,
         cluster_key_info: Option<ClusterKeyInfo>,
+        int_columns: Arc<IntColumns>,
         io_permits: Arc<Semaphore>,
         stats_read_window: usize,
         decode_permits: Arc<Semaphore>,
@@ -570,8 +690,15 @@ impl MergeTasks {
         let DecodedGroup {
             blocks,
             mut statistics,
+            column_stats_updates,
             stats_locations,
-        } = Self::decode_fragments(fragments, cluster_key_info, decode_permits.clone()).await?;
+        } = Self::decode_fragments(
+            fragments,
+            cluster_key_info,
+            int_columns,
+            decode_permits.clone(),
+        )
+        .await?;
         let stats = if let Some(stats_locations) = stats_locations {
             Some(
                 Self::read_source_stats(
@@ -587,7 +714,7 @@ impl MergeTasks {
             None
         };
         let output_location = location.clone();
-        let (segment_data, cached_segment, stats_output, statistics) =
+        let (segment_data, cached_segment, stats_output, removed_statistics) =
             run_cpu(decode_permits, move || {
                 let mut stats_output = None;
                 if let Some(sources) = stats {
@@ -608,6 +735,16 @@ impl MergeTasks {
                     });
                     stats_output = Some((stats_path, stats_data));
                 }
+                // The compact commit adds and deducts the original statistics.
+                // Repairs affect the new segment only, not snapshot accounting.
+                let source_statistics = (!column_stats_updates.is_empty()).then(|| statistics.clone());
+                for (id, stats) in column_stats_updates {
+                    if let Some(stats) = stats {
+                        statistics.col_stats.insert(id, stats);
+                    } else {
+                        statistics.col_stats.remove(&id);
+                    }
+                }
                 let new_segment = SegmentInfo::new(blocks, statistics);
                 let segment_data = new_segment.to_bytes()?;
                 // Reuse the encoded blocks instead of encoding and compressing them again.
@@ -616,7 +753,8 @@ impl MergeTasks {
                     .is_enabled()
                     .then(|| CompactSegmentInfo::from_reader(segment_data.as_slice()))
                     .transpose()?;
-                Ok((segment_data, cached_segment, stats_output, new_segment.summary))
+                let removed_statistics = source_statistics.unwrap_or(new_segment.summary);
+                Ok((segment_data, cached_segment, stats_output, removed_statistics))
             }).await?;
         Self::write_outputs(
             &operator,
@@ -629,7 +767,7 @@ impl MergeTasks {
         Ok(MergeResult {
             indexes,
             location,
-            statistics,
+            removed_statistics,
         })
     }
 

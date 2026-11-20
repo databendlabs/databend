@@ -27,9 +27,18 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::NumberScalar;
+use databend_query::sessions::TableContextCachePolicy;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
+use databend_query::storages::fuse::FuseTable;
+use databend_query::storages::fuse::io::MetaWriter;
+use databend_query::storages::fuse::io::SegmentInfoReader;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::Reader;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 
 fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {
     //   sample message
@@ -216,5 +225,49 @@ async fn test_accurate_columns_rages() -> anyhow::Result<()> {
         assert!(res.get(&1).unwrap().max.may_be_truncated);
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_accurate_columns_ranges_requires_coverage_across_chunks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_setting("enable_compact_after_write".to_string(), "0".to_string())?;
+    fixture
+        .execute_command("create table range_coverage (a int, b int) segment_format='row_oriented'")
+        .await?;
+    for n in 1..=5 {
+        fixture
+            .execute_command(&format!("insert into range_coverage values ({n}, {n})"))
+            .await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_max_threads(1)?; // Four segments per chunk.
+    ctx.set_cache_policy(CachePolicy::BYPASS);
+    let catalog = ctx.get_catalog("default").await?;
+    let table = catalog
+        .get_table(&fixture.default_tenant(), "default", "range_coverage")
+        .await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.segments.len(), 5);
+    let location = &snapshot.segments[0];
+    let operator = fuse.get_operator();
+    let schema = table.schema();
+    let a = schema.column_id_of("a")?;
+    let b = schema.column_id_of("b")?;
+    let reader = SegmentInfoReader::new(operator.clone(), schema);
+    let mut segment = SegmentInfo::try_from(reader.read(location, &CachePolicy::BYPASS).await?)?;
+    assert!(segment.summary.col_stats.remove(&b).is_some());
+    segment.write_meta(&operator, &location.0).await?;
+
+    let ranges = table.accurate_columns_ranges(ctx, &[a, b]).await?.unwrap();
+    assert!(!ranges.contains_key(&b), "later chunk revived b");
+    let int = |v| Scalar::Number(NumberScalar::Int32(v));
+    assert_eq!(ranges[&a].min.value, int(1));
+    assert_eq!(ranges[&a].max.value, int(5));
     Ok(())
 }
