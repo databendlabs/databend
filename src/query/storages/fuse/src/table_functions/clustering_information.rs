@@ -653,8 +653,9 @@ fn summarize_linear_ranges(
     mut builders: Vec<ColumnBuilder>,
     key_types: &[DataType],
 ) -> Result<LinearClusterStatistics> {
-    // The row encoder orders float bits; OrderedFloat equates signed zeros and all NaNs.
-    for builder in &mut builders {
+    // Signed zeros are adjacent in encoded order, so collapsing them preserves
+    // single-key bounds. For composite keys it can change the extrema.
+    if let [builder] = builders.as_mut_slice() {
         let values = match builder {
             ColumnBuilder::Nullable(nullable) => &mut nullable.builder,
             _ => builder,
@@ -662,12 +663,16 @@ fn summarize_linear_ranges(
         match values {
             ColumnBuilder::Number(NumberColumnBuilder::Float32(values)) => {
                 for value in values {
-                    *value = value.canonicalize();
+                    if value.into_inner() == 0.0 {
+                        *value = 0.0.into();
+                    }
                 }
             }
             ColumnBuilder::Number(NumberColumnBuilder::Float64(values)) => {
                 for value in values {
-                    *value = value.canonicalize();
+                    if value.into_inner() == 0.0 {
+                        *value = 0.0.into();
+                    }
                 }
             }
             _ => {}
@@ -876,11 +881,57 @@ fn percentile_depth(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Float64Type;
     use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::number::F64;
     use databend_common_expression::types::number::NumberScalar;
+    use databend_common_pipeline_transforms::sorts::sort_merge;
 
     use super::*;
+    use crate::statistics::ClusterStatsGenerator;
+    use crate::statistics::ClusterStatsKey;
+    use crate::statistics::ClusterStatsLayout;
+
+    fn linear_stats_generator(key_count: usize) -> ClusterStatsGenerator {
+        ClusterStatsGenerator::new(
+            0,
+            (0..key_count)
+                .map(|offset| ClusterStatsKey {
+                    offset,
+                    source_column_id: None,
+                })
+                .collect(),
+            0,
+            0,
+            Default::default(),
+            vec![],
+            ClusterStatsLayout::Linear,
+            vec![],
+            Default::default(),
+        )
+    }
+
+    fn summarize_linear_blocks(
+        generator: &ClusterStatsGenerator,
+        types: &[DataType],
+        blocks: Vec<DataBlock>,
+    ) -> Result<LinearClusterStatistics> {
+        let mut builders = types
+            .iter()
+            .map(|ty| ColumnBuilder::with_capacity(ty, blocks.len() * 2))
+            .collect::<Vec<_>>();
+        for block in blocks {
+            let stats = generator
+                .gen_stats_for_append(block)?
+                .cluster_stats
+                .unwrap();
+            push_endpoint(&mut builders, stats.min());
+            push_endpoint(&mut builders, stats.max());
+        }
+        summarize_linear_ranges(builders, types)
+    }
 
     fn int(value: i32) -> Scalar {
         Scalar::Number(NumberScalar::Int32(value))
@@ -906,27 +957,72 @@ mod tests {
 
     #[test]
     fn test_linear_excludes_reversed_ranges() -> Result<()> {
-        let report = |ranges: &[(f64, f64)]| {
-            let ty = DataType::Number(NumberDataType::Float64).wrap_nullable();
-            let mut builder = ColumnBuilder::with_capacity(&ty, ranges.len() * 2);
-            for value in ranges.iter().flat_map(|&(min, max)| [min, max]) {
-                builder.push(Scalar::Number(NumberScalar::Float64(F64::from(value))).as_ref());
-            }
-            summarize_linear_ranges(vec![builder], &[ty])
-        };
-        let nan = -f64::NAN;
-        let mixed = report(&[(0.0, -0.0), (nan, 1.0), (-0.0, nan)])?;
-        assert_eq!(mixed.invalid_block_count, Some(1));
-        assert_eq!(mixed.average_overlaps, 1.0);
-        assert_eq!(mixed.p95_depth, 2);
+        let ty = DataType::Number(NumberDataType::Int32);
+        let mut builder = ColumnBuilder::with_capacity(&ty, 6);
+        for value in [1, 3, 4, 0, 2, 2] {
+            builder.push(int(value).as_ref());
+        }
+        let report = summarize_linear_ranges(vec![builder], &[ty])?;
+        assert_eq!(report.invalid_block_count, Some(1));
+        assert_eq!(report.average_overlaps, 1.0);
         assert_eq!(
-            mixed.block_depth_histogram,
+            report.block_depth_histogram,
             BTreeMap::from([("00002".into(), 2)])
         );
+        Ok(())
+    }
 
-        let all_invalid = report(&[(nan, 1.0)])?;
-        assert_eq!(all_invalid.invalid_block_count, Some(1));
-        assert!(all_invalid.block_depth_histogram.is_empty());
+    #[test]
+    fn test_linear_signed_zero_matches_append_order() -> Result<()> {
+        let generator = linear_stats_generator(1);
+        let sort_desc = generator.sort_descs();
+        let blocks = [vec![0.0, -0.0], vec![0.0], vec![-0.0]]
+            .into_iter()
+            .map(|rows| {
+                let block = DataBlock::new_from_columns(vec![Float64Type::from_data(rows)]);
+                DataBlock::sort(&block, &sort_desc, None)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let types = [DataType::Number(NumberDataType::Float64)];
+        let report = summarize_linear_blocks(&generator, &types, blocks)?;
+        assert_eq!(report.invalid_block_count, None);
+        assert_eq!(report.average_overlaps, 2.0);
+        assert_eq!(report.average_depth, 3.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_linear_preserves_composite_float_bounds() -> Result<()> {
+        let types = [DataType::Number(NumberDataType::Float64), DataType::String];
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("k", types[0].clone()),
+            DataField::new("s", types[1].clone()),
+        ]);
+        let generator = linear_stats_generator(2);
+        let run = |zero: f64, labels: Vec<&str>| {
+            DataBlock::new_from_columns(vec![
+                Float64Type::from_data(vec![zero; labels.len()]),
+                StringType::from_data(labels),
+            ])
+        };
+        let mut merged = sort_merge(
+            schema,
+            4,
+            generator.sort_descs(),
+            vec![run(0.0, vec!["b", "c"]), run(-0.0, vec!["a", "z"])],
+            false,
+            false,
+        )?;
+        let block = merged.next().unwrap()?;
+        assert_eq!(block.num_rows(), 4);
+
+        // (-0.0, 'z') is inside the encoded bounds but would fall outside
+        // if the reader normalized the float endpoints.
+        let report =
+            summarize_linear_blocks(&generator, &types, vec![block, run(-0.0, vec!["z"])])?;
+        assert_eq!(report.invalid_block_count, None);
+        assert_eq!(report.average_overlaps, 1.0);
+        assert_eq!(report.average_depth, 2.0);
         Ok(())
     }
 
