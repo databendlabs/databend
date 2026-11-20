@@ -17,8 +17,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
-use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
-
 pub trait JoinStream: Send + Sync {
     fn next(&mut self) -> Result<Option<DataBlock>>;
 }
@@ -30,13 +28,6 @@ pub trait Join: Send + Sync + 'static {
     /// Finalize build phase in chunks; each call processes the next pending build batch and
     /// returns its progress. Once all batches are consumed it returns `None` to signal completion.
     fn final_build(&mut self) -> Result<Option<ProgressValues>>;
-
-    fn add_runtime_filter_packet(&self, _packet: JoinRuntimeFilterPacket) {}
-
-    /// Generate runtime filter packet for the given filter description.
-    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
-        Ok(JoinRuntimeFilterPacket::default())
-    }
 
     /// Whether spill has happened for this join.
     fn is_spill_happened(&self) -> bool {

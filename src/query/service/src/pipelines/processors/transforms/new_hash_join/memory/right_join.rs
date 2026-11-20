@@ -14,7 +14,6 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_base::hints::assume;
@@ -32,12 +31,10 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
-use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::memory::left_join::null_block;
-use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
@@ -54,9 +51,6 @@ pub struct OuterRightHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
-    pub(crate) inlist_threshold: usize,
-    pub(crate) bloom_threshold: usize,
-    pub(crate) min_max_threshold: usize,
 
     pub(crate) finished: bool,
 }
@@ -71,9 +65,6 @@ impl OuterRightHashJoin {
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
-        let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
-        let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
-        let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
@@ -91,9 +82,6 @@ impl OuterRightHashJoin {
             function_ctx,
             basic_state: state,
             performance_context: context,
-            inlist_threshold,
-            bloom_threshold,
-            min_max_threshold,
             finished: false,
         })
     }
@@ -106,22 +94,6 @@ impl Join for OuterRightHashJoin {
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
         self.basic_hash_join.final_build::<true>()
-    }
-
-    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
-        let locked = self.basic_state.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-        self.basic_state.packets.as_mut().push(packet);
-    }
-
-    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
-        let packets = std::mem::take(self.basic_state.packets.as_mut());
-        merge_join_runtime_filter_packets(
-            packets,
-            self.inlist_threshold,
-            self.bloom_threshold,
-            self.min_max_threshold,
-        )
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
