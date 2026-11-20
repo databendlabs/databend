@@ -44,6 +44,7 @@ use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::VERGEN_BUILD_TIMESTAMP;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_common_version::VERGEN_RUSTC_SEMVER;
+use databend_meta::Secret;
 use databend_meta::configs::AdminConfig;
 use databend_meta::configs::GrpcAuthConfig as InnerGrpcAuthConfig;
 use databend_meta::configs::GrpcConfig;
@@ -51,7 +52,6 @@ use databend_meta::configs::GrpcCredential as InnerGrpcCredential;
 use databend_meta::configs::MetaServiceConfig;
 use databend_meta::configs::TlsConfig;
 use databend_meta::raft_config::MetaStartupError;
-use databend_meta::raft_config::Secret;
 use databend_meta::raft_config::config::RaftConfig as InnerRaftConfig;
 use databend_meta::raft_config::config::get_default_raft_advertise_host;
 use databend_meta::raft_config::data_version::DATA_VERSION;
@@ -595,7 +595,6 @@ impl Default for RaftConfig {
 impl From<RaftConfig> for InnerRaftConfig {
     fn from(x: RaftConfig) -> InnerRaftConfig {
         InnerRaftConfig {
-            config_id: "".to_string(),
             raft_listen_host: x.raft_listen_host,
             raft_advertise_host: x.raft_advertise_host,
             raft_api_port: x.raft_api_port,
@@ -969,9 +968,9 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
+    use databend_meta::Secret;
     use databend_meta::configs::GrpcAuthConfig as InnerGrpcAuthConfig;
     use databend_meta::configs::GrpcCredential as InnerGrpcCredential;
-    use databend_meta::raft_config::Secret;
     use databend_meta::raft_config::config::RaftConfig as InnerRaftConfig;
     use tempfile::tempdir;
 
