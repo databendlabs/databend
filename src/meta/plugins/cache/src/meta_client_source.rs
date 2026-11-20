@@ -59,9 +59,12 @@ const LEADER_LOOKUPS: usize = 3;
 /// new watch on the current leader. The changes in a snapshot that a node installs right after it
 /// steps down can still be missing from the copy for up to one check interval.
 ///
-/// A leader cut off from the other meta nodes still leads in its own view: its watch stays open,
-/// without changes, until the cut heals. If the client cannot connect to the leader, e.g. its
-/// endpoints lack the leader's gRPC address, the cache does not become ready.
+/// A leader cut off from the other meta nodes still leads in its own view. Since databend-meta
+/// v260629.8.0 it ends its watch streams once its quorum lease expires, and refuses new ones: a
+/// node that claims to lead but refuses the watch is then skipped, see
+/// [`MetaClientSource::watch_on_leader`]. An older one keeps its watch open, without changes,
+/// until the cut heals. If the client cannot connect to the leader, e.g. its endpoints lack the
+/// leader's gRPC address, the cache does not become ready.
 pub struct MetaClientSource {
     pub(crate) client: Arc<ClientHandle<DatabendRuntime>>,
 
@@ -133,7 +136,27 @@ impl MetaClientSource {
         };
 
         let target = leader.target_endpoint().to_string();
-        let strm = leader.watch(watch).await.map_err(status_error)?;
+        let strm = match leader.watch(watch).await {
+            Ok(strm) => strm,
+            Err(status) => {
+                // A leader cut off from a quorum still claims to lead, and refuses the watch.
+                // Every lookup would start on it again, since the client keeps the endpoint it
+                // last used: point the client at the next node, unless it has moved meanwhile.
+                // From there, the lookup finds the leader that a quorum follows.
+                let mut endpoints = leader.endpoints().lock();
+                if endpoints.current() == Some(target.as_str()) {
+                    let next = endpoints.choose_next();
+                    warn!(
+                        "{}: {} claims to lead but refused the watch: {}; switch to {}",
+                        self.name,
+                        target,
+                        status.message(),
+                        next
+                    );
+                }
+                return Err(status_error(status));
+            }
+        };
         debug!(
             "{}: watch stream established on {}, the leader of term {}",
             self.name, target, term
