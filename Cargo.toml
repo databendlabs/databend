@@ -162,11 +162,11 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # External meta service
-databend-meta = "260629.7.0"
-databend-meta-test-harness = "260629.7.0"
+databend-meta = "260629.11.0"
+databend-meta-test-harness = "260629.11.0"
 
 # External meta client
-databend-meta-client = "260205.13.5"
+databend-meta-client = "260205.13.7"
 structkey = "0.1.1"
 
 # Crates.io dependencies
@@ -227,7 +227,7 @@ chrono = { version = "0.4.45", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
 cidr = { version = "0.3.1" }
 clap = { version = "4.4.2", features = ["derive"] }
-codeq = { version = "0.5.2" }
+codeq = { version = "0.6.3" }
 comfy-table = "7"
 # Pinned: 0.4.40+ moves to zstd 0.14, while arrow/parquet still use zstd 0.13.
 compression-codecs = { version = "=0.4.39", features = [
@@ -648,9 +648,9 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.4.0" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.5" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.11.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.7" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.11.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # dev: v0.2.0 plus the reqwest rustls fix (datafuse-extras/paimon-rust#1).
