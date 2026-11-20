@@ -101,14 +101,14 @@ impl ColumnStatisticsState {
     pub fn finalize(
         self,
         mut column_distinct_count: HashMap<ColumnId, usize>,
-    ) -> Result<StatisticsOfColumns> {
+    ) -> StatisticsOfColumns {
         for (column_id, estimator) in &self.distinct_columns {
             column_distinct_count.insert(*column_id, estimator.finalize());
         }
 
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
         for (id, stats) in self.col_stats {
-            let mut col_stats = stats.finalize()?;
+            let mut col_stats = stats.finalize();
             if let Some(count) = column_distinct_count.get(&id) {
                 col_stats.distinct_of_values = Some(*count as u64);
             } else if col_stats.min == col_stats.max {
@@ -121,7 +121,7 @@ impl ColumnStatisticsState {
             }
             statistics.insert(id, col_stats);
         }
-        Ok(statistics)
+        statistics
     }
 }
 
@@ -192,7 +192,7 @@ mod tests {
         let mut column_stats_state =
             ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new());
         column_stats_state.add_block(&schema, &block)?;
-        let stats_1 = column_stats_state.finalize(HashMap::new())?;
+        let stats_1 = column_stats_state.finalize(HashMap::new());
 
         assert_eq!(stats_0, stats_1);
         Ok(())
@@ -226,7 +226,7 @@ mod tests {
             let mut state =
                 ColumnStatisticsState::new(&stats_columns, &stats_columns, &truncate_lens);
             state.add_block(&schema, &block)?;
-            let actual = state.finalize(HashMap::new())?;
+            let actual = state.finalize(HashMap::new());
 
             assert_eq!(actual, expected);
             assert_eq!(actual[&0].max(), &Scalar::String("ac\0\0".to_string()));
@@ -269,7 +269,7 @@ mod tests {
             let mut state =
                 ColumnStatisticsState::new(&stats_columns, &stats_columns, &truncate_lens);
             state.add_block(&schema, &block)?;
-            let actual = state.finalize(HashMap::new())?;
+            let actual = state.finalize(HashMap::new());
 
             assert_eq!(actual, expected);
             assert_eq!(actual[&0].min(), &Scalar::String(min.to_string()));
@@ -346,7 +346,7 @@ mod tests {
             for block in prefix {
                 state.add_block(&schema, block)?;
             }
-            let actual = state.finalize(HashMap::new())?;
+            let actual = state.finalize(HashMap::new());
             let combined = DataBlock::concat(prefix)?;
             let mut expected =
                 gen_columns_statistics(&combined, None, &schema, &truncate_lens, HashMap::new())?;
@@ -386,7 +386,7 @@ mod tests {
         for block in &blocks {
             state.add_block(&schema, block)?;
         }
-        let stats = state.finalize(HashMap::new())?;
+        let stats = state.finalize(HashMap::new());
         let col_stats = stats.get(&0).unwrap();
 
         assert_eq!(

@@ -355,7 +355,7 @@ impl StreamBlockBuilder {
                 }
             }
         }
-        let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
+        let col_stats = self.column_stats_state.finalize(column_distinct_count);
 
         let mut written_inverted = Vec::with_capacity(self.inverted_index_writers.len());
         for (i, (location, writer)) in std::mem::take(&mut self.inverted_index_writers)

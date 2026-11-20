@@ -10,18 +10,22 @@ DROP TABLE IF EXISTS t_string_stats_max_past_len;
 statement ok
 CREATE TABLE t_string_stats_max_past_len (
     carry_value STRING STATS_TRUNCATE_LEN 4,
-    all_max STRING STATS_TRUNCATE_LEN 4
+    all_max STRING STATS_TRUNCATE_LEN 4,
+    no_suffix STRING STATS_TRUNCATE_LEN 4
 ) row_per_block=100 storage_format='parquet';
 
 statement ok
 INSERT INTO t_string_stats_max_past_len VALUES
-    ('abc', 'abc'),
-    (concat(repeat(char(0x10FFFF), 4), 'z-suffix'), repeat(char(0x10FFFF), 6));
+    ('abc', 'abc', 'abc'),
+    (concat(repeat(char(0x10FFFF), 4), 'z-suffix'),
+     repeat(char(0x10FFFF), 6),
+     concat(repeat(char(0x10FFFF), 4), 'z'));
 
 # U+10FFFF is f48fbfbf in UTF-8:
 # - carry_value max: <MAX>x4 then 'z' + 1 = '{' (7b).
 # - all_max max: no scalar can be incremented, so the value bounds itself.
-# The min of both columns stays 'abc' (616263).
+# - no_suffix max: keep 'z' (7a), since incrementing it would not drop a suffix.
+# The min of all three columns stays 'abc' (616263).
 query TTT
 SELECT column_name, to_hex(statistics:min::string), to_hex(statistics:max::string)
 FROM fuse_block_statistics('default', 't_string_stats_max_past_len')
@@ -29,6 +33,7 @@ ORDER BY column_id;
 ----
 carry_value 616263 f48fbfbff48fbfbff48fbfbff48fbfbf7b
 all_max 616263 f48fbfbff48fbfbff48fbfbff48fbfbff48fbfbff48fbfbf
+no_suffix 616263 f48fbfbff48fbfbff48fbfbff48fbfbf7a
 
 query II
 SELECT count(*), count_if(carry_value > 'abc') FROM t_string_stats_max_past_len;
