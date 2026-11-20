@@ -127,6 +127,10 @@ pub struct ReadState {
     pub remain_reader: Arc<BlockReader>,
     pub filters: Option<Expr>,
     prewhere_selector: Option<FilterExecutor>,
+    /// Whether `filters` is set and deterministic. Evaluating a non-deterministic filter (e.g.
+    /// seeded `rand()`) in batches yields different results than evaluating it on the whole
+    /// block, so such filters skip the batched scan.
+    filters_deterministic: bool,
     pub runtime_filters: Vec<BloomRuntimeFilterRef>,
     pub pre_column_ids: HashSet<ColumnId>,
     pub remain_column_ids: HashSet<ColumnId>,
@@ -225,12 +229,16 @@ impl ReadState {
         let prewhere_selector = prewhere_filter
             .as_ref()
             .and_then(|filter| prewhere_selector(filter, &func_ctx, max_block_size));
+        let filters_deterministic = prewhere_filter
+            .as_ref()
+            .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS));
 
         Ok(Self {
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
             prewhere_selector,
+            filters_deterministic,
             runtime_filters,
             pre_column_ids,
             remain_column_ids,
@@ -325,7 +333,7 @@ impl ReadState {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
         const FILTER_BATCH_ROWS: usize = 8192;
         if no_output_columns
-            && self.filters.is_some()
+            && self.filters_deterministic
             && self.runtime_filters.is_empty()
             && self.remain_column_ids.is_empty()
             && part.nums_rows > FILTER_BATCH_ROWS
