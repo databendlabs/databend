@@ -35,6 +35,19 @@ SELECT count(*), count_if(carry_value > 'abc') FROM t_string_stats_max_past_len;
 ----
 2 1
 
+# Check both sides of the extended upper bound.
+query I
+SELECT count(*) FROM t_string_stats_max_past_len
+WHERE carry_value >= concat(repeat(char(0x10FFFF), 4), 'z');
+----
+1
+
+query I
+SELECT count(*) FROM t_string_stats_max_past_len
+WHERE carry_value > concat(repeat(char(0x10FFFF), 4), '{');
+----
+0
+
 query I
 SELECT count(*) FROM t_string_stats_max_past_len WHERE carry_value < 'abc' OR all_max < 'abc';
 ----
