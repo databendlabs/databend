@@ -1,0 +1,62 @@
+# run-with-settings: enable_block_stream_write=1
+# run-with-settings: enable_block_stream_write=0
+
+# Issue #21130: when the first STATS_TRUNCATE_LEN scalars of the max are all
+# U+10FFFF, no string of that length is an upper bound. The writer must accept
+# the value and keep both bounds, extending the max past the truncate length.
+statement ok
+DROP TABLE IF EXISTS t_string_stats_max_past_len;
+
+statement ok
+CREATE TABLE t_string_stats_max_past_len (
+    carry_value STRING STATS_TRUNCATE_LEN 4,
+    all_max STRING STATS_TRUNCATE_LEN 4
+) row_per_block=100 storage_format='parquet';
+
+statement ok
+INSERT INTO t_string_stats_max_past_len VALUES
+    ('abc', 'abc'),
+    (concat(repeat(char(0x10FFFF), 4), 'z-suffix'), repeat(char(0x10FFFF), 6));
+
+# U+10FFFF is f48fbfbf in UTF-8:
+# - carry_value max: <MAX>x4 then 'z' + 1 = '{' (7b).
+# - all_max max: no scalar can be incremented, so the value bounds itself.
+# The min of both columns stays 'abc' (616263).
+query TTT
+SELECT column_name, to_hex(statistics:min::string), to_hex(statistics:max::string)
+FROM fuse_block_statistics('default', 't_string_stats_max_past_len')
+ORDER BY column_id;
+----
+carry_value 616263 f48fbfbff48fbfbff48fbfbff48fbfbf7b
+all_max 616263 f48fbfbff48fbfbff48fbfbff48fbfbff48fbfbff48fbfbf
+
+query II
+SELECT count(*), count_if(carry_value > 'abc') FROM t_string_stats_max_past_len;
+----
+2 1
+
+query I
+SELECT count(*) FROM t_string_stats_max_past_len WHERE carry_value < 'abc' OR all_max < 'abc';
+----
+0
+
+# The extended max is longer than STATS_TRUNCATE_LEN, so it stays approximate:
+# MAX must return the actual values, not the bounds.
+query B
+SELECT MAX(carry_value) = concat(repeat(char(0x10FFFF), 4), 'z-suffix')
+FROM t_string_stats_max_past_len;
+----
+1
+
+query B
+SELECT MAX(all_max) = repeat(char(0x10FFFF), 6) FROM t_string_stats_max_past_len;
+----
+1
+
+query TT
+SELECT MIN(carry_value), MIN(all_max) FROM t_string_stats_max_past_len;
+----
+abc abc
+
+statement ok
+DROP TABLE t_string_stats_max_past_len;
