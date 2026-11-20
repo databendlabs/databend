@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_cache::CachePolicy;
@@ -50,6 +51,7 @@ use crate::io::build_virtual_segment_schema;
 use crate::io::read_segment_stats;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::generate_virtual_column_statistics;
+use crate::statistics::reducers::has_complete_block_column_stats;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::same_partition;
 use crate::statistics::sort_by_cluster_stats;
@@ -434,6 +436,7 @@ struct MergeTasks {
 struct DecodedGroup {
     blocks: Vec<Arc<BlockMeta>>,
     statistics: Statistics,
+    incomplete_columns: Vec<ColumnId>,
     // All source statistics locations, or None if any source has no file.
     stats_locations: Option<Vec<(Location, usize)>>,
 }
@@ -500,14 +503,14 @@ impl MergeTasks {
                 Ok::<_, ErrorCode>((segment, blocks))
             }));
         }
-        let decoded = futures::future::try_join_all(tasks)
+        let mut decoded = futures::future::try_join_all(tasks)
             .await
             .map_err(|e| ErrorCode::Internal(format!("compact segment decode task failed: {e}")))?
             .into_iter()
             .collect::<Result<Vec<_>>>()?;
         // All decode permits have been released before assembly acquires one;
         // this also works with a single CPU permit.
-        let (blocks, statistics, stats_locations) = run_cpu(decode_permits, move || {
+        run_cpu(decode_permits, move || {
             let block_count = decoded.iter().map(|(_, blocks)| blocks.len()).sum();
             let mut blocks = Vec::with_capacity(block_count);
             let mut virtual_inputs = Vec::with_capacity(block_count);
@@ -515,7 +518,7 @@ impl MergeTasks {
             // A merged stats file is only valid if every source has stats.
             let mut stats_locations = Some(Vec::new());
             // try_join_all preserves source order, independently of decode completion.
-            for (segment, segment_blocks) in decoded {
+            for (segment, segment_blocks) in &mut decoded {
                 merge_statistics_mut(&mut statistics, &segment.summary, cluster_key_info.as_ref());
                 let virtual_schema = segment.summary.virtual_segment_schema.clone().map(Arc::new);
                 virtual_inputs.extend((0..segment_blocks.len()).map(|_| {
@@ -523,7 +526,7 @@ impl MergeTasks {
                         schema: virtual_schema.clone(),
                     }
                 }));
-                blocks.extend(segment_blocks);
+                blocks.append(segment_blocks);
                 if let Some(locations) = &mut stats_locations {
                     if let Some(meta) = segment.summary.additional_stats_meta.as_ref() {
                         locations
@@ -546,14 +549,28 @@ impl MergeTasks {
             } else {
                 None
             };
-            Ok((blocks, statistics, stats_locations))
+            // A legacy summary may have a key but still omit rows from old
+            // blocks. Also reject ranges merged from only some source summaries.
+            let incomplete_columns = statistics
+                .col_stats
+                .keys()
+                .filter(|id| {
+                    !has_complete_block_column_stats(&blocks, id)
+                        || decoded.iter().any(|(segment, _)| {
+                            segment.summary.row_count != 0
+                                && !segment.summary.col_stats.contains_key(id)
+                        })
+                })
+                .copied()
+                .collect();
+            Ok(DecodedGroup {
+                blocks,
+                statistics,
+                incomplete_columns,
+                stats_locations,
+            })
         })
-        .await?;
-        Ok(DecodedGroup {
-            blocks,
-            statistics,
-            stats_locations,
-        })
+        .await
     }
 
     async fn merge_group(
@@ -570,6 +587,7 @@ impl MergeTasks {
         let DecodedGroup {
             blocks,
             mut statistics,
+            incomplete_columns,
             stats_locations,
         } = Self::decode_fragments(fragments, cluster_key_info, decode_permits.clone()).await?;
         let stats = if let Some(stats_locations) = stats_locations {
@@ -608,6 +626,12 @@ impl MergeTasks {
                     });
                     stats_output = Some((stats_path, stats_data));
                 }
+                // Only the new segment's pruning stats change. The snapshot
+                // commit adds and deducts the original source statistics.
+                let source_statistics = (!incomplete_columns.is_empty()).then(|| statistics.clone());
+                for id in incomplete_columns {
+                    statistics.col_stats.remove(&id);
+                }
                 let new_segment = SegmentInfo::new(blocks, statistics);
                 let segment_data = new_segment.to_bytes()?;
                 // Reuse the encoded blocks instead of encoding and compressing them again.
@@ -616,7 +640,8 @@ impl MergeTasks {
                     .is_enabled()
                     .then(|| CompactSegmentInfo::from_reader(segment_data.as_slice()))
                     .transpose()?;
-                Ok((segment_data, cached_segment, stats_output, new_segment.summary))
+                let source_statistics = source_statistics.unwrap_or(new_segment.summary);
+                Ok((segment_data, cached_segment, stats_output, source_statistics))
             }).await?;
         Self::write_outputs(
             &operator,
