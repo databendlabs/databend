@@ -113,7 +113,7 @@ impl AsyncSink for CommitMultiTableInsert {
             let table = self.tables.get(&table_id).unwrap();
 
             // generate snapshot
-            let mut snapshot_generator = AppendGenerator::new(self.ctx.clone(), self.overwrite);
+            let mut snapshot_generator = AppendGenerator::new(self.overwrite);
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             if table.is_temp() {
                 let prepared = build_update_temp_table_req(

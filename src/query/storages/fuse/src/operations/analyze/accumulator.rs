@@ -52,6 +52,10 @@ pub struct ReducedSegmentStats {
 
 impl ReducedSegmentStats {
     pub fn fold(&mut self, summary: &Statistics, cluster_key_info: Option<&ClusterKeyInfo>) {
+        // An empty segment has no rows to cover, and must not drop the reduced ranges.
+        if summary.row_count == 0 {
+            return;
+        }
         let next = Self {
             col_stats: summary.col_stats.clone(),
             cluster_stats: summary.cluster_stats.clone(),
