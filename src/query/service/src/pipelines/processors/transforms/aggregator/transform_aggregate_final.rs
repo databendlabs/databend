@@ -668,8 +668,6 @@ impl Processor for TransformFinalAggregate {
                 self.handle_serialized(restored, need_check_spill)?;
             }
             self.finish(Some(task.task_id), task.spilled_depth, task.tx)?;
-
-            return Ok(());
         } else {
             self.ensure_spill_depth(0);
             let sender = mem::take(&mut self.tx)
