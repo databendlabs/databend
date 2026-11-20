@@ -13,6 +13,7 @@ EvalScalar
     ├── build keys: [statistics_trace_t.a (#1)]
     ├── probe keys: [statistics_trace_t.a (#0)]
     ├── other filters: []
+    ├── runtime filters: [#0: statistics_trace_t.a (#1) -> statistics_trace_t.a (#0)]
     ├── Scan
     │   ├── table: default.statistics_trace_t (#1)
     │   ├── filters: []
@@ -22,7 +23,8 @@ EvalScalar
         ├── table: default.statistics_trace_t (#0)
         ├── filters: []
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: statistics_trace_t.a (#0)]
 
 
 === tpch_returned_orders ===
@@ -70,10 +72,12 @@ TopN
                     ├── build keys: [orders.o_custkey (#4)]
                     ├── probe keys: [customer.c_custkey (#0)]
                     ├── other filters: []
+                    ├── runtime filters: [#0: orders.o_custkey (#4) -> customer.c_custkey (#0)]
                     ├── Join(Inner)
                     │   ├── build keys: [orders.o_orderkey (#3)]
                     │   ├── probe keys: [lineitem.l_orderkey (#6)]
                     │   ├── other filters: []
+                    │   ├── runtime filters: [#1: orders.o_orderkey (#3) -> lineitem.l_orderkey (#6)]
                     │   ├── EvalScalar
                     │   │   ├── scalars: [orders.o_orderkey (#3) AS (#3), orders.o_custkey (#4) AS (#4), orders.o_orderdate (#5) AS (#12)]
                     │   │   └── Scan
@@ -93,12 +97,14 @@ TopN
                     │                   ├── table: default.lineitem (#2)
                     │                   ├── filters: [eq(lineitem.l_returnflag (#7), 'R')]
                     │                   ├── order by: []
-                    │                   └── limit: NONE
+                    │                   ├── limit: NONE
+                    │                   └── runtime filters: [#1: lineitem.l_orderkey (#6)]
                     └── Scan
                         ├── table: default.customer (#0)
                         ├── filters: [gte(customer.c_name (#2), 'Customer'), lt(customer.c_name (#2), 'Customes')]
                         ├── order by: []
-                        └── limit: NONE
+                        ├── limit: NONE
+                        └── runtime filters: [#0: customer.c_custkey (#0)]
 
 
 === customer_self_join ===
@@ -129,6 +135,7 @@ Filter
                 ├── build keys: [customer.c_nationkey (#4)]
                 ├── probe keys: [customer.c_nationkey (#1)]
                 ├── other filters: [lt(customer.c_custkey (#0), customer.c_custkey (#3))]
+                ├── runtime filters: [#0: customer.c_nationkey (#4) -> customer.c_nationkey (#1)]
                 ├── Scan
                 │   ├── table: default.customer (#1)
                 │   ├── filters: [gte(customer.c_name (#5), 'Customer'), lt(customer.c_name (#5), 'Customes')]
@@ -138,6 +145,7 @@ Filter
                     ├── table: default.customer (#0)
                     ├── filters: []
                     ├── order by: []
-                    └── limit: NONE
+                    ├── limit: NONE
+                    └── runtime filters: [#0: customer.c_nationkey (#1)]
 
 

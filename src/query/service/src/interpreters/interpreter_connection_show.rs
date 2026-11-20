@@ -28,6 +28,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -63,11 +64,17 @@ impl Interpreter for ShowConnectionsInterpreter {
 
             formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-            let visibility_checker = self
+            if self
                 .ctx
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
+            {
+                let visibility_checker = self
+                    .ctx
+                    .get_visibility_checker(false, Object::Connection)
+                    .await?;
+                formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
+            }
 
             // Merge three independent 'map().collect()' into one iteration.
             let capacity = formats.len();

@@ -641,6 +641,7 @@ TopN
                 ├── build keys: [small.item (#4)]
                 ├── probe keys: [events.item (#0)]
                 ├── other filters: []
+                ├── runtime filters: [#0: small.item (#4) -> events.item (#0)]
                 ├── Scan
                 │   ├── table: default.small (#1)
                 │   ├── filters: []
@@ -650,7 +651,8 @@ TopN
                     ├── table: default.events (#0)
                     ├── filters: []
                     ├── order by: []
-                    └── limit: NONE
+                    ├── limit: NONE
+                    └── runtime filters: [#0: events.item (#0)]
 
 
 === unique_key_is_not_rewritten ===

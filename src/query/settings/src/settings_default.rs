@@ -634,7 +634,7 @@ impl DefaultSettings {
                 }),
                 ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
-                    desc: "Selectivity threshold (percentage) for bloom join runtime filters. Bloom filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
+                    desc: "Initial bloom join runtime-filter threshold (percentage). Enable bloom if build rows are below this percentage of either known build-table rows or a single trusted probe target's table rows. Missing or zero denominators do not qualify. Default 10 means 10%; low-yield bloom may later be disabled by runtime sampling.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
@@ -1236,6 +1236,27 @@ impl DefaultSettings {
                     desc: "experiment setting enable row access policy(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_RBAC_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable stage and UDF privilege checks and object visibility filters.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Connection object privilege checks. At 0, retain legacy SUPER management and skip named Connection usage checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Sequence object privilege checks. At 0, retain legacy SUPER management, list all sequences and skip nextval checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_expand_roles", DefaultSettingValue {

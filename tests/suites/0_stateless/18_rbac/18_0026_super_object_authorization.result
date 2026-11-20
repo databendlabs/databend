@@ -1,16 +1,75 @@
-=== SUPER alone grants neither creation nor access ===
+=== Legacy Connection mode allows SUPER management and named usage ===
+allowed
 denied
+allowed
+allowed
+visible=1
+allowed
+=== Only SUPER can enable Connection object checks ===
 denied
-denied
-denied
-denied
+allowed
+allowed
 visible=0
+denied
+=== Legacy sequence mode: SUPER manages sequences, and all sequences are listed ===
+allowed
+owners: 0
+allowed
+visible=1
+denied
+denied
+allowed
+=== Sequence object checks keep the SUPER bypass for management ===
+allowed
+allowed
 visible=0
+denied
 === CREATE privileges must be granted to the current role ===
 denied
 denied
 === SET ROLE grants creation and selects the owner ===
 OWNERSHIP	super_creator_role
 OWNERSHIP	super_creator_role
+allowed
+allowed
+=== With object checks, a SUPER role owns the connections it creates or replaces ===
+allowed
+allowed
+OWNERSHIP	super_ops_role
+visible=1
+OWNERSHIP	super_ops_role
+visible=1
+=== In legacy sequence mode, nextval skips object checks ===
+allowed
+denied
+allowed
+allowed
+allowed
+denied
+visible=1
+=== Stage and UDF checks are on by default; SUPER can restore legacy behavior ===
+denied
+denied
+denied
+allowed
+allowed
+allowed
+=== Only direct SUPER or SUPER on the current role can change the global switches ===
+allowed
+denied
+denied
+denied
+denied
+denied
+denied
+denied
+session override rejected
+allowed
+session override rejected
+allowed
+session override rejected
+allowed
+denied
+denied
 allowed
 allowed

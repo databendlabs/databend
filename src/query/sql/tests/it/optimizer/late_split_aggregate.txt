@@ -112,6 +112,7 @@ Aggregate(Final)
             ├── build keys: [t.k (#0)]
             ├── probe keys: [t.k (#2)]
             ├── other filters: []
+            ├── runtime filters: [#0: t.k (#0) -> t.k (#2)]
             ├── Scan
             │   ├── table: default.t (#0)
             │   ├── filters: []
@@ -129,7 +130,8 @@ Aggregate(Final)
                             ├── table: default.t (#1)
                             ├── filters: [gt(t.v (#3), 0)]
                             ├── order by: []
-                            └── limit: NONE
+                            ├── limit: NONE
+                            └── runtime filters: [#0: t.k (#2)]
 
 === same_rows_eliminate_loose_aggregate ===
 description: Self-join elimination must consume logical aggregates before the late split boundary.
@@ -299,6 +301,7 @@ EvalScalar
     ├── build keys: [t.k (#0)]
     ├── probe keys: [t.k (#3)]
     ├── other filters: []
+    ├── runtime filters: [#0: t.k (#0) -> t.k (#3)]
     ├── Filter
     │   ├── filters: [gt(sum(v) (#2), 10)]
     │   └── Aggregate(Final)
@@ -322,5 +325,6 @@ EvalScalar
                 ├── table: default.t (#1)
                 ├── filters: []
                 ├── order by: []
-                └── limit: NONE
+                ├── limit: NONE
+                └── runtime filters: [#0: t.k (#3)]
 
