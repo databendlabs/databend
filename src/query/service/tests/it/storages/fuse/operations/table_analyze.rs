@@ -268,7 +268,9 @@ async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sync_post_commit_analyze_does_not_reacquire_table_lock() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let mut config = ConfigBuilder::create().build();
+    config.query.common.table_hook_mode = "sync".into();
+    let fixture = TestFixture::setup_with_config(&config).await?;
     for sql in [
         "SET enable_compact_after_write = 0",
         "SET acquire_lock_timeout = 0",

@@ -211,7 +211,7 @@ async fn split_blocks(fixture: &TestFixture, name: &str, drop_stats_of: &[&str])
         reduce_block_metas(&all_blocks, table.get_block_thresholds(), None)?.col_stats;
     table
         .commit_to_meta_server(
-            ctx.as_ref(),
+            ctx,
             table.get_table_info(),
             location_gen,
             new_snapshot,

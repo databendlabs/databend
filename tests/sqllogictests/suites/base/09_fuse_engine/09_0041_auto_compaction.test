@@ -82,6 +82,13 @@ select segment_count , block_count , row_count from fuse_snapshot('i15760', 't')
 
 
 #ISSUE 16498
+# Shorten the window only in async mode, so a wrongly queued Recluster cannot
+# satisfy the immediate sync assertion below.
+statement ok
+set global recluster_accumulation_secs =
+    select if(count_if(value = 'async') > 0, '0', '600')
+    from system.configs where name = 'table_hook_mode';
+
 statement ok
 create table t1(a int) cluster by(a) row_per_block=5;
 
@@ -97,16 +104,35 @@ insert into t1 values(4),(6),(10),(11);
 statement ok
 insert into t1 values(0),(9),(12);
 
+statement ok
+unset global recluster_accumulation_secs;
+
+# Sync must finish before INSERT returns. Only async may wait for the same
+# clustering invariant; don't use manual Recluster to make it pass.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET max_attempts := (SELECT if(count_if(value = 'async') > 0, 200, 0)
+                         FROM system.configs WHERE name = 'table_hook_mode');
+    LET attempts := 0;
+    LET ready := (SELECT coalesce(max(info:average_depth::DOUBLE) = 1.0, false)
+                  FROM clustering_information('i15760', 't1'));
+    WHILE NOT ready AND attempts < max_attempts DO
+        SELECT sleep(0.1);
+        ready := (SELECT coalesce(max(info:average_depth::DOUBLE) = 1.0, false)
+                  FROM clustering_information('i15760', 't1'));
+        attempts := attempts + 1;
+    END WHILE;
+    RETURN ready;
+END;
+$$;
+----
+1
+
 query B
 select count() > 4 from fuse_snapshot('i15760', 't1');
 ----
 1
-
-# Default mode: the single foreground Recluster round has already finished.
-query T
-select info:average_depth from clustering_information('i15760', 't1')
-----
-1.0
 
 #ISSUE 18859
 statement ok
