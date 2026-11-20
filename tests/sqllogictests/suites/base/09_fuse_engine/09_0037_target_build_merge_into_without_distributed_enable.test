@@ -199,6 +199,31 @@ merge into t_17800 using t1_17800 on t_17800.a=t1_17800.a when matched then upda
 ----
 17 33
 
+# The MERGE must trigger Auto Analyze. In async mode, wait for its publication
+# before checking the original per-column accuracy assertion below.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET max_attempts := (SELECT if(count_if(value = 'async') > 0, 200, 1)
+                         FROM system.configs WHERE name = 'table_hook_mode');
+    FOR attempt IN 1 TO max_attempts DO
+        LET ready := (SELECT count(DISTINCT column_name) = 2
+                      FROM system.statistics
+                      WHERE database = 'db' AND `table` = 't_17800'
+                        AND abs(stats_row_count - actual_row_count) * 10 < actual_row_count);
+        IF ready THEN
+            RETURN true;
+        END IF;
+        IF attempt < max_attempts THEN
+            SELECT sleep(0.1);
+        END IF;
+    END FOR;
+    RETURN false;
+END;
+$$;
+----
+1
+
 query B
 select abs(stats_row_count - actual_row_count) * 10 < actual_row_count from system.statistics where database = 'db' and table = 't_17800';
 ----
