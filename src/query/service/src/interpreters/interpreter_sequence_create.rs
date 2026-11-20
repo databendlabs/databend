@@ -30,6 +30,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 pub struct CreateSequenceInterpreter {
@@ -64,8 +65,17 @@ impl Interpreter for CreateSequenceInterpreter {
                 comment: self.plan.comment.clone(),
                 create_on: Utc::now(),
                 storage_version: 0,
-                // Written in the same transaction as the sequence.
-                owner_role: self.ctx.get_current_role().map(|role| role.name),
+                // Written in the same transaction as the sequence. Without sequence object
+                // checks, a new sequence has no owner and a replaced one keeps its owner.
+                owner_role: if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_sequence_privilege_check()?
+                {
+                    self.ctx.get_current_role().map(|role| role.name)
+                } else {
+                    None
+                },
             };
             let catalog = self.ctx.get_default_catalog()?;
             let reply = catalog.create_sequence(req).await?;

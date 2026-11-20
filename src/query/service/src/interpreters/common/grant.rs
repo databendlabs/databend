@@ -129,19 +129,15 @@ pub async fn validate_grant_object_exists(
                 .await?;
         }
         GrantObject::Connection(c) => {
-            return match StageResolver::from_table_context(
+            StageResolver::from_table_context(
                 ctx.clone(),
                 databend_common_users::UserApiProvider::instance(),
                 databend_common_config::GlobalConfig::instance()
                     .storage
                     .allow_insecure,
             )?
-            .resolve_connection(c)
-            .await
-            {
-                Ok(_c) => Ok(()),
-                Err(e) => Err(e),
-            };
+            .check_connection_exists(c)
+            .await?;
         }
         GrantObject::Sequence(c) => {
             let catalog = ctx.get_default_catalog()?;

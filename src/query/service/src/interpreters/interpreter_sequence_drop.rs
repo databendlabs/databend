@@ -27,6 +27,7 @@ use databend_common_users::UserApiProvider;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextTableAccess;
 
 pub struct DropSequenceInterpreter {
@@ -71,6 +72,7 @@ impl Interpreter for DropSequenceInterpreter {
             if reply.success {
                 let tenant = self.plan.ident.tenant();
                 let name = self.plan.ident.name().to_string();
+                self.ctx.record_sequence_access(&name);
                 let role_api = UserApiProvider::instance().role_api(tenant);
                 role_api
                     .revoke_ownership(&OwnershipObject::Sequence { name })

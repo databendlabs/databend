@@ -27,6 +27,7 @@ use databend_common_sql::plans::DescSequencePlan;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextTableAccess;
 
 pub struct DescSequenceInterpreter {
@@ -59,6 +60,7 @@ impl Interpreter for DescSequenceInterpreter {
             let catalog = self.ctx.get_default_catalog()?;
             // Already check seq privilege before interpreter
             let reply = catalog.get_sequence(req, &None).await?;
+            self.ctx.record_sequence_access(self.plan.ident.name());
 
             let name = vec![self.plan.ident.name().to_string()];
             let interval = vec![reply.meta.step];

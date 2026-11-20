@@ -216,6 +216,7 @@ impl QueryFragmentsActions {
                 .get_create_query_flight_client_with_current_rt()?,
             perf_config: self.ctx.get_perf_config(),
             user: self.ctx.get_current_user()?,
+            audit_role_name: self.ctx.audit_role_name(),
             cache_policy: self.ctx.cache_policy(),
         })
     }

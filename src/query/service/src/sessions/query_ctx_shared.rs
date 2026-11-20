@@ -76,6 +76,7 @@ use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
+use crate::interpreters::access_log::ObjectDomain;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
@@ -131,6 +132,9 @@ pub struct QueryContextShared {
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     query_lineage: Arc<RwLock<Option<QueryLineage>>>,
     pending_lineage_logs: Arc<RwLock<Vec<String>>>,
+    pub(super) audited_named_objects: Mutex<HashMap<ObjectDomain, HashSet<String>>>,
+    /// The coordinator's role for audit attribution only, never for authorization.
+    pub(super) remote_audit_role: OnceLock<Option<String>>,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
@@ -266,6 +270,8 @@ impl QueryContextShared {
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             query_lineage: Arc::new(RwLock::new(None)),
+            audited_named_objects: Mutex::default(),
+            remote_audit_role: OnceLock::new(),
             pending_lineage_logs: Arc::new(RwLock::new(Vec::new())),
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),

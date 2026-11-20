@@ -490,10 +490,10 @@ impl Binder {
             match stage_resolver
                 .as_ref()
                 .expect("stage resolver is initialized when connection option exists")
-                .resolve_connection(connection_name)
+                .check_connection_exists(connection_name)
                 .await
             {
-                Ok(_) => {
+                Ok(()) => {
                     // Connection exists, continue
                 }
                 Err(_) => {
