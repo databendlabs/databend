@@ -19,7 +19,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_base::uniq_id::GlobalUniq;
 use databend_meta::api::grpc::grpc_service::MetaServiceImpl;
 use databend_meta::configs;
 use databend_meta::meta_node::meta_handle::MetaHandle;
@@ -136,8 +135,6 @@ impl LocalMetaService {
         let mut config = configs::MetaServiceConfig::default();
 
         config.raft_config.id = 0;
-
-        config.raft_config.config_id = GlobalUniq::unique();
 
         config.raft_config.raft_dir = raft_dir.to_string_lossy().into_owned();
 
@@ -264,7 +261,6 @@ mod tests {
     use std::time::Instant;
 
     use databend_meta::runtime_api::TokioRuntime;
-    use databend_meta_client::kvapi::KVApi;
     use databend_meta_client::kvapi::KvApiExt;
     use databend_meta_client::types::UpsertKV;
 

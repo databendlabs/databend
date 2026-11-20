@@ -34,7 +34,7 @@ use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
-use databend_meta_client::kvapi::KVApi;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::UpsertKV;
 use databend_query::interpreters::InterpreterFactory;

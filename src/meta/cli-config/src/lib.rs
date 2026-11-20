@@ -595,7 +595,6 @@ impl Default for RaftConfig {
 impl From<RaftConfig> for InnerRaftConfig {
     fn from(x: RaftConfig) -> InnerRaftConfig {
         InnerRaftConfig {
-            config_id: "".to_string(),
             raft_listen_host: x.raft_listen_host,
             raft_advertise_host: x.raft_advertise_host,
             raft_api_port: x.raft_api_port,

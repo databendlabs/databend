@@ -27,12 +27,10 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KVStream;
 use databend_meta_client::kvapi::ListOptions;
-use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::protobuf::RaftRequest;
 use databend_meta_client::types::protobuf::StreamItem;
 use databend_meta_client::types::protobuf::meta_service_client::MetaServiceClient;
@@ -233,9 +231,6 @@ impl KVApi for StreamKV {
     }
 
     async fn list_kv(&self, _: ListOptions<'_, str>) -> Result<KVStream<MetaError>, MetaError> {
-        unimplemented!()
-    }
-    async fn upsert_kv(&self, _: UpsertKV) -> Result<Change<Vec<u8>>, MetaError> {
         unimplemented!()
     }
     async fn transaction(&self, _: TxnRequest) -> Result<TxnReply, MetaError> {

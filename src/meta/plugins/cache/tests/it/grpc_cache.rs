@@ -21,6 +21,7 @@ use databend_meta_client::ClientHandle;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
 use databend_meta_client::errors::CreationError;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::runtime_api::RuntimeApi;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::UpsertKV;

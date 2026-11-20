@@ -23,6 +23,7 @@ databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
+seq-marked = { workspace = true }
 sub-cache = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }

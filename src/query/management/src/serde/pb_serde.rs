@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::types::InvalidReply;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;

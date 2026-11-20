@@ -62,7 +62,7 @@ impl kvapi::Key for TableCloneByGroupIdent {
 mod tests {
     use std::collections::BTreeMap;
 
-    use databend_meta_client::kvapi::testing::assert_round_trip;
+    use structkey::testing::assert_round_trip;
 
     use super::OPT_KEY_CLONE_GROUP_ID;
     use super::TableCloneByGroupIdent;

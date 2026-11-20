@@ -36,6 +36,7 @@ use databend_meta::runtime_api::SpawnApi;
 use databend_meta_client::ClientHandle;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::MetaGrpcClient;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::Operation;
 use databend_meta_client::types::UpsertKV;

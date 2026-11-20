@@ -59,7 +59,7 @@ mod kvapi_impl {
 #[cfg(test)]
 mod tests {
 
-    use databend_meta_client::kvapi::testing::assert_round_trip;
+    use structkey::testing::assert_round_trip;
 
     use crate::principal::network_policy_ident::NetworkPolicyIdent;
     use crate::tenant::Tenant;

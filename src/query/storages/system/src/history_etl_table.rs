@@ -197,8 +197,6 @@ impl HistoryEtlTable {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::types::KVMeta;
-
     use super::*;
 
     #[test]
@@ -221,23 +219,15 @@ mod tests {
     #[test]
     fn rows_include_inactive_tables_and_legacy_checkpoints() -> Result<()> {
         let prefix = "tenant/history_log_transform/";
-        let checkpoint = |meta| SeqV {
-            seq: 1,
-            meta,
-            data: b"42".to_vec(),
-        };
+        let checkpoint = || SeqV::new(1, b"42".to_vec());
+        let mut dated_checkpoint = checkpoint();
+        dated_checkpoint.meta.get_or_insert_default().proposed_at_ms = Some(1788834023067);
         let rows = collect_rows(prefix, vec![
             (
                 format!("{prefix}query_history/batch_number"),
-                checkpoint(Some(KVMeta {
-                    expire_at: None,
-                    proposed_at_ms: Some(1788834023067),
-                })),
+                dated_checkpoint,
             ),
-            (
-                format!("{prefix}log_history/batch_number"),
-                checkpoint(None),
-            ),
+            (format!("{prefix}log_history/batch_number"), checkpoint()),
             (
                 format!("{prefix}log_history/heartbeat"),
                 SeqV::new(2, br#"{"from_node_id":"node-in-another-cluster"}"#.to_vec()),
@@ -258,7 +248,7 @@ mod tests {
             ),
             (
                 "other-tenant/history_log_transform/query_history/batch_number".into(),
-                checkpoint(None),
+                checkpoint(),
             ),
             (
                 format!("{prefix}ignored/future_field"),

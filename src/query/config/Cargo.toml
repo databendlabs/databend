@@ -23,6 +23,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta-client = { workspace = true }
+databend-meta-raft-config = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }

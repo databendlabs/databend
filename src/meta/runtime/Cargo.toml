@@ -13,7 +13,6 @@ databend-common-grpc = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
-databend-meta-client = { workspace = true }
 fastrace = { workspace = true }
 hyper-util = { workspace = true }
 tokio = { workspace = true }

@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_system::HistoryEtlError;
 use databend_meta_client::ClientHandle;
+use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::Operation;
 use databend_meta_client::types::TxnCondition;
@@ -398,6 +399,7 @@ mod tests {
     use databend_common_base::runtime::spawn;
     use databend_common_exception::Result;
     use databend_common_meta_store::MetaStore;
+    use databend_meta_client::kvapi::KvApiExt;
     use databend_meta_client::types::UpsertKV;
     use databend_meta_runtime::DatabendRuntime;
 

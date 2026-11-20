@@ -37,7 +37,7 @@ use databend_common_tracing::Config as LogConfig;
 use databend_meta_client::DEFAULT_GRPC_MESSAGE_SIZE;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::RpcClientTlsConfig;
-use databend_meta_client::Secret;
+use databend_meta_raft_config::Secret;
 use serde::Deserialize;
 use serde::Serialize;
 

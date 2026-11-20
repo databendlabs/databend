@@ -17,11 +17,9 @@
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KVStream;
 use databend_meta_client::kvapi::ListOptions;
-use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::protobuf::StreamItem;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -33,10 +31,6 @@ pub(crate) struct EmptyKv;
 #[async_trait::async_trait]
 impl KVApi for EmptyKv {
     type Error = MetaError;
-
-    async fn upsert_kv(&self, _req: UpsertKV) -> Result<Change<Vec<u8>>, MetaError> {
-        unreachable!("watched reads do not write")
-    }
 
     async fn get_many_kv(
         &self,

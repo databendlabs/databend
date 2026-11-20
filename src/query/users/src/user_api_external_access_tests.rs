@@ -27,10 +27,8 @@ use databend_meta_client::MetaGrpcClient;
 use databend_meta_client::kvapi::KVApi;
 use databend_meta_client::kvapi::KVStream;
 use databend_meta_client::kvapi::ListOptions;
-use databend_meta_client::types::Change;
 use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::errors::IncompleteStream;
 use databend_meta_runtime::DatabendRuntime;
 use futures::StreamExt;
@@ -53,10 +51,6 @@ struct CountingKv {
 #[async_trait::async_trait]
 impl KVApi for CountingKv {
     type Error = MetaError;
-
-    async fn upsert_kv(&self, req: UpsertKV) -> StdResult<Change<Vec<u8>>, MetaError> {
-        self.inner.upsert_kv(req).await
-    }
 
     async fn get_many_kv(
         &self,

@@ -128,7 +128,7 @@ pub struct IdGeneratorValue;
 mod t {
 
     use databend_meta_client::kvapi::StructKey;
-    use databend_meta_client::kvapi::testing::assert_round_trip;
+    use structkey::testing::assert_round_trip;
 
     use crate::id_generator::IdGenerator;
 
