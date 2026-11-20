@@ -598,63 +598,51 @@ where A: TypeCheckAdapter
                     }
                 }
             }
-        } else if (func_name.eq_ignore_ascii_case("to_number")
+        } else if func_name.eq_ignore_ascii_case("to_number")
             || func_name.eq_ignore_ascii_case("to_numeric")
             || func_name.eq_ignore_ascii_case("to_decimal")
             || func_name.eq_ignore_ascii_case("try_to_number")
             || func_name.eq_ignore_ascii_case("try_to_numeric")
-            || func_name.eq_ignore_ascii_case("try_to_decimal"))
-            && params.is_empty()
+            || func_name.eq_ignore_ascii_case("try_to_decimal")
         {
-            if args.is_empty() || args.len() > 4 {
+            if args.is_empty() || args.len() > 4 || (!params.is_empty() && params.len() != 2) {
                 return Err(ErrorCode::SemanticError(format!(
                     "Invalid arguments for `{func_name}`, get {} params and {} arguments",
                     params.len(),
                     args.len()
                 )));
             }
-            let arg_fn = |args: &[BoundScalar],
-                          index: usize,
-                          arg_name: &str,
-                          default: i64|
-             -> Result<i64> {
-                Ok(args
-                    .get(index)
-                    .map(|arg| match self.bound_constant_value(&arg.scalar, &arg.facts) {
-                        Some((value, _)) => Ok(value.get_i64()),
-                        None => Err(ErrorCode::SemanticError(format!(
-                            "Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"
-                        ))),
-                    })
-                    .transpose()?
-                    .flatten()
-                    .unwrap_or(default))
-            };
-
-            let (precision_index, scale_index) =
-                if args.len() > 1 && args[1].scalar.data_type().remove_nullable().is_string() {
-                    (2, 3)
-                } else {
-                    (1, 2)
+            let size = if let [precision, scale] = params.as_slice() {
+                DecimalSize::try_from_scalars(precision, scale)
+            } else {
+                let arg_fn = |index: usize, name: &str, default: u8| -> Result<Scalar> {
+                    let Some(arg) = args.get(index) else {
+                        return Ok(Scalar::Number(NumberScalar::UInt8(default)));
+                    };
+                    self.bound_constant_value(&arg.scalar, &arg.facts)
+                        .map(|(value, _)| value)
+                        .ok_or_else(|| ErrorCode::SemanticError(format!(
+                            "Invalid arguments for `{func_name}`, {name} is only allowed to be a constant"
+                        )))
                 };
-            let precision = arg_fn(
-                &args,
-                precision_index,
-                "precision",
-                DEFAULT_DECIMAL_PRECISION,
-            )?;
-            let scale = arg_fn(&args, scale_index, "scale", DEFAULT_DECIMAL_SCALE)?;
-
-            if let Err(err) = DecimalSize::new(precision as u8, scale as u8) {
-                return Err(ErrorCode::SemanticError(format!(
-                    "Invalid arguments for `{func_name}`, {}",
-                    err,
-                )));
+                let precision_index =
+                    if args.len() > 1 && args[1].scalar.data_type().remove_nullable().is_string() {
+                        2
+                    } else {
+                        1
+                    };
+                let precision = arg_fn(precision_index, "precision", DEFAULT_DECIMAL_PRECISION)?;
+                let scale = arg_fn(precision_index + 1, "scale", DEFAULT_DECIMAL_SCALE)?;
+                DecimalSize::try_from_scalars(&precision, &scale)
+            };
+            let size = size.map_err(|err| {
+                ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {err}"))
+            })?;
+            if params.is_empty() {
+                // Typed as literal params are, e.g. `to_decimal(10, 2)(x)`.
+                params.push(Scalar::Number(NumberScalar::UInt8(size.precision())));
+                params.push(Scalar::Number(NumberScalar::UInt8(size.scale())));
             }
-
-            // Typed as literal params are, e.g. `to_decimal(10, 2)(x)`.
-            params.push(Scalar::Number(NumberScalar::UInt8(precision as _)));
-            params.push(Scalar::Number(NumberScalar::UInt8(scale as _)));
         }
 
         let placeholders = args
