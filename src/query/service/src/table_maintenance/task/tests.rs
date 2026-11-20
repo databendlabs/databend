@@ -71,11 +71,13 @@ async fn wait_for_publication_waiter(ctx: &QueryContext, table_id: u64) -> Resul
 async fn test_table_hook_request_merge_releases_write_context() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let old_ctx = fixture.new_query_ctx().await?;
-    let latest_ctx = fixture.new_query_ctx().await?;
+    assert_eq!(old_ctx.get_settings().get_recluster_accumulation_secs()?, 0);
     old_ctx
         .get_settings()
         .set_global_setting("recluster_accumulation_secs".into(), "600".into())
         .await?;
+    let latest_ctx = fixture.new_query_ctx().await?;
+    latest_ctx.get_settings().load_changes().await?;
 
     let requests = async |ctx: &Arc<QueryContext>| {
         let target = target("default", "t", 1);

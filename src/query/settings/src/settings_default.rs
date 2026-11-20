@@ -1081,8 +1081,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("recluster_accumulation_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(600),
-                    desc: "Accumulation window in seconds for a new automatic Recluster generation. Zero makes it immediately eligible. Changes and new notifications do not move an existing generation's deadline.",
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Accumulation window in seconds for a new automatic Recluster generation. The default of zero makes it immediately eligible. Changes and new notifications do not move an existing generation's deadline.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,
                     range: Some(SettingRange::Numeric(0..=12 * 60 * 60)),
