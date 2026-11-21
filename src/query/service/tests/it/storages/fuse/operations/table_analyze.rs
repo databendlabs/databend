@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -40,6 +41,7 @@ use databend_common_storages_fuse::operations::AnalyzeOptions;
 use databend_common_storages_fuse::operations::commit_refresh_virtual_column;
 use databend_common_storages_fuse::operations::prepare_refresh_virtual_column;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_query::interpreters::commit_transaction;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
@@ -178,7 +180,7 @@ async fn test_unknown_legacy_sample_ndv_after_sql_append() -> anyhow::Result<()>
     updated.table_statistics_location = Some(location.clone());
     table
         .commit_to_meta_server(
-            ctx.as_ref(),
+            ctx.clone(),
             table.get_table_info(),
             generator,
             updated,
@@ -261,6 +263,61 @@ async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
     // check count: delete not affect counts
     check_column_ndv_statistics(ctx, table.clone(), expected).await?;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sync_post_commit_analyze_does_not_reacquire_table_lock() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().build();
+    config.query.common.table_hook_mode = "sync".into();
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    for sql in [
+        "SET enable_compact_after_write = 0",
+        "SET acquire_lock_timeout = 0",
+        "CREATE TABLE sync_analyze(a INT) enable_auto_analyze=1",
+        "INSERT INTO sync_analyze VALUES (1), (2)",
+        "BEGIN",
+        "DELETE FROM sync_analyze WHERE a = 1",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let hooks = commit_transaction(ctx.clone()).await?.unwrap();
+    let table = latest_fuse_table(&ctx, "sync_analyze").await?;
+    let before = table.read_table_snapshot().await?.unwrap();
+    assert_eq!(before.summary.row_count, 1);
+    assert_eq!(
+        before
+            .summary
+            .additional_stats_meta
+            .as_ref()
+            .unwrap()
+            .row_count,
+        2
+    );
+
+    // The DELETE has committed. Another writer may now own the table lock; the
+    // inline Analyze must still publish its fresh statistics using the sequence CAS.
+    let _lock = ctx
+        .clone()
+        .acquire_table_lock_by_id("default", table.get_id(), &LockTableOption::LockWithRetry)
+        .await?
+        .unwrap();
+    hooks.execute().await;
+    let after = latest_fuse_table(&ctx, "sync_analyze")
+        .await?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_eq!(
+        after
+            .summary
+            .additional_stats_meta
+            .as_ref()
+            .unwrap()
+            .row_count,
+        1
+    );
     Ok(())
 }
 
@@ -463,7 +520,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     snapshot_2.table_statistics_location = Some(table_statistics_location);
     fuse_table
         .commit_to_meta_server(
-            fixture.new_query_ctx().await?.as_ref(),
+            fixture.new_query_ctx().await?,
             fuse_table.get_table_info(),
             location_gen,
             snapshot_2,
@@ -990,7 +1047,7 @@ async fn test_column_statistics_provider_ignores_snapshot_virtual_stats() -> any
     snapshot.summary.virtual_col_stats = Some(HashMap::from([(0, conflicting_stat)]));
     table
         .commit_to_meta_server(
-            ctx.as_ref(),
+            ctx.clone(),
             table.get_table_info(),
             table.meta_location_generator(),
             snapshot,

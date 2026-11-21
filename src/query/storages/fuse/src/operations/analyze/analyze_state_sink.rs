@@ -55,6 +55,7 @@ use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
@@ -474,7 +475,7 @@ impl SinkAnalyzeState {
         let new_snapshot = self.build_snapshot(table, snapshot, table_statistics.as_ref())?;
         table
             .commit_to_meta_server(
-                self.ctx.as_ref(),
+                self.ctx.clone(),
                 &table.table_info,
                 &table.meta_location_generator,
                 new_snapshot,
@@ -535,13 +536,17 @@ impl SinkAnalyzeState {
         snapshot.summary.virtual_col_stats = None;
         snapshot.summary.cluster_stats = self.acc.segment_stats.cluster_stats.clone();
         if let Some(stats) = table_statistics {
+            // Background attempts stage concurrently, even against the same base. Use
+            // an independent file ID; the statistics payload still identifies its base.
+            let file_id = if self.ctx.is_automatic_maintenance() {
+                SnapshotId::now_v7()
+            } else {
+                stats.snapshot_id
+            };
             snapshot.table_statistics_location = Some(
                 table
                     .meta_location_generator
-                    .snapshot_statistics_location_from_uuid(
-                        &stats.snapshot_id,
-                        stats.format_version(),
-                    )?,
+                    .snapshot_statistics_location_from_uuid(&file_id, stats.format_version())?,
             );
         }
         Ok(snapshot)
@@ -682,7 +687,13 @@ impl Processor for SinkAnalyzeState {
                 }
             }
             AnalyzeStep::CommitStatistics => {
-                self.commit_statistics_with_retry().await?;
+                if self.ctx.is_automatic_maintenance() {
+                    // A stale background unit must release its reservation and table gate
+                    // before retrying. The scheduler will start from fresh statistics.
+                    self.commit_statistics().await?;
+                } else {
+                    self.commit_statistics_with_retry().await?;
+                }
                 self.step = AnalyzeStep::Finished;
             }
             AnalyzeStep::MergeSources | AnalyzeStep::Finished => unreachable!(),

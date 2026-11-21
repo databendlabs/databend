@@ -486,6 +486,40 @@ impl ClusterDiscovery {
         self.create_cluster_with_try_connect(config, nodes).await
     }
 
+    /// Queued work on a dynamically assigned node needs a real local member in
+    /// the discovery result. The foreground heartbeat fallback can otherwise
+    /// synthesize it from peers left in the old warehouse after reassignment.
+    pub(crate) async fn discover_for_maintenance(
+        &self,
+        config: &InnerConfig,
+    ) -> Result<Arc<Cluster>> {
+        if GlobalConfig::is_embedded_mode() {
+            return self.single_node_cluster(config).await;
+        }
+        if !config.query.common.cluster_id.is_empty() {
+            return self.discover(config).await;
+        }
+
+        let nodes = self
+            .warehouse_manager
+            .discover(&config.query.node_id)
+            .await
+            .and_then(|nodes| {
+                if nodes
+                    .iter()
+                    .any(|node| node.id == self.local_id && node.assigned_warehouse())
+                {
+                    Ok(nodes)
+                } else {
+                    Err(ErrorCode::InvalidWarehouse(format!(
+                        "Maintenance requires node '{}' to be a discovered warehouse member",
+                        self.local_id
+                    )))
+                }
+            });
+        self.create_cluster_with_try_connect(config, nodes).await
+    }
+
     pub async fn single_node_cluster(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         // For embedded/local mode with empty cluster_id and warehouse_id, skip meta lookup
         let use_embedded_mode = databend_common_config::GlobalConfig::is_embedded_mode();
@@ -1108,5 +1142,76 @@ pub struct CachedNode {
 impl MemSized for CachedNode {
     fn mem_bytes(&self) -> usize {
         0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_version::BUILD_INFO;
+    use databend_meta_client::types::NodeType;
+
+    use super::*;
+    use crate::test_kits::ConfigBuilder;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_maintenance_discovery_rejects_synthetic_local_member() -> Result<()> {
+        let _fixture = TestFixture::setup().await?;
+        let mut config = ConfigBuilder::create().build();
+        config.query.check_connection_before_schedule = false;
+        let meta = ClusterDiscovery::create_meta_client(&config, &BUILD_INFO).await?;
+        let discovery = ClusterDiscovery::try_create(&config, &BUILD_INFO, meta).await?;
+        let mut local = NodeInfo::create(
+            config.query.node_id.clone(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            BUILD_INFO.commit_detail.clone(),
+            String::new(),
+        );
+        local.node_type = NodeType::SelfManaged;
+        local.cluster_id = config.query.common.cluster_id.clone();
+        local.warehouse_id = config.query.common.warehouse_id.clone();
+        let mut peer = local.clone();
+        peer.id = "remaining-peer".into();
+        discovery.warehouse_manager.start_node(peer).await?;
+
+        // Static membership keeps its compatibility fallback for maintenance.
+        let static_cluster = discovery.discover_for_maintenance(&config).await?;
+        assert_eq!(static_cluster.get_warehouse_id()?, local.warehouse_id);
+
+        // Version filtering deterministically produces the same raw list as a
+        // reassignment between the node lookup and the cluster membership read:
+        // the local record says A, but the list contains only a peer in A.
+        config.query.common.cluster_id.clear();
+        config.query.common.warehouse_id.clear();
+        let mut stale_local = local.clone();
+        stale_local.binary_version.push_str("-old");
+        discovery.warehouse_manager.start_node(stale_local).await?;
+        let foreground = discovery.discover(&config).await?;
+        assert_eq!(foreground.get_warehouse_id()?, local.warehouse_id);
+        let error = discovery
+            .discover_for_maintenance(&config)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::INVALID_WAREHOUSE);
+
+        discovery
+            .warehouse_manager
+            .shutdown_node(local.id.clone())
+            .await?;
+        discovery
+            .warehouse_manager
+            .start_node(local.clone())
+            .await?;
+        assert_eq!(
+            discovery
+                .discover_for_maintenance(&config)
+                .await?
+                .get_warehouse_id()?,
+            local.warehouse_id
+        );
+        Ok(())
     }
 }

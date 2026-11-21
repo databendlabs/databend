@@ -14,9 +14,9 @@
 
 pub(crate) mod analyze_hook;
 pub(crate) mod compact_hook;
+pub(crate) mod recluster_hook;
 pub(crate) mod refresh_hook;
-pub(crate) mod table_hook_scheduler;
-pub(crate) mod table_hook_task;
+mod table_hook_task;
 pub(crate) mod vacuum_hook;
 
 #[allow(clippy::module_inception)]
@@ -24,59 +24,101 @@ mod hook;
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 pub use hook::HookOperator;
 pub(crate) use hook::execute_deferred_table_hooks;
 use log::info;
 use log::warn;
-pub use table_hook_scheduler::TableHookScheduler;
 
 use crate::interpreters::common::check_expected_table_id;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
+use crate::table_maintenance::scheduler::TaskKind;
 
-/// Adapt the shared identity check to the hooks' log-and-skip behavior.
-pub(crate) fn table_id_matches_target(
-    hook_name: &str,
-    expected_table_id: Option<u64>,
-    actual_table_id: u64,
-    catalog: &str,
-    database: &str,
-    table: &str,
-) -> bool {
-    let Some(expected_table_id) = expected_table_id else {
-        return true;
-    };
-
-    if check_expected_table_id(actual_table_id, Some(expected_table_id)).is_ok() {
-        return true;
-    }
-
-    log::warn!(
-        "Skip {} hook because table id mismatches target, expected_table_id={}, actual_table_id={}, catalog={}, database={}, table={}",
-        hook_name,
-        expected_table_id,
-        actual_table_id,
-        catalog,
-        database,
-        table,
-    );
-    false
+#[derive(Clone)]
+pub(crate) struct TableHookTarget {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub table_id: u64,
 }
 
-pub(crate) async fn resolve_current_table_name_by_id(
+impl TableHookTarget {
+    /// Each operation resolves by identity afresh, following renames but not replacements.
+    pub(crate) async fn resolve(
+        &self,
+        ctx: &Arc<QueryContext>,
+        hook_name: &str,
+    ) -> Result<Option<Self>> {
+        let Some((database, table)) = resolve_current_table_name_by_id(
+            ctx,
+            hook_name,
+            &self.catalog,
+            &self.database,
+            &self.table,
+            self.table_id,
+        )
+        .await?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            catalog: self.catalog.clone(),
+            database,
+            table,
+            table_id: self.table_id,
+        }))
+    }
+
+    fn is_system_history(&self) -> bool {
+        self.catalog == CATALOG_DEFAULT && self.database == SENSITIVE_SYSTEM_RESOURCE
+    }
+
+    /// A queued notification can outlive a rename, including a move into system_history.
+    async fn resolve_background(
+        &self,
+        ctx: &Arc<QueryContext>,
+        kind: TaskKind,
+    ) -> Result<Option<(Self, Arc<dyn Table>)>> {
+        let Some(desc) = self.resolve(ctx, kind.name()).await? else {
+            return Ok(None);
+        };
+        let table = ctx
+            .get_table(&desc.catalog, &desc.database, &desc.table)
+            .await?;
+        if !desc.matches_id(kind.name(), table.get_id())
+            || !hook::HookMode::for_table(&desc, table.as_ref()).queues(kind)
+        {
+            return Ok(None);
+        }
+        Ok(Some((desc, table)))
+    }
+
+    fn matches_id(&self, hook_name: &str, actual_table_id: u64) -> bool {
+        if self.table_id == actual_table_id {
+            return true;
+        }
+        warn!(
+            "Skip {hook_name} hook because table id mismatches target, expected_table_id={}, actual_table_id={actual_table_id}, catalog={}, database={}, table={}",
+            self.table_id, self.catalog, self.database, self.table,
+        );
+        false
+    }
+}
+
+async fn resolve_current_table_name_by_id(
     ctx: &Arc<QueryContext>,
     hook_name: &str,
     catalog_name: &str,
     database: &str,
     table: &str,
-    expected_table_id: Option<u64>,
+    table_id: u64,
 ) -> Result<Option<(String, String)>> {
-    let Some(table_id) = expected_table_id else {
-        return Ok(Some((database.to_string(), table.to_string())));
-    };
-
     // Most hooks still target the original name. Refresh and verify it first so the
     // common path needs no ID-to-name lookup and leaves a current table in the cache.
     if table_id_exists_in_database(ctx, catalog_name, database, table, table, table_id).await? {
@@ -190,6 +232,14 @@ async fn table_id_exists_in_database(
     {
         // A mismatch is a failed name candidate, not a resolver error.
         Ok(table) => Ok(check_expected_table_id(table.get_id(), Some(expected_table_id)).is_ok()),
-        Err(_) => Ok(false),
+        Err(error)
+            if matches!(
+                error.code(),
+                ErrorCode::UNKNOWN_TABLE | ErrorCode::UNKNOWN_DATABASE
+            ) =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(error),
     }
 }

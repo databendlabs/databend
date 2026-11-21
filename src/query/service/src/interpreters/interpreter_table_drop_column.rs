@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -69,9 +70,33 @@ impl Interpreter for DropTableColumnInterpreter {
             let tbl_name = self.plan.table.as_str();
 
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let table = catalog
-                .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-                .await?;
+            let tenant = self.ctx.get_tenant();
+            let mut table = catalog.get_table(&tenant, db_name, tbl_name).await?;
+            let table_id = table.get_id();
+            let lock_guard =
+                if table.engine() == "FUSE" && !table.is_read_only() && !table.is_temp() {
+                    self.ctx
+                        .clone()
+                        .acquire_table_lock_by_id(
+                            catalog_name,
+                            table_id,
+                            &LockTableOption::LockWithRetry,
+                        )
+                        .await?
+                } else {
+                    None
+                };
+            if lock_guard.is_some() {
+                // ANALYZE may have published while we waited. Use the latest metadata,
+                // but never apply the DDL to a replacement under the old table's lock.
+                table = catalog.get_table(&tenant, db_name, tbl_name).await?;
+                if table.get_id() != table_id {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot drop column: {catalog_name}.{db_name}.{tbl_name} changed while waiting for the table lock (expected table ID {table_id}, found {})",
+                        table.get_id()
+                    )));
+                }
+            }
 
             // check mutability
             table.check_mutable()?;

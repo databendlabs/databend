@@ -34,7 +34,6 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::BlockHLL;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
@@ -88,7 +87,6 @@ pub struct TxnTableHook {
     pub table: String,
     pub table_id: u64,
     pub compaction_num_block_hint: u64,
-    pub written_segments: HashSet<Location>,
     pub enable_auto_analyze: bool,
 }
 
@@ -606,7 +604,6 @@ impl TxnManager {
             hook.compaction_num_block_hint = hook
                 .compaction_num_block_hint
                 .max(previous.compaction_num_block_hint);
-            hook.written_segments.extend(previous.written_segments);
             hook.enable_auto_analyze |= previous.enable_auto_analyze;
         }
         self.txn_buffer.table_hooks.insert(key, hook);

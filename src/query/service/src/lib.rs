@@ -60,6 +60,7 @@ pub mod share;
 pub mod spillers;
 pub mod stream;
 pub mod table_functions;
+mod table_maintenance;
 pub mod test_kits;
 
 mod global_services;

@@ -16,6 +16,38 @@ use databend_common_meta_app::schema::LockKey;
 
 use super::*;
 
+impl QueryContext {
+    /// Reload the bound table under its own lock, never a replacement under the same name.
+    pub(crate) async fn get_table_with_lock(
+        self: &Arc<Self>,
+        catalog: &str,
+        database: &str,
+        name: &str,
+    ) -> Result<(Arc<dyn Table>, Option<Arc<LockGuard>>)> {
+        let table = self.get_table(catalog, database, name).await?;
+        if table.engine() != "FUSE" || table.is_read_only() || table.is_temp() {
+            return Ok((table, None));
+        }
+        let expected = table.get_id();
+        let guard = self
+            .clone()
+            .acquire_table_lock_by_id(catalog, expected, &LockTableOption::LockWithRetry)
+            .await?;
+        if guard.is_none() {
+            return Ok((table, None));
+        }
+        self.evict_table_from_cache(catalog, database, name)?;
+        let latest = self.get_table(catalog, database, name).await?;
+        if latest.get_id() != expected {
+            return Err(ErrorCode::TableVersionMismatched(format!(
+                "{catalog}.{database}.{name} changed while waiting for the table lock: expected table ID {expected}, found {}",
+                latest.get_id()
+            )));
+        }
+        Ok((latest, guard))
+    }
+}
+
 impl TableContextTableFactory for QueryContext {
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {

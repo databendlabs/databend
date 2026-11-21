@@ -284,7 +284,7 @@ async fn test_commit_to_meta_server() -> anyhow::Result<()> {
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
             let r = fuse_table
                 .commit_to_meta_server(
-                    ctx.as_ref(),
+                    ctx,
                     fuse_table.get_table_info(),
                     fuse_table.meta_location_generator(),
                     new_snapshot,
@@ -400,10 +400,6 @@ impl TableContext for CtxDelegation {
 
     fn result_cache_state(&self) -> &ResultCacheState {
         self.ctx.result_cache_state()
-    }
-
-    fn written_segment_locations(&self) -> &SegmentLocationsState {
-        self.ctx.written_segment_locations()
     }
 
     fn as_any(&self) -> &dyn Any {

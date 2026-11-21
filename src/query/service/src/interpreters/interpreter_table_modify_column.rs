@@ -932,9 +932,24 @@ impl Interpreter for ModifyTableColumnInterpreter {
             let db_name = self.plan.database.as_str();
             let tbl_name = self.plan.table.as_str();
 
+            // Policy changes commit synchronously with an exact table sequence.
+            // Coordinate with background snapshot publishers and reload after waiting.
+            // Data-type changes retain the version and lock acquired by the binder.
+            let (table, _policy_lock) = if matches!(
+                &self.plan.action,
+                ModifyColumnAction::SetMaskingPolicy(..)
+                    | ModifyColumnAction::UnsetMaskingPolicy(..)
+            ) {
+                self.ctx
+                    .get_table_with_lock(catalog_name, db_name, tbl_name)
+                    .await?
+            } else {
+                (
+                    self.ctx.get_table(catalog_name, db_name, tbl_name).await?,
+                    None,
+                )
+            };
             let catalog = self.ctx.get_catalog(catalog_name).await?;
-            // Preserve the version against which the new column definitions were bound.
-            let table = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
             table.check_mutable()?;
 

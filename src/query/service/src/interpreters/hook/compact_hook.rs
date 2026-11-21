@@ -18,17 +18,15 @@ databend_common_tracing::register_module_tag!("[COMPACT-HOOK]");
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::defer;
 use databend_common_catalog::cache_policy::CachePolicy;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::OptimizeCompactBlock;
-use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::RelOperator;
 use log::info;
 
@@ -37,9 +35,9 @@ use crate::interpreters::OptimizeCompactBlockInterpreter;
 use crate::interpreters::ReclusterTableInterpreter;
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
-use crate::interpreters::hook::table_hook_task::TableHookTarget;
+use crate::interpreters::hook::TableHookTarget;
+use crate::interpreters::hook::recluster_hook::recluster_plan;
 use crate::interpreters::hook::table_hook_task::TableHookTask;
-use crate::interpreters::hook::table_id_matches_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -72,23 +70,39 @@ pub(crate) fn compact_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
 }
 
 impl TableHookTask {
-    pub(super) async fn execute_compact(&self) -> Result<()> {
-        let ctx = self.ctx.clone();
+    /// Compact always runs on the write path. Either run Recluster inline as part of
+    /// the same timed operation, or return its target for the async route.
+    pub(super) async fn execute_compact(&self, recluster_inline: bool) -> Option<TableHookTarget> {
+        if !self.compact_after_write {
+            return None;
+        }
+        match self.do_compact(recluster_inline).await {
+            Ok(target) => target,
+            Err(error) => {
+                log::warn!(table_id = self.target.table_id, error :? = error; "Table hook compact failed");
+                None
+            }
+        }
+    }
+
+    async fn do_compact(&self, recluster_inline: bool) -> Result<Option<TableHookTarget>> {
+        let ctx = &self.ctx;
+        let target = &self.target;
+        let op_name = self.operation_name.as_str();
         // Maintenance after the write: `CachePolicy::MAINTENANCE` for its reads, on the context
         // of the write, whose own reads are done by now.
         ctx.set_cache_policy(ctx.cache_policy().at_most(CachePolicy::MAINTENANCE));
-        let op_name = &self.operation_name;
         // Hints are attached to the task's original table name. With no work, keep the
         // usual logging and metrics without resolving a maintenance target.
-        let resolved_target = if ctx.get_compaction_num_block_hint(&self.target.table) == 0 {
+        let resolved_target = if ctx.get_compaction_num_block_hint(&target.table) == 0 {
             None
         } else {
-            let Some(target) = self.target.resolve_compact(&ctx).await? else {
-                return Ok(());
+            let Some(target) = target.resolve_compact(ctx).await? else {
+                return Ok(None);
             };
             Some(target)
         };
-        let compact_target = resolved_target.as_ref().unwrap_or(&self.target);
+        let compact_target = resolved_target.as_ref().unwrap_or(target);
 
         metrics_inc_compact_hook_main_operation_time_ms(
             op_name,
@@ -103,55 +117,98 @@ impl TableHookTask {
             compact_target.table, compaction_num_block_hint
         );
         if compaction_num_block_hint == 0 {
-            return Ok(());
+            return Ok(None);
         }
         let compaction_limits = CompactionLimits {
             segment_limit: None,
             block_limit: Some(compaction_num_block_hint as usize),
         };
 
-        // keep the original progress value
-        let write_progress = ctx.get_write_progress();
-        let write_progress_value = write_progress.as_ref().get_values();
-        let scan_progress = ctx.get_scan_progress();
-        let scan_progress_value = scan_progress.as_ref().get_values();
-
-        match compact_table(
-            ctx,
-            compact_target,
-            compaction_limits,
-            self.lock_opt.clone(),
-        )
-        .await
-        {
-            Ok(_) => {
-                info!("Operation {op_name} and table optimization job completed successfully.");
+        let result: Result<bool> = keep_progress(ctx, async {
+            compact_table(
+                ctx.clone(),
+                compact_target,
+                compaction_limits,
+                self.lock_opt.clone(),
+            )
+            .await?;
+            let table = ctx
+                .get_table(
+                    &compact_target.catalog,
+                    &compact_target.database,
+                    &compact_target.table,
+                )
+                .await?;
+            if table.cluster_key_meta().is_none() {
+                return Ok(false);
             }
-            Err(e) => {
-                info!(
-                    "Operation {op_name} completed but table optimization job failed: {:?}",
-                    e
-                );
+            if !recluster_inline {
+                return Ok(true);
             }
-        }
-
-        // reset the progress value
-        write_progress.set(&write_progress_value);
-        scan_progress.set(&scan_progress_value);
+            let started = Instant::now();
+            let result = self.recluster_after_compact(compact_target).await;
+            info!(
+                event = "compact_hook.stage_finished",
+                stage = "recluster",
+                catalog = compact_target.catalog.as_str(),
+                database = compact_target.database.as_str(),
+                table = compact_target.table.as_str(),
+                elapsed_ms = started.elapsed().as_millis() as u64,
+                success = result.is_ok(),
+                error :? = result.as_ref().err();
+                "Compact hook stage finished"
+            );
+            result?;
+            Ok(false)
+        })
+        .await;
         metrics_inc_compact_hook_compact_time_ms(
             op_name,
             compact_start_at.elapsed().as_millis() as u64,
         );
+        let queue_recluster = result?;
+        info!("Operation {op_name} and table optimization job completed successfully.");
+        Ok(resolved_target.filter(|_| queue_recluster))
+    }
 
+    async fn recluster_after_compact(&self, target: &TableHookTarget) -> Result<()> {
+        let ctx = &self.ctx;
+        let Some(target) = target.resolve(ctx, "recluster").await? else {
+            return Ok(());
+        };
+        let table = ctx
+            .get_table(&target.catalog, &target.database, &target.table)
+            .await?;
+        if table.get_id() != target.table_id || table.cluster_key_meta().is_none() {
+            return Ok(());
+        }
+        let plan = recluster_plan(ctx, &target, table.as_ref(), false)?;
+        ctx.set_enable_sort_spill(false);
+        let allow_segment_claims = self.lock_opt != LockTableOption::NoLock;
+        let interpreter =
+            ReclusterTableInterpreter::try_create(ctx.clone(), plan, allow_segment_claims)?;
+        let build_res = interpreter.execute2().await?;
+        debug_assert!(build_res.main_pipeline.is_empty());
         Ok(())
     }
 }
 
-/// compact the target table, will do optimize table actions, including:
-///  - compact blocks
-///  - re-cluster if the cluster keys are defined
+/// Inline maintenance must not add its IO to the triggering statement's progress.
+async fn keep_progress<T>(ctx: &Arc<QueryContext>, work: impl Future<Output = T>) -> T {
+    let write_progress = ctx.get_write_progress();
+    let write_progress_value = write_progress.get_values();
+    let scan_progress = ctx.get_scan_progress();
+    let scan_progress_value = scan_progress.get_values();
+    let _restore = defer(move || {
+        write_progress.set(&write_progress_value);
+        scan_progress.set(&scan_progress_value);
+    });
+    work.await
+}
+
+/// Compact the blocks of the target table.
 ///
-/// `compact_target` must already be resolved by `execute_compact`.
+/// `compact_target` must already be resolved by the caller.
 async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: &TableHookTarget,
@@ -203,8 +260,6 @@ async fn compact_table(
             let complete_executor =
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
-            // Preserve parent-write hints for untouched segments and failed compaction.
-            // CommitSink adds published outputs; refresh filters out no-longer-live sources.
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute().await?;
             drop(complete_executor);
@@ -223,86 +278,7 @@ async fn compact_table(
         error :? = compact_result.as_ref().err();
         "Compact hook stage finished"
     );
-    compact_result?;
-
-    {
-        let table = ctx
-            .get_table(
-                &compact_target.catalog,
-                &compact_target.database,
-                &compact_target.table,
-            )
-            .await?;
-        if !table_id_matches_target(
-            "compact",
-            Some(compact_target.table_id),
-            table.get_id(),
-            &compact_target.catalog,
-            &compact_target.database,
-            &compact_target.table,
-        ) {
-            return Ok(());
-        }
-        // do recluster.
-        if table.cluster_key_meta().is_some() {
-            let recluster_start = Instant::now();
-            let recluster_result: Result<()> = async {
-                // evict the table from cache
-                ctx.evict_table_from_cache(
-                    &compact_target.catalog,
-                    &compact_target.database,
-                    &compact_target.table,
-                )?;
-                // Spill is disabled to keep this synchronous hook fast (spilling adds
-                // disk IO). Admission must then keep tasks inside the memory budget.
-                // TODO: remove once the async hook is enabled.
-                ctx.set_enable_sort_spill(false);
-                let target = if is_materialized_view_engine(table.engine()) {
-                    MaintenanceTarget::MaterializedView {
-                        table_id: table.get_id(),
-                    }
-                } else {
-                    MaintenanceTarget::Table
-                };
-                let recluster = ReclusterPlan {
-                    catalog: compact_target.catalog.clone(),
-                    database: compact_target.database.clone(),
-                    table: compact_target.table.clone(),
-                    target,
-                    expected_table_id: Some(compact_target.table_id),
-                    limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-                    selection: None,
-                    is_final: false,
-                };
-                let allow_segment_claims = lock_opt != LockTableOption::NoLock;
-                let recluster_interpreter = ReclusterTableInterpreter::try_create(
-                    ctx.clone(),
-                    recluster,
-                    allow_segment_claims,
-                )?;
-                // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
-                // we do not need to use `PipelineCompleteExecutor` to execute it.
-                let build_res = recluster_interpreter.execute2().await?;
-                debug_assert!(build_res.main_pipeline.is_empty());
-                Ok(())
-            }
-            .await;
-            info!(
-                event = "compact_hook.stage_finished",
-                stage = "recluster",
-                catalog = compact_target.catalog.as_str(),
-                database = compact_target.database.as_str(),
-                table = compact_target.table.as_str(),
-                elapsed_ms = recluster_start.elapsed().as_millis() as u64,
-                success = recluster_result.is_ok(),
-                error :? = recluster_result.as_ref().err();
-                "Compact hook stage finished"
-            );
-            recluster_result?;
-        }
-    }
-
-    Ok(())
+    compact_result
 }
 
 impl TableHookTarget {
@@ -337,8 +313,37 @@ fn move_compaction_hint_to_resolved_table(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_base::base::ProgressValues;
+    use databend_common_base::runtime::CatchUnwindFuture;
+
     use super::*;
     use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_inline_panic_restores_write_and_scan_progress() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let write = ctx.get_write_progress();
+        let scan = ctx.get_scan_progress();
+        write.set(&ProgressValues { rows: 3, bytes: 60 });
+        scan.set(&ProgressValues { rows: 5, bytes: 90 });
+        let result = CatchUnwindFuture::create(keep_progress(&ctx, async {
+            let extra = ProgressValues {
+                rows: 7,
+                bytes: 100,
+            };
+            write.incr(&extra);
+            scan.incr(&extra);
+            panic!("injected failure after maintenance IO");
+        }))
+        .await;
+        assert!(result.is_err());
+        let write = write.get_values();
+        let scan = scan.get_values();
+        assert_eq!((write.rows, write.bytes), (3, 60));
+        assert_eq!((scan.rows, scan.bytes), (5, 90));
+        Ok(())
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_move_compaction_hint_to_resolved_table() -> Result<()> {

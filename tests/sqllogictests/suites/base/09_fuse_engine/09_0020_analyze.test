@@ -94,6 +94,27 @@ a 3 0 8 (empty)
 statement ok
 delete from t where a=5
 
+# A DELETE can return before Auto Analyze publishes fresh stats in async mode.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := false;
+    REPEAT
+        ready := (SELECT count_if(stats_row_count = 4) > 0 FROM system.statistics
+                  WHERE database = 'db_09_0020' AND `table` = 't' AND column_name = 'a');
+        IF NOT ready THEN
+            SELECT sleep(0.1);
+        END IF;
+        attempts := attempts + 1;
+    UNTIL ready OR attempts >= 200
+    END REPEAT;
+    RETURN ready;
+END;
+$$;
+----
+1
+
 query TIIIT
 select * from fuse_statistic('db_09_0020', 't')
 ----
@@ -395,6 +416,28 @@ delete from t2 where a=1;
 ----
 1
 
+# Observe the post-DELETE Auto Analyze before checking stats or running the
+# explicit ANALYZE, which could otherwise race it in async mode.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := false;
+    REPEAT
+        ready := (SELECT count_if(stats_row_count = 3) > 0 FROM system.statistics
+                  WHERE database = 'db_09_0020' AND `table` = 't2' AND column_name = 'a');
+        IF NOT ready THEN
+            SELECT sleep(0.1);
+        END IF;
+        attempts := attempts + 1;
+    UNTIL ready OR attempts >= 200
+    END REPEAT;
+    RETURN ready;
+END;
+$$;
+----
+1
+
 query TTTIIIITTIT
 show statistics from table db_09_0020.t2;
 ----
@@ -503,6 +546,30 @@ db_09_0020 t4 b 4 4 3 0 a c <slt:ignore> (empty)
 
 statement ok
 delete from t4 where a = 4;
+
+# Auto Analyze publishes inline in sync mode and in the background in async
+# mode. Wait for refreshed stats, not just for the new snapshot's row count.
+query B
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET attempts := 0;
+    LET ready := false;
+    REPEAT
+        ready := (SELECT count(DISTINCT column_name) = 2
+                  FROM system.statistics
+                  WHERE database = 'db_09_0020' AND `table` = 't4'
+                    AND stats_row_count = 3 AND actual_row_count = 3);
+        IF NOT ready THEN
+            SELECT sleep(0.1);
+        END IF;
+        attempts := attempts + 1;
+    UNTIL ready OR attempts >= 200
+    END REPEAT;
+    RETURN ready;
+END;
+$$;
+----
+1
 
 query TTTIIIITTIT
 show statistics from table db_09_0020.t4;

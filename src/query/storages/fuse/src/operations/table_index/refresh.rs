@@ -194,7 +194,7 @@ impl FuseTable {
                 Some(previous),
                 None,
                 timestamps,
-                false,
+                ctx.is_automatic_maintenance(),
                 None,
             )
         })?;

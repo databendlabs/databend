@@ -12,16 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::take_alloc_error_panic;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
+use databend_common_metrics::table_maintenance::record_rejected;
 use databend_common_storage::init_stage_operator;
 use databend_common_storages_fuse::commit_with_backoff;
 use databend_common_storages_fuse::operations::vacuum_tables_from_info;
@@ -29,6 +34,7 @@ use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_io::Files;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::TxnTableHook;
+use futures::FutureExt;
 use log::error;
 use log::info;
 use log::warn;
@@ -96,12 +102,40 @@ impl PostCommitHooks {
     pub async fn execute(self) {
         // Maintenance builds and executes SQL pipelines. Keep its large future off the
         // caller's stack, including internal transactions nested in materialized-view refresh.
-        Box::pin(execute_deferred_table_hooks(
-            self.ctx,
-            self.table_hooks,
-            &self.txn_id,
-        ))
+        let txn_id = &self.txn_id;
+        // This outer boundary must not allocate: CatchUnwindFuture::create boxes
+        // its input before polling it. Protect the large future's Box allocation too.
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the outer boundary must also protect CatchUnwindFuture's allocation"
+        )]
+        let result = AssertUnwindSafe(async {
+            Box::pin(execute_deferred_table_hooks(
+                self.ctx,
+                self.table_hooks,
+                txn_id,
+            ))
+            .await;
+        })
+        .catch_unwind()
         .await;
+        if let Err(error) = result {
+            Self::report_panic(error, Some(txn_id));
+        }
+    }
+
+    fn report_panic(error: Box<dyn Any + Send>, txn_id: Option<&str>) {
+        let _guard = LimitMemGuard::enter_unlimited();
+        // These allocation-free boundaries return the original panic payload instead
+        // of converting it to an allocating ErrorCode while still over the limit.
+        take_alloc_error_panic();
+        let message = error
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| error.downcast_ref::<&str>().copied())
+            .unwrap_or("unknown panic");
+        record_rejected("post_commit_panic");
+        warn!(txn_id :? = txn_id, error = message; "Discard best-effort post-commit maintenance after panic");
     }
 }
 
@@ -130,19 +164,37 @@ pub async fn commit_transaction(ctx: Arc<QueryContext>) -> Result<Option<PostCom
             )
         };
         commit_with_backoff(ctx.clone(), &tenant, req).await?;
-        let (need_purge_files, tables_need_purge, table_hooks, txn_id) = {
+        let (need_purge_files, tables_need_purge, hooks) = {
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();
-            (
-                txn_mgr.need_purge_files(),
-                txn_mgr.table_need_purge(),
-                txn_mgr.take_table_hooks(),
-                txn_mgr.txn_id().to_string(),
-            )
+            let need_purge_files = txn_mgr.need_purge_files();
+            let tables_need_purge = txn_mgr.table_need_purge();
+            // Taking the hook vector and cloning its transaction ID can allocate too.
+            // Isolate only automatic maintenance preparation, not the actual commit
+            // or existing purge/vacuum work; preserve the original lock boundary.
+            // The common wrapper allocates ErrorCode on recovery. Defer reporting
+            // until after releasing this lock and clearing the transaction instead.
+            #[expect(
+                clippy::disallowed_methods,
+                reason = "defer allocating panic diagnostics until the transaction is cleared"
+            )]
+            let hooks = std::panic::catch_unwind(AssertUnwindSafe(|| PostCommitHooks {
+                ctx: ctx.clone(),
+                table_hooks: txn_mgr.take_table_hooks(),
+                txn_id: txn_mgr.txn_id().to_string(),
+            }));
+            (need_purge_files, tables_need_purge, hooks)
         };
         // set_auto_commit only changed the state. Clear the actual buffer before any
         // post-commit work, and finish the guard before handing tasks to another context.
         drop(guard);
+        let hooks = match hooks {
+            Ok(hooks) => Some(hooks),
+            Err(error) => {
+                PostCommitHooks::report_panic(error, None);
+                None
+            }
+        };
         for (stage_info, files) in need_purge_files {
             try_purge_files(ctx.clone(), &stage_info, &files).await;
         }
@@ -170,11 +222,7 @@ pub async fn commit_transaction(ctx: Arc<QueryContext>) -> Result<Option<PostCom
                 warn!("EE feature is not enabled, vacuum after transaction commit is skipped");
             }
         }
-        return Ok(Some(PostCommitHooks {
-            ctx,
-            table_hooks,
-            txn_id,
-        }));
+        return Ok(hooks);
     }
     Ok(None)
 }

@@ -13,8 +13,11 @@
 //  limitations under the License.
 
 use std::collections::HashSet;
+use std::time::Duration;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_catalog::lock::LockTableOption;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -28,6 +31,8 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::LockKey;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
@@ -50,6 +55,81 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures_util::TryStreamExt;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_ddl_rejects_replacement_while_waiting_for_table_lock() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    for name in ["ddl_target", "replacement"] {
+        fixture
+            .execute_command(&format!("CREATE TABLE {name}(s STRING)"))
+            .await?;
+        fixture
+            .execute_command(&format!("INSERT INTO {name} VALUES ('row')"))
+            .await?;
+        fixture
+            .execute_command(&format!("CREATE ASYNC INVERTED INDEX inv ON {name}(s)"))
+            .await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+    let original = ctx.get_table("default", "default", "ddl_target").await?;
+    let lock = ctx
+        .clone()
+        .acquire_table_lock_by_id(
+            "default",
+            original.get_id(),
+            &LockTableOption::LockWithRetry,
+        )
+        .await?
+        .expect("foreground table lock");
+    let key = LockKey::Table {
+        tenant: ctx.get_tenant(),
+        table_id: original.get_id(),
+    };
+    let replace = async {
+        // Both statements have resolved the old table and queued a lock revision on its ID.
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while catalog
+                .list_lock_revisions(ListLockRevReq::new(key.clone()))
+                .await?
+                .len()
+                != 3
+            {
+                tokio::task::yield_now().await;
+            }
+            Ok::<_, ErrorCode>(())
+        })
+        .await??;
+        fixture
+            .execute_command("ALTER TABLE ddl_target RENAME TO original")
+            .await?;
+        fixture
+            .execute_command("ALTER TABLE replacement RENAME TO ddl_target")
+            .await?;
+        let replacement = catalog
+            .get_table(&ctx.get_tenant(), "default", "ddl_target")
+            .await?;
+        drop(lock);
+        Ok::<_, anyhow::Error>(replacement.get_table_info().ident)
+    };
+    let (replacement, refresh, policy) = tokio::join!(
+        replace,
+        fixture.execute_command("REFRESH INVERTED INDEX inv ON ddl_target"),
+        fixture.execute_command("ALTER TABLE ddl_target MODIFY COLUMN s UNSET MASKING POLICY"),
+    );
+    let replacement = replacement?;
+    for result in [refresh, policy] {
+        assert_eq!(
+            result.unwrap_err().code(),
+            ErrorCode::TABLE_VERSION_MISMATCHED
+        );
+    }
+    let current = catalog
+        .get_table(&ctx.get_tenant(), "default", "ddl_target")
+        .await?;
+    assert_eq!(current.get_table_info().ident, replacement);
+    Ok(())
+}
 
 async fn check_segment_column_ids(
     fixture: &TestFixture,

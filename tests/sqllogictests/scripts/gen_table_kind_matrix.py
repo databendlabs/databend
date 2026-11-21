@@ -86,7 +86,9 @@ def gen_kind(out: list[str], kind: Kind):
         out.append("")
 
     out.append(f"## {kind.name} table")
-    ok(f"CREATE OR REPLACE {kw}TABLE {t}(a INT, b STRING)")
+    out.append("# Isolate the write-path matrix from Auto Analyze, which can publish a")
+    out.append("# snapshot concurrently with schema changes in async mode.")
+    ok(f"CREATE OR REPLACE {kw}TABLE {t}(a INT, b STRING) enable_auto_analyze = 0")
 
     # Two inserts, two blocks.
     ok(f"INSERT INTO {t} VALUES (1, 'a'), (2, 'b'), (3, 'c')")

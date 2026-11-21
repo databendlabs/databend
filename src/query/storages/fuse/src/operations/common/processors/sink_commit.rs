@@ -50,7 +50,6 @@ use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -117,7 +116,6 @@ pub struct CommitSink<F: SnapshotGenerator> {
     max_retry_elapsed: Option<Duration>,
     backoff: ExponentialBackoff,
 
-    new_segment_locs: Vec<Location>,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
     statistics_hll: BlockHLL,
@@ -134,8 +132,8 @@ pub struct CommitSink<F: SnapshotGenerator> {
     // We still need to read the previous snapshot before deciding to skip the commit,
     // because new tables must record their first snapshot even for empty writes.
     pending_noop_commit: bool,
-    // Recluster may rewrite disjoint segment sets concurrently. Serialize only the final
-    // refresh, sequence validation, and metadata CAS.
+    // Background Recluster and Refresh coordinate with foreground table locks.
+    // Serialize only the final refresh, sequence validation, and metadata CAS.
     acquire_commit_lock: bool,
     expected_ttl: Option<String>,
 }
@@ -189,7 +187,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
             retries: 0,
             max_retry_elapsed,
             input,
-            new_segment_locs: vec![],
             statistics_hll: HashMap::new(),
             insert_top_n: HashMap::new(),
             statistics_rows: 0,
@@ -312,8 +309,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let is_append_only_txn = self.is_append_only_txn();
         let should_preserve_statistics_rows =
             has_hll || has_top_n || (has_new_segments && is_append_only_txn);
-
-        self.new_segment_locs = new_segment_locs;
 
         if should_preserve_statistics_rows {
             self.statistics_rows = statistics_rows;
@@ -742,6 +737,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     None
                 };
 
+                // Protect the metadata RPC and successful-publication bookkeeping from
+                // cooperative maintenance cancellation. The caller may still force an
+                // unknown outcome after its bounded cleanup grace; never delete on that
+                // assumption. Foreground/temporary-table behavior is unchanged.
+                let mut publication_guard = self.ctx.begin_maintenance_publication()?;
                 let commit_result = async {
                     if self.acquire_commit_lock {
                         self.table = self.table.refresh(self.ctx.as_ref()).await?;
@@ -781,6 +781,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 .await;
                 // Do not hold the commit gate during vacuum, retry backoff, or snapshot rebase.
                 drop(commit_guard);
+                if commit_result.is_err() {
+                    // No retry/backoff is part of the publication critical section.
+                    drop(publication_guard.take());
+                    if self.ctx.is_automatic_maintenance() {
+                        self.ctx
+                            .check_aborting()
+                            .map_err(|cause| cause.with_context("after maintenance publication"))?;
+                    }
+                }
 
                 match commit_result {
                     Ok(_) => {
@@ -841,10 +850,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         if let Some(files) = &self.copied_files {
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
-                        for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
-                            self.ctx.written_segment_locations().add(segment_loc);
-                        }
-
                         if enable_auto_analyze {
                             self.ctx.set_enable_auto_analyze(true);
                         }

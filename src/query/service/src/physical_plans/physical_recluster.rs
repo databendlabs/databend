@@ -56,6 +56,7 @@ use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::BlockIndexBuildMode;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
 use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
@@ -147,17 +148,26 @@ impl IPhysicalPlan for Recluster {
                     ));
                 }
                 let settings = builder.ctx.get_settings();
-                // Execution-time guard: planning-time admission runs on the
-                // coordinator and cannot see this node's live memory pressure.
-                // Oversized tasks are only tolerable when sort spill can absorb
-                // the pressure; otherwise fail fast instead of risking an OOM kill.
+                // Automatic fragments reserve the planned envelope on this node. Use
+                // that grant's input bound, rather than mixing it with the legacy
+                // max_memory_usage/global-usage estimate. Manual execution retains
+                // its existing no-spill guard below.
                 let multiway_merge = task.kind == ReclusterTaskKind::MergeBlocks
                     && settings.get_enable_recluster_multiway_merge()?
                     && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
                     && !table.schema().fields().iter().any(|field| {
                         matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_)))
                     });
-                if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
+                if builder.ctx.is_automatic_maintenance() {
+                    let grant = settings.get_max_query_memory_usage()?;
+                    let input_limit = settings.get_recluster_block_size()?;
+                    if grant == 0 || task.total_bytes as u64 > input_limit {
+                        return Err(ErrorCode::NoResourcesAvailable(format!(
+                            "Recluster input exceeds this execution grant: task_bytes = {}, input_limit = {}, grant = {}",
+                            task.total_bytes, input_limit, grant
+                        )));
+                    }
+                } else if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
                     let max_memory_usage = settings.get_max_memory_usage()? as usize;
                     // `max_memory_usage == 0` means memory usage is unlimited.
                     if max_memory_usage != 0 {
@@ -220,7 +230,12 @@ impl IPhysicalPlan for Recluster {
                             matches!(field.data_type(), TableDataType::AggregateState { .. })
                         }) =>
                     {
-                        ReclusterIndexMergeInputs::try_create(table, task)?
+                        let index_mode = if builder.ctx.is_automatic_maintenance() {
+                            BlockIndexBuildMode::All
+                        } else {
+                            BlockIndexBuildMode::Synchronous
+                        };
+                        ReclusterIndexMergeInputs::try_create_with_mode(table, task, index_mode)?
                     }
                     _ => None,
                 };

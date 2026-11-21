@@ -5,8 +5,10 @@
 # same expected results, so a kind-specific divergence shows up as a diff.
 
 ## regular table
+# Isolate the write-path matrix from Auto Analyze, which can publish a
+# snapshot concurrently with schema changes in async mode.
 statement ok
-CREATE OR REPLACE TABLE tkm_regular(a INT, b STRING)
+CREATE OR REPLACE TABLE tkm_regular(a INT, b STRING) enable_auto_analyze = 0
 
 statement ok
 INSERT INTO tkm_regular VALUES (1, 'a'), (2, 'b'), (3, 'c')
@@ -234,8 +236,10 @@ statement ok
 DROP TABLE tkm_regular_src
 
 ## transient table
+# Isolate the write-path matrix from Auto Analyze, which can publish a
+# snapshot concurrently with schema changes in async mode.
 statement ok
-CREATE OR REPLACE TRANSIENT TABLE tkm_transient(a INT, b STRING)
+CREATE OR REPLACE TRANSIENT TABLE tkm_transient(a INT, b STRING) enable_auto_analyze = 0
 
 statement ok
 INSERT INTO tkm_transient VALUES (1, 'a'), (2, 'b'), (3, 'c')
@@ -463,8 +467,10 @@ statement ok
 DROP TABLE tkm_transient_src
 
 ## temp table
+# Isolate the write-path matrix from Auto Analyze, which can publish a
+# snapshot concurrently with schema changes in async mode.
 statement ok
-CREATE OR REPLACE TEMP TABLE tkm_temp(a INT, b STRING)
+CREATE OR REPLACE TEMP TABLE tkm_temp(a INT, b STRING) enable_auto_analyze = 0
 
 statement ok
 INSERT INTO tkm_temp VALUES (1, 'a'), (2, 'b'), (3, 'c')

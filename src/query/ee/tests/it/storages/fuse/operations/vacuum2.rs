@@ -52,6 +52,7 @@ use databend_enterprise_query::test_kits::context::EESetup;
 use databend_meta_client::types::MatchSeq;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::VacuumTablesInterpreter;
+use databend_query::interpreters::commit_transaction;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextTableAccess;
@@ -1721,6 +1722,64 @@ async fn test_vacuum2_protected_segments_span_multiple_chunks() -> anyhow::Resul
     let scanned_rows: usize = blocks.iter().map(|b| b.num_rows()).sum();
     assert_eq!(scanned_rows, SEGMENT_COUNT + 1);
 
+    Ok(())
+}
+
+/// Dispatch the first commit's hooks only after another transaction has staged an append.
+/// A background Refresh would publish a snapshot and vacuum objects the writer still needs.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_transient_post_commit_hooks_preserve_buffered_append() -> anyhow::Result<()> {
+    let mut setup = EESetup::new();
+    setup.config_mut().query.common.table_hook_mode = "async".into();
+    let fixture = TestFixture::setup_with_custom(setup).await?;
+    fixture
+        .execute_command("CREATE TRANSIENT TABLE tr_refresh(s STRING, ASYNC INVERTED INDEX inv(s))")
+        .await?;
+    fixture.execute_command("BEGIN").await?;
+    fixture
+        .execute_command("INSERT INTO tr_refresh VALUES ('first')")
+        .await?;
+    let hooks = commit_transaction(fixture.new_query_ctx().await?)
+        .await?
+        .unwrap();
+
+    let writer = fixture.new_session_with_type(SessionType::Dummy).await?;
+    let write = async |sql: &str| {
+        execute_command(
+            writer
+                .create_query_context(&databend_common_version::BUILD_INFO)
+                .await?,
+            sql,
+        )
+        .await
+    };
+    write("BEGIN").await?;
+    write("INSERT INTO tr_refresh VALUES ('second')").await?;
+    let coverage =
+        "SELECT count_if(inverted_index_size > 0) FROM fuse_block('default', 'tr_refresh')";
+    assert_eq!(
+        query_count(fixture.execute_query(coverage).await?).await?,
+        0
+    );
+    hooks.execute().await;
+    // Let any erroneously dispatched publication *and its vacuum* finish before COMMIT.
+    let idle = "SELECT count(*) FROM system.metrics WHERE metric='table_maintenance_mailbox_tables' AND try_cast(value AS FLOAT64) = 0";
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while query_count(fixture.execute_query(idle).await?).await? == 0 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        anyhow::Ok(())
+    })
+    .await??;
+    write("COMMIT").await?;
+    assert_eq!(
+        query_count(fixture.execute_query(coverage).await?).await?,
+        0
+    );
+    for word in ["first", "second"] {
+        let query = format!("SELECT count(*) FROM tr_refresh WHERE s = '{word}'");
+        assert_eq!(query_count(fixture.execute_query(&query).await?).await?, 1);
+    }
     Ok(())
 }
 

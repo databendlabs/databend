@@ -15,7 +15,7 @@
 mod access;
 pub(crate) mod access_log;
 pub(crate) mod common;
-mod hook;
+pub(crate) mod hook;
 mod interpreter;
 mod interpreter_add_warehouse_cluster;
 mod interpreter_alter_database;
@@ -237,7 +237,6 @@ pub(crate) use access::validate_stage_write_access;
 pub use common::InterpreterQueryLog;
 pub use common::QueryFinishHooks;
 pub use hook::HookOperator;
-pub use hook::TableHookScheduler;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter::interpreter_plan_sql;
