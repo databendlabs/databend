@@ -40,6 +40,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
@@ -50,6 +51,7 @@ use databend_common_pipeline_transforms::OrderedBlockCompactBuilder;
 use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_pipeline_transforms::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
@@ -147,16 +149,25 @@ impl IPhysicalPlan for Recluster {
                     ));
                 }
                 let settings = builder.ctx.get_settings();
-                // Execution-time guard: planning-time admission runs on the
-                // coordinator and cannot see this node's live memory pressure.
-                // Oversized tasks are only tolerable when sort spill can absorb
-                // the pressure; otherwise fail fast instead of risking an OOM kill.
+                let block_thresholds = table.get_block_thresholds();
+                let schema = table.schema_with_stream();
+                let mut cluster_stats_gen = table.get_cluster_stats_gen(
+                    builder.ctx.clone(),
+                    task.level + 1,
+                    block_thresholds,
+                    DataSchema::from(schema.clone()).into(),
+                )?;
+                let blockwise_sort = task.kind == ReclusterTaskKind::SortBlocks
+                    && cluster_stats_gen.is_linear()
+                    && !is_materialized_view_engine(table.engine());
                 let multiway_merge = task.kind == ReclusterTaskKind::MergeBlocks
                     && settings.get_enable_recluster_multiway_merge()?
                     && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
                     && !table.schema().fields().iter().any(|field| {
                         matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_)))
                     });
+                // Recheck the task's byte budget against executor-local memory
+                // when sort spill is disabled, except for the multiway merge path.
                 if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
                     let max_memory_usage = settings.get_max_memory_usage()? as usize;
                     // `max_memory_usage == 0` means memory usage is unlimited.
@@ -172,9 +183,7 @@ impl IPhysicalPlan for Recluster {
                     }
                 }
                 let recluster_block_nums = task.parts.len();
-                let block_thresholds = table.get_block_thresholds();
                 let table_info = table.get_table_info();
-                let schema = table.schema_with_stream();
                 let description = task.stats.get_description(&table_info.desc);
                 let plan = DataSourcePlan {
                     source_info: DataSourceInfo::TableSource(table_info.clone()),
@@ -202,18 +211,14 @@ impl IPhysicalPlan for Recluster {
                         event = "recluster.input_planned",
                         table_id = table.get_id(),
                         task_kind :? = task.kind,
+                        cluster_layout = cluster_stats_gen.layout_name(),
+                        input_blocks = recluster_block_nums,
+                        input_bytes = task.total_bytes,
                         input_levels :serde = task.input_level_stats;
                         "Recluster input planned"
                     );
                 }
 
-                let input_schema = DataSchema::from(table.schema_with_stream()).into();
-                let mut cluster_stats_gen = table.get_cluster_stats_gen(
-                    builder.ctx.clone(),
-                    task.level + 1,
-                    block_thresholds,
-                    input_schema,
-                )?;
                 let index_merge = match multiway_merge {
                     true if settings.get_enable_recluster_inverted_index_merge()?
                         && !table.schema().fields().iter().any(|field| {
@@ -263,6 +268,11 @@ impl IPhysicalPlan for Recluster {
                             .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
                     }
 
+                    if blockwise_sort {
+                        // Like append, form output blocks before sorting. All inputs
+                        // in this task belong to the same table partition.
+                        build_compact_block_pipeline(&mut builder.main_pipeline, block_thresholds)?;
+                    }
                     if !cluster_stats_gen.eval_operators.is_empty() {
                         let eval_operators = cluster_stats_gen.eval_operators.clone();
                         let func_ctx2 = cluster_stats_gen.func_ctx.clone();
@@ -301,7 +311,12 @@ impl IPhysicalPlan for Recluster {
                     ));
                 }
 
-                if multiway_merge {
+                if blockwise_sort {
+                    let sort_descs: Arc<[_]> = cluster_stats_gen.sort_descs().into();
+                    builder.main_pipeline.add_transformer(move || {
+                        TransformSortPartial::new(LimitType::None, sort_descs.clone())
+                    });
+                } else if multiway_merge {
                     let extra_key_num = cluster_stats_gen.extra_key_num;
                     builder.main_pipeline.add_accumulating_transformer(move || {
                         OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)

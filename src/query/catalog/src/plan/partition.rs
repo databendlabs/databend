@@ -473,9 +473,9 @@ impl ClusterLevelLogStats {
 /// this enum is not part of persisted FUSE metadata.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ReclusterTaskKind {
-    /// Establish row order. For ordinary linear FUSE tasks, the inputs are one
-    /// unordered block or a size-bounded group of small blocks. Other layouts
-    /// retain their layout-specific sorting and re-aggregation semantics.
+    /// Establish row order. Ordinary linear FUSE tasks form output blocks first
+    /// and sort each one independently. Other layouts retain their existing
+    /// sort paths.
     SortBlocks,
     /// Merge blocks already ordered by the current linear cluster key, without
     /// sorting their rows again.

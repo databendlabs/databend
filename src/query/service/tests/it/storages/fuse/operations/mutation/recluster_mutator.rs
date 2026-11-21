@@ -918,7 +918,15 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
             1000,
             100,
             1,
-            vec![(ReclusterTaskKind::SortBlocks, 1)],
+            vec![(ReclusterTaskKind::SortBlocks, 3)],
+        ),
+        (
+            "task_byte_budget",
+            vec![Some(0), None, Some(0)],
+            1000,
+            400,
+            1,
+            vec![(ReclusterTaskKind::SortBlocks, 2)],
         ),
         ("over_memory", vec![Some(0)], 1000, 1001, 4, vec![]),
     ] {
@@ -968,6 +976,7 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
             );
             let mut source_locations = HashSet::new();
             for task in &parts.tasks {
+                assert!(task.total_bytes <= 1000, "{case}");
                 let decoded: ReclusterTask = serde_json::from_slice(&serde_json::to_vec(task)?)?;
                 assert_eq!(decoded.kind, task.kind);
                 assert_eq!(decoded.parts, task.parts);
@@ -1008,6 +1017,10 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     fixture
         .execute_command(&format!("alter table {name} cluster by(id)"))
         .await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let before = fuse.read_table_snapshot().await?.unwrap();
+
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(1)?;
     execute_command(ctx, &format!("alter table {name} recluster")).await?;
@@ -1015,6 +1028,11 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse = FuseTable::try_from_table(table.as_ref())?;
     let snapshot = fuse.read_table_snapshot().await?.unwrap();
+    assert_eq!(
+        snapshot.prev_snapshot_id.map(|(id, _)| id),
+        Some(before.snapshot_id),
+        "ordinary RECLUSTER must commit exactly one snapshot"
+    );
     let key_id = fuse.cluster_key_id().unwrap();
     let mut ordered = 0;
     let mut unordered = 0;
@@ -1036,8 +1054,8 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     }
     assert_eq!(
         (ordered, unordered),
-        (1, 1),
-        "ordinary RECLUSTER must execute only one task round"
+        (2, 0),
+        "one SortBlocks task should rewrite both source blocks"
     );
 
     fixture

@@ -923,33 +923,18 @@ impl ReclusterMutator {
                     }
                 }
 
-                if self.properties.split_sort_tasks {
-                    match candidate.kind {
-                        ReclusterTaskKind::MergeBlocks => {
-                            if block_metas.iter().any(|(_, meta)| {
-                                !meta.cluster_stats.as_ref().is_some_and(|stats| {
-                                    self.strategy
-                                        .can_reuse_cluster_stats(&self.properties, stats)
-                                })
-                            }) {
-                                return Err(ErrorCode::Internal(
-                                    "MergeBlocks requires sources ordered by the current cluster key",
-                                ));
-                            }
-                        }
-                        ReclusterTaskKind::SortBlocks => {
-                            if block_metas.len() > 1
-                                && !self
-                                    .properties
-                                    .block_thresholds
-                                    .check_for_compact(total_rows, total_bytes)
-                            {
-                                return Err(ErrorCode::Internal(
-                                    "multi-source SortBlocks exceeds the small-block group limits",
-                                ));
-                            }
-                        }
-                    }
+                if self.properties.split_sort_tasks
+                    && candidate.kind == ReclusterTaskKind::MergeBlocks
+                    && block_metas.iter().any(|(_, meta)| {
+                        !meta.cluster_stats.as_ref().is_some_and(|stats| {
+                            self.strategy
+                                .can_reuse_cluster_stats(&self.properties, stats)
+                        })
+                    })
+                {
+                    return Err(ErrorCode::Internal(
+                        "MergeBlocks requires sources ordered by the current cluster key",
+                    ));
                 }
 
                 let (stats, parts) = FuseTable::to_partitions(
@@ -1129,11 +1114,10 @@ impl ReclusterMutator {
                     )?
                 }
             };
-            for idx in unordered {
-                let bytes = blocks[idx].meta.block_size as usize;
-                if bytes > self.properties.memory_threshold {
-                    continue;
-                }
+            // These blocks belong to one partition and all have the normalized
+            // base level (0). A task is a dispatch unit, not a sorted run.
+            let bins = self.pack_unordered_blocks(unordered, blocks, task_budget);
+            for (indices, bytes) in bins {
                 candidates.push(task_candidate(
                     self.strategy.supports_ordered_merge(),
                     group,
@@ -1142,7 +1126,7 @@ impl ReclusterMutator {
                         max_depth: 1,
                         average_depth: 1.0,
                     },
-                    &[idx],
+                    &indices,
                     blocks,
                 ));
             }
@@ -1156,6 +1140,36 @@ impl ReclusterMutator {
         }
         self.strategy
             .fetch_task_candidates(&self.properties, group, &indices, blocks, task_budget)
+    }
+
+    /// Pack unordered blocks into byte-bounded tasks within one candidate group.
+    /// Place the largest blocks first on the least loaded task so tasks from
+    /// a single large window can still use all executors.
+    fn pack_unordered_blocks(
+        &self,
+        mut indices: Vec<usize>,
+        blocks: &[&ReclusterBlock],
+        task_budget: usize,
+    ) -> Vec<(Vec<usize>, usize)> {
+        let block_bytes = |idx: usize| blocks[idx].meta.block_size as usize;
+        let memory = self.properties.memory_threshold;
+        indices.retain(|&idx| block_bytes(idx) <= memory);
+        indices.sort_by_key(|&idx| std::cmp::Reverse(block_bytes(idx)));
+        let mut pending = indices.into_iter();
+        let mut bins = pending
+            .by_ref()
+            .take(task_budget)
+            .map(|idx| (vec![idx], block_bytes(idx)))
+            .collect::<Vec<_>>();
+        for idx in pending {
+            let bytes = block_bytes(idx);
+            let (indices, total_bytes) = bins.iter_mut().min_by_key(|bin| bin.1).unwrap();
+            if bytes <= memory.saturating_sub(*total_bytes) {
+                indices.push(idx);
+                *total_bytes += bytes;
+            }
+        }
+        bins
     }
 
     /// Fast-path acceptance for very deep, sufficiently large candidates.
