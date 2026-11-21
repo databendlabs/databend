@@ -28,7 +28,6 @@ use tantivy::collector::TopDocs;
 use tantivy::query::Bm25StatisticsProvider;
 use tantivy::query::Query;
 
-use crate::io::FuseCaches;
 use crate::io::read::inverted_index::inverted_index_bundle_loader::load_bundle_searcher;
 use crate::io::read::inverted_index::inverted_index_bundle_loader::with_bundle_search_scope;
 use crate::io::read::inverted_index::inverted_index_warmup::InvertedIndexWarmupInfo;
@@ -95,12 +94,8 @@ impl InvertedIndexReader {
         query: Box<dyn Query>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
-        let searcher =
+        let (searcher, term_infos) =
             load_bundle_searcher(&self.storage, index_path, object_size, self.policy).await?;
-        let term_infos = FuseCaches::instance()
-            .inverted
-            .term_info
-            .with_policy(self.policy);
         with_bundle_search_scope(self.storage.clone(), async {
             let statistics = self
                 .warmup

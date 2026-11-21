@@ -48,6 +48,7 @@ use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
 use databend_storages_common_index::InvertedIndexSearcher;
+use databend_storages_common_index::InvertedIndexTermInfo;
 use databend_storages_common_index::SearchPinDirectory;
 use databend_storages_common_index::inverted_index_meta_cache_key;
 use databend_storages_common_index::with_search_scope;
@@ -1082,20 +1083,45 @@ impl Reader for BundleSearcherReader<'_> {
 }
 
 /// The searcher of a bundle, opened once for all its searches unless `policy` does not cache
-/// it. Index files are immutable, so the location and size identify one.
+/// it, and the cache its searches keep term infos in. Index files are immutable, so the
+/// location and size identify one.
 pub(crate) async fn load_bundle_searcher(
     storage: &DiskCachedStorage,
     location: &str,
     object_size: u64,
     policy: CachePolicy,
-) -> Result<CacheRef<InvertedIndexSearcher>> {
+) -> Result<(
+    CacheRef<InvertedIndexSearcher>,
+    MemCache<InvertedIndexTermInfo>,
+)> {
     let caches = &FuseCaches::instance().inverted;
+    load_bundle_searcher_from(caches, storage, location, object_size, policy).await
+}
+
+async fn load_bundle_searcher_from(
+    caches: &InvertedIndexCache,
+    storage: &DiskCachedStorage,
+    location: &str,
+    object_size: u64,
+    policy: CachePolicy,
+) -> Result<(
+    CacheRef<InvertedIndexSearcher>,
+    MemCache<InvertedIndexTermInfo>,
+)> {
     let reader = BundleSearcherReader { storage, caches };
-    caches
+    let searcher = caches
         .searcher
         .with_policy(policy)
         .get(&reader, (location.to_string(), object_size, policy))
-        .await
+        .await?;
+    // Term infos are keyed by searcher. A searcher the cache did not admit is opened again by
+    // the next search, under another key: the term infos of its searches would never be read.
+    let term_policy = if searcher.is_charged() {
+        policy
+    } else {
+        CachePolicy::BYPASS
+    };
+    Ok((searcher, caches.term_info.with_policy(term_policy)))
 }
 
 #[cfg(test)]
@@ -1112,7 +1138,6 @@ mod tests {
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_index::BundleOpenSlice;
-    use databend_storages_common_index::InvertedIndexTermInfo;
     use opendal::Operator;
     use opendal::raw::Access;
     use opendal::raw::Layer;
@@ -1873,6 +1898,70 @@ mod tests {
             assert_eq!(count, 2000);
         }
         assert_eq!(term_infos.stats().items, 2);
+        Ok(())
+    }
+
+    /// Searches of a searcher the cache did not admit cache no term infos: the next search opens
+    /// the bundle again, under another key. Searches of a cached searcher do, and keep finding
+    /// the same rows.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_term_infos_are_cached_only_for_cached_searchers() -> Result<()> {
+        use tantivy::collector::Count;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, _, storage, _) = expansion_bundle_fixture().await?;
+        let location = remote.location.to_string();
+        let object_size = storage.operator().read(&location).await?.len() as u64;
+        for (capacity, cached) in [
+            (LegacyCapacity::Disabled, false),
+            (LegacyCapacity::Bytes(1 << 24), true),
+        ] {
+            let caches = InvertedIndexCache {
+                meta: cache_state(&location, object_size).meta_cache,
+                lookup: no_lookup_cache(),
+                payload: payload_cache(16 * 1024 * 1024),
+                full_payload: full_payload_cache(0),
+                searcher: local_cache(CacheKind::of::<inverted::Searcher>(), capacity),
+                term_info: term_info_cache(),
+            };
+            let mut counts = Vec::new();
+            for _ in 0..2 {
+                let (searcher, term_infos) = load_bundle_searcher_from(
+                    &caches,
+                    &storage,
+                    &location,
+                    object_size,
+                    CachePolicy::DEFAULT,
+                )
+                .await?;
+                assert_eq!(searcher.is_charged(), cached);
+                let index = searcher.searcher().index();
+                let schema = index.schema();
+                let body = schema.get_field("body")?;
+                let query = QueryParser::for_index(index, vec![body]).parse_query("alpha")?;
+                let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+                    query.as_ref(),
+                    &parse_query("alpha").unwrap(),
+                    &schema,
+                    &[body],
+                    None,
+                )?;
+                let count = with_bundle_search_scope(storage.clone(), async {
+                    let statistics = warmup.warm_searcher(&searcher, &term_infos, true).await?;
+                    Ok::<_, ErrorCode>(searcher.searcher().search_with_statistics_provider(
+                        query.as_ref(),
+                        &Count,
+                        &statistics,
+                    )?)
+                })
+                .await?;
+                counts.push(count);
+            }
+            assert_eq!(counts, [2000, 2000], "cached searcher: {cached}");
+            let expected = usize::from(cached);
+            assert_eq!(caches.term_info.stats().items, expected, "cached: {cached}");
+        }
         Ok(())
     }
 
