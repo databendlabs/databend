@@ -40,6 +40,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_management::task::TaskError;
 use databend_common_management::task::TaskMgr;
 use databend_common_meta_api::kv_pb_api::decode_seqv;
 use databend_common_meta_app::principal::ScheduleType;
@@ -101,6 +102,9 @@ const WHEN_CONDITION_FALSE: &str = "WHEN_CONDITION_FALSE";
 /// The delays before watching the task messages again: from the min, doubled up to the max.
 const WATCH_AGAIN_MIN_DELAY: Duration = Duration::from_secs(1);
 const WATCH_AGAIN_MAX_DELAY: Duration = Duration::from_secs(30);
+
+/// The delay before a schedule that failed starts again.
+const SCHEDULE_RESTART_DELAY: Duration = Duration::from_secs(1);
 
 /// A schedule that this node runs for a task.
 struct ScheduledTask {
@@ -333,14 +337,22 @@ impl TaskService {
                                 duration += Duration::from_millis(*ms);
                             }
 
+                            let name = format!("interval schedule of task {}", task_name);
+                            let cancel = child_token.clone();
                             runtime
                                 .spawn(async move {
-                                    let mut fn_work = async move || {
+                                    let fn_work = async move || {
                                         let committed_at = Utc::now();
                                         task.next_scheduled_at = Some(committed_at + duration);
                                         task.updated_at = committed_at;
-                                        if !task_mgr.update_task(task.clone()).await?? {
-                                            return Ok(());
+                                        match Self::update_schedule(&task_mgr, &task).await {
+                                            Ok(true) => {}
+                                            Ok(false) => return Ok(()),
+                                            // Stored again by the first tick.
+                                            Err(err) => error!(
+                                                "failed to store the next run of task {}: {}",
+                                                task.task_name, err
+                                            ),
                                         }
                                         loop {
                                             tokio::select! {
@@ -351,7 +363,7 @@ impl TaskService {
                                                     let committed_at = Utc::now();
                                                     task.next_scheduled_at = Some(committed_at + duration);
                                                     task.updated_at = committed_at;
-                                                    if !task_mgr.update_task(task.clone()).await?? {
+                                                    if !Self::update_schedule(&task_mgr, &task).await? {
                                                         break;
                                                     }
                                                     if task_service.has_executing_task_run(&task.task_name).await? {
@@ -370,9 +382,8 @@ impl TaskService {
                                         }
                                         Result::Ok(())
                                     };
-                                    if let Err(err) = fn_work().await {
-                                        error!("interval schedule failed due to {}", err);
-                                    }
+                                    keep_running(&name, SCHEDULE_RESTART_DELAY, cancel, fn_work)
+                                        .await;
                                 })
                         }
                         ScheduleType::CronType => {
@@ -393,9 +404,11 @@ impl TaskService {
                                 .unwrap_or(Tz::UCT);
                             let schedule = Schedule::from_str(cron_expr).unwrap();
 
+                            let name = format!("cron schedule of task {}", task_name);
+                            let cancel = child_token.clone();
                             runtime
                                 .spawn(async move {
-                                    let mut fn_work = async move || {
+                                    let fn_work = async move || {
                                         let mut upcoming = schedule.upcoming(tz).peekable();
 
                                         while let Some(next_time) = upcoming.next() {
@@ -406,8 +419,14 @@ impl TaskService {
 
                                             task.next_scheduled_at = Some(next_time.with_timezone(&Utc));
                                             task.updated_at = now;
-                                            if !task_mgr.update_task(task.clone()).await?? {
-                                                break;
+                                            match Self::update_schedule(&task_mgr, &task).await {
+                                                Ok(true) => {}
+                                                Ok(false) => break,
+                                                // Stored again by the tick.
+                                                Err(err) => error!(
+                                                    "failed to store the next run of task {}: {}",
+                                                    task.task_name, err
+                                                ),
                                             }
                                             tokio::select! {
                                                 _ = sleep(duration) => {
@@ -420,7 +439,7 @@ impl TaskService {
                                                         .map(|next| next.with_timezone(&Utc));
                                                     task.next_scheduled_at = next_scheduled_at;
                                                     task.updated_at = committed_at;
-                                                    if !task_mgr.update_task(task.clone()).await?? {
+                                                    if !Self::update_schedule(&task_mgr, &task).await? {
                                                         break;
                                                     }
                                                     if task_service.has_executing_task_run(&task.task_name).await? {
@@ -439,9 +458,8 @@ impl TaskService {
                                         }
                                         Result::Ok(())
                                     };
-                                    if let Err(err) = fn_work().await {
-                                        error!("cron schedule failed due to {}", err);
-                                    }
+                                    keep_running(&name, SCHEDULE_RESTART_DELAY, cancel, fn_work)
+                                        .await;
                                 })
                         }
                     };
@@ -661,6 +679,17 @@ impl TaskService {
             .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
 
         Ok(Some((key, message)))
+    }
+
+    /// Store the next run of a schedule in its task. `Ok(false)` if the schedule must stop: its
+    /// task was dropped, or no longer matches it.
+    async fn update_schedule(task_mgr: &TaskMgr, task: &Task) -> Result<bool> {
+        match task_mgr.update_task(task.clone()).await? {
+            Ok(matches) => Ok(matches),
+            // The task was dropped: stop, since a schedule that fails starts again.
+            Err(TaskError::NotFound { .. }) => Ok(false),
+            Err(err) => Err(err.into()),
+        }
     }
 
     async fn get_task_owner(task: &Task, tenant: &Tenant) -> Result<UserInfo> {
@@ -1304,13 +1333,39 @@ WHERE ta.task_name = {task_name}
     }
 }
 
+/// Run `schedule` until it ends without an error, or `cancel` fires while it waits to start
+/// again.
+///
+/// A schedule fails on an error in one of its ticks, e.g. a meta-service error while the
+/// meta-service leader changes, and must not end there: it starts again after `delay`.
+async fn keep_running(
+    name: &str,
+    delay: Duration,
+    cancel: CancellationToken,
+    mut schedule: impl AsyncFnMut() -> Result<()>,
+) {
+    while let Err(err) = schedule().await {
+        error!("{} failed: {}; start it again in {:?}", name, err, delay);
+        tokio::select! {
+            _ = sleep(delay) => {}
+            _ = cancel.cancelled() => return,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
     use databend_common_base::runtime::spawn;
+    use databend_common_exception::ErrorCode;
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
     use super::ScheduledTask;
+    use super::keep_running;
 
     fn scheduled_task(message_seq: u64, handle: JoinHandle<()>) -> ScheduledTask {
         ScheduledTask {
@@ -1335,5 +1390,33 @@ mod tests {
         }
         let stopped = scheduled_task(5, handle);
         assert!(!stopped.runs_message(5));
+    }
+
+    /// A schedule that fails starts again until it ends without an error. Cancelling it while it
+    /// waits to start again ends it.
+    #[tokio::test]
+    async fn test_keep_running() {
+        let runs = AtomicUsize::new(0);
+        keep_running(
+            "schedule",
+            Duration::from_millis(1),
+            CancellationToken::new(),
+            async || match runs.fetch_add(1, Ordering::Relaxed) {
+                0 | 1 => Err(ErrorCode::MetaServiceError("meta leader changed")),
+                _ => Ok(()),
+            },
+        )
+        .await;
+        assert_eq!(runs.load(Ordering::Relaxed), 3);
+
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+        let runs = AtomicUsize::new(0);
+        keep_running("schedule", Duration::from_secs(3600), cancel, async || {
+            runs.fetch_add(1, Ordering::Relaxed);
+            Err(ErrorCode::MetaServiceError("meta leader changed"))
+        })
+        .await;
+        assert_eq!(runs.load(Ordering::Relaxed), 1);
     }
 }
