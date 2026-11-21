@@ -18,7 +18,6 @@ databend_common_tracing::register_module_tag!("[PRIVATE-TASKS]");
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Write;
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -65,6 +64,7 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::SeqV;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::WatchResponse;
 use futures::Stream;
@@ -72,6 +72,7 @@ use futures_util::TryStreamExt;
 use futures_util::stream::BoxStream;
 use itertools::Itertools;
 use log::error;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -90,11 +91,29 @@ use crate::task::meta::TaskMetaHandle;
 use crate::task::session::create_session;
 use crate::task::session::get_task_user;
 
-pub type TaskMessageStream = BoxStream<'static, Result<(String, TaskMessage)>>;
+pub type TaskMessageStream = BoxStream<'static, Result<(String, SeqV<TaskMessage>)>>;
 
 const OVERLAPPING_EXECUTION: &str = "OVERLAPPING_EXECUTION";
 const WHEN_CONDITION_EVALUATION_ERROR: &str = "WHEN_CONDITION_EVALUATION_ERROR";
 const WHEN_CONDITION_FALSE: &str = "WHEN_CONDITION_FALSE";
+
+/// A schedule that this node runs for a task.
+struct ScheduledTask {
+    task_id: u64,
+    /// The seq of the `ScheduleTask` message that started this schedule.
+    message_seq: u64,
+    /// Cancelled to stop this schedule.
+    token: CancellationToken,
+    handle: JoinHandle<()>,
+}
+
+impl ScheduledTask {
+    /// Whether the `ScheduleTask` message of `message_seq` started this schedule, and it still
+    /// runs.
+    fn runs_message(&self, message_seq: u64) -> bool {
+        self.message_seq == message_seq && !self.handle.is_finished()
+    }
+}
 
 /// Currently, query uses the watch in meta to imitate channel to obtain tasks. When task messages are sent to channels, they are stored in meta using TaskMessage::key.
 /// TaskMessage::key is divided into only 4 types of keys that will overwrite each other to avoid repeated storage and repeated processing.
@@ -210,21 +229,15 @@ impl TaskService {
     }
 
     async fn work(&self, tenant: &Tenant, runtime: Arc<Runtime>) -> Result<()> {
-        let mut scheduled_tasks: HashMap<String, (u64, CancellationToken)> = HashMap::new();
+        let mut scheduled_tasks: HashMap<String, ScheduledTask> = HashMap::new();
         let task_mgr = UserApiProvider::instance().task_api(tenant);
 
         let mut steam = self.subscribe().await?;
 
         while let Some(result) = steam.next().await {
-            let (_, task_message) = result?;
-            self.handle_message(
-                tenant,
-                &runtime,
-                &task_mgr,
-                &mut scheduled_tasks,
-                task_message,
-            )
-            .await?;
+            let (_, message) = result?;
+            self.handle_message(tenant, &runtime, &task_mgr, &mut scheduled_tasks, message)
+                .await?;
         }
         Ok(())
     }
@@ -235,9 +248,11 @@ impl TaskService {
         tenant: &Tenant,
         runtime: &Arc<Runtime>,
         task_mgr: &TaskMgr,
-        scheduled_tasks: &mut HashMap<String, (u64, CancellationToken)>,
-        task_message: TaskMessage,
+        scheduled_tasks: &mut HashMap<String, ScheduledTask>,
+        message: SeqV<TaskMessage>,
     ) -> Result<()> {
+        let message_seq = message.seq;
+        let task_message = message.data;
         let task_key = TaskMessageIdent::new(tenant, task_message.key());
 
         let is_delete = matches!(&task_message, TaskMessage::DeleteTask(_, _, _));
@@ -261,9 +276,17 @@ impl TaskService {
             TaskMessage::ScheduleTask(mut task) => {
                 debug_assert!(task.schedule_options.is_some());
                 if let Some(schedule_options) = &task.schedule_options {
+                    // A ScheduleTask message stays until its task is dropped, so a new watch
+                    // brings it again: keep the schedule it started, unless that has stopped.
+                    if scheduled_tasks
+                        .get(&task.task_name)
+                        .is_some_and(|scheduled| scheduled.runs_message(message_seq))
+                    {
+                        return Ok(());
+                    }
                     // clean old task if alter
-                    if let Some((_, token)) = scheduled_tasks.remove(&task.task_name) {
-                        token.cancel();
+                    if let Some(scheduled) = scheduled_tasks.remove(&task.task_name) {
+                        scheduled.token.cancel();
                     }
                     match task.status {
                         Status::Suspended => return Ok(()),
@@ -287,7 +310,7 @@ impl TaskService {
                             .await
                     };
 
-                    match schedule_options.schedule_type {
+                    let handle = match schedule_options.schedule_type {
                         ScheduleType::IntervalType => {
                             let task_mgr = task_mgr.clone();
                             let mut duration =
@@ -336,7 +359,7 @@ impl TaskService {
                                     if let Err(err) = fn_work().await {
                                         error!("interval schedule failed due to {}", err);
                                     }
-                                });
+                                })
                         }
                         ScheduleType::CronType => {
                             let task_mgr = task_mgr.clone();
@@ -405,10 +428,15 @@ impl TaskService {
                                     if let Err(err) = fn_work().await {
                                         error!("cron schedule failed due to {}", err);
                                     }
-                                });
+                                })
                         }
-                    }
-                    let _ = scheduled_tasks.insert(task_name_clone, (task_id, token));
+                    };
+                    let _ = scheduled_tasks.insert(task_name_clone, ScheduledTask {
+                        task_id,
+                        message_seq,
+                        token,
+                        handle,
+                    });
                 }
             }
             TaskMessage::ExecuteTask(task) => {
@@ -531,10 +559,10 @@ impl TaskService {
                 if task_id.is_none_or(|task_id| {
                     scheduled_tasks
                         .get(&task_name)
-                        .is_some_and(|(scheduled_task_id, _)| *scheduled_task_id == task_id)
+                        .is_some_and(|scheduled| scheduled.task_id == task_id)
                 }) {
-                    if let Some((_, token)) = scheduled_tasks.remove(&task_name) {
-                        token.cancel();
+                    if let Some(scheduled) = scheduled_tasks.remove(&task_name) {
+                        scheduled.token.cancel();
                     }
                 }
                 if self.create_context(None).await?.get_cluster().unassign {
@@ -603,14 +631,14 @@ impl TaskService {
         })))
     }
 
-    fn decode(resp: WatchResponse) -> Result<Option<(String, TaskMessage)>> {
+    fn decode(resp: WatchResponse) -> Result<Option<(String, SeqV<TaskMessage>)>> {
         let Some((key, _, Some(value))) = resp.unpack() else {
             return Ok(None);
         };
         let message = decode_seqv::<TaskMessage>(value, || format!("decode value of {}", key))
             .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
 
-        Ok(Some((key, TaskMessage::clone(message.deref()))))
+        Ok(Some((key, message)))
     }
 
     async fn get_task_owner(task: &Task, tenant: &Tenant) -> Result<UserInfo> {
@@ -1251,5 +1279,39 @@ WHERE ta.task_name = {task_name}
 
     fn make_run_id() -> u64 {
         Utc::now().timestamp_micros() as u64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_base::runtime::spawn;
+    use tokio::task::JoinHandle;
+    use tokio_util::sync::CancellationToken;
+
+    use super::ScheduledTask;
+
+    fn scheduled_task(message_seq: u64, handle: JoinHandle<()>) -> ScheduledTask {
+        ScheduledTask {
+            task_id: 1,
+            message_seq,
+            token: CancellationToken::new(),
+            handle,
+        }
+    }
+
+    /// A new watch brings a `ScheduleTask` message again: the schedule it started goes on,
+    /// unless that has stopped, and another message replaces the schedule.
+    #[tokio::test]
+    async fn test_scheduled_task_runs_message() {
+        let running = scheduled_task(5, spawn(std::future::pending::<()>()));
+        assert!(running.runs_message(5));
+        assert!(!running.runs_message(6));
+
+        let handle = spawn(async {});
+        while !handle.is_finished() {
+            tokio::task::yield_now().await;
+        }
+        let stopped = scheduled_task(5, handle);
+        assert!(!stopped.runs_message(5));
     }
 }
