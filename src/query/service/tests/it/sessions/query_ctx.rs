@@ -17,6 +17,7 @@ use std::time::Duration;
 use anyhow::Context;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_exception::ErrorCode;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::LockKey;
@@ -478,5 +479,45 @@ async fn test_query_ctx_keeps_resolved_database_ids() -> anyhow::Result<()> {
     // Another query reads its own.
     let other = fixture.new_query_ctx().await?;
     assert_eq!(other.get_resolved_database_id("default", "db_ids"), None);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_ctx_rejects_recreated_database() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.execute_command("CREATE DATABASE d").await?;
+    fixture.execute_command("CREATE TABLE d.a(i INT)").await?;
+    fixture.execute_command("CREATE TABLE d.b(i INT)").await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let first = ctx.get_table("default", "d", "a").await?;
+    let old_id = ctx.get_resolved_database_id("default", "d").unwrap();
+    ctx.get_table("default", "d", "b").await?;
+
+    fixture.execute_command("DROP DATABASE d").await?;
+    fixture.execute_command("CREATE DATABASE d").await?;
+    fixture.execute_command("CREATE TABLE d.c(i INT)").await?;
+
+    // Repeat the lookup: the first failure must not cache the replacement table.
+    for _ in 0..2 {
+        let err = ctx
+            .get_table("default", "d", "c")
+            .await
+            .err()
+            .context("the original query accepted a table from the replacement database")?;
+        assert_eq!(err.code(), ErrorCode::DATABASE_VERSION_MISMATCHED);
+    }
+    assert_eq!(ctx.get_resolved_database_id("default", "d"), Some(old_id));
+    assert_eq!(
+        ctx.get_table("default", "d", "a").await?.get_id(),
+        first.get_id()
+    );
+
+    let fresh = fixture.new_query_ctx().await?;
+    fresh.get_table("default", "d", "c").await?;
+    assert_ne!(
+        fresh.get_resolved_database_id("default", "d").unwrap(),
+        old_id
+    );
     Ok(())
 }

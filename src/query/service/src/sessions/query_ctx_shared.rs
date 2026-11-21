@@ -599,7 +599,12 @@ impl QueryContextShared {
             Entry::Vacant(v) => {
                 // Keep the database id read with the table kept, not one of a concurrent read.
                 if let Some((key, db_id)) = database_id {
-                    self.database_ids.lock().insert(key, db_id);
+                    let bound_id = *self.database_ids.lock().entry(key).or_insert(db_id);
+                    if bound_id != db_id {
+                        return Err(ErrorCode::DatabaseVersionMismatched(format!(
+                            "Database '{catalog_name}.{database}' changed from ID {bound_id} to {db_id} while resolving tables. Retry the statement."
+                        )));
+                    }
                 }
                 Ok(v.insert(cache_table).clone())
             }
