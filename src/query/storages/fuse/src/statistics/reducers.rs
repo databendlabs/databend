@@ -407,6 +407,20 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.virtual_block_count = Option::from(virtual_block_count).filter(|&x| x > 0);
 }
 
+/// Segment ranges are safe only if every nonempty block supplies a physical
+/// column and its statistics. A missing column may read as a default value;
+/// missing stats on a physically present column give no bounds at all.
+pub(crate) fn has_complete_block_column_stats<T: Borrow<BlockMeta>>(
+    blocks: &[T],
+    id: &ColumnId,
+) -> bool {
+    blocks.iter().all(|block| {
+        let block = block.borrow();
+        block.row_count == 0
+            || (block.col_stats.contains_key(id) && block.column_meta(id).is_some())
+    })
+}
+
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     block_metas: &[T],
     thresholds: BlockThresholds,
@@ -472,13 +486,16 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         {
             perfect_block_count += 1;
         }
-        col_stats.push(&b.col_stats);
+        if b.row_count != 0 {
+            col_stats.push(&b.col_stats);
+        }
         cluster_stats.push(&b.cluster_stats);
         partition_stats.push(&b.partition_stats);
         spatial_col_stats.push(&b.spatial_stats);
     });
 
-    let merged_col_stats = reduce_block_statistics(&col_stats);
+    let mut merged_col_stats = reduce_block_statistics(&col_stats);
+    merged_col_stats.retain(|id, _| has_complete_block_column_stats(block_metas, id));
     let merged_spatial_stats = reduce_spatial_statistics(&spatial_col_stats);
     let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, cluster_key_info);
     let merged_partition_stats = validate_segment_partition_statistics(

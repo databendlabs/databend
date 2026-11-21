@@ -399,7 +399,15 @@ async fn gen_recluster_segments_by_vector_stats(
                 block_size,
                 file_size,
                 col_stats,
-                HashMap::default(),
+                // The tenant range describes a physically stored column.
+                HashMap::from([(
+                    0,
+                    meta::ColumnMeta::Parquet(meta::SingleColumnMeta {
+                        offset: 0,
+                        len: file_size,
+                        num_values: row_count,
+                    }),
+                )]),
                 Some(ClusterStatistics::new(
                     cluster_key_id,
                     if scalar_cluster_stats {
