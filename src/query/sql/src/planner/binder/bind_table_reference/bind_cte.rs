@@ -33,8 +33,11 @@ use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::Sequence;
+use crate::plans::SubqueryExpr;
+use crate::plans::Visitor as ScalarExprVisitor;
 
 impl Binder {
     pub fn init_cte(&mut self, bind_context: &mut BindContext, with: &Option<With>) -> Result<()> {
@@ -48,6 +51,10 @@ impl Binder {
                 return Err(ErrorCode::SemanticError(format!(
                     "Duplicate common table expression: {cte_name}"
                 )));
+            }
+
+            if cte.user_specified_materialized {
+                self.check_materialized_cte_recursion(&cte_name, bind_context, &cte.query)?;
             }
 
             let materialized_cte_info = if cte.materialized {
@@ -102,6 +109,22 @@ impl Binder {
 
         Ok(())
     }
+
+    fn check_materialized_cte_recursion(
+        &mut self,
+        cte_name: &str,
+        bind_context: &BindContext,
+        query: &Query,
+    ) -> Result<()> {
+        if let Some(recursive_cte_id) = bind_context.recursive_cte_id {
+            // Explicit materialization runs once while binding, not once per generation.
+            // Check the bound plan to respect aliases, CTE shadowing, and subquery scopes.
+            let (definition, _) = self.bind_cte_definition(cte_name, bind_context, query)?;
+            MaterializedCteRecursionChecker { recursive_cte_id }.check(&definition)?;
+        }
+        Ok(())
+    }
+
     pub fn bind_cte_consumer(
         &mut self,
         bind_context: &mut BindContext,
@@ -211,6 +234,7 @@ impl Binder {
         }
         let mut cte_bind_context = BindContext {
             binding_depth: bind_context.next_depth()?,
+            recursive_cte_id: bind_context.recursive_cte_id,
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,
@@ -249,5 +273,43 @@ impl Binder {
         }
 
         Ok(current_expr)
+    }
+}
+
+struct MaterializedCteRecursionChecker {
+    recursive_cte_id: u32,
+}
+
+impl MaterializedCteRecursionChecker {
+    #[recursive::recursive]
+    fn check(&mut self, expr: &SExpr) -> Result<()> {
+        match expr.plan() {
+            RelOperator::RecursiveCteScan(scan)
+                if scan.logical_recursive_cte_id == Some(self.recursive_cte_id) =>
+            {
+                return Err(ErrorCode::Unimplemented(
+                    "AS MATERIALIZED CTEs cannot reference the active recursive CTE",
+                ));
+            }
+            RelOperator::MaterializedCTERef(cte) => self.check(&cte.def)?,
+            _ => {}
+        }
+        for scalar in expr.plan().scalar_expr_iter() {
+            self.visit(scalar)?;
+        }
+        for child in expr.children() {
+            self.check(child)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> ScalarExprVisitor<'a> for MaterializedCteRecursionChecker {
+    fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
+        self.check(&subquery.subquery)?;
+        if let Some(child) = &subquery.child_expr {
+            self.visit(child)?;
+        }
+        Ok(())
     }
 }

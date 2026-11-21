@@ -487,16 +487,16 @@ impl Binder {
         all: &bool,
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
-        let prev_recursive = self.bind_recursive_cte.clone();
+        let prev_recursive = bind_context.recursive_cte_id;
         if cte_name.is_some() {
             // Anchor part should not treat self references as recursive scans.
-            self.set_bind_recursive_cte(None);
+            bind_context.recursive_cte_id = None;
         }
-        let (left_expr, left_bind_context) =
-            self.bind_set_expr(bind_context, left, &[], None, cte_name.clone())?;
+        let left_result = self.bind_set_expr(bind_context, left, &[], None, cte_name.clone());
+        bind_context.recursive_cte_id = prev_recursive;
+        let (left_expr, left_bind_context) = left_result?;
         if let Some(cte_name) = cte_name.as_ref() {
             if !all {
-                self.set_bind_recursive_cte(prev_recursive);
                 return Err(ErrorCode::Internal(
                     "Currently, recursive cte only support union all".to_string(),
                 ));
@@ -521,15 +521,14 @@ impl Binder {
         bind_context
             .cte_context
             .merge(left_bind_context.cte_context.clone());
-        if let Some(cte_name) = cte_name.clone() {
-            // Recursive part should treat self references as recursive scans.
-            self.set_bind_recursive_cte(Some(cte_name));
+        if let Some(cte_name) = cte_name.as_ref() {
+            // Recursive references, including those inside scalar subqueries, scan this step.
+            bind_context.recursive_cte_id =
+                bind_context.cte_context.cte_map[cte_name].logical_recursive_cte_id;
         }
-        let (right_expr, right_bind_context) =
-            self.bind_set_expr(bind_context, right, &[], None, None)?;
-        if cte_name.is_some() {
-            self.set_bind_recursive_cte(prev_recursive);
-        }
+        let right_result = self.bind_set_expr(bind_context, right, &[], None, None);
+        bind_context.recursive_cte_id = prev_recursive;
+        let (right_expr, right_bind_context) = right_result?;
 
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(

@@ -512,6 +512,7 @@ impl Binder {
 
         let mut output_context = BindContext::new();
         output_context.binding_depth = from_context.depth();
+        output_context.recursive_cte_id = from_context.recursive_cte_id;
         output_context.definition_scope = from_context.definition_scope;
         output_context.binding_views = from_context.binding_views;
         output_context.parent = from_context.parent;
