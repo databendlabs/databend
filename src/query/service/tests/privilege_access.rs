@@ -363,6 +363,35 @@ async fn test_select_access_path_counts() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_create_table_checks_destination_database_by_name() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (db_id, _) = setup_table(&fixture).await?;
+    let mut user = UserInfo::new_no_auth("creator", "%");
+    user.grants.grant_privileges(
+        &GrantObject::DatabaseById("default".into(), db_id),
+        UserPrivilegeType::Create.into(),
+    );
+    let ctx = user_context(&fixture, user, None).await?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql("CREATE TABLE select_access.dst LIKE select_access.t")
+        .await?;
+    assert_eq!(
+        ctx.get_resolved_database_id("default", "select_access"),
+        Some(db_id)
+    );
+
+    // Binding found the source database. Authorizing the destination still needs a name lookup.
+    let spans = reported_spans();
+    let trace = SpanContext::random();
+    InterpreterFactory::get(ctx, &plan)
+        .in_span(Span::root("create_access_test", trace))
+        .await?;
+    fastrace::flush();
+    assert_eq!(count_spans(&spans.lock(), trace, "get_database"), 1);
+    Ok(())
+}
+
 async fn setup_table(fixture: &TestFixture) -> Result<(u64, u64)> {
     fixture
         .execute_command("CREATE DATABASE select_access")
