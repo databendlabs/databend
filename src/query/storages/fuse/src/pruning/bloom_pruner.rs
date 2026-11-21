@@ -35,9 +35,11 @@ use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::NgramLikeScalarMap;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
+use futures_util::future::try_join_all;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -51,15 +53,86 @@ use crate::pruning::PruningCostKind;
 
 #[async_trait::async_trait]
 pub trait BloomPruner {
-    // returns true, if target should NOT be pruned (false positive allowed)
+    /// Returns true if the block should NOT be pruned (false positives allowed).
+    ///
+    /// `rebuild_from` is the block to rebuild a missing index file from, `None` when the
+    /// index must not be rebuilt.
     async fn should_keep(
         &self,
-        index_location: &Option<Location>,
-        index_length: u64,
+        index_files: &[BloomIndexFile<'_>],
         column_stats: &StatisticsOfColumns,
-        column_ids: Vec<ColumnId>,
-        block_meta: &BlockReadInfo,
+        rebuild_from: Option<&BlockReadInfo>,
     ) -> bool;
+}
+
+/// A Bloom index file of a block and the columns whose filters in it are current.
+///
+/// A legacy block has at most one file. A split block has one file per column group that has
+/// one. A group file keeps the filters of the columns a later group rewrote, and those filters
+/// describe the old values, so a file is consulted only for the columns its group serves.
+pub struct BloomIndexFile<'a> {
+    pub location: &'a Location,
+    /// Size of this file. For a split block this is not `bloom_filter_index_size`, which
+    /// sums the files of all groups.
+    pub size: u64,
+    pub column_ids: Vec<ColumnId>,
+}
+
+impl<'a> BloomIndexFile<'a> {
+    pub fn of_block(meta: &'a BlockMeta) -> Vec<Self> {
+        if !meta.is_split() {
+            return meta
+                .bloom_filter_index_location
+                .iter()
+                .map(|location| BloomIndexFile {
+                    location,
+                    size: meta.bloom_filter_index_size,
+                    column_ids: meta.col_metas.keys().copied().collect(),
+                })
+                .collect();
+        }
+        meta.column_groups
+            .iter()
+            .filter_map(|group| {
+                let bloom = group.bloom.as_ref()?;
+                Some(BloomIndexFile {
+                    location: &bloom.location,
+                    size: bloom.file_size,
+                    column_ids: group.leaf_column_metas.keys().copied().collect(),
+                })
+            })
+            .collect()
+    }
+
+    /// The index files of the block of `part`, consulted only for the columns the part reads.
+    pub fn of_part(part: &'a FuseBlockPartInfo) -> Vec<Self> {
+        if part.column_groups.is_empty() {
+            return part
+                .bloom_filter_index_location
+                .iter()
+                .map(|location| BloomIndexFile {
+                    location,
+                    size: part.bloom_filter_index_size,
+                    column_ids: part.columns_meta.keys().copied().collect(),
+                })
+                .collect();
+        }
+        part.column_groups
+            .iter()
+            .filter_map(|group| {
+                let bloom = group.bloom.as_ref()?;
+                Some(BloomIndexFile {
+                    location: &bloom.location,
+                    size: bloom.file_size,
+                    column_ids: group.columns_meta.keys().copied().collect(),
+                })
+            })
+            .collect()
+    }
+
+    fn serves(&self, field: &TableField) -> bool {
+        self.column_ids.contains(&field.column_id())
+    }
 }
 
 pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
@@ -71,11 +144,9 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
     expr: &Expr<String>,
     part: &FuseBlockPartInfo,
 ) -> Result<bool> {
-    let Some(index_location) = part.bloom_filter_index_location.as_ref() else {
-        return Ok(false);
-    };
-
-    if part.bloom_filter_index_size == 0 {
+    let mut index_files = BloomIndexFile::of_part(part);
+    index_files.retain(|file| file.size > 0);
+    if index_files.is_empty() {
         return Ok(false);
     }
 
@@ -98,32 +169,45 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
         }
     }
 
-    let index_columns = result
-        .bloom_fields
-        .iter()
-        .map(|field| BloomIndex::build_filter_bloom_name(index_location.1, field))
-        .collect::<Result<Vec<_>>>()?;
-    let filter = index_location
-        .read_block_filter(
-            dal.clone(),
-            settings,
-            &index_columns,
-            part.bloom_filter_index_size,
-            cache_policy,
+    let indexes = try_join_all(index_files.iter().map(|file| async {
+        let version = file.location.1;
+        let index_columns = result
+            .bloom_fields
+            .iter()
+            .filter(|field| file.serves(field))
+            .map(|field| BloomIndex::build_filter_bloom_name(version, field))
+            .collect::<Result<Vec<_>>>()?;
+        if index_columns.is_empty() {
+            return Ok(None);
+        }
+        let filter = file
+            .location
+            .read_block_filter(
+                dal.clone(),
+                settings,
+                &index_columns,
+                file.size,
+                cache_policy,
+            )
+            .await?;
+        BloomIndex::from_filter_block(
+            func_ctx.clone(),
+            filter.filter_schema,
+            filter.filters,
+            version,
         )
-        .await?;
-
-    let bloom_index = BloomIndex::from_filter_block(
-        func_ctx.clone(),
-        filter.filter_schema,
-        filter.filters,
-        index_location.1,
-    )?;
+        .map(Some)
+    }))
+    .await?
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
 
     let like_scalar_map = HashMap::new();
     let empty_stats = StatisticsOfColumns::new();
     let column_stats = part.columns_stat.as_ref().unwrap_or(&empty_stats);
-    Ok(bloom_index.apply(
+    Ok(BloomIndex::apply_all(
+        &indexes,
         expr.clone(),
         &eq_scalar_map,
         &like_scalar_map,
@@ -241,23 +325,50 @@ impl BloomPrunerCreator {
         })))
     }
 
-    // Check a location file is hit or not by bloom filter.
+    /// Returns false if the filters of `index_files` prove that the block holds no row the
+    /// filter expression accepts.
     #[async_backtrace::framed]
     pub async fn apply(
         &self,
-        index_location: &Location,
-        index_length: u64,
+        index_files: &[BloomIndexFile<'_>],
         column_stats: &StatisticsOfColumns,
-        column_ids_of_indexed_block: Vec<ColumnId>,
-        block_meta: &BlockReadInfo,
+        rebuild_from: Option<&BlockReadInfo>,
     ) -> Result<bool> {
+        let indexes = try_join_all(
+            index_files
+                .iter()
+                .map(|file| self.load_index(file, rebuild_from)),
+        )
+        .await?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+        Ok(BloomIndex::apply_all(
+            &indexes,
+            self.filter_expression.clone(),
+            &self.eq_scalar_map,
+            &self.like_scalar_map,
+            &self.ngram_args,
+            column_stats,
+            self.data_schema.clone(),
+        )? != FilterEvalResult::MustFalse)
+    }
+
+    /// Loads the filters of `file` the filter expression needs, `None` if it needs none of
+    /// them or the file has a format no longer supported.
+    async fn load_index(
+        &self,
+        file: &BloomIndexFile<'_>,
+        rebuild_from: Option<&BlockReadInfo>,
+    ) -> Result<Option<BloomIndex>> {
+        let index_location = file.location;
         let version = index_location.1;
 
-        // filter out columns that no longer exist in the indexed block
+        // consult the file only for the columns whose filters in it are current
         let index_columns = self.index_fields.iter().try_fold(
             Vec::with_capacity(self.index_fields.len()),
             |mut acc, field| {
-                if column_ids_of_indexed_block.contains(&field.column_id()) {
+                if file.serves(field) {
                     acc.push(BloomIndex::build_filter_bloom_name(version, field)?);
                 }
                 if let Some(ngram_arg) = self.ngram_args.iter().find(|arg| arg.field() == field) {
@@ -271,6 +382,9 @@ impl BloomPrunerCreator {
                 Ok::<_, ErrorCode>(acc)
             },
         )?;
+        if index_columns.is_empty() {
+            return Ok(None);
+        }
 
         // load the relevant index columns
         let maybe_filter = self
@@ -281,14 +395,14 @@ impl BloomPrunerCreator {
                     self.dal.clone(),
                     &self.settings,
                     &index_columns,
-                    index_length,
+                    file.size,
                     self.cache_policy,
                 ),
             )
             .await;
 
-        let maybe_filter = match (&maybe_filter, &self.bloom_index_builder) {
-            (Err(_e), Some(bloom_index_builder)) => {
+        let maybe_filter = match (&maybe_filter, &self.bloom_index_builder, rebuild_from) {
+            (Err(_e), Some(bloom_index_builder), Some(block_read_info)) => {
                 // Got error while loading bloom filters, and there is Some(bloom_index_builder),
                 // try rebuilding the bloom index.
                 //
@@ -301,7 +415,7 @@ impl BloomPrunerCreator {
                         index_location,
                         bloom_index_builder,
                         &index_columns,
-                        block_meta,
+                        block_read_info,
                     )
                     .await
                 {
@@ -320,25 +434,16 @@ impl BloomPrunerCreator {
         };
 
         match maybe_filter {
-            Ok(filter) => Ok(BloomIndex::from_filter_block(
+            Ok(filter) => Ok(Some(BloomIndex::from_filter_block(
                 self.func_ctx.clone(),
                 filter.filter_schema,
                 filter.filters,
                 version,
-            )?
-            .apply(
-                self.filter_expression.clone(),
-                &self.eq_scalar_map,
-                &self.like_scalar_map,
-                &self.ngram_args,
-                column_stats,
-                self.data_schema.clone(),
-            )? != FilterEvalResult::MustFalse),
+            )?)),
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
-                // In case that the index is no longer supported, just return true to indicate
-                // that the block being pruned should be kept. (Although the caller of this method
-                // "FilterPruner::should_keep",  will ignore any exceptions returned)
-                Ok(true)
+                // An index file no longer supported prunes nothing. (The caller of this method,
+                // "BloomPruner::should_keep", keeps the block on any error anyway.)
+                Ok(None)
             }
             Err(e) => Err(e),
         }
@@ -400,27 +505,21 @@ impl BloomPruner for BloomPrunerCreator {
     #[async_backtrace::framed]
     async fn should_keep(
         &self,
-        index_location: &Option<Location>,
-        index_length: u64,
+        index_files: &[BloomIndexFile<'_>],
         column_stats: &StatisticsOfColumns,
-        column_ids: Vec<ColumnId>,
-        block_meta: &BlockReadInfo,
+        rebuild_from: Option<&BlockReadInfo>,
     ) -> bool {
-        if let Some(loc) = index_location {
-            // load filter, and try pruning according to filter expression
-            match self
-                .apply(loc, index_length, column_stats, column_ids, block_meta)
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    // swallow exceptions intentionally, corrupted index should not prevent execution
-                    warn!("failed to apply bloom pruner, returning true. {}", e);
-                    true
-                }
+        if index_files.is_empty() {
+            return true;
+        }
+        // load filter, and try pruning according to filter expression
+        match self.apply(index_files, column_stats, rebuild_from).await {
+            Ok(v) => v,
+            Err(e) => {
+                // swallow exceptions intentionally, corrupted index should not prevent execution
+                warn!("failed to apply bloom pruner, returning true. {}", e);
+                true
             }
-        } else {
-            true
         }
     }
 }
