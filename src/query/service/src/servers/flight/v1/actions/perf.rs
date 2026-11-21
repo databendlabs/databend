@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use databend_common_base::runtime::CpuProfiler;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::MemoryProfiler;
 use databend_common_base::runtime::ProfileScope;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -53,21 +54,45 @@ impl fmt::Display for PerfTarget {
     }
 }
 
+/// What a profiling session samples.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum PerfKind {
+    /// Call stacks on CPU, see `CpuProfiler`.
+    Cpu,
+    /// Call stacks allocating memory, see `MemoryProfiler`.
+    Memory,
+}
+
+impl fmt::Display for PerfKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PerfKind::Cpu => write!(f, "CPU"),
+            PerfKind::Memory => write!(f, "memory"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum PerfRequest {
     Start {
+        kind: PerfKind,
         target: PerfTarget,
+        /// Samples per second, only for `PerfKind::Cpu`.
         frequency: i32,
         max_seconds: u64,
     },
     Stop {
+        kind: PerfKind,
         target: PerfTarget,
     },
     Status {
+        kind: PerfKind,
         target: PerfTarget,
     },
     Dump {
+        kind: PerfKind,
         target: PerfTarget,
     },
 }
@@ -112,11 +137,12 @@ impl PerfNodeStatus {
     }
 }
 
-/// The on-demand profiling session of this node. The CPU profiler is
-/// process-wide, so a node profiles one target at a time; the last session is
-/// kept after it stops so its samples can still be fetched.
+/// An on-demand profiling session of this node. The profilers are
+/// process-wide, so a node profiles one target at a time per `PerfKind`; the
+/// last session is kept after it stops so its samples can still be fetched.
 struct PerfSession {
     id: u64,
+    kind: PerfKind,
     target: PerfTarget,
     /// The threads sampled, the query's `perf_query_token` on this node.
     scope: ProfileScope,
@@ -125,8 +151,29 @@ struct PerfSession {
     state: PerfSessionState,
 }
 
+enum Profiler {
+    Cpu(CpuProfiler),
+    Memory(MemoryProfiler),
+}
+
+impl Profiler {
+    fn start(kind: PerfKind, scope: ProfileScope, frequency: i32) -> Result<Profiler> {
+        match kind {
+            PerfKind::Cpu => CpuProfiler::start(scope, frequency).map(Profiler::Cpu),
+            PerfKind::Memory => MemoryProfiler::start(scope).map(Profiler::Memory),
+        }
+    }
+
+    fn dump_folded(&self) -> Result<String> {
+        match self {
+            Profiler::Cpu(profiler) => profiler.dump_folded(),
+            Profiler::Memory(profiler) => profiler.dump_folded(),
+        }
+    }
+}
+
 enum PerfSessionState {
-    Profiling(CpuProfiler),
+    Profiling(Profiler),
     Stopped {
         elapsed: Duration,
         reason: String,
@@ -175,7 +222,10 @@ impl PerfSession {
     /// Stop sampling and keep the final samples.
     fn stop(&mut self, reason: String) {
         if let PerfSessionState::Profiling(profiler) = &self.state {
-            info!("Stop profiling {} on this node: {}", self.target, reason);
+            info!(
+                "Stop {} profiling of {} on this node: {}",
+                self.kind, self.target, reason
+            );
             let folded = profiler.dump_folded();
             self.state = PerfSessionState::Stopped {
                 elapsed: self.started_at.elapsed(),
@@ -186,27 +236,41 @@ impl PerfSession {
     }
 }
 
-static PERF_SESSION: Mutex<Option<PerfSession>> = Mutex::new(None);
+static CPU_SESSION: Mutex<Option<PerfSession>> = Mutex::new(None);
+static MEMORY_SESSION: Mutex<Option<PerfSession>> = Mutex::new(None);
+
+fn session_of(kind: PerfKind) -> &'static Mutex<Option<PerfSession>> {
+    match kind {
+        PerfKind::Cpu => &CPU_SESSION,
+        PerfKind::Memory => &MEMORY_SESSION,
+    }
+}
 
 pub async fn perf(request: PerfRequest) -> Result<PerfNodeStatus> {
     // Dumping the samples symbolizes every sampled stack, keep it off the
     // async workers.
     databend_common_base::runtime::spawn_blocking(move || match request {
         PerfRequest::Start {
+            kind,
             target,
             frequency,
             max_seconds,
-        } => start(target, frequency, Duration::from_secs(max_seconds)),
-        PerfRequest::Stop { target } => Ok(stop(&target)),
-        PerfRequest::Status { target } => Ok(status(&target, false)),
-        PerfRequest::Dump { target } => Ok(status(&target, true)),
+        } => start(kind, target, frequency, Duration::from_secs(max_seconds)),
+        PerfRequest::Stop { kind, target } => Ok(stop(kind, &target)),
+        PerfRequest::Status { kind, target } => Ok(status(kind, &target, false)),
+        PerfRequest::Dump { kind, target } => Ok(status(kind, &target, true)),
     })
     .await
     .map_err(|cause| ErrorCode::Internal(format!("perf task failed: {cause}")))?
 }
 
-fn start(target: PerfTarget, frequency: i32, max_duration: Duration) -> Result<PerfNodeStatus> {
-    let mut session = PERF_SESSION.lock();
+fn start(
+    kind: PerfKind,
+    target: PerfTarget,
+    frequency: i32,
+    max_duration: Duration,
+) -> Result<PerfNodeStatus> {
+    let mut session = session_of(kind).lock();
 
     let profiling = session
         .as_ref()
@@ -227,25 +291,32 @@ fn start(target: PerfTarget, frequency: i32, max_duration: Duration) -> Result<P
 
     if let Some(current) = profiling {
         return Ok(PerfNodeStatus::failed(format!(
-            "Profiling {} on this node, stop it first",
-            current.target
+            "Profiling {} of {} on this node, stop it first",
+            kind, current.target
         )));
     }
 
-    let profiler = match CpuProfiler::start(scope, frequency) {
+    let profiler = match Profiler::start(kind, scope, frequency) {
         Ok(profiler) => profiler,
-        // EXPLAIN PERF or /debug/pprof/profile owns the profiler.
+        // EXPLAIN PERF or /debug/pprof/profile owns the CPU profiler.
         Err(cause) => return Ok(PerfNodeStatus::failed(cause.message())),
     };
 
-    info!(
-        "Start profiling {} on this node, frequency: {}, max duration: {:?}",
-        target, frequency, max_duration
-    );
+    match kind {
+        PerfKind::Cpu => info!(
+            "Start CPU profiling of {} on this node, frequency: {}, max duration: {:?}",
+            target, frequency, max_duration
+        ),
+        PerfKind::Memory => info!(
+            "Start memory profiling of {} on this node, max duration: {:?}",
+            target, max_duration
+        ),
+    }
     let id = session.as_ref().map_or(0, |s| s.id + 1);
     let now = Instant::now();
     let new_session = PerfSession {
         id,
+        kind,
         target,
         scope,
         started_at: now,
@@ -255,12 +326,12 @@ fn start(target: PerfTarget, frequency: i32, max_duration: Duration) -> Result<P
     let status = new_session.status(false);
     *session = Some(new_session);
 
-    GlobalIORuntime::instance().spawn(watch_session(id));
+    GlobalIORuntime::instance().spawn(watch_session(kind, id));
     Ok(status)
 }
 
-fn stop(target: &PerfTarget) -> PerfNodeStatus {
-    let mut session = PERF_SESSION.lock();
+fn stop(kind: PerfKind, target: &PerfTarget) -> PerfNodeStatus {
+    let mut session = session_of(kind).lock();
     match session.as_mut() {
         Some(current) if &current.target == target => {
             current.stop("stopped by request".to_string());
@@ -270,8 +341,8 @@ fn stop(target: &PerfTarget) -> PerfNodeStatus {
     }
 }
 
-fn status(target: &PerfTarget, with_folded: bool) -> PerfNodeStatus {
-    let session = PERF_SESSION.lock();
+fn status(kind: PerfKind, target: &PerfTarget, with_folded: bool) -> PerfNodeStatus {
+    let session = session_of(kind).lock();
     match session.as_ref() {
         Some(current) if &current.target == target => current.status(with_folded),
         _ => idle_status(target),
@@ -291,19 +362,20 @@ fn idle_status(target: &PerfTarget) -> PerfNodeStatus {
 /// Stops the session `id` once it reaches its deadline or its query is no
 /// longer running on this node, so a forgotten session never keeps the
 /// profiler running.
-async fn watch_session(id: u64) {
+async fn watch_session(kind: PerfKind, id: u64) {
     loop {
         tokio::time::sleep(WATCH_INTERVAL).await;
-        let watching = databend_common_base::runtime::spawn_blocking(move || check_session(id));
+        let watching =
+            databend_common_base::runtime::spawn_blocking(move || check_session(kind, id));
         if !matches!(watching.await, Ok(true)) {
             return;
         }
     }
 }
 
-/// Returns whether session `id` is still profiling after the check.
-fn check_session(id: u64) -> bool {
-    let mut session = PERF_SESSION.lock();
+/// Returns whether session `id` of `kind` is still profiling after the check.
+fn check_session(kind: PerfKind, id: u64) -> bool {
+    let mut session = session_of(kind).lock();
     let Some(current) = session.as_mut() else {
         return false;
     };

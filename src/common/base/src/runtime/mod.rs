@@ -56,6 +56,8 @@ pub use memory::is_alloc_error_panic;
 pub use memory::set_alloc_error_hook;
 pub use memory::take_alloc_error_panic;
 pub use perf::CpuProfiler;
+pub use perf::MEMORY_SAMPLE_INTERVAL;
+pub use perf::MemoryProfiler;
 pub use perf::PerfConfig;
 pub use perf::PerfCounters;
 pub use perf::PerfEvent;
