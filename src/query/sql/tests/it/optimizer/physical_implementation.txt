@@ -276,12 +276,12 @@ sql: SELECT k, grouping(k) AS g, sum(v) AS total FROM t
              GROUP BY GROUPING SETS ((k), ())
 raw_plan:
 EvalScalar
-├── scalars: [t.k (#0) AS (#0), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+├── scalars: [k (#2) AS (#2), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
 └── Aggregate(Initial)
-    ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+    ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
     ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
     └── EvalScalar
-        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        ├── scalars: [t.v (#1) AS (#1), CAST(t.k (#0) AS Int64 NULL) AS (#2)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []
@@ -290,15 +290,15 @@ EvalScalar
 
 default_plan:
 EvalScalar
-├── scalars: [t.k (#0) AS (#0), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+├── scalars: [k (#2) AS (#2), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
 └── Aggregate(Final)
-    ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+    ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
     ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
     └── Aggregate(Partial)
-        ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+        ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
         ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
         └── EvalScalar
-            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            ├── scalars: [t.v (#1) AS (#1), CAST(t.k (#0) AS Int64 NULL) AS (#2)]
             └── Scan
                 ├── table: default.t (#0)
                 ├── filters: []
@@ -307,15 +307,15 @@ EvalScalar
 
 selected_plan:
 EvalScalar
-├── scalars: [t.k (#0) AS (#0), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+├── scalars: [k (#2) AS (#2), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
 └── Aggregate(Final)
-    ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+    ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
     ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
     └── Aggregate(Partial)
-        ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+        ├── group items: [k (#2) AS (#2), _grouping_id (#3) AS (#3)]
         ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
         └── EvalScalar
-            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            ├── scalars: [t.v (#1) AS (#1), CAST(t.k (#0) AS Int64 NULL) AS (#2)]
             └── Scan
                 ├── table: default.t (#0)
                 ├── filters: []
