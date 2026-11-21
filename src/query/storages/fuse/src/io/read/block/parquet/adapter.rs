@@ -31,6 +31,8 @@ use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::schema::types::SchemaDescriptor;
 
+use super::page_header::all_pages_dictionary_encoded;
+
 pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,
     column_chunks: HashMap<usize, Buffer>,
@@ -78,19 +80,13 @@ impl<'a> RowGroupImplBuilder<'a> {
         self.column_chunks.insert(dfs_id, column_chunk);
     }
 
-    /// Whether the added column chunk starts with a dictionary page, i.e. it is dictionary
-    /// encoded. Reads only the first page header; `false` if it cannot be read.
-    pub fn starts_with_dictionary_page(&self, dfs_id: usize) -> bool {
-        let (Some(chunk), Some(meta)) = (
-            self.column_chunks.get(&dfs_id),
-            self.column_chunk_metadatas.get(&dfs_id),
-        ) else {
-            return false;
-        };
-        let reader = Arc::new(BufferReader(chunk.clone()));
-        SerializedPageReader::new(reader, meta, self.num_rows, None)
-            .and_then(|mut pages| pages.peek_next_page())
-            .is_ok_and(|page| page.is_some_and(|page| page.is_dict))
+    /// Whether the added column chunk is dictionary encoded: it starts with a dictionary page,
+    /// and the writer did not fall back to plain pages after it. Reads only the page headers;
+    /// `false` if they cannot be read.
+    pub fn all_pages_dictionary_encoded(&self, dfs_id: usize) -> bool {
+        self.column_chunks
+            .get(&dfs_id)
+            .is_some_and(|chunk| all_pages_dictionary_encoded(&chunk.to_bytes()))
     }
 
     pub fn build(self) -> RowGroupImpl {

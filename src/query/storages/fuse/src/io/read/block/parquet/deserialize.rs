@@ -179,9 +179,10 @@ pub(super) fn column_chunks_record_reader(
                 .get(&column_id)
                 // Whether a column chunk is dictionary encoded was decided when writing it, from
                 // its distinct values (dictionary disabled for high NDV, or the arrow-rs writer
-                // falling back to plain once the dictionary page is too large), and shows as a
-                // leading dictionary page. Its header tells whether reading as a dictionary pays.
-                .is_some_and(|dfs_id| !builder.starts_with_dictionary_page(*dfs_id))
+                // falling back to plain pages once the dictionary page is too large). A chunk
+                // that fell back is read as its regular type: the reader would otherwise
+                // rebuild a dictionary of all the plain values, row by row.
+                .is_some_and(|dfs_id| !builder.all_pages_dictionary_encoded(*dfs_id))
         {
             adjusted_fields.get_or_insert_with(|| hint_fields.to_vec())[index] =
                 arrow_schema.fields()[index].clone();
