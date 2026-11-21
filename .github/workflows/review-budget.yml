@@ -1,0 +1,44 @@
+name: review-budget
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  budget:
+    if: github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check automated review rounds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          MAX_ROUNDS: ${{ vars.MAX_REVIEW_ROUNDS || '2' }}
+        run: |
+          set -euo pipefail
+          trigger=$(printf '%s' "$COMMENT_BODY" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+          case "$trigger" in '@codexreview'|'/review') ;; *) exit 0 ;; esac
+          case "$MAX_ROUNDS" in ''|*[!0-9]*) MAX_ROUNDS=2 ;; esac
+
+          labels=$(gh api "repos/$GH_REPO/issues/$NUMBER" --jq '[.labels[].name] | join("\n")')
+          case "$labels" in *review-budget-override*|*review-budget-exceeded*) exit 0 ;; esac
+
+          rounds=$(gh api "repos/$GH_REPO/issues/$NUMBER/comments" --paginate \
+            --jq '.[] | select(.body | test("^\\s*(@codex\\s+review|/review)\\s*$"; "i")) | .id' \
+            | wc -l | tr -d '[:space:]')
+          if [ "$rounds" -le "$MAX_ROUNDS" ]; then exit 0; fi
+
+          gh api -X POST "repos/$GH_REPO/labels" \
+            -f name=review-budget-exceeded -f color=e11d48 \
+            -f description='Too many automated review rounds; escalate to a human reviewer' >/dev/null || true
+          echo '{"labels":["review-budget-exceeded"]}' | \
+            gh api -X POST "repos/$GH_REPO/issues/$NUMBER/labels" --input - >/dev/null
+          jq -n --arg r "$rounds" --arg m "$MAX_ROUNDS" \
+            '{body: ("<!-- review-budget -->\nThis PR has had " + $r + " automated review requests (budget " + $m + "). Please escalate to a human reviewer instead of re-running the bot on the whole PR. See AI_POLICY.md -> AI review discipline; add the `review-budget-override` label to silence this.")}' | \
+            gh api -X POST "repos/$GH_REPO/issues/$NUMBER/comments" --input - >/dev/null
