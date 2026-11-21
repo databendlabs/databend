@@ -90,12 +90,17 @@ use crate::sessions::TableContextSettings;
 use crate::task::meta::TaskMetaHandle;
 use crate::task::session::create_session;
 use crate::task::session::get_task_user;
+use crate::task::subscription::Subscription;
 
 pub type TaskMessageStream = BoxStream<'static, Result<(String, SeqV<TaskMessage>)>>;
 
 const OVERLAPPING_EXECUTION: &str = "OVERLAPPING_EXECUTION";
 const WHEN_CONDITION_EVALUATION_ERROR: &str = "WHEN_CONDITION_EVALUATION_ERROR";
 const WHEN_CONDITION_FALSE: &str = "WHEN_CONDITION_FALSE";
+
+/// The delays before watching the task messages again: from the min, doubled up to the max.
+const WATCH_AGAIN_MIN_DELAY: Duration = Duration::from_secs(1);
+const WATCH_AGAIN_MAX_DELAY: Duration = Duration::from_secs(30);
 
 /// A schedule that this node runs for a task.
 struct ScheduledTask {
@@ -221,25 +226,34 @@ impl TaskService {
             if let Err(err) = task_service.prepare().await {
                 error!("prepare failed due to {}", err);
             }
-            if let Err(err) = task_service.work(&tenant, runtime).await {
-                error!("prepare failed due to {}", err);
-            }
+            task_service.work(&tenant, runtime).await;
         });
         Ok(())
     }
 
-    async fn work(&self, tenant: &Tenant, runtime: Arc<Runtime>) -> Result<()> {
+    /// Handle the task messages as they come, for as long as the process runs.
+    ///
+    /// The watch of the task messages ends when the connection to the meta-service breaks, and
+    /// when the meta-service leader changes: watch again, and keep the schedules this node runs.
+    /// An error while handling one message is logged, and the next message is handled.
+    async fn work(&self, tenant: &Tenant, runtime: Arc<Runtime>) {
         let mut scheduled_tasks: HashMap<String, ScheduledTask> = HashMap::new();
         let task_mgr = UserApiProvider::instance().task_api(tenant);
 
-        let mut steam = self.subscribe().await?;
-
-        while let Some(result) = steam.next().await {
-            let (_, message) = result?;
-            self.handle_message(tenant, &runtime, &task_mgr, &mut scheduled_tasks, message)
-                .await?;
+        let mut messages = Subscription::new(
+            || self.subscribe(),
+            WATCH_AGAIN_MIN_DELAY,
+            WATCH_AGAIN_MAX_DELAY,
+        );
+        loop {
+            let (key, message) = messages.next().await;
+            if let Err(err) = self
+                .handle_message(tenant, &runtime, &task_mgr, &mut scheduled_tasks, message)
+                .await
+            {
+                error!("failed to handle task message {}: {}", key, err);
+            }
         }
-        Ok(())
     }
 
     /// Handle one task message received from the watch stream.
@@ -622,12 +636,20 @@ impl TaskService {
             .await
             .map_err(meta_client_error)?;
 
-        Ok(Box::pin(stream.filter_map(|result| {
-            result
-                .map(Self::decode)
-                .map_err(|_| ErrorCode::MetaServiceError("task watch-stream closed"))
-                .flatten()
-                .transpose()
+        Ok(Box::pin(stream.filter_map(|result| match result {
+            Ok(resp) => match Self::decode(resp) {
+                Ok(message) => message.map(Ok),
+                // Skipped instead of returned: an error ends the watch, and every new watch would
+                // end again at this message.
+                Err(err) => {
+                    error!("skip a task message that cannot be decoded: {}", err);
+                    None
+                }
+            },
+            Err(status) => Some(Err(ErrorCode::MetaServiceError(format!(
+                "task watch-stream closed: {}",
+                status
+            )))),
         })))
     }
 
