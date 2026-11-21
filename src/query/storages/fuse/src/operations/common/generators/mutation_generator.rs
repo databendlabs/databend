@@ -24,12 +24,14 @@ use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
+use crate::operations::common::SnapshotChanges;
 use crate::operations::common::SnapshotGenerator;
 use crate::statistics::TableStatsGenerator;
 use crate::statistics::merge_statistics;
@@ -51,6 +53,41 @@ impl MutationGenerator {
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
             logical_change_delta: (0, 0),
+        }
+    }
+
+    /// Merging keeps a column range only if both the previous summary and the
+    /// mutation output cover it. Recover the ranges that still bound every row.
+    fn restore_column_ranges(
+        &self,
+        new_summary: &mut Statistics,
+        previous: &Statistics,
+        changes: &SnapshotChanges,
+        engine: &str,
+    ) {
+        // Every previous row was removed, so the output alone describes the table.
+        if previous.row_count == changes.removed_statistics.row_count {
+            for (id, stats) in &changes.merged_statistics.col_stats {
+                new_summary
+                    .col_stats
+                    .entry(*id)
+                    .or_insert_with(|| stats.clone());
+            }
+        }
+        // Compaction and reclustering keep the rows, so the previous ranges and
+        // counts still describe them.
+        let keeps_rows = matches!(
+            self.mutation_kind,
+            MutationKind::Compact | MutationKind::Recluster
+        ) && !is_materialized_view_engine(engine)
+            && changes.merged_statistics.row_count == changes.removed_statistics.row_count;
+        if keeps_rows {
+            for (id, stats) in &previous.col_stats {
+                new_summary
+                    .col_stats
+                    .entry(*id)
+                    .or_insert_with(|| stats.clone());
+            }
         }
     }
 }
@@ -114,12 +151,19 @@ impl SnapshotGenerator for MutationGenerator {
                         replaced,
                         removed,
                     );
+                    let previous_summary = previous.summary();
                     let mut new_summary = merge_statistics(
-                        previous.summary(),
+                        previous_summary.clone(),
                         &ctx.merged_statistics,
                         cluster_key_info.as_ref(),
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
+                    self.restore_column_ranges(
+                        &mut new_summary,
+                        &previous_summary,
+                        ctx,
+                        &table_info.meta.engine,
+                    );
 
                     let table_statistics_location = table_stats_gen.table_statistics_location();
                     for (id, ndv) in table_stats_gen.column_distinct_values() {

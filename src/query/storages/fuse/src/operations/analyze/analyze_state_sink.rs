@@ -524,6 +524,11 @@ impl SinkAnalyzeState {
             ..Default::default()
         });
         let mut col_stats = self.acc.segment_stats.col_stats.clone();
+        // ANALYZE does not change the data: a column whose segment ranges are
+        // incomplete keeps the range `base` already has for the same rows.
+        for (id, stats) in &snapshot.summary.col_stats {
+            col_stats.entry(*id).or_insert_with(|| stats.clone());
+        }
         for (id, hll) in &self.acc.column_hlls {
             if let Some(stats) = col_stats.get_mut(id) {
                 stats.distinct_of_values = Some(hll.count() as u64);
