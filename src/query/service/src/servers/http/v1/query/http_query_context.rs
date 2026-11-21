@@ -32,6 +32,7 @@ use crate::servers::http::middleware::session_header::ClientSessionType;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
+use crate::servers::http::v1::query::CredentialBinding;
 use crate::servers::http::v1::query::HttpQuery;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
@@ -46,6 +47,10 @@ pub struct HttpQueryContext {
     pub(crate) authenticated_tenant: Tenant,
     /// Bound during HTTP authentication, before the context reaches a handler.
     pub(crate) authenticated_query: Option<Arc<HttpQuery>>,
+    /// Set for submissions only; retained by the created query.
+    pub(crate) credential_binding: Option<CredentialBinding>,
+    /// Authorized by a credential binding instead of ordinary authentication.
+    pub(crate) authorized_by_binding: bool,
     pub credential: Credential,
     pub query_id: String,
     pub is_query_id_from_client: bool,
@@ -174,7 +179,7 @@ impl HttpQueryContext {
     pub async fn try_refresh_worksheet_session(&self) -> databend_common_exception::Result<()> {
         // A query capability must not extend session/temporary-table lifetimes
         // or introduce Meta accesses on the follow-up authentication path.
-        if matches!(&self.credential, Credential::QueryToken { .. }) {
+        if matches!(&self.credential, Credential::QueryToken { .. }) || self.authorized_by_binding {
             return Ok(());
         }
         if let Some(client_session) = self.client_session.as_ref() {
