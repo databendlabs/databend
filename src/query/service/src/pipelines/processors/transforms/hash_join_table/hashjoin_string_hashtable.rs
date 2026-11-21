@@ -23,6 +23,7 @@ use databend_common_hashtable::hash_join_fast_string_hash;
 use super::HashJoinHashtableLike;
 use super::hashjoin_hashtable::combine_header;
 use super::hashjoin_hashtable::early_filtering;
+use super::hashjoin_hashtable::for_each_hash_with_prefetch;
 use super::hashjoin_hashtable::hash_bits;
 use super::hashjoin_hashtable::new_header;
 use super::hashjoin_hashtable::remove_header_tag;
@@ -108,22 +109,27 @@ impl<const UNIQUE: bool> HashJoinHashtableLike for HashJoinStringHashTable<UNIQU
         let mut count = 0;
         match valids {
             Some(valids) => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    if unsafe { valids.get_bit_unchecked(idx) } {
-                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                        if header != 0 {
-                            *hash = remove_header_tag(header);
-                            count += 1;
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
+                        if unsafe { valids.get_bit_unchecked(idx) } {
+                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                            if header != 0 {
+                                *hash = remove_header_tag(header);
+                                count += 1;
+                            } else {
+                                *hash = 0;
+                            }
                         } else {
                             *hash = 0;
-                        }
-                    } else {
-                        *hash = 0;
-                    };
-                });
+                        };
+                    },
+                );
             }
             None => {
-                hashes.iter_mut().for_each(|hash| {
+                for_each_hash_with_prefetch(&self.pointers, self.hash_shift, hashes, |_, hash| {
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 {
                         *hash = remove_header_tag(header);
@@ -158,8 +164,34 @@ impl<const UNIQUE: bool> HashJoinHashtableLike for HashJoinStringHashTable<UNIQU
 
         match valids {
             Some(valids) => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    if unsafe { valids.get_bit_unchecked(idx) } {
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
+                        if unsafe { valids.get_bit_unchecked(idx) } {
+                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                            if header != 0 && early_filtering(header, *hash) {
+                                *hash = remove_header_tag(header);
+                                assume(matched_selection.len() < matched_selection.capacity());
+                                matched_selection.push(idx as u32);
+                            } else {
+                                assume(unmatched_selection.len() < unmatched_selection.capacity());
+                                unmatched_selection.push(idx as u32);
+                            }
+                        } else {
+                            assume(unmatched_selection.len() < unmatched_selection.capacity());
+                            unmatched_selection.push(idx as u32);
+                        }
+                    },
+                );
+            }
+            None => {
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
@@ -169,24 +201,8 @@ impl<const UNIQUE: bool> HashJoinHashtableLike for HashJoinStringHashTable<UNIQU
                             assume(unmatched_selection.len() < unmatched_selection.capacity());
                             unmatched_selection.push(idx as u32);
                         }
-                    } else {
-                        assume(unmatched_selection.len() < unmatched_selection.capacity());
-                        unmatched_selection.push(idx as u32);
-                    }
-                });
-            }
-            None => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                    if header != 0 && early_filtering(header, *hash) {
-                        *hash = remove_header_tag(header);
-                        assume(matched_selection.len() < matched_selection.capacity());
-                        matched_selection.push(idx as u32);
-                    } else {
-                        assume(unmatched_selection.len() < unmatched_selection.capacity());
-                        unmatched_selection.push(idx as u32);
-                    }
-                });
+                    },
+                );
             }
         }
         (matched_selection.len(), unmatched_selection.len())
@@ -210,26 +226,36 @@ impl<const UNIQUE: bool> HashJoinHashtableLike for HashJoinStringHashTable<UNIQU
 
         match valids {
             Some(valids) => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    if unsafe { valids.get_bit_unchecked(idx) } {
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
+                        if unsafe { valids.get_bit_unchecked(idx) } {
+                            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                            if header != 0 && early_filtering(header, *hash) {
+                                *hash = remove_header_tag(header);
+                                assume(selection.len() < selection.capacity());
+                                selection.push(idx as u32);
+                            }
+                        }
+                    },
+                );
+            }
+            None => {
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
                             assume(selection.len() < selection.capacity());
                             selection.push(idx as u32);
                         }
-                    }
-                });
-            }
-            None => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                    if header != 0 && early_filtering(header, *hash) {
-                        *hash = remove_header_tag(header);
-                        assume(selection.len() < selection.capacity());
-                        selection.push(idx as u32);
-                    }
-                });
+                    },
+                );
             }
         }
         selection.len()

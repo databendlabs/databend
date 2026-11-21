@@ -30,8 +30,8 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeDat
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::BinaryKeyProbeStream;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::serialize_keys::EarlyFilteringProbeStream;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::probe_chain::BinaryKeyEntries;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::probe_chain::ChainProbeStream;
 
 impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
     pub fn new(
@@ -108,7 +108,7 @@ impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
         let keys = ProjectedBlock::from(data.columns());
         let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
+        let entries = BinaryKeyEntries::new(hash_method.build_keys_accessor(keys_state)?);
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -133,13 +133,18 @@ impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
         match matched_rows {
             0 => Ok(Box::new(EmptyProbeStream)),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<true, UNIQUE>::create(
+                true => Ok(ChainProbeStream::<_, true, UNIQUE>::from_selection(
+                    entries,
                     hashes,
-                    keys,
-                    &ctx.selection,
+                    &mut ctx.selection,
                     &[],
                 )),
-                false => Ok(BinaryKeyProbeStream::<true, UNIQUE>::create(hashes, keys)),
+                false => Ok(ChainProbeStream::<_, true, UNIQUE>::from_pointers(
+                    entries,
+                    hashes,
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
+                )),
             },
         }
     }
@@ -152,7 +157,7 @@ impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
         let keys = ProjectedBlock::from(data.columns());
         let keys_state = hash_method.build_keys_state(keys, num_rows)?;
         hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
+        let entries = BinaryKeyEntries::new(hash_method.build_keys_accessor(keys_state)?);
 
         let probed_rows = data.non_null_rows();
         let (_, valids, ctx) = data.into_raw();
@@ -181,13 +186,18 @@ impl<const UNIQUE: bool> SingleBinaryHashJoinHashTable<UNIQUE> {
         match matched_rows {
             0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
             _ => match enable_early_filtering {
-                true => Ok(EarlyFilteringProbeStream::<false, UNIQUE>::create(
+                true => Ok(ChainProbeStream::<_, false, UNIQUE>::from_selection(
+                    entries,
                     hashes,
-                    keys,
-                    &ctx.selection,
+                    &mut ctx.selection,
                     &ctx.unmatched_selection,
                 )),
-                false => Ok(BinaryKeyProbeStream::<false, UNIQUE>::create(hashes, keys)),
+                false => Ok(ChainProbeStream::<_, false, UNIQUE>::from_pointers(
+                    entries,
+                    hashes,
+                    &mut ctx.selection,
+                    &mut ctx.unmatched_selection,
+                )),
             },
         }
     }

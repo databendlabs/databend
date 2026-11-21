@@ -72,6 +72,39 @@ pub fn early_filtering(header: u64, hash: u64) -> bool {
     ((header >> POINTER_BITS_SIZE) & (1 << (hash & TAG_BITS_SIZE_MASK))) != 0
 }
 
+/// How many rows ahead of the current one the probe loop prefetches the directory bucket.
+/// The loop body is a few instructions, so the distance has to cover a whole memory latency.
+const DIRECTORY_PREFETCH_DISTANCE: usize = 64;
+
+/// Hints the CPU to load the cache line containing `ptr` into all cache levels.
+/// It is only a hint: it never faults and does not change program semantics.
+#[inline(always)]
+pub fn prefetch_read<T>(ptr: *const T) {
+    std::intrinsics::prefetch_read_data::<T, 3>(ptr);
+}
+
+/// Calls `f(idx, hash)` for every probe hash in order. Before each call it prefetches the
+/// directory bucket of the hash `DIRECTORY_PREFETCH_DISTANCE` rows ahead, so that the random
+/// bucket loads of consecutive rows overlap instead of being served one by one.
+#[inline(always)]
+pub(super) fn for_each_hash_with_prefetch(
+    pointers: &[u64],
+    hash_shift: usize,
+    hashes: &mut [u64],
+    mut f: impl FnMut(usize, &mut u64),
+) {
+    for idx in 0..hashes.len() {
+        if let Some(ahead) = hashes.get(idx + DIRECTORY_PREFETCH_DISTANCE) {
+            prefetch_read(
+                pointers
+                    .as_ptr()
+                    .wrapping_add((*ahead >> hash_shift) as usize),
+            );
+        }
+        f(idx, &mut hashes[idx]);
+    }
+}
+
 /// For SSE4.2, we use CRC32 to calculate the hash, and the hash type is u32.
 #[inline(always)]
 pub fn hash_bits() -> u32 {
@@ -156,11 +189,12 @@ impl<K: HashtableKeyable, const UNIQUE: bool> HashJoinHashtableLike
         let mut count = 0;
         match valids {
             Some(valids) => {
-                valids
-                    .iter()
-                    .zip(hashes.iter_mut())
-                    .for_each(|(valid, hash)| {
-                        if valid {
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
+                        if unsafe { valids.get_bit_unchecked(idx) } {
                             let header = self.pointers[(*hash >> self.hash_shift) as usize];
                             if header != 0 {
                                 *hash = remove_header_tag(header);
@@ -171,10 +205,11 @@ impl<K: HashtableKeyable, const UNIQUE: bool> HashJoinHashtableLike
                         } else {
                             *hash = 0;
                         }
-                    });
+                    },
+                );
             }
             None => {
-                hashes.iter_mut().for_each(|hash| {
+                for_each_hash_with_prefetch(&self.pointers, self.hash_shift, hashes, |_, hash| {
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 {
                         *hash = remove_header_tag(header);
@@ -209,9 +244,12 @@ impl<K: HashtableKeyable, const UNIQUE: bool> HashJoinHashtableLike
 
         match valids {
             Some(valids) => {
-                valids.iter().zip(hashes.iter_mut().enumerate()).for_each(
-                    |(valid, (idx, hash))| {
-                        if valid {
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
+                        if unsafe { valids.get_bit_unchecked(idx) } {
                             let header = self.pointers[(*hash >> self.hash_shift) as usize];
                             if header != 0 && early_filtering(header, *hash) {
                                 *hash = remove_header_tag(header);
@@ -229,17 +267,22 @@ impl<K: HashtableKeyable, const UNIQUE: bool> HashJoinHashtableLike
                 );
             }
             None => {
-                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
-                    let header = self.pointers[(*hash >> self.hash_shift) as usize];
-                    if header != 0 && early_filtering(header, *hash) {
-                        *hash = remove_header_tag(header);
-                        assume(matched_selection.len() < matched_selection.capacity());
-                        matched_selection.push(idx as u32);
-                    } else {
-                        assume(unmatched_selection.len() < unmatched_selection.capacity());
-                        unmatched_selection.push(idx as u32);
-                    }
-                });
+                for_each_hash_with_prefetch(
+                    &self.pointers,
+                    self.hash_shift,
+                    hashes,
+                    |idx, hash| {
+                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                        if header != 0 && early_filtering(header, *hash) {
+                            *hash = remove_header_tag(header);
+                            assume(matched_selection.len() < matched_selection.capacity());
+                            matched_selection.push(idx as u32);
+                        } else {
+                            assume(unmatched_selection.len() < unmatched_selection.capacity());
+                            unmatched_selection.push(idx as u32);
+                        }
+                    },
+                );
             }
         }
         (matched_selection.len(), unmatched_selection.len())
@@ -263,8 +306,8 @@ impl<K: HashtableKeyable, const UNIQUE: bool> HashJoinHashtableLike
         }
 
         if let Some(valids) = valids {
-            for (valid, (idx, hash)) in valids.iter().zip(hashes.iter_mut().enumerate()) {
-                if valid {
+            for_each_hash_with_prefetch(&self.pointers, self.hash_shift, hashes, |idx, hash| {
+                if unsafe { valids.get_bit_unchecked(idx) } {
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
@@ -272,19 +315,19 @@ impl<K: HashtableKeyable, const UNIQUE: bool> HashJoinHashtableLike
                         selection.push(idx as u32);
                     }
                 }
-            }
+            });
 
             return selection.len();
         }
 
-        for (idx, hash) in hashes.iter_mut().enumerate() {
+        for_each_hash_with_prefetch(&self.pointers, self.hash_shift, hashes, |idx, hash| {
             let header = self.pointers[(*hash >> self.hash_shift) as usize];
             if header != 0 && early_filtering(header, *hash) {
                 *hash = remove_header_tag(header);
                 assume(selection.len() < selection.capacity());
                 selection.push(idx as u32);
             }
-        }
+        });
 
         selection.len()
     }

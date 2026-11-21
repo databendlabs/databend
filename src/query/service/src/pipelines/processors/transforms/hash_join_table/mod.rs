@@ -23,6 +23,7 @@ pub use hashjoin_hashtable::combine_header;
 pub use hashjoin_hashtable::early_filtering;
 pub use hashjoin_hashtable::hash_bits;
 pub use hashjoin_hashtable::new_header;
+pub use hashjoin_hashtable::prefetch_read;
 pub use hashjoin_hashtable::remove_header_tag;
 pub use hashjoin_hashtable::tag;
 pub use hashjoin_string_hashtable::HashJoinStringHashTable;
