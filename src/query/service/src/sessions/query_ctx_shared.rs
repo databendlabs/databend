@@ -592,8 +592,16 @@ impl QueryContextShared {
             .cache_stream_source_table(catalog, cache_table, max_batch_size)
             .await?;
 
-        let mut tables_refs = self.tables_refs.lock();
+        self.cache_resolved_table(table_meta_key, cache_table, database_id)
+    }
 
+    fn cache_resolved_table(
+        &self,
+        table_meta_key: DatabaseAndTable,
+        table: Arc<dyn Table>,
+        database_id: Option<((String, String), u64)>,
+    ) -> Result<Arc<dyn Table>> {
+        let mut tables_refs = self.tables_refs.lock();
         match tables_refs.entry(table_meta_key) {
             Entry::Occupied(v) => Ok(v.get().clone()),
             Entry::Vacant(v) => {
@@ -601,12 +609,13 @@ impl QueryContextShared {
                 if let Some((key, db_id)) = database_id {
                     let bound_id = *self.database_ids.lock().entry(key).or_insert(db_id);
                     if bound_id != db_id {
+                        let (catalog_name, database, _) = v.key();
                         return Err(ErrorCode::DatabaseVersionMismatched(format!(
                             "Database '{catalog_name}.{database}' changed from ID {bound_id} to {db_id} while resolving tables. Retry the statement."
                         )));
                     }
                 }
-                Ok(v.insert(cache_table).clone())
+                Ok(v.insert(table).clone())
             }
         }
     }
@@ -644,8 +653,8 @@ impl QueryContextShared {
                 let source = match cached_source {
                     Some(source) => source,
                     None => {
-                        let source = catalog
-                            .get_table(
+                        let (source, db_id) = catalog
+                            .get_table_with_db_id(
                                 &self.get_tenant(),
                                 &source_database_name,
                                 &source_table_name,
@@ -667,11 +676,9 @@ impl QueryContextShared {
                                 ))
                             })?;
                         // Only the full source belongs in the ordinary table cache.
-                        self.tables_refs
-                            .lock()
-                            .entry(meta_key)
-                            .or_insert(source)
-                            .clone()
+                        let database_id =
+                            db_id.map(|id| ((catalog.name(), source_database_name), id));
+                        self.cache_resolved_table(meta_key, source, database_id)?
                     }
                 };
                 let source_table = stream
