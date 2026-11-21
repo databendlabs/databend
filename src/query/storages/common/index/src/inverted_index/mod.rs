@@ -58,6 +58,7 @@ pub use search_pin::SearchPinDirectory;
 pub use search_pin::with_search_scope;
 pub use searcher::FieldPostings;
 pub use searcher::InvertedIndexSearcher;
+pub use searcher::InvertedIndexTermInfo;
 
 macro_rules! read_only_directory {
     () => {

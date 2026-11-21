@@ -37,6 +37,7 @@ use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
 use databend_storages_common_index::InvertedIndexSearcher;
+use databend_storages_common_index::InvertedIndexTermInfo;
 use databend_storages_common_index::SpatialIndexFile;
 use databend_storages_common_index::SpatialIndexMeta;
 use databend_storages_common_index::VectorIndexFile;
@@ -100,6 +101,8 @@ pub struct InvertedIndexCache {
     pub full_payload: MemCache<InvertedIndexPayloadBytes>,
     /// Bundles opened for search, keyed by location, size and cache policy.
     pub searcher: MemCache<InvertedIndexSearcher>,
+    /// The term infos the searches of each searcher looked up, by `InvertedIndexSearcher::term_key`.
+    pub term_info: MemCache<InvertedIndexTermInfo>,
 }
 
 impl InvertedIndexCache {
@@ -110,6 +113,7 @@ impl InvertedIndexCache {
             payload: self.payload.with_policy(policy),
             full_payload: self.full_payload.with_policy(policy),
             searcher: self.searcher.with_policy(policy),
+            term_info: self.term_info.with_policy(policy),
         }
     }
 }
@@ -163,6 +167,7 @@ impl FuseCaches {
                 payload: manager.cache::<inverted::Payload>(),
                 full_payload: manager.cache::<inverted::FullPayload>(),
                 searcher: manager.cache::<inverted::Searcher>(),
+                term_info: manager.cache::<inverted::TermInfo>(),
             },
             vector_indexes: manager.cache::<vector::Index>(),
             column_arrays: manager.cache::<column::Array>(),

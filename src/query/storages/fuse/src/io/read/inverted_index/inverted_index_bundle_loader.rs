@@ -1112,6 +1112,7 @@ mod tests {
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_index::BundleOpenSlice;
+    use databend_storages_common_index::InvertedIndexTermInfo;
     use opendal::Operator;
     use opendal::raw::Access;
     use opendal::raw::Layer;
@@ -1253,6 +1254,13 @@ mod tests {
     /// A cache of its own, so tests do not share process-wide state.
     fn local_cache<T: CachedItem>(kind: CacheKind, capacity: LegacyCapacity) -> MemCache<T> {
         MemCache::new(Arc::new(LegacyStore::new([(kind, capacity)])), kind)
+    }
+
+    fn term_info_cache() -> MemCache<InvertedIndexTermInfo> {
+        local_cache(
+            CacheKind::of::<inverted::TermInfo>(),
+            LegacyCapacity::Bytes(1 << 20),
+        )
     }
 
     fn lookup_cache(capacity: usize) -> MemCache<InvertedIndexLookupBytes> {
@@ -1610,8 +1618,11 @@ mod tests {
             &[body],
             fuzziness,
         )?;
+        let term_infos = term_info_cache();
         let mut rows = with_bundle_search_scope(storage.clone(), async {
-            warmup.warm_searcher(&searcher, has_score).await?;
+            warmup
+                .warm_searcher(&searcher, &term_infos, has_score)
+                .await?;
             // Search is synchronous and must succeed using pinned data, without remote reads.
             let searcher = searcher.searcher();
             Ok::<_, ErrorCode>(if has_score {
@@ -1741,11 +1752,11 @@ mod tests {
         Ok(())
     }
 
-    /// One searcher serves repeated searches. The second reads no term dictionary from
-    /// storage: the term infos are remembered and their dictionary blocks stay pinned. Scores
-    /// with the remembered document frequencies equal those of Tantivy's own statistics.
+    /// The term infos the first search of a searcher looks up serve its second search, which
+    /// reads no term dictionary from storage. Scores with the document frequencies of the warmup
+    /// equal those of Tantivy's own statistics.
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_shared_searcher_remembers_terms_across_searches() -> Result<()> {
+    async fn test_term_infos_serve_later_searches_of_the_searcher() -> Result<()> {
         use tantivy::Term;
         use tantivy::collector::TopDocs;
         use tantivy::query::QueryParser;
@@ -1778,17 +1789,18 @@ mod tests {
             &[body],
             None,
         )?;
+        let term_infos = term_info_cache();
         let collector = TopDocs::with_limit(100).order_by_score();
         let search = || {
             with_bundle_search_scope(storage.clone(), async {
-                warmup.warm_searcher(&searcher, true).await?;
-                let remembered = searcher.searcher().search_with_statistics_provider(
+                let statistics = warmup.warm_searcher(&searcher, &term_infos, true).await?;
+                let warmed = searcher.searcher().search_with_statistics_provider(
                     query.as_ref(),
                     &collector,
-                    &searcher,
+                    &statistics,
                 )?;
                 let own = searcher.searcher().search(query.as_ref(), &collector)?;
-                Ok::<_, ErrorCode>((remembered, own))
+                Ok::<_, ErrorCode>((warmed, own))
             })
         };
         let term_reads = || {
@@ -1799,22 +1811,117 @@ mod tests {
                 .filter(|range| range.start < term_file.end && range.end > term_file.start)
                 .count()
         };
+        let cached = |field, text| {
+            let key = searcher.term_key(&Term::from_field_text(field, text));
+            term_infos
+                .lookup(&key)
+                .map(|cached| cached.info.as_ref().map(|info| info.doc_freq))
+        };
 
         let (first, own) = search().await?;
         assert_eq!(first.len(), 100);
         assert_eq!(first, own);
         let first_reads = term_reads();
         assert!(first_reads > 0);
-        let alpha = searcher.term_info(&Term::from_field_text(body, "alpha"));
-        assert_eq!(alpha.flatten().map(|info| info.doc_freq), Some(2000));
-        let needle = searcher.term_info(&Term::from_field_text(title, "needle"));
-        assert_eq!(needle.flatten().map(|info| info.doc_freq), Some(1334));
-        let absent = searcher.term_info(&Term::from_field_text(body, "absent"));
-        assert_eq!(absent, Some(None));
+        assert_eq!(cached(body, "alpha"), Some(Some(2000)));
+        assert_eq!(cached(title, "needle"), Some(Some(1334)));
+        assert_eq!(cached(body, "absent"), Some(None));
 
         let (second, _) = search().await?;
         assert_eq!(second, first);
         assert_eq!(term_reads(), first_reads);
+        Ok(())
+    }
+
+    /// The term infos of a searcher do not serve a searcher opened again from the same bundle:
+    /// its shared pin does not keep the dictionary blocks that its synchronous search reads.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_reopened_searcher_looks_its_terms_up_again() -> Result<()> {
+        use tantivy::collector::Count;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, footer, storage, _) = expansion_bundle_fixture().await?;
+        let open = || {
+            let remote = Arc::new(remote.clone());
+            let pin = SearchPinDirectory::shared(remote, InvertedIndexSearcher::retains);
+            InvertedIndexSearcher::open(FooterDirectory::new(pin, footer.clone()))
+        };
+        let term_infos = term_info_cache();
+        for searcher in [open()?, open()?] {
+            let index = searcher.searcher().index();
+            let schema = index.schema();
+            let body = schema.get_field("body")?;
+            let query = QueryParser::for_index(index, vec![body]).parse_query("alpha")?;
+            let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+                query.as_ref(),
+                &parse_query("alpha").unwrap(),
+                &schema,
+                &[body],
+                None,
+            )?;
+            let count = with_bundle_search_scope(storage.clone(), async {
+                let statistics = warmup.warm_searcher(&searcher, &term_infos, true).await?;
+                let searcher = searcher.searcher();
+                Ok::<_, ErrorCode>(searcher.search_with_statistics_provider(
+                    query.as_ref(),
+                    &Count,
+                    &statistics,
+                )?)
+            })
+            .await?;
+            assert_eq!(count, 2000);
+        }
+        assert_eq!(term_infos.stats().items, 2);
+        Ok(())
+    }
+
+    /// Term infos are cached as the policy of the search allows: `READ_ONLY` reads them without
+    /// putting any, `BYPASS` neither reads nor puts them.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_term_infos_follow_the_cache_policy() -> Result<()> {
+        use tantivy::Term;
+        use tantivy::query::Bm25StatisticsProvider;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, footer, storage, _) = expansion_bundle_fixture().await?;
+        let pin = SearchPinDirectory::shared(Arc::new(remote), InvertedIndexSearcher::retains);
+        let searcher = InvertedIndexSearcher::open(FooterDirectory::new(pin, footer))?;
+        let index = searcher.searcher().index();
+        let schema = index.schema();
+        let body = schema.get_field("body")?;
+        let query = QueryParser::for_index(index, vec![body]).parse_query("alpha")?;
+        let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+            query.as_ref(),
+            &parse_query("alpha").unwrap(),
+            &schema,
+            &[body],
+            None,
+        )?;
+        let alpha = Term::from_field_text(body, "alpha");
+        let term_infos = term_info_cache();
+        let doc_freq = |policy| {
+            let term_infos = term_infos.with_policy(policy);
+            let (warmup, searcher, alpha) = (&warmup, &searcher, &alpha);
+            with_bundle_search_scope(storage.clone(), async move {
+                let statistics = warmup.warm_searcher(searcher, &term_infos, true).await?;
+                Ok::<_, ErrorCode>(statistics.doc_freq(alpha)?)
+            })
+        };
+
+        assert_eq!(doc_freq(CachePolicy::READ_ONLY).await?, 2000);
+        assert_eq!(term_infos.stats().items, 0);
+        // A wrong info, as if cached: the policies that read it score with it.
+        let key = searcher.term_key(&alpha);
+        let key_len = key.len();
+        term_infos.put(&key, InvertedIndexTermInfo {
+            info: None,
+            key_len,
+        });
+        assert_eq!(doc_freq(CachePolicy::DEFAULT).await?, 0);
+        assert_eq!(doc_freq(CachePolicy::READ_ONLY).await?, 0);
+        assert_eq!(doc_freq(CachePolicy::BYPASS).await?, 2000);
         Ok(())
     }
 
@@ -1845,6 +1952,7 @@ mod tests {
                 CacheKind::of::<inverted::Searcher>(),
                 LegacyCapacity::Bytes(1 << 24),
             ),
+            term_info: term_info_cache(),
         };
         let first = caches
             .searcher
@@ -1887,7 +1995,7 @@ mod tests {
             None,
         )?;
         let count = with_bundle_search_scope(current, async {
-            warmup.warm_searcher(&hit, false).await?;
+            warmup.warm_searcher(&hit, &caches.term_info, false).await?;
             Ok::<_, ErrorCode>(hit.searcher().search(query.as_ref(), &Count)?)
         })
         .await?;
@@ -1931,6 +2039,7 @@ mod tests {
             payload: payload_cache(16 * 1024 * 1024),
             full_payload: full_payload_cache(0),
             searcher: manager.cache::<inverted::Searcher>(),
+            term_info: term_info_cache(),
         };
         let first = databend_common_base::runtime::spawn({
             let (caches, key) = (caches.clone(), key.clone());

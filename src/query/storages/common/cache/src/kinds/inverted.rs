@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Inverted indexes: the footer of each index file, then whole lookup files or 64 KiB pages, and
-//! the bundles opened for search.
+//! Inverted indexes: the footer of each index file, then whole lookup files or 64 KiB pages, the
+//! bundles opened for search, and the term infos their searches looked up.
 
 use std::mem::size_of;
 
@@ -21,6 +21,7 @@ use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
 use databend_storages_common_index::InvertedIndexSearcher;
+use databend_storages_common_index::InvertedIndexTermInfo;
 
 use crate::CacheDef;
 use crate::CachedItem;
@@ -82,6 +83,31 @@ impl CacheDef for Searcher {
 impl CachedItem for InvertedIndexSearcher {
     fn mem_bytes(&self) -> usize {
         self.memory_size()
+    }
+}
+
+/// The infos of the terms the searches of each opened searcher looked up in its dictionary, by
+/// `InvertedIndexSearcher::term_key`: a later search of the searcher reads the postings of a
+/// term and scores it without looking it up again. The infos of a searcher that was dropped are
+/// never looked up again, and leave as the pool turns over.
+pub struct TermInfo;
+
+impl CacheDef for TermInfo {
+    type Value = InvertedIndexTermInfo;
+    const NAME: &'static str = "memory_cache_inverted_index_term_info";
+    const POOL: Pool = Pool::Index;
+}
+
+/// What the shared backend allocates for an entry of a term info, apart from the bytes of its
+/// key: its slot in the pool with its share of the table and the free list, and the `Arc` of
+/// the value with its reservation. Several times the info itself; other kinds leave it out,
+/// their values being far larger. `test_term_info_is_charged_what_its_entry_takes` measures it,
+/// about 300 bytes on 64-bit targets.
+const TERM_INFO_ENTRY_BYTES: usize = 300;
+
+impl CachedItem for InvertedIndexTermInfo {
+    fn mem_bytes(&self) -> usize {
+        TERM_INFO_ENTRY_BYTES + self.key_len
     }
 }
 

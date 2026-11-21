@@ -18,7 +18,6 @@ use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
 use std::alloc::System;
 use std::cell::Cell;
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::ptr;
@@ -30,19 +29,10 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_base::set_alloc_error_hook;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_index::FooterDirectory;
-use databend_storages_common_index::InvertedIndexBundleFooter;
-use databend_storages_common_index::InvertedIndexSearcher;
 use databend_storages_common_index::SearchPinDirectory;
 use tantivy::Directory;
-use tantivy::Index;
-use tantivy::IndexSettings;
-use tantivy::Term;
 use tantivy::directory::OwnedBytes;
 use tantivy::directory::RamDirectory;
-use tantivy::schema::Field;
-use tantivy::schema::Schema;
-use tantivy::schema::TEXT;
 
 thread_local! {
     static FAIL_IN: Cell<usize> = const { Cell::new(0) };
@@ -89,43 +79,8 @@ fn fail_on(nth: usize, op: impl FnOnce()) -> Result<()> {
     result
 }
 
-fn searcher() -> (InvertedIndexSearcher, Field) {
-    let raw = RamDirectory::default();
-    let mut schema = Schema::builder();
-    let body = schema.add_text_field("body", TEXT);
-    let index = Index::create(raw.clone(), schema.build(), IndexSettings::default()).unwrap();
-    let mut writer = index.writer_with_num_threads(1, 15_000_000).unwrap();
-    writer.add_document(tantivy::doc!(body => "first")).unwrap();
-    writer.commit().unwrap();
-    drop(writer);
-    let files = index
-        .directory()
-        .list_managed_files()
-        .into_iter()
-        .filter(|path| {
-            !matches!(path.to_str(), Some(".managed.json" | "meta.json"))
-                && raw.exists(path).unwrap()
-        })
-        .map(|path| {
-            let bytes = raw.atomic_read(&path).unwrap();
-            (path, bytes)
-        })
-        .collect::<Vec<_>>();
-    let bundle = InvertedIndexBundleFooter::build(
-        files,
-        BTreeMap::new(),
-        BTreeMap::new(),
-        raw.atomic_read(Path::new(".managed.json")).unwrap(),
-        raw.atomic_read(Path::new("meta.json")).unwrap(),
-    )
-    .unwrap();
-    let footer = InvertedIndexBundleFooter::open(&bundle).unwrap();
-    let directory = FooterDirectory::new(raw, footer);
-    (InvertedIndexSearcher::open(directory).unwrap(), body)
-}
-
 #[test]
-fn test_searcher_survives_a_warmup_allocation_failure() {
+fn test_shared_pin_survives_a_warmup_allocation_failure() {
     set_alloc_error_hook();
 
     let raw = RamDirectory::default();
@@ -148,25 +103,4 @@ fn test_searcher_survives_a_warmup_allocation_failure() {
     }
     assert_eq!(file.read_bytes_slice(2..4).unwrap().as_ref(), b"xx");
     assert_eq!(file.read_bytes_slice(126..127).unwrap().as_ref(), b"x");
-
-    let (searcher, field) = searcher();
-    let first = Term::from_field_text(field, "first");
-    searcher.remember_term_info(&first, None);
-    // The first allocation clones the term. Fail the second, when growing the map under its
-    // write lock. Try enough new terms to force a growth without depending on its capacity.
-    let failed = (1..64).find_map(|i| {
-        let term = Term::from_field_text(field, &i.to_string());
-        fail_on(2, || searcher.remember_term_info(&term, None))
-            .is_err()
-            .then_some((i, term))
-    });
-    let (count, term) = failed.expect("term map did not try to grow");
-    assert_eq!(searcher.term_info(&first), Some(None));
-    assert_eq!(searcher.term_info(&term), None);
-    searcher.remember_term_info(&term, None);
-    assert_eq!(searcher.term_info(&term), Some(None));
-    for i in 1..count {
-        let term = Term::from_field_text(field, &i.to_string());
-        assert_eq!(searcher.term_info(&term), Some(None));
-    }
 }

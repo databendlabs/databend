@@ -80,6 +80,7 @@ pub use inverted_index::InvertedIndexMeta;
 pub use inverted_index::InvertedIndexOutputDirectory;
 pub use inverted_index::InvertedIndexPayloadBytes;
 pub use inverted_index::InvertedIndexSearcher;
+pub use inverted_index::InvertedIndexTermInfo;
 pub use inverted_index::MANAGED_JSON_PATH;
 pub use inverted_index::META_JSON_PATH;
 pub use inverted_index::MergeOutput;

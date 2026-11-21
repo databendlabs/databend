@@ -70,6 +70,7 @@ use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
 use databend_storages_common_index::InvertedIndexSearcher;
+use databend_storages_common_index::InvertedIndexTermInfo;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::collect_index_open_slices;
@@ -327,6 +328,24 @@ impl Sample for inverted::Searcher {
         });
         let directory = FooterDirectory::new(raw.clone(), footer.clone());
         InvertedIndexSearcher::open(directory).unwrap()
+    }
+}
+
+impl Sample for inverted::TermInfo {
+    /// Charged with its key and its cache entry, which a value alone does not allocate:
+    /// `test_term_info_is_charged_what_its_entry_takes` measures them.
+    const ACCURACY: Accuracy = Accuracy::Unchecked;
+
+    fn sample(seed: u32) -> InvertedIndexTermInfo {
+        let info = tantivy::postings::TermInfo {
+            doc_freq: seed,
+            postings_range: 0..seed as usize,
+            positions_range: 0..0,
+        };
+        InvertedIndexTermInfo {
+            info: Some(info),
+            key_len: format!("{seed}:0:616c706861").len(),
+        }
     }
 }
 
