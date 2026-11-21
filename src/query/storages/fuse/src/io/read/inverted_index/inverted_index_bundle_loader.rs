@@ -1066,6 +1066,8 @@ impl Reader for BundleSearcherReader<'_> {
         let cache_state =
             FooterCacheState::new(location, *object_size, caches.meta, caches.lookup.clone());
         let footer = cache_state.load_or_fetch(self.storage, location).await?;
+        // The searcher keeps handles of the process-wide caches that hold it. Evicting it ends
+        // that cycle; the caches themselves live as long as the process.
         let remote = RemoteBundleDirectory {
             location: Arc::from(location.as_str()),
             file_ranges: footer.file_ranges.clone(),
@@ -1167,6 +1169,68 @@ mod tests {
                     .push(range.offset()..range.offset() + size);
             }
             self.inner.read(path, args).await
+        }
+
+        async fn write(
+            &self,
+            path: &str,
+            args: OpWrite,
+        ) -> opendal::Result<(RpWrite, Self::Writer)> {
+            self.inner.write(path, args).await
+        }
+
+        async fn list(&self, path: &str, args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+            self.inner.list(path, args).await
+        }
+
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+            self.inner.delete().await
+        }
+    }
+
+    /// Holds each read until released, then fails it: a connection whose credentials were
+    /// revoked while it read.
+    #[derive(Clone, Debug, Default)]
+    struct RevokedLayer {
+        reading: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
+    }
+
+    impl<A: Access> Layer<A> for RevokedLayer {
+        type LayeredAccess = RevokedAccessor<A>;
+
+        fn layer(&self, inner: A) -> Self::LayeredAccess {
+            RevokedAccessor {
+                inner,
+                gate: self.clone(),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct RevokedAccessor<A: Access> {
+        inner: A,
+        gate: RevokedLayer,
+    }
+
+    impl<A: Access> LayeredAccess for RevokedAccessor<A> {
+        type Inner = A;
+        type Reader = A::Reader;
+        type Writer = A::Writer;
+        type Lister = A::Lister;
+        type Deleter = A::Deleter;
+
+        fn inner(&self) -> &Self::Inner {
+            &self.inner
+        }
+
+        async fn read(&self, _: &str, _: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+            self.gate.reading.notify_one();
+            self.gate.release.notified().await;
+            Err(opendal::Error::new(
+                opendal::ErrorKind::PermissionDenied,
+                "credentials revoked",
+            ))
         }
 
         async fn write(
@@ -1830,6 +1894,70 @@ mod tests {
         assert_eq!(count, 2000);
         assert!(old_reads.lock().unwrap().is_empty());
         assert!(!current_reads.lock().unwrap().is_empty());
+        Ok(())
+    }
+
+    /// A query opening a bundle with a revoked connection fails alone: another one opening it
+    /// meanwhile, with the current connection, opens it with its own.
+    #[tokio::test]
+    async fn test_failed_searcher_load_fails_no_other_query() -> Result<()> {
+        use databend_storages_common_cache::CacheManager;
+
+        let (remote, _, storage, _) = expansion_bundle_fixture().await?;
+        let bundle = storage.operator().read(remote.location.as_ref()).await?;
+        let location = "revoked-connection-bundle";
+        let revoked = RevokedLayer::default();
+        let old = Operator::new(Memory::default())?
+            .layer(revoked.clone())
+            .finish();
+        old.write(location, bundle.clone()).await?;
+        let old = DiskCachedStorage::with_disk(old, None);
+        let current = Operator::new(Memory::default())?.finish();
+        current.write(location, bundle.clone()).await?;
+        let current = DiskCachedStorage::with_disk(current, None);
+
+        // A handle made as for the process, which shares loads if the kind does.
+        let kind = CacheKind::of::<inverted::Searcher>();
+        let store = LegacyStore::new([(kind, LegacyCapacity::Bytes(1 << 24))]);
+        let manager = CacheManager::new(Arc::new(store), None);
+        let key = (
+            location.to_string(),
+            bundle.len() as u64,
+            CachePolicy::DEFAULT,
+        );
+        let caches = InvertedIndexCache {
+            meta: cache_state(location, key.1).meta_cache,
+            lookup: no_lookup_cache(),
+            payload: payload_cache(16 * 1024 * 1024),
+            full_payload: full_payload_cache(0),
+            searcher: manager.cache::<inverted::Searcher>(),
+        };
+        let first = databend_common_base::runtime::spawn({
+            let (caches, key) = (caches.clone(), key.clone());
+            async move {
+                let reader = BundleSearcherReader {
+                    storage: &old,
+                    caches: &caches,
+                };
+                caches.searcher.get(&reader, key).await.map(drop)
+            }
+        });
+        revoked.reading.notified().await;
+
+        // Fail the first load once the second one has started.
+        let release = async {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            revoked.release.notify_one();
+        };
+        let reader = BundleSearcherReader {
+            storage: &current,
+            caches: &caches,
+        };
+        let (_, second) = tokio::join!(release, caches.searcher.get(&reader, key.clone()));
+        assert!(first.await.unwrap().is_err());
+        let second = second?;
+        let hit = caches.searcher.get(&reader, key).await?;
+        assert!(std::ptr::eq(&*second, &*hit));
         Ok(())
     }
 

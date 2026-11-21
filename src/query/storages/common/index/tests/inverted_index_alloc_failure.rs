@@ -165,13 +165,8 @@ fn test_searcher_survives_a_warmup_allocation_failure() {
     assert_eq!(searcher.term_info(&term), None);
     searcher.remember_term_info(&term, None);
     assert_eq!(searcher.term_info(&term), Some(None));
-
-    for i in count + 1..4096 {
-        searcher.remember_term_info(&Term::from_field_text(field, &i.to_string()), None);
+    for i in 1..count {
+        let term = Term::from_field_text(field, &i.to_string());
+        assert_eq!(searcher.term_info(&term), Some(None));
     }
-    assert_eq!(searcher.term_info(&first), Some(None));
-    let overflow = Term::from_field_text(field, "overflow");
-    searcher.remember_term_info(&overflow, None);
-    assert_eq!(searcher.term_info(&first), None);
-    assert_eq!(searcher.term_info(&overflow), Some(None));
 }

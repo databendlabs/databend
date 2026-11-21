@@ -68,14 +68,15 @@ impl CacheDef for FullPayload {
 
 /// Bundles opened once and shared by the searches of their block, by location and size. Each
 /// is charged the most its shared pin keeps: see `InvertedIndexSearcher`.
+///
+/// Loads are not shared: each query opens a bundle with the storage operator of its table, so
+/// a load failing with an old connection (`ALTER TABLE ... CONNECTION`) fails no other query.
 pub struct Searcher;
 
 impl CacheDef for Searcher {
     type Value = InvertedIndexSearcher;
     const NAME: &'static str = "memory_cache_inverted_index_searcher";
     const POOL: Pool = Pool::Index;
-    /// Index files are written once, under new locations.
-    const SHARE_LOADS: bool = true;
 }
 
 impl CachedItem for InvertedIndexSearcher {

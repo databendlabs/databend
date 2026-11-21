@@ -123,9 +123,12 @@ impl LegacyKinds {
                 "inverted_index_payload_size",
                 |c, _| LegacyKind::split_budget(c.inverted_index_payload_size as usize).1 as u64,
             ))
-            .register::<inverted::Searcher>(LegacyKind::bytes("", |_, _| {
-                INVERTED_INDEX_SEARCHER_BYTES
-            }))
+            .register::<inverted::Searcher>(
+                LegacyKind::bytes("", |_, _| INVERTED_INDEX_SEARCHER_BYTES)
+                    // As vector indexes: a searcher too large for the kind evicts no other one,
+                    // and those held by searches are charged until they drop it.
+                    .counting_held_values(),
+            )
             .register::<spatial::Index>(LegacyKind::bytes(
                 "spatial_index_filter_size, spatial_index_filter_memory_ratio",
                 |c, memory| {
