@@ -227,7 +227,7 @@ async fn test_safety() -> anyhow::Result<()> {
 
         let mut summary = Statistics::default();
         for seg in &segment_infos {
-            merge_statistics_mut(&mut summary, &seg.summary, None);
+            merge_statistics_mut(&mut summary, &seg.summary, None, &schema);
         }
 
         let snapshot = TableSnapshot::try_new(

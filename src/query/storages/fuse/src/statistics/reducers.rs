@@ -20,6 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -37,6 +39,7 @@ const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
+    schema: &TableSchema,
 ) -> StatisticsOfColumns {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
@@ -54,14 +57,28 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     // Reduce the `Vec<&ColumnStatistics>` into ColumnStatistics`, i.e.:
     // from : `HashMap<ColumnId, Vec<&ColumnStatistics>>`
     // to   : `type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>`
-    let len = col_to_stats_lit.len();
+    let mut string_ids = None;
     col_to_stats_lit
-        .iter()
-        .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
-            acc.insert(*id, col_stats);
-            acc
+        .into_iter()
+        .filter(|(id, stats)| {
+            // A physically present string can omit its bounds. Use the schema,
+            // since bounds that are both NULL don't identify the column type.
+            stats.len() == stats_of_columns.len()
+                || !string_ids
+                    .get_or_insert_with(|| {
+                        schema
+                            .leaf_fields()
+                            .into_iter()
+                            .filter(|field| {
+                                matches!(field.data_type().remove_nullable(), TableDataType::String)
+                            })
+                            .map(|field| field.column_id())
+                            .collect::<HashSet<_>>()
+                    })
+                    .contains(id)
         })
+        .map(|(id, stats)| (id, reduce_column_statistics(&stats)))
+        .collect()
 }
 
 pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
@@ -288,8 +305,9 @@ pub fn merge_statistics(
     mut l: Statistics,
     r: &Statistics,
     cluster_key_info: Option<&ClusterKeyInfo>,
+    schema: &TableSchema,
 ) -> Statistics {
-    merge_statistics_mut(&mut l, r, cluster_key_info);
+    merge_statistics_mut(&mut l, r, cluster_key_info, schema);
     l
 }
 
@@ -297,6 +315,7 @@ pub fn merge_statistics_mut(
     l: &mut Statistics,
     r: &Statistics,
     cluster_key_info: Option<&ClusterKeyInfo>,
+    schema: &TableSchema,
 ) {
     // Segment-local virtual ids have meaning only together with the schema of a
     // single segment. Cross-segment summaries cannot merge them by column id.
@@ -309,7 +328,9 @@ pub fn merge_statistics_mut(
         l.cluster_stats = r.cluster_stats.clone();
         l.partition_stats = r.partition_stats.clone();
     } else {
-        l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        if r.row_count != 0 {
+            l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats], schema);
+        }
         l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
         l.cluster_stats =
             reduce_cluster_statistics(&[&l.cluster_stats, &r.cluster_stats], cluster_key_info);
@@ -411,6 +432,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     block_metas: &[T],
     thresholds: BlockThresholds,
     cluster_key_info: Option<&ClusterKeyInfo>,
+    schema: &TableSchema,
 ) -> Result<Statistics> {
     let mut row_count: u64 = 0;
     let mut block_count: u64 = 0;
@@ -472,13 +494,15 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         {
             perfect_block_count += 1;
         }
-        col_stats.push(&b.col_stats);
+        if b.row_count != 0 {
+            col_stats.push(&b.col_stats);
+        }
         cluster_stats.push(&b.cluster_stats);
         partition_stats.push(&b.partition_stats);
         spatial_col_stats.push(&b.spatial_stats);
     });
 
-    let merged_col_stats = reduce_block_statistics(&col_stats);
+    let merged_col_stats = reduce_block_statistics(&col_stats, schema);
     let merged_spatial_stats = reduce_spatial_statistics(&spatial_col_stats);
     let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, cluster_key_info);
     let merged_partition_stats = validate_segment_partition_statistics(
@@ -521,4 +545,67 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         virtual_segment_schema: None,
         additional_stats_meta: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    #[test]
+    fn missing_bounds_do_not_publish_partial_string_ranges() {
+        let schema = TableSchema::new(vec![
+            TableField::new("s", TableDataType::String),
+            TableField::new("i", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("s_complete", TableDataType::String.wrap_nullable()),
+            TableField::new("s_null", TableDataType::String.wrap_nullable()),
+            TableField::new(
+                "i_null",
+                TableDataType::Number(NumberDataType::Int64).wrap_nullable(),
+            ),
+        ]);
+        let string = Scalar::String("a".to_string());
+        let string = ColumnStatistics::new(string.clone(), string, 0, 1, None);
+        let null = ColumnStatistics::new(Scalar::Null, Scalar::Null, 1, 0, None);
+        let number = Scalar::Number(1_i64.into());
+        let number = ColumnStatistics::new(number.clone(), number, 0, 8, None);
+        let complete = HashMap::from([
+            (0, string.clone()),
+            (1, number.clone()),
+            (2, string.clone()),
+            (3, null.clone()),
+            (4, null.clone()),
+        ]);
+        let incomplete = HashMap::from([(2, null)]);
+
+        let reduced = reduce_block_statistics(&[&complete, &incomplete], &schema);
+        assert!(!reduced.contains_key(&0));
+        assert_eq!(reduced[&1], number);
+        assert_eq!(reduced[&2].min(), string.min());
+        assert_eq!(reduced[&2].max(), string.max());
+        assert_eq!(reduced[&2].null_count, 1);
+        assert!(!reduced.contains_key(&3));
+        assert_eq!(reduced[&4].null_count, 1);
+
+        let mut summary = Statistics {
+            col_stats: complete,
+            row_count: 1,
+            ..Default::default()
+        };
+        merge_statistics_mut(&mut summary, &Statistics::default(), None, &schema);
+        assert_eq!(summary.col_stats.len(), 5);
+        merge_statistics_mut(
+            &mut summary,
+            &Statistics {
+                col_stats: incomplete,
+                row_count: 1,
+                ..Default::default()
+            },
+            None,
+            &schema,
+        );
+        assert_eq!(summary.col_stats, reduced);
+    }
 }

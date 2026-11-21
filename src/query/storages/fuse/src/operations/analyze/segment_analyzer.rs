@@ -192,6 +192,7 @@ pub struct SegmentAnalyzer {
     storage_format: FuseStorageFormat,
     segment_cache: SegmentCache,
     segment_reader: SegmentInfoReader,
+    table_schema: TableSchemaRef,
     stats_reader: SegmentStatsReader,
     cluster_key_info: Option<ClusterKeyInfo>,
 }
@@ -218,7 +219,8 @@ impl SegmentAnalyzer {
             segment_cache: FuseCaches::instance()
                 .segments
                 .with_policy(ctx.cache_policy()),
-            segment_reader: SegmentInfoReader::new(dal.clone(), table_schema),
+            segment_reader: SegmentInfoReader::new(dal.clone(), table_schema.clone()),
+            table_schema,
             stats_reader: SegmentStatsReader::new(dal.clone()),
             dal,
             cluster_key_info: table.cluster_key_info(),
@@ -235,8 +237,11 @@ impl SegmentAnalyzer {
     #[async_backtrace::framed]
     pub async fn analyze(&self, location: &Location, acc: &mut AnalyzeAccumulator) -> Result<()> {
         let segment = self.read_segment(location).await?;
-        acc.segment_stats
-            .fold(&segment.summary, self.cluster_key_info.as_ref());
+        acc.segment_stats.fold(
+            &segment.summary,
+            self.cluster_key_info.as_ref(),
+            &self.table_schema,
+        );
         if location.1 < 2 {
             // Legacy segments carry no block statistics at all.
             acc.unstats_rows += segment.summary.row_count;

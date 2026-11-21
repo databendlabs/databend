@@ -32,8 +32,8 @@ use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 
 use crate::io::build_virtual_segment_schema;
 
-#[derive(Default)]
 pub struct RowOrientedSegmentBuilder {
+    table_schema: TableSchemaRef,
     pub blocks_metas: Vec<Arc<BlockMeta>>,
     pub virtual_inputs: Vec<VirtualBlockInput>,
 }
@@ -56,19 +56,22 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
         cluster_key_info: Option<&ClusterKeyInfo>,
         additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment> {
-        let mut builder = std::mem::take(self);
-        let virtual_schema =
-            build_virtual_segment_schema(&mut builder.blocks_metas, &mut builder.virtual_inputs)?;
+        let mut blocks = std::mem::take(&mut self.blocks_metas);
+        let mut virtual_inputs = std::mem::take(&mut self.virtual_inputs);
+        let virtual_schema = build_virtual_segment_schema(&mut blocks, &mut virtual_inputs)?;
         let mut stat =
-            super::reduce_block_metas(&builder.blocks_metas, thresholds, cluster_key_info)?;
+            super::reduce_block_metas(&blocks, thresholds, cluster_key_info, &self.table_schema)?;
         stat.additional_stats_meta = additional_stats_meta;
         stat.virtual_segment_schema = virtual_schema;
-        let segment = SegmentInfo::new(builder.blocks_metas, stat);
-        Ok(segment)
+        Ok(SegmentInfo::new(blocks, stat))
     }
 
-    fn new(_table_schema: TableSchemaRef, _block_per_segment: usize) -> Self {
-        Self::default()
+    fn new(table_schema: TableSchemaRef, _block_per_segment: usize) -> Self {
+        Self {
+            table_schema,
+            blocks_metas: Vec::new(),
+            virtual_inputs: Vec::new(),
+        }
     }
 }
 

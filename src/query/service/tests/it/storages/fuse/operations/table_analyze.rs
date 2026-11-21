@@ -314,6 +314,7 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
             &mut segment_summary,
             &segment_info.summary,
             fuse_table.cluster_key_info().as_ref(),
+            &fuse_table.schema(),
         );
     }
 

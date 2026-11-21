@@ -184,7 +184,7 @@ fn test_ft_stats_col_stats_reduce() -> anyhow::Result<()> {
             )
         })
         .collect::<databend_common_exception::Result<Vec<_>>>()?;
-    let r = reducers::reduce_block_statistics(&col_stats);
+    let r = reducers::reduce_block_statistics(&col_stats, &schema);
     assert_eq!(3, r.len());
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(
@@ -234,7 +234,10 @@ fn test_reduce_block_statistics_in_memory_size() -> anyhow::Result<()> {
     // combine two statistics
     let col_stats_left = HashMap::from_iter(iter(0).take(num_of_cols));
     let col_stats_right = HashMap::from_iter(iter(0).take(num_of_cols));
-    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right]);
+    let r = reducers::reduce_block_statistics(
+        &[col_stats_left, col_stats_right],
+        &TableSchema::empty(),
+    );
     assert_eq!(num_of_cols, r.len());
     // there should be 100 columns in the result
     for idx in 1..=num_of_cols as u32 {
@@ -645,7 +648,7 @@ async fn test_ft_cluster_stats_with_vector_keeps_full_block_for_scalar_suffix() 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> anyhow::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
-    let mut stats_acc = RowOrientedSegmentBuilder::default();
+    let mut stats_acc = RowOrientedSegmentBuilder::new(schema.clone(), 10);
 
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
@@ -941,7 +944,12 @@ fn char_len(value: &str) -> usize {
 fn test_reduce_block_meta() -> anyhow::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
-    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None)?;
+    let reduced = reduce_block_metas(
+        &block_metas,
+        BlockThresholds::default(),
+        None,
+        &TableSchema::empty(),
+    )?;
     assert_eq!(Statistics::default(), reduced);
 
     // case 2: accumulated variants of size index should be as expected
@@ -987,7 +995,12 @@ fn test_reduce_block_meta() -> anyhow::Result<()> {
         blocks.push(block_meta);
     }
 
-    let stats = reduce_block_metas(&blocks, BlockThresholds::default(), None)?;
+    let stats = reduce_block_metas(
+        &blocks,
+        BlockThresholds::default(),
+        None,
+        &TableSchema::empty(),
+    )?;
 
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);

@@ -163,7 +163,11 @@ impl SnapshotGenerator for AppendGenerator {
                         .iter()
                         .for_each(|(col_id, default_value)| {
                             if let Some(data_type) = column_data_types.get(col_id) {
-                                if !summary.col_stats.contains_key(col_id) {
+                                // A physically present string may lack bounds. Missing
+                                // statistics cannot prove it has the schema default.
+                                if !matches!(data_type.remove_nullable(), TableDataType::String)
+                                    && !summary.col_stats.contains_key(col_id)
+                                {
                                     assert!(
                                         default_value
                                             .as_ref()
@@ -205,7 +209,12 @@ impl SnapshotGenerator for AppendGenerator {
                     .cloned()
                     .collect();
 
-                merge_statistics_mut(&mut new_summary, &summary, cluster_key_info.as_ref());
+                merge_statistics_mut(
+                    &mut new_summary,
+                    &summary,
+                    cluster_key_info.as_ref(),
+                    &table_schema,
+                );
             }
         }
 

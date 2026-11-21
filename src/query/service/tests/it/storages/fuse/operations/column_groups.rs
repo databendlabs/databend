@@ -196,7 +196,8 @@ async fn split_blocks(fixture: &TestFixture, name: &str, drop_stats_of: &[&str])
         }
         // Pruning trusts the summaries: they must cover the new values.
         segment.summary.col_stats =
-            reduce_block_metas(&blocks, table.get_block_thresholds(), None)?.col_stats;
+            reduce_block_metas(&blocks, table.get_block_thresholds(), None, &table.schema())?
+                .col_stats;
         all_blocks.extend(blocks.iter().cloned());
         segment.blocks = blocks;
         let location = location_gen.gen_segment_info_location(timestamps, false);
@@ -207,8 +208,13 @@ async fn split_blocks(fixture: &TestFixture, name: &str, drop_stats_of: &[&str])
     let mut new_snapshot =
         TableSnapshot::try_from_previous(snapshot, table.cluster_key_info(), None, timestamps)?;
     new_snapshot.segments = segment_locations;
-    new_snapshot.summary.col_stats =
-        reduce_block_metas(&all_blocks, table.get_block_thresholds(), None)?.col_stats;
+    new_snapshot.summary.col_stats = reduce_block_metas(
+        &all_blocks,
+        table.get_block_thresholds(),
+        None,
+        &table.schema(),
+    )?
+    .col_stats;
     table
         .commit_to_meta_server(
             ctx.as_ref(),

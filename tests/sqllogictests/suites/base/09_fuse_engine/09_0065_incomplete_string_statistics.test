@@ -1,0 +1,136 @@
+# run-with-settings: enable_block_stream_write=0
+
+# Exercise the default streaming writer and the regular writer. Disable
+# automatic maintenance so the two INSERTs stay in separate segments, and
+# bypass caches so each query sees the current segment layout.
+
+statement ok
+SET enable_auto_analyze = 0
+
+statement ok
+SET auto_compaction_imperfect_blocks_threshold = 0
+
+statement ok
+SET enable_planner_cache = 0
+
+statement ok
+SET enable_query_result_cache = 0
+
+statement ok
+CREATE OR REPLACE TABLE incomplete_string_stats (s STRING NOT NULL STATS_TRUNCATE_LEN 4) row_per_block = 100 storage_format = 'parquet'
+
+statement ok
+INSERT INTO incomplete_string_stats VALUES ('a')
+
+# F48FBFBF is UTF-8 for U+10FFFF, the largest Unicode scalar. Four copies
+# form the largest four-character string; appending 'z' makes the value
+# larger still. STATS_TRUNCATE_LEN 4 therefore cannot provide a safe max,
+# and neither bound should be stored for this block.
+statement ok
+INSERT INTO incomplete_string_stats VALUES (repeat(unhex('F48FBFBF')::STRING, 4) || 'z')
+
+query II
+SELECT block_count, row_count FROM fuse_segment('default', 'incomplete_string_stats') ORDER BY block_count
+----
+1 1
+1 1
+
+# MAX must not be folded to the maximum of the only segment with bounds.
+query T
+SELECT hex(max(s)) FROM incomplete_string_stats
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+# Merge the segment metadata without rewriting the blocks. Treating the
+# first block's ['a', 'a'] as the merged range would prune the entire
+# segment for s > 'a' and make MAX return 'a'.
+statement ok
+OPTIMIZE TABLE incomplete_string_stats COMPACT SEGMENT
+
+query II
+SELECT block_count, row_count FROM fuse_segment('default', 'incomplete_string_stats')
+----
+2 2
+
+query T
+SELECT hex(s) FROM incomplete_string_stats WHERE s > 'a'
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+query T
+SELECT hex(max(s)) FROM incomplete_string_stats
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+# If 'a' were the segment's max, DELETE could drop both blocks without
+# checking their rows. Only the row containing 'a' should be removed.
+statement ok
+DELETE FROM incomplete_string_stats WHERE s <= 'a'
+
+query T
+SELECT hex(s) FROM incomplete_string_stats
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+# The remaining row has no bounds. Appending 'b' must not treat that row
+# as the schema default and publish a snapshot statistic for s.
+statement ok
+INSERT INTO incomplete_string_stats VALUES ('b')
+
+query I
+SELECT count(*) FROM fuse_statistic('default', 'incomplete_string_stats') WHERE column_name = 's'
+----
+0
+
+statement ok
+DROP TABLE incomplete_string_stats
+
+# In a column-oriented segment, the stat_* field may be absent, but the
+# block metadata must still point to the stored data column.
+statement ok
+CREATE OR REPLACE TABLE incomplete_column_stats (s STRING NOT NULL STATS_TRUNCATE_LEN 4) segment_format = 'column_oriented' storage_format = 'parquet'
+
+statement ok
+INSERT INTO incomplete_column_stats VALUES ('a'), (repeat(unhex('F48FBFBF')::STRING, 4) || 'z')
+
+query T
+SELECT hex(s) FROM incomplete_column_stats WHERE s > 'a'
+----
+f48fbfbff48fbfbff48fbfbff48fbfbf7a
+
+statement ok
+DROP TABLE incomplete_column_stats
+
+# Older blocks lack k because it was added later, not because INT bounds
+# cannot be represented. Preserve the observed k=42 across ANALYZE and append;
+# otherwise REPLACE could skip the existing row and create a duplicate key.
+statement ok
+CREATE OR REPLACE TABLE added_int_stats (id INT NOT NULL) row_per_block = 100 storage_format = 'parquet'
+
+statement ok
+INSERT INTO added_int_stats VALUES (1)
+
+statement ok
+ALTER TABLE added_int_stats ADD COLUMN k INT NOT NULL DEFAULT 0
+
+statement ok
+INSERT INTO added_int_stats VALUES (2, 42)
+
+statement ok
+ANALYZE TABLE added_int_stats
+
+statement ok
+INSERT INTO added_int_stats VALUES (3, 18)
+
+statement ok
+REPLACE INTO added_int_stats ON (k) VALUES (4, 42)
+
+query II
+SELECT id, k FROM added_int_stats ORDER BY id
+----
+1 0
+3 18
+4 42
+
+statement ok
+DROP TABLE added_int_stats

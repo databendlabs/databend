@@ -1014,6 +1014,7 @@ impl ReclusterMutator {
                 &mut removed_segment_summary,
                 &segment_info.summary,
                 cluster_key_info,
+                &self.schema,
             );
         }
 

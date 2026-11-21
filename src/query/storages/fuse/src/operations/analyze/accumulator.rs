@@ -20,6 +20,7 @@ use std::fmt::Formatter;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableSchema;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_statistics::KllSketch;
 use databend_common_storage::MetaHLL;
@@ -51,16 +52,29 @@ pub struct ReducedSegmentStats {
 }
 
 impl ReducedSegmentStats {
-    pub fn fold(&mut self, summary: &Statistics, cluster_key_info: Option<&ClusterKeyInfo>) {
+    pub fn fold(
+        &mut self,
+        summary: &Statistics,
+        cluster_key_info: Option<&ClusterKeyInfo>,
+        schema: &TableSchema,
+    ) {
+        if summary.row_count == 0 {
+            return;
+        }
         let next = Self {
             col_stats: summary.col_stats.clone(),
             cluster_stats: summary.cluster_stats.clone(),
             segment_count: 1,
         };
-        self.merge(next, cluster_key_info);
+        self.merge(next, cluster_key_info, schema);
     }
 
-    pub fn merge(&mut self, other: Self, cluster_key_info: Option<&ClusterKeyInfo>) {
+    pub fn merge(
+        &mut self,
+        other: Self,
+        cluster_key_info: Option<&ClusterKeyInfo>,
+        schema: &TableSchema,
+    ) {
         if other.segment_count == 0 {
             return;
         }
@@ -69,7 +83,7 @@ impl ReducedSegmentStats {
             return;
         }
 
-        self.col_stats = reduce_block_statistics(&[&self.col_stats, &other.col_stats]);
+        self.col_stats = reduce_block_statistics(&[&self.col_stats, &other.col_stats], schema);
         self.cluster_stats = reduce_cluster_statistics(
             &[&self.cluster_stats, &other.cluster_stats],
             cluster_key_info,
@@ -100,7 +114,12 @@ pub struct AnalyzeAccumulator {
 }
 
 impl AnalyzeAccumulator {
-    pub fn merge(&mut self, other: Self, cluster_key_info: Option<&ClusterKeyInfo>) -> Result<()> {
+    pub fn merge(
+        &mut self,
+        other: Self,
+        cluster_key_info: Option<&ClusterKeyInfo>,
+        schema: &TableSchema,
+    ) -> Result<()> {
         merge_column_hll_mut(&mut self.column_hlls, &other.column_hlls);
 
         self.dropped_top_n_columns
@@ -122,7 +141,7 @@ impl AnalyzeAccumulator {
         }
 
         self.segment_stats
-            .merge(other.segment_stats, cluster_key_info);
+            .merge(other.segment_stats, cluster_key_info, schema);
         self.row_count += other.row_count;
         self.unstats_rows += other.unstats_rows;
         Ok(())

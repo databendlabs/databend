@@ -20,7 +20,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::NumberDataType;
 
-use crate::meta::supported_stat_type;
 pub const ROW_COUNT: &str = "row_count";
 pub const BLOCK_SIZE: &str = "block_size";
 pub const FILE_SIZE: &str = "file_size";
@@ -116,7 +115,10 @@ pub fn col_meta_type() -> TableDataType {
     }
 }
 
-pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
+pub fn segment_schema(
+    table_schema: &TableSchema,
+    has_stats: impl Fn(ColumnId) -> bool,
+) -> TableSchema {
     let u64_t = TableDataType::Number(NumberDataType::UInt64);
     let nullable_u64_t = TableDataType::Nullable(Box::new(u64_t.clone()));
     let u8_t = TableDataType::Number(NumberDataType::UInt8);
@@ -138,7 +140,7 @@ pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
     ];
 
     for field in table_schema.leaf_fields() {
-        if supported_stat_type(&field.data_type().into()) {
+        if has_stats(field.column_id()) {
             fields.push(TableField::new(
                 &stat_name(field.column_id()),
                 col_stats_type(field.data_type()),

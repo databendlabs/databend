@@ -160,7 +160,7 @@ pub fn new_serialize_segment_processor(
                 output,
                 table,
                 thresholds,
-                RowOrientedSegmentBuilder::default(),
+                RowOrientedSegmentBuilder::new(table.schema(), thresholds.block_per_segment),
                 table_meta_timestamps,
             )?;
             Ok(ProcessorPtr::create(Box::new(processor)))
