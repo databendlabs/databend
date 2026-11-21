@@ -1245,7 +1245,7 @@ where T: EqVisitor
             ] = args.as_slice()
             {
                 if let Some(pattern) = scalar.as_string() {
-                    match generate_like_pattern(pattern.as_bytes(), 1) {
+                    match generate_like_pattern(pattern.as_bytes()) {
                         LikePattern::StartOfPercent(v) | LikePattern::EndOfPercent(v) => {
                             let string = String::from_utf8_lossy(v.as_ref()).to_string();
 

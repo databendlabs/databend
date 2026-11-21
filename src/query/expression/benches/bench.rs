@@ -117,7 +117,6 @@ mod escaped_like {
     const SUFFIX_PATTERN: &[u8] = br"%request\_processing\%failed";
     const CONTAINS_PATTERN: &[u8] = br"%request\_processing\%failed%";
     const CONTAINS_LITERAL: &[u8] = b"request_processing%failed";
-    const LARGE_COLUMN_TOTAL_BYTES: usize = 1024 * 1024;
     const LOG_FRAGMENT: &[u8] =
         b"2026-01-01T00:00:00Z INFO synthetic_worker request processed successfully\n\
         at synthetic.module::run\n";
@@ -139,16 +138,7 @@ mod escaped_like {
     }
 
     fn bench_optimized(bencher: divan::Bencher, pattern: &'static [u8], haystack: &[u8]) {
-        bench_optimized_with_hint(bencher, pattern, haystack, haystack.len());
-    }
-
-    fn bench_optimized_with_hint(
-        bencher: divan::Bencher,
-        pattern: &'static [u8],
-        haystack: &[u8],
-        haystack_size_hint: usize,
-    ) {
-        let matcher = generate_like_pattern(pattern, haystack_size_hint);
+        let matcher = generate_like_pattern(pattern);
         assert!(!matches!(matcher, LikePattern::ComplexPattern(_)));
         bencher
             .counter(BytesCount::new(haystack.len()))
@@ -254,12 +244,7 @@ mod escaped_like {
     #[divan::bench(args = [1024, 4096, 16384])]
     fn optimized_contains_large_miss(bencher: divan::Bencher, len: usize) {
         let haystack = synthetic_log_message(len, false);
-        bench_optimized_with_hint(
-            bencher,
-            CONTAINS_PATTERN,
-            &haystack,
-            LARGE_COLUMN_TOTAL_BYTES,
-        );
+        bench_optimized(bencher, CONTAINS_PATTERN, &haystack);
     }
 
     #[divan::bench(args = [1024, 4096, 16384])]
@@ -271,12 +256,7 @@ mod escaped_like {
     #[divan::bench(args = [1024, 4096, 16384])]
     fn optimized_contains_large_hit(bencher: divan::Bencher, len: usize) {
         let haystack = synthetic_log_message(len, true);
-        bench_optimized_with_hint(
-            bencher,
-            CONTAINS_PATTERN,
-            &haystack,
-            LARGE_COLUMN_TOTAL_BYTES,
-        );
+        bench_optimized(bencher, CONTAINS_PATTERN, &haystack);
     }
 }
 

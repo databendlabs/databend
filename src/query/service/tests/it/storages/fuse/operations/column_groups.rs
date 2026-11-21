@@ -74,18 +74,34 @@ const SCHEMA: &str =
 /// Creates the table `t`, made of split blocks, and the table `t_ref`, holding the same rows in
 /// legacy blocks.
 async fn setup(fixture: &TestFixture, drop_stats_of: &[&str]) -> Result<()> {
+    setup_with(fixture, drop_stats_of, 4, 6).await
+}
+
+/// Like [`setup`], with blocks of up to `row_per_block` rows filled by three inserts of `rows`
+/// rows each.
+async fn setup_with(
+    fixture: &TestFixture,
+    drop_stats_of: &[&str],
+    row_per_block: usize,
+    rows: usize,
+) -> Result<()> {
     fixture
-        .execute_command(&format!("create table t {SCHEMA} row_per_block = 4"))
+        .execute_command(&format!(
+            "create table t {SCHEMA} row_per_block = {row_per_block}"
+        ))
         .await?;
     fixture
-        .execute_command(&format!("create table t_ref {SCHEMA} row_per_block = 4"))
+        .execute_command(&format!(
+            "create table t_ref {SCHEMA} row_per_block = {row_per_block}"
+        ))
         .await?;
     for batch in 0..3 {
         let values = "select number + {start} as id, (number + {start}) * 2 as a, \
              concat('v', (number + {start})::string) as s, \
              (number + {start}, concat('y', (number + {start})::string)) as n, \
-             [number + {start}, number + {start} + 1] as arr from numbers(6)"
-            .replace("{start}", &(batch * 6).to_string());
+             [number + {start}, number + {start} + 1] as arr from numbers({rows})"
+            .replace("{start}", &(batch * rows).to_string())
+            .replace("{rows}", &rows.to_string());
         fixture
             .execute_command(&format!("insert into t {values}"))
             .await?;
@@ -286,6 +302,31 @@ async fn test_scan_split_blocks() -> anyhow::Result<()> {
     // A column added after the split is in no group and reads as its default.
     execute_on_both(&fixture, "alter table {t} add column z int default 7").await?;
     assert_same(&fixture, "select * from {t} order by id").await?;
+    Ok(())
+}
+
+/// A filter-only scan decodes the filter columns of a block of more than one batch in batches.
+/// The columns come from files of different codecs.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_filter_only_scan_split_blocks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    setup_with(&fixture, &[], 10_000, 10_000).await?;
+    let (split, total) = block_counts(&fixture, "t").await?;
+    assert_eq!(split, total);
+    let blocks = query(
+        &fixture,
+        "select min(row_count) > 8192 from fuse_block('default', 't')",
+    )
+    .await?;
+    assert!(blocks.contains("true"), "{blocks}");
+
+    for sql in [
+        "select count(*) from {t} where s like '%99%'",
+        "select count(*) from {t} where s like '%99%' and id % 2 = 0",
+        "select count(*) from {t} where a % 7 = 0 and s <> 'v7'",
+    ] {
+        assert_same(&fixture, sql).await?;
+    }
     Ok(())
 }
 
