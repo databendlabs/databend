@@ -88,16 +88,14 @@ impl AttachTableHandler for RealAttachTableHandler {
 
         let attach_table_schema = Self::gen_schema(&plan, &snapshot)?;
 
-        // let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
-        let field_comments = snapshot_hint.entity_comments.field_comments;
-        let comment = snapshot_hint.entity_comments.table_comment;
         let table_meta = TableMeta {
             schema: Arc::new(attach_table_schema),
             engine: plan.engine.to_string(),
             storage_params: plan.storage_params.clone(),
             options,
-            comment,
-            field_comments,
+            comment: snapshot_hint.entity_comments.table_comment,
+            field_comments: snapshot_hint.entity_comments.field_comments,
+            field_stats_truncate_len: snapshot_hint.field_stats_truncate_len,
             drop_on: None,
             statistics: stat,
             indexes: snapshot_hint.indexes,
