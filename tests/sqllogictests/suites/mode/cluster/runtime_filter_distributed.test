@@ -1,0 +1,323 @@
+# Runtime filters of distributed hash joins, with and without a spilled build side.
+#
+# A shuffle join builds one runtime filter packet per node from the build rows hashed to
+# that node, and merges the packets of all nodes before any probe scan reads data. The probe
+# scans run on every node, so each of them needs the filter of the whole build side.
+#
+# The build keys sit in two ranges that hash to different nodes: [1500, 1520] and
+# [7485, 7504]. Only the merged min-max filter [1500, 7504] prunes exactly the probe blocks
+# [0, 999], [8000, 8999] and [9000, 9999] (3 of 10). A filter missing the packet of a node
+# prunes other blocks and drops matching probe rows, which changes the join results.
+#
+# EXPLAIN ANALYZE outputs are matched by fragments: `<slt:ignore>` skips everything up to
+# the next fragment, also across lines, so only the lines that matter are pinned.
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+set max_threads = 2;
+
+statement ok
+set enable_prune_cache = 0;
+
+statement ok
+create or replace table rf_dist_probe(k int null, v int not null);
+
+# One block per insert: block i holds keys [1000 * i, 1000 * i + 999], with NULL keys.
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number), number from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 1000), number + 1000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 2000), number + 2000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 3000), number + 3000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 4000), number + 4000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 5000), number + 5000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 6000), number + 6000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 7000), number + 7000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 8000), number + 8000 from numbers(1000);
+
+statement ok
+insert into rf_dist_probe select if(number % 97 = 0, null, number + 9000), number + 9000 from numbers(1000);
+
+# 1582 and 7485 are NULL keys in the probe table, so they and the NULL keys stay unmatched.
+# Small blocks spread the build rows over several processors of each node, so a filter that
+# misses the packet of any processor also loses matching rows.
+statement ok
+create or replace table rf_dist_build(k int null, v int not null) row_per_block = 4 as
+select number + 1500, number from numbers(20)
+union all select 1582, 20
+union all select number + 7485, number + 21 from numbers(20)
+union all select null, 41
+union all select null, 42;
+
+query IIII
+select count(*), count(k), min(k), max(k) from rf_dist_build;
+----
+43 41 1500 7504
+
+statement ok
+create or replace view rf_dist_results as
+select 'inner' as name, count(*) as c, sum(p.v + b.v) as s from rf_dist_probe p join rf_dist_build b on p.k = b.k
+union all
+select 'left semi', count(*), sum(v) from rf_dist_probe p where exists(select 1 from rf_dist_build b where p.k = b.k)
+union all
+select 'left anti', count(*), sum(v) from rf_dist_probe p where not exists(select 1 from rf_dist_build b where p.k = b.k)
+union all
+select 'right outer', count(*), sum(coalesce(p.v, 0) + b.v) from rf_dist_probe p right join rf_dist_build b on p.k = b.k
+union all
+select 'right semi', count(*), sum(b.v) from rf_dist_probe p right semi join rf_dist_build b on p.k = b.k
+union all
+select 'right anti', count(*), sum(b.v) from rf_dist_probe p right anti join rf_dist_build b on p.k = b.k;
+
+# Shuffle join, in memory.
+statement ok
+set enforce_shuffle_join = 1;
+
+query TII rowsort
+select * from rf_dist_results;
+----
+inner 39 173374
+left anti 9961 49822405
+left semi 39 172595
+right anti 4 124
+right outer 43 173498
+right semi 39 779
+
+# Only min-max filters, so the pruned blocks depend on the merged key range alone.
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+query T
+explain analyze select count(*) from rf_dist_probe p join rf_dist_build b on p.k = b.k;
+----
+<slt:ignore>HashJoin
+<slt:ignore>── output rows: 39
+<slt:ignore>── build join filters(distributed):
+<slt:ignore>── exchange type: Hash(b.k (#2))
+<slt:ignore>── parts pruned by runtime filter: 3
+<slt:ignore>── table: default.default.rf_dist_probe
+<slt:ignore>── partitions total: 10
+<slt:ignore>
+
+statement ok
+unset enable_bloom_runtime_filter;
+
+statement ok
+unset inlist_runtime_filter_threshold;
+
+# The bloom and inlist thresholds apply to the build rows of all nodes. Each node holds
+# fewer than 30 of the 43 build rows, but the merged filter drops them: only min-max is left.
+statement ok
+set inlist_runtime_filter_threshold = 30;
+
+statement ok
+set bloom_runtime_filter_threshold = 30;
+
+query T
+explain analyze select count(*) from rf_dist_probe p join rf_dist_build b on p.k = b.k;
+----
+<slt:ignore>HashJoin
+<slt:ignore>── output rows: 39
+<slt:ignore>── parts pruned by runtime filter: 3
+<slt:ignore>── table: default.default.rf_dist_probe
+<slt:ignore>
+
+statement ok
+unset inlist_runtime_filter_threshold;
+
+statement ok
+unset bloom_runtime_filter_threshold;
+
+# Shuffle join, every node spills its build side.
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+query TII rowsort
+select * from rf_dist_results;
+----
+inner 39 173374
+left anti 9961 49822405
+left semi 39 172595
+right anti 4 124
+right outer 43 173498
+right semi 39 779
+
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+query T
+explain analyze select count(*) from rf_dist_probe p join rf_dist_build b on p.k = b.k;
+----
+<slt:ignore>HashJoin
+<slt:ignore>── output rows: 39
+<slt:ignore>── numbers remote spilled by write: <slt:ignore>── build join filters(distributed):
+<slt:ignore>── exchange type: Hash(b.k (#2))
+<slt:ignore>── parts pruned by runtime filter: 3
+<slt:ignore>── table: default.default.rf_dist_probe
+<slt:ignore>── partitions total: 10
+<slt:ignore>
+
+statement ok
+unset enable_bloom_runtime_filter;
+
+statement ok
+unset inlist_runtime_filter_threshold;
+
+# A single build row (key 1505): the other nodes have no local build rows, but the build
+# side as a whole is not empty, so no node may skip its probe. The row is selected by `v`, a
+# column outside the join keys, so the predicate cannot be pushed to the probe side.
+query II
+select count(*), sum(p.v + b.v) from rf_dist_probe p join (select * from rf_dist_build where v = 5) b on p.k = b.k;
+----
+1 1510
+
+query II
+select count(*), sum(v) from rf_dist_probe p where not exists(select 1 from rf_dist_build b where p.k = b.k and b.v = 5);
+----
+9999 49993495
+
+query II
+select count(*), sum(b.v) from rf_dist_probe p right join (select * from rf_dist_build where v = 5) b on p.k = b.k;
+----
+1 5
+
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+query T
+explain analyze select count(*) from rf_dist_probe p join (select * from rf_dist_build where v = 5) b on p.k = b.k;
+----
+<slt:ignore>HashJoin
+<slt:ignore>── output rows: 1
+<slt:ignore>── parts pruned by runtime filter: 9
+<slt:ignore>── table: default.default.rf_dist_probe
+<slt:ignore>
+
+statement ok
+unset enable_bloom_runtime_filter;
+
+statement ok
+unset inlist_runtime_filter_threshold;
+
+# An empty build side on every node.
+query I
+select count(*) from rf_dist_probe p join (select * from rf_dist_build where v < 0) b on p.k = b.k;
+----
+0
+
+query I
+select count(*) from rf_dist_probe p where not exists(select 1 from rf_dist_build b where p.k = b.k and b.v < 0);
+----
+10000
+
+query I
+select count(*) from rf_dist_probe p right anti join (select * from rf_dist_build where v < 0) b on p.k = b.k;
+----
+0
+
+# Downstream stops reading early while the spilled join is still running.
+query I
+select count(*) from (select p.k from rf_dist_probe p join rf_dist_build b on p.k = b.k limit 5);
+----
+5
+
+statement ok
+unset enforce_shuffle_join;
+
+# Broadcast join: every node builds a filter from the whole build side.
+statement ok
+set enforce_broadcast_join = 1;
+
+query TII rowsort
+select * from rf_dist_results;
+----
+inner 39 173374
+left anti 9961 49822405
+left semi 39 172595
+right anti 4 124
+right outer 43 173498
+right semi 39 779
+
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+query T
+explain analyze select count(*) from rf_dist_probe p join rf_dist_build b on p.k = b.k;
+----
+<slt:ignore>HashJoin
+<slt:ignore>── output rows: 39
+<slt:ignore>── numbers remote spilled by write: <slt:ignore>── exchange type: Broadcast
+<slt:ignore>── parts pruned by runtime filter: 3
+<slt:ignore>── table: default.default.rf_dist_probe
+<slt:ignore>── partitions total: 10
+<slt:ignore>
+
+statement ok
+unset enable_bloom_runtime_filter;
+
+statement ok
+unset inlist_runtime_filter_threshold;
+
+statement ok
+unset enforce_broadcast_join;
+
+statement ok
+unset force_join_data_spill;
+
+statement ok
+unset join_spilling_buffer_threshold_per_proc_mb;
+
+statement ok
+drop view rf_dist_results;
+
+statement ok
+drop table rf_dist_probe;
+
+statement ok
+drop table rf_dist_build;
+
+statement ok
+unset enable_prune_cache;
+
+statement ok
+unset max_threads;
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;

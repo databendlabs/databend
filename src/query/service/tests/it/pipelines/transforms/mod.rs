@@ -14,4 +14,5 @@
 
 mod adaptive_topk_count;
 mod cross_join;
+mod hash_join_runtime_filter;
 mod sort;

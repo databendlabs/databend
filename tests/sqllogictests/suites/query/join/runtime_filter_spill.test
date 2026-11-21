@@ -1,0 +1,86 @@
+# Runtime filters built from a spilled hash join build side.
+#
+# The filters are built from every build row before the join decides to spill, so they stay
+# enabled under spill. The results below are those of the same joins without spill, for
+# every join type that plans runtime filters, plus LEFT ANTI that plans none, with NULL keys
+# on both sides and several processors. mode/cluster/runtime_filter_distributed.test covers
+# distributed joins and checks that the filters prune the probe scan.
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+set max_threads = 4;
+
+# Every build key is unique and every build block holds keys that match probe rows, so a
+# filter missing the rows of any processor (a lost packet, or a filter part restarted after it
+# was dropped) prunes matching probe rows and changes the results. Keys of the rows with
+# number % 7 = 0 are outside the probe range and stay unmatched, as do the NULL keys.
+statement ok
+create or replace table rf_spill_build(k int null, v int not null) row_per_block = 100 as
+select if(number % 50 = 0, null, if(number % 7 = 0, number + 5000, number)), number from numbers(1000);
+
+statement ok
+create or replace table rf_spill_probe(k int null, v int not null) row_per_block = 500 as
+select if(number % 97 = 0, null, number % 1000), number from numbers(5000);
+
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+query TII rowsort
+select 'inner', count(*), sum(p.v + b.v) from rf_spill_probe p join rf_spill_build b on p.k = b.k
+union all
+select 'left semi', count(*), sum(v) from rf_spill_probe p where exists(select 1 from rf_spill_build b where p.k = b.k)
+union all
+select 'left anti', count(*), sum(v) from rf_spill_probe p where not exists(select 1 from rf_spill_build b where p.k = b.k)
+union all
+select 'right outer', count(*), sum(coalesce(p.v, 0) + b.v) from rf_spill_probe p right join rf_spill_build b on p.k = b.k
+union all
+select 'right semi', count(*), sum(b.v) from rf_spill_probe p right semi join rf_spill_build b on p.k = b.k
+union all
+select 'right anti', count(*), sum(b.v) from rf_spill_probe p right anti join rf_spill_build b on p.k = b.k;
+----
+inner 4157 12473106
+left anti 843 2102947
+left semi 4157 10394553
+right anti 160 79521
+right outer 4317 12552627
+right semi 840 419979
+
+# An empty build side still skips or runs the probe correctly under spill.
+query I
+select count(*) from rf_spill_probe p join (select * from rf_spill_build where v < 0) b on p.k = b.k;
+----
+0
+
+query I
+select count(*) from rf_spill_probe p where not exists(select 1 from rf_spill_build b where p.k = b.k and b.v < 0);
+----
+5000
+
+statement ok
+unset force_join_data_spill;
+
+statement ok
+unset join_spilling_buffer_threshold_per_proc_mb;
+
+statement ok
+unset max_threads;
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table rf_spill_build;
+
+statement ok
+drop table rf_spill_probe;
