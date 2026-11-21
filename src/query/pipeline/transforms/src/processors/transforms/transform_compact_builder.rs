@@ -34,12 +34,32 @@ pub fn build_compact_block_pipeline(
     Ok(())
 }
 
+/// Builds the compaction stage for inputs whose blocks already hold contiguous input
+/// that must not be combined with other blocks: oversized blocks are still split evenly,
+/// but small blocks pass through unchanged.
+pub fn build_split_only_block_pipeline(
+    pipeline: &mut Pipeline,
+    thresholds: BlockThresholds,
+    max_threads: usize,
+) -> Result<()> {
+    // Blocks are complete, so they can move between lanes: spread them over at least
+    // `max_threads` lanes for the rest of the write, since an upstream lane may be bound to one
+    // input file, and a few large files may be read by fewer lanes.
+    let width = pipeline.output_len().max(max_threads);
+    pipeline.resize(width, true)?;
+    pipeline.add_accumulating_transformer(|| BlockCompactBuilder::new_split_only(thresholds));
+    pipeline.add_block_meta_transformer(|| TransformCompactBlock);
+    Ok(())
+}
+
 pub struct BlockCompactBuilder {
     thresholds: BlockThresholds,
     // Holds blocks that are partially accumulated but haven't reached the threshold.
     pending_blocks: Vec<DataBlock>,
     accumulated_rows: usize,
     accumulated_bytes: usize,
+    // When false, small blocks are passed through instead of being concatenated.
+    concat: bool,
 }
 
 impl BlockCompactBuilder {
@@ -49,6 +69,15 @@ impl BlockCompactBuilder {
             pending_blocks: vec![],
             accumulated_rows: 0,
             accumulated_bytes: 0,
+            concat: true,
+        }
+    }
+
+    /// A builder that only splits oversized blocks and never concatenates blocks.
+    pub fn new_split_only(thresholds: BlockThresholds) -> Self {
+        BlockCompactBuilder {
+            concat: false,
+            ..Self::new(thresholds)
         }
     }
 
@@ -76,7 +105,7 @@ impl AccumulatingTransform for BlockCompactBuilder {
                     block_num,
                 },
             ))])
-        } else if self.thresholds.check_large_enough(num_rows, num_bytes) {
+        } else if !self.concat || self.thresholds.check_large_enough(num_rows, num_bytes) {
             // pass through the new data block just arrived
             Ok(vec![DataBlock::empty_with_meta(Box::new(
                 BlockCompactMeta::NoChange(vec![data]),

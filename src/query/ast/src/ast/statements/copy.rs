@@ -90,6 +90,7 @@ impl CopyIntoTableStmt {
                 self.options.column_match_mode = Some(ColumnMatchMode::from_str(&v)?)
             }
             CopyIntoTableOption::SchemaEvolution(v) => self.options.schema_evolution = Some(v),
+            CopyIntoTableOption::SortedByClusterKey(v) => self.options.sorted_by_cluster_key = v,
         }
         Ok(())
     }
@@ -149,6 +150,9 @@ pub struct CopyIntoTableOptions {
     pub return_failed_only: bool,
     pub column_match_mode: Option<ColumnMatchMode>,
     pub schema_evolution: Option<CopySchemaEvolutionOptions>,
+    /// The rows of each input file are declared to be sorted by the target table's cluster key.
+    #[serde(default)]
+    pub sorted_by_cluster_key: bool,
 
     // not used for now
     pub size_limit: usize,
@@ -252,6 +256,9 @@ impl Display for CopyIntoTableOptions {
         }
         if let Some(schema_evolution) = &self.schema_evolution {
             write!(f, " SCHEMA_EVOLUTION = ({schema_evolution})")?;
+        }
+        if self.sorted_by_cluster_key {
+            write!(f, " SORTED_BY_CLUSTER_KEY = true")?;
         }
         Ok(())
     }
@@ -769,6 +776,7 @@ pub enum CopyIntoTableOption {
     OnError(String),
     ColumnMatchMode(String),
     SchemaEvolution(CopySchemaEvolutionOptions),
+    SortedByClusterKey(bool),
 }
 
 pub enum CopyIntoLocationOption {
