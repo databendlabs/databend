@@ -17,7 +17,7 @@ use std::collections::HashSet;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_index::FooterDirectory;
+use databend_storages_common_index::InvertedIndexSearcher;
 use futures_util::future;
 use tantivy::Directory;
 use tantivy::Searcher;
@@ -176,37 +176,21 @@ impl InvertedIndexWarmupInfo {
             .retain(|field| !self.full_posting_fields.contains_key(field));
     }
 
+    /// Pins what the synchronous search needs. Run it in the `with_search_scope` of the search:
+    /// the postings and positions it warms are pinned for that search only.
     pub(crate) async fn warm_searcher(
         &self,
-        searcher: &Searcher,
-        raw_bundle_directory: &FooterDirectory,
+        searcher: &InvertedIndexSearcher,
         has_score: bool,
     ) -> Result<()> {
-        let segments = searcher.index().searchable_segments()?;
-        let segments_by_id = segments
-            .iter()
-            .map(|segment| (segment.id(), segment))
-            .collect::<HashMap<_, _>>();
-        // Match IDs, not list positions: the Searcher and Index need not use the same order.
-        let readers = searcher
-            .segment_readers()
-            .iter()
-            .map(|reader| {
-                let segment = segments_by_id
-                    .get(&reader.segment_id())
-                    .copied()
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(
-                            "inverted-index warmup segment is missing from the index",
-                        )
-                    })?;
-                Ok((reader, segment))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
+        // `InvertedIndexSearcher::open` checked that the bundle has one segment.
+        let readers = [(
+            &searcher.searcher().segment_readers()[0],
+            searcher.segment(),
+        )];
         tokio::try_join!(
-            self.warm_metadata(searcher, &readers, has_score),
-            self.warm_payload(&readers, raw_bundle_directory),
+            self.warm_metadata(searcher.searcher(), &readers, has_score),
+            self.warm_payload(searcher, &readers),
         )?;
         Ok(())
     }
@@ -290,9 +274,10 @@ impl InvertedIndexWarmupInfo {
     /// Segments progress independently; a slow full read does not block another segment's terms.
     async fn warm_payload(
         &self,
+        searcher: &InvertedIndexSearcher,
         readers: &[(&SegmentReader, &Segment)],
-        raw_bundle_directory: &FooterDirectory,
     ) -> Result<()> {
+        let raw_bundle_directory = searcher.directory();
         let with_positions = self
             .full_posting_fields
             .values()
@@ -317,19 +302,59 @@ impl InvertedIndexWarmupInfo {
             let term_reads = self
                 .exact_postings
                 .iter()
-                .map(|(term, &positions)| async move {
-                    reader
-                        .inverted_index(term.field())?
-                        .warm_postings(term, positions)
-                        .await?;
-                    Ok::<(), ErrorCode>(())
-                });
+                .map(|(term, &positions)| warm_term(searcher, reader, term, positions));
             future::try_join_all(term_reads).await?;
             Ok::<(), ErrorCode>(())
         });
         future::try_join_all(warmups).await?;
         Ok(())
     }
+}
+
+/// Pins the postings of `term`, and its positions if asked, as `warm_postings` does. Its term
+/// info is looked up once for the searcher: later searches read neither its dictionary block
+/// nor, for its document frequency, the dictionary again (`InvertedIndexSearcher`).
+async fn warm_term(
+    searcher: &InvertedIndexSearcher,
+    reader: &SegmentReader,
+    term: &Term,
+    with_positions: bool,
+) -> Result<()> {
+    let info = match searcher.term_info(term) {
+        Some(info) => info,
+        None => {
+            let info = reader
+                .inverted_index(term.field())?
+                .terms()
+                .get_async(term.serialized_value_bytes())
+                .await?;
+            searcher.remember_term_info(term, info.clone());
+            info
+        }
+    };
+    let Some(info) = info else {
+        return Ok(());
+    };
+    let slices = searcher.field_postings(term.field())?;
+    let postings = slices
+        .postings
+        .read_bytes_slice_async(info.postings_range.clone());
+    match (with_positions, &slices.positions) {
+        (false, _) => {
+            postings.await?;
+        }
+        (true, Some(positions)) => {
+            let positions = positions.read_bytes_slice_async(info.positions_range.clone());
+            future::try_join(postings, positions).await?;
+        }
+        (true, None) => {
+            reader
+                .inverted_index(term.field())?
+                .warm_postings(term, true)
+                .await?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

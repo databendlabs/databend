@@ -705,13 +705,8 @@ mod tests {
         let warmup =
             InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, &fields, None)
                 .unwrap();
-        let reader = InvertedIndexReader::create(
-            operator.clone(),
-            CachePolicy::DEFAULT,
-            false,
-            create_tokenizer_manager(&index_options(), None),
-            warmup,
-        );
+        let reader =
+            InvertedIndexReader::create(operator.clone(), CachePolicy::DEFAULT, false, warmup);
         let result = reader
             .do_filter(
                 query,
@@ -773,13 +768,8 @@ mod tests {
                 fuzziness,
             )
             .unwrap();
-            let reader = InvertedIndexReader::create(
-                operator.clone(),
-                CachePolicy::DEFAULT,
-                false,
-                tokenizers.clone(),
-                warmup,
-            );
+            let reader =
+                InvertedIndexReader::create(operator.clone(), CachePolicy::DEFAULT, false, warmup);
             let (rows, _) = reader
                 .do_filter(
                     query,
@@ -941,13 +931,8 @@ mod merge_tests {
         let warmup =
             InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, fields, None)
                 .unwrap();
-        let reader = InvertedIndexReader::create(
-            operator.clone(),
-            CachePolicy::DEFAULT,
-            false,
-            create_tokenizer_manager(&index_options(), None),
-            warmup,
-        );
+        let reader =
+            InvertedIndexReader::create(operator.clone(), CachePolicy::DEFAULT, false, warmup);
         let result = reader
             .do_filter(
                 query,

@@ -92,6 +92,7 @@ fn test_each_kind_reads_its_option() {
         ("memory_cache_inverted_index_lookup", Bytes(16)),
         ("memory_cache_inverted_index_payload", Bytes(300)),
         ("memory_cache_inverted_index_full_payload", Bytes(100)),
+        ("memory_cache_inverted_index_searcher", Bytes(1073741824)),
         ("memory_cache_spatial_index_file", Bytes(17)),
         ("memory_cache_column_data", Disabled),
         ("memory_cache_table_data", Bytes(19)),
@@ -155,15 +156,20 @@ fn test_meta_cache_switch() {
     }
 }
 
-/// Only the HNSW cache counts held values, and only the payload pages share their budget.
+/// Only the HNSW cache and the inverted-index searchers count held values, and only the payload
+/// pages share their budget.
 #[test]
 fn test_special_rules() {
     let legacy = LegacyKinds::global();
+    let counting_held = [
+        CacheKind::of::<vector::Index>(),
+        CacheKind::of::<inverted::Searcher>(),
+    ];
     for kind in CacheKind::all() {
         let rules = legacy.get(kind).unwrap();
         assert_eq!(
             rules.counts_held_values,
-            kind == CacheKind::of::<vector::Index>(),
+            counting_held.contains(&kind),
             "{kind:?}"
         );
         let shares = (kind == CacheKind::of::<inverted::Payload>())
