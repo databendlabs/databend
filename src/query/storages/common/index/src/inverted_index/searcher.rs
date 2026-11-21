@@ -16,11 +16,13 @@ use std::collections::HashMap;
 use std::io;
 use std::mem::size_of;
 use std::path::Path;
-use std::sync::RwLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use parking_lot::RwLock;
 use tantivy::Index;
+use tantivy::IndexReader;
+use tantivy::ReloadPolicy;
 use tantivy::Searcher;
 use tantivy::Term;
 use tantivy::directory::CompositeFile;
@@ -30,7 +32,6 @@ use tantivy::index::SegmentComponent;
 use tantivy::postings::TermInfo;
 use tantivy::query::Bm25StatisticsProvider;
 use tantivy::schema::Field;
-use tantivy::tokenizer::TokenizerManager;
 
 use super::directory::FooterDirectory;
 
@@ -74,18 +75,28 @@ impl InvertedIndexSearcher {
     }
 
     /// Opens the single segment of a bundle, through a directory over a shared pin.
-    pub fn open(directory: FooterDirectory, tokenizers: TokenizerManager) -> Result<Self> {
-        let mut index = Index::open(directory.clone())?;
-        index.set_tokenizers(tokenizers);
-        let searcher = index.reader()?.searcher();
-        let segments = index.searchable_segments()?;
+    pub fn open(directory: FooterDirectory) -> Result<Self> {
+        let index = Index::open(directory.clone())?;
+        let reader: IndexReader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()?;
+        let searcher = reader.searcher();
         let [reader] = searcher.segment_readers() else {
             return Err(ErrorCode::StorageOther(format!(
                 "inverted index bundle expects one Tantivy segment, got {}",
                 searcher.segment_readers().len()
             )));
         };
-        let segment = segments
+        // Tantivy lazily inserts field readers under a poisonable lock. Open them from the
+        // footer's index-open slices before publishing the searcher, not during a later query.
+        for (field, entry) in index.schema().fields() {
+            if entry.is_indexed() {
+                reader.inverted_index(field)?;
+            }
+        }
+        let segment = index
+            .searchable_segments()?
             .into_iter()
             .find(|segment| segment.id() == reader.segment_id())
             .ok_or_else(|| {
@@ -137,32 +148,21 @@ impl InvertedIndexSearcher {
     /// A term is remembered after its dictionary block was read through the shared pin, which
     /// keeps the block: the synchronous lookups of a search find it pinned.
     pub fn term_info(&self, term: &Term) -> Option<Option<TermInfo>> {
-        self.term_infos
-            .read()
-            .expect("inverted-index searcher lock poisoned")
-            .get(term)
-            .cloned()
+        self.term_infos.read().get(term).cloned()
     }
 
     pub fn remember_term_info(&self, term: &Term, info: Option<TermInfo>) {
-        let mut term_infos = self
-            .term_infos
-            .write()
-            .expect("inverted-index searcher lock poisoned");
-        if term_infos.len() >= MAX_REMEMBERED_TERMS && !term_infos.contains_key(term) {
+        let term = term.clone();
+        let mut term_infos = self.term_infos.write();
+        if term_infos.len() >= MAX_REMEMBERED_TERMS && !term_infos.contains_key(&term) {
             term_infos.clear();
         }
-        term_infos.insert(term.clone(), info);
+        term_infos.insert(term, info);
     }
 
     /// The slices Tantivy reads the posting lists and positions of `field` from.
     pub fn field_postings(&self, field: Field) -> io::Result<FieldPostings> {
-        if let Some(postings) = self
-            .field_postings
-            .read()
-            .expect("inverted-index searcher lock poisoned")
-            .get(&field)
-        {
+        if let Some(postings) = self.field_postings.read().get(&field) {
             return Ok(postings.clone());
         }
         let missing = || io::Error::other(format!("inverted index has no postings for {field:?}"));
@@ -183,10 +183,7 @@ impl InvertedIndexSearcher {
             postings,
             positions,
         };
-        self.field_postings
-            .write()
-            .expect("inverted-index searcher lock poisoned")
-            .insert(field, postings.clone());
+        self.field_postings.write().insert(field, postings.clone());
         Ok(postings)
     }
 }

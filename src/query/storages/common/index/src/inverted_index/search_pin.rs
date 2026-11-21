@@ -20,13 +20,16 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt;
 use std::io;
+use std::ops::Bound::Excluded;
+use std::ops::Bound::Unbounded;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use async_trait::async_trait;
+use databend_common_base::runtime::LimitMemGuard;
+use parking_lot::RwLock;
 use tantivy::Directory;
 use tantivy::HasLen;
 use tantivy::directory::FileHandle;
@@ -63,21 +66,28 @@ impl FileRangeCache {
                 "cached range and byte lengths differ",
             ));
         }
-        let mut ranges = self.0.write().expect("search pin lock poisoned");
+        let mut ranges = self.0.write();
         if Self::last_from(&ranges, range.start).is_some_and(|cached| cached.range.end >= range.end)
         {
             return Ok(());
         }
-        // The ranges it contains start at or after it and, ends growing, are consecutive.
+        // The new range replaces any range with the same start. The later ranges it contains
+        // are consecutive because their ends grow with their starts.
         let contained = ranges
-            .range(range.start..)
+            .range((Excluded(range.start), Unbounded))
             .take_while(|(_, cached)| cached.range.end <= range.end)
             .map(|(&start, _)| start)
             .collect::<Vec<_>>();
+        // Never unpin a dictionary range before its replacement is in place. A BTreeMap
+        // insertion can allocate after splitting a node, so do not let a memory limit
+        // interrupt the tree update. The range bytes were already allocated under the limit.
+        {
+            let _unlimited = LimitMemGuard::enter_unlimited();
+            ranges.insert(range.start, CachedRange { range, bytes });
+        }
         for start in contained {
             ranges.remove(&start);
         }
-        ranges.insert(range.start, CachedRange { range, bytes });
         Ok(())
     }
 
@@ -85,7 +95,7 @@ impl FileRangeCache {
         if range.is_empty() {
             return Some(OwnedBytes::empty());
         }
-        let ranges = self.0.read().expect("search pin lock poisoned");
+        let ranges = self.0.read();
         if let Some(cached) =
             Self::last_from(&ranges, range.start).filter(|cached| cached.range.end >= range.end)
         {
@@ -117,18 +127,11 @@ struct PinnedFiles(Arc<RwLock<HashMap<PathBuf, FileRangeCache>>>);
 
 impl PinnedFiles {
     fn file_cache(&self, path: &Path) -> FileRangeCache {
-        if let Some(cache) = self
-            .0
-            .read()
-            .expect("search pin lock poisoned")
-            .get(path)
-            .cloned()
-        {
+        if let Some(cache) = self.0.read().get(path).cloned() {
             return cache;
         }
         self.0
             .write()
-            .expect("search pin lock poisoned")
             .entry(path.to_path_buf())
             .or_default()
             .clone()
@@ -142,15 +145,10 @@ struct SearchScope(RwLock<HashMap<usize, PinnedFiles>>);
 
 impl SearchScope {
     fn files(&self, pin: usize) -> PinnedFiles {
-        if let Some(files) = self.0.read().expect("search scope lock poisoned").get(&pin) {
+        if let Some(files) = self.0.read().get(&pin) {
             return files.clone();
         }
-        self.0
-            .write()
-            .expect("search scope lock poisoned")
-            .entry(pin)
-            .or_default()
-            .clone()
+        self.0.write().entry(pin).or_default().clone()
     }
 }
 
@@ -434,7 +432,7 @@ mod tests {
     }
 
     fn pinned(cache: &FileRangeCache) -> Vec<Range<usize>> {
-        let ranges = cache.0.read().unwrap();
+        let ranges = cache.0.read();
         ranges.values().map(|cached| cached.range.clone()).collect()
     }
 
@@ -526,7 +524,7 @@ mod tests {
                         .insert(start..end, OwnedBytes::new(data[start..end].to_vec()))
                         .unwrap();
                     model.insert(start..end);
-                    let pinned = cache.0.read().unwrap();
+                    let pinned = cache.0.read();
                     let mut want = model.0.clone();
                     want.sort_by_key(|r| r.start);
                     let got = pinned.values().map(|c| c.range.clone()).collect::<Vec<_>>();

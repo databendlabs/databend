@@ -14,6 +14,7 @@ cc = "1.0"
 
 [dependencies]
 databend-common-ast = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -66,7 +67,6 @@ zerocopy = { workspace = true }
 zstd = { workspace = true }
 
 [dev-dependencies]
-databend-common-base = { workspace = true }
 databend-common-expression-test-support = { workspace = true }
 
 anyhow = { workspace = true }

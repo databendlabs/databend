@@ -19,17 +19,17 @@ use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
 use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
-use databend_storages_common_index::with_search_scope;
 use opendal::Operator;
 use tantivy::Searcher;
 use tantivy::collector::DocSetCollector;
 use tantivy::collector::TopDocs;
 use tantivy::query::Bm25StatisticsProvider;
 use tantivy::query::Query;
-use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::read::inverted_index::inverted_index_bundle_loader::load_bundle_searcher;
+use crate::io::read::inverted_index::inverted_index_bundle_loader::with_bundle_search_scope;
 use crate::io::read::inverted_index::inverted_index_warmup::InvertedIndexWarmupInfo;
 
 /// The matched rows of a block, with their scores when the reader scores them.
@@ -37,11 +37,10 @@ pub type InvertedIndexFilterResult = Option<(Vec<u32>, Option<Vec<F32>>)>;
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
-    dal: Operator,
+    storage: DiskCachedStorage,
     policy: CachePolicy,
     has_score: bool,
     top_k: Option<usize>,
-    tokenizer_manager: TokenizerManager,
     warmup: InvertedIndexWarmupInfo,
 }
 
@@ -50,15 +49,13 @@ impl InvertedIndexReader {
         dal: Operator,
         policy: CachePolicy,
         has_score: bool,
-        tokenizer_manager: TokenizerManager,
         warmup: InvertedIndexWarmupInfo,
     ) -> Self {
         Self {
-            dal,
+            storage: DiskCachedStorage::new(dal),
             policy,
             has_score,
             top_k: None,
-            tokenizer_manager,
             warmup,
         }
     }
@@ -97,16 +94,9 @@ impl InvertedIndexReader {
         query: Box<dyn Query>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
-        let searcher = load_bundle_searcher(
-            &self.dal,
-            index_path,
-            object_size,
-            self.policy,
-            &self.tokenizer_manager,
-        )
-        .await?;
-        // The postings warmed for this search stay pinned until it completes.
-        with_search_scope(async {
+        let searcher =
+            load_bundle_searcher(&self.storage, index_path, object_size, self.policy).await?;
+        with_bundle_search_scope(self.storage.clone(), async {
             self.warmup.warm_searcher(&searcher, self.has_score).await?;
             self.search(searcher.searcher(), &*searcher, query, row_count)
         })
@@ -203,7 +193,6 @@ mod tests {
             Operator::new(Memory::default()).unwrap().finish(),
             CachePolicy::DEFAULT,
             has_score,
-            TokenizerManager::default(),
             InvertedIndexWarmupInfo::default(),
         )
         .with_top_k(top_k)

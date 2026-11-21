@@ -98,7 +98,7 @@ pub struct InvertedIndexCache {
     pub payload: MemCache<InvertedIndexPayloadBytes>,
     /// Complete `.idx` / `.pos` components, apart from pages so warmups cannot evict hot pages.
     pub full_payload: MemCache<InvertedIndexPayloadBytes>,
-    /// Bundles opened for search, keyed by `{location}:{object_size}`.
+    /// Bundles opened for search, keyed by location, size and cache policy.
     pub searcher: MemCache<InvertedIndexSearcher>,
 }
 

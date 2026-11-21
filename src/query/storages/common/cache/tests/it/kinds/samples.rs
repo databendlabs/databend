@@ -284,7 +284,6 @@ impl Sample for inverted::Searcher {
         use tantivy::directory::RamDirectory;
         use tantivy::schema::Schema;
         use tantivy::schema::TEXT;
-        use tantivy::tokenizer::TokenizerManager;
 
         static BUNDLE: OnceLock<(RamDirectory, InvertedIndexBundleFooter)> = OnceLock::new();
         let (raw, footer) = BUNDLE.get_or_init(|| {
@@ -327,7 +326,7 @@ impl Sample for inverted::Searcher {
             (raw, InvertedIndexBundleFooter::open(&object).unwrap())
         });
         let directory = FooterDirectory::new(raw.clone(), footer.clone());
-        InvertedIndexSearcher::open(directory, TokenizerManager::default()).unwrap()
+        InvertedIndexSearcher::open(directory).unwrap()
     }
 }
 
