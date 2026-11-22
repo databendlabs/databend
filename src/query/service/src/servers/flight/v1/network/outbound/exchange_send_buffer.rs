@@ -592,10 +592,19 @@ impl ExchangeSendBuffer {
 
         self.try_flush(connection_idx);
 
-        match remote.state.lock().last_error.clone() {
+        // Another connection of the node may have failed while this call waited
+        // for quota; the node's data is lost with it, so report its error too.
+        match self.destination_error(dest_idx) {
             Some(error) => Err(error),
             None => Ok(()),
         }
+    }
+
+    /// The error of the first closed connection of destination `dest_idx`.
+    fn destination_error(&self, dest_idx: usize) -> Option<ErrorCode> {
+        self.state.destinations[dest_idx]
+            .clone()
+            .find_map(|idx| self.state.remotes[idx].state.lock().last_error.clone())
     }
 
     /// The connection of destination `dest_idx` with the fewest bytes queued and
@@ -637,9 +646,7 @@ impl ExchangeSendBuffer {
 
     /// Whether destination `dest_idx` is closed: any of its connections is.
     pub fn is_closed(&self, dest_idx: usize) -> bool {
-        self.state.destinations[dest_idx]
-            .clone()
-            .any(|idx| self.state.remotes[idx].state.lock().last_error.is_some())
+        self.destination_error(dest_idx).is_some()
     }
 }
 
@@ -1685,5 +1692,61 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// An enqueue waiting for quota on one connection reports the failure of
+    /// another connection of the same node that happened meanwhile.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_enqueue_reports_sibling_failure_during_quota_wait() {
+        let rt = test_runtime();
+        let (first, first_rx, first_pong) = create_mock_exchange(1);
+        let (second, second_rx, second_pong) = create_mock_exchange(1);
+        let buffer = Arc::new(
+            ExchangeSendBuffer::create_with_connections(
+                vec![vec![first, second]],
+                ExchangeSendBufferConfig {
+                    max_queued_bytes: 4,
+                    max_batch_bytes: 1,
+                },
+                &rt,
+                None,
+            )
+            .unwrap(),
+        );
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            // Fill the quota: one frame in flight on each connection.
+            buffer
+                .enqueue_items(0, vec![make_flight_data(2)])
+                .await
+                .unwrap();
+            buffer
+                .enqueue_items(0, vec![make_flight_data(1)])
+                .await
+                .unwrap();
+            assert_eq!(first_rx.recv().await.unwrap().data_body.len(), 2);
+            assert_eq!(second_rx.recv().await.unwrap().data_body.len(), 1);
+
+            // Picks the second connection, the less loaded one, and waits for quota.
+            let waiting = {
+                let buffer = buffer.clone();
+                databend_common_base::runtime::spawn(async move {
+                    buffer.enqueue_items(0, vec![make_flight_data(3)]).await
+                })
+            };
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            // The first connection fails, which releases its quota.
+            drop(first_pong);
+            let error = waiting.await.unwrap().unwrap_err();
+            assert!(
+                error
+                    .message()
+                    .contains(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE)
+            );
+            drop(second_pong);
+        })
+        .await
+        .expect("the waiting enqueue must finish");
     }
 }
