@@ -3766,8 +3766,9 @@ impl Default for DiskCacheKeyReloadPolicy {
 #[serde(default)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data; 1024 or less disables it. Unset, it is sized at
-    /// start to the room the file system under `path` leaves before `watermark_ratio` percent
-    /// of it is in use, the cache's own files counted in, at most 1 TiB.
+    /// start to the room the file system under `path` leaves 5 percent below `watermark_ratio`
+    /// (85% of it in use by default), the cache's own files counted in, at most 1 TiB. Nodes
+    /// sharing one file system each take that room: set it for them.
     #[clap(long = "cache-disk-max-bytes", value_name = "VALUE")]
     pub max_bytes: Option<u64>,
 

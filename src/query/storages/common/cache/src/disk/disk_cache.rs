@@ -68,6 +68,11 @@ const MIN_DISK_CACHE_BYTES: u64 = 1024;
 /// in memory, a few hundred bytes each. A larger cache is configured in bytes.
 pub const MAX_AUTO_DISK_CACHE_BYTES: u64 = 1 << 40;
 
+/// `cache.disk.max_bytes` unset keeps the cache this many percent of the file system below
+/// `watermark_ratio`: filled to the watermark itself, the growth of any other file would evict
+/// it under disk pressure at every write, and a watermark of 100 would let it fill the disk.
+pub const AUTO_HEADROOM_PERCENT: u64 = 5;
+
 /// Version of the directory layout, `<path>/<tenant>/v2/<pool>/<kind>/<prefix>/<hash>`. Other
 /// entries under `<path>/<tenant>` are from older layouts and are removed in the background.
 const LAYOUT_DIR: &str = "v2";
@@ -169,7 +174,7 @@ impl DiskCache {
                 if bytes <= MIN_DISK_CACHE_BYTES {
                     warn!(
                         "[DiskCache] off: max_bytes unset and the file system under {:?} has no \
-                         room below the watermark of {}%",
+                         room {AUTO_HEADROOM_PERCENT}% below the watermark of {}%",
                         disk.path, disk.watermark_ratio
                     );
                     return Ok(None);
@@ -592,12 +597,14 @@ pub fn split_caps(max_bytes: u64, ratios: [u64; 3]) -> Result<[u64; 3]> {
 }
 
 /// `cache.disk.max_bytes` when unset, in bytes: the room a file system of `total` bytes,
-/// `available` of them free, leaves the cache before `watermark_ratio` percent of it is in use,
-/// past which the writer evicts. The `cached` bytes of the cache's own files count as room:
-/// those of a previous run are freed or indexed by the restart, and leaving them out would
-/// size the cache smaller at each restart. At most `MAX_AUTO_DISK_CACHE_BYTES`.
+/// `available` of them free, leaves the cache `AUTO_HEADROOM_PERCENT` below `watermark_ratio`
+/// percent of it in use, past which the writer evicts. The `cached` bytes of the cache's own
+/// files count as room: those of a previous run are freed or indexed by the restart, and
+/// leaving them out would size the cache smaller at each restart. At most
+/// `MAX_AUTO_DISK_CACHE_BYTES`.
 pub fn auto_max_bytes(total: u64, available: u64, cached: u64, watermark_ratio: u64) -> u64 {
-    let reserved = total as u128 * 100u128.saturating_sub(watermark_ratio as u128) / 100;
+    let reserved_percent = (100 + AUTO_HEADROOM_PERCENT).saturating_sub(watermark_ratio);
+    let reserved = total as u128 * reserved_percent as u128 / 100;
     let room = (available as u128 + cached as u128).saturating_sub(reserved);
     room.min(MAX_AUTO_DISK_CACHE_BYTES as u128) as u64
 }
@@ -631,8 +638,8 @@ fn size_from_file_system(
     let bytes = auto_max_bytes(total, available, cached, disk.watermark_ratio);
     info!(
         "[DiskCache] max_bytes unset: {bytes} bytes, from {total} bytes in the file system under \
-         {path:?}, {available} available and {cached} in cache files, below the watermark of {}%, \
-         at most {MAX_AUTO_DISK_CACHE_BYTES}",
+         {path:?}, {available} available and {cached} in cache files, {AUTO_HEADROOM_PERCENT}% \
+         below the watermark of {}%, at most {MAX_AUTO_DISK_CACHE_BYTES}",
         disk.watermark_ratio
     );
     Ok(bytes)
@@ -641,10 +648,15 @@ fn size_from_file_system(
 /// Bytes of the files under `tenant_root`. Files it could not see count for none, sizing the
 /// cache smaller.
 fn cached_bytes(tenant_root: &Path) -> u64 {
+    // Not held to the memory limit, on this thread or the workers', like the restart scan.
+    let _unlimited = LimitMemGuard::enter_unlimited();
     let complete = AtomicBool::new(true);
     let bytes = scan_files(tenant_root, &complete)
         .par_iter()
-        .map(|path| fs::metadata(path).map_or(0, |meta| meta.len()))
+        .map(|path| {
+            let _unlimited = LimitMemGuard::enter_unlimited();
+            fs::metadata(path).map_or(0, |meta| meta.len())
+        })
         .sum();
     if !complete.into_inner() {
         warn!(

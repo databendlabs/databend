@@ -23,6 +23,7 @@ pub mod disk_pool;
 pub mod disk_writer;
 mod key;
 
+pub use disk_cache::AUTO_HEADROOM_PERCENT;
 pub use disk_cache::DiskCache;
 pub use disk_cache::DiskCacheStats;
 pub use disk_cache::DiskKindEvents;

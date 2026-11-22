@@ -161,8 +161,9 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
     const GIB: u64 = 1 << 30;
     // Other tests change what the file system has available meanwhile.
     const SLACK: u64 = GIB;
-    // A file of the previous run, sparse: counted by its length without taking room.
-    const CACHED: u64 = 64 * GIB;
+    // A file of the previous run, sparse: counted by its length without taking room. Twice the
+    // slack, so the result tells it counted; small enough for a file system without holes.
+    const CACHED: u64 = 2 * GIB;
     let dir = TempDir::new().unwrap();
     let old_layout = dir.path().join("test_tenant").join("v1");
     std::fs::create_dir_all(&old_layout).unwrap();
@@ -173,7 +174,7 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
     let config = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
             max_bytes: None,
-            // Never over the watermark, wherever the test runs.
+            // The most room, wherever the test runs: 95% of the file system.
             watermark_ratio: 100,
             ..disk_config(&dir).disk_cache_config
         },
@@ -204,19 +205,15 @@ fn test_disk_cache_unset_max_bytes_without_room_or_file_system() {
     let config = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
             max_bytes: None,
-            // Room only on a file system more than 99% free.
+            // The headroom reserves the whole file system: never any room.
             watermark_ratio: 1,
             ..disk_config(&dir).disk_cache_config
         },
         ..disk_config(&dir)
     };
     let (total, available) = file_system_space(dir.path());
-    let room = auto_max_bytes(total, available, 0, 1);
-    assert_eq!(
-        manager(&config, true).disk().is_some(),
-        room > 1024,
-        "{room}"
-    );
+    assert_eq!(auto_max_bytes(total, available, 0, 1), 0);
+    assert!(manager(&config, true).disk().is_none());
 
     let file = dir.path().join("file");
     std::fs::write(&file, b"").unwrap();

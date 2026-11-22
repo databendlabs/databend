@@ -67,6 +67,7 @@ pub use databend_storages_common_table_meta::meta::SegmentStatistics;
 pub use databend_storages_common_table_meta::meta::TableSnapshot;
 pub use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 pub use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
+pub use disk::AUTO_HEADROOM_PERCENT;
 pub use disk::DiskCache;
 pub use disk::DiskCacheStats;
 pub use disk::DiskCachedStorage;
