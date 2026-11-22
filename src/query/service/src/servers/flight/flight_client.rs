@@ -51,6 +51,13 @@ pub struct DoExchangeParams {
     pub num_threads: usize,
     /// Receive queue quota of this connection on the target node, in bytes.
     pub max_bytes_per_connection: usize,
+    /// The sending node, for the statistics of the connection.
+    #[serde(default)]
+    pub source_node_id: String,
+    /// Index of this connection among the connections of the exchange from the
+    /// sending node to the target node.
+    #[serde(default)]
+    pub lane: usize,
 }
 
 pub struct FlightClient {

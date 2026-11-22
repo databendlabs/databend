@@ -234,22 +234,25 @@ pub(super) fn build_broadcast_senders(
 
     for (target_id, threads) in &params.destination_channels {
         if target_id != &params.executor_id {
-            let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
+            let connections = exchanges.remove(target_id.as_str()).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "PingPongTransport not found for target {}",
                     target_id
                 ))
             })?;
-            assert_eq!(threads.len(), exchange.num_threads);
-            exchanges_seq.push(exchange);
+            for exchange in &connections {
+                assert_eq!(threads.len(), exchange.num_threads);
+            }
+            exchanges_seq.push(connections);
         }
     }
 
     // Create shared ExchangeSendBuffer: one RemoteInstance per PingPong
-    let shared_buffer = Arc::new(ExchangeSendBuffer::create(
+    let shared_buffer = Arc::new(ExchangeSendBuffer::create_with_connections(
         exchanges_seq,
         config,
         &GlobalIORuntime::instance(),
+        Some(format!("query {} exchange {}", query_id, exchange_id)),
     )?);
 
     let local_sender = RoundRobinBlockSender::create(
@@ -301,21 +304,24 @@ pub(super) fn build_hash_shuffle_nodes(
 
     for (target_id, threads) in &params.destination_channels {
         if target_id != &params.executor_id {
-            let exchange = exchanges.remove(target_id.as_str()).ok_or_else(|| {
+            let connections = exchanges.remove(target_id.as_str()).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "PingPongTransport not found for target {}",
                     target_id
                 ))
             })?;
-            assert_eq!(threads.len(), exchange.num_threads);
-            exchanges_seq.push(exchange);
+            for exchange in &connections {
+                assert_eq!(threads.len(), exchange.num_threads);
+            }
+            exchanges_seq.push(connections);
         }
     }
 
-    let shared_buffer = Arc::new(ExchangeSendBuffer::create(
+    let shared_buffer = Arc::new(ExchangeSendBuffer::create_with_connections(
         exchanges_seq,
         config,
         &GlobalIORuntime::instance(),
+        Some(format!("query {} exchange {}", query_id, exchange_id)),
     )?);
 
     let arrow_schema = Arc::new(ArrowSchema::from(params.schema.as_ref()));

@@ -143,6 +143,7 @@ http = { workspace = true }
 humantime = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
+libc = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 lz4_flex = { workspace = true }

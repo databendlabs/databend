@@ -39,6 +39,8 @@ use tonic::transport::ClientTlsConfig;
 use tonic::transport::Endpoint;
 
 use crate::RpcClientTlsConfig;
+use crate::SocketProbe;
+use crate::socket_probe::ProbedConnector;
 
 /// Async DNS resolver using hickory-resolver.
 ///
@@ -177,7 +179,28 @@ impl ConnectionFactory {
         keep_alive: Option<TcpKeepAliveConfig>,
     ) -> std::result::Result<Channel, GrpcConnectionError> {
         let endpoint = Self::create_rpc_endpoint(addr, rpc_client_config)?;
+        let connector = Self::create_http_connector(timeout, keep_alive);
+        Self::connect(endpoint, connector).await
+    }
 
+    /// Like [`Self::create_rpc_channel`], and reports the TCP connects of the
+    /// channel, including the reconnects tonic performs inside it, to `probe`.
+    pub async fn create_probed_rpc_channel(
+        addr: impl ToString,
+        timeout: Option<Duration>,
+        rpc_client_config: Option<RpcClientTlsConfig>,
+        keep_alive: Option<TcpKeepAliveConfig>,
+        probe: SocketProbe,
+    ) -> std::result::Result<Channel, GrpcConnectionError> {
+        let endpoint = Self::create_rpc_endpoint(addr, rpc_client_config)?;
+        let connector = Self::create_http_connector(timeout, keep_alive);
+        Self::connect(endpoint, ProbedConnector::new(connector, probe)).await
+    }
+
+    fn create_http_connector(
+        timeout: Option<Duration>,
+        keep_alive: Option<TcpKeepAliveConfig>,
+    ) -> HttpConnector<DNSService> {
         let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
         inner_connector.set_nodelay(true);
         match keep_alive {
@@ -194,9 +217,21 @@ impl ConnectionFactory {
         }
         inner_connector.enforce_http(false);
         inner_connector.set_connect_timeout(timeout);
+        inner_connector
+    }
 
+    async fn connect<C>(
+        endpoint: Endpoint,
+        connector: C,
+    ) -> std::result::Result<Channel, GrpcConnectionError>
+    where
+        C: tower_service::Service<Uri> + Send + 'static,
+        C::Response: hyper::rt::Read + hyper::rt::Write + Send + Unpin,
+        C::Future: Send,
+        tonic::codegen::StdError: From<C::Error> + Send,
+    {
         // check connection immediately
-        match endpoint.connect_with_connector(inner_connector).await {
+        match endpoint.connect_with_connector(connector).await {
             Ok(channel) => Ok(channel),
             Err(error) => Err(GrpcConnectionError::CannotConnect {
                 uri: endpoint.uri().to_string(),
