@@ -639,6 +639,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("pipeline_timeline_interval_ms", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Test instrumentation: records, per bucket of this many milliseconds, the time each processor spends waiting for input, waiting for output, queued, running and in async work, plus the growth of its profile statistics, and writes it to <log dir>/pipeline_timeline when the query ends. 0 disables it.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=60_000)),
+                }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",

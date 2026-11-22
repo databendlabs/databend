@@ -181,6 +181,7 @@ impl ExecutorWorkerContext {
             let begin = SystemTime::now();
             let instant = Instant::now();
 
+            proc.graph.timeline_running(proc.processor.id());
             let perf_enabled = payload.perf_enabled;
             if perf_enabled {
                 if let Some(counters) = &mut self.perf_counters {

@@ -82,6 +82,10 @@ use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::memory_limit_diagnostics::log_memory_limit_diagnostics;
 use crate::pipelines::executor::memory_limit_diagnostics::out_of_limit_error;
+use crate::pipelines::executor::pipeline_timeline::GraphTimeline;
+use crate::pipelines::executor::pipeline_timeline::NodeTimeline;
+use crate::pipelines::executor::pipeline_timeline::TimelineConfig;
+use crate::pipelines::executor::pipeline_timeline::TimelineState;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 
@@ -128,6 +132,7 @@ pub(crate) struct Node {
     pub(crate) processor: ProcessorPtr,
 
     pub(crate) tracking_payload: TrackingPayload,
+    timeline: Option<Arc<NodeTimeline>>,
     updated_list: Arc<UpdateList>,
     inputs_port: Vec<Arc<InputPort>>,
     outputs_port: Vec<Arc<OutputPort>>,
@@ -186,6 +191,7 @@ impl Node {
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
             tracking_payload,
+            timeline: None,
         })
     }
 
@@ -235,6 +241,9 @@ struct ExecutingGraph {
     waker: Arc<ExecutorWaker>,
     /// Perf event groups selected for this query (only set during EXPLAIN PERF).
     perf_event_groups: Vec<Vec<PerfEvent>>,
+    /// Kept only to be written when the graph is dropped; `None` unless
+    /// `pipeline_timeline_interval_ms`.
+    _timeline: Option<GraphTimeline>,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -246,6 +255,7 @@ impl ExecutingGraph {
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
         perf_event_groups: Vec<Vec<PerfEvent>>,
+        timeline: Option<TimelineConfig>,
     ) -> Result<ExecutingGraph> {
         let waker = pipeline.get_waker();
         let perf_enabled = !perf_event_groups.is_empty();
@@ -263,6 +273,7 @@ impl ExecutingGraph {
             &should_finish,
         );
         let executor_stats = ExecutorStats::new();
+        let timeline = Self::init_timeline(&mut graph, timeline);
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
@@ -277,6 +288,7 @@ impl ExecutingGraph {
             executor_stats,
             waker,
             perf_event_groups,
+            _timeline: timeline,
         })
     }
 
@@ -286,6 +298,7 @@ impl ExecutingGraph {
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
         perf_event_groups: Vec<Vec<PerfEvent>>,
+        timeline: Option<TimelineConfig>,
     ) -> Result<ExecutingGraph> {
         // Create a shared waker at the graph level
         let graph_waker = ExecutorWaker::create();
@@ -314,6 +327,7 @@ impl ExecutingGraph {
             );
         }
         let executor_stats = ExecutorStats::new();
+        let timeline = Self::init_timeline(&mut graph, timeline);
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             running_tasks: AtomicUsize::new(0),
@@ -328,7 +342,24 @@ impl ExecutingGraph {
             executor_stats,
             waker: graph_waker,
             perf_event_groups,
+            _timeline: timeline,
         })
+    }
+
+    fn init_timeline(
+        graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
+        config: Option<TimelineConfig>,
+    ) -> Option<GraphTimeline> {
+        let mut timeline = GraphTimeline::create(config?);
+        let node_indices: Vec<_> = graph.node_indices().collect();
+        for node_index in node_indices {
+            let node = Arc::get_mut(&mut graph[node_index])?;
+            if let Some(profile) = &node.tracking_payload.profile {
+                node.timeline = Some(timeline.register(profile));
+            }
+        }
+        timeline.start();
+        Some(timeline)
     }
 
     fn init_graph(
@@ -517,6 +548,9 @@ impl ExecutingGraph {
                             state_guard_cache = Some(node.state.lock().unwrap());
                         }
 
+                        if let Some(timeline) = &node.timeline {
+                            timeline.enter(Some(TimelineState::InEvent));
+                        }
                         let event = node.processor.event(event_cause)?;
                         let process_rows = ThreadTracker::process_rows();
                         match guard.flush() {
@@ -531,6 +565,15 @@ impl ExecutingGraph {
                         node.processor.name(),
                         event
                     );
+                    if let Some(timeline) = &node.timeline {
+                        timeline.enter(match event {
+                            Event::Finished => None,
+                            Event::NeedData => Some(TimelineState::NeedData),
+                            Event::NeedConsume => Some(TimelineState::NeedConsume),
+                            Event::Sync => Some(TimelineState::SyncQueued),
+                            Event::Async => Some(TimelineState::Async),
+                        });
+                    }
                     let processor_state = match event {
                         Event::Finished => {
                             if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
@@ -808,6 +851,7 @@ impl RunningGraph {
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
         perf_event_groups: Vec<Vec<PerfEvent>>,
+        timeline: Option<TimelineConfig>,
     ) -> Result<Arc<RunningGraph>> {
         let graph_state = ExecutingGraph::create(
             pipeline,
@@ -815,6 +859,7 @@ impl RunningGraph {
             query_id,
             finish_condvar_notify,
             perf_event_groups,
+            timeline,
         )?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
@@ -826,6 +871,7 @@ impl RunningGraph {
         query_id: Arc<String>,
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
         perf_event_groups: Vec<Vec<PerfEvent>>,
+        timeline: Option<TimelineConfig>,
     ) -> Result<Arc<RunningGraph>> {
         let graph_state = ExecutingGraph::from_pipelines(
             pipelines,
@@ -833,6 +879,7 @@ impl RunningGraph {
             query_id,
             finish_condvar_notify,
             perf_event_groups,
+            timeline,
         )?;
         debug!("Create running graph:{:?}", graph_state);
         Ok(Arc::new(RunningGraph(graph_state)))
@@ -858,6 +905,13 @@ impl RunningGraph {
 
     pub(crate) fn get_node_tracking_payload(&self, pid: NodeIndex) -> &TrackingPayload {
         &self.0.graph[pid].tracking_payload
+    }
+
+    /// A worker starts the `process` of the node.
+    pub(crate) fn timeline_running(&self, pid: NodeIndex) {
+        if let Some(timeline) = &self.0.graph[pid].timeline {
+            timeline.enter(Some(TimelineState::SyncRunning));
+        }
     }
 
     pub fn perf_event_groups(&self) -> &[Vec<PerfEvent>] {
@@ -1346,6 +1400,7 @@ mod tests {
             Arc::new("test-notify-before-diagnostics".to_string()),
             Some(finished.clone()),
             vec![],
+            None,
         )?;
 
         // Held like `DataExchangeManager::shutdown_query` does when it finishes

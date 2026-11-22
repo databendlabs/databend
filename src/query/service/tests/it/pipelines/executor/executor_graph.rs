@@ -251,7 +251,8 @@ async fn test_queries_executor_survives_event_panic() -> anyhow::Result<()> {
         )]));
         let finished = Finished::default();
         let query_id = Arc::new(format!("test-event-panic-{panic_event:?}"));
-        let graph = RunningGraph::create(pipeline, 1, query_id, Some(finished.clone()), vec![])?;
+        let graph =
+            RunningGraph::create(pipeline, 1, query_id, Some(finished.clone()), vec![], None)?;
         Ok((graph, finished))
     };
     let wait = |finished: &Finished| {
@@ -519,6 +520,7 @@ async fn test_sync_process_observes_graph_interrupt() -> anyhow::Result<()> {
         Arc::new("test-sync-process-interrupt".to_string()),
         None,
         vec![],
+        None,
     )?;
     let mut queue = unsafe { graph.clone().init_schedule_queue(0)? };
     let processor = queue
@@ -623,6 +625,7 @@ async fn test_format_top_memory_plan_nodes() -> anyhow::Result<()> {
         Arc::new("test-top-memory-plan-nodes".to_string()),
         None,
         vec![],
+        None,
     )?;
 
     let mut context = ExecutorWorkerContext::create(1, WorkersCondvar::create(1));
@@ -666,7 +669,7 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![], None)
 }
 
 fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -678,7 +681,7 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<Running
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![], None)
 }
 
 fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -694,7 +697,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![], None)
 }
 
 fn create_memory_tracking_pipeline(
@@ -894,6 +897,7 @@ async fn create_executor_with_simple_pipeline(
         max_threads: 8,
         executor_node_id: "".to_string(),
         perf_event_groups: vec![],
+        timeline: None,
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

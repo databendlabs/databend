@@ -132,6 +132,8 @@ struct RemoteInstanceState {
     in_flight: VecDeque<Vec<OwnedSemaphorePermit>>,
     /// Quota held by `in_flight`.
     in_flight_bytes: usize,
+    /// When each frame in flight was sent and its size, in send order.
+    in_flight_sent: VecDeque<(Instant, usize)>,
     /// Since when queued data waits for room in flight.
     held_back_since: Option<Instant>,
     /// First terminal error; checked under the same lock before every enqueue.
@@ -167,6 +169,8 @@ impl RemoteInstanceState {
         }
         self.in_flight_bytes += permits.iter().map(|p| p.num_permits()).sum::<usize>();
         self.in_flight.push_back(permits);
+        self.in_flight_sent
+            .push_back((Instant::now(), flight_data_size(&flight)));
         Some(flight)
     }
 
@@ -178,9 +182,12 @@ impl RemoteInstanceState {
     }
 
     /// Release the quota of the oldest frame in flight, answered by a response.
-    fn acknowledge(&mut self) {
+    fn acknowledge(&mut self, profile: &SendProfile) {
         if let Some(permits) = self.in_flight.pop_front() {
             self.in_flight_bytes -= permits.iter().map(|p| p.num_permits()).sum::<usize>();
+        }
+        if let Some((sent, bytes)) = self.in_flight_sent.pop_front() {
+            profile.record_acked(sent.elapsed(), bytes);
         }
     }
 
@@ -191,6 +198,7 @@ impl RemoteInstanceState {
 
         self.pending.items.clear();
         self.in_flight.clear();
+        self.in_flight_sent.clear();
         self.in_flight_bytes = 0;
         self.held_back_since = None;
     }
@@ -211,6 +219,7 @@ impl RemoteInstance {
                 pending: PendingSendQueue::default(),
                 in_flight: VecDeque::new(),
                 in_flight_bytes: 0,
+                in_flight_sent: VecDeque::new(),
                 held_back_since: None,
                 last_error: None,
             }),
@@ -231,6 +240,18 @@ impl SendProfile {
             && let Some(profile) = Profile::current()
         {
             let _ = self.0.set(profile);
+        }
+    }
+
+    /// A frame of `bytes` was answered `round_trip` after it was sent.
+    fn record_acked(&self, round_trip: Duration, bytes: usize) {
+        if let Some(profile) = self.0.get() {
+            profile.record_usize(
+                ProfileStatisticsName::ExchangeFrameRoundTripTime,
+                round_trip.as_nanos() as usize,
+            );
+            profile.record_usize(ProfileStatisticsName::ExchangeFramesAcked, 1);
+            profile.record_usize(ProfileStatisticsName::ExchangeAckedBytes, bytes);
         }
     }
 
@@ -314,7 +335,7 @@ impl ExchangeSendBufferState {
         let remote = &self.remotes[dest_idx];
 
         let Some(status) = status else {
-            remote.state.lock().acknowledge();
+            remote.state.lock().acknowledge(&self.profile);
             return self.flush_remote(dest_idx, true);
         };
 
