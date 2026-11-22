@@ -655,7 +655,7 @@ fn size_from_file_system(tenant_root: &Path, watermark_ratio: u64) -> Result<u64
 /// Bytes the files under `tenant_root` take on disk, which deleting them frees: their blocks,
 /// as `available` counts, not their lengths, smaller for files of a fraction of a block. Files
 /// it could not see count for none, sizing the cache smaller.
-fn cached_bytes(tenant_root: &Path) -> u64 {
+pub fn cached_bytes(tenant_root: &Path) -> u64 {
     // Not held to the memory limit, on this thread or the workers', like the restart scan.
     let _unlimited = LimitMemGuard::enter_unlimited();
     let complete = AtomicBool::new(true);

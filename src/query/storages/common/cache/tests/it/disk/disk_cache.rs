@@ -26,6 +26,7 @@ use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::MAX_AUTO_DISK_CACHE_BYTES;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::auto_max_bytes;
+use databend_storages_common_cache::cached_bytes;
 use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
@@ -410,6 +411,39 @@ fn test_auto_max_bytes_is_the_room_below_the_watermark() {
         auto_max_bytes(u64::MAX, u64::MAX, u64::MAX, 90),
         MAX_AUTO_DISK_CACHE_BYTES
     );
+}
+
+/// The files of a previous run count by the blocks they take, which deleting them frees, as
+/// `du` reports it: for files much smaller than a block, far more than their lengths.
+#[test]
+fn test_cached_bytes_counts_the_blocks_files_take() {
+    use std::os::unix::fs::MetadataExt;
+    let dir = TempDir::new().unwrap();
+    assert_eq!(cached_bytes(&dir.path().join("missing")), 0);
+    let mut lengths = 0;
+    let mut blocks = 0;
+    for (i, layout) in [
+        "v2/data/memory_cache_column_data/abc",
+        "v1",
+        "v2.reset/meta",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let sub = dir.path().join(layout);
+        std::fs::create_dir_all(&sub).unwrap();
+        for j in 0..1000 {
+            let file = sub.join(format!("{i}_{j}"));
+            std::fs::write(&file, [0u8; 100]).unwrap();
+            lengths += 100;
+            blocks += std::fs::metadata(&file).unwrap().blocks() * 512;
+        }
+    }
+    assert_eq!(cached_bytes(dir.path()), blocks);
+    // Some file systems keep small files inline, in no block.
+    if blocks > 0 {
+        assert!(blocks > lengths, "{blocks} <= {lengths}");
+    }
 }
 
 /// An entry whose file is gone (deleted behind the cache) is a miss and leaves the index.

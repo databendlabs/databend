@@ -157,22 +157,14 @@ fn file_system_space(path: &std::path::Path) -> (u64, u64) {
 }
 
 /// `max_bytes` unset sizes the disk cache at start from the file system under `path`: the room
-/// below the watermark, split among the pools by their ratios. The files of the previous run
-/// count as room, by the space they take: the cache is as large as without them.
+/// below the watermark, split among the pools by their ratios. How the files of a previous run
+/// count is `test_cached_bytes_counts_the_blocks_files_take`.
 #[test]
 fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
-    // Other tests change what the file system has available meanwhile.
-    const SLACK: u64 = 24 * MIB;
     let dir = TempDir::new().unwrap();
     let (total, before) = file_system_space(dir.path());
-    // Files much smaller than a block: 16384 of 100 bytes take 64 MiB of 4 KiB blocks for
-    // 1.6 MB of length, so leaving them out or counting their lengths misses it by more than
-    // the slack.
-    let old_layout = dir.path().join("test_tenant").join("v1");
-    std::fs::create_dir_all(&old_layout).unwrap();
-    for i in 0..16384 {
-        std::fs::write(old_layout.join(format!("entry_{i}")), [0u8; 100]).unwrap();
-    }
+    // Other tests write to the file system meanwhile.
+    let slack = (total / 100).max(1 << 30);
     let config = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
             max_bytes: None,
@@ -183,10 +175,11 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
         ..disk_config(&dir)
     };
     let manager = manager(&config, true);
+    let (_, after) = file_system_space(dir.path());
     let max_bytes = manager.disk().unwrap().max_bytes();
-    let without_them = auto_max_bytes(total, before, 0, MAX_AUTO_WATERMARK_RATIO);
-    let low = without_them.saturating_sub(SLACK);
-    let high = without_them + SLACK;
+    let room = |available| auto_max_bytes(total, available, 0, MAX_AUTO_WATERMARK_RATIO);
+    let low = room(before.min(after)).saturating_sub(slack);
+    let high = room(before.max(after)) + slack;
     assert!(
         (low..=high).contains(&max_bytes),
         "{max_bytes} not in {low}..={high}"
