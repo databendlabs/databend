@@ -1080,6 +1080,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_recluster_early_virtual_column", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Extract virtual columns while reading recluster input instead of in the block writer.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),
                     desc: "Sets the seconds that recluster final will be timeout.",

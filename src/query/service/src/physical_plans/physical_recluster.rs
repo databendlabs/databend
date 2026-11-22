@@ -41,6 +41,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
@@ -58,9 +59,11 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::VirtualColumnExtractor;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
 use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::ReclusterTaskBudget;
+use databend_common_storages_fuse::operations::TransformExtractVirtualColumns;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
 use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -294,6 +297,17 @@ impl Recluster {
                 .fields()
                 .iter()
                 .any(|field| matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))));
+        let virtual_column_extractor = Self::virtual_column_extractor(
+            table,
+            task,
+            multiway_merge,
+            settings.get_enable_recluster_early_virtual_column()?,
+        );
+        // `task.total_bytes` does not include the extracted virtual columns, which
+        // roughly hold the Variant values a second time. Without sort spill the
+        // check below can therefore admit a task that then needs more memory than
+        // budgeted; disable `enable_recluster_early_virtual_column` to restore the
+        // previous footprint.
         if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
             let max_memory_usage = settings.get_max_memory_usage()? as usize;
             // `max_memory_usage == 0` means memory usage is unlimited.
@@ -349,13 +363,32 @@ impl Recluster {
             );
         }
 
-        let input_schema = DataSchema::from(table.schema_with_stream()).into();
+        // Extracted virtual columns sit between the source and the temporary key
+        // columns, so the pipeline generator places sort and cluster keys after
+        // them. The writer removes them first and uses a generator of the source
+        // columns only.
+        let source_schema = Arc::new(DataSchema::from(table.schema_with_stream()));
+        let mut num_extracted_columns = 0;
+        let mut input_fields = source_schema.fields().clone();
+        if let Some(extractor) = &virtual_column_extractor {
+            num_extracted_columns = extractor.num_columns();
+            input_fields.extend(extractor.fields());
+        }
         let mut cluster_stats_gen = table.get_cluster_stats_gen(
             builder.ctx.clone(),
             task.level + 1,
             block_thresholds,
-            input_schema,
+            DataSchemaRefExt::create(input_fields),
         )?;
+        let mut writer_cluster_stats_gen = cluster_stats_gen.clone();
+        if virtual_column_extractor.is_some() {
+            writer_cluster_stats_gen = table.get_cluster_stats_gen(
+                builder.ctx.clone(),
+                task.level + 1,
+                block_thresholds,
+                source_schema,
+            )?;
+        }
         let index_merge = match multiway_merge {
             true if settings.get_enable_recluster_inverted_index_merge()?
                 && !table.schema().fields().iter().any(|field| {
@@ -393,7 +426,7 @@ impl Recluster {
                 max_io_requests,
             )?;
 
-            let num_input_columns = schema.fields().len();
+            let mut num_input_columns = schema.fields().len();
             if table.change_tracking_enabled() {
                 let stream_ctx = StreamContext::try_create(
                     builder.ctx.get_function_context()?,
@@ -406,6 +439,13 @@ impl Recluster {
                 builder
                     .main_pipeline
                     .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
+            }
+
+            if let Some(extractor) = &virtual_column_extractor {
+                builder
+                    .main_pipeline
+                    .add_transformer(|| TransformExtractVirtualColumns::new(extractor.clone()));
+                num_input_columns += num_extracted_columns;
             }
 
             if !cluster_stats_gen.eval_operators.is_empty() {
@@ -461,6 +501,7 @@ impl Recluster {
                 rows_per_block,
                 compact_thresholds,
                 max_threads,
+                num_extracted_columns,
             )?;
         } else {
             Self::build_regular_layout_pipeline(
@@ -470,6 +511,7 @@ impl Recluster {
                 rows_per_block,
                 compact_thresholds,
                 max_threads,
+                num_extracted_columns,
             )?;
         }
 
@@ -501,6 +543,8 @@ impl Recluster {
                     merged_names: merged_names.clone(),
                 });
         }
+        // Layout pipelines may add temporary keys, e.g. the Hilbert value.
+        writer_cluster_stats_gen.extra_key_num = cluster_stats_gen.extra_key_num;
         let virtual_column_layout = task.virtual_column_layout.clone();
         let query_ctx = builder.ctx.clone();
         // All layouts share the ordinary block statistics and serialization path after
@@ -514,7 +558,7 @@ impl Recluster {
                         transform_input_port,
                         transform_output_port,
                         table,
-                        cluster_stats_gen.clone(),
+                        writer_cluster_stats_gen.clone(),
                         MutationKind::Recluster,
                         Arc::new(layout.clone()),
                         self.table_meta_timestamps,
@@ -524,10 +568,14 @@ impl Recluster {
                         transform_input_port,
                         transform_output_port,
                         table,
-                        cluster_stats_gen.clone(),
+                        writer_cluster_stats_gen.clone(),
                         MutationKind::Recluster,
                         self.table_meta_timestamps,
                     )?,
+                };
+                let proc = match &virtual_column_extractor {
+                    Some(extractor) => proc.with_virtual_column_extractor(extractor.clone())?,
+                    None => proc,
                 };
                 proc.into_processor()
             },
@@ -547,6 +595,32 @@ impl Recluster {
 }
 
 impl Recluster {
+    /// Extractor for virtual columns before the sort. `None` keeps the extraction
+    /// in the block writer: no planned layout, the multiway merge reader, and
+    /// pipelines that change rows after compaction or serialize a schema other
+    /// than the one read.
+    fn virtual_column_extractor(
+        table: &FuseTable,
+        task: &ReclusterTask,
+        multiway_merge: bool,
+        enabled: bool,
+    ) -> Option<Arc<VirtualColumnExtractor>> {
+        if !enabled || multiway_merge || !table.enable_virtual_column() {
+            return None;
+        }
+        if is_materialized_view_engine(table.engine()) {
+            return None;
+        }
+        for field in table.schema().fields() {
+            if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
+                return None;
+            }
+        }
+        let layout = task.virtual_column_layout.as_ref()?;
+        let extractor = VirtualColumnExtractor::try_create(&table.schema_with_stream(), layout)?;
+        Some(Arc::new(extractor))
+    }
+
     fn build_hilbert_layout_pipeline(
         builder: &mut PipelineBuilder,
         task: &ReclusterTask,
@@ -554,6 +628,7 @@ impl Recluster {
         rows_per_block: usize,
         compact_thresholds: BlockThresholds,
         max_threads: usize,
+        num_extracted_columns: usize,
     ) -> Result<()> {
         let dimension_offsets = cluster_stats_gen.hilbert_dimension_offsets()?;
         let worker_count = builder.main_pipeline.output_len().max(1);
@@ -619,7 +694,7 @@ impl Recluster {
         // The ordinary cluster statistics generator removes all trailing temporary columns before
         // serialization; include the task-local Hilbert sort key.
         cluster_stats_gen.extra_key_num += 1;
-        let extra_key_num = cluster_stats_gen.extra_key_num;
+        let extra_key_num = cluster_stats_gen.extra_key_num + num_extracted_columns;
         pipeline.add_accumulating_transformer(move || {
             OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
         });
@@ -654,6 +729,7 @@ impl Recluster {
         rows_per_block: usize,
         compact_thresholds: BlockThresholds,
         max_threads: usize,
+        num_extracted_columns: usize,
     ) -> Result<()> {
         if let Some(vector_operator) = cluster_stats_gen.vector_operator() {
             let vector_column_input_offset = vector_operator.vector_column_input_offset;
@@ -690,7 +766,8 @@ impl Recluster {
         )?;
 
         builder.main_pipeline.try_resize(1)?;
-        let extra_key_num = cluster_stats_gen.extra_key_num;
+        // Ordered compact sizes blocks by their leading source columns only.
+        let extra_key_num = cluster_stats_gen.extra_key_num + num_extracted_columns;
         builder.main_pipeline.add_accumulating_transformer(move || {
             OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
         });

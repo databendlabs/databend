@@ -76,6 +76,7 @@ use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::block_index::collect_inverted_index_metas;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
+use crate::io::write::virtual_column_extractor::VirtualColumnExtractor;
 use crate::operations::column_parquet_metas;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::ClusterStatsState;
@@ -157,6 +158,9 @@ pub struct BlockBuilder {
     pub top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
     pub block_index_specs: Vec<Arc<dyn BlockIndexSpec>>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
+    /// Set when input blocks carry the columns of `VirtualColumnExtractor`
+    /// between the source and the temporary key columns.
+    pub virtual_column_extractor: Option<Arc<VirtualColumnExtractor>>,
     pub json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
     /// Indicates whether column_hlls should be serialized into RawBlockHLL
@@ -168,6 +172,11 @@ pub struct BlockBuilder {
 impl BlockBuilder {
     pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<ClusterStatsState> {
+        let mut extracted_virtual_columns = Vec::new();
+        let mut data_block = data_block;
+        if let Some(extractor) = &self.virtual_column_extractor {
+            (data_block, extracted_virtual_columns) = extractor.split(data_block)?;
+        }
         let partition_stats = self
             .cluster_stats_gen
             .extract_partition_stats(&data_block)?;
@@ -241,7 +250,14 @@ impl BlockBuilder {
         let virtual_column_state =
             if let Some(ref virtual_column_builder) = self.virtual_column_builder {
                 let mut virtual_column_builder = virtual_column_builder.clone();
-                virtual_column_builder.add_block(&data_block)?;
+                match &self.virtual_column_extractor {
+                    Some(extractor) => virtual_column_builder.add_extracted_columns(
+                        extractor,
+                        &extracted_virtual_columns,
+                        data_block.num_rows(),
+                    )?,
+                    None => virtual_column_builder.add_block(&data_block)?,
+                }
                 let virtual_column_state =
                     virtual_column_builder.finalize(&self.write_settings, &block_location)?;
                 Some(virtual_column_state)

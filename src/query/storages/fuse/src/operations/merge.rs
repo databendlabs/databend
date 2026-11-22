@@ -120,6 +120,7 @@ impl FuseTable {
             top_n: None,
             block_index_specs,
             virtual_column_builder: None,
+            virtual_column_extractor: None,
             json_path_statistics_builder,
             table_meta_timestamps,
             serialize_hll: true,
