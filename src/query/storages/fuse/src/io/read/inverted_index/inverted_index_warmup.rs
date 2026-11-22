@@ -17,14 +17,15 @@ use std::collections::HashSet;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_index::FooterDirectory;
+use databend_storages_common_cache::MemCache;
+use databend_storages_common_index::InvertedIndexSearcher;
+use databend_storages_common_index::InvertedIndexTermInfo;
 use futures_util::future;
 use tantivy::Directory;
 use tantivy::Searcher;
-use tantivy::SegmentReader;
 use tantivy::Term;
-use tantivy::index::Segment;
 use tantivy::index::SegmentComponent;
+use tantivy::query::Bm25StatisticsProvider;
 use tantivy::query::Query;
 use tantivy::query_grammar::UserInputAst;
 use tantivy::query_grammar::UserInputLeaf;
@@ -176,65 +177,43 @@ impl InvertedIndexWarmupInfo {
             .retain(|field| !self.full_posting_fields.contains_key(field));
     }
 
-    pub(crate) async fn warm_searcher(
-        &self,
-        searcher: &Searcher,
-        raw_bundle_directory: &FooterDirectory,
+    /// Pins what the synchronous search needs, and returns the statistics to score it with.
+    /// Run it in the `with_search_scope` of the search: the postings and positions it warms are
+    /// pinned for that search only. Term infos are cached in `term_infos` as its policy allows.
+    pub(crate) async fn warm_searcher<'a>(
+        &'a self,
+        searcher: &'a InvertedIndexSearcher,
+        term_infos: &MemCache<InvertedIndexTermInfo>,
         has_score: bool,
-    ) -> Result<()> {
-        let segments = searcher.index().searchable_segments()?;
-        let segments_by_id = segments
-            .iter()
-            .map(|segment| (segment.id(), segment))
-            .collect::<HashMap<_, _>>();
-        // Match IDs, not list positions: the Searcher and Index need not use the same order.
-        let readers = searcher
-            .segment_readers()
-            .iter()
-            .map(|reader| {
-                let segment = segments_by_id
-                    .get(&reader.segment_id())
-                    .copied()
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(
-                            "inverted-index warmup segment is missing from the index",
-                        )
-                    })?;
-                Ok((reader, segment))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        tokio::try_join!(
-            self.warm_metadata(searcher, &readers, has_score),
-            self.warm_payload(&readers, raw_bundle_directory),
+    ) -> Result<SearchStatistics<'a>> {
+        let (_, doc_freqs) = tokio::try_join!(
+            self.warm_metadata(searcher, has_score),
+            self.warm_payload(searcher, term_infos),
         )?;
-        Ok(())
+        Ok(SearchStatistics {
+            searcher: searcher.searcher(),
+            doc_freqs,
+        })
     }
 
     /// Dictionary, fieldnorm, and fast-field reads do not depend on payload downloads.
-    async fn warm_metadata(
-        &self,
-        searcher: &Searcher,
-        readers: &[(&SegmentReader, &Segment)],
-        has_score: bool,
-    ) -> Result<()> {
-        let dictionary_fields = self
-            .dictionary_fields
-            .iter()
-            .chain(self.full_posting_fields.keys())
-            .copied()
-            .collect::<HashSet<_>>();
+    async fn warm_metadata(&self, searcher: &InvertedIndexSearcher, has_score: bool) -> Result<()> {
+        let reader = searcher.segment_reader();
         let warm_dictionaries = async {
-            let warmups = readers.iter().flat_map(|(reader, _)| {
-                dictionary_fields.iter().map(move |&field| async move {
-                    // Footer open-slices already cover synchronous inverted-index setup.
-                    reader
-                        .inverted_index(field)?
-                        .terms()
-                        .warm_up_dictionary()
-                        .await?;
-                    Ok::<(), ErrorCode>(())
-                })
+            let fields = self
+                .dictionary_fields
+                .iter()
+                .chain(self.full_posting_fields.keys())
+                .copied()
+                .collect::<HashSet<_>>();
+            let warmups = fields.into_iter().map(|field| async move {
+                // Footer open-slices already cover synchronous inverted-index setup.
+                reader
+                    .inverted_index(field)?
+                    .terms()
+                    .warm_up_dictionary()
+                    .await?;
+                Ok::<(), ErrorCode>(())
             });
             future::try_join_all(warmups).await?;
             Ok::<(), ErrorCode>(())
@@ -248,36 +227,32 @@ impl InvertedIndexWarmupInfo {
                     .copied()
                     .chain(self.exact_postings.keys().map(Term::field))
                     .collect::<HashSet<_>>();
-                let warmups = readers.iter().flat_map(|(reader, _)| {
-                    let fieldnorms = reader.fieldnorms_readers().get_inner_file();
-                    fields
-                        .iter()
-                        .filter_map(move |&field| fieldnorms.open_read(field))
-                        .map(|file| async move {
-                            file.read_bytes_async().await?;
-                            Ok::<(), ErrorCode>(())
-                        })
-                });
+                let fieldnorms = reader.fieldnorms_readers().get_inner_file();
+                let warmups = fields
+                    .into_iter()
+                    .filter_map(|field| fieldnorms.open_read(field))
+                    .map(|file| async move {
+                        file.read_bytes_async().await?;
+                        Ok::<(), ErrorCode>(())
+                    });
                 future::try_join_all(warmups).await?;
             }
             Ok::<(), ErrorCode>(())
         };
 
         let warm_fast_fields = async {
+            let schema = searcher.searcher().schema();
             if self
                 .fast_fields
                 .iter()
-                .any(|field| searcher.schema().get_field_entry(*field).is_fast())
+                .any(|field| schema.get_field_entry(*field).is_fast())
             {
                 // Pin the complete managed .fast component, irrespective of the JSON path.
-                let warmups = readers.iter().map(|(_, segment)| async move {
-                    segment
-                        .open_read(SegmentComponent::FastFields)?
-                        .read_bytes_async()
-                        .await?;
-                    Ok::<(), ErrorCode>(())
-                });
-                future::try_join_all(warmups).await?;
+                searcher
+                    .segment()
+                    .open_read(SegmentComponent::FastFields)?
+                    .read_bytes_async()
+                    .await?;
             }
             Ok::<(), ErrorCode>(())
         };
@@ -286,49 +261,125 @@ impl InvertedIndexWarmupInfo {
         Ok(())
     }
 
-    /// Within each segment, pin full components before warming exact terms on other fields.
-    /// Segments progress independently; a slow full read does not block another segment's terms.
+    /// Pins full components before warming exact terms on other fields, and returns the
+    /// document frequencies of the exact terms.
     async fn warm_payload(
         &self,
-        readers: &[(&SegmentReader, &Segment)],
-        raw_bundle_directory: &FooterDirectory,
-    ) -> Result<()> {
-        let with_positions = self
-            .full_posting_fields
-            .values()
-            .any(|positions| *positions);
-        let warmups = readers.iter().map(|(reader, segment)| async move {
-            if !self.full_posting_fields.is_empty() {
-                // Field slices exclude managed/composite footers and the .idx token-count header.
-                // Read physical components through the raw directory to populate the full pool.
-                let components = [SegmentComponent::Postings, SegmentComponent::Positions];
-                let count = if with_positions { 2 } else { 1 };
-                let full_reads = components[..count].iter().map(|&component| async move {
-                    raw_bundle_directory
-                        .open_read(&segment.relative_path(component))?
-                        .read_bytes_async()
-                        .await?;
-                    Ok::<(), ErrorCode>(())
-                });
-                future::try_join_all(full_reads).await?;
-            }
+        searcher: &InvertedIndexSearcher,
+        term_infos: &MemCache<InvertedIndexTermInfo>,
+    ) -> Result<HashMap<&Term, u64>> {
+        if !self.full_posting_fields.is_empty() {
+            let with_positions = self
+                .full_posting_fields
+                .values()
+                .any(|positions| *positions);
+            // Field slices exclude managed/composite footers and the .idx token-count header.
+            // Read physical components through the raw directory to populate the full pool.
+            let components = [SegmentComponent::Postings, SegmentComponent::Positions];
+            let count = if with_positions { 2 } else { 1 };
+            let full_reads = components[..count].iter().map(|&component| async move {
+                searcher
+                    .directory()
+                    .open_read(&searcher.segment().relative_path(component))?
+                    .read_bytes_async()
+                    .await?;
+                Ok::<(), ErrorCode>(())
+            });
+            future::try_join_all(full_reads).await?;
+        }
 
-            // Do not overlap exact page reads with a full read of the same component.
-            let term_reads = self
-                .exact_postings
-                .iter()
-                .map(|(term, &positions)| async move {
-                    reader
-                        .inverted_index(term.field())?
-                        .warm_postings(term, positions)
-                        .await?;
-                    Ok::<(), ErrorCode>(())
-                });
-            future::try_join_all(term_reads).await?;
-            Ok::<(), ErrorCode>(())
-        });
-        future::try_join_all(warmups).await?;
-        Ok(())
+        // Do not overlap exact page reads with a full read of the same component.
+        let term_reads = self
+            .exact_postings
+            .iter()
+            .map(|(term, &positions)| async move {
+                let doc_freq = warm_term(searcher, term_infos, term, positions).await?;
+                Ok::<_, ErrorCode>((term, doc_freq))
+            });
+        Ok(future::try_join_all(term_reads)
+            .await?
+            .into_iter()
+            .collect())
+    }
+}
+
+/// Pins the postings of `term`, and its positions if asked, as `warm_postings` does, and returns
+/// its document frequency. Its term info is looked up once per searcher: `term_infos` keeps it
+/// for the later searches of the searcher, which read neither its dictionary block nor, to
+/// score it, the dictionary again. Only this lookup puts term infos: through the shared pin of
+/// the searcher, it pins the dictionary block that the synchronous search reads.
+async fn warm_term(
+    searcher: &InvertedIndexSearcher,
+    term_infos: &MemCache<InvertedIndexTermInfo>,
+    term: &Term,
+    with_positions: bool,
+) -> Result<u64> {
+    let key = searcher.term_key(term);
+    let info = match term_infos.lookup(&key) {
+        Some(cached) => cached.info.clone(),
+        None => {
+            let info = searcher
+                .segment_reader()
+                .inverted_index(term.field())?
+                .terms()
+                .get_async(term.serialized_value_bytes())
+                .await?;
+            let key_len = key.len();
+            term_infos.fill(&key, InvertedIndexTermInfo {
+                info: info.clone(),
+                key_len,
+            });
+            info
+        }
+    };
+    let Some(info) = info else {
+        return Ok(0);
+    };
+    let slices = searcher.field_postings(term.field())?;
+    let postings = slices
+        .postings
+        .read_bytes_slice_async(info.postings_range.clone());
+    match (with_positions, &slices.positions) {
+        (false, _) => {
+            postings.await?;
+        }
+        (true, Some(positions)) => {
+            let positions = positions.read_bytes_slice_async(info.positions_range.clone());
+            future::try_join(postings, positions).await?;
+        }
+        (true, None) => {
+            searcher
+                .segment_reader()
+                .inverted_index(term.field())?
+                .warm_postings(term, true)
+                .await?;
+        }
+    }
+    Ok(u64::from(info.doc_freq))
+}
+
+/// The BM25 statistics of a search. Its warmup looked its exact terms up: their document
+/// frequencies are not looked up in the dictionary again.
+pub(crate) struct SearchStatistics<'a> {
+    searcher: &'a Searcher,
+    doc_freqs: HashMap<&'a Term, u64>,
+}
+
+impl Bm25StatisticsProvider for SearchStatistics<'_> {
+    fn total_num_tokens(&self, field: Field) -> tantivy::Result<u64> {
+        self.searcher.total_num_tokens(field)
+    }
+
+    fn total_num_docs(&self) -> tantivy::Result<u64> {
+        self.searcher.total_num_docs()
+    }
+
+    fn doc_freq(&self, term: &Term) -> tantivy::Result<u64> {
+        match self.doc_freqs.get(term) {
+            // One segment: the frequency in it is the frequency in the index.
+            Some(doc_freq) => Ok(*doc_freq),
+            None => self.searcher.doc_freq(term),
+        }
     }
 }
 
