@@ -3851,9 +3851,9 @@ pub struct DiskCacheConfig {
     )]
     pub queue_wait_ms: u64,
 
-    /// Percent of the file system in use above which the disk cache evicts before it writes:
-    /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
-    /// Read at start only.
+    /// Percent of the file system in use, of its space or its inodes, above which the disk cache
+    /// evicts before it writes: other files share the disk, spill files among them. 1 to 100;
+    /// 100 never evicts for it. Read at start only.
     #[clap(
         long = "cache-disk-watermark-ratio",
         id = "cache_disk_watermark_ratio",
