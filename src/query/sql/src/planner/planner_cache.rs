@@ -82,6 +82,7 @@ impl Planner {
         &self,
         name_resolution_ctx: NameResolutionContext,
         stmt: &Statement,
+        distributed: bool,
     ) -> Result<Option<PlanCacheContext>> {
         if !matches!(stmt, Statement::Query(_))
             || !self.ctx.get_settings().get_enable_planner_cache()?
@@ -112,8 +113,12 @@ impl Planner {
             .map(|source| mv_fingerprint(source.1, &mv_source_bindings[source]))
             .collect::<Vec<_>>();
 
-        let cache_key =
-            self.planner_cache_key_for_stmt(stmt, visitor.has_security_policy, &mv_fingerprints)?;
+        let cache_key = self.planner_cache_key_for_stmt(
+            stmt,
+            visitor.has_security_policy,
+            &mv_fingerprints,
+            distributed,
+        )?;
         Ok(Some(PlanCacheContext {
             cache_key,
             table_snapshots: visitor.table_snapshots,
@@ -144,25 +149,31 @@ impl Planner {
         Some(bindings)
     }
 
+    /// `distributed` tells whether the statement is optimized for distributed execution. A
+    /// distributed plan fails where the same statement is planned locally, such as in the
+    /// single-node context of the task service, and a local plan leaves a cluster unused.
     fn planner_cache_key_for_stmt(
         &self,
         stmt: &Statement,
         has_security_policy: bool,
         mv_fingerprints: &[String],
+        distributed: bool,
     ) -> Result<String> {
         let mv_fingerprint = mv_fingerprints.join("\0");
+        let distribution = if distributed { "distributed" } else { "local" };
         if has_security_policy {
             return Ok(Self::planner_cache_key(&format!(
-                "{}\0{}\0{}",
+                "{}\0{}\0{}\0{}",
                 self.security_policy_cache_key_prefix()?,
+                distribution,
                 mv_fingerprint,
                 stmt
             )));
         }
 
         Ok(Self::planner_cache_key(&format!(
-            "{}\0{}",
-            mv_fingerprint, stmt
+            "{}\0{}\0{}",
+            distribution, mv_fingerprint, stmt
         )))
     }
 
