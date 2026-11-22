@@ -385,9 +385,9 @@ mod tests {
         let file = Bytes::from(file);
         let reader = SerializedFileReader::new(file.clone()).unwrap();
         let (start, len) = reader.metadata().row_group(0).column(0).byte_range();
-        let chunk = file.slice(start as usize..(start + len) as usize);
+        let chunk = Buffer::from(file.slice(start as usize..(start + len) as usize));
         assert!(crate::io::read::block::parquet::page_header::all_pages_dictionary_encoded(&chunk));
-        Buffer::from(chunk)
+        chunk
     }
 
     fn decoded_strings(column: &Column) -> Vec<String> {

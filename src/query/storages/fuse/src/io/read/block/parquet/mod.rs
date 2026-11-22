@@ -77,7 +77,7 @@ impl BlockReader {
                     && matches!(
                         column_chunks.get(&field.column_id),
                         Some(DataItem::RawData(chunk))
-                            if dictionary_len(&chunk.to_bytes()).is_some_and(|len| {
+                            if dictionary_len(chunk).is_some_and(|len| {
                                 len > 0
                                     && len as u64 * 100
                                         <= num_rows as u64 * self.dictionary_ndv_ratio

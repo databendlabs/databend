@@ -86,7 +86,7 @@ impl<'a> RowGroupImplBuilder<'a> {
     pub fn all_pages_dictionary_encoded(&self, dfs_id: usize) -> bool {
         self.column_chunks
             .get(&dfs_id)
-            .is_some_and(|chunk| all_pages_dictionary_encoded(&chunk.to_bytes()))
+            .is_some_and(all_pages_dictionary_encoded)
     }
 
     pub fn build(self) -> RowGroupImpl {

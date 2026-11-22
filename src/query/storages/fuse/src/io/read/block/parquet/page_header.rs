@@ -16,6 +16,9 @@
 //! encoding of its pages without decompressing them. The parquet crate does not expose page
 //! encodings without reading the pages.
 
+use bytes::Bytes;
+use opendal::Buffer;
+
 const DATA_PAGE: i32 = 0;
 const DICTIONARY_PAGE: i32 = 2;
 const DATA_PAGE_V2: i32 = 3;
@@ -39,17 +42,23 @@ const STRUCT: u8 = 12;
 /// Whether the column chunk starts with a dictionary page and all its data pages are
 /// dictionary encoded, i.e. the writer did not fall back to plain pages once the dictionary
 /// grew too large. `false` if a page header cannot be read.
-pub fn all_pages_dictionary_encoded(chunk: &[u8]) -> bool {
+pub fn all_pages_dictionary_encoded(chunk: &Buffer) -> bool {
     dictionary_len(chunk).is_some()
 }
 
 /// The number of values of the dictionary of the column chunk, if it is dictionary encoded
-/// throughout (see [`all_pages_dictionary_encoded`]).
-pub fn dictionary_len(chunk: &[u8]) -> Option<usize> {
-    let mut input = Input { buf: chunk, pos: 0 };
+/// throughout (see [`all_pages_dictionary_encoded`]). Reads the chunk in place: a local file
+/// read keeps a chunk in several pieces, and only the page headers are needed.
+pub fn dictionary_len(chunk: &Buffer) -> Option<usize> {
+    let parts: Vec<Bytes> = chunk.clone().collect();
+    let mut input = Input {
+        parts: &parts,
+        part: 0,
+        pos: 0,
+    };
     let mut dictionary_len = None;
     let mut data_pages = 0;
-    while input.pos < chunk.len() {
+    while !input.at_end() {
         let header = PageHeader::read(&mut input)?;
         match header.page_type {
             DICTIONARY_PAGE if dictionary_len.is_none() => {
@@ -107,21 +116,41 @@ impl PageHeader {
     }
 }
 
+/// A position in a chunk stored in `parts`.
 struct Input<'a> {
-    buf: &'a [u8],
+    parts: &'a [Bytes],
+    part: usize,
+    /// Offset in `parts[part]`.
     pos: usize,
 }
 
 impl Input<'_> {
+    /// Moves past the ends of the parts, so that `parts[part]` has a byte at `pos` unless
+    /// the chunk is exhausted.
+    fn settle(&mut self) {
+        while self.part < self.parts.len() && self.pos >= self.parts[self.part].len() {
+            self.pos -= self.parts[self.part].len();
+            self.part += 1;
+        }
+    }
+
+    fn at_end(&mut self) -> bool {
+        self.settle();
+        self.part == self.parts.len()
+    }
+
     fn byte(&mut self) -> Option<u8> {
-        let b = *self.buf.get(self.pos)?;
+        self.settle();
+        let b = *self.parts.get(self.part)?.get(self.pos)?;
         self.pos += 1;
         Some(b)
     }
 
     fn skip(&mut self, n: usize) -> Option<()> {
-        let end = self.pos.checked_add(n)?;
-        (end <= self.buf.len()).then(|| self.pos = end)
+        self.pos = self.pos.checked_add(n)?;
+        self.settle();
+        // Skipping to the very end is fine, past it is not.
+        (self.part < self.parts.len() || self.pos == 0).then_some(())
     }
 
     fn varint(&mut self) -> Option<u64> {
@@ -273,30 +302,56 @@ mod tests {
             .collect()
     }
 
+    /// `chunk` as one piece, and split into pieces of `piece` bytes, as a local file read
+    /// keeps it.
+    fn buffers(chunk: &Bytes) -> [Buffer; 3] {
+        let pieces = |piece: usize| {
+            Buffer::from(
+                (0..chunk.len())
+                    .step_by(piece)
+                    .map(|i| chunk.slice(i..(i + piece).min(chunk.len())))
+                    .collect::<Vec<_>>(),
+            )
+        };
+        [Buffer::from(chunk.clone()), pieces(1), pieces(7)]
+    }
+
     #[test]
     fn test_all_pages_dictionary_encoded() {
         for version in [WriterVersion::PARQUET_1_0, WriterVersion::PARQUET_2_0] {
             let chunk = column_chunk(values(10), props(version).build());
-            assert!(all_pages_dictionary_encoded(&chunk), "{version:?}");
-            assert_eq!(dictionary_len(&chunk), Some(10));
+            for buffer in buffers(&chunk) {
+                assert!(all_pages_dictionary_encoded(&buffer), "{version:?}");
+                assert_eq!(dictionary_len(&buffer), Some(10));
+            }
 
             // A dictionary page too small for the values: the writer falls back to plain.
             let fallback = props(version).set_dictionary_page_size_limit(64).build();
             let chunk = column_chunk(values(500), fallback);
-            assert!(!all_pages_dictionary_encoded(&chunk));
+            for buffer in buffers(&chunk) {
+                assert!(!all_pages_dictionary_encoded(&buffer));
+            }
 
             let plain = props(version).set_dictionary_enabled(false).build();
             let chunk = column_chunk(values(10), plain);
-            assert!(!all_pages_dictionary_encoded(&chunk));
+            for buffer in buffers(&chunk) {
+                assert!(!all_pages_dictionary_encoded(&buffer));
+            }
         }
     }
 
     #[test]
     fn test_invalid_page_headers() {
         let chunk = column_chunk(values(10), props(WriterVersion::PARQUET_2_0).build());
-        assert!(!all_pages_dictionary_encoded(&chunk[..chunk.len() - 1]));
-        assert!(!all_pages_dictionary_encoded(&chunk[1..]));
-        assert!(!all_pages_dictionary_encoded(&[]));
-        assert!(!all_pages_dictionary_encoded(&[0xff; 16]));
+        for invalid in [
+            chunk.slice(..chunk.len() - 1),
+            chunk.slice(1..),
+            Bytes::new(),
+            Bytes::from_static(&[0xff; 16]),
+        ] {
+            for buffer in buffers(&invalid) {
+                assert!(!all_pages_dictionary_encoded(&buffer));
+            }
+        }
     }
 }
