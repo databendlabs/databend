@@ -74,6 +74,12 @@ pub const MAX_AUTO_DISK_CACHE_BYTES: u64 = 1 << 40;
 /// it under disk pressure at every write, and a watermark of 100 would let it fill the disk.
 pub const AUTO_HEADROOM_PERCENT: u64 = 5;
 
+/// `cache.disk.max_bytes` unset holds the writer to this `watermark_ratio` at most, and sizes
+/// the cache from it. The pools count entries by length, the disk fills by blocks: entries of a
+/// fraction of a block take more than the pools count, and only the writer's watermark, which
+/// reads the file system, keeps them from filling the disk. 100 would never evict.
+pub const MAX_AUTO_WATERMARK_RATIO: u64 = 100 - AUTO_HEADROOM_PERCENT;
+
 /// Version of the directory layout, `<path>/<tenant>/v2/<pool>/<kind>/<prefix>/<hash>`. Other
 /// entries under `<path>/<tenant>` are from older layouts and are removed in the background.
 const LAYOUT_DIR: &str = "v2";
@@ -146,7 +152,7 @@ pub struct DiskCache {
 impl DiskCache {
     /// The disk cache of the node, or `None` when `cache.data_cache_storage` is not `disk`,
     /// `max_bytes` is too small, or the build is not EE. `max_bytes` unset is sized from the
-    /// file system under `cache.disk.path` (see `auto_max_bytes`).
+    /// file system under `<cache.disk.path>/<tenant>` (see `auto_max_bytes`).
     pub fn from_config(
         config: &CacheConfig,
         tenant_id: &str,
@@ -166,17 +172,18 @@ impl DiskCache {
             return Ok(None);
         }
         // Checked before the file system is looked at: `auto_max_bytes` takes the watermark.
-        let writer = writer_options(disk)?;
+        let mut writer = writer_options(disk)?;
         let tenant_root = PathBuf::from(&disk.path).join(tenant_id);
         let max_bytes = match disk.max_bytes {
             Some(bytes) => bytes,
             None => {
-                let bytes = size_from_file_system(Path::new(&disk.path), &tenant_root, disk)?;
+                writer.watermark_ratio = writer.watermark_ratio.min(MAX_AUTO_WATERMARK_RATIO);
+                let bytes = size_from_file_system(&tenant_root, writer.watermark_ratio)?;
                 if bytes <= MIN_DISK_CACHE_BYTES {
                     warn!(
                         "[DiskCache] off: max_bytes unset and the file system under {:?} has no \
                          room {AUTO_HEADROOM_PERCENT}% below the watermark of {}%",
-                        disk.path, disk.watermark_ratio
+                        tenant_root, writer.watermark_ratio
                     );
                     // The files of a previous run, counted as room, left none: no writer would
                     // evict them while the cache is off, so they are deleted, whatever the policy.
@@ -613,21 +620,18 @@ pub fn auto_max_bytes(total: u64, available: u64, cached: u64, watermark_ratio: 
     room.min(MAX_AUTO_DISK_CACHE_BYTES as u128) as u64
 }
 
-/// `auto_max_bytes` of the file system under `path`, the cache's files being those under
-/// `tenant_root`, of every layout.
-fn size_from_file_system(
-    path: &Path,
-    tenant_root: &Path,
-    disk: &DiskCacheInnerConfig,
-) -> Result<u64> {
-    fs::create_dir_all(path).map_err(|e| {
+/// `auto_max_bytes` of the file system under `tenant_root`, the cache's files being those under
+/// it, of every layout. The file system the cache writes to and the writer watches: not that of
+/// `cache.disk.path` when the tenant directory is a mount point or a link to another one.
+fn size_from_file_system(tenant_root: &Path, watermark_ratio: u64) -> Result<u64> {
+    fs::create_dir_all(tenant_root).map_err(|e| {
         ErrorCode::StorageOther(format!(
-            "failed to create disk cache directory {path:?}: {e}"
+            "failed to create disk cache directory {tenant_root:?}: {e}"
         ))
     })?;
-    let stat = rustix::fs::statvfs(path).map_err(|e| {
+    let stat = rustix::fs::statvfs(tenant_root).map_err(|e| {
         ErrorCode::StorageOther(format!(
-            "failed to size the disk cache from the file system under {path:?}: {e}"
+            "failed to size the disk cache from the file system under {tenant_root:?}: {e}"
         ))
     })?;
     // Block counts are in fragments; `f_frsize` is 0 on some file systems.
@@ -639,12 +643,11 @@ fn size_from_file_system(
     let total = stat.f_blocks.saturating_mul(block);
     let available = stat.f_bavail.saturating_mul(block);
     let cached = cached_bytes(tenant_root);
-    let bytes = auto_max_bytes(total, available, cached, disk.watermark_ratio);
+    let bytes = auto_max_bytes(total, available, cached, watermark_ratio);
     info!(
         "[DiskCache] max_bytes unset: {bytes} bytes, from {total} bytes in the file system under \
-         {path:?}, {available} available and {cached} in cache files, {AUTO_HEADROOM_PERCENT}% \
-         below the watermark of {}%, at most {MAX_AUTO_DISK_CACHE_BYTES}",
-        disk.watermark_ratio
+         {tenant_root:?}, {available} available and {cached} in cache files, {AUTO_HEADROOM_PERCENT}% \
+         below the watermark of {watermark_ratio}%, at most {MAX_AUTO_DISK_CACHE_BYTES}"
     );
     Ok(bytes)
 }

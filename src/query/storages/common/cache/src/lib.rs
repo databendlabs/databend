@@ -76,6 +76,7 @@ pub use disk::DiskKindEvents;
 pub use disk::DiskKindStats;
 pub use disk::DiskPoolStats;
 pub use disk::MAX_AUTO_DISK_CACHE_BYTES;
+pub use disk::MAX_AUTO_WATERMARK_RATIO;
 pub use disk::UnitsRead;
 pub use disk::auto_max_bytes;
 pub use disk::split_caps;

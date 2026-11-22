@@ -26,6 +26,7 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheRow;
 use databend_storages_common_cache::DiskKey;
 use databend_storages_common_cache::MAX_AUTO_DISK_CACHE_BYTES;
+use databend_storages_common_cache::MAX_AUTO_WATERMARK_RATIO;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::Unit;
@@ -175,7 +176,7 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
     let config = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
             max_bytes: None,
-            // The most room, wherever the test runs: 95% of the file system.
+            // The most room, wherever the test runs; held to `MAX_AUTO_WATERMARK_RATIO`.
             watermark_ratio: 100,
             ..disk_config(&dir).disk_cache_config
         },
@@ -183,7 +184,7 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
     };
     let manager = manager(&config, true);
     let max_bytes = manager.disk().unwrap().max_bytes();
-    let without_them = auto_max_bytes(total, before, 0, 100);
+    let without_them = auto_max_bytes(total, before, 0, MAX_AUTO_WATERMARK_RATIO);
     let low = without_them.saturating_sub(SLACK);
     let high = without_them + SLACK;
     assert!(
@@ -191,6 +192,20 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
         "{max_bytes} not in {low}..={high}"
     );
     assert!(max_bytes <= MAX_AUTO_DISK_CACHE_BYTES);
+    // The writer evicts under disk pressure before the disk is full, also for entries smaller
+    // than a block, which the pools count by length.
+    let writer = manager.disk().unwrap().writer_options();
+    assert_eq!(writer.watermark_ratio, MAX_AUTO_WATERMARK_RATIO);
+    // Sized in bytes, the cache keeps the watermark it is given.
+    let sized = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            max_bytes: Some(MIB),
+            ..config.disk_cache_config.clone()
+        },
+        ..config.clone()
+    };
+    let sized = CacheManager::try_new(&sized, &MIB, "sized_tenant", true).unwrap();
+    assert_eq!(sized.disk().unwrap().writer_options().watermark_ratio, 100);
     let caps = split_caps(max_bytes, [10, 20, 70]).unwrap();
     assert_eq!(capacity(&manager, "__disk_pool:meta"), Some(caps[0]));
     assert_eq!(capacity(&manager, "__disk_pool:index"), Some(caps[1]));
