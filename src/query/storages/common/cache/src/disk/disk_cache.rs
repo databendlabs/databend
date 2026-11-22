@@ -177,6 +177,9 @@ impl DiskCache {
                          room {AUTO_HEADROOM_PERCENT}% below the watermark of {}%",
                         disk.path, disk.watermark_ratio
                     );
+                    // The files of a previous run, counted as room, left none: no writer would
+                    // evict them while the cache is off, so they are deleted, whatever the policy.
+                    remove_layouts_in_background(tenant_root);
                     return Ok(None);
                 }
                 bytes
@@ -664,6 +667,22 @@ fn cached_bytes(tenant_root: &Path) -> u64 {
         );
     }
     bytes
+}
+
+/// Deletes every file under `tenant_root`, every layout included, in a background thread: the
+/// disk cache stays off, and nothing else would.
+fn remove_layouts_in_background(tenant_root: PathBuf) {
+    let spawned = std::thread::Builder::new()
+        .name("disk-cache-delete".to_string())
+        .spawn(move || {
+            if let Err(e) = set_aside_layout(&tenant_root) {
+                warn!("[DiskCache] {}", e.message());
+            }
+            remove_old_layouts(&tenant_root);
+        });
+    if let Err(e) = spawned {
+        warn!("[DiskCache] failed to spawn the delete thread: {e}");
+    }
 }
 
 fn delete_in_background(pool: Arc<DiskPool>, victims: Vec<String>) {

@@ -42,6 +42,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use tempfile::TempDir;
 
+use crate::disk::files_under;
 use crate::fakes::Item;
 use crate::fakes::Live;
 use crate::fakes::shared_store;
@@ -198,10 +199,22 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
 }
 
 /// `max_bytes` unset leaves the disk cache off when the file system has no room below the
-/// watermark, and fails the start when the file system under `path` cannot be read.
+/// watermark, deleting the files of the previous run, which no writer would evict; and fails
+/// the start when the file system under `path` cannot be read. Turned off by `max_bytes`, the
+/// cache leaves its files alone.
 #[test]
 fn test_disk_cache_unset_max_bytes_without_room_or_file_system() {
     let dir = TempDir::new().unwrap();
+    let tenant_root = dir.path().join("test_tenant");
+    let previous_run = || {
+        for file in [
+            tenant_root.join("v2/data/column_data/aa/x"),
+            tenant_root.join("v1/y"),
+        ] {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, b"cached").unwrap();
+        }
+    };
     let config = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
             max_bytes: None,
@@ -209,11 +222,26 @@ fn test_disk_cache_unset_max_bytes_without_room_or_file_system() {
             watermark_ratio: 1,
             ..disk_config(&dir).disk_cache_config
         },
+        // Would keep the files of the previous run for the next start.
+        data_cache_key_reload_policy: DiskCacheKeyReloadPolicy::Fuzzy,
         ..disk_config(&dir)
     };
     let (total, available) = file_system_space(dir.path());
     assert_eq!(auto_max_bytes(total, available, 0, 1), 0);
+    previous_run();
     assert!(manager(&config, true).disk().is_none());
+    wait_for(|| files_under(&tenant_root).is_empty());
+
+    previous_run();
+    let turned_off = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            max_bytes: Some(0),
+            ..config.disk_cache_config.clone()
+        },
+        ..config.clone()
+    };
+    assert!(manager(&turned_off, true).disk().is_none());
+    assert_eq!(files_under(&tenant_root).len(), 2);
 
     let file = dir.path().join("file");
     std::fs::write(&file, b"").unwrap();
