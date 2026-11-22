@@ -300,6 +300,13 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         self.views.iter().map(|v| v.length)
     }
 
+    /// Whether each value is empty (`empty`) or not (`!empty`), read from the view lengths
+    /// without touching the value bytes.
+    pub fn empty_bitmap(&self, empty: bool) -> Bitmap {
+        let views = self.views.as_slice();
+        Bitmap::collect_bool(views.len(), |i| (views[i].length == 0) == empty)
+    }
+
     pub fn from_slice<S: AsRef<T>, P: AsRef<[S]>>(slice: P) -> Self {
         let mutable = BinaryViewColumnBuilder::from_iterator(
             slice.as_ref().iter().map(|opt_v| opt_v.as_ref()),
