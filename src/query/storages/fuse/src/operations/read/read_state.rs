@@ -127,6 +127,10 @@ pub struct ReadState {
     pub remain_reader: Arc<BlockReader>,
     pub filters: Option<Expr>,
     prewhere_selector: Option<FilterExecutor>,
+    /// Whether `filters` is set and deterministic. Evaluating a non-deterministic filter (e.g.
+    /// seeded `rand()`) in batches yields different results than evaluating it on the whole
+    /// block, so such filters skip the batched scan.
+    filters_deterministic: bool,
     pub runtime_filters: Vec<BloomRuntimeFilterRef>,
     pub pre_column_ids: HashSet<ColumnId>,
     pub remain_column_ids: HashSet<ColumnId>,
@@ -225,12 +229,16 @@ impl ReadState {
         let prewhere_selector = prewhere_filter
             .as_ref()
             .and_then(|filter| prewhere_selector(filter, &func_ctx, max_block_size));
+        let filters_deterministic = prewhere_filter
+            .as_ref()
+            .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS));
 
         Ok(Self {
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
             prewhere_selector,
+            filters_deterministic,
             runtime_filters,
             pre_column_ids,
             remain_column_ids,
@@ -320,8 +328,49 @@ impl ReadState {
         &mut self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
+        no_output_columns: bool,
     ) -> Result<ReadStateOutput> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
+        const FILTER_BATCH_ROWS: usize = 8192;
+        if no_output_columns
+            && self.filters_deterministic
+            && self.runtime_filters.is_empty()
+            && self.remain_column_ids.is_empty()
+            && part.nums_rows > FILTER_BATCH_ROWS
+            && let Some(batches) = self.pre_reader.clone().parquet_filter_batches(
+                part,
+                &pre_columns_chunks,
+                FILTER_BATCH_ROWS,
+            )?
+        {
+            let mut bytes = 0;
+            let mut bits = MutableBitmap::with_capacity(part.nums_rows);
+            for batch in batches {
+                let batch = batch?;
+                // Adjacent batches can reference the same page; count logical decoded bytes.
+                bytes += batch
+                    .columns()
+                    .iter()
+                    .map(|entry| entry.memory_size_with_options(true))
+                    .sum::<usize>();
+                let bitmap = self.filter(&batch, batch.num_rows())?.unwrap();
+                bits.extend_from_bitmap(&bitmap.into());
+            }
+            // Apply the pruner's selection in original block coordinates.
+            let mut bitmap: Bitmap = bits.into();
+            if let Some(rows) = selected_rows(part) {
+                bitmap = &bitmap & &rows;
+            }
+            return Ok(ReadStateOutput {
+                block: DataBlock::empty_with_rows(bitmap.len() - bitmap.null_count()),
+                bitmap_selection: Some(bitmap),
+                scan_stats: BlockScanStats {
+                    rows: part.nums_rows,
+                    bytes,
+                },
+            });
+        }
+
         let mut preread_block = self
             .pre_reader
             .deserialize_part(part, pre_columns_chunks, None)?;
@@ -425,7 +474,7 @@ impl ReadState {
 
     fn filter_column_chunks<'a>(
         columns_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-        column_ids: &'a HashSet<ColumnId>,
+        column_ids: &HashSet<ColumnId>,
     ) -> Result<HashMap<ColumnId, DataItem<'a>>> {
         let mut filtered_columns_chunks = HashMap::new();
         for (column_id, data_item) in columns_chunks {
