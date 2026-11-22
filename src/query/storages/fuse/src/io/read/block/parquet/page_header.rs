@@ -40,37 +40,47 @@ const STRUCT: u8 = 12;
 /// dictionary encoded, i.e. the writer did not fall back to plain pages once the dictionary
 /// grew too large. `false` if a page header cannot be read.
 pub fn all_pages_dictionary_encoded(chunk: &[u8]) -> bool {
+    dictionary_len(chunk).is_some()
+}
+
+/// The number of values of the dictionary of the column chunk, if it is dictionary encoded
+/// throughout (see [`all_pages_dictionary_encoded`]).
+pub fn dictionary_len(chunk: &[u8]) -> Option<usize> {
     let mut input = Input { buf: chunk, pos: 0 };
-    let mut pages = 0;
+    let mut dictionary_len = None;
+    let mut data_pages = 0;
     while input.pos < chunk.len() {
-        let Some(header) = PageHeader::read(&mut input) else {
-            return false;
-        };
-        let dictionary_encoded = match header.page_type {
-            DICTIONARY_PAGE => pages == 0,
-            DATA_PAGE | DATA_PAGE_V2 => {
-                pages > 0 && matches!(header.encoding, Some(PLAIN_DICTIONARY | RLE_DICTIONARY))
+        let header = PageHeader::read(&mut input)?;
+        match header.page_type {
+            DICTIONARY_PAGE if dictionary_len.is_none() => {
+                dictionary_len = Some(header.dictionary_len?);
             }
-            _ => false,
-        };
-        if !dictionary_encoded || input.skip(header.compressed_size).is_none() {
-            return false;
+            DATA_PAGE | DATA_PAGE_V2
+                if dictionary_len.is_some()
+                    && matches!(header.encoding, Some(PLAIN_DICTIONARY | RLE_DICTIONARY)) =>
+            {
+                data_pages += 1;
+            }
+            _ => return None,
         }
-        pages += 1;
+        input.skip(header.compressed_size)?;
     }
-    pages > 1
+    dictionary_len.filter(|_| data_pages > 0)
 }
 
 struct PageHeader {
     page_type: i32,
     /// Encoding of the values of a data page.
     encoding: Option<i32>,
+    /// Number of values of a dictionary page.
+    dictionary_len: Option<usize>,
     compressed_size: usize,
 }
 
 impl PageHeader {
     fn read(input: &mut Input) -> Option<PageHeader> {
         let (mut page_type, mut encoding, mut compressed_size) = (None, None, None);
+        let mut dictionary_len = None;
         let mut last = 0;
         while let Some((id, ty)) = input.field(&mut last)? {
             match (id, ty) {
@@ -79,12 +89,19 @@ impl PageHeader {
                 // `DataPageHeader.encoding` and `DataPageHeaderV2.encoding`.
                 (5, STRUCT) => encoding = input.struct_i32(2)?,
                 (8, STRUCT) => encoding = input.struct_i32(4)?,
+                // `DictionaryPageHeader.num_values`.
+                (7, STRUCT) => {
+                    dictionary_len = input
+                        .struct_i32(1)?
+                        .and_then(|len| usize::try_from(len).ok())
+                }
                 _ => input.skip_value(ty)?,
             }
         }
         Some(PageHeader {
             page_type: page_type?,
             encoding,
+            dictionary_len,
             compressed_size: compressed_size?,
         })
     }
@@ -261,6 +278,7 @@ mod tests {
         for version in [WriterVersion::PARQUET_1_0, WriterVersion::PARQUET_2_0] {
             let chunk = column_chunk(values(10), props(version).build());
             assert!(all_pages_dictionary_encoded(&chunk), "{version:?}");
+            assert_eq!(dictionary_len(&chunk), Some(10));
 
             // A dictionary page too small for the values: the writer falls back to plain.
             let fallback = props(version).set_dictionary_page_size_limit(64).build();

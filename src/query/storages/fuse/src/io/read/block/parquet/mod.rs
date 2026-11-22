@@ -48,7 +48,7 @@ pub use deserialize::column_chunks_to_record_batch_with_codecs;
 pub use deserialize::dictionary_hint_fields;
 use dict_chunk::read_string_dictionary_chunk;
 pub use encode::ColumnEncoding;
-use page_header::all_pages_dictionary_encoded;
+use page_header::dictionary_len;
 use parquet::basic::Compression as ParquetCompression;
 pub use row_selection::RowSelection;
 
@@ -60,8 +60,13 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 
 impl BlockReader {
     /// The projected non-nullable string columns kept as dictionaries whose chunk is
-    /// dictionary encoded throughout.
-    fn dictionary_chunks(&self, column_chunks: &HashMap<ColumnId, DataItem>) -> HashSet<ColumnId> {
+    /// dictionary encoded throughout, with a dictionary within the NDV ratio (as in
+    /// [`ColumnEncoding::encode`]).
+    fn dictionary_chunks(
+        &self,
+        num_rows: usize,
+        column_chunks: &HashMap<ColumnId, DataItem>,
+    ) -> HashSet<ColumnId> {
         self.projected_schema
             .fields
             .iter()
@@ -72,7 +77,11 @@ impl BlockReader {
                     && matches!(
                         column_chunks.get(&field.column_id),
                         Some(DataItem::RawData(chunk))
-                            if all_pages_dictionary_encoded(&chunk.to_bytes())
+                            if dictionary_len(&chunk.to_bytes()).is_some_and(|len| {
+                                len > 0
+                                    && len as u64 * 100
+                                        <= num_rows as u64 * self.dictionary_ndv_ratio
+                            })
                     )
             })
             .map(|field| field.column_id)
@@ -127,7 +136,7 @@ impl BlockReader {
 
         // Dictionary encoded chunks of the string columns kept as dictionaries are read
         // without the arrow reader, see `dict_chunk`.
-        let dictionary_chunks = self.dictionary_chunks(&column_chunks);
+        let dictionary_chunks = self.dictionary_chunks(num_rows, &column_chunks);
         let arrow_chunks;
         let arrow_chunks = if dictionary_chunks.is_empty() {
             &column_chunks
