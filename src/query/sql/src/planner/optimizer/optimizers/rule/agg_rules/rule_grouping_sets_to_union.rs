@@ -244,16 +244,16 @@ struct ReplaceColumnForGroupingSetsVisitor {
 
 impl VisitorMut<'_> for ReplaceColumnForGroupingSetsVisitor {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        let old = expr.clone();
-
         if let ScalarExpr::BoundColumnRef(col) = expr {
             if self.group_indexes.contains(&col.column.index) {
-                *expr = ScalarExpr::CastExpr(CastExpr {
-                    argument: Box::new(old),
-                    is_try: true,
-                    target_type: Box::new(col.column.data_type.wrap_nullable()),
-                    span: col.span,
-                });
+                if !col.column.data_type.is_nullable_or_null() {
+                    *expr = ScalarExpr::CastExpr(CastExpr {
+                        argument: Box::new(col.clone().into()),
+                        is_try: true,
+                        target_type: Box::new(col.column.data_type.wrap_nullable()),
+                        span: col.span,
+                    });
+                }
             } else if self.exclude_group_indexes.contains(&col.column.index) {
                 *expr = ScalarExpr::TypedConstantExpr(
                     ConstantExpr {

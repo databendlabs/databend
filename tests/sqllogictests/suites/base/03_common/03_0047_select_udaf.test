@@ -53,6 +53,33 @@ select number % 3, weighted_avg(number+1, 1), weighted_avg(number+2, 1) from num
 1 5.0 6.0
 2 6.0 7.0
 
+# A UDAF binds like a builtin aggregate: under a scalar, with a key named by
+# alias or collected by GROUP BY ALL, and never as a key.
+query R
+select weighted_avg(number+1, number*2) + avg(number) from numbers(10);
+----
+11.833333492279053
+
+query IR
+select number % 3 as g, weighted_avg(number, 1) from numbers(10) group by g order by 1;
+----
+0 4.5
+1 4.0
+2 5.0
+
+query IR
+select number % 3, weighted_avg(number, 1) from numbers(10) group by all order by 1;
+----
+0 4.5
+1 4.0
+2 5.0
+
+statement error (?s)1065.*GROUP BY items can't contain aggregate functions
+select weighted_avg(number, 1) from numbers(10) group by weighted_avg(number, 1)
+
+statement error (?s)1065.*window syntax is not supported for user-defined functions
+select weighted_avg(number, 1) over () from numbers(10)
+
 # FILTER is parsed for UDAFs (PostgreSQL compatibility) but execution is not wired up yet.
 # The UDAF should be recognized as an aggregate and rejected with a dedicated message,
 # not the "only supported for aggregate functions" error used for scalar functions.

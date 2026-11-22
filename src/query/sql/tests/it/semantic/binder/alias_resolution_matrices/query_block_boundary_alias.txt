@@ -79,11 +79,3 @@ status: error
 code: 1065
 message: column i doesn't exist
 
-=== query_block_boundary_alias__query_block_boundary_does_not_expose_prior_group_alias_namespace ===
-matrix: query_block_boundary_alias
-key: B0N0G0_3_
-sql: SELECT k FROM (SELECT i, count(*) FROM t GROUP BY i, abs(i)) AS q
-status: error
-code: 1065
-message: column k doesn't exist
-

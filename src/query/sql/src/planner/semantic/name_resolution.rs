@@ -51,6 +51,15 @@ impl NameResolutionContext {
         }
     }
 
+    /// The names of the parameters of a lambda, normalized as the names that
+    /// refer to them in its body are.
+    pub fn normalize_lambda_params(&self, params: &[Identifier]) -> Vec<String> {
+        params
+            .iter()
+            .map(|param| self.normalize_identifier(param).name)
+            .collect()
+    }
+
     // Rely on identifier normalization preserving quote information.
     pub fn is_case_sensitive(&self, ident: &Identifier) -> bool {
         (ident.is_quoted() && self.quoted_ident_case_sensitive)

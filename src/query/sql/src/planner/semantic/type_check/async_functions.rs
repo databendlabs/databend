@@ -62,6 +62,23 @@ pub(super) enum CoreAsyncFunction<'a> {
     Sleep(CoreAsyncFunctionArg),
 }
 
+impl CoreAsyncFunction<'_> {
+    /// The argument expressions of the function.
+    pub(super) fn args(&self) -> Vec<CoreExprId> {
+        match self {
+            CoreAsyncFunction::NextVal { .. } => vec![],
+            CoreAsyncFunction::DictGet(function) => vec![function.field.expr, function.key.expr],
+            CoreAsyncFunction::ReadFile(function) => function
+                .stage
+                .iter()
+                .chain(std::iter::once(&function.location))
+                .map(|arg| arg.expr)
+                .collect(),
+            CoreAsyncFunction::Sleep(arg) => vec![arg.expr],
+        }
+    }
+}
+
 impl<'a> CoreExprArena<'a> {
     fn lower_async_function_arg(&mut self, expr: &'a Expr) -> Result<CoreAsyncFunctionArg> {
         Ok(CoreAsyncFunctionArg {
@@ -153,15 +170,19 @@ where A: TypeCheckAdapter
         span: Span,
         function: &CoreAsyncFunction<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if matches!(self.bind_context.expr_context, ExprContext::InAsyncFunction) {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InAsyncFunction { .. }
+        ) {
             return Err(
                 ErrorCode::SemanticError("async functions cannot be nested".to_string())
                     .set_span(span),
             );
         }
+        let alias_first = self.bind_context.expr_context.prefer_resolve_alias();
         let original_context = self
             .bind_context
-            .replace_expr_context(ExprContext::InAsyncFunction);
+            .replace_expr_context(ExprContext::InAsyncFunction { alias_first });
         let result = match function {
             CoreAsyncFunction::Sleep(argument) => {
                 let (scalar, _) = *self.resolve_core(arena, argument.expr)?;
