@@ -1,0 +1,526 @@
+   Compiling syn v3.0.4
+   Compiling databend-common-ast-visit-derive v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ast/visit_derive)
+   Compiling display-more v0.2.7
+   Compiling parse-size v1.1.0
+   Compiling tabled v0.20.0
+   Compiling databend-common-frozen-api v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/frozen_api)
+   Compiling databend-storages-common-index v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/index)
+   Compiling databend-common-cache v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/cache)
+   Compiling databend-query v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/service)
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.20
+   Compiling prometheus-client-derive-encode v0.5.1
+   Compiling bytecheck_derive v0.8.3
+   Compiling rkyv_derive v0.8.18
+   Compiling bytecheck v0.8.3
+   Compiling rend v0.5.2
+   Compiling thiserror v2.0.20
+   Compiling structkey v0.1.1
+   Compiling serde v1.0.229
+   Compiling semver v1.0.26
+   Compiling serde_fmt v1.0.3
+   Compiling cargo-platform v0.1.9
+   Compiling camino v1.1.9
+   Compiling smallvec v1.15.0
+   Compiling bytes v1.11.1
+   Compiling rand_core v0.6.4
+   Compiling either v1.15.0
+   Compiling bitflags v2.9.0
+   Compiling ahash v0.8.12
+   Compiling chrono v0.4.45
+   Compiling num-bigint v0.4.6
+   Compiling uuid v1.18.1
+   Compiling bincode v2.0.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling quick-xml v0.37.5
+   Compiling anyerror v0.1.13
+   Compiling quick-xml v0.38.4
+   Compiling tantivy-common v0.11.0
+   Compiling value-bag-serde1 v1.12.0
+   Compiling rustc_version v0.4.1
+   Compiling parking_lot_core v0.9.10
+   Compiling value-bag v1.12.0
+   Compiling crypto-common v0.1.6
+   Compiling rand_chacha v0.3.1
+   Compiling icu_normalizer v2.0.0
+   Compiling itertools v0.13.0
+   Compiling hashbrown v0.14.5
+   Compiling digest v0.10.7
+   Compiling cipher v0.4.4
+   Compiling rustix v0.38.44
+   Compiling parking_lot v0.12.3
+   Compiling arrow-schema v58.4.0
+   Compiling rand v0.8.5
+   Compiling universal-hash v0.5.1
+   Compiling aes v0.8.4
+   Compiling salsa20 v0.10.2
+   Compiling cbc v0.1.2
+   Compiling sha2 v0.10.9
+   Compiling log v0.4.34
+   Compiling hmac v0.12.1
+   Compiling tokio v1.54.1
+   Compiling http v1.3.1
+   Compiling idna_adapter v1.2.1
+   Compiling prost v0.14.3
+   Compiling idna v1.1.0
+   Compiling hkdf v0.12.4
+   Compiling pbkdf2 v0.12.2
+   Compiling polyval v0.6.2
+   Compiling tracing v0.1.41
+   Compiling rustls v0.23.45
+   Compiling scrypt v0.11.0
+   Compiling ctr v0.9.2
+   Compiling aead v0.5.2
+   Compiling rayon v1.12.0
+   Compiling signature v2.2.0
+   Compiling rustix v1.0.7
+   Compiling flatbuffers v25.2.10
+   Compiling pkcs5 v0.7.1
+   Compiling ghash v0.5.1
+   Compiling fastrace v0.7.14
+   Compiling moka v0.12.10
+   Compiling url v2.5.8
+   Compiling chrono-tz v0.10.4
+   Compiling arrow-buffer v58.4.0
+   Compiling simple_asn1 v0.6.3
+   Compiling rustc-hash v2.1.1
+   Compiling aes-gcm v0.10.3
+   Compiling cookie v0.18.1
+   Compiling publicsuffix v2.3.0
+   Compiling pkcs8 v0.10.2
+   Compiling http-body v1.0.1
+   Compiling http-body-util v0.1.3
+   Compiling jsonwebtoken v9.3.1
+   Compiling axum-core v0.5.5
+   Compiling sha1 v0.10.6
+   Compiling cookie_store v0.21.1
+   Compiling pkcs1 v0.7.5
+   Compiling arrow-data v58.4.0
+   Compiling num-bigint-dig v0.8.4
+   Compiling twox-hash v1.6.3
+   Compiling ordered-multimap v0.7.3
+   Compiling md-5 v0.10.6
+   Compiling crc32c v0.6.8
+   Compiling rstar v0.12.2
+   Compiling ruzstd v0.7.3
+   Compiling rust-ini v0.21.1
+   Compiling itertools v0.10.5
+   Compiling dashmap v5.5.3
+   Compiling prost-types v0.14.3
+   Compiling itertools v0.14.0
+   Compiling nix v0.30.1
+   Compiling ordered-float v4.6.0
+   Compiling rsa v0.9.8
+   Compiling object v0.36.7
+   Compiling prost-build v0.14.3
+   Compiling prost v0.13.5
+   Compiling tantivy-stacker v0.7.0
+   Compiling futures-intrusive v0.5.0
+   Compiling debugid v0.8.0
+   Compiling itertools v0.12.1
+   Compiling ethnum v1.5.3
+   Compiling tantivy-tokenizer-api v0.7.0
+   Compiling measure_time v0.9.0
+   Compiling prometheus-client v0.24.1
+   Compiling typetag v0.2.21
+   Compiling tantivy-query-grammar v0.26.0
+   Compiling rust-stemmers v1.2.0
+   Compiling sketches-ddsketch v0.4.1
+   Compiling geojson v1.0.0
+   Compiling tempfile v3.20.0
+   Compiling geo-types v0.7.18
+   Compiling async-backtrace v0.2.6 (https://github.com/datafuse-extras/async-backtrace.git?rev=dea4553#dea4553c)
+   Compiling ctrlc v3.4.7
+   Compiling tonic-prost-build v0.14.5
+   Compiling fs4 v0.13.1
+   Compiling prost-build v0.11.9
+   Compiling prost v0.11.9
+   Compiling protobuf-parse v3.7.2
+   Compiling symbolic-common v12.15.5
+   Compiling tantivy-sstable v0.7.0
+   Compiling databend-common-ast v0.2.5 (/home/kould/tmp-build/wt-official-main-prs/src/query/ast)
+   Compiling symbolic-demangle v12.15.5
+   Compiling prost-types v0.11.9
+   Compiling geo-traits v0.3.0
+   Compiling procfs-core v0.17.0
+   Compiling seq-marked v0.3.5
+   Compiling inferno v0.11.21
+   Compiling perf-event-data v0.1.8
+   Compiling micromarshal v0.7.0
+   Compiling chrono-tz v0.8.6
+   Compiling openraft-macros v0.10.1
+   Compiling map-api v0.5.0 (https://github.com/databendlabs/map-api?tag=v0.5.0#556bde71)
+   Compiling wkt v0.14.0
+   Compiling tantivy-columnar v0.7.0
+   Compiling validit v0.2.6
+   Compiling quorum-set v0.6.2
+   Compiling crossterm v0.28.1
+   Compiling prometheus-client v0.22.3
+   Compiling protobuf-codegen v3.7.2
+   Compiling geozero v0.14.0 (https://github.com/georust/geozero.git?rev=bda4d03#bda4d03f)
+   Compiling prometheus-parse v0.2.5
+   Compiling itertools v0.15.0
+   Compiling codeq v0.6.3
+   Compiling env_filter v0.1.3
+   Compiling comfy-table v7.1.2
+   Compiling perf-event2 v0.7.4
+   Compiling arrow-array v58.4.0
+   Compiling rust_decimal v1.40.0
+   Compiling openraft-rt v0.10.1
+   Compiling env_logger v0.11.8
+   Compiling itertools v0.11.0
+   Compiling bstr v1.12.0
+   Compiling i_overlay v4.0.6
+   Compiling spade v2.13.1
+   Compiling databend-common-timezone v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/timezone)
+   Compiling geohash v0.13.1
+   Compiling enumflags2 v0.7.11
+   Compiling tokio-util v0.7.18
+   Compiling tokio-rustls v0.26.2
+   Compiling tokio-stream v0.1.17
+   Compiling backon v1.6.0
+   Compiling databend-base v0.4.0 (https://github.com/databendlabs/databend-base?tag=v0.4.0#04fe7a5d)
+   Compiling tantivy v0.26.2
+   Compiling hickory-proto v0.25.2
+   Compiling display-more v0.2.0 (https://github.com/databendlabs/display-more?tag=v0.2.0#8a3e8351)
+   Compiling openraft-rt-tokio v0.10.1
+   Compiling rotbl v0.2.11
+   Compiling procfs v0.17.0
+   Compiling sqlx-core v0.8.5
+   Compiling state-machine-api v0.4.0 (https://github.com/databendlabs/state-machine-api.git?tag=v0.4.0#7abd898d)
+   Compiling h2 v0.4.17
+   Compiling tower v0.5.2
+   Compiling backtrace v0.3.73 (https://github.com/rust-lang/backtrace-rs.git?rev=72265be#72265bea)
+   Compiling combine v4.6.7
+   Compiling openraft v0.10.1
+   Compiling earcutr v0.4.3
+   Compiling jaq-std v3.0.1
+   Compiling roaring v0.10.12
+   Compiling databend-meta-proto v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling pprof v0.15.0 (https://github.com/datafuse-extras/pprof-rs?rev=edecd74#edecd742)
+   Compiling geo v0.32.0
+   Compiling terminal_size v0.4.2
+   Compiling rand_distr v0.4.3
+   Compiling axum v0.8.7
+   Compiling tower-http v0.6.6
+   Compiling jaq-json v2.0.1
+   Compiling arrow-select v58.4.0
+   Compiling arrow-arith v58.4.0
+   Compiling arrow-row v58.4.0
+   Compiling simple_hll v0.0.4
+   Compiling jsonb v0.5.6 (https://github.com/databendlabs/jsonb.git?rev=fba895c#fba895c5)
+   Compiling databend-common-datavalues v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/datavalues)
+   Compiling sqlx-mysql v0.8.5
+   Compiling hickory-resolver v0.25.2
+   Compiling databend-meta-base v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-types v260205.13.7 (https://github.com/databendlabs/databend-meta.git?tag=v260205.13.7#62c39dbf)
+   Compiling serde_spanned v0.6.8
+   Compiling toml_datetime v0.6.9
+   Compiling databend-meta-version v260205.13.7 (https://github.com/databendlabs/databend-meta.git?tag=v260205.13.7#62c39dbf)
+   Compiling opentelemetry v0.31.0
+   Compiling chunked-wal v0.2.3
+   Compiling toml_edit v0.22.26
+   Compiling hyper v1.8.1
+   Compiling arrow-ord v58.4.0
+   Compiling arrow-ipc v58.4.0
+   Compiling arrow-string v58.4.0
+   Compiling sqlx v0.8.5
+   Compiling rmp-serde v1.3.0
+   Compiling opentelemetry_sdk v0.31.0
+   Compiling raft-log v0.4.7
+   Compiling bigdecimal v0.4.10
+   Compiling parking_lot_core v0.8.6
+   Compiling rand_xoshiro v0.6.0
+   Compiling redis v0.27.6
+   Compiling serde_with v3.12.0
+   Compiling parking_lot v0.11.2
+   Compiling im v15.1.0
+   Compiling lenient_semver_version_builder v0.4.2
+   Compiling hyper-util v0.1.18
+   Compiling parquet v58.4.0 (https://github.com/datafuse-extras/arrow-rs.git?rev=221c744#221c7443)
+   Compiling toml v0.8.22
+   Compiling arrow-cast v58.4.0
+   Compiling apache-avro v0.21.0
+   Compiling lenient_semver_parser v0.4.2
+   Compiling sled v0.34.6 (https://github.com/datafuse-extras/sled?tag=v0.34.7-datafuse.1#43fa7250)
+   Compiling dashmap v6.1.0
+   Compiling lenient_semver v0.4.2
+   Compiling databend-meta-version v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling ff v0.13.1
+   Compiling group v0.13.0
+   Compiling watcher v0.5.0 (https://github.com/databendlabs/watcher?tag=v0.5.0#4508a803)
+   Compiling sec1 v0.7.3
+   Compiling feature-set v0.1.1
+   Compiling crypto-bigint v0.5.5
+   Compiling dtparse v2.0.0 (https://github.com/datafuse-extras/dtparse.git?rev=7a9e40f#7a9e40f9)
+   Compiling proj4rs v0.1.10
+   Compiling h3o v0.9.4
+   Compiling num-rational v0.4.2
+   Compiling hyper-timeout v0.5.2
+   Compiling tonic v0.14.5
+   Compiling hyper-rustls v0.27.5
+   Compiling fastrace-opentelemetry v0.14.0
+   Compiling reqwest v0.12.24
+   Compiling rfc6979 v0.4.0
+   Compiling num v0.4.3
+   Compiling databend-common-protos v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/protos)
+   Compiling toml_edit v0.19.15
+   Compiling elliptic-curve v0.13.8
+   Compiling hmac-sha512 v1.1.6
+   Compiling hmac-sha256 v1.1.8
+   Compiling sub-cache v0.4.1 (https://github.com/databendlabs/sub-cache?tag=v0.4.1#b54d7bd8)
+   Compiling serde-env v0.2.0 (https://github.com/datafuse-extras/serde-env?rev=085d4b1#085d4b18)
+   Compiling superboring v0.1.4
+   Compiling serde-bridge v0.1.0 (https://github.com/datafuse-extras/serde-bridge?rev=4f0e99a#4f0e99ab)
+   Compiling ecdsa v0.16.9
+   Compiling primeorder v0.13.6
+   Compiling arrow-json v58.4.0
+   Compiling arrow-csv v58.4.0
+   Compiling random-number v0.1.9
+   Compiling cron v0.12.1
+   Compiling serde_ignored v0.1.12
+   Compiling bincode v1.3.3
+   Compiling random-pick v1.2.16
+   Compiling petgraph v0.8.3
+   Compiling passwords v3.1.16
+   Compiling http v0.2.12
+   Compiling cbordata v0.6.0
+   Compiling p256 v0.13.2
+   Compiling tonic-prost v0.14.5
+   Compiling arrow-flight v58.4.0
+   Compiling databend-meta-runtime-api v260205.13.7 (https://github.com/databendlabs/databend-meta.git?tag=v260205.13.7#62c39dbf)
+   Compiling opentelemetry-proto v0.31.0
+   Compiling databend-meta-runtime-api v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling reqsign v0.16.5
+   Compiling reqwest-hickory-resolver v0.2.0 (https://github.com/datafuse-extras/reqwest-hickory-resolver?rev=5ad03257a3c702d34b9643878efb5a3536323d2d#5ad03257)
+   Compiling opentelemetry-http v0.31.0
+   Compiling tonic-reflection v0.14.5
+   Compiling arrow v58.4.0
+   Compiling toml v0.7.8
+   Compiling p384 v0.13.1
+   Compiling k256 v0.13.4
+   Compiling http-body v0.4.6
+   Compiling bytes-utils v0.1.4
+   Compiling xorfilter-rs v0.5.2 (https://github.com/datafuse-extras/xorfilter?tag=databend-alpha.4#3bd8eb6b)
+   Compiling serfig v0.1.0 (https://github.com/datafuse-extras/serfig?rev=610ac6d#610ac6df)
+   Compiling jwt-simple v0.12.12
+   Compiling aws-smithy-types v1.3.6
+   Compiling xorf v0.12.0
+   Compiling aws-smithy-async v1.2.7
+   Compiling databend-common-cloud-control v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/cloud_control)
+   Compiling zopfli v0.8.3
+   Compiling chumsky v0.9.3
+   Compiling prqlc-ast v0.11.3
+   Compiling sqlparser v0.43.1
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling zip v9.0.1
+   Compiling opendal v0.55.0
+   Compiling opendal v0.54.1
+   Compiling aws-smithy-runtime-api v1.10.0
+   Compiling opentelemetry-otlp v0.31.1
+   Compiling globiter v0.1.0
+   Compiling ureq-proto v0.6.1
+   Compiling prqlc-parser v0.11.3
+   Compiling aws-types v1.3.11
+   Compiling aws-smithy-http v0.62.6
+   Compiling logforth v0.23.0 (https://github.com/datafuse-extras/logforth?branch=dev#179561ba)
+   Compiling aws-credential-types v1.2.11
+   Compiling aws-smithy-observability v0.2.0
+   Compiling rkyv v0.8.18
+   Compiling aws-sigv4 v1.3.7
+   Compiling aws-smithy-runtime v1.9.8
+   Compiling cranelift-bitset v0.114.0
+   Compiling cranelift-entity v0.114.0
+   Compiling aws-smithy-json v0.61.9
+   Compiling libflate_lz77 v2.1.0
+   Compiling faststr v0.2.31
+   Compiling cranelift-bforest v0.114.0
+   Compiling libflate v2.1.0
+   Compiling regalloc2 v0.10.2
+   Compiling nix v0.29.0
+   Compiling orc-rust v0.8.0
+   Compiling fs-set-times v0.20.3
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling wasmparser v0.219.2
+   Compiling databend-meta-types v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-client-types v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling include-flate-compress v0.3.1
+   Compiling include-flate v0.3.1
+   Compiling cedarwood v0.5.0
+   Compiling databend-meta-kvapi v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling cranelift-codegen v0.114.0
+   Compiling databend-meta-kvapi v260205.13.7 (https://github.com/databendlabs/databend-meta.git?tag=v260205.13.7#62c39dbf)
+   Compiling databend-meta-kvapi-test-suite v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-kvapi-test-suite v260205.13.7 (https://github.com/databendlabs/databend-meta.git?tag=v260205.13.7#62c39dbf)
+   Compiling databend-meta-raft-config v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-snapshot-db v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-raft-log v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-leveled-store v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-sled-store v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-client v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-metrics v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-client v260205.13.7 (https://github.com/databendlabs/databend-meta.git?tag=v260205.13.7#62c39dbf)
+   Compiling ureq v3.4.0
+   Compiling aws-runtime v1.5.18
+   Compiling lindera-dictionary v5.3.0
+   Compiling serde_yaml_ng v0.10.0
+   Compiling postcard v1.1.1
+   Compiling databend-meta-snapshot-store v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling jieba-rs v0.10.3
+   Compiling databend-meta-store-compat v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling databend-meta-state-machine v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling cap-primitives v3.4.4
+   Compiling linkedbytes v0.1.8
+   Compiling metainfo v0.7.14
+   Compiling databend-meta v260629.11.0 (https://github.com/databendlabs/databend-meta.git?tag=v260629.11.0#9bda7d0a)
+   Compiling wasmprinter v0.219.2
+   Compiling aws-smithy-query v0.60.9
+   Compiling motore v0.4.1
+   Compiling integer-encoding v4.0.2
+   Compiling aws-sdk-sts v1.96.0
+   Compiling volo v0.10.6
+   Compiling pilota v0.11.10
+   Compiling aws-sdk-sso v1.92.0
+   Compiling aws-sdk-ssooidc v1.94.0
+   Compiling sonic-rs v0.3.17
+   Compiling iceberg v0.8.0 (https://github.com/databendlabs/iceberg-rust?branch=dev#15aee17e)
+   Compiling prqlc v0.11.3
+   Compiling wit-parser v0.219.2
+   Compiling lindera-ipadic v5.3.0
+   Compiling wasmtime-environ v27.0.0
+   Compiling tantivy-jieba v0.20.0
+   Compiling backoff v0.4.0
+   Compiling databend-common-exception v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/exception)
+   Compiling geo-index v0.3.4
+   Compiling witx v0.9.1
+   Compiling cargo_metadata v0.19.2
+   Compiling aws-config v1.8.12
+   Compiling volo-thrift v0.10.8
+   Compiling databend-common-base v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/base)
+   Compiling databend-common-meta-app-storage v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/app-storage)
+   Compiling databend-common-vector v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/vector)
+   Compiling databend-common-script v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/script)
+   Compiling databend-common-compress v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/compress)
+   Compiling wasmtime-wit-bindgen v27.0.0
+   Compiling cranelift-native v0.114.0
+   Compiling cranelift-frontend v0.114.0
+   Compiling vergen v9.0.6
+   Compiling wiggle-generate v27.0.0
+   Compiling cap-std v3.4.4
+   Compiling wasmtime-cache v27.0.0
+   Compiling aws-smithy-http-client v1.1.5
+   Compiling wasmtime-jit-debug v27.0.0
+   Compiling memfd v0.6.4
+   Compiling wasmtime-fiber v27.0.0
+   Compiling fxprof-processed-profile v0.6.0
+   Compiling ittapi v0.4.0
+   Compiling vergen-gitcl v1.0.8
+   Compiling wasmtime-component-macro v27.0.0
+   Compiling hive_metastore v0.2.0
+   Compiling aws-sdk-s3tables v1.48.0
+   Compiling aws-sdk-glue v1.93.0
+   Compiling databend-common-building v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/building)
+   Compiling wiggle-macro v27.0.0
+   Compiling system-interface v0.27.3
+   Compiling databend-common-grpc v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/grpc)
+   Compiling databend-common-metrics v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/metrics)
+   Compiling databend-common-hashtable v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/hashtable)
+   Compiling databend-common-io v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/io)
+   Compiling databend-common-column v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/column)
+   Compiling databend-common-statistics v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/statistics)
+   Compiling databend-common-tracing v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/tracing)
+   Compiling databend-enterprise-storage-encryption v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/storage_encryption)
+   Compiling databend-common-license v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/license)
+   Compiling databend-common-expression v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/expression)
+   Compiling wasmtime-cranelift v27.0.0
+   Compiling cap-fs-ext v3.4.4
+   Compiling databend-meta-runtime v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/runtime)
+   Compiling paimon v0.2.0 (https://github.com/datafuse-extras/paimon-rust?branch=dev#f55c3a68)
+   Compiling cap-time-ext v3.4.4
+   Compiling databend-meta-plugin-semaphore v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/plugins/semaphore)
+   Compiling databend-meta-plugin-cache v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/plugins/cache)
+   Compiling headers-core v0.3.0
+   Compiling cap-rand v3.4.4
+   Compiling databend-common-meta-store v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/store)
+   Compiling headers v0.4.0
+   Compiling wasmtime v27.0.0
+   Compiling databend-common-version v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/version)
+   Compiling async-compression v0.4.44
+   Compiling multer v3.1.0
+   Compiling poem v3.1.10
+   Compiling mysql_common v0.37.3
+   Compiling lindera v5.3.0
+   Compiling iceberg-catalog-rest v0.8.0 (https://github.com/databendlabs/iceberg-rust?branch=dev#15aee17e)
+   Compiling lindera-analysis v5.3.0
+   Compiling databend-common-telemetry v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/telemetry)
+   Compiling iceberg-catalog-s3tables v0.8.0 (https://github.com/databendlabs/iceberg-rust?branch=dev#15aee17e)
+   Compiling async-compat v0.2.4
+   Compiling buf-list v1.0.3
+   Compiling lindera-tantivy v5.0.1
+   Compiling serde_stacker v0.1.12
+   Compiling databend-meta-ver v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/ver)
+   Compiling databend-common-http v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/http)
+   Compiling opensrv-mysql v0.8.0 (https://github.com/databendlabs/opensrv.git?branch=main#de6178b2)
+   Compiling wiggle v27.0.0
+   Compiling wasi-common v27.0.0
+   Compiling arrow-udf-runtime v0.8.0 (https://github.com/datafuse-extras/arrow-udf.git?rev=6a49de9d03e85722313f32b202edddb2456ca865#6a49de9d)
+   Compiling databend-common-meta-app v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/app)
+   Compiling databend-functions-scalar-decimal v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions/src/scalars/decimal)
+   Compiling databend-functions-scalar-numeric-basic-arithmetic v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions/src/scalars/numeric_basic_arithmetic)
+   Compiling databend-functions-scalar-datetime v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions/src/scalars/timestamp)
+   Compiling databend-functions-scalar-geo v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions/src/scalars/geographic)
+   Compiling databend-common-pipeline v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/pipeline)
+   Compiling databend-functions-scalar-integer-basic-arithmetic v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions/src/scalars/integer_arithmetic)
+   Compiling databend-functions-scalar-math v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions/src/scalars/mathematics)
+   Compiling databend-functions-scalar-arithmetic v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions/src/scalars/arithmetic)
+   Compiling databend-common-storage v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/common/storage)
+   Compiling databend-common-proto-conv v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/proto-conv)
+   Compiling databend-enterprise-row-access-policy-feature v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/row_access_policy)
+   Compiling databend-enterprise-data-mask-feature v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/data_mask)
+   Compiling databend-common-formats v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/formats)
+   Compiling databend-enterprise-data-sharing v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/data_sharing)
+   Compiling databend-common-meta-api v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/meta/api)
+   Compiling iceberg-catalog-hms v0.8.0 (https://github.com/databendlabs/iceberg-rust?branch=dev#15aee17e)
+   Compiling databend-common-functions v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/functions)
+   Compiling databend-common-config v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/config)
+   Compiling iceberg-catalog-glue v0.8.0 (https://github.com/databendlabs/iceberg-rust?branch=dev#15aee17e)
+   Compiling databend-common-management v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/management)
+   Compiling databend-storages-common-table-meta v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/table_meta)
+   Compiling databend-common-users v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/users)
+   Compiling databend-enterprise-resources-management v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/resources_management)
+   Compiling databend-storages-common-blocks v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/blocks)
+   Compiling databend-common-component v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/common/component)
+   Compiling databend-storages-common-session v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/session)
+   Compiling databend-common-settings v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/settings)
+   Compiling databend-common-catalog v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/catalog)
+   Compiling databend-storages-common-io v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/io)
+   Compiling databend-storages-common-stage v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/stage)
+   Compiling databend-enterprise-materialized-view v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/materialized_view)
+   Compiling databend-enterprise-fail-safe v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/fail_safe)
+   Compiling databend-enterprise-vacuum-handler v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/vacuum_handler)
+   Compiling databend-storages-common-pruner v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/pruner)
+   Compiling databend-storages-common-cache v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/common/cache)
+   Compiling databend-common-storages-parquet v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/parquet)
+   Compiling databend-common-storages-basic v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/basic)
+   Compiling databend-common-sql v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/sql)
+   Compiling databend-common-pipeline-transforms v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/pipeline/transforms)
+   Compiling databend-enterprise-stream-handler v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/stream_handler)
+   Compiling databend-enterprise-attach-table v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/attach_table)
+   Compiling databend-enterprise-table-ref-handler v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee_features/table_ref_handler)
+   Compiling databend-common-storages-fuse v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/fuse)
+   Compiling databend-common-storages-orc v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/orc)
+   Compiling databend-common-storages-paimon v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/paimon)
+   Compiling databend-query-script-udf-support v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/script_udf_support)
+   Compiling databend-common-storages-iceberg v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/iceberg)
+   Compiling databend-common-storages-stage v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/stage)
+   Compiling databend-query-storage-stage-support v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storage_stage_support)
+   Compiling databend-common-storages-stream v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/stream)
+   Compiling databend-common-storages-system v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/system)
+   Compiling databend-common-storages-factory v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/factory)
+   Compiling databend-common-storages-information-schema v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/storages/information_schema)
+   Compiling databend-query-task-support v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/task_support)
+   Compiling databend-enterprise-query v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/query/ee)
+   Compiling databend-binaries v0.1.0 (/home/kould/tmp-build/wt-official-main-prs/src/binaries)
+    Finished `release` profile [optimized + debuginfo] target(s) in 15m 05s
+warning: the following packages contain code that will be rejected by a future version of Rust: lzokay-native v0.1.0, num-bigint-dig v0.8.4, proc-macro-error2 v2.0.1, trim-in-place v0.1.7
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`

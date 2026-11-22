@@ -1,0 +1,34 @@
+#!/bin/bash
+set -eu
+
+# Pick the binary matching the host arch. Hard-coding x86_64 made the
+# c8g.* runs download an x86_64 musl tarball that exec'd fine on arm64
+# kernels but crashed at first syscall, so ./check looped 600s on
+# "Failed to connect to localhost:8124" and the run died before any
+# query.
+case "$(uname -m)" in
+    x86_64|amd64)  arch=x86_64 ;;
+    aarch64|arm64) arch=aarch64 ;;
+    *) echo "databend: unsupported arch $(uname -m)" >&2; exit 1 ;;
+esac
+tarball="databend-v0.9.53-nightly-${arch}-unknown-linux-musl.tar.gz"
+
+if [ ! -d ./bin ]; then
+    curl -LJO "https://github.com/databendlabs/databend/releases/download/v0.9.53-nightly/${tarball}"
+    tar xzvf "${tarball}"
+fi
+
+cat > config.toml <<'CONF'
+[storage]
+type = "fs"
+
+[storage.fs]
+data_path = "./_data"
+
+[meta]
+endpoints = ["127.0.0.1:9191"]
+username = "root"
+password = "root"
+client_timeout_in_second = 60
+auto_sync_interval = 60
+CONF

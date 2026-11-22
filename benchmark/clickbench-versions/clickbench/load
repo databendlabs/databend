@@ -1,0 +1,13 @@
+#!/bin/bash
+set -eu
+
+# Create the table.
+curl -sS 'http://default@localhost:8124/' --data-binary @create.sql
+
+# Load via the streaming_load HTTP endpoint.
+curl -sS -XPUT 'http://root:@127.0.0.1:8000/v1/streaming_load' \
+    -H 'insert_sql: insert into hits FILE_FORMAT = (type = TSV)' \
+    -F 'upload=@./hits.tsv'
+
+rm -f hits.tsv
+sync

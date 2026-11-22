@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+
+curl -sSf 'http://default@localhost:8124/' --data-binary 'SELECT 1' >/dev/null

@@ -1,0 +1,25 @@
+#!/bin/bash
+# Reads a SQL query from stdin, runs it via databend's clickhouse-compatible HTTP.
+# Stdout: query result.
+# Stderr: query runtime in fractional seconds on the last line (curl wall-clock).
+# Exit non-zero on error.
+set -e
+
+query=$(cat)
+
+body=$(mktemp)
+trap 'rm -f "$body"' EXIT
+
+stats=$(curl -sS -o "$body" -w 'HTTP:%{http_code} TIME:%{time_total}\n' \
+    'http://default@localhost:8124' --data "$query")
+http_code=$(echo "$stats" | grep -oP 'HTTP:\K[0-9]+')
+res=$(echo "$stats" | grep -oP 'TIME:\K[0-9.]+')
+
+if [ "$http_code" != "200" ] || grep -qiE '"error"|exception|error code' "$body"; then
+    cat "$body" >&2
+    exit 1
+fi
+
+cat "$body"
+
+awk -v t="$res" 'BEGIN { printf "%.3f\n", t }' >&2

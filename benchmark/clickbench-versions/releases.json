@@ -1,0 +1,7 @@
+{
+ "v0.9.53": {"source": "official release v0.9.53-nightly (the version ClickBench uses)", "builtin_root": true},
+ "v1.2.955": {"source": "official release v1.2.955-nightly, commit 058a1e8fbd, before encoded columns #20819"},
+ "v1.2.967": {"source": "official release v1.2.967-nightly, commit 25ca45599d"},
+ "official-967": {"source": "commit 25ca45599d (= v1.2.967) built locally by build-official.sh with the release CI parameters; meta from the v1.2.967 package"},
+ "official-main-prs": {"source": "upstream/main 177b395dd3 + #21138 + #21144 (581c894436) built by build-official.sh; meta from the v1.2.967 package"}
+}

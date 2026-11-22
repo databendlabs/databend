@@ -1,0 +1,28 @@
+#!/bin/bash
+set -eu
+
+# Idempotent: if HTTP API is already up, do nothing.
+if curl -sSf 'http://default@localhost:8124/' --data-binary 'SELECT 1' >/dev/null 2>&1; then
+    exit 0
+fi
+
+# databend-query opens a lot of object-store handles during ingest and
+# query; the default 1024 fd limit hit "No file descriptors available
+# (os error 24)" mid-benchmark.
+ulimit -n 65536 || true
+
+# databend has two daemons: meta service + query service. Query's first
+# action is to dial the meta service; if we start them simultaneously
+# query crashes on the connection refused, exits, and the bench loop
+# then polls a dead process for 300s. Start meta first, wait for the
+# raft port (9191) to bind, then bring up query.
+nohup ./bin/databend-meta --single > meta.log 2>&1 &
+disown
+
+for _ in $(seq 1 60); do
+    if (echo > /dev/tcp/127.0.0.1/9191) >/dev/null 2>&1; then break; fi
+    sleep 1
+done
+
+nohup ./bin/databend-query -c config.toml > query.log 2>&1 &
+disown

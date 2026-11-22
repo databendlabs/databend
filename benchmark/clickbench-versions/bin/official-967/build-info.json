@@ -1,0 +1,21 @@
+{
+ "name": "official-967",
+ "git_rev_arg": "25ca45599d",
+ "git_sha": "25ca45599d2b9aa78b2bde12ffb1295173e9f996",
+ "git_log": "25ca45599d feat(query): improve bloom runtime filter selection and sampling (#20847)\nf526ce0d9c refactor(query): plan runtime filters with filter push-down rules (#20870)\n8812710fe6 fix: report table-meta-inspector failures (#21127)\n9433cf82aa fix(query): preserve RBAC upgrade compatibility and audit access (#21132)\na83eaeaddd feat(query): speed up top COUNT(*) GROUP BY queries by aggregating only heavy hitter keys (#21077)\ndea33860c3 fix(query): batch small blocks before the window partition exchange (#21112)\n76caf9e844 fix(query): enforce stage WRITE on HTTP uploads (#21126)\n10a03cc83e feat: config: add `ownership` to `cache.meta_service_caches` (#21124)\nad64c4c815 feat(storage): partial column update(read path) (#21098)\n1d54ffea64 chore: meta: use sub-cache 0.4.1, which stops a dropped cache's watch (#21123)\n6546196f60 feat(query): read the watched user on MySQL and FlightSQL login (#21110)\n50f8ae1bf3 fix(query): stream all-pairs joins with bounded memory (#20966)",
+ "rustc": "rustc 1.101.0-nightly (12433c307 2026-10-24)\nbinary: rustc\ncommit-hash: 12433c307b5a497388ffe2f4e49dbf1ab8c71fa0\ncommit-date: 2026-10-24\nhost: x86_64-unknown-linux-gnu\nrelease: 1.101.0-nightly\nLLVM version: 23.1.4",
+ "toolchain_file": "[toolchain]\nchannel = \"nightly-2026-10-25\"\ncomponents = [\"rustfmt\", \"clippy\", \"rust-src\", \"miri\", \"rust-analyzer\"]",
+ "cargo_cmd": "cargo build --locked --target x86_64-unknown-linux-gnu --features default --profile release --bin databend-query",
+ "env": {
+  "CARGO_INCREMENTAL": "0",
+  "CARGO_PROFILE_RELEASE_OPT_LEVEL": "s",
+  "RUSTFLAGS": "-C target-feature=+sse4.2 -C link-arg=-fuse-ld=mold"
+ },
+ "profile_release": "[profile.release]\ndebug = \"line-tables-only\"\nlto = \"thin\"\noverflow-checks = false\nopt-level = \"s\"            # defaults to be 3\nincremental = false\ncodegen-units = 1          ## better performance see below comment",
+ "cargo_config": "[env]\n# https://android.googlesource.com/platform/external/jemalloc_new/+/refs/heads/master/TUNING.md\nJEMALLOC_SYS_WITH_MALLOC_CONF = \"percpu_arena:percpu,oversize_threshold:0,background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000\"\n\n## If you are using aarch64-apple-darwin, you may need to set the following:\n## JEMALLOC_SYS_WITH_LG_PAGE = \"14\"\n## JEMALLOC_SYS_WITH_MALLOC_CONF = \"oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000\"\n\n[target.'cfg(target_os = \"linux\")']\nlinker = \"clang\"\nrustflags = [\"-C\", \"link-arg=-fuse-ld=mold\", \"-C\", \"link-arg=-flto=thin\"]",
+ "post": "objcopy --only-keep-debug; strip --strip-debug --remove-section=.comment --remove-section=.note",
+ "build_start": "2026-11-21T20:08:34Z",
+ "build_end": "2026-11-21T20:23:57Z",
+ "sha256": "7c531a49ca628254beed79a232277f61e95247b96558aea7d98eb761407eebcd",
+ "version": "databend-query v1.2.967-25ca45599d(rust-1.101.0-nightly-2026-11-21T20:09:51.167759719Z)"
+}

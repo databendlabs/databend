@@ -1,0 +1,21 @@
+{
+ "name": "official-main-prs",
+ "git_rev_arg": "581c89443690c8c9003e204b564ffbbf526fdadd",
+ "git_sha": "581c89443690c8c9003e204b564ffbbf526fdadd",
+ "git_log": "581c894436 refactor(query): output the first block of a spilled final aggregate task at once\n8e2f8c18fc fix(query): reserve one row per group for final aggregate results\n955d77acf5 refactor(query): output in-memory final aggregate results a block at a time\n4d3add6365 fix(storage): skip batched filter-only scan for non-deterministic prewhere\ne5dda7e770 test(storage): check filter-only row ids whatever the block layout\n622d88dfb2 perf(storage): avoid copying local FS merge reads\n2d820e1ac5 perf(storage): batch filter-only Parquet scans\n32b9e9896a perf(query): compare strings with the empty string by length\nccf1fd18c1 refactor(query): search `%needle%` LIKE patterns with memmem\n177b395dd3 refactor(query): drop duplicate meta reads when planning a SELECT (#21145)\n77137bc2ad chore(meta): use server v260629.11.0 and client v260205.13.7 (#21146)\na85e50302c fix(query): probe the partition built in each hash join spill round (#21141)",
+ "rustc": "rustc 1.101.0-nightly (12433c307 2026-10-24)\nbinary: rustc\ncommit-hash: 12433c307b5a497388ffe2f4e49dbf1ab8c71fa0\ncommit-date: 2026-10-24\nhost: x86_64-unknown-linux-gnu\nrelease: 1.101.0-nightly\nLLVM version: 23.1.4",
+ "toolchain_file": "[toolchain]\nchannel = \"nightly-2026-10-25\"\ncomponents = [\"rustfmt\", \"clippy\", \"rust-src\", \"miri\", \"rust-analyzer\"]",
+ "cargo_cmd": "cargo build --locked --target x86_64-unknown-linux-gnu --features default --profile release --bin databend-query",
+ "env": {
+  "CARGO_INCREMENTAL": "0",
+  "CARGO_PROFILE_RELEASE_OPT_LEVEL": "s",
+  "RUSTFLAGS": "-C target-feature=+sse4.2 -C link-arg=-fuse-ld=mold"
+ },
+ "profile_release": "[profile.release]\ndebug = \"line-tables-only\"\nlto = \"thin\"\noverflow-checks = false\nopt-level = \"s\"            # defaults to be 3\nincremental = false\ncodegen-units = 1          ## better performance see below comment",
+ "cargo_config": "[env]\n# https://android.googlesource.com/platform/external/jemalloc_new/+/refs/heads/master/TUNING.md\nJEMALLOC_SYS_WITH_MALLOC_CONF = \"percpu_arena:percpu,oversize_threshold:0,background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000\"\n\n## If you are using aarch64-apple-darwin, you may need to set the following:\n## JEMALLOC_SYS_WITH_LG_PAGE = \"14\"\n## JEMALLOC_SYS_WITH_MALLOC_CONF = \"oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000\"\n\n[target.'cfg(target_os = \"linux\")']\nlinker = \"clang\"\nrustflags = [\"-C\", \"link-arg=-fuse-ld=mold\", \"-C\", \"link-arg=-flto=thin\"]",
+ "post": "objcopy --only-keep-debug; strip --strip-debug --remove-section=.comment --remove-section=.note",
+ "build_start": "2026-11-21T20:24:08Z",
+ "build_end": "2026-11-21T20:39:14Z",
+ "sha256": "6c59b5f5ed49b1921ab13ba609493f4fb59a55cc581c78daf8dbcc97b2703784",
+ "version": "databend-query v1.2.967-581c894436(rust-1.101.0-nightly-2026-11-21T20:24:58.225847978Z)"
+}
