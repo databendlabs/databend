@@ -156,22 +156,22 @@ fn file_system_space(path: &std::path::Path) -> (u64, u64) {
 }
 
 /// `max_bytes` unset sizes the disk cache at start from the file system under `path`: the room
-/// below the watermark, the cache's own files counted in, split among the pools by their ratios.
+/// below the watermark, split among the pools by their ratios. The files of the previous run
+/// count as room, by the space they take: the cache is as large as without them.
 #[test]
 fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
-    const GIB: u64 = 1 << 30;
     // Other tests change what the file system has available meanwhile.
-    const SLACK: u64 = GIB;
-    // A file of the previous run, sparse: counted by its length without taking room. Twice the
-    // slack, so the result tells it counted; small enough for a file system without holes.
-    const CACHED: u64 = 2 * GIB;
+    const SLACK: u64 = 24 * MIB;
     let dir = TempDir::new().unwrap();
+    let (total, before) = file_system_space(dir.path());
+    // Files much smaller than a block: 16384 of 100 bytes take 64 MiB of 4 KiB blocks for
+    // 1.6 MB of length, so leaving them out or counting their lengths misses it by more than
+    // the slack.
     let old_layout = dir.path().join("test_tenant").join("v1");
     std::fs::create_dir_all(&old_layout).unwrap();
-    std::fs::File::create(old_layout.join("entry"))
-        .unwrap()
-        .set_len(CACHED)
-        .unwrap();
+    for i in 0..16384 {
+        std::fs::write(old_layout.join(format!("entry_{i}")), [0u8; 100]).unwrap();
+    }
     let config = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
             max_bytes: None,
@@ -181,12 +181,11 @@ fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
         },
         ..disk_config(&dir)
     };
-    let (total, before) = file_system_space(dir.path());
     let manager = manager(&config, true);
-    let (_, after) = file_system_space(dir.path());
     let max_bytes = manager.disk().unwrap().max_bytes();
-    let low = auto_max_bytes(total, before.min(after), CACHED, 100).saturating_sub(SLACK);
-    let high = auto_max_bytes(total, before.max(after), CACHED, 100) + SLACK;
+    let without_them = auto_max_bytes(total, before, 0, 100);
+    let low = without_them.saturating_sub(SLACK);
+    let high = without_them + SLACK;
     assert!(
         (low..=high).contains(&max_bytes),
         "{max_bytes} not in {low}..={high}"

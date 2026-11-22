@@ -18,6 +18,7 @@
 //! fill it on a miss; writes and maintenance do not.
 
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -648,8 +649,9 @@ fn size_from_file_system(
     Ok(bytes)
 }
 
-/// Bytes of the files under `tenant_root`. Files it could not see count for none, sizing the
-/// cache smaller.
+/// Bytes the files under `tenant_root` take on disk, which deleting them frees: their blocks,
+/// as `available` counts, not their lengths, smaller for files of a fraction of a block. Files
+/// it could not see count for none, sizing the cache smaller.
 fn cached_bytes(tenant_root: &Path) -> u64 {
     // Not held to the memory limit, on this thread or the workers', like the restart scan.
     let _unlimited = LimitMemGuard::enter_unlimited();
@@ -658,7 +660,8 @@ fn cached_bytes(tenant_root: &Path) -> u64 {
         .par_iter()
         .map(|path| {
             let _unlimited = LimitMemGuard::enter_unlimited();
-            fs::metadata(path).map_or(0, |meta| meta.len())
+            // `st_blocks` is in 512 byte units, whatever the block size.
+            fs::metadata(path).map_or(0, |meta| meta.blocks().saturating_mul(512))
         })
         .sum();
     if !complete.into_inner() {
