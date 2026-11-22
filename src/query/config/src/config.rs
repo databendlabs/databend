@@ -3765,13 +3765,11 @@ impl Default for DiskCacheKeyReloadPolicy {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct DiskCacheConfig {
-    /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
-    #[clap(
-        long = "cache-disk-max-bytes",
-        value_name = "VALUE",
-        default_value = "21474836480"
-    )]
-    pub max_bytes: u64,
+    /// Max bytes of cached raw table data; 1024 or less disables it. Unset, it is sized at
+    /// start to the room the file system under `path` leaves before `watermark_ratio` percent
+    /// of it is in use, the cache's own files counted in, at most 1 TiB.
+    #[clap(long = "cache-disk-max-bytes", value_name = "VALUE")]
+    pub max_bytes: Option<u64>,
 
     /// Table disk cache root path
     #[clap(
@@ -3875,7 +3873,7 @@ pub struct DiskCacheConfig {
 impl Default for DiskCacheConfig {
     fn default() -> Self {
         Self {
-            max_bytes: 21474836480,
+            max_bytes: None,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
             meta_max_ratio: 10,

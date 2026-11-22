@@ -22,7 +22,9 @@ use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::DiskKey;
+use databend_storages_common_cache::MAX_AUTO_DISK_CACHE_BYTES;
 use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::auto_max_bytes;
 use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
@@ -369,6 +371,40 @@ fn test_split_caps_follows_the_ratios_whatever_their_sum() {
     assert_eq!(caps[2], 0);
     assert_eq!(split_caps(1000, [0, 1, 1]).unwrap(), [0, 500, 500]);
     assert!(split_caps(1000, [0, 0, 0]).is_err());
+}
+
+/// `max_bytes` unset is the room the file system leaves below the watermark, the cache's own
+/// files counted as room, at most `MAX_AUTO_DISK_CACHE_BYTES`.
+#[test]
+fn test_auto_max_bytes_is_the_room_below_the_watermark() {
+    const GIB: u64 = 1 << 30;
+    let total = 1000 * GIB;
+    // A disk of its own, empty: up to the watermark.
+    assert_eq!(auto_max_bytes(total, total, 0, 90), 900 * GIB);
+    // A shared disk, 400 GiB used by other files: what they leave below the watermark.
+    assert_eq!(auto_max_bytes(total, 600 * GIB, 0, 90), 500 * GIB);
+    // A restart finding 300 GiB of its files beside 100 GiB of others sizes the cache as a start
+    // without them would: its files do not shrink it.
+    assert_eq!(
+        auto_max_bytes(total, 600 * GIB, 300 * GIB, 90),
+        auto_max_bytes(total, 900 * GIB, 0, 90)
+    );
+    assert_eq!(auto_max_bytes(total, 600 * GIB, 300 * GIB, 90), 800 * GIB);
+    // Other files over the watermark already leave nothing: the cache is off.
+    assert_eq!(auto_max_bytes(total, 50 * GIB, 0, 90), 0);
+    assert_eq!(auto_max_bytes(total, 100 * GIB, 0, 90), 0);
+    assert_eq!(auto_max_bytes(0, 0, 0, 90), 0);
+    // A watermark of 100 never evicts: everything available.
+    assert_eq!(auto_max_bytes(total, 600 * GIB, 0, 100), 600 * GIB);
+    // Large disks are capped, without overflow.
+    assert_eq!(
+        auto_max_bytes(16 << 40, 16 << 40, 0, 90),
+        MAX_AUTO_DISK_CACHE_BYTES
+    );
+    assert_eq!(
+        auto_max_bytes(u64::MAX, u64::MAX, u64::MAX, 90),
+        MAX_AUTO_DISK_CACHE_BYTES
+    );
 }
 
 /// An entry whose file is gone (deleted behind the cache) is a miss and leaves the index.

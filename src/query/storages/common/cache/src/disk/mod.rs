@@ -28,6 +28,8 @@ pub use disk_cache::DiskCacheStats;
 pub use disk_cache::DiskKindEvents;
 pub use disk_cache::DiskKindStats;
 pub use disk_cache::DiskPoolStats;
+pub use disk_cache::MAX_AUTO_DISK_CACHE_BYTES;
+pub use disk_cache::auto_max_bytes;
 pub use disk_cache::split_caps;
 pub use disk_cached_storage::DiskCachedStorage;
 pub use disk_cached_storage::UnitsRead;

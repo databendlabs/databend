@@ -25,15 +25,18 @@ use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CacheRow;
 use databend_storages_common_cache::DiskKey;
+use databend_storages_common_cache::MAX_AUTO_DISK_CACHE_BYTES;
 use databend_storages_common_cache::MemCache;
 use databend_storages_common_cache::Pool;
 use databend_storages_common_cache::Unit;
+use databend_storages_common_cache::auto_max_bytes;
 use databend_storages_common_cache::backend::KindStore;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::table;
 use databend_storages_common_cache::kinds::virtual_column;
 use databend_storages_common_cache::legacy::LegacyCapacity;
 use databend_storages_common_cache::legacy::LegacyStore;
+use databend_storages_common_cache::split_caps;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -52,7 +55,7 @@ pub fn disk_config(dir: &TempDir) -> CacheConfig {
     CacheConfig {
         data_cache_storage: CacheStorageTypeInnerConfig::Disk,
         disk_cache_config: DiskCacheInnerConfig {
-            max_bytes: MIB,
+            max_bytes: Some(MIB),
             path: dir.path().to_string_lossy().to_string(),
             ..Default::default()
         },
@@ -121,7 +124,7 @@ fn test_disk_cache_follows_ee_mode_and_config() {
     assert!(manager(&legacy_config(), true).disk().is_none());
     let tiny = CacheConfig {
         disk_cache_config: DiskCacheInnerConfig {
-            max_bytes: 1024,
+            max_bytes: Some(1024),
             ..config.disk_cache_config.clone()
         },
         ..config.clone()
@@ -138,6 +141,97 @@ fn test_disk_cache_follows_ee_mode_and_config() {
         ..config
     };
     assert!(CacheManager::try_new(&no_pools, &MIB, "t", true).is_err());
+}
+
+/// Total and available bytes of the file system under `path`, as the disk cache reads them.
+fn file_system_space(path: &std::path::Path) -> (u64, u64) {
+    let stat = rustix::fs::statvfs(path).unwrap();
+    let block = if stat.f_frsize > 0 {
+        stat.f_frsize
+    } else {
+        stat.f_bsize
+    };
+    (stat.f_blocks * block, stat.f_bavail * block)
+}
+
+/// `max_bytes` unset sizes the disk cache at start from the file system under `path`: the room
+/// below the watermark, the cache's own files counted in, split among the pools by their ratios.
+#[test]
+fn test_disk_cache_unset_max_bytes_sizes_from_the_file_system() {
+    const GIB: u64 = 1 << 30;
+    // Other tests change what the file system has available meanwhile.
+    const SLACK: u64 = GIB;
+    // A file of the previous run, sparse: counted by its length without taking room.
+    const CACHED: u64 = 64 * GIB;
+    let dir = TempDir::new().unwrap();
+    let old_layout = dir.path().join("test_tenant").join("v1");
+    std::fs::create_dir_all(&old_layout).unwrap();
+    std::fs::File::create(old_layout.join("entry"))
+        .unwrap()
+        .set_len(CACHED)
+        .unwrap();
+    let config = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            max_bytes: None,
+            // Never over the watermark, wherever the test runs.
+            watermark_ratio: 100,
+            ..disk_config(&dir).disk_cache_config
+        },
+        ..disk_config(&dir)
+    };
+    let (total, before) = file_system_space(dir.path());
+    let manager = manager(&config, true);
+    let (_, after) = file_system_space(dir.path());
+    let max_bytes = manager.disk().unwrap().max_bytes();
+    let low = auto_max_bytes(total, before.min(after), CACHED, 100).saturating_sub(SLACK);
+    let high = auto_max_bytes(total, before.max(after), CACHED, 100) + SLACK;
+    assert!(
+        (low..=high).contains(&max_bytes),
+        "{max_bytes} not in {low}..={high}"
+    );
+    assert!(max_bytes <= MAX_AUTO_DISK_CACHE_BYTES);
+    let caps = split_caps(max_bytes, [10, 20, 70]).unwrap();
+    assert_eq!(capacity(&manager, "__disk_pool:meta"), Some(caps[0]));
+    assert_eq!(capacity(&manager, "__disk_pool:index"), Some(caps[1]));
+    assert_eq!(capacity(&manager, "__disk_pool:data"), Some(caps[2]));
+}
+
+/// `max_bytes` unset leaves the disk cache off when the file system has no room below the
+/// watermark, and fails the start when the file system under `path` cannot be read.
+#[test]
+fn test_disk_cache_unset_max_bytes_without_room_or_file_system() {
+    let dir = TempDir::new().unwrap();
+    let config = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            max_bytes: None,
+            // Room only on a file system more than 99% free.
+            watermark_ratio: 1,
+            ..disk_config(&dir).disk_cache_config
+        },
+        ..disk_config(&dir)
+    };
+    let (total, available) = file_system_space(dir.path());
+    let room = auto_max_bytes(total, available, 0, 1);
+    assert_eq!(
+        manager(&config, true).disk().is_some(),
+        room > 1024,
+        "{room}"
+    );
+
+    let file = dir.path().join("file");
+    std::fs::write(&file, b"").unwrap();
+    let path = file.join("cache");
+    let unreadable = CacheConfig {
+        disk_cache_config: DiskCacheInnerConfig {
+            path: path.to_string_lossy().to_string(),
+            ..config.disk_cache_config.clone()
+        },
+        ..config
+    };
+    let err = CacheManager::try_new(&unreadable, &MIB, "test_tenant", true)
+        .err()
+        .unwrap();
+    assert!(err.message().contains(&*path.to_string_lossy()), "{err}");
 }
 
 /// The disk cache is independent of the memory backend and its switches; the options of the

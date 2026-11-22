@@ -44,6 +44,7 @@ use databend_storages_common_io::MergeIOReadResult;
 use log::info;
 use log::warn;
 use parking_lot::Mutex;
+use rayon::prelude::*;
 
 use crate::CacheKind;
 use crate::DiskKey;
@@ -53,6 +54,7 @@ use crate::disk::disk_file::read_entry;
 pub use crate::disk::disk_pool::DiskKindEvents;
 use crate::disk::disk_pool::DiskPool;
 pub use crate::disk::disk_pool::DiskPoolStats;
+use crate::disk::disk_pool::scan_files;
 use crate::disk::disk_writer::DiskWriter;
 use crate::disk::disk_writer::DropReason;
 use crate::disk::disk_writer::WriteJob;
@@ -61,6 +63,10 @@ use crate::disk::disk_writer::WriterOptions;
 /// `cache.disk.max_bytes` at or below this turns the disk cache off: the cloud platform sets a
 /// tiny size rather than 0 to disable it without unmounting the volume.
 const MIN_DISK_CACHE_BYTES: u64 = 1024;
+
+/// `cache.disk.max_bytes` unset sizes the cache to at most this: the pools index every entry
+/// in memory, a few hundred bytes each. A larger cache is configured in bytes.
+pub const MAX_AUTO_DISK_CACHE_BYTES: u64 = 1 << 40;
 
 /// Version of the directory layout, `<path>/<tenant>/v2/<pool>/<kind>/<prefix>/<hash>`. Other
 /// entries under `<path>/<tenant>` are from older layouts and are removed in the background.
@@ -133,7 +139,8 @@ pub struct DiskCache {
 
 impl DiskCache {
     /// The disk cache of the node, or `None` when `cache.data_cache_storage` is not `disk`,
-    /// `max_bytes` is too small, or the build is not EE.
+    /// `max_bytes` is too small, or the build is not EE. `max_bytes` unset is sized from the
+    /// file system under `cache.disk.path` (see `auto_max_bytes`).
     pub fn from_config(
         config: &CacheConfig,
         tenant_id: &str,
@@ -141,32 +148,50 @@ impl DiskCache {
     ) -> Result<Option<Arc<DiskCache>>> {
         let disk = &config.disk_cache_config;
         if config.data_cache_storage != CacheStorageTypeConfig::Disk
-            || disk.max_bytes <= MIN_DISK_CACHE_BYTES
+            || disk
+                .max_bytes
+                .is_some_and(|bytes| bytes <= MIN_DISK_CACHE_BYTES)
             || !ee_mode
         {
             info!(
-                "[DiskCache] off: storage {:?}, max_bytes {}, ee mode {ee_mode}",
+                "[DiskCache] off: storage {:?}, max_bytes {:?}, ee mode {ee_mode}",
                 config.data_cache_storage, disk.max_bytes
             );
             return Ok(None);
         }
-        let caps = split_caps(disk.max_bytes, [
+        // Checked before the file system is looked at: `auto_max_bytes` takes the watermark.
+        let writer = writer_options(disk)?;
+        let tenant_root = PathBuf::from(&disk.path).join(tenant_id);
+        let max_bytes = match disk.max_bytes {
+            Some(bytes) => bytes,
+            None => {
+                let bytes = size_from_file_system(Path::new(&disk.path), &tenant_root, disk)?;
+                if bytes <= MIN_DISK_CACHE_BYTES {
+                    warn!(
+                        "[DiskCache] off: max_bytes unset and the file system under {:?} has no \
+                         room below the watermark of {}%",
+                        disk.path, disk.watermark_ratio
+                    );
+                    return Ok(None);
+                }
+                bytes
+            }
+        };
+        let caps = split_caps(max_bytes, [
             disk.meta_max_ratio,
             disk.index_max_ratio,
             disk.data_max_ratio,
         ])?;
-        let tenant_root = PathBuf::from(&disk.path).join(tenant_id);
         if config.data_cache_key_reload_policy == DiskCacheKeyReloadPolicy::Reset {
             // Starts empty: the files of the previous run are set aside at once, then deleted
             // with the older layouts in the background. Nothing cached before a restart is read
             // after it, whatever happened to the objects meanwhile.
             set_aside_layout(&tenant_root)?;
         }
-        let writer = writer_options(disk)?;
-        let cache = DiskCache::with_writer(&tenant_root, disk.max_bytes, caps, writer)?;
+        let cache = DiskCache::with_writer(&tenant_root, max_bytes, caps, writer)?;
         info!(
             "[DiskCache] on: {} bytes, meta {} / index {} / data {}, under {:?}",
-            disk.max_bytes, caps[0], caps[1], caps[2], tenant_root
+            max_bytes, caps[0], caps[1], caps[2], tenant_root
         );
         let cache = Arc::new(cache);
         cache.clone().start_reload(tenant_root);
@@ -564,6 +589,69 @@ pub fn split_caps(max_bytes: u64, ratios: [u64; 3]) -> Result<[u64; 3]> {
         ));
     }
     Ok(ratios.map(|r| (max_bytes as u128 * r as u128 / total) as u64))
+}
+
+/// `cache.disk.max_bytes` when unset, in bytes: the room a file system of `total` bytes,
+/// `available` of them free, leaves the cache before `watermark_ratio` percent of it is in use,
+/// past which the writer evicts. The `cached` bytes of the cache's own files count as room:
+/// those of a previous run are freed or indexed by the restart, and leaving them out would
+/// size the cache smaller at each restart. At most `MAX_AUTO_DISK_CACHE_BYTES`.
+pub fn auto_max_bytes(total: u64, available: u64, cached: u64, watermark_ratio: u64) -> u64 {
+    let reserved = total as u128 * 100u128.saturating_sub(watermark_ratio as u128) / 100;
+    let room = (available as u128 + cached as u128).saturating_sub(reserved);
+    room.min(MAX_AUTO_DISK_CACHE_BYTES as u128) as u64
+}
+
+/// `auto_max_bytes` of the file system under `path`, the cache's files being those under
+/// `tenant_root`, of every layout.
+fn size_from_file_system(
+    path: &Path,
+    tenant_root: &Path,
+    disk: &DiskCacheInnerConfig,
+) -> Result<u64> {
+    fs::create_dir_all(path).map_err(|e| {
+        ErrorCode::StorageOther(format!(
+            "failed to create disk cache directory {path:?}: {e}"
+        ))
+    })?;
+    let stat = rustix::fs::statvfs(path).map_err(|e| {
+        ErrorCode::StorageOther(format!(
+            "failed to size the disk cache from the file system under {path:?}: {e}"
+        ))
+    })?;
+    // Block counts are in fragments; `f_frsize` is 0 on some file systems.
+    let block = if stat.f_frsize > 0 {
+        stat.f_frsize
+    } else {
+        stat.f_bsize
+    };
+    let total = stat.f_blocks.saturating_mul(block);
+    let available = stat.f_bavail.saturating_mul(block);
+    let cached = cached_bytes(tenant_root);
+    let bytes = auto_max_bytes(total, available, cached, disk.watermark_ratio);
+    info!(
+        "[DiskCache] max_bytes unset: {bytes} bytes, from {total} bytes in the file system under \
+         {path:?}, {available} available and {cached} in cache files, below the watermark of {}%, \
+         at most {MAX_AUTO_DISK_CACHE_BYTES}",
+        disk.watermark_ratio
+    );
+    Ok(bytes)
+}
+
+/// Bytes of the files under `tenant_root`. Files it could not see count for none, sizing the
+/// cache smaller.
+fn cached_bytes(tenant_root: &Path) -> u64 {
+    let complete = AtomicBool::new(true);
+    let bytes = scan_files(tenant_root, &complete)
+        .par_iter()
+        .map(|path| fs::metadata(path).map_or(0, |meta| meta.len()))
+        .sum();
+    if !complete.into_inner() {
+        warn!(
+            "[DiskCache] the scan of {tenant_root:?} is incomplete; files it missed are not room"
+        );
+    }
+    bytes
 }
 
 fn delete_in_background(pool: Arc<DiskPool>, victims: Vec<String>) {
