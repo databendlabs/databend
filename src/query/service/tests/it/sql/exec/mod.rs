@@ -270,5 +270,6 @@ mod insert;
 mod multi_table_insert;
 mod range_join;
 mod spatial_join;
+mod stage_access;
 mod table_ttl_test;
 mod window;

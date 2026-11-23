@@ -287,7 +287,13 @@ where
         usage: &str,
     ) -> Result<StorageParams> {
         self.resolve_uri_connection(uri).await?;
-        Ok(parse_storage_params_from_uri(uri, usage).await?)
+        let storage_params = parse_storage_params_from_uri(uri, usage).await?;
+        if !storage_params.is_secure() && !self.storage_allow_insecure {
+            return Err(ErrorCode::StorageInsecure(format!(
+                "insecure storage is not allowed {usage}"
+            )));
+        }
+        Ok(storage_params)
     }
 
     #[async_backtrace::framed]

@@ -120,6 +120,7 @@ pub use stage::StageFileInfoStream;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
 pub use stage::ensure_no_stage_path_traversal;
+pub use stage::ensure_valid_stage_prefix_name;
 pub use stage::init_stage_operator;
 pub use stage::internal_stage_storage_params;
 pub use stage::is_stage_path_traversal;
