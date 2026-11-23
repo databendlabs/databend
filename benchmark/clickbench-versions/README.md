@@ -23,6 +23,8 @@
 | `results/round{0,1}.json` | 每格（轮、题、版本）的时间戳、开始前主机 CPU 占用、启动耗时、3 次运行的耗时、峰值 RSS、行数、结果哈希，以及第 1 次运行的前 20 行结果 |
 | `clickbench/` | 所用的 ClickBench databend 脚本副本（`create.sql`、`queries.sql`、原始 `benchmark.sh` 等） |
 | `logs/run.log` | 测试过程输出 |
+| `probes/run_probes.py` | 补充测试（2026-11-23）：`format` 在 v0.9.53 里建 Parquet 表做同格式对比，`q03` 对比单列聚合，`small` 测小查询的 segment 统计、block meta 缓存，以及 `length` 和 `octet_length` |
+| `probes/{format,q03,small}.json`、`*.log` | 补充测试的结果和输出 |
 
 ## 版本与构建参数
 
@@ -72,4 +74,6 @@ for n in v0.9.53 v1.2.955 v1.2.967 official-967 official-main-prs; do python3 be
 python3 bench.py manifest && python3 bench.py run 2
 for n in v0.9.53 v1.2.955 v1.2.967 official-967 official-main-prs; do cp /tmp/cb-versions/$n/load.json loads/$n.json; done
 python3 report.py > report.md
+# 4. 补充测试（需要 v0.9.53 和 official-main-prs 的表已导入；format 会在 v0.9.53 里多建一张约 15 GB 的 hits_parquet）
+for p in format q03 small; do python3 probes/run_probes.py $p > probes/$p.log 2>&1; done
 ```

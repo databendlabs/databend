@@ -1,0 +1,126 @@
+{
+ "queries": [
+  1,
+  2,
+  3,
+  7,
+  24,
+  26,
+  41
+ ],
+ "segment_stats": {
+  "1": [
+   "read cost: 1 ms, decompress cost: 41 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 43 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 40 ms, range pruning: 1 to 1 cost: 1 ms"
+  ],
+  "2": [
+   "read cost: 1 ms, decompress cost: 40 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 41 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 41 ms, range pruning: 1 to 1 cost: 1 ms"
+  ],
+  "3": [
+   "read cost: 1 ms, decompress cost: 42 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 38 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 42 ms, range pruning: 1 to 1 cost: 1 ms"
+  ],
+  "7": [
+   "read cost: 1 ms, decompress cost: 42 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 41 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 42 ms, range pruning: 1 to 1 cost: 1 ms"
+  ],
+  "24": [
+   "read cost: 1 ms, decompress cost: 39 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 40 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 40 ms, range pruning: 1 to 1 cost: 1 ms"
+  ],
+  "26": [
+   "read cost: 1 ms, decompress cost: 39 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 40 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 41 ms, range pruning: 1 to 1 cost: 1 ms"
+  ],
+  "41": [
+   "read cost: 1 ms, decompress cost: 40 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 40 ms, range pruning: 1 to 1 cost: 1 ms",
+   "read cost: 1 ms, decompress cost: 38 ms, range pruning: 1 to 1 cost: 1 ms"
+  ]
+ },
+ "hot": {
+  "default": {
+   "1": 0.0285,
+   "2": 0.0504,
+   "3": 0.0618,
+   "7": 0.0305,
+   "24": 0.0504,
+   "26": 0.0637,
+   "41": 0.0132
+  },
+  "block meta caches on": {
+   "1": 0.0288,
+   "2": 0.0502,
+   "3": 0.0614,
+   "7": 0.0318,
+   "24": 0.0501,
+   "26": 0.0634,
+   "41": 0.013
+  }
+ },
+ "caches": [
+  [
+   "memory_cache_compact_segment_info",
+   "1",
+   "1685967"
+  ],
+  [
+   "memory_cache_column_oriented_segment_info",
+   "0",
+   "0"
+  ],
+  [
+   "memory_cache_segment_statistics",
+   "0",
+   "0"
+  ],
+  [
+   "memory_cache_segment_zone_map_meta_data",
+   "0",
+   "0"
+  ],
+  [
+   "memory_cache_segment_zone_map_chunk",
+   "0",
+   "0"
+  ]
+ ],
+ "main-prs length": {
+  "length/octet_length of абв": [
+   "3",
+   "6"
+  ],
+  "Q27 length": 1.0606,
+  "Q27 octet_length": 0.9272,
+  "Q27 first row length": [
+   "233773",
+   "453.1628285069236",
+   "2938865"
+  ],
+  "Q27 first row octet_length": [
+   "233773",
+   "469.14923754578723",
+   "2938865"
+  ]
+ },
+ "v0.9.53 length": {
+  "length/octet_length of абв": [
+   "6",
+   "6"
+  ],
+  "Q27 length": 0.3025,
+  "Q27 first row length": [
+   "233773",
+   "469.14923754578723",
+   "2938865"
+  ]
+ },
+ "created": "2026-11-23T02:04:30Z"
+}
