@@ -17,18 +17,32 @@ use std::collections::VecDeque;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
+fn block_logical_bytes(block: &DataBlock) -> usize {
+    block
+        .columns()
+        .iter()
+        .map(|entry| entry.memory_size_with_options(true))
+        .sum()
+}
+
 struct BlockWithInfo {
     avg_bytes: usize,
+    bytes: usize,
     block: DataBlock,
 }
 
 impl BlockWithInfo {
     pub fn new(block: DataBlock) -> BlockWithInfo {
+        let bytes = block_logical_bytes(&block);
         let avg_bytes = match block.num_rows() {
             0 => 0,
-            _ => block.memory_size().div_ceil(block.num_rows()),
+            rows => bytes.div_ceil(rows),
         };
-        BlockWithInfo { avg_bytes, block }
+        BlockWithInfo {
+            avg_bytes,
+            bytes,
+            block,
+        }
     }
 }
 
@@ -60,17 +74,19 @@ impl SquashBlocks {
         let up_rows_bound = self.squash_rows * 2 / 3 * 2;
         let up_bytes_bound = self.squash_bytes * 2 / 3 * 2;
 
-        if block.num_rows() >= self.squash_rows && block.num_rows() < up_rows_bound {
-            return Ok(Some(block));
+        let info = BlockWithInfo::new(block);
+
+        if info.block.num_rows() >= self.squash_rows && info.block.num_rows() < up_rows_bound {
+            return Ok(Some(info.block));
         }
 
-        if block.memory_size() >= self.squash_bytes && block.memory_size() < up_bytes_bound {
-            return Ok(Some(block));
+        if info.bytes >= self.squash_bytes && info.bytes < up_bytes_bound {
+            return Ok(Some(info.block));
         }
 
-        self.current_rows += block.num_rows();
-        self.current_bytes += block.memory_size();
-        self.blocks.push_back(BlockWithInfo::new(block));
+        self.current_rows += info.block.num_rows();
+        self.current_bytes += info.bytes;
+        self.blocks.push_back(info);
 
         if self.current_rows >= up_rows_bound || self.current_bytes >= up_bytes_bound {
             return Ok(Some(self.squash_blocks()?));
@@ -98,7 +114,7 @@ impl SquashBlocks {
         let mut current_bytes = 0;
 
         while current_rows < self.squash_rows && current_bytes < self.squash_bytes {
-            let Some(mut block) = self.blocks.pop_front() else {
+            let Some(block) = self.blocks.pop_front() else {
                 return DataBlock::concat(&blocks);
             };
 
@@ -107,7 +123,7 @@ impl SquashBlocks {
             }
 
             self.current_rows -= block.block.num_rows();
-            self.current_bytes -= block.block.memory_size();
+            self.current_bytes -= block.bytes;
 
             let mut slice_rows = block.block.num_rows();
             slice_rows = std::cmp::min(slice_rows, self.squash_rows - current_rows);
@@ -120,27 +136,25 @@ impl SquashBlocks {
             slice_rows = std::cmp::min(max_bytes_rows, slice_rows);
 
             if slice_rows != block.block.num_rows() {
-                let compact_block = block.block.slice(0..slice_rows).maybe_gc();
+                // Both slices stay alive together in the join's build chunks, so avoid
+                // calling `maybe_gc()` here (which would copy every slice without freeing
+                // the shared backing buffer).
+                let compact_block = block.block.slice(0..slice_rows);
                 blocks.push(compact_block);
 
-                let remain_block = block
-                    .block
-                    .slice(slice_rows..block.block.num_rows())
-                    .maybe_gc();
-
-                self.current_rows += remain_block.num_rows();
-                self.current_bytes += remain_block.memory_size();
-
+                let remain_block = block.block.slice(slice_rows..block.block.num_rows());
                 if !remain_block.is_empty() {
-                    block.block = remain_block;
-                    self.blocks.push_front(block);
+                    let remain_info = BlockWithInfo::new(remain_block);
+                    self.current_rows += remain_info.block.num_rows();
+                    self.current_bytes += remain_info.bytes;
+                    self.blocks.push_front(remain_info);
                 }
 
                 break;
             }
 
             current_rows += block.block.num_rows();
-            current_bytes += block.block.memory_size();
+            current_bytes += block.bytes;
             blocks.push(block.block);
         }
 
@@ -209,4 +223,86 @@ pub fn compact_blocks(
     }
 
     Ok(compacted_blocks)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::ArrayColumn;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::NumberColumn;
+    use databend_common_expression::types::StringType;
+
+    use super::*;
+
+    #[test]
+    fn test_squash_blocks_split_keeps_sibling_slices_zero_copy() -> Result<()> {
+        let total_rows = 6 * 4096;
+        let ids = Int64Type::from_data((0..total_rows as i64).collect::<Vec<_>>());
+        let strs = StringType::from_data(
+            (0..total_rows)
+                .map(|r| format!("row_{r:08}_00000000000000000000000000"))
+                .collect::<Vec<_>>(),
+        );
+        let mut offsets = Vec::with_capacity(total_rows + 1);
+        offsets.push(0u64);
+        let mut vals = Vec::with_capacity(total_rows * 4);
+        for r in 0..total_rows {
+            for e in 0..4 {
+                vals.push((r * 10 + e) as i64);
+            }
+            offsets.push(vals.len() as u64);
+        }
+        let arr = Column::Array(Box::new(ArrayColumn::new(
+            Int64Type::from_data(vals),
+            offsets.into(),
+        )));
+
+        let Column::Number(NumberColumn::Int64(orig_ids)) = &ids else {
+            unreachable!()
+        };
+        let orig_ids_ptr = orig_ids.backing_ptr();
+        let Column::String(orig_s) = &strs else {
+            unreachable!()
+        };
+        let orig_str_ptr = orig_s.buffers_ptr();
+
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::Column(ids),
+                BlockEntry::Column(strs),
+                BlockEntry::Column(arr),
+            ],
+            total_rows,
+        );
+
+        let mut squasher = SquashBlocks::new(4096, 64 * 1024 * 1024);
+        let mut out = Vec::new();
+        if let Some(b) = squasher.add_block(block)? {
+            out.push(b);
+        }
+        while let Some(b) = squasher.finalize()? {
+            out.push(b);
+        }
+
+        let total_out_rows: usize = out.iter().map(DataBlock::num_rows).sum();
+        assert_eq!(total_out_rows, total_rows);
+        assert!(out.len() >= 2);
+
+        // First emitted slice shares the parent buffers zero-copy instead of redundantly copying.
+        let Column::Number(NumberColumn::Int64(first_ids)) =
+            out[0].get_by_offset(0).as_column().unwrap()
+        else {
+            unreachable!()
+        };
+        let Column::String(first_s) = out[0].get_by_offset(1).as_column().unwrap() else {
+            unreachable!()
+        };
+        assert_eq!(first_ids.backing_ptr(), orig_ids_ptr);
+        assert_eq!(first_s.buffers_ptr(), orig_str_ptr);
+
+        Ok(())
+    }
 }

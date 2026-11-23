@@ -142,6 +142,36 @@ impl Bitmap {
         self.len() == 0
     }
 
+    /// Returns the byte length of the underlying backing allocation.
+    #[inline]
+    pub fn backing_bytes_len(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Returns an opaque identity for the underlying backing allocation,
+    /// shared by all zero-copy slices of the same bitmap.
+    #[inline]
+    pub fn backing_ptr(&self) -> usize {
+        self.bytes.as_ptr() as usize
+    }
+
+    /// Copies the visible bits into a tightly sized allocation if sliced,
+    /// releasing any oversized backing buffer. No-op when already tight.
+    pub fn gc(self) -> Self {
+        if self.offset == 0 && self.bytes.len() <= self.length.div_ceil(8) {
+            return self;
+        }
+        if self.unset_bits == 0 {
+            return Bitmap::new_trued(self.length);
+        }
+        if self.unset_bits == self.length {
+            return Bitmap::new_zeroed(self.length);
+        }
+        let mut builder = MutableBitmap::with_capacity(self.length);
+        builder.append_packed_range(self.offset..self.offset + self.length, &self.bytes);
+        builder.into()
+    }
+
     /// Returns a new iterator of `bool` over this bitmap
     pub fn iter(&self) -> BitmapIter<'_> {
         BitmapIter::new(&self.bytes, self.offset, self.length)

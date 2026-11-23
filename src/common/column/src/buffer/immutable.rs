@@ -127,6 +127,19 @@ impl<T> Buffer<T> {
         self.len() == 0
     }
 
+    /// Returns the length of the underlying backing allocation.
+    #[inline]
+    pub fn backing_len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Returns an opaque identity for the underlying backing allocation,
+    /// shared by all zero-copy slices of the same buffer.
+    #[inline]
+    pub fn backing_ptr(&self) -> usize {
+        self.data.as_ptr() as usize
+    }
+
     /// Returns whether underlying data is sliced.
     /// If sliced the [`Buffer`] is backed by
     /// more data than the length of `Self`.

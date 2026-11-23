@@ -29,6 +29,7 @@ mod block;
 mod block_thresholds;
 mod block_vec;
 mod common;
+mod compact;
 mod constant_folder;
 mod conversion;
 mod decimal;

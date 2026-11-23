@@ -360,9 +360,24 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         self.len() == 0
     }
 
-    /// Garbage collect
+    /// Returns an opaque identity for the shared variadic buffer slice.
+    #[inline]
+    pub fn buffers_ptr(&self) -> usize {
+        Arc::as_ptr(&self.buffers) as *const () as usize
+    }
+
+    /// Garbage collect oversized sliced `views` or shared variadic `buffers`.
+    /// No-op for freshly built columns whose storage already tightly fits.
     pub fn gc(self) -> Self {
         if self.buffers.is_empty() {
+            if self.views.is_sliced() {
+                let views: Buffer<View> = self.views.as_slice().to_vec().into();
+                let total_bytes_len = self.total_bytes_len.get().copied();
+                return Self::new_unchecked(views, self.buffers, total_bytes_len, Some(0));
+            }
+            return self;
+        }
+        if !self.views.is_sliced() && self.total_buffer_len() <= self.total_bytes_len() {
             return self;
         }
         let mut mutable = BinaryViewColumnBuilder::with_capacity(self.len());
@@ -437,7 +452,11 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     pub fn maybe_gc(self) -> Self {
         const GC_MINIMUM_SAVINGS: usize = 16 * 1024; // At least 16 KiB.
 
-        if self.total_buffer_len() <= GC_MINIMUM_SAVINGS {
+        let backing_views_bytes = self.views.backing_len() * 16;
+        let current_buffer_len = self.total_buffer_len();
+        let current_mem_usage = backing_views_bytes + current_buffer_len;
+
+        if current_mem_usage <= GC_MINIMUM_SAVINGS {
             return self;
         }
 
@@ -451,10 +470,13 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         // Subtract the maximum amount of inlined strings to get a lower bound
         // on the number of buffer bytes needed (assuming no dedup).
         let total_bytes_len = self.total_bytes_len();
-        let buffer_req_lower_bound = total_bytes_len.saturating_sub(self.len() * 12);
+        let buffer_req_lower_bound = if current_buffer_len == 0 {
+            0
+        } else {
+            total_bytes_len.saturating_sub(self.len() * 12)
+        };
 
         let lower_bound_mem_usage_post_gc = self.len() * 16 + buffer_req_lower_bound;
-        let current_mem_usage = self.len() * 16 + self.total_buffer_len();
         let savings_upper_bound = current_mem_usage.saturating_sub(lower_bound_mem_usage_post_gc);
 
         if savings_upper_bound >= GC_MINIMUM_SAVINGS

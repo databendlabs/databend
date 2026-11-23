@@ -1033,17 +1033,52 @@ impl DataBlock {
             .sum()
     }
 
+    /// Compacts columns whose backing buffers hold excessive dead bytes.
+    ///
+    /// Use for a single standalone block (e.g. `LIMIT`, cache, export). For a
+    /// group of blocks that may share backing buffers, use [`Self::maybe_gc_blocks`].
     pub fn maybe_gc(self) -> DataBlock {
-        let mut columns = Vec::with_capacity(self.entries.len());
-
-        for entry in self.entries {
-            columns.push(match entry {
+        let columns = self
+            .entries
+            .into_iter()
+            .map(|entry| match entry {
                 BlockEntry::Column(column) => BlockEntry::Column(column.maybe_gc()),
                 BlockEntry::Const(s, d, n) => BlockEntry::Const(s, d, n),
-            });
-        }
+            })
+            .collect();
 
-        DataBlock::new(columns, self.num_rows)
+        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
+    }
+
+    /// Compacts a group of blocks that may share backing buffers (e.g. slices
+    /// split from one large Parquet block, or buffered chunks held together).
+    ///
+    /// Aggregates live bytes per shared backing buffer across `blocks`: keeps
+    /// buffers zero-copy when combined live usage stays above 80%, and compacts
+    /// only those with >= 20% dead bytes (and >= 16 KiB savings).
+    pub fn maybe_gc_blocks(blocks: Vec<DataBlock>) -> Vec<DataBlock> {
+        let Some(col_stats) = crate::kernels::gc::collect_blocks_gc_stats(&blocks) else {
+            return blocks;
+        };
+
+        blocks
+            .into_iter()
+            .map(|block| {
+                let columns = block
+                    .entries
+                    .into_iter()
+                    .zip(col_stats.iter())
+                    .map(|(entry, stats)| match (entry, stats) {
+                        (BlockEntry::Column(column), Some(stats)) => BlockEntry::Column(
+                            crate::kernels::gc::gc_column_with_stats(column, stats),
+                        ),
+                        (entry, _) => entry,
+                    })
+                    .collect();
+
+                DataBlock::new_with_meta(columns, block.num_rows, block.meta)
+            })
+            .collect()
     }
 }
 

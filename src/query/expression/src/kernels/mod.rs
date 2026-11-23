@@ -14,6 +14,7 @@
 
 mod concat;
 mod filter;
+pub(crate) mod gc;
 mod group_by;
 mod group_by_hash;
 mod if_then_else;

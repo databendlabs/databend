@@ -65,9 +65,13 @@ impl<const GC: bool> BlockingTransform for TransformFilter<GC> {
     const NAME: &'static str = "TransformFilter";
 
     fn consume(&mut self, input: DataBlock) -> Result<()> {
-        let blocks = input.split_by_rows_no_tail(self.max_block_size);
-        for block in blocks.into_iter() {
-            let mut data_block = self.filter.filter(block)?;
+        let total_rows = input.num_rows();
+        if total_rows == 0 {
+            return Ok(());
+        }
+
+        if total_rows <= self.max_block_size {
+            let mut data_block = self.filter.filter(input)?;
             if data_block.num_rows() > 0 {
                 if GC {
                     data_block = data_block.maybe_gc();
@@ -75,7 +79,23 @@ impl<const GC: bool> BlockingTransform for TransformFilter<GC> {
 
                 self.output_data_blocks.push_back(data_block);
             }
+            return Ok(());
         }
+
+        // Account for shared parent buffers across all surviving slices.
+        let blocks = input.split_by_rows_no_tail(self.max_block_size);
+        drop(input);
+
+        let mut outputs = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            let data_block = self.filter.filter(block)?;
+            if data_block.num_rows() > 0 {
+                outputs.push(data_block);
+            }
+        }
+
+        let outputs = DataBlock::maybe_gc_blocks(outputs);
+        self.output_data_blocks.extend(outputs);
 
         Ok(())
     }
