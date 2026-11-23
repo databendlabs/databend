@@ -21,6 +21,8 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::metrics::FamilyCounter;
@@ -113,7 +115,7 @@ fn init_operator_uncached_with(
 ) -> Result<Operator> {
     let op = match &cfg {
         StorageParams::Azblob(cfg) => build_operator(
-            init_azblob_operator(cfg)?,
+            init_azblob_operator(cfg, endpoint_policy_scope)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
             retry_stats.clone(),
@@ -125,7 +127,7 @@ fn init_operator_uncached_with(
             retry_stats.clone(),
         )?,
         StorageParams::Gcs(cfg) => build_operator(
-            init_gcs_operator(cfg)?,
+            init_gcs_operator(cfg, endpoint_policy_scope)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
             retry_stats.clone(),
@@ -166,7 +168,7 @@ fn init_operator_uncached_with(
             retry_stats.clone(),
         )?,
         StorageParams::S3(cfg) => build_operator(
-            init_s3_operator(cfg)?,
+            init_s3_operator(cfg, endpoint_policy_scope)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
             retry_stats.clone(),
@@ -382,7 +384,16 @@ fn get_http_client(
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
-pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
+///
+/// `External` locations must carry a complete shared key.
+fn init_azblob_operator(
+    cfg: &StorageAzblobConfig,
+    endpoint_policy_scope: EndpointPolicyScope,
+) -> Result<impl Builder> {
+    if endpoint_policy_scope == EndpointPolicyScope::External {
+        check_external_azblob_credential(cfg)?;
+    }
+
     let builder = services::Azblob::default()
         // Endpoint
         .endpoint(&cfg.endpoint_url)
@@ -395,6 +406,45 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
         .account_key(&cfg.account_key);
 
     Ok(builder)
+}
+
+fn check_external_azblob_credential(cfg: &StorageAzblobConfig) -> Result<()> {
+    if cfg.account_key.is_empty() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("azblob location requires `account_key`"),
+        ));
+    }
+    // The shared key is only used when the account name is known; OpenDAL
+    // derives it from official Azure endpoints only.
+    if cfg.account_name.is_empty() && !is_official_azure_endpoint(&cfg.endpoint_url) {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("azblob location requires `account_name` with a custom `endpoint_url`"),
+        ));
+    }
+    Ok(())
+}
+
+/// `<account>.<service>.<suffix>` with a known Azure Storage suffix.
+fn is_official_azure_endpoint(endpoint: &str) -> bool {
+    const KNOWN_ENDPOINT_SUFFIXES: [&str; 3] = [
+        "core.windows.net",
+        "core.usgovcloudapi.net",
+        "core.chinacloudapi.cn",
+    ];
+
+    let host = endpoint
+        .strip_prefix("https://")
+        .or_else(|| endpoint.strip_prefix("http://"))
+        .unwrap_or(endpoint);
+    let Some((account, rest)) = host.split_once('.') else {
+        return false;
+    };
+    let Some((_service, suffix)) = rest.split_once('.') else {
+        return false;
+    };
+    !account.is_empty() && KNOWN_ENDPOINT_SUFFIXES.contains(&suffix.trim_end_matches('/'))
 }
 
 /// init_fs_operator will init a opendal fs operator.
@@ -411,14 +461,67 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<impl Builder> {
 }
 
 /// init_gcs_operator will init a opendal gcs operator.
-fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
-    let builder = services::Gcs::default()
+///
+/// `External` locations only use the `service_account` credential given in
+/// SQL, or none at all.
+fn init_gcs_operator(
+    cfg: &StorageGcsConfig,
+    endpoint_policy_scope: EndpointPolicyScope,
+) -> Result<impl Builder> {
+    let mut builder = services::Gcs::default()
         .endpoint(&cfg.endpoint_url)
         .bucket(&cfg.bucket)
-        .root(&cfg.root)
-        .credential(&cfg.credential);
+        .root(&cfg.root);
+
+    match endpoint_policy_scope {
+        EndpointPolicyScope::Trusted => {
+            builder = builder.credential(&cfg.credential);
+        }
+        EndpointPolicyScope::External => {
+            builder = builder.disable_config_load().disable_vm_metadata();
+            if cfg.credential.is_empty() {
+                builder = builder.allow_anonymous();
+            } else {
+                builder = builder.credential(&sanitize_gcs_service_account(&cfg.credential)?);
+            }
+        }
+    }
 
     Ok(builder)
+}
+
+/// Re-encode a base64 service account key with only the fields signing needs.
+fn sanitize_gcs_service_account(credential: &str) -> Result<String> {
+    let invalid = |reason: &str| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("invalid gcs credential: {reason}"),
+        )
+    };
+
+    let content = BASE64_STANDARD
+        .decode(credential.trim())
+        .map_err(|_| invalid("expect base64 encoded service account key json"))?;
+    let value: serde_json::Value = serde_json::from_slice(&content)
+        .map_err(|_| invalid("expect base64 encoded service account key json"))?;
+
+    if value.get("type").and_then(|v| v.as_str()) != Some("service_account") {
+        return Err(invalid("only `service_account` credentials are supported"));
+    }
+    let field = |name: &str| {
+        value
+            .get(name)
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| invalid(&format!("missing `{name}`")))
+    };
+
+    let sanitized = serde_json::json!({
+        "type": "service_account",
+        "client_email": field("client_email")?,
+        "private_key": field("private_key")?,
+    });
+    Ok(BASE64_STANDARD.encode(sanitized.to_string()))
 }
 
 /// init_hdfs_operator will init an opendal hdfs operator.
@@ -470,7 +573,20 @@ fn init_memory_operator() -> Result<impl Builder> {
 }
 
 /// init_s3_operator will init a opendal s3 operator with input s3 config.
-fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
+fn init_s3_operator(
+    cfg: &StorageS3Config,
+    endpoint_policy_scope: EndpointPolicyScope,
+) -> Result<impl Builder> {
+    if endpoint_policy_scope == EndpointPolicyScope::External && !is_valid_s3_region(&cfg.region) {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!(
+                "invalid s3 region {:?}: expect a single DNS label of ASCII letters, digits, '-' or '_'",
+                cfg.region
+            ),
+        ));
+    }
+
     let mut builder = services::S3::default()
         // Endpoint.
         .endpoint(&cfg.endpoint_url)
@@ -550,6 +666,18 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     }
 
     Ok(builder)
+}
+
+/// Empty, or one DNS label such as `us-east-1`.
+fn is_valid_s3_region(region: &str) -> bool {
+    let bytes = region.as_bytes();
+    bytes.is_empty()
+        || (bytes.len() <= 63
+            && bytes[0].is_ascii_alphanumeric()
+            && bytes[bytes.len() - 1].is_ascii_alphanumeric()
+            && bytes
+                .iter()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_')))
 }
 
 /// init_obs_operator will init a opendal obs operator with input obs config.
@@ -1010,12 +1138,17 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use databend_common_meta_app::storage::StorageAzblobConfig;
+    use databend_common_meta_app::storage::StorageGcsConfig;
+    use databend_common_meta_app::storage::StorageParams;
+    use databend_common_meta_app::storage::StorageS3Config;
     use opendal::Error;
     use opendal::ErrorKind;
     use opendal::layers::RetryInterceptor;
 
     use super::DatabendRetryInterceptor;
     use super::IcebergFileIO;
+    use crate::EndpointPolicyScope;
     use crate::RetryStats;
 
     #[test]
@@ -1130,5 +1263,222 @@ mod tests {
                 .contains("s3.session-token requires s3.access-key-id and s3.secret-access-key"),
             "unexpected error: {err}"
         );
+    }
+
+    fn b64(v: &str) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode(v)
+    }
+
+    fn init_test_runtime() {
+        let thread = std::thread::current();
+        databend_common_base::base::GlobalInstance::init_testing(thread.name().unwrap());
+        databend_common_base::runtime::GlobalIORuntime::init(2).unwrap();
+    }
+
+    fn init(cfg: &StorageParams, scope: EndpointPolicyScope) -> std::io::Result<()> {
+        super::init_operator_uncached(cfg, scope).map(|_| ())
+    }
+
+    fn assert_accepted(cfg: &StorageParams, scope: EndpointPolicyScope) {
+        if let Err(e) = init(cfg, scope) {
+            panic!("{scope:?} should accept {cfg:?}: {e}");
+        }
+    }
+
+    fn assert_rejected(cfg: &StorageParams, scope: EndpointPolicyScope, msg: &str) {
+        match init(cfg, scope) {
+            Ok(_) => panic!("{scope:?} should reject {cfg:?}"),
+            Err(e) => {
+                assert_eq!(e.kind(), std::io::ErrorKind::InvalidInput, "{cfg:?}: {e}");
+                assert!(e.to_string().contains(msg), "{cfg:?}: {e}");
+            }
+        }
+    }
+
+    fn s3(region: &str, endpoint_url: &str) -> StorageParams {
+        StorageParams::S3(StorageS3Config {
+            bucket: "bucket".to_string(),
+            region: region.to_string(),
+            endpoint_url: endpoint_url.to_string(),
+            access_key_id: "ak".to_string(),
+            secret_access_key: "sk".to_string(),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn s3_locations_accept_common_regions_and_endpoints() {
+        init_test_runtime();
+
+        let common = [
+            s3("us-east-1", "https://s3.amazonaws.com"),
+            s3("eu-central-1", "https://s3.eu-central-1.amazonaws.com"),
+            s3("cn-north-1", "https://s3.cn-north-1.amazonaws.com.cn"),
+            s3("", "https://s3.amazonaws.com"),
+            s3("auto", "https://account.r2.cloudflarestorage.com"),
+            s3("us-east-1", "http://127.0.0.1:9900"),
+            s3("garage_local", "http://127.0.0.1:3900"),
+            StorageParams::S3(StorageS3Config {
+                bucket: "bucket".to_string(),
+                region: "us-east-1".to_string(),
+                role_arn: "arn:aws:iam::123456789012:role/reader".to_string(),
+                external_id: "ext".to_string(),
+                ..Default::default()
+            }),
+            StorageParams::S3(StorageS3Config {
+                bucket: "bucket".to_string(),
+                access_key_id: "ak".to_string(),
+                secret_access_key: "sk".to_string(),
+                security_token: "token".to_string(),
+                enable_virtual_host_style: true,
+                ..Default::default()
+            }),
+        ];
+        for cfg in &common {
+            assert_accepted(cfg, EndpointPolicyScope::Trusted);
+            assert_accepted(cfg, EndpointPolicyScope::External);
+        }
+
+        for region in [
+            "us east 1",
+            "us-east-1/",
+            "us-east-1.example.com",
+            "a@b",
+            "-x",
+            "x-",
+        ] {
+            let cfg = s3(region, "https://s3.amazonaws.com");
+            assert_rejected(&cfg, EndpointPolicyScope::External, "invalid s3 region");
+            assert_accepted(&cfg, EndpointPolicyScope::Trusted);
+        }
+    }
+
+    #[test]
+    fn s3_region_is_a_single_dns_label() {
+        for region in [
+            "",
+            "us-east-1",
+            "cn-north-1",
+            "auto",
+            "garage_local",
+            "a",
+            "a1_b",
+        ] {
+            assert!(super::is_valid_s3_region(region), "{region}");
+        }
+        for region in [
+            "a.b",
+            "..",
+            "-us-east-1",
+            "us-east-1-",
+            "us-east-1/",
+            "us east 1",
+            "us-east-1#",
+            "us-east-1?",
+            "a@b:1",
+            &"a".repeat(64),
+        ] {
+            assert!(!super::is_valid_s3_region(region), "{region}");
+        }
+    }
+
+    fn gcs(credential: &str) -> StorageParams {
+        StorageParams::Gcs(StorageGcsConfig {
+            bucket: "bucket".to_string(),
+            endpoint_url: "https://storage.googleapis.com".to_string(),
+            credential: credential.to_string(),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn gcs_locations_accept_service_account_credentials() {
+        init_test_runtime();
+
+        let service_account = b64(
+            r#"{"type":"service_account","project_id":"p","client_email":"a@b.iam.gserviceaccount.com","private_key":"pk","private_key_id":"id","token_uri":"https://oauth2.googleapis.com/token"}"#,
+        );
+        for cfg in [gcs(&service_account), gcs("")] {
+            assert_accepted(&cfg, EndpointPolicyScope::Trusted);
+            assert_accepted(&cfg, EndpointPolicyScope::External);
+        }
+
+        let sanitized = super::sanitize_gcs_service_account(&service_account).unwrap();
+        let decoded =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, sanitized).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&decoded).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "type": "service_account",
+                "client_email": "a@b.iam.gserviceaccount.com",
+                "private_key": "pk",
+            })
+        );
+
+        let other = [
+            b64(
+                r#"{"type":"authorized_user","client_id":"c","client_secret":"s","refresh_token":"r"}"#,
+            ),
+            b64(
+                r#"{"type":"external_account","audience":"a","subject_token_type":"t","token_url":"https://sts.googleapis.com/v1/token","credential_source":{"file":"/tmp/token"}}"#,
+            ),
+            b64(
+                r#"{"type":"impersonated_service_account","service_account_impersonation_url":"https://iamcredentials.googleapis.com/","source_credentials":{}}"#,
+            ),
+            b64(r#"{"type":"service_account","client_email":"a@b"}"#),
+            b64("not json"),
+            "not base64!".to_string(),
+        ];
+        for credential in &other {
+            assert_rejected(
+                &gcs(credential),
+                EndpointPolicyScope::External,
+                "invalid gcs credential",
+            );
+            assert_accepted(&gcs(credential), EndpointPolicyScope::Trusted);
+        }
+    }
+
+    fn azblob(endpoint_url: &str, account_name: &str, account_key: &str) -> StorageParams {
+        StorageParams::Azblob(StorageAzblobConfig {
+            endpoint_url: endpoint_url.to_string(),
+            container: "container".to_string(),
+            account_name: account_name.to_string(),
+            account_key: account_key.to_string(),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn azblob_locations_accept_shared_key_credentials() {
+        init_test_runtime();
+
+        let key = b64("key");
+        let official = "https://account.blob.core.windows.net";
+        let custom = "https://blob.example.com";
+
+        for cfg in [
+            azblob(official, "", &key),
+            azblob(official, "account", &key),
+            azblob("https://account.blob.core.chinacloudapi.cn/", "", &key),
+            azblob("https://account.blob.core.usgovcloudapi.net", "", &key),
+            azblob(custom, "account", &key),
+            azblob("http://127.0.0.1:10000", "devstoreaccount1", &key),
+        ] {
+            assert_accepted(&cfg, EndpointPolicyScope::Trusted);
+            assert_accepted(&cfg, EndpointPolicyScope::External);
+        }
+
+        for (cfg, msg) in [
+            (azblob(official, "account", ""), "account_key"),
+            (azblob(official, "", ""), "account_key"),
+            (azblob(custom, "", &key), "account_name"),
+            (azblob("https://core.windows.net", "", &key), "account_name"),
+        ] {
+            assert_rejected(&cfg, EndpointPolicyScope::External, msg);
+            assert_accepted(&cfg, EndpointPolicyScope::Trusted);
+        }
     }
 }
