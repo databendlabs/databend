@@ -368,9 +368,10 @@ impl BloomPrunerCreator {
         let index_columns = self.index_fields.iter().try_fold(
             Vec::with_capacity(self.index_fields.len()),
             |mut acc, field| {
-                if file.serves(field) {
-                    acc.push(BloomIndex::build_filter_bloom_name(version, field)?);
+                if !file.serves(field) {
+                    return Ok(acc);
                 }
+                acc.push(BloomIndex::build_filter_bloom_name(version, field)?);
                 if let Some(ngram_arg) = self.ngram_args.iter().find(|arg| arg.field() == field) {
                     acc.push(BloomIndex::build_filter_ngram_name(
                         field.column_id(),

@@ -19,8 +19,9 @@
 //! same statements on the split table and on a reference table that holds the same rows in
 //! legacy blocks, and compares the results.
 //!
-//! Each group file gets a Bloom index of its columns. The legacy file keeps its Bloom index,
-//! which still holds the filter of `a` for the values `a` had before the split.
+//! Each group file gets a Bloom index of its columns, with the n-gram filter of `s`. The legacy
+//! file keeps its Bloom index, which still holds the filters of `a` and `s` for the values they
+//! had before the split.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,8 +31,12 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::StringType;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::SegmentsIO;
@@ -66,8 +71,8 @@ struct Group {
     compression: TableCompression,
 }
 
-/// `a` takes the values of `id`, so that reading `a` from the legacy file would show.
-/// `id`, `arr` and `c` stay in the legacy file.
+/// `a` and `s` take new values derived from `id`, so that reading them from the legacy file would
+/// show. `id`, `arr` and `c` stay in the legacy file.
 const GROUPS: &[Group] = &[
     Group {
         columns: &["a"],
@@ -106,9 +111,16 @@ async fn setup_with(
             "create table t_ref {SCHEMA} row_per_block = {row_per_block}"
         ))
         .await?;
+    for name in ["t", "t_ref"] {
+        fixture
+            .execute_command(&format!(
+                "create ngram index idx_s_{name} on {name}(s) gram_size = 3"
+            ))
+            .await?;
+    }
     for batch in 0..3 {
         let values = "select number + {start} as id, (number + {start}) * 2 as a, \
-             concat('v', (number + {start})::string) as s, \
+             concat('w', (number + {start})::string) as s, \
              (number + {start}, concat('y', (number + {start})::string)) as n, \
              [number + {start}, number + {start} + 1] as arr, \
              concat('c', (number + {start})::string) as c from numbers({rows})"
@@ -119,7 +131,7 @@ async fn setup_with(
             .await?;
         fixture
             .execute_command(&format!(
-                "insert into t_ref select id, id, s, n, arr, c from ({values})"
+                "insert into t_ref select id, id, concat('v', id::string), n, arr, c from ({values})"
             ))
             .await?;
     }
@@ -178,13 +190,23 @@ async fn split_blocks(fixture: &TestFixture, name: &str, drop_stats_of: &[&str])
                     .columns
                     .iter()
                     .zip(&indices)
-                    .map(|(name, index)| {
-                        let source = if *name == "a" {
-                            schema.index_of("id").unwrap()
-                        } else {
-                            *index
-                        };
-                        data.get_by_offset(source).to_column()
+                    .map(|(name, index)| match *name {
+                        "a" => data
+                            .get_by_offset(schema.index_of("id").unwrap())
+                            .to_column(),
+                        "s" => {
+                            let ids = data
+                                .get_by_offset(schema.index_of("id").unwrap())
+                                .to_column();
+                            let values = Int32Type::try_downcast_column(&ids)
+                                .unwrap()
+                                .iter()
+                                .map(|id| format!("v{id}"))
+                                .collect::<Vec<_>>();
+                            StringType::from_data(values.iter().map(String::as_str).collect())
+                                .wrap_nullable(None)
+                        }
+                        _ => data.get_by_offset(*index).to_column(),
                     })
                     .collect::<Vec<Column>>();
                 let group_block = DataBlock::new_from_columns(columns);
@@ -198,11 +220,16 @@ async fn split_blocks(fixture: &TestFixture, name: &str, drop_stats_of: &[&str])
                 let bloom_columns = table
                     .bloom_index_cols()
                     .bloom_index_fields(group_schema.clone(), BloomIndex::supported_type)?;
+                let ngram_args = FuseTable::create_ngram_index_args(
+                    &table.get_table_info().meta.indexes,
+                    &group_schema,
+                    true,
+                )?;
                 let mut bloom_builder = BloomIndexBuilder::create(
                     FunctionContext::default(),
                     BloomIndexType::default(),
                     bloom_columns,
-                    &[],
+                    &ngram_args,
                 )?;
                 bloom_builder.add_block(&group_block)?;
                 let bloom_index = bloom_builder
@@ -537,5 +564,29 @@ async fn test_bloom_pruning_split_blocks() -> anyhow::Result<()> {
         assert_eq!(split, reference, "{sql}");
         assert!(reference.1 < reference.0, "{sql}: {reference:?}");
     }
+    Ok(())
+}
+
+/// N-gram pruning of a split block reads the n-gram filter of `s` from the index file of the
+/// group that serves `s`. The legacy file still holds the n-gram filter of the old values.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_ngram_pruning_split_blocks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    setup(&fixture, &[]).await?;
+
+    // `s` was `w13` before the split and is `v13` now. The n-gram filter of the legacy file
+    // would drop the block that holds the row.
+    let sql = "select id from {t} where s like '%v13%'";
+    let rows = query(&fixture, &sql.replace("{t}", "t")).await?;
+    assert!(rows.contains("13"), "{rows}");
+    assert_same(&fixture, sql).await?;
+    let split = bloom_pruning(&fixture, &sql.replace("{t}", "t")).await?;
+    let reference = bloom_pruning(&fixture, &sql.replace("{t}", "t_ref")).await?;
+    assert_eq!(split, reference);
+    assert!(reference.1 < reference.0, "{reference:?}");
+
+    // No row holds the old value any more.
+    let sql = "select id from {t} where s like '%w13%'";
+    assert_same(&fixture, sql).await?;
     Ok(())
 }
