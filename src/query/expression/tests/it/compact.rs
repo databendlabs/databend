@@ -394,3 +394,63 @@ fn test_maybe_gc_is_noop_for_fresh_short_out_of_line_strings() {
     };
     assert_eq!(after.views().as_ptr(), orig_ptr);
 }
+
+#[test]
+fn test_string_gc_mixed_buffers_spans_sparse_and_duplicates() {
+    // Build a multi-buffer String column (~2 MiB across several buffers from builder growth)
+    // mixed with inline strings so gc exercises drop, zero-copy retain, contiguous span copy,
+    // and sparse packing.
+    let n = 32_768;
+    let col = StringType::from_data(
+        (0..n)
+            .map(|i| {
+                if i % 7 == 0 {
+                    format!("s{i:04}")
+                } else {
+                    format!("row_{i:06}_payload_0123456789abcdef0123456789")
+                }
+            })
+            .collect::<Vec<_>>(),
+    );
+    let Column::String(orig) = col else {
+        unreachable!()
+    };
+    assert!(orig.data_buffers().len() > 2);
+
+    // 1. Contiguous middle slice exercises dead-buffer drop + zero-copy whole-buffer retain
+    //    + contiguous span memcpy.
+    let mid = orig.clone().sliced(4096, 8192);
+    let mid_expected = mid.clone();
+    let mid_gc = mid.gc();
+    assert_eq!(mid_gc, mid_expected);
+    assert_eq!(mid_gc.views().backing_len(), 8192);
+    assert!(mid_gc.total_buffer_len() * 4 <= mid_gc.total_bytes_len() * 5);
+
+    // 2. Sparse strided views sharing parent buffers exercises sparse buffer packing.
+    let sparse_views: Vec<_> = orig.views().iter().step_by(11).copied().collect();
+    let sparse = databend_common_column::binview::StringColumn::new_unchecked(
+        sparse_views.into(),
+        orig.data_buffers().clone(),
+        None,
+        None,
+    );
+    let sparse_expected = sparse.clone();
+    let sparse_gc = sparse.gc();
+    assert_eq!(sparse_gc, sparse_expected);
+    assert!(sparse_gc.total_buffer_len() * 4 <= sparse_gc.total_bytes_len() * 5);
+
+    // 3. Heavy duplicates of a single view sharing a large buffer must copy only the single
+    //    referenced span instead of retaining the full parent buffer.
+    let single_view = orig.views()[1];
+    let dup_views = vec![single_view; 1024];
+    let dup = databend_common_column::binview::StringColumn::new_unchecked(
+        dup_views.into(),
+        orig.data_buffers().clone(),
+        None,
+        None,
+    );
+    let dup_expected = dup.clone();
+    let dup_gc = dup.gc();
+    assert_eq!(dup_gc, dup_expected);
+    assert_eq!(dup_gc.total_buffer_len(), single_view.length as usize);
+}

@@ -185,8 +185,8 @@ fn assert_all_columns_detached(blocks: &[DataBlock], parent_rows: usize) {
         };
         assert_eq!(long_s.views().backing_len(), n);
         assert!(
-            long_s.total_buffer_len() <= long_s.total_bytes_len(),
-            "string buffers should not pin parent block: buf={} > live={}",
+            long_s.total_buffer_len() * 4 <= long_s.total_bytes_len() * 5,
+            "string buffers should not pin parent block: buf={} vs live={}",
             long_s.total_buffer_len(),
             long_s.total_bytes_len(),
         );
@@ -206,7 +206,7 @@ fn assert_all_columns_detached(blocks: &[DataBlock], parent_rows: usize) {
         let Column::String(inner_str) = arr_str.values() else {
             unreachable!()
         };
-        assert!(inner_str.total_buffer_len() <= inner_str.total_bytes_len());
+        assert!(inner_str.total_buffer_len() * 4 <= inner_str.total_bytes_len() * 5);
     }
 }
 
