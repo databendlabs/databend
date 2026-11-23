@@ -583,7 +583,7 @@ impl Catalog for SessionCatalog {
         match state {
             TxnState::AutoCommit => {
                 let update_temp_tables = std::mem::take(&mut req.update_temp_tables);
-                let reply = if req.is_empty() {
+                let reply = if !req.has_persistent_updates() {
                     Ok(Default::default())
                 } else {
                     self.inner
