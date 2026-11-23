@@ -147,45 +147,11 @@ impl MetaStore {
 
         let name = format!("Semaphore-{prefix}-{id}");
 
-        let mut ith = 0;
-        loop {
-            ith += 1;
-
-            let start = Instant::now();
-
-            let timeout_res = self
-                .do_new_acquired_by_time(prefix.clone(), capacity, id.clone(), lease, retry_timeout)
-                .await;
-
-            info!(
-                "{} attempt {} to acquire semaphore, result:{:?}",
-                name, ith, timeout_res
-            );
-
-            let res = match timeout_res {
-                Ok(acquire_res) => acquire_res,
-                Err(_elapsed) => {
-                    warn!(
-                        "{} attempt {} to acquire semaphore; timeout after: {:?}; retry at once",
-                        name,
-                        ith,
-                        start.elapsed()
-                    );
-                    continue;
-                }
-            };
-
-            match res {
-                Ok(permit) => return Ok(permit),
-                Err(err) => {
-                    warn!(
-                        "{} attempt {} to acquire semaphore failed: {:?}; retry at once",
-                        name, ith, err
-                    );
-                    continue;
-                }
-            }
-        }
+        let permit = retry_acquire(&name, move || {
+            self.do_new_acquired_by_time(prefix.clone(), capacity, id.clone(), lease, retry_timeout)
+        })
+        .await;
+        Ok(permit)
     }
 
     pub async fn do_new_acquired_by_time(
@@ -206,6 +172,66 @@ impl MetaStore {
             Semaphore::new_acquired_by_time(client, prefix, capacity, id, timestamp, lease),
         )
         .await
+    }
+}
+
+/// The delay before the first retry of a failed attempt to acquire a semaphore. It doubles with
+/// each failed attempt in a row, up to [`ACQUIRE_RETRY_MAX_DELAY`].
+const ACQUIRE_RETRY_MIN_DELAY: Duration = Duration::from_millis(100);
+
+const ACQUIRE_RETRY_MAX_DELAY: Duration = Duration::from_secs(2);
+
+/// Run `attempt` until it acquires, and return what it acquired.
+///
+/// An attempt that timed out is retried at once: it lasted its whole retry timeout. An attempt
+/// that failed is retried after a delay. It can fail as soon as it starts, such as when no
+/// meta-service node serves its watch during a leader election, and each attempt writes a
+/// permit entry and deletes it.
+async fn retry_acquire<T, F, Fut>(name: &str, mut attempt: F) -> T
+where
+    T: std::fmt::Debug,
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<Result<T, AcquireError>, Elapsed>>,
+{
+    let mut delay = ACQUIRE_RETRY_MIN_DELAY;
+
+    let mut ith = 0;
+    loop {
+        ith += 1;
+
+        let start = Instant::now();
+
+        let timeout_res = attempt().await;
+
+        info!(
+            "{} attempt {} to acquire semaphore, result:{:?}",
+            name, ith, timeout_res
+        );
+
+        let res = match timeout_res {
+            Ok(acquire_res) => acquire_res,
+            Err(_elapsed) => {
+                warn!(
+                    "{} attempt {} to acquire semaphore; timeout after: {:?}; retry at once",
+                    name,
+                    ith,
+                    start.elapsed()
+                );
+                continue;
+            }
+        };
+
+        match res {
+            Ok(acquired) => return acquired,
+            Err(err) => {
+                warn!(
+                    "{} attempt {} to acquire semaphore failed: {:?}; retry in {:?}",
+                    name, ith, err, delay
+                );
+                tokio::time::sleep(delay).await;
+                delay = std::cmp::min(delay * 2, ACQUIRE_RETRY_MAX_DELAY);
+            }
+        }
     }
 }
 
@@ -310,5 +336,46 @@ impl kvapi::KVApi for MetaStore {
     #[fastrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         self.inner().transaction(txn).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    use databend_meta_plugin_semaphore::errors::AcquireError;
+    use databend_meta_plugin_semaphore::errors::ConnectionClosed;
+    use tokio::time::Instant;
+    use tokio::time::error::Elapsed;
+
+    use super::retry_acquire;
+
+    /// A failed attempt is retried after a delay that doubles with each failure in a row, not at
+    /// once: an attempt that fails as soon as it starts would otherwise run in a tight loop.
+    #[tokio::test]
+    async fn test_retry_acquire_waits_before_retrying_a_failed_attempt() {
+        let attempts = &AtomicUsize::new(0);
+        let start = Instant::now();
+
+        let acquired = retry_acquire("test", move || async move {
+            if attempts.fetch_add(1, Ordering::SeqCst) < 3 {
+                let refused = ConnectionClosed::new_str("no meta-service node serves the watch");
+                Ok::<_, Elapsed>(Err(AcquireError::from(refused)))
+            } else {
+                Ok(Ok("permit"))
+            }
+        })
+        .await;
+
+        assert_eq!(acquired, "permit");
+        assert_eq!(attempts.load(Ordering::SeqCst), 4);
+        // 100 ms, 200 ms and 400 ms before the second, third and fourth attempts.
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed >= Duration::from_millis(700),
+            "elapsed: {elapsed:?}"
+        );
     }
 }
