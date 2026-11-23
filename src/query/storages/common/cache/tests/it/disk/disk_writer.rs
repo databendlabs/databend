@@ -38,6 +38,7 @@ use databend_storages_common_cache::disk::disk_writer::DiskWriter;
 use databend_storages_common_cache::disk::disk_writer::DropReason;
 use databend_storages_common_cache::disk::disk_writer::WriteJob;
 use databend_storages_common_cache::disk::disk_writer::WriterOptions;
+use databend_storages_common_cache::disk::disk_writer::over_percent;
 use databend_storages_common_cache::kinds::column;
 use databend_storages_common_cache::kinds::segment;
 use parking_lot::Condvar;
@@ -319,6 +320,28 @@ async fn test_writer_checks_the_configured_watermark() {
     wait_for(|| idle(&writer));
     assert_eq!(RATIO.load(Ordering::Relaxed), 75);
     assert_eq!(pool.stats().items, 1);
+}
+
+/// The watermark is over when either the blocks or the inodes of the file system are more than
+/// `watermark_ratio` percent in use; a file system reporting no inodes is checked by blocks.
+#[test]
+fn test_watermark_counts_blocks_and_inodes() {
+    assert!(!over_percent(1000, 100, 90));
+    assert!(over_percent(1000, 99, 90));
+    assert!(!over_percent(1000, 0, 100));
+    assert!(!over_percent(0, 0, 90));
+    assert!(!over_percent(u64::MAX, 0, 100));
+    assert!(over_percent(u64::MAX, 0, 99));
+    // The default check reads the file system the root is on, inodes included.
+    let dir = TempDir::new().unwrap();
+    let stat = rustix::fs::statvfs(dir.path()).unwrap();
+    let check = WriterOptions::new(false).over_watermark;
+    assert_eq!(
+        check(dir.path(), 50),
+        over_percent(stat.f_blocks, stat.f_bavail, 50)
+            || over_percent(stat.f_files, stat.f_favail, 50)
+    );
+    assert!(!check(dir.path(), 100));
 }
 
 /// An entry larger than a quarter of its pool is dropped as rejected, and leaves no room

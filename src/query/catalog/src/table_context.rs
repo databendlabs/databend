@@ -31,6 +31,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFileInfo;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 
 mod authorization;
 mod cache_policy;
@@ -211,6 +213,32 @@ pub trait TableContext:
     fn result_cache_state(&self) -> &ResultCacheState;
 
     fn written_segment_locations(&self) -> &SegmentLocationsState;
+
+    /// The internal history stage must not bypass authorization in compatibility mode.
+    fn should_check_stage_privilege(&self, stage_name: &str) -> Result<bool> {
+        Ok(self.get_settings().get_enable_experimental_rbac_check()?
+            || stage_name.eq_ignore_ascii_case(
+                &databend_common_config::GlobalConfig::instance()
+                    .log
+                    .history
+                    .stage_name,
+            ))
+    }
+
+    /// Returns the checker for using or listing sequences when sequence object checks
+    /// are enabled, or `None` in legacy mode.
+    async fn sequence_usage_checker(&self) -> Result<Option<Arc<GrantObjectVisibilityChecker>>> {
+        if self
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            return self
+                .get_visibility_checker(false, Object::Sequence)
+                .await
+                .map(Some);
+        }
+        Ok(None)
+    }
 
     fn as_any(&self) -> &dyn Any;
 }

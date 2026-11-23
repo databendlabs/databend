@@ -16,3 +16,4 @@ mod access_logger;
 mod log_entry;
 
 pub use access_logger::AccessLogger;
+pub(crate) use log_entry::ObjectDomain;

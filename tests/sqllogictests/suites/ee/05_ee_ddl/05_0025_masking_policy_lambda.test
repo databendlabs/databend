@@ -1,0 +1,50 @@
+# A lambda in a masking policy is a part of the policy: a column that its
+# body refers to is the unmasked column, as elsewhere in the policy, and the
+# policy is not applied to it again.
+
+statement ok
+DROP TABLE IF EXISTS masking_policy_lambda
+
+statement ok
+DROP MASKING POLICY IF EXISTS masking_policy_lambda_body
+
+statement ok
+DROP MASKING POLICY IF EXISTS masking_policy_lambda_plain
+
+statement ok
+CREATE MASKING POLICY masking_policy_lambda_body AS (val STRING) RETURNS STRING -> array_to_string(array_transform([val], x -> x || val), ',')
+
+statement ok
+CREATE MASKING POLICY masking_policy_lambda_plain AS (val STRING) RETURNS STRING -> val || val
+
+statement ok
+CREATE TABLE masking_policy_lambda(a STRING, b STRING)
+
+statement ok
+INSERT INTO masking_policy_lambda VALUES ('p', 'q')
+
+statement ok
+ALTER TABLE masking_policy_lambda MODIFY COLUMN a SET MASKING POLICY masking_policy_lambda_body
+
+statement ok
+ALTER TABLE masking_policy_lambda MODIFY COLUMN b SET MASKING POLICY masking_policy_lambda_plain
+
+query T
+SELECT a FROM masking_policy_lambda
+----
+pp
+
+# A lambda in the query reads the masked column.
+query T
+SELECT array_transform([b], y -> y || '!') FROM masking_policy_lambda
+----
+["qq!"]
+
+statement ok
+DROP TABLE masking_policy_lambda
+
+statement ok
+DROP MASKING POLICY masking_policy_lambda_body
+
+statement ok
+DROP MASKING POLICY masking_policy_lambda_plain

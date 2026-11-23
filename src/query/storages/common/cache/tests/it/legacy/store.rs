@@ -175,6 +175,22 @@ fn test_rejected_vector_index_accounts_for_victims() {
     assert_eq!((stats.items, stats.in_cache), (0, 0));
 }
 
+/// A searcher too large for its kind is returned uncached and evicts no hot searcher.
+#[test]
+fn test_oversized_inverted_index_searcher_keeps_hot_ones() {
+    let kind = CacheKind::of::<inverted::Searcher>();
+    let store = legacy(&[(kind, LegacyCapacity::Bytes(200))]);
+    let cache = cache(&store, kind);
+    let live = Live::default();
+    drop(cache.put("hot", live.item(100)));
+    let large = cache.put("large", live.item(300));
+    assert!(!large.is_charged());
+    assert!(cache.contains("hot"));
+    assert!(!cache.contains("large"));
+    let stats = store.kind_stats(kind);
+    assert_eq!((stats.items, stats.resident), (1, 100));
+}
+
 /// Concurrent vector index inserts cannot together exceed the budget: the check and the
 /// charge happen under one lock.
 #[test]

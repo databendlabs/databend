@@ -33,12 +33,14 @@ use crate::sessions::TableContextSettings;
 
 /// There are three types of hash table:
 /// 1. FirstRound: it is the first time the hash table is constructed.
-/// 2. Restored: the hash table is restored from the spilled data.
+/// 2. Restored: the hash table is restored from the spilled partition it carries.
+///    Probes restore the same partition: the next partition id in `HashJoinState`
+///    may already belong to a later round when a probe reads it.
 /// 3. Empty: the hash table is empty.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HashTableType {
     FirstRound,
-    Restored,
+    Restored(usize),
     Empty,
     UnFinished,
 }
@@ -355,6 +357,7 @@ impl Processor for TransformHashJoinBuild {
             Step::Async(AsyncStep::Restore) => {
                 let partition_id_to_restore = self.partition_to_restore();
                 self.data_blocks = self.spiller.restore(partition_id_to_restore).await?;
+                self.hash_table_type = HashTableType::Restored(partition_id_to_restore);
             }
             Step::Async(AsyncStep::NextRound) => {
                 self.reset_build_state()?;
@@ -438,7 +441,6 @@ impl TransformHashJoinBuild {
         self.is_from_restore = true;
         self.is_collect_finished = false;
         self.is_finalize_finished = false;
-        self.hash_table_type = HashTableType::Restored;
     }
 
     // Reset build state for the next round.

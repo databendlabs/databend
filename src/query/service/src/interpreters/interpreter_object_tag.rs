@@ -50,6 +50,7 @@ use crate::meta_service_error;
 use crate::meta_txn_error;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextTableAccess;
 
 pub struct SetObjectTagsInterpreter {
@@ -141,7 +142,7 @@ async fn resolve_taggable_object(
         TagSetObject::Stage(target) => resolve_stage_object(tenant, target).await,
         TagSetObject::User(target) => resolve_user_object(tenant, target).await,
         TagSetObject::Role(target) => resolve_role_object(tenant, target).await,
-        TagSetObject::Connection(target) => resolve_connection_object(tenant, target).await,
+        TagSetObject::Connection(target) => resolve_connection_object(ctx, tenant, target).await,
         TagSetObject::View(target) => resolve_view_object(ctx, tenant, target).await,
         TagSetObject::Stream(target) => resolve_stream_object(ctx, tenant, target).await,
         TagSetObject::UDF(target) => resolve_udf_object(tenant, target).await,
@@ -297,6 +298,7 @@ async fn resolve_role_object(
 }
 
 async fn resolve_connection_object(
+    ctx: &QueryContext,
     tenant: &Tenant,
     target: &ConnectionTagSetTarget,
 ) -> Result<Option<TaggableObject>> {
@@ -304,9 +306,12 @@ async fn resolve_connection_object(
         .get_connection(tenant, &target.connection_name)
         .await
     {
-        Ok(_) => Ok(Some(TaggableObject::Connection {
-            name: target.connection_name.clone(),
-        })),
+        Ok(connection) => {
+            ctx.record_connection_access(&connection.name);
+            Ok(Some(TaggableObject::Connection {
+                name: connection.name,
+            }))
+        }
         Err(e) if e.code() == ErrorCode::UNKNOWN_CONNECTION && target.if_exists => Ok(None),
         Err(e) => Err(e),
     }

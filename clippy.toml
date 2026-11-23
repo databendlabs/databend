@@ -19,6 +19,10 @@ disallowed-methods = [
     { path = "tokio::runtime::Runtime::spawn_blocking", reason = "Please use `databend_common_base::runtime::Runtime::spawn_blocking` instead." },
 
     { path = "std::thread::spawn", reason = "Please use `databend_common_base::runtime::Thread::spawn` instead." },
+
+    { path = "jaq_std::funs", reason = "Includes native filters such as `env`. Please use `jq_funs` in `srfs/variant.rs` instead." },
+    { path = "jaq_std::extra_funs", reason = "Includes native filters such as `env`. Please use `jq_funs` in `srfs/variant.rs` instead." },
+    { path = "jaq_core::unwrap_valr", reason = "Exits the process on `halt`. Please handle `Exn::get_err` instead." },
 ]
 
 disallowed-types = [

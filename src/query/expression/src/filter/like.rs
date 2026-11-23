@@ -15,8 +15,7 @@
 use std::borrow::Cow;
 
 use memchr::memchr;
-
-use crate::VolnitskyBase;
+use memchr::memmem;
 
 #[derive(Debug, Clone)]
 pub enum LikePattern<'a> {
@@ -26,8 +25,11 @@ pub enum LikePattern<'a> {
     StartOfPercent(Cow<'a, [u8]>),
     // e.g. 'Arrow%'.
     EndOfPercent(Cow<'a, [u8]>),
-    // e.g. '%Arrow%'.
-    SurroundByPercent(VolnitskyBase<'a>),
+    // e.g. '%Arrow%'. `memmem` scans 32 bytes at a time for two bytes of the needle (AVX2)
+    // before comparing the rest, which beats n-gram skip searches on short and long strings
+    // alike.
+    // The finder holds its prefilter state, so it is boxed to keep the enum small.
+    SurroundByPercent(Box<memmem::Finder<'a>>),
     // e.g. 'A%row', 'A_row'.
     ComplexPattern(Cow<'a, [u8]>),
     // Only includes %, e.g. 'A%r%w'.
@@ -42,7 +44,9 @@ impl PartialEq for LikePattern<'_> {
             (LikePattern::OrdinalStr(a), LikePattern::OrdinalStr(b)) => a == b,
             (LikePattern::StartOfPercent(a), LikePattern::StartOfPercent(b)) => a == b,
             (LikePattern::EndOfPercent(a), LikePattern::EndOfPercent(b)) => a == b,
-            (LikePattern::SurroundByPercent(a), LikePattern::SurroundByPercent(b)) => a == b,
+            (LikePattern::SurroundByPercent(a), LikePattern::SurroundByPercent(b)) => {
+                a.needle() == b.needle()
+            }
             (LikePattern::ComplexPattern(a), LikePattern::ComplexPattern(b)) => a == b,
             (LikePattern::SimplePattern((a, b, c)), LikePattern::SimplePattern((d, e, f))) => {
                 a == d && b == e && c == f
@@ -63,7 +67,7 @@ impl LikePattern<'_> {
             // 'abc%'
             LikePattern::EndOfPercent(s) => haystack.starts_with(s),
             // '%abc%'
-            LikePattern::SurroundByPercent(s) => s.search(haystack).is_some(),
+            LikePattern::SurroundByPercent(s) => s.find(haystack).is_some(),
             LikePattern::ComplexPattern(s) => Self::complex_pattern(haystack, s),
             LikePattern::SimplePattern((has_start_percent, has_end_percent, segments)) => {
                 Self::simple_pattern(haystack, *has_start_percent, *has_end_percent, segments)
@@ -212,10 +216,7 @@ pub fn is_like_pattern_escape(c: char) -> bool {
 /// 'a\\%row'
 /// '\\%' will be escaped to a percent. Need transform to `a%row`.
 #[inline]
-pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
-    pattern: B,
-    haystack_size_hint: usize,
-) -> LikePattern<'a> {
+pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(pattern: B) -> LikePattern<'a> {
     let pattern: Cow<'a, [u8]> = pattern.into();
     let len = pattern.len();
     if len == 0 {
@@ -253,9 +254,7 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
                 if index < len - 1 {
                     index += 1;
                     if is_like_pattern_escape(pattern[index] as char) {
-                        if let Some(literal_pattern) =
-                            parse_escaped_literal_pattern(&pattern, haystack_size_hint)
-                        {
+                        if let Some(literal_pattern) = parse_escaped_literal_pattern(&pattern) {
                             return literal_pattern;
                         }
                         return LikePattern::ComplexPattern(pattern);
@@ -282,11 +281,11 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
             if needle.is_empty() {
                 LikePattern::Constant(true)
             } else {
-                let needle = match pattern {
-                    Cow::Borrowed(v) => Cow::Borrowed(&v[1..v.len() - 1]),
-                    Cow::Owned(v) => Cow::Owned(v[1..v.len() - 1].to_vec()),
+                let finder = match pattern {
+                    Cow::Borrowed(v) => memmem::Finder::new(&v[1..v.len() - 1]),
+                    Cow::Owned(v) => memmem::Finder::new(&v[1..v.len() - 1]).into_owned(),
                 };
-                LikePattern::SurroundByPercent(VolnitskyBase::new_cow(needle, haystack_size_hint))
+                LikePattern::SurroundByPercent(Box::new(finder))
             }
         }
         _ => {
@@ -294,12 +293,7 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
                 if first_non_percent < len {
                     segments.push(pattern[first_non_percent..len].to_vec());
                 }
-                normalize_simple_pattern(
-                    has_start_percent,
-                    has_end_percent,
-                    segments,
-                    haystack_size_hint,
-                )
+                normalize_simple_pattern(has_start_percent, has_end_percent, segments)
             } else {
                 LikePattern::ComplexPattern(pattern)
             }
@@ -312,10 +306,7 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
 ///
 /// This is called only after the regular classifier finds a supported escape,
 /// so patterns without escapes keep the existing zero-copy path.
-fn parse_escaped_literal_pattern<'a>(
-    pattern: &[u8],
-    haystack_size_hint: usize,
-) -> Option<LikePattern<'a>> {
+fn parse_escaped_literal_pattern<'a>(pattern: &[u8]) -> Option<LikePattern<'a>> {
     #[derive(Clone, Copy)]
     enum Phase {
         LeadingPercent,
@@ -380,10 +371,9 @@ fn parse_escaped_literal_pattern<'a>(
         (false, false) => LikePattern::OrdinalStr(Cow::Owned(literal)),
         (true, false) => LikePattern::StartOfPercent(Cow::Owned(literal)),
         (false, true) => LikePattern::EndOfPercent(Cow::Owned(literal)),
-        (true, true) => LikePattern::SurroundByPercent(VolnitskyBase::new_cow(
-            Cow::Owned(literal),
-            haystack_size_hint,
-        )),
+        (true, true) => {
+            LikePattern::SurroundByPercent(Box::new(memmem::Finder::new(&literal).into_owned()))
+        }
     })
 }
 
@@ -391,7 +381,6 @@ fn normalize_simple_pattern<'a>(
     has_start_percent: bool,
     has_end_percent: bool,
     mut segments: Vec<Vec<u8>>,
-    haystack_size_hint: usize,
 ) -> LikePattern<'a> {
     match segments.len() {
         0 => LikePattern::Constant(true),
@@ -401,9 +390,8 @@ fn normalize_simple_pattern<'a>(
                 (false, false) => LikePattern::OrdinalStr(Cow::Owned(segment)),
                 (true, false) => LikePattern::StartOfPercent(Cow::Owned(segment)),
                 (false, true) => LikePattern::EndOfPercent(Cow::Owned(segment)),
-                (true, true) => LikePattern::SurroundByPercent(VolnitskyBase::new_cow(
-                    Cow::Owned(segment),
-                    haystack_size_hint,
+                (true, true) => LikePattern::SurroundByPercent(Box::new(
+                    memmem::Finder::new(&segment).into_owned(),
                 )),
             }
         }
@@ -493,7 +481,7 @@ fn test_generate_like_pattern() {
         ),
         (
             "%databend%",
-            LikePattern::SurroundByPercent(VolnitskyBase::new("databend".as_bytes(), 1)),
+            LikePattern::SurroundByPercent(Box::new(memmem::Finder::new("databend".as_bytes()))),
         ),
         (
             "databend%cloud%data%warehouse",
@@ -522,11 +510,11 @@ fn test_generate_like_pattern() {
         ),
         (
             "%%%%databend%%%%",
-            LikePattern::SurroundByPercent(VolnitskyBase::new("databend".as_bytes(), 1)),
+            LikePattern::SurroundByPercent(Box::new(memmem::Finder::new("databend".as_bytes()))),
         ),
         (
             "%alpha\\_beta%",
-            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha_beta".as_bytes(), 1)),
+            LikePattern::SurroundByPercent(Box::new(memmem::Finder::new("alpha_beta".as_bytes()))),
         ),
         (
             "alpha\\_beta",
@@ -542,11 +530,11 @@ fn test_generate_like_pattern() {
         ),
         (
             "%alpha\\%beta%",
-            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha%beta".as_bytes(), 1)),
+            LikePattern::SurroundByPercent(Box::new(memmem::Finder::new("alpha%beta".as_bytes()))),
         ),
         (
             "%alpha\\\\beta%",
-            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha\\beta".as_bytes(), 1)),
+            LikePattern::SurroundByPercent(Box::new(memmem::Finder::new("alpha\\beta".as_bytes()))),
         ),
         (
             "\\%alpha%",
@@ -558,7 +546,7 @@ fn test_generate_like_pattern() {
         ),
         (
             "%%%alpha\\_beta%%%",
-            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha_beta".as_bytes(), 1)),
+            LikePattern::SurroundByPercent(Box::new(memmem::Finder::new("alpha_beta".as_bytes()))),
         ),
         (
             "databend_cloud%data%warehouse",
@@ -582,13 +570,13 @@ fn test_generate_like_pattern() {
         ),
     ];
     for (pattern, pattern_type) in test_cases {
-        assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes(), 1));
+        assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes()));
     }
 }
 
 #[test]
 fn test_empty_like_pattern_only_matches_empty_haystack() {
-    let pattern = generate_like_pattern("".as_bytes(), 0);
+    let pattern = generate_like_pattern("".as_bytes());
 
     assert!(pattern.compare("".as_bytes()));
     assert!(!pattern.compare("anything".as_bytes()));
@@ -622,7 +610,7 @@ fn test_escaped_literal_patterns_match_complex_pattern() {
     ];
 
     for pattern in patterns {
-        let optimized = generate_like_pattern(pattern.as_bytes(), 0);
+        let optimized = generate_like_pattern(pattern.as_bytes());
         assert!(!matches!(optimized, LikePattern::ComplexPattern(_)));
 
         for haystack in haystacks {
@@ -670,7 +658,7 @@ mod property_tests {
             }
             pattern.extend(std::iter::repeat_n(b'%', trailing_percent_count));
 
-            let optimized = generate_like_pattern(pattern.as_slice(), 0);
+            let optimized = generate_like_pattern(pattern.as_slice());
             match (leading_percent_count > 0, trailing_percent_count > 0) {
                 (false, false) => prop_assert!(matches!(&optimized, LikePattern::OrdinalStr(_))),
                 (true, false) => {
@@ -720,7 +708,7 @@ fn test_like_pattern_with_repeated_percent() {
 
     for (haystack, pattern, expected) in test_cases {
         assert_eq!(
-            generate_like_pattern(pattern.as_bytes(), haystack.len()).compare(haystack.as_bytes()),
+            generate_like_pattern(pattern.as_bytes()).compare(haystack.as_bytes()),
             expected,
             "{haystack:?} LIKE {pattern:?}"
         );

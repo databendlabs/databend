@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::UriLocation;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -26,6 +27,7 @@ use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator_with_policy_scope;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -34,6 +36,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
 pub struct ModifyTableConnectionInterpreter {
@@ -135,14 +138,24 @@ impl Interpreter for ModifyTableConnectionInterpreter {
             let mut new_table_meta = table_info.meta.clone();
             new_table_meta.storage_params = Some(new_sp);
 
-            commit_table_meta(
-                &self.ctx,
-                table.as_ref(),
-                new_table_meta,
-                catalog,
-                |_, _| {},
-            )
-            .await?;
+            // Committing reads the current snapshot and writes a new one. Do that with the new
+            // connection: the old one may no longer be usable, which is why it is being replaced.
+            let table_with_new_connection = if FuseTable::try_from_table(table.as_ref()).is_ok() {
+                let mut new_table_info = table_info.clone();
+                new_table_info.meta.storage_params = new_table_meta.storage_params.clone();
+                Some(FuseTable::create_without_refresh_table_info(
+                    new_table_info,
+                    self.ctx.get_settings().get_s3_storage_class()?,
+                )?)
+            } else {
+                None
+            };
+            let commit_table = match &table_with_new_connection {
+                Some(fuse_table) => fuse_table.as_ref() as &dyn Table,
+                None => table.as_ref(),
+            };
+
+            commit_table_meta(&self.ctx, commit_table, new_table_meta, catalog, |_, _| {}).await?;
 
             Ok(PipelineBuildResult::create())
         })

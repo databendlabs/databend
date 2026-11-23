@@ -33,6 +33,10 @@ const PARQUET_META_ITEMS: u64 = 3000;
 /// Segment zone maps came after the options: footers bounded by count, chunks by bytes.
 const ZONE_MAP_META_ITEMS: u64 = 1024;
 const ZONE_MAP_CHUNK_BYTES: u64 = 512 * 1024 * 1024;
+/// Inverted index searchers and the term infos of their searches came after the options too:
+/// bounded by bytes.
+const INVERTED_INDEX_SEARCHER_BYTES: u64 = 1024 * 1024 * 1024;
+const INVERTED_INDEX_TERM_INFO_BYTES: u64 = 64 * 1024 * 1024;
 
 impl LegacyKinds {
     /// The pre-refactor caches, each sized by its pre-refactor options.
@@ -121,6 +125,15 @@ impl LegacyKinds {
                 "inverted_index_payload_size",
                 |c, _| LegacyKind::split_budget(c.inverted_index_payload_size as usize).1 as u64,
             ))
+            .register::<inverted::Searcher>(
+                LegacyKind::bytes("", |_, _| INVERTED_INDEX_SEARCHER_BYTES)
+                    // As vector indexes: a searcher too large for the kind evicts no other one,
+                    // and those held by searches are charged until they drop it.
+                    .counting_held_values(),
+            )
+            .register::<inverted::TermInfo>(LegacyKind::bytes("", |_, _| {
+                INVERTED_INDEX_TERM_INFO_BYTES
+            }))
             .register::<spatial::Index>(LegacyKind::bytes(
                 "spatial_index_filter_size, spatial_index_filter_memory_ratio",
                 |c, memory| {

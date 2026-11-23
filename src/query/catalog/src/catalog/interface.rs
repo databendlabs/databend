@@ -311,6 +311,17 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_name: &str,
     ) -> Result<Arc<dyn Table>>;
 
+    /// `get_table`, plus the id of the database the table was read from, if the catalog read
+    /// that database on the way. Saves callers such as the privilege checks a `get_database`.
+    async fn get_table_with_db_id(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<(Arc<dyn Table>, Option<u64>)> {
+        Ok((self.get_table(tenant, db_name, table_name).await?, None))
+    }
+
     async fn create_table_tag(&self, _req: CreateTableTagReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "'create_table_tag' not implemented for catalog {}",

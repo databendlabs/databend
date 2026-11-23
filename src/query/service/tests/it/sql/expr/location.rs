@@ -18,6 +18,9 @@ use std::collections::BTreeMap;
 
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::CaptureLogSettings;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
@@ -330,6 +333,7 @@ async fn test_parse_uri_location_without_connection() -> anyhow::Result<()> {
                     bucket: "example".to_string(),
                     root: "/tmp/".to_string(),
                     credential: "gcs.credential".to_string(),
+                    allow_credential_chain: None,
                     network_config: None,
                 }),
                 "/".to_string(),
@@ -429,8 +433,69 @@ async fn test_parse_uri_location_without_connection() -> anyhow::Result<()> {
     ];
 
     for (name, mut input, expected) in cases {
-        let actual = parse_uri_location(&mut input).await?;
+        let actual = parse_uri_location(&mut input, true).await?;
         assert_eq!(expected, actual, "{}", name);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_parse_uri_location_in_history_scope() -> anyhow::Result<()> {
+    let thread_name = std::thread::current()
+        .name()
+        .map(ToString::to_string)
+        .expect("thread should has a name");
+
+    GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO)?;
+
+    let locations = || {
+        [
+            ("s3", vec![("region", "us-east-1")]),
+            ("gcs", vec![]),
+            ("azblob", vec![(
+                "endpoint_url",
+                "https://account.blob.core.windows.net",
+            )]),
+        ]
+        .into_iter()
+        .map(|(protocol, connection)| {
+            UriLocation::new(
+                protocol.to_string(),
+                "bucket".to_string(),
+                "/history/".to_string(),
+                connection
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<BTreeMap<_, _>>(),
+            )
+        })
+    };
+
+    fn credential_chain(sp: &StorageParams) -> Option<bool> {
+        match sp {
+            StorageParams::S3(cfg) => cfg.allow_credential_chain,
+            StorageParams::Gcs(cfg) => cfg.allow_credential_chain,
+            StorageParams::Azblob(cfg) => cfg.allow_credential_chain,
+            _ => unreachable!(),
+        }
+    }
+
+    // History table queries run with log capture off; their locations come
+    // from the server config and may use the ambient credential chain.
+    for mut location in locations() {
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
+        let (sp, _) = payload
+            .tracking(parse_uri_location(&mut location, true))
+            .await?;
+        assert_eq!(credential_chain(&sp), Some(true), "{sp:?}");
+    }
+
+    for mut location in locations() {
+        let (sp, _) = parse_uri_location(&mut location, true).await?;
+        assert_eq!(credential_chain(&sp), None, "{sp:?}");
     }
 
     Ok(())

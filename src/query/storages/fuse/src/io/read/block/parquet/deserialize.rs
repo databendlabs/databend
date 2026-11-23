@@ -81,6 +81,64 @@ pub fn column_chunks_to_record_batch(
     selection: Option<RowSelection>,
     hint_fields: Option<&Fields>,
 ) -> databend_common_exception::Result<RecordBatch> {
+    column_chunks_to_record_batch_with_codecs(
+        original_schema,
+        num_rows,
+        column_chunks,
+        *compression,
+        |_| *compression,
+        selection,
+        hint_fields,
+    )
+}
+
+/// Like [`column_chunks_to_record_batch`], but each column chunk is decompressed with the
+/// codec `compression_of` returns for its leaf column id. `default_compression` describes the
+/// columns that have no chunk.
+pub fn column_chunks_to_record_batch_with_codecs(
+    original_schema: &TableSchema,
+    num_rows: usize,
+    column_chunks: &HashMap<ColumnId, DataItem>,
+    default_compression: Compression,
+    compression_of: impl Fn(ColumnId) -> Compression,
+    selection: Option<RowSelection>,
+    hint_fields: Option<&Fields>,
+) -> databend_common_exception::Result<RecordBatch> {
+    // The reader uses batch_size to preallocate column buffers retained by the output.
+    let batch_size = selection.as_ref().map_or(num_rows, RowSelection::row_count);
+    let mut record_reader = column_chunks_record_reader(
+        original_schema,
+        num_rows,
+        column_chunks,
+        default_compression,
+        compression_of,
+        selection,
+        hint_fields,
+        batch_size,
+    )?;
+    let record = match record_reader.next() {
+        Some(record) => record?,
+        // The reader yields nothing when `selection` keeps no rows, e.g. a prewhere
+        // predicate filtered out every row of the block while the block itself
+        // survived min/max pruning. Return an empty batch with the projected schema
+        // so callers can build zero-row columns without special casing.
+        None => RecordBatch::new_empty(record_reader.schema()),
+    };
+    assert!(record_reader.next().is_none());
+    Ok(record)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn column_chunks_record_reader(
+    original_schema: &TableSchema,
+    num_rows: usize,
+    column_chunks: &HashMap<ColumnId, DataItem>,
+    default_compression: Compression,
+    compression_of: impl Fn(ColumnId) -> Compression,
+    selection: Option<RowSelection>,
+    hint_fields: Option<&Fields>,
+    batch_size: usize,
+) -> databend_common_exception::Result<ParquetRecordBatchReader> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
     let hint_fields = hint_fields.unwrap_or(arrow_schema.fields());
@@ -95,14 +153,18 @@ pub fn column_chunks_to_record_batch(
     let mut builder = RowGroupImplBuilder::new(
         num_rows,
         &parquet_schema,
-        ParquetCompression::from(*compression),
+        ParquetCompression::from(default_compression),
     );
     for (column_id, data_item) in column_chunks.iter() {
         match data_item {
             DataItem::RawData(bytes) => {
                 let dfs_id = column_id_to_dfs_id.get(column_id).cloned().unwrap();
                 projection_mask.push(dfs_id);
-                builder.add_column_chunk(dfs_id, bytes.clone());
+                builder.add_column_chunk_with_compression(
+                    dfs_id,
+                    bytes.clone(),
+                    ParquetCompression::from(compression_of(*column_id)),
+                );
             }
             DataItem::ColumnArray(_) => {}
         }
@@ -134,24 +196,12 @@ pub fn column_chunks_to_record_batch(
         ProjectionMask::leaves(&parquet_schema, projection_mask),
         Some(hint_fields),
     )?;
-    // The reader uses batch_size to preallocate column buffers retained by the output.
-    let batch_size = selection.as_ref().map_or(num_rows, RowSelection::row_count);
-    let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
+    Ok(ParquetRecordBatchReader::try_new_with_row_groups(
         &field_levels,
         row_group.as_ref(),
         batch_size,
         selection,
-    )?;
-    let record = match record_reader.next() {
-        Some(record) => record?,
-        // The reader yields nothing when `selection` keeps no rows, e.g. a prewhere
-        // predicate filtered out every row of the block while the block itself
-        // survived min/max pruning. Return an empty batch with the projected schema
-        // so callers can build zero-row columns without special casing.
-        None => RecordBatch::new_empty(record_reader.schema()),
-    };
-    assert!(record_reader.next().is_none());
-    Ok(record)
+    )?)
 }
 
 #[cfg(test)]

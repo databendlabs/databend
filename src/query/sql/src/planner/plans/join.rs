@@ -36,6 +36,7 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
+use crate::plans::JoinRuntimeFilter;
 use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
@@ -343,6 +344,9 @@ pub struct Join {
     // Derived annotation. The canonical join condition remains
     // `non_equi_conditions`; this is finalized after logical rewrites.
     pub spatial_join: Option<Box<SpatialJoinCandidate>>,
+    // Runtime filters built from the build side and applied to scans of the probe side.
+    // A join rewrite that changes the build/probe sides must clear them.
+    pub runtime_filters: Vec<JoinRuntimeFilter>,
 }
 
 impl Default for Join {
@@ -357,6 +361,7 @@ impl Default for Join {
             single_to_inner: None,
             build_side_cache_info: None,
             spatial_join: None,
+            runtime_filters: Vec::new(),
         }
     }
 }
@@ -378,6 +383,17 @@ impl Join {
         self.equi_conditions
             .iter()
             .any(|condition| condition.is_null_equal)
+    }
+
+    /// Whether a join condition may depend on other input rows. The join evaluates its
+    /// conditions on its inputs, so removing input rows can then change the matches of the
+    /// remaining rows.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.equi_conditions
+            .iter()
+            .flat_map(|condition| [&condition.left, &condition.right])
+            .chain(self.non_equi_conditions.iter())
+            .any(ScalarExpr::depends_on_other_rows)
     }
 
     fn nullable_mark_join_distributions(&self) -> Option<(Distribution, Distribution)> {

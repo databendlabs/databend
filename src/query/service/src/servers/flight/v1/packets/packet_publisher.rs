@@ -170,6 +170,9 @@ pub struct QueryEnv {
     #[serde(default)]
     pub perf_config: PerfConfig,
     pub user: UserInfo,
+    /// Coordinator role for access history attribution, not a worker authorization grant.
+    #[serde(default)]
+    pub audit_role_name: Option<String>,
     /// What the statement's reads may do with the caches, on every node: maintenance
     /// statements bypass the disk cache (`TableContextCachePolicy`).
     #[serde(default)]
@@ -218,6 +221,7 @@ impl QueryEnv {
         )?;
 
         query_ctx.update_init_query_id(self.query_id.clone());
+        query_ctx.set_remote_audit_role(self.audit_role_name.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());
         query_ctx.set_cache_policy(self.cache_policy);
 

@@ -37,6 +37,8 @@ use regex::Regex;
 
 use crate::DataOperator;
 use crate::EndpointPolicyScope;
+use crate::StorageSecurityRegistry;
+use crate::ensure_secure_storage_params;
 use crate::init_operator;
 use crate::init_operator_with_policy_scope;
 
@@ -92,39 +94,56 @@ impl StageFileInfo {
 
 pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
     if stage_info.stage_type == StageType::External {
-        // External S3 stages disallow the ambient credential chain by default.
+        // External stages disallow the ambient credential chain by default.
         // The S3 operator builder will re-enable it automatically when a role_arn is present.
         // This hook only needs to force-enable the chain for cases like system history tables.
-        let storage = match stage_info.stage_params.storage.clone() {
-            StorageParams::S3(mut cfg) => {
-                if stage_info.allow_credential_chain {
-                    cfg.allow_credential_chain = Some(true);
-                }
-                StorageParams::S3(cfg)
+        let mut storage = stage_info.stage_params.storage.clone();
+        if stage_info.allow_credential_chain {
+            match &mut storage {
+                StorageParams::S3(cfg) => cfg.allow_credential_chain = Some(true),
+                StorageParams::Gcs(cfg) => cfg.allow_credential_chain = Some(true),
+                StorageParams::Azblob(cfg) => cfg.allow_credential_chain = Some(true),
+                _ => {}
             }
-            v => v,
-        };
+        }
+        // Stored stages may predate the check at CREATE/ALTER STAGE.
+        ensure_secure_storage_params(&storage, StorageSecurityRegistry::allow_insecure())?;
 
         Ok(init_operator_with_policy_scope(
             &storage,
             EndpointPolicyScope::External,
         )?)
     } else {
-        Ok(init_operator(&stage_root_params(stage_info))?)
+        Ok(init_operator(&stage_root_params(stage_info)?)?)
     }
 }
 
 /// Storage params backing an internal or user stage, rooted at the stage
 /// prefix. Returns `None` for external stages.
-pub fn internal_stage_storage_params(stage_info: &StageInfo) -> Option<StorageParams> {
-    (stage_info.stage_type != StageType::External).then(|| stage_root_params(stage_info))
+pub fn internal_stage_storage_params(stage_info: &StageInfo) -> Result<Option<StorageParams>> {
+    (stage_info.stage_type != StageType::External)
+        .then(|| stage_root_params(stage_info))
+        .transpose()
 }
 
-fn stage_root_params(stage_info: &StageInfo) -> StorageParams {
+fn stage_root_params(stage_info: &StageInfo) -> Result<StorageParams> {
+    ensure_valid_stage_prefix_name(&stage_info.stage_name)?;
     let stage_prefix = stage_info.stage_prefix();
-    DataOperator::instance()
+    Ok(DataOperator::instance()
         .params()
-        .map_root(|path| format!("{path}/{stage_prefix}"))
+        .map_root(|path| format!("{path}/{stage_prefix}")))
+}
+
+/// Rejects stage names that would place an internal or user stage outside
+/// its own directory under the storage root.
+pub fn ensure_valid_stage_prefix_name(name: &str) -> Result<()> {
+    if StageInfo::is_valid_prefix_name(name) {
+        Ok(())
+    } else {
+        Err(ErrorCode::BadArguments(format!(
+            "invalid stage name {name:?}: must not be empty, '.' or '..', and must not contain '/'"
+        )))
+    }
 }
 
 pub fn is_stage_path_traversal(path: &str) -> bool {
@@ -404,6 +423,7 @@ mod tests {
     use databend_common_meta_app::storage::StorageFsConfig;
     use databend_common_meta_app::storage::StorageParams;
 
+    use super::init_stage_operator;
     use super::internal_stage_storage_params;
     use super::is_stage_path_traversal;
 
@@ -412,7 +432,27 @@ mod tests {
         // Must not touch the global DataOperator for external stages.
         let stage =
             StageInfo::new_external_stage(StorageParams::Fs(StorageFsConfig::default()), false);
-        assert!(internal_stage_storage_params(&stage).is_none());
+        assert!(internal_stage_storage_params(&stage).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_is_valid_stage_prefix_name() {
+        for name in ["", ".", "..", "/", "a/", "/a", "a/b", "../..", "a/../b"] {
+            assert!(!StageInfo::is_valid_prefix_name(name), "{name:?}");
+        }
+        for name in ["a", "user@example.com", "a.b", "..a", "a..", "a\\b", "~"] {
+            assert!(StageInfo::is_valid_prefix_name(name), "{name:?}");
+        }
+    }
+
+    #[test]
+    fn user_stage_with_invalid_name_is_rejected() {
+        // Rejected before touching the global DataOperator.
+        for name in ["", ".", "..", "../..", "alice/", "/"] {
+            let stage = StageInfo::new_user_stage(name);
+            assert!(internal_stage_storage_params(&stage).is_err(), "{name:?}");
+            assert!(init_stage_operator(&stage).is_err(), "{name:?}");
+        }
     }
 
     #[test]

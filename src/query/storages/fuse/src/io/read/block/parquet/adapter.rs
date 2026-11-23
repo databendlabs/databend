@@ -55,9 +55,20 @@ impl<'a> RowGroupImplBuilder<'a> {
     }
 
     pub fn add_column_chunk(&mut self, dfs_id: usize, column_chunk: Buffer) {
+        self.add_column_chunk_with_compression(dfs_id, column_chunk, self.compression);
+    }
+
+    /// Adds a column chunk compressed with its own codec, for chunks of one row group that
+    /// come from files written with different codecs.
+    pub fn add_column_chunk_with_compression(
+        &mut self,
+        dfs_id: usize,
+        column_chunk: Buffer,
+        compression: Compression,
+    ) {
         let column_chunk_metadata =
             ColumnChunkMetaData::builder(self.schema_descriptor.column(dfs_id))
-                .set_compression(self.compression)
+                .set_compression(compression)
                 .set_data_page_offset(0)
                 .set_total_compressed_size(column_chunk.len() as i64)
                 .build()

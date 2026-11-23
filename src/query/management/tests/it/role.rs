@@ -20,7 +20,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_meta_client::types::UpsertKV;
 use databend_meta_runtime::DatabendRuntime;
-use tokio::sync::Mutex;
 
 fn make_role_key(role: &str) -> String {
     format!("__fd_roles/admin/{}", role)
@@ -98,7 +97,7 @@ async fn new_role_api(
         test_api.clone(),
         &tenant,
         enable_meta_data_upgrade_json_to_pb_from_v307,
-        Some(Arc::new(Mutex::new(cache))),
+        Some(Arc::new(cache)),
     );
     Ok((test_api, mgr))
 }

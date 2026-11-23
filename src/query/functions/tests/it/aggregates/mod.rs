@@ -58,5 +58,6 @@ mod stddev;
 mod string_agg;
 mod sum;
 mod support;
+mod topk_count_exact;
 mod uniq;
 mod window_funnel;

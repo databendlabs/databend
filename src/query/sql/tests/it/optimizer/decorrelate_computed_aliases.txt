@@ -55,6 +55,7 @@ Exchange(Merge)
             │               │       ├── build keys: [a (#2), plus(a (#2), 1), b (#3)]
             │               │       ├── probe keys: [a (#7), a (#7), b (#8)]
             │               │       ├── other filters: []
+            │               │       ├── runtime filters: [#0: a (#2) -> a (#7), #1: plus(a (#2), 1) -> a (#7), #2: b (#3) -> b (#8)]
             │               │       ├── Exchange(Broadcast)
             │               │       │   └── Filter
             │               │       │       ├── filters: [eq(a (#2), plus(a (#2), 1))]
@@ -137,6 +138,7 @@ Exchange(Merge)
             │               │       ├── build keys: [a (#2), b (#3), plus(b (#3), 1)]
             │               │       ├── probe keys: [a (#7), b (#8), b (#8)]
             │               │       ├── other filters: []
+            │               │       ├── runtime filters: [#0: a (#2) -> a (#7), #1: b (#3) -> b (#8), #2: plus(b (#3), 1) -> b (#8)]
             │               │       ├── Exchange(Broadcast)
             │               │       │   └── Filter
             │               │       │       ├── filters: [eq(b (#3), plus(b (#3), 1))]
@@ -271,6 +273,7 @@ Exchange(Merge)
             │                               ├── build keys: [b (#3)]
             │                               ├── probe keys: [b (#7)]
             │                               ├── other filters: []
+            │                               ├── runtime filters: [#0: b (#3) -> b (#7)]
             │                               ├── Exchange(Broadcast)
             │                               │   └── ConstantTableScan
             │                               │       ├── columns: [a (#2), b (#3)]
@@ -353,6 +356,7 @@ Exchange(Merge)
             │               ├── build keys: [b (#3), a (#2)]
             │               ├── probe keys: [b (#8), a (#7)]
             │               ├── other filters: []
+            │               ├── runtime filters: [#0: b (#3) -> b (#8), #1: a (#2) -> a (#7)]
             │               ├── Exchange(Broadcast)
             │               │   └── ConstantTableScan
             │               │       ├── columns: [a (#2), b (#3)]

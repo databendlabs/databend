@@ -14,5 +14,6 @@
 
 mod builders;
 mod optimizer;
+mod planner_cache;
 mod semantic;
 mod view_cte_resolution;

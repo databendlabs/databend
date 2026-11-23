@@ -121,6 +121,7 @@ weekofyear -> to_week_of_year
 year -> to_year
 
 Functions overloads:
+0 __runtime_filter FACTORY
 0 abs FACTORY
 1 abs(UInt64) :: UInt64
 2 abs(UInt64 NULL) :: UInt64 NULL
@@ -2355,6 +2356,7 @@ Functions overloads:
 1 is_timestamp(Variant NULL) :: Boolean NULL
 0 is_timestamp_tz(Variant) :: Boolean
 1 is_timestamp_tz(Variant NULL) :: Boolean NULL
+0 is_topk_count_candidate FACTORY
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
 0 isinf(Float32) :: Boolean

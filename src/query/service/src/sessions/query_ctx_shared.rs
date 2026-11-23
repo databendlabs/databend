@@ -76,6 +76,7 @@ use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
+use crate::interpreters::access_log::ObjectDomain;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
@@ -131,9 +132,15 @@ pub struct QueryContextShared {
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     query_lineage: Arc<RwLock<Option<QueryLineage>>>,
     pending_lineage_logs: Arc<RwLock<Vec<String>>>,
+    pub(super) audited_named_objects: Mutex<HashMap<ObjectDomain, HashSet<String>>>,
+    /// The coordinator's role for audit attribution only, never for authorization.
+    pub(super) remote_audit_role: OnceLock<Option<String>>,
     aborting: Arc<AtomicBool>,
     pub(super) abort_notify: Arc<WatchNotify>,
     pub(super) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    /// The ids of the databases this query read its tables from, by catalog and database name:
+    /// the privilege checks reuse them instead of reading the databases again.
+    database_ids: Mutex<HashMap<(String, String), u64>>,
     pub(super) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
     affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(super) catalog_manager: Arc<CatalogManager>,
@@ -266,10 +273,13 @@ impl QueryContextShared {
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             query_lineage: Arc::new(RwLock::new(None)),
+            audited_named_objects: Mutex::default(),
+            remote_audit_role: OnceLock::new(),
             pending_lineage_logs: Arc::new(RwLock::new(Vec::new())),
             aborting: Arc::new(AtomicBool::new(false)),
             abort_notify: Arc::new(WatchNotify::new()),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
+            database_ids: Default::default(),
             streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
@@ -515,6 +525,15 @@ impl QueryContextShared {
         };
     }
 
+    /// The id of a database this query read a table from, by the catalog and database names it
+    /// was read by.
+    pub fn get_resolved_database_id(&self, catalog: &str, database: &str) -> Option<u64> {
+        self.database_ids
+            .lock()
+            .get(&(catalog.to_string(), database.to_string()))
+            .copied()
+    }
+
     #[async_backtrace::framed]
     pub async fn get_table(
         &self,
@@ -565,16 +584,39 @@ impl QueryContextShared {
                 self.session.session_ctx.session_state()?,
             )
             .await?;
-        let cache_table = catalog.get_table(&tenant, database, table).await?;
+        let (cache_table, db_id) = catalog
+            .get_table_with_db_id(&tenant, database, table)
+            .await?;
+        let database_id = db_id.map(|db_id| ((catalog.name(), database.to_string()), db_id));
         let cache_table = self
             .cache_stream_source_table(catalog, cache_table, max_batch_size)
             .await?;
 
-        let mut tables_refs = self.tables_refs.lock();
+        self.cache_resolved_table(table_meta_key, cache_table, database_id)
+    }
 
+    fn cache_resolved_table(
+        &self,
+        table_meta_key: DatabaseAndTable,
+        table: Arc<dyn Table>,
+        database_id: Option<((String, String), u64)>,
+    ) -> Result<Arc<dyn Table>> {
+        let mut tables_refs = self.tables_refs.lock();
         match tables_refs.entry(table_meta_key) {
             Entry::Occupied(v) => Ok(v.get().clone()),
-            Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
+            Entry::Vacant(v) => {
+                // Keep the database id read with the table kept, not one of a concurrent read.
+                if let Some((key, db_id)) = database_id {
+                    let bound_id = *self.database_ids.lock().entry(key).or_insert(db_id);
+                    if bound_id != db_id {
+                        let (catalog_name, database, _) = v.key();
+                        return Err(ErrorCode::DatabaseVersionMismatched(format!(
+                            "Database '{catalog_name}.{database}' changed from ID {bound_id} to {db_id} while resolving tables. Retry the statement."
+                        )));
+                    }
+                }
+                Ok(v.insert(table).clone())
+            }
         }
     }
 
@@ -611,8 +653,8 @@ impl QueryContextShared {
                 let source = match cached_source {
                     Some(source) => source,
                     None => {
-                        let source = catalog
-                            .get_table(
+                        let (source, db_id) = catalog
+                            .get_table_with_db_id(
                                 &self.get_tenant(),
                                 &source_database_name,
                                 &source_table_name,
@@ -634,11 +676,9 @@ impl QueryContextShared {
                                 ))
                             })?;
                         // Only the full source belongs in the ordinary table cache.
-                        self.tables_refs
-                            .lock()
-                            .entry(meta_key)
-                            .or_insert(source)
-                            .clone()
+                        let database_id =
+                            db_id.map(|id| ((catalog.name(), source_database_name), id));
+                        self.cache_resolved_table(meta_key, source, database_id)?
                     }
                 };
                 let source_table = stream
@@ -679,6 +719,7 @@ impl QueryContextShared {
     pub fn clear_tables_cache(&self) {
         let mut tables_refs = self.tables_refs.lock();
         tables_refs.clear();
+        self.database_ids.lock().clear();
     }
 
     /// Init runtime when first get

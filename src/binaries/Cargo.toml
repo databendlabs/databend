@@ -39,6 +39,9 @@ serde_json = { workspace = true }
 serfig = { workspace = true }
 tokio = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [[bin]]
 name = "databend-query"
 path = "query/ee_main.rs"

@@ -1,4 +1,4 @@
-=== Connection authorization is always enabled ===
+=== Connection object authorization enabled ===
 === TEST USER A WITH SUPER AND EXPLICIT CREATE CONNECTION PRIVILEGES ===
 --- CREATE 3 CONNECTIONS WILL SUCCESS ---
 c1	azblob	endpoint_url=http://s3.amazonaws.com

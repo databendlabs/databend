@@ -60,6 +60,17 @@ pub(super) enum CoreSearchFunction {
     Query { args: CoreDisplayExprArgs },
 }
 
+impl CoreSearchFunction {
+    /// The argument expressions of the function.
+    pub(super) fn args(&self) -> impl Iterator<Item = CoreExprId> + '_ {
+        let args = match self {
+            CoreSearchFunction::Score => None,
+            CoreSearchFunction::Match { args } | CoreSearchFunction::Query { args } => Some(args),
+        };
+        args.into_iter().flatten().map(|(_, arg)| *arg)
+    }
+}
+
 impl<'a> CoreExprArena<'a> {
     pub(super) fn try_lower_search(
         &mut self,

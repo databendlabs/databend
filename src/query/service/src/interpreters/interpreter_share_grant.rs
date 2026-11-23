@@ -28,6 +28,7 @@ use crate::interpreters::access::validate_share_management_for_connection;
 use crate::interpreters::access::validate_share_object_by_id;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextTableAccess;
 use crate::share::ProviderObjectIds;
 use crate::share::SHARE_ENGINE;
@@ -116,6 +117,7 @@ impl Interpreter for GrantShareInterpreter {
                             storage_params,
                         )
                         .await?;
+                    self.ctx.record_connection_access(&connection);
                     manager
                         .grant_table(&self.plan.tenant, &self.plan.share, grant, connection)
                         .await?;

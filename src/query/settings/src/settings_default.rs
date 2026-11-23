@@ -506,6 +506,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_heavy_hitter_aggregate", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Optimizes a local GROUP BY of one key ordered by COUNT(*) DESC with a LIMIT using bounded heavy-hitter counting: proven exact counts return after one pass, otherwise only candidate keys or, failing that, every row is aggregated. 0 disables it, 1 applies cost heuristics, 2 skips the cost heuristics.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=2)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -627,7 +634,7 @@ impl DefaultSettings {
                 }),
                 ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
-                    desc: "Selectivity threshold (percentage) for bloom join runtime filters. Bloom filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
+                    desc: "Initial bloom join runtime-filter threshold (percentage). Enable bloom if build rows are below this percentage of either known build-table rows or a single trusted probe target's table rows. Missing or zero denominators do not qualify. Default 10 means 10%; low-yield bloom may later be disabled by runtime sampling.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
@@ -917,9 +924,9 @@ impl DefaultSettings {
                 }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
-                    desc: "Sql duplicate label for deduplication.",
+                    desc: "Retry token for SQL writes that support deduplication.",
                     mode: SettingMode::Write,
-                    scope: SettingScope::Both,
+                    scope: SettingScope::Session,
                     range: None,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
@@ -1118,13 +1125,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_recluster_task_selection_v2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_parquet_page_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parquet page index",
@@ -1229,6 +1229,27 @@ impl DefaultSettings {
                     desc: "experiment setting enable row access policy(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_RBAC_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable stage and UDF privilege checks and object visibility filters.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Connection object privilege checks. At 0, retain legacy SUPER management and skip named Connection usage checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                (crate::ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK, DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable Sequence object privilege checks. At 0, retain legacy SUPER management, list all sequences and skip nextval checks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_expand_roles", DefaultSettingValue {

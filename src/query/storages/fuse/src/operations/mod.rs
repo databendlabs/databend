@@ -63,6 +63,7 @@ pub use recluster::ReclusterCandidateWindow;
 pub use recluster::ReclusterFinalCarry;
 pub use recluster::ReclusterMode;
 pub use recluster::ReclusterMutator;
+pub use recluster::ReclusterTaskBudget;
 pub use recluster::SelectedReclusterSegment;
 pub use recluster::VectorFinalPlan;
 pub use recluster::VectorReclusterBlock;

@@ -74,7 +74,7 @@ where A: super::TypeCheckAdapter
 {
     pub(super) fn check_set_returning_function(&self, span: Span) -> Result<()> {
         match self.bind_context.expr_context {
-            ExprContext::InSetReturningFunction => {
+            ExprContext::InSetReturningFunction { .. } => {
                 return Err(ErrorCode::SemanticError(
                     "set-returning functions cannot be nested".to_string(),
                 )

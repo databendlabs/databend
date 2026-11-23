@@ -31,6 +31,12 @@ pub trait TableContextAuthorization: Send + Sync {
 
     fn get_secondary_roles(&self) -> Option<Vec<String>>;
 
+    /// Records a successful Connection access, not an authorization or existence check.
+    fn record_connection_access(&self, _name: &str) {}
+
+    /// Records a successful Sequence access, including allocation in either privilege mode.
+    fn record_sequence_access(&self, _name: &str) {}
+
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
 
     async fn validate_privilege(

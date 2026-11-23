@@ -83,7 +83,7 @@ AggregateFinal
         ├── keys is null equal: [false]
         ├── filters: []
         ├── build join filters:
-        │   └── filter id:0, build key:b.row_num (#0), probe targets:[p.row_num (#5)@scan1], filter type:bloom,inlist,min_max
+        │   └── filter id:0, build key:b.row_num (#0), probe targets:[t_stream_probe._origin_block_row_num (#5)@scan1], filter type:bloom,inlist,min_max
         ├── estimated rows: 3.00
         ├── TableScan(Build)
         │   ├── table: default.test_stream_rf_alias_collision.t_stream_build

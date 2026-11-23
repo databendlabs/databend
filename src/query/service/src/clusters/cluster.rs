@@ -37,6 +37,7 @@ pub use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::MetaServiceCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
@@ -58,6 +59,7 @@ use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
+use databend_storages_common_cache::CacheManager;
 use futures::Future;
 use futures::StreamExt;
 use futures::future::Either;
@@ -287,7 +289,7 @@ impl ClusterDiscovery {
         version: BuildInfoRef,
         metastore: MetaStore,
     ) -> Result<Arc<ClusterDiscovery>> {
-        let (lift_time, provider) = Self::create_provider(cfg, version, metastore)?;
+        let (lift_time, provider) = Self::create_provider(cfg, version, metastore).await?;
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
@@ -311,7 +313,7 @@ impl ClusterDiscovery {
         GlobalInstance::get()
     }
 
-    fn create_provider(
+    async fn create_provider(
         cfg: &InnerConfig,
         version: BuildInfoRef,
         metastore: MetaStore,
@@ -319,8 +321,31 @@ impl ClusterDiscovery {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager =
+        let client = metastore.inner().clone();
+        let mut cluster_manager =
             WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time, version)?;
+        let common = &cfg.query.common;
+        if cfg
+            .cache
+            .is_meta_service_cache_enabled(MetaServiceCache::ClusterNode)
+        {
+            if common.cluster_id.is_empty() {
+                // A system-managed node: the warehouse management assigns its cluster at runtime
+                // and can move it, so there is no fixed cluster to watch.
+                warn!(
+                    "cluster_node in cache.meta_service_caches needs a configured cluster_id: this node reads its cluster from meta-service"
+                );
+            } else {
+                cluster_manager = cluster_manager
+                    .watch_cluster_nodes(
+                        client,
+                        &common.warehouse_id,
+                        &common.cluster_id,
+                        &cfg.query.node_id,
+                    )
+                    .await?;
+            }
+        }
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
@@ -854,7 +879,7 @@ impl ClusterDiscovery {
                 "data_cache_in_memory_bytes": cfg.cache.data_cache_in_memory_bytes,
                 "table_data_cache_population_queue_size": cfg.cache.table_data_cache_population_queue_size,
                 "table_data_deserialized_data_bytes": cfg.cache.table_data_deserialized_data_bytes,
-                "disk_cache_max_bytes": cfg.cache.disk_cache_config.max_bytes,
+                "disk_cache_max_bytes": CacheManager::instance().disk().map_or(0, |disk| disk.max_bytes()),
                 "disk_cache_sync_data": cfg.cache.disk_cache_config.sync_data
             },
             "memory_management": {

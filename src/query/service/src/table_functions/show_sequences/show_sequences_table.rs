@@ -45,7 +45,6 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
-use databend_common_users::Object;
 
 use crate::sessions::TableContext;
 
@@ -173,8 +172,10 @@ async fn show_sequences(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>>
         .await?
         .info;
 
-    let visibility_checker = ctx.get_visibility_checker(false, Object::Sequence).await?;
-    seqs.retain(|c| visibility_checker.check_seq_visibility(&c.0));
+    let visibility_checker = ctx.sequence_usage_checker().await?;
+    if let Some(visibility_checker) = visibility_checker {
+        seqs.retain(|c| visibility_checker.check_seq_visibility(&c.0));
+    }
 
     let names = seqs.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
     let interval = seqs.iter().map(|x| x.1.step).collect::<Vec<_>>();

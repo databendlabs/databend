@@ -39,7 +39,72 @@ async fn test_type_check_lambda_functions() -> Result<()> {
             setup_sqls: &[],
             sql: "array_transform([number], (x, y) -> x)",
         },
+        SqlTestCase {
+            name: "lambda_body_rejects_subquery",
+            description: "A lambda body compiles into an expression evaluated per element, which cannot hold a subquery.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> x + (SELECT 1))",
+        },
+        SqlTestCase {
+            name: "lambda_body_rejects_set_returning_function",
+            description: "A lambda body cannot hold a set-returning function, which a ProjectSet evaluates.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> x + unnest([1]))",
+        },
+        SqlTestCase {
+            name: "lambda_body_rejects_async_function",
+            description: "A lambda body cannot hold an async function, which an AsyncFunction plan evaluates.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> x + sleep(1))",
+        },
+        SqlTestCase {
+            name: "lambda_parameter_names_are_normalized_like_references",
+            description: "Parameter names are normalized as the names in the body are: an unquoted name matches it in any case.",
+            setup_sqls: &[],
+            sql: "array_transform([number], X -> x + 1)",
+        },
+        SqlTestCase {
+            name: "lambda_parameter_must_not_be_quoted",
+            description: "A parameter is named by a plain identifier, so a quoted name is rejected.",
+            setup_sqls: &[],
+            sql: "array_transform([number], \"Y\" -> \"Y\" + 1)",
+        },
+        SqlTestCase {
+            name: "lambda_parameters_must_not_be_quoted",
+            description: "Each of the parameters of a lambda is named by a plain identifier.",
+            setup_sqls: &[],
+            sql: "array_reduce([number], (x, `y`) -> x + y)",
+        },
     ];
 
     run_type_check_cases("lambda.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_lambda_parameters_case_sensitive() -> Result<()> {
+    init_testing_globals();
+    let settings = Settings::create(Tenant::new_literal("default"));
+    settings.set_setting("unquoted_ident_case_sensitive".to_string(), "1".to_string())?;
+    let cases = [
+        SqlTestCase {
+            name: "case_sensitive_lambda_parameter_matches_same_case",
+            description: "With unquoted names case sensitive, a parameter is referred to by its name as written.",
+            setup_sqls: &[],
+            sql: "array_transform([number], X -> X + 1)",
+        },
+        SqlTestCase {
+            name: "case_sensitive_lambda_parameter_differs_from_other_case",
+            description: "With unquoted names case sensitive, a name in another case is not the parameter.",
+            setup_sqls: &[],
+            sql: "array_transform([number], X -> x + 1)",
+        },
+    ];
+
+    run_type_check_cases_with_settings(
+        "lambda_case_sensitive.txt",
+        &cases,
+        settings,
+        ExprContext::Unknown,
+    )
+    .await
 }

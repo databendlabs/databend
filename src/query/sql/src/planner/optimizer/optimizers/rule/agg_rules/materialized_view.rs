@@ -778,6 +778,7 @@ fn try_build_state_rollup(
     Ok(Some(SExpr::create_unary(
         Arc::new(
             Aggregate {
+                adaptive_topk_count: None,
                 group_items: query_aggregate.group_items.clone(),
                 aggregate_functions,
                 from_distinct: false,
@@ -833,6 +834,7 @@ fn build_rollup_aggregate(
     }
 
     Ok(Some(Aggregate {
+        adaptive_topk_count: None,
         group_items,
         aggregate_functions,
         from_distinct: false,

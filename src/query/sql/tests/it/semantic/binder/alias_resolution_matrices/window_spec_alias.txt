@@ -29,25 +29,25 @@ EvalScalar
                             └── limit: NONE
 
 
-=== window_spec_alias__window_spec_reuses_group_item_alias ===
+=== window_spec_alias__window_spec_reuses_key_item_alias ===
 matrix: window_spec_alias
-key: W0N2G0_0_
+key: W0N2S1_0_
 sql: SELECT number % 3 AS a, number % 4 AS b, row_number() OVER (PARTITION BY b % 2 ORDER BY a) FROM t GROUP BY a, b
 status: ok
 EvalScalar
-├── scalars: [row_number() OVER (PARTITION BY b % 2 ORDER BY a) (#5) AS (#5), a (#1) AS (#6), b (#2) AS (#7)]
+├── scalars: [a (#1) AS (#1), b (#2) AS (#2), row_number() OVER (PARTITION BY b % 2 ORDER BY a) (#4) AS (#4)]
 └── Window
     ├── aggregate function: row_number
     ├── partition items: [modulo(b (#2), 2) AS (#3)]
-    ├── order by items: [a (#1) AS (#4)]
+    ├── order by items: [a (#1) AS (#1)]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
     └── Sort
-        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, row_number_order_0 (#4) ASC NULLS LAST]
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, a (#1) ASC NULLS LAST]
         ├── limit: [NONE]
         ├── window top: NONE
         ├── window function: RowNumber
         └── EvalScalar
-            ├── scalars: [modulo(b (#2), 2) AS (#3), a (#1) AS (#4)]
+            ├── scalars: [a (#1) AS (#1), modulo(b (#2), 2) AS (#3)]
             └── Aggregate(Initial)
                 ├── group items: [modulo(t.number (#0), 3) AS (#1), modulo(t.number (#0), 4) AS (#2)]
                 ├── aggregate functions: []
@@ -68,9 +68,9 @@ status: error
 code: 1065
 message: Window function cannot contain another window function
 
-=== window_spec_alias__window_spec_qualified_name_does_not_consume_group_alias ===
+=== window_spec_alias__window_spec_qualified_name_does_not_consume_key_item_alias ===
 matrix: window_spec_alias
-key: W0N1G0_3_
+key: W0N1S1_3_
 sql: SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k
 status: error
 code: 1065

@@ -914,6 +914,32 @@ impl FuseTable {
         self.storage_format
     }
 
+    /// Read one recluster branch with a share of the node's concurrency, without
+    /// overriding session settings or bypassing the ordinary read checks.
+    pub fn read_data_with_parallelism(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+        cache_policy: CachePolicy,
+        max_threads: usize,
+        max_io_requests: usize,
+    ) -> Result<()> {
+        self.check_data_sharing_license(ctx.as_ref())?;
+        self.check_format_supported()?;
+        if max_threads == 0 || max_io_requests == 0 {
+            return Err(ErrorCode::BadArguments("Read parallelism must be positive"));
+        }
+        self.do_read_data_with_parallelism(
+            ctx,
+            plan,
+            pipeline,
+            cache_policy,
+            max_threads,
+            max_io_requests,
+        )
+    }
+
     /// Reject any data-touching operation on a table whose storage format is no
     /// longer supported (e.g. the removed `native` format). Such tables can
     /// still be listed and dropped, but cannot be read from, written to, or
@@ -1399,6 +1425,10 @@ impl Table for FuseTable {
             let count_min_sketch = aligned_table_statistics
                 .map(|v| v.count_min_sketch.clone())
                 .unwrap_or_default();
+            let (approx_top_n, approx_top_n_rows) = table_statistics
+                .as_ref()
+                .map(|v| (v.top_n.clone(), v.row_count))
+                .unwrap_or_default();
             FuseTableColumnStatisticsProvider::new(
                 stats,
                 histograms,
@@ -1410,6 +1440,7 @@ impl Table for FuseTable {
                 snapshot.summary.block_count,
                 &self.schema(),
             )
+            .with_approx_top_n(approx_top_n, approx_top_n_rows)
         } else {
             FuseTableColumnStatisticsProvider::default()
         };
