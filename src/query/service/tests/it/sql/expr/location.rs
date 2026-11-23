@@ -429,7 +429,7 @@ async fn test_parse_uri_location_without_connection() -> anyhow::Result<()> {
     ];
 
     for (name, mut input, expected) in cases {
-        let actual = parse_uri_location(&mut input).await?;
+        let actual = parse_uri_location(&mut input, true).await?;
         assert_eq!(expected, actual, "{}", name);
     }
 

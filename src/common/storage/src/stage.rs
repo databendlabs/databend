@@ -37,6 +37,8 @@ use regex::Regex;
 
 use crate::DataOperator;
 use crate::EndpointPolicyScope;
+use crate::StorageSecurityRegistry;
+use crate::ensure_secure_storage_params;
 use crate::init_operator;
 use crate::init_operator_with_policy_scope;
 
@@ -104,6 +106,8 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
             }
             v => v,
         };
+        // Stored stages may predate the check at CREATE/ALTER STAGE.
+        ensure_secure_storage_params(&storage, StorageSecurityRegistry::allow_insecure())?;
 
         Ok(init_operator_with_policy_scope(
             &storage,

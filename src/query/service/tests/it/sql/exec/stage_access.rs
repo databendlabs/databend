@@ -15,6 +15,10 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::storage::StorageFsConfig;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_users::UserApiProvider;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
@@ -49,6 +53,29 @@ async fn test_stored_locations_respect_allow_insecure() -> Result<()> {
         format!("create temporary table {db}.insecure_fs_tmp(a int) '{url}'"),
     ] {
         let err = fixture.execute_command(&sql).await.expect_err(sql.as_str());
+        assert_eq!(err.code(), ErrorCode::STORAGE_INSECURE, "{sql}: {err}");
+    }
+
+    let sql = "create connection insecure_conn storage_type = 's3' endpoint_url = 'http://127.0.0.1:9000' access_key_id = 'a' secret_access_key = 'b'";
+    let err = fixture.execute_command(sql).await.expect_err(sql);
+    assert_eq!(err.code(), ErrorCode::STORAGE_INSECURE, "{sql}: {err}");
+
+    // A stage stored before the DDL check must not be usable either.
+    let stored = StageInfo::new_external_stage(
+        StorageParams::Fs(StorageFsConfig {
+            root: format!("{}/", dir.path().display()),
+        }),
+        false,
+    )
+    .with_stage_name("stored_fs_stage");
+    UserApiProvider::instance()
+        .add_stage(&fixture.default_tenant(), stored, false, None)
+        .await?;
+    for sql in [
+        "select read_file('@stored_fs_stage/a')",
+        "list @stored_fs_stage",
+    ] {
+        let err = query_error(&fixture, sql).await;
         assert_eq!(err.code(), ErrorCode::STORAGE_INSECURE, "{sql}: {err}");
     }
 

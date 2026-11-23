@@ -150,7 +150,8 @@ pub async fn should_reset(
         payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
 
         let (new_storage_params, _) = payload
-            .tracking(parse_uri_location(&mut uri_location))
+            // History storage comes from server config.
+            .tracking(parse_uri_location(&mut uri_location, true))
             .await?;
 
         // External1 -> External2
