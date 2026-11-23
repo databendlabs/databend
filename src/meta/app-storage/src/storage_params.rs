@@ -214,6 +214,14 @@ impl StorageParams {
                 s1.allow_credential_chain = s2.allow_credential_chain;
                 Ok(Self::S3(s1))
             }
+            (StorageParams::Oss(mut current), StorageParams::Oss(update)) => {
+                // Keep the table's location; the update may have a placeholder bucket and root.
+                current.access_key_id = update.access_key_id;
+                current.access_key_secret = update.access_key_secret;
+                current.role_arn = update.role_arn;
+                current.network_config = update.network_config;
+                Ok(Self::Oss(current))
+            }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
                 "Cannot apply update from {:?} to {:?}",
                 s1, s2
@@ -1042,6 +1050,60 @@ pub struct StorageNetworkParams {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn apply_oss_update_preserves_storage_location() {
+        let current = StorageOssConfig {
+            endpoint_url: "https://oss.example.com".to_string(),
+            presign_endpoint_url: "https://oss-public.example.com".to_string(),
+            bucket: "table-bucket".to_string(),
+            root: "/table-prefix/".to_string(),
+            access_key_id: "old-key".to_string(),
+            access_key_secret: "old-secret".to_string(),
+            role_arn: "old-role".to_string(),
+            server_side_encryption: "KMS".to_string(),
+            server_side_encryption_key_id: "table-kms-key".to_string(),
+            network_config: Some(StorageNetworkParams {
+                connect_timeout: 5,
+                ..Default::default()
+            }),
+        };
+        let update = StorageOssConfig {
+            endpoint_url: "https://other-oss.example.com".to_string(),
+            bucket: "test".to_string(),
+            root: "/".to_string(),
+            access_key_id: "new-key".to_string(),
+            access_key_secret: "new-secret".to_string(),
+            role_arn: "new-role".to_string(),
+            ..Default::default()
+        };
+
+        // SQL currently supplies None. Match S3's replacement semantics for both cases.
+        for network_config in [
+            None,
+            Some(StorageNetworkParams {
+                connect_timeout: 10,
+                ..Default::default()
+            }),
+        ] {
+            let result = StorageParams::Oss(current.clone())
+                .apply_update(StorageParams::Oss(StorageOssConfig {
+                    network_config: network_config.clone(),
+                    ..update.clone()
+                }))
+                .unwrap();
+            assert_eq!(
+                result,
+                StorageParams::Oss(StorageOssConfig {
+                    access_key_id: update.access_key_id.clone(),
+                    access_key_secret: update.access_key_secret.clone(),
+                    role_arn: update.role_arn.clone(),
+                    network_config,
+                    ..current.clone()
+                })
+            );
+        }
+    }
 
     #[test]
     fn without_credentials_preserves_s3_location() {
