@@ -385,12 +385,12 @@ fn get_http_client(
 
 /// init_azblob_operator will init an opendal azblob operator.
 ///
-/// `External` locations must carry a complete shared key.
+/// Without the credential chain, the location must carry a complete shared key.
 fn init_azblob_operator(
     cfg: &StorageAzblobConfig,
     endpoint_policy_scope: EndpointPolicyScope,
 ) -> Result<impl Builder> {
-    if endpoint_policy_scope == EndpointPolicyScope::External {
+    if !allow_credential_chain(cfg.allow_credential_chain, endpoint_policy_scope) {
         check_external_azblob_credential(cfg)?;
     }
 
@@ -462,8 +462,8 @@ fn init_fs_operator(cfg: &StorageFsConfig) -> Result<impl Builder> {
 
 /// init_gcs_operator will init a opendal gcs operator.
 ///
-/// `External` locations only use the `service_account` credential given in
-/// SQL, or none at all.
+/// Without the credential chain, only the `service_account` credential given
+/// in the location is used, or none at all.
 fn init_gcs_operator(
     cfg: &StorageGcsConfig,
     endpoint_policy_scope: EndpointPolicyScope,
@@ -473,21 +473,24 @@ fn init_gcs_operator(
         .bucket(&cfg.bucket)
         .root(&cfg.root);
 
-    match endpoint_policy_scope {
-        EndpointPolicyScope::Trusted => {
-            builder = builder.credential(&cfg.credential);
-        }
-        EndpointPolicyScope::External => {
-            builder = builder.disable_config_load().disable_vm_metadata();
-            if cfg.credential.is_empty() {
-                builder = builder.allow_anonymous();
-            } else {
-                builder = builder.credential(&sanitize_gcs_service_account(&cfg.credential)?);
-            }
+    if allow_credential_chain(cfg.allow_credential_chain, endpoint_policy_scope) {
+        builder = builder.credential(&cfg.credential);
+    } else {
+        builder = builder.disable_config_load().disable_vm_metadata();
+        if cfg.credential.is_empty() {
+            builder = builder.allow_anonymous();
+        } else {
+            builder = builder.credential(&sanitize_gcs_service_account(&cfg.credential)?);
         }
     }
 
     Ok(builder)
+}
+
+/// An explicit setting wins; otherwise only trusted storage may use the
+/// ambient credential chain.
+fn allow_credential_chain(explicit: Option<bool>, scope: EndpointPolicyScope) -> bool {
+    explicit.unwrap_or(scope == EndpointPolicyScope::Trusted)
 }
 
 /// Re-encode a base64 service account key with only the fields signing needs.
@@ -1438,7 +1441,22 @@ mod tests {
                 "invalid gcs credential",
             );
             assert_accepted(&gcs(credential), EndpointPolicyScope::Trusted);
+            assert_accepted(
+                &with_credential_chain(gcs(credential)),
+                EndpointPolicyScope::External,
+            );
         }
+    }
+
+    /// Mark params as allowed to use the ambient credential chain, as history
+    /// tables do.
+    fn with_credential_chain(mut cfg: StorageParams) -> StorageParams {
+        match &mut cfg {
+            StorageParams::Gcs(cfg) => cfg.allow_credential_chain = Some(true),
+            StorageParams::Azblob(cfg) => cfg.allow_credential_chain = Some(true),
+            _ => unreachable!(),
+        }
+        cfg
     }
 
     fn azblob(endpoint_url: &str, account_name: &str, account_key: &str) -> StorageParams {
@@ -1479,6 +1497,7 @@ mod tests {
         ] {
             assert_rejected(&cfg, EndpointPolicyScope::External, msg);
             assert_accepted(&cfg, EndpointPolicyScope::Trusted);
+            assert_accepted(&with_credential_chain(cfg), EndpointPolicyScope::External);
         }
     }
 }

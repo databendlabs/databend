@@ -94,18 +94,18 @@ impl StageFileInfo {
 
 pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
     if stage_info.stage_type == StageType::External {
-        // External S3 stages disallow the ambient credential chain by default.
+        // External stages disallow the ambient credential chain by default.
         // The S3 operator builder will re-enable it automatically when a role_arn is present.
         // This hook only needs to force-enable the chain for cases like system history tables.
-        let storage = match stage_info.stage_params.storage.clone() {
-            StorageParams::S3(mut cfg) => {
-                if stage_info.allow_credential_chain {
-                    cfg.allow_credential_chain = Some(true);
-                }
-                StorageParams::S3(cfg)
+        let mut storage = stage_info.stage_params.storage.clone();
+        if stage_info.allow_credential_chain {
+            match &mut storage {
+                StorageParams::S3(cfg) => cfg.allow_credential_chain = Some(true),
+                StorageParams::Gcs(cfg) => cfg.allow_credential_chain = Some(true),
+                StorageParams::Azblob(cfg) => cfg.allow_credential_chain = Some(true),
+                _ => {}
             }
-            v => v,
-        };
+        }
         // Stored stages may predate the check at CREATE/ALTER STAGE.
         ensure_secure_storage_params(&storage, StorageSecurityRegistry::allow_insecure())?;
 

@@ -942,6 +942,7 @@ impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
             bucket: self.gcs_bucket,
             root: self.gcs_root,
             credential: self.credential,
+            allow_credential_chain: None,
             network_config: None,
         })
     }
@@ -1178,6 +1179,7 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
             account_name: self.account_name,
             account_key: self.account_key,
             root: self.azblob_root,
+            allow_credential_chain: None,
             network_config: None,
         })
     }

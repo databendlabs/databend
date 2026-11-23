@@ -64,6 +64,17 @@ fn secure_omission(endpoint: String) -> String {
     }
 }
 
+/// History table locations come from the server config, so they may use the
+/// ambient credential chain.
+fn history_credential_chain() -> Option<bool> {
+    ThreadTracker::capture_log_settings()
+        .is_some_and(|settings| settings.level == LevelFilter::Off)
+        .then(|| {
+            info!("Allow credential chain for history tables");
+            true
+        })
+}
+
 fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l.connection.get("endpoint_url").cloned().ok_or_else(|| {
         Error::new(
@@ -82,6 +93,7 @@ fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams
             .unwrap_or_default(),
         account_key: l.connection.get("account_key").cloned().unwrap_or_default(),
         root,
+        allow_credential_chain: history_credential_chain(),
         network_config: None,
     });
 
@@ -179,12 +191,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     .to_string();
 
     // Enable credential chain explicitly only in history-table scope.
-    let allow_credential_chain = ThreadTracker::capture_log_settings()
-        .is_some_and(|settings| settings.level == LevelFilter::Off)
-        .then(|| {
-            info!("Allow credential chain for history tables");
-            true
-        });
+    let allow_credential_chain = history_credential_chain();
 
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: endpoint,
@@ -224,6 +231,7 @@ fn parse_gcs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
         bucket: l.name.clone(),
         root: root.clone(),
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
+        allow_credential_chain: history_credential_chain(),
         network_config: None,
     });
 

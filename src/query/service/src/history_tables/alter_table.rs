@@ -199,6 +199,20 @@ fn storage_params_equal(lhs: &StorageParams, rhs: &StorageParams) -> bool {
             right.allow_credential_chain = None;
             left == right
         }
+        (StorageParams::Gcs(left), StorageParams::Gcs(right)) => {
+            let mut left = left.clone();
+            let mut right = right.clone();
+            left.allow_credential_chain = None;
+            right.allow_credential_chain = None;
+            left == right
+        }
+        (StorageParams::Azblob(left), StorageParams::Azblob(right)) => {
+            let mut left = left.clone();
+            let mut right = right.clone();
+            left.allow_credential_chain = None;
+            right.allow_credential_chain = None;
+            left == right
+        }
         _ => lhs == rhs,
     }
 }
