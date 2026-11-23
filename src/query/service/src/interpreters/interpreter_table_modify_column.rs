@@ -51,6 +51,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
+use databend_common_sql::QueryExecutor;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::binder::validate_constraints_by_schema;
 use databend_common_sql::parse_cluster_keys;
@@ -98,6 +99,7 @@ use crate::meta_service_error;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::ServiceQueryExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCachePolicy;
@@ -480,19 +482,17 @@ impl ModifyTableColumnInterpreter {
                     let statistics_provider = fuse_table
                         .column_statistics_provider(self.ctx.clone())
                         .await?;
-                    let column_stat = statistics_provider
-                        .column_statistics(old_field.column_id)
-                        .ok_or_else(|| {
-                            ErrorCode::UnknownColumn(format!(
-                                "Cannot find statistics for column '{}' (id: {})",
-                                field.name, old_field.column_id
-                            ))
-                        })?;
-                    if column_stat.null_count() > 0 {
+                    let null_count =
+                        match statistics_provider.column_statistics(old_field.column_id) {
+                            Some(column_stat) => column_stat.null_count(),
+                            // Statistics are left out where they do not cover every
+                            // row, so count the NULL values instead.
+                            None => self.count_null_values(&field.name).await?,
+                        };
+                    if null_count > 0 {
                         return Err(ErrorCode::BadArguments(format!(
                             "Cannot change column '{}' to NOT NULL: contains {} NULL values",
-                            field.name,
-                            column_stat.null_count()
+                            field.name, null_count
                         )));
                     }
                 }
@@ -782,6 +782,24 @@ impl ModifyTableColumnInterpreter {
     }
 
     // Set column comment.
+    async fn count_null_values(&self, column_name: &str) -> Result<u64> {
+        let sql = format!(
+            "SELECT count(*) FROM `{}`.`{}` WHERE `{}` IS NULL",
+            self.plan.database, self.plan.table, column_name
+        );
+        let executor = ServiceQueryExecutor::new(QueryContext::create_from(self.ctx.as_ref()));
+        let blocks = executor.execute_query_with_sql_string(&sql).await?;
+        let count = blocks
+            .first()
+            .and_then(|block| block.get_by_offset(0).index(0))
+            .and_then(|value| value.as_number().and_then(|n| n.as_u_int64()).copied());
+        count.ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "failed to count NULL values of column '{column_name}'"
+            ))
+        })
+    }
+
     async fn do_set_comment(
         &self,
         table: Arc<dyn Table>,

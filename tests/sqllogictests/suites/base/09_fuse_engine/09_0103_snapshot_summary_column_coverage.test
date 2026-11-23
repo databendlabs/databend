@@ -74,17 +74,6 @@ a
 b
 c
 
-# ANALYZE keeps the range that the old segment cannot provide.
-statement ok
-analyze table summary_added_column
-
-query T
-select column_name from fuse_statistic('default', 'summary_added_column') order by column_name
-----
-a
-b
-c
-
 # The rewritten segment mixes the old block with an updated one and has no
 # range for b or c. The table range must not keep b in [7, 100], or REPLACE
 # misses 200.
@@ -105,8 +94,88 @@ select a, b from summary_added_column order by a
 1 7
 3 200
 
+# ANALYZE publishes only the ranges its segments cover.
+statement ok
+analyze table summary_added_column
+
+query T
+select column_name from fuse_statistic('default', 'summary_added_column') order by column_name
+----
+a
+
 statement ok
 drop table summary_added_column
+
+# ADD COLUMN counts the old rows as NULL. Deleting them must not leave that
+# count behind, or COUNT(b) folds to the wrong value.
+statement ok
+create or replace table summary_added_null (a int) storage_format = 'parquet'
+
+statement ok
+insert into summary_added_null values (1)
+
+statement ok
+alter table summary_added_null add column b int null
+
+statement ok
+insert into summary_added_null values (2, 42), (3, 43)
+
+statement ok
+delete from summary_added_null where a = 1
+
+query II
+select count(*), count(b) from summary_added_null
+----
+2 2
+
+statement ok
+drop table summary_added_null
+
+# Without a table range for b, MODIFY COLUMN ... NOT NULL counts the NULLs.
+statement ok
+create or replace table summary_modify_not_null (a int)
+  storage_format = 'parquet' segment_format = 'row_oriented' block_per_segment = 10
+
+statement ok
+insert into summary_modify_not_null values (1)
+
+statement ok
+alter table summary_modify_not_null add column b int null default 7
+
+statement ok
+insert into summary_modify_not_null values (2, 100)
+
+statement ok
+optimize table summary_modify_not_null compact segment
+
+statement ok
+update summary_modify_not_null set b = 200 where a = 2
+
+query T
+select column_name from fuse_statistic('default', 'summary_modify_not_null') order by column_name
+----
+a
+
+statement ok
+insert into summary_modify_not_null values (3, null)
+
+statement error 1006
+alter table summary_modify_not_null modify column b int not null default 7
+
+statement ok
+delete from summary_modify_not_null where a = 3
+
+statement ok
+alter table summary_modify_not_null modify column b int not null default 7
+
+query II
+select a, b from summary_modify_not_null order by a
+----
+1 7
+2 200
+
+statement ok
+drop table summary_modify_not_null
 
 # A non-deterministic default is filled by rewriting every row, so the
 # rewritten segments describe the whole table.

@@ -66,7 +66,11 @@ impl MutationGenerator {
         engine: &str,
     ) {
         // Every previous row was removed, so the output alone describes the table.
-        if previous.row_count == changes.removed_statistics.row_count {
+        // Segment compaction reports its source statistics as the output, which
+        // may hold ranges the compacted segments do not publish.
+        if !matches!(self.mutation_kind, MutationKind::Compact)
+            && previous.row_count == changes.removed_statistics.row_count
+        {
             for (id, stats) in &changes.merged_statistics.col_stats {
                 new_summary
                     .col_stats
@@ -208,6 +212,56 @@ impl SnapshotGenerator for MutationGenerator {
             _ => Err(ErrorCode::Internal(
                 "conflict_resolve_ctx should not be AppendOnly in MutationGenerator",
             )),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_sql::executor::physical_plans::MutationKind;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+    use databend_storages_common_table_meta::meta::Statistics;
+
+    use super::MutationGenerator;
+    use crate::operations::common::SnapshotChanges;
+
+    fn summary(row_count: u64, ranged: bool) -> Statistics {
+        let int = |v| Scalar::Number(NumberScalar::Int32(v));
+        let col_stats = if ranged {
+            HashMap::from([(0, ColumnStatistics::new(int(1), int(9), 0, 4, Some(2)))])
+        } else {
+            HashMap::new()
+        };
+        Statistics {
+            row_count,
+            col_stats,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_restore_column_ranges_of_replaced_rows() {
+        let previous = summary(2, false);
+        for (kind, restored) in [(MutationKind::Update, true), (MutationKind::Compact, false)] {
+            // Segment compaction reports its source statistics as the output,
+            // and they may hold a range its new segment does not publish.
+            let changes = SnapshotChanges {
+                merged_statistics: summary(2, true),
+                removed_statistics: summary(2, true),
+                ..Default::default()
+            };
+            let mut new_summary = summary(2, false);
+            MutationGenerator::new(None, kind).restore_column_ranges(
+                &mut new_summary,
+                &previous,
+                &changes,
+                "FUSE",
+            );
+            assert_eq!(new_summary.col_stats.contains_key(&0), restored, "{kind}");
         }
     }
 }

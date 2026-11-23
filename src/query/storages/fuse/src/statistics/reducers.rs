@@ -369,6 +369,11 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.uncompressed_byte_size -= r.uncompressed_byte_size;
     l.compressed_byte_size -= r.compressed_byte_size;
     l.index_size -= r.index_size;
+    // The counts of a column cannot be deducted if the removed rows have no
+    // statistics for it, e.g. old rows covered by the range ADD COLUMN records.
+    if r.row_count != 0 {
+        l.col_stats.retain(|id, _| r.col_stats.contains_key(id));
+    }
     for (id, col_stats) in &mut l.col_stats {
         if let Some(r_col_stats) = r.col_stats.get(id) {
             // The MinMax of a column cannot be recalculated by the right statistics,
