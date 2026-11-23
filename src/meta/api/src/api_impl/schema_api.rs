@@ -48,6 +48,7 @@ use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
+use databend_common_meta_app::schema::TableDeduplicationLabelIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
@@ -402,9 +403,10 @@ pub async fn get_db_by_id_or_err(
     ))
 }
 
-pub fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
+pub(super) fn build_upsert_table_deduplicated_label(tenant: &Tenant, label: String) -> TxnOp {
+    let ident = TableDeduplicationLabelIdent::new_generic(tenant, label);
     TxnOp::put_with_ttl(
-        deduplicated_label,
+        ident.to_string_key(),
         1_i8.to_le_bytes().to_vec(),
         Some(Duration::from_secs(86400)),
     )
@@ -801,4 +803,28 @@ pub fn mark_table_index_as_deleted(
         marked_deleted_table_index_id_ident.to_string_key(),
         serialize_struct(&marked_deleted_table_index_meta),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::tenant::Tenant;
+    use databend_meta_client::types::txn_op::Request;
+
+    use super::build_upsert_table_deduplicated_label;
+
+    #[test]
+    fn test_deduplication_label_put_uses_tenant_key() {
+        let tenant = Tenant::new_literal("tenant_a");
+        let op = build_upsert_table_deduplicated_label(&tenant, "daily/import".to_string());
+        let Some(Request::Put(put)) = op.request else {
+            panic!("expected a put for the deduplication label");
+        };
+
+        assert_eq!(
+            put.key,
+            "__fd_table_deduplication_label/tenant_a/daily%2fimport"
+        );
+        assert_eq!(put.value, [1]);
+        assert_eq!(put.ttl_ms, Some(86_400_000));
+    }
 }

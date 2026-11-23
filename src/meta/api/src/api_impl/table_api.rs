@@ -1581,7 +1581,7 @@ where
         }
     }
 
-    /// `tenant` locates MV source binding generation records for invalidating schema updates.
+    /// `tenant` scopes deduplication labels and MV source binding generations.
     async fn update_multi_table_meta(
         &self,
         tenant: &Tenant,
@@ -1832,8 +1832,10 @@ where
         }
 
         for deduplicated_label in deduplicated_labels {
-            txn.if_then
-                .push(build_upsert_table_deduplicated_label(deduplicated_label));
+            txn.if_then.push(build_upsert_table_deduplicated_label(
+                tenant,
+                deduplicated_label,
+            ));
         }
 
         // Keep these after the table metadata gets: failure parsing relies on the first N
