@@ -31,17 +31,8 @@ select count(*) from list_stage(location => '@ext_s3_region_auto/parquet/tuple.p
 statement ok
 drop stage ext_s3_region_auto
 
-statement ok
-drop stage if exists ext_s3_region_bad
-
-statement ok
-create stage ext_s3_region_bad url='s3://testbucket/data/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us east 1')
-
 statement error invalid s3 region
-select count(*) from list_stage(location => '@ext_s3_region_bad/')
-
-statement ok
-drop stage ext_s3_region_bad
+create stage ext_s3_region_bad url='s3://testbucket/data/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us east 1')
 
 statement ok
 drop table if exists ext_tbl_region all
@@ -155,17 +146,8 @@ gcs gcs://ext-bucket/path/ 1
 statement ok
 drop stage ext_gcs
 
-statement ok
-drop stage if exists ext_gcs_user
-
-statement ok
-create stage ext_gcs_user url='gcs://ext-bucket/path/' connection=(credential='eyJ0eXBlIjoiYXV0aG9yaXplZF91c2VyIiwiY2xpZW50X2lkIjoiYyIsImNsaWVudF9zZWNyZXQiOiJzIiwicmVmcmVzaF90b2tlbiI6InIifQ==')
-
 statement error invalid gcs credential
-select count(*) from list_stage(location => '@ext_gcs_user/')
-
-statement ok
-drop stage ext_gcs_user
+create stage ext_gcs_user url='gcs://ext-bucket/path/' connection=(credential='eyJ0eXBlIjoiYXV0aG9yaXplZF91c2VyIiwiY2xpZW50X2lkIjoiYyIsImNsaWVudF9zZWNyZXQiOiJzIiwicmVmcmVzaF90b2tlbiI6InIifQ==')
 
 statement ok
 drop stage if exists ext_azblob
@@ -181,26 +163,8 @@ azblob azblob://ext-container/path/ https://extaccount.blob.core.windows.net 1
 statement ok
 drop stage ext_azblob
 
-statement ok
-drop stage if exists ext_azblob_nokey
-
-statement ok
+statement error account_key
 create stage ext_azblob_nokey url='azblob://ext-container/path/' connection=(endpoint_url='https://extaccount.blob.core.windows.net')
 
-statement error account_key
-select count(*) from list_stage(location => '@ext_azblob_nokey/')
-
-statement ok
-drop stage ext_azblob_nokey
-
-statement ok
-drop stage if exists ext_azblob_noname
-
-statement ok
-create stage ext_azblob_noname url='azblob://ext-container/path/' connection=(endpoint_url='http://127.0.0.1:10000' account_key='a2V5a2V5a2V5a2V5')
-
 statement error account_name
-select count(*) from list_stage(location => '@ext_azblob_noname/')
-
-statement ok
-drop stage ext_azblob_noname
+create stage ext_azblob_noname url='azblob://ext-container/path/' connection=(endpoint_url='http://127.0.0.1:10000' account_key='a2V5a2V5a2V5a2V5')
