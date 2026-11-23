@@ -3172,8 +3172,9 @@ impl Default for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
-    /// Deprecated: name `ownership` in `meta_service_caches` instead. When true, it enables
-    /// [`MetaServiceCache::Ownership`] as that name does.
+    /// Deprecated, kept for backward compatibility: name `ownership` in `meta_service_caches`
+    /// instead. When true, it enables [`MetaServiceCache::Ownership`] as that name does, and the
+    /// node logs a warning at startup.
     #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
@@ -3688,6 +3689,15 @@ impl CacheConfig {
     pub fn is_meta_service_cache_enabled(&self, cache: MetaServiceCache) -> bool {
         self.meta_service_caches.contains(&cache)
             || (cache == MetaServiceCache::Ownership && self.meta_service_ownership_cache)
+    }
+
+    /// The warning to log at startup when this config sets the deprecated
+    /// `meta_service_ownership_cache`.
+    pub fn deprecated_ownership_cache_warning(&self) -> Option<&'static str> {
+        self.meta_service_ownership_cache.then_some(
+            "`cache.meta_service_ownership_cache` is deprecated but still enables the ownership \
+             cache; add `ownership` to `cache.meta_service_caches` instead",
+        )
     }
 }
 
