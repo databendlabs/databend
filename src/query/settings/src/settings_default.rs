@@ -1080,6 +1080,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("recluster_final_target_average_depth", DefaultSettingValue {
+                    value: UserSettingValue::String("0".to_string()),
+                    desc: "Stop explicit, unfiltered scalar-linear RECLUSTER FINAL once the nonempty table's clustering_information average_depth is at or below this target. Zero disables the check. Enabled checks scan all block metadata before execution and after each commit.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),
                     desc: "Sets the seconds that recluster final will be timeout.",

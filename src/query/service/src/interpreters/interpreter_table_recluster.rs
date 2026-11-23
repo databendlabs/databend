@@ -27,6 +27,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -49,8 +50,10 @@ use databend_common_storages_fuse::operations::VectorReclusterBlock;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_common_storages_fuse::operations::vector_final_plan;
 use databend_common_storages_fuse::segment_zone_map::RefreshOutcome;
+use databend_common_storages_fuse::table_functions::get_clustering_information;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::error;
 use log::info;
 use log::warn;
@@ -152,6 +155,10 @@ impl Interpreter for ReclusterTableInterpreter {
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
+            let target_average_depth = self.final_target_average_depth().await?;
+            let initial_target_reached = self
+                .average_depth_target_reached(target_average_depth)
+                .await?;
             // Vector FINAL: what it does is decided from the blocks when it starts (see
             // `vector_final_plan`); the full pass starts at once. This scans every block
             // meta, so it is skipped when FINAL rewrites part of the table at most:
@@ -192,6 +199,9 @@ impl Interpreter for ReclusterTableInterpreter {
                     );
                     break (Err(err.with_context("failed to execute")), "aborted");
                 }
+                if initial_target_reached {
+                    break (Ok(()), "average_depth_target_reached");
+                }
                 if vector_plan == VectorFinalPlan::Skip {
                     // Rows not mixed yet are below the full pass threshold, or none:
                     // they keep their level to add up.
@@ -210,6 +220,14 @@ impl Interpreter for ReclusterTableInterpreter {
                             break (Ok(()), reason);
                         }
                         committed_rounds += 1;
+                        match self
+                            .average_depth_target_reached(target_average_depth)
+                            .await
+                        {
+                            Ok(true) => break (Ok(()), "average_depth_target_reached"),
+                            Ok(false) => {}
+                            Err(error) => break (Err(error), "error"),
+                        }
                         // A FINAL recluster may run for a long time, so the segment
                         // zone map is refreshed along the way, not only at the end.
                         if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
@@ -300,6 +318,75 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
+    /// The average-depth target of an explicit, unfiltered scalar-linear FINAL, or
+    /// zero when the target does not apply. The setting is read only after the
+    /// layout check, so its value cannot fail the FINAL paths that ignore it.
+    async fn final_target_average_depth(&self) -> Result<f64> {
+        let plan = &self.plan;
+        if !plan.is_final
+            || plan.selection.is_some()
+            || plan.limit.is_some()
+            || plan.expected_table_id.is_some()
+        {
+            return Ok(0.0);
+        }
+        let table = self
+            .ctx
+            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .await?;
+        let Ok(fuse) = FuseTable::try_from_table(table.as_ref()) else {
+            return Ok(0.0);
+        };
+        if !self.is_scalar_linear(fuse) {
+            return Ok(0.0);
+        }
+        self.ctx
+            .get_settings()
+            .get_recluster_final_target_average_depth()
+    }
+
+    fn is_scalar_linear(&self, fuse: &FuseTable) -> bool {
+        // The average-depth metric does not describe Hilbert or vector clustering quality.
+        fuse.cluster_type() == Some(ClusterType::Linear)
+            && !fuse
+                .cluster_key_types(self.ctx.clone())
+                .iter()
+                .any(|ty| matches!(ty.remove_nullable(), DataType::Vector(_)))
+    }
+
+    async fn average_depth_target_reached(&self, target: f64) -> Result<bool> {
+        if target == 0.0 {
+            return Ok(false);
+        }
+        self.ctx
+            .check_aborting()
+            .map_err(|err| err.with_context("failed to execute"))?;
+        self.ctx.clear_table_meta_timestamps_cache();
+        self.ctx.evict_table_from_cache(
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.table,
+        )?;
+        let table = self
+            .ctx
+            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+            .await?;
+        check_maintenance_target(table.as_ref(), &self.plan.target)?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        // The cluster key may change while FINAL runs.
+        if !self.is_scalar_linear(fuse) {
+            return Ok(false);
+        }
+        let quality = get_clustering_information(self.ctx.clone(), fuse, &None).await?;
+        let average_depth = quality.info["average_depth"]
+            .as_f64()
+            .ok_or_else(|| ErrorCode::Internal("Missing clustering_information average depth"))?;
+        Ok(quality.info["total_block_count"]
+            .as_u64()
+            .is_some_and(|blocks| blocks > 0)
+            && average_depth <= target)
+    }
+
     async fn vector_recluster_blocks(&self) -> Result<Option<Vec<VectorReclusterBlock>>> {
         let ReclusterPlan {
             catalog,

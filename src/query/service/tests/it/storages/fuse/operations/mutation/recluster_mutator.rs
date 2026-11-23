@@ -24,6 +24,7 @@ use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::plan::ReclusterTaskKind;
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
@@ -1061,6 +1062,42 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     fixture
         .execute_command(&format!("alter table {name} recluster final"))
         .await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_final_depth_target_read_only_for_scalar_linear() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    for (table, cluster_by) in [("hilbert_t", "hilbert(a, b)"), ("linear_t", "(a)")] {
+        fixture
+            .execute_command(&format!(
+                "create table {db}.{table}(a int not null, b int not null) cluster by {cluster_by} row_per_block=3"
+            ))
+            .await?;
+        for values in ["(3, 1), (1, 3), (2, 2)", "(2, 1), (3, 3), (1, 2)"] {
+            fixture
+                .execute_command(&format!("insert into {db}.{table} values {values}"))
+                .await?;
+        }
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_setting(
+        "recluster_final_target_average_depth".to_string(),
+        "invalid".to_string(),
+    )?;
+    // Hilbert FINAL ignores the target, so an invalid value must not fail it.
+    execute_command(
+        ctx.clone(),
+        &format!("alter table {db}.hilbert_t recluster final"),
+    )
+    .await?;
+    let err = execute_command(ctx, &format!("alter table {db}.linear_t recluster final"))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::WRONG_VALUE_FOR_VARIABLE, "{err}");
     Ok(())
 }
 
