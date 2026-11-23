@@ -15,6 +15,9 @@ stmt "CREATE OR REPLACE TABLE external_table_test (
     age INT
 ) 's3://testbucket/13_fuse_external_table/' connection=(connection_name = 'external_table_conn');"
 
+# Give the table a snapshot, so that altering the connection has to read it and write a new one.
+stmt "insert into external_table_test values (1, 'a', 20);"
+
 stmt "create or replace connection external_table_conn_wrong storage_type='s3' access_key_id = 'minioadmin'  endpoint_url = 'http://127.0.0.1:9900' secret_access_key = 'minio';"
 
 # Alter with the wrong connection should fail
@@ -22,6 +25,9 @@ stmt_fail "ALTER TABLE external_table_test connection=(connection_name = 'extern
 
 # Alter the connection back to the correct one
 stmt "ALTER TABLE external_table_test connection=(connection_name = 'external_table_conn');"
+
+# The existing data must still be readable after the connection is altered.
+query "select * from external_table_test;"
 
 stmt "CREATE OR REPLACE TABLE internal_table_test (
     id INTEGER,
