@@ -5,8 +5,7 @@ lost after a durable write commits, a retry with the same token should not
 repeat the write. Query derives the key from the authenticated execution context
 and authorized target. The marker commits atomically with the durable effect.
 
-This document defines the target contract. Except for restricting the setting
-to session scope, the changes described here are not yet implemented.
+This document distinguishes the current behavior from the target contract.
 
 ## Token entry points
 
@@ -31,8 +30,8 @@ statements follow the rules below.
 | --- | --- | --- |
 | Single-target `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, `MERGE`, and `COPY INTO <table>` on a persistent Fuse-backed table | The interpreter can check a label before execution, and the Fuse commit path can record it. A label is currently shared across statement kinds and targets within the tenant. | Support a bounded token scoped to the authenticated principal, catalog, target, and operation kind. A retry must use the same token for the same logical operation. A successful retry may return an already-committed outcome rather than replaying the original result. |
 | Supported DML that consumes a stream but changes no table rows | A stream-offset-only commit can record a marker. | Keep this path: advancing an offset is a durable effect. A statement with no durable effect leaves no persistent marker. |
-| Supported statements inside an explicit transaction | The open transaction checks buffered labels. Persistent markers are written at commit. | Keep duplicate handling local to the open transaction until commit and publish only markers tied to durable effects. Rollback leaves no persistent marker. A conflicting marker must not cause a transaction containing new work to report success. A statement token does not identify or replay the whole transaction. |
-| Temporary-table-only writes | The commit path can record a persistent marker even though table metadata is session-local. | Reject a token before execution until a session-local retry contract exists. Never persist a marker for a temporary-table-only write. |
+| Supported statements inside an explicit transaction | The open transaction checks buffered labels. Only statements with persistent updates contribute markers at commit. | Keep duplicate handling local to the open transaction until commit and publish only markers tied to durable effects. Rollback leaves no persistent marker. A conflicting marker must not cause a transaction containing new work to report success. A statement token does not identify or replay the whole transaction. |
+| Temporary-table-only writes | No persistent marker is written. A label is buffered only for duplicate checks within an open transaction. | Reject a token before execution until a session-local retry contract exists. Never persist a marker for a temporary-table-only write. |
 | `COPY INTO <location>` | It consults the same lookup as table writes, but the stage sink does not record a matching marker. | Reject a token before execution until an export-specific contract exists. A table-write marker does not prove that an external file was written. |
 | Multi-table `INSERT`, other storage engines without marker support, and other statements without a retry contract | Not consistently covered; for example, multi-table `INSERT` does not pass a label to its commit plan. | Reject an explicit token on unsupported operations before execution. Do not silently run an unsupported labeled write as an ordinary write. |
 

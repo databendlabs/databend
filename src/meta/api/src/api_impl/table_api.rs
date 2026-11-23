@@ -1598,6 +1598,10 @@ where
         req: UpdateMultiTableMetaReq,
         txn_sender: &IdempotentKVTxnSender,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
+        if !req.deduplicated_labels.is_empty() && !req.has_persistent_updates() {
+            return Err(AppError::DeduplicationLabelWithoutMetaUpdate.into());
+        }
+
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
             copied_files,

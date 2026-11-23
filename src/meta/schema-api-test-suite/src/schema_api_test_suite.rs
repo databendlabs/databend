@@ -150,6 +150,7 @@ use databend_common_meta_app::schema::TableCloneBinding;
 use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
+use databend_common_meta_app::schema::TableDeduplicationLabelIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
@@ -168,7 +169,9 @@ use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -364,6 +367,8 @@ impl SchemaApiTestSuite {
         self.table_rename(&b.build().await).await?;
         self.table_swap(&b.build().await).await?;
         self.table_update_meta(&b.build().await).await?;
+        self.deduplication_labels_require_persistent_updates(&b.build().await)
+            .await?;
 
         Ok(())
     }
@@ -4066,6 +4071,61 @@ impl SchemaApiTestSuite {
 
             assert!(mt.swap_table(swap_req_nonexist).await.is_ok());
         }
+
+        Ok(())
+    }
+
+    async fn deduplication_labels_require_persistent_updates<MT>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()>
+    where
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi,
+    {
+        let mut util = DbTableHarness::new(mt, "deduplication", "db", "stream", "STREAM");
+        let tenant = util.tenant();
+        let label = "stream-retry";
+        let key = TableDeduplicationLabelIdent::new(&tenant, label).to_string_key();
+
+        for update_temp_tables in [vec![], vec![UpdateTempTableReq {
+            table_id: 1,
+            desc: "'db'.'temp'".to_string(),
+            new_table_meta: TableMeta::default(),
+            copied_files: Default::default(),
+        }]] {
+            let err = mt
+                .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+                    update_temp_tables,
+                    deduplicated_labels: vec![label.to_string()],
+                    ..Default::default()
+                })
+                .await
+                .unwrap_err();
+            assert_eq!(
+                err,
+                KVAppError::AppError(AppError::DeduplicationLabelWithoutMetaUpdate)
+            );
+            assert!(mt.get_kv(&key).await?.is_none());
+        }
+
+        util.create_db().await?;
+        util.create_table().await?;
+        let stream = util.get_table().await?;
+        let mut options = stream.meta.options.clone();
+        options.insert("offset".to_string(), "42".to_string());
+        mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+            update_stream_metas: vec![UpdateStreamMetaReq {
+                stream_id: stream.ident.table_id,
+                seq: MatchSeq::Exact(stream.ident.seq),
+                options: options.clone(),
+            }],
+            deduplicated_labels: vec![label.to_string()],
+            ..Default::default()
+        })
+        .await?
+        .unwrap();
+        assert_eq!(util.get_table().await?.meta.options, options);
+        assert!(mt.get_kv(&key).await?.is_some());
 
         Ok(())
     }
