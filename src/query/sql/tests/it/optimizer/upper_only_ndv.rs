@@ -95,7 +95,7 @@ async fn test_upper_only_ndv_is_a_cap_not_an_estimate() -> Result<()> {
         async move { estimated_rows(&ctx, &sql).await }
     };
     // (sql, point estimate, upper-only estimate)
-    let cases: [(&str, f64, f64); 8] = [
+    let cases: [(&str, f64, f64); 9] = [
         // Equality: `1 / upper` would give 100 (k) and 10000 (g) as if the
         // upper were the NDV; the upper-only column takes the default
         // selectivity instead, like a column without statistics.
@@ -124,6 +124,13 @@ async fn test_upper_only_ndv_is_a_cap_not_an_estimate() -> Result<()> {
             "SELECT k, g, count() FROM {t} GROUP BY k, g",
             10_000.0,
             10_000.0,
+        ),
+        // The same cap applies to the detail set of a ROLLUP; its grand
+        // total contributes one additional row.
+        (
+            "SETTINGS (grouping_sets_to_union = 0, enable_cascading_grouping_sets = 0) SELECT g, count() FROM {t} GROUP BY ROLLUP(g)",
+            11.0,
+            11.0,
         ),
     ];
     for (sql, point, upper_only) in cases {

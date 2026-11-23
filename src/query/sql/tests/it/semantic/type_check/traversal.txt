@@ -37,7 +37,7 @@ type: Int64 NULL
 description: A lambda body is resolved by a new checker with its own parameter bindings.
 sql: array_transform([number], x -> x + delta)
 status: ok
-scalar: array_transform(delta (#3), array(number (#0)), ["x"] -> x (#7) + delta (#3))
+scalar: array_transform(delta (#3), array(number (#0)), ["x"] -> x + delta (#3))
 type: Array(Int64 NULL)
 
 === parameter_error_precedes_argument_binding ===

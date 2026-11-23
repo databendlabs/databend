@@ -435,6 +435,60 @@ async fn test_binder_nested_udf_rewrite() -> Result<()> {
             ],
             sql: "SELECT array_transform([a], x -> sql_add_one(x)) FROM t",
         },
+        SqlTestCase {
+            name: "sql_udf_with_subquery_inside_sql_lambda_body_is_rejected",
+            description: "The body of a SQL UDF called in a lambda body is a part of it, so a subquery in it is rejected like one in the lambda body, instead of leaking an internal column id.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_add_subquery AS (x) -> x + (SELECT 1)",
+            ],
+            sql: "SELECT array_transform([a], x -> sql_add_subquery(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "sql_udf_with_long_in_list_inside_sql_lambda_body_keeps_the_list",
+            description: "A long IN list in the body of a SQL UDF called in a lambda body is kept, as in the lambda body, rather than turned into a subquery.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_in_list AS (x) -> x IN (1, 2, 3)",
+            ],
+            sql: "SETTINGS (inlist_to_join_threshold = 2) SELECT array_transform([a], x -> sql_in_list(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "aggregating_sql_udf_argument_captured_by_body_lambda_is_rejected",
+            description: "An aggregating SQL UDF is expanded with its arguments as written: `a` substituted for `x` in the body lambda `a -> x` would be bound to the lambda parameter, not to the column, so the call is rejected.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_capture AS (x) -> sum(x) + array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT a, sql_capture(a) FROM t GROUP BY a",
+        },
+        SqlTestCase {
+            name: "aggregating_sql_udf_argument_with_other_name_is_substituted_in_body_lambda",
+            description: "An argument whose names no lambda parameter of the body shadows is substituted in the lambda body, as a capture of the column.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_capture AS (x) -> sum(x) + array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT b, sql_capture(b) FROM t GROUP BY b",
+        },
+        SqlTestCase {
+            name: "aggregating_sql_udf_argument_binding_its_own_lambda_name_is_substituted",
+            description: "A name that a lambda of the argument binds is not free in the argument, so the lambda parameter of the body does not shadow it.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_capture AS (x) -> sum(x) + array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT b, sql_capture(array_sum(array_transform([b], a -> a + 1))) FROM t GROUP BY b",
+        },
+        SqlTestCase {
+            name: "scalar_sql_udf_argument_is_not_captured_by_body_lambda",
+            description: "A scalar SQL UDF binds its arguments before its body, so a lambda parameter of the body cannot shadow a column of the argument.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_scalar_capture AS (x) -> array_transform([0], a -> x)[1]",
+            ],
+            sql: "SELECT sql_scalar_capture(a) FROM t",
+        },
     ];
 
     run_binder_cases("binder_nested_udf.txt", &cases).await
@@ -685,140 +739,294 @@ async fn test_binder_named_window_paths() -> Result<()> {
     run_binder_cases("binder_window_named.txt", &cases).await
 }
 
+/// Plans of grouped SELECT statements and set-returning functions whose shape
+/// is their correctness: whether the SELECT is grouped, how often an
+/// aggregate is computed, which side of the Aggregate a set-returning
+/// function or a subquery is on, and whether an expression reads a key output
+/// or is computed again. Results and errors are in sqllogictests, see
+/// `query/grouping_sets` (`ordinary`, `key_binding`, `null_injection` and
+/// `correlated`), `03_0003_select_group_by` and `03_0047_select_udaf`; name
+/// resolution is in the `group_by_alias` alias-resolution matrix.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_binder_grouping_and_srf_paths() -> Result<()> {
+    const T: &[&str] = &["CREATE TABLE t(a Int32 NOT NULL, b Int32 NOT NULL)"];
+    const T_U: &[&str] = &[
+        "CREATE TABLE t(a Int32 NOT NULL, b Int32 NOT NULL)",
+        "CREATE TABLE u(n Int32)",
+    ];
+    const V: &[&str] = &["CREATE TABLE v(j Variant)"];
+    const T_AGG_UDF: &[&str] = &[
+        "CREATE TABLE t(a Int32 NOT NULL, b Int32 NOT NULL)",
+        "CREATE OR REPLACE FUNCTION agg_udf AS (x) -> sum(x)",
+        "CREATE OR REPLACE FUNCTION agg_udf2 AS (x, y) -> sum(x) + y",
+    ];
+    const T_SCRIPT_UDF: &[&str] = &[
+        "CREATE TABLE t(a Int32 NOT NULL, b Int32 NOT NULL)",
+        TEST_SCRIPT_UDF_SQL,
+    ];
     let cases = [
+        // Whether the SELECT is grouped: an Aggregate is built.
         SqlTestCase {
-            name: "unnest_over_aggregate_is_planned_after_aggregate",
-            description: "A set-returning function over an aggregate should stay above the aggregate phase instead of rewriting the aggregate away early.",
+            name: "window_argument_aggregate_makes_select_grouped",
+            description: "An aggregate in a window argument makes the SELECT grouped: the Aggregate is below the Window.",
+            setup_sqls: T,
+            sql: "SELECT sum(sum(a)) OVER () FROM t",
+        },
+        SqlTestCase {
+            name: "sql_udf_aggregate_makes_select_grouped",
+            description: "A SQL UDF whose body aggregates is expanded where it is called, so the SELECT is grouped and the Aggregate computes its sum.",
+            setup_sqls: T_AGG_UDF,
+            sql: "SELECT agg_udf(a) FROM t",
+        },
+        // How often an aggregate is computed.
+        SqlTestCase {
+            name: "aggregate_shared_by_select_and_having",
+            description: "The same aggregate in the SELECT list and HAVING is one aggregate function.",
+            setup_sqls: T,
+            sql: "SELECT count(*) FROM t HAVING count(*) > 0",
+        },
+        SqlTestCase {
+            name: "qualify_window_argument_reuses_aggregate",
+            description: "An aggregate in a QUALIFY window argument that the SELECT list has is not computed again.",
+            setup_sqls: T,
+            sql: "SELECT b, sum(a) FROM t GROUP BY b QUALIFY sum(sum(a)) OVER () > 0",
+        },
+        SqlTestCase {
+            name: "order_by_expression_over_aggregate_alias_reuses_aggregate",
+            description: "An ORDER BY expression over an aggregate alias reads the aggregate output.",
+            setup_sqls: T,
+            sql: "SELECT b, sum(a) AS s FROM t GROUP BY b ORDER BY s + 1",
+        },
+        // Which side of the Aggregate a set-returning function or a subquery is on, and
+        // how often a set-returning function is evaluated.
+        SqlTestCase {
+            name: "srf_over_aggregate_is_above_aggregate",
+            description: "A set-returning function over an aggregate is evaluated in a ProjectSet above the aggregate.",
             setup_sqls: &[],
             sql: "SELECT unnest(max([11, 12]))",
         },
         SqlTestCase {
-            name: "duplicate_srf_expression_reuses_project_set_binding",
-            description: "Repeated identical SRF expressions should reuse the registered ProjectSet binding.",
+            name: "srf_output_reuses_constant_key",
+            description: "A constant set-returning function matching a key reads its output, without a second ProjectSet above the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]), count(*) FROM t GROUP BY unnest([1, 2])",
+        },
+        SqlTestCase {
+            name: "multiple_constant_srf_keys_share_input_project_set",
+            description: "Two constant set-returning keys expand together below the aggregate; both SELECT expressions read key outputs.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]), unnest([10, 20, 30]), count(*) FROM t GROUP BY unnest([1, 2]), unnest([10, 20, 30])",
+        },
+        SqlTestCase {
+            name: "constant_srf_key_and_nonkey_output_have_separate_project_sets",
+            description: "A matching constant SRF reads the key, while a different output SRF expands above the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]), unnest([10, 20, 30]), count(*) FROM t GROUP BY unnest([1, 2])",
+        },
+        SqlTestCase {
+            name: "constant_srf_rollup_keys_and_grouping_read_key_outputs",
+            description: "Constant set-returning keys are expanded once below the aggregate and read as nullable outputs, including in GROUPING arguments.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]), unnest([10, 20, 30]), grouping(unnest([1, 2]), unnest([10, 20, 30])), count(*) FROM t GROUP BY ROLLUP(unnest([1, 2]), unnest([10, 20, 30]))",
+        },
+        SqlTestCase {
+            name: "constant_srf_inside_composite_key_cannot_expand_again",
+            description: "A constant SRF hidden inside a composite key is rejected instead of expanding again above the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]) + 10, count(*) FROM t GROUP BY unnest([1, 2]) + 10",
+        },
+        SqlTestCase {
+            name: "constant_srf_inside_rollup_key_cannot_expand_again",
+            description: "The same restriction applies to composite keys of grouping sets.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]) + 10, count(*) FROM t GROUP BY ROLLUP(unnest([1, 2]) + 10)",
+        },
+        SqlTestCase {
+            name: "srf_inside_rollup_key_compares_with_key_folding_policy",
+            description: "The unsupported composite key is rejected using its preserved input form, even when normal binding would fold an SRF argument.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1 + 1, 3]) + 10, count(*) FROM t GROUP BY ROLLUP(unnest([1 + 1, 3]) + 10)",
+        },
+        SqlTestCase {
+            name: "order_by_srf_inside_composite_key_cannot_expand_again",
+            description: "An ORDER BY-only SRF cannot re-expand an input used inside a composite key.",
+            setup_sqls: T,
+            sql: "SELECT count(*) FROM t GROUP BY unnest([1, 2]) + 10 ORDER BY unnest([1, 2])",
+        },
+        SqlTestCase {
+            name: "composite_srf_key_by_alias_reads_key_output",
+            description: "A SELECT item used as a key by alias still reads the whole key output.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]) + 10 AS x, count(*) FROM t GROUP BY x",
+        },
+        SqlTestCase {
+            name: "composite_srf_key_by_position_reads_key_output",
+            description: "A SELECT item used as a key by position still reads the whole key output.",
+            setup_sqls: T,
+            sql: "SELECT unnest([1, 2]) + 10, count(*) FROM t GROUP BY 1",
+        },
+        SqlTestCase {
+            name: "nonkey_srf_after_composite_key_stays_above_aggregate",
+            description: "A different SRF may still expand above an aggregate with a composite SRF key.",
+            setup_sqls: T,
+            sql: "SELECT unnest([3, 4]), count(*) FROM t GROUP BY unnest([1, 2]) + 10",
+        },
+        SqlTestCase {
+            name: "where_alias_of_srf_key_is_above_project_set",
+            description: "WHERE over the alias of a set-returning key is above the ProjectSet below the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT unnest([a, a + 10]) AS s, count(*) FROM t WHERE s > 2 GROUP BY ROLLUP(s)",
+        },
+        SqlTestCase {
+            name: "where_alias_of_grouping_sets_key_keeps_structure",
+            description: "An alias in WHERE binds the pre-aggregate form of its item first, with the policy of the grouping-sets keys, so the form stays unfolded and is the key `a + (1 + 1)`.",
+            setup_sqls: T,
+            sql: "SELECT a + (1 + 1) AS k, count(*) FROM t WHERE k > 0 GROUP BY ROLLUP(k)",
+        },
+        SqlTestCase {
+            name: "subquery_in_aggregate_argument_is_below_aggregate",
+            description: "A subquery in an aggregate argument is evaluated below the aggregate.",
+            setup_sqls: T_U,
+            sql: "SELECT b FROM t GROUP BY b HAVING sum((SELECT max(n) FROM u)) > 0",
+        },
+        SqlTestCase {
+            name: "correlated_subquery_in_aggregate_argument_is_below_aggregate",
+            description: "A correlated subquery in an aggregate argument reads the input below the aggregate, not the key output.",
+            setup_sqls: T,
+            sql: "SELECT b, sum((SELECT t.a * 10)) FROM t GROUP BY ROLLUP(b)",
+        },
+        SqlTestCase {
+            name: "duplicate_srf_is_one_project_set_function",
+            description: "Repeated identical set-returning functions are one ProjectSet function.",
             setup_sqls: &[],
             sql: "SELECT unnest([1, 2, 3]), unnest([1, 2, 3])",
         },
         SqlTestCase {
-            name: "group_by_all_collects_non_aggregate_select_items",
-            description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
-            setup_sqls: &["CREATE TABLE t(number UInt64)"],
-            sql: "SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL",
+            name: "duplicate_srf_over_aggregate_is_one_project_set_function",
+            description: "Repeated set-returning functions over the same aggregate share its output symbol, so they are one ProjectSet function.",
+            setup_sqls: T,
+            sql: "SELECT unnest([sum(a)]), unnest([sum(a)]) + 1 FROM t",
         },
         SqlTestCase {
-            name: "select_scalar_wraps_builtin_aggregate",
-            description: "A scalar wrapper over a builtin aggregate should bind through the select aggregate path without requiring direct aggregate support in type checking.",
-            setup_sqls: &["CREATE TABLE t(number UInt64)"],
-            sql: "SELECT sum(number) + 1 FROM t",
+            name: "order_by_srf_of_select_list_is_its_output",
+            description: "An ORDER BY set-returning function that is in the SELECT list sorts by the output of the same ProjectSet function.",
+            setup_sqls: T,
+            sql: "SELECT unnest([a, b]) AS u FROM t ORDER BY unnest([a, b])",
         },
         SqlTestCase {
-            name: "grouped_select_udaf_binds",
-            description: "A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.",
-            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
-            sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g",
+            name: "order_by_srf_over_aggregate_is_its_output",
+            description: "An ORDER BY set-returning function over an aggregate is the function in the ProjectSet above the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT unnest([sum(a)]) FROM t ORDER BY unnest([sum(a)])",
         },
         SqlTestCase {
-            name: "select_scalar_wraps_udaf",
-            description: "A scalar wrapper over a UDAF should keep binding through the normal UDAF path while coexisting with builtin aggregate prebinding.",
-            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
-            sql: "SELECT weighted_avg(a, b) + 1 FROM t",
+            name: "order_by_only_srf_is_below_where",
+            description: "A set-returning function only in ORDER BY joins the ProjectSet of the SELECT list, below the WHERE that refers to an SRF alias.",
+            setup_sqls: T,
+            sql: "SELECT unnest([a]) AS u FROM t WHERE u > 1 ORDER BY unnest([b])",
         },
         SqlTestCase {
-            name: "group_by_all_collects_non_udaf_select_items",
-            description: "GROUP BY ALL should also skip UDAF select items when inferring grouping keys.",
-            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
-            sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY ALL",
+            name: "order_by_only_srf_in_grouped_select_is_above_aggregate",
+            description: "A set-returning function only in the ORDER BY of a grouped SELECT is in the ProjectSet above the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT b FROM t GROUP BY b ORDER BY unnest([b, 1])",
+        },
+        // Whether an expression reads a key output or is computed again.
+        SqlTestCase {
+            name: "ordinary_key_output_is_read_after_aggregate",
+            description: "An expression that is an ordinary key reads the key output above the aggregate instead of computing it again.",
+            setup_sqls: T,
+            sql: "SELECT a + 1, sum(b) FROM t GROUP BY a + 1",
         },
         SqlTestCase {
-            name: "group_by_rejects_udaf_item",
-            description: "Explicit GROUP BY items must reject UDAF calls just like builtin aggregates.",
-            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
-            sql: "SELECT weighted_avg(a, b) FROM t GROUP BY weighted_avg(a, b)",
+            name: "ordinary_key_is_folded",
+            description: "An ordinary key folds like any expression, here to a constant, while grouping-set keys keep their column structure.",
+            setup_sqls: T,
+            sql: "SELECT a IS NULL, count(*) FROM t GROUP BY a IS NULL",
         },
         SqlTestCase {
-            name: "combined_grouping_sets_binds",
-            description: "A normal GROUP BY item combined with GROUPING SETS should bind through the combined-group expansion path.",
-            setup_sqls: &["CREATE TABLE sales(brand String, segment String, quantity UInt64)"],
-            sql: "SELECT quantity, brand, segment, sum(quantity) FROM sales GROUP BY brand, GROUPING SETS(segment, quantity)",
+            name: "constant_grouping_set_key_is_read_as_its_output",
+            description: "`1 + 1` reads the output of the grouping-set key `1 + 1`, which is NULL in the sets without it, and `coalesce(1 + 1, 100)` is an expression over that output, as the key is not folded. The literal `2` is a constant above the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT 2, 1 + 1, coalesce(1 + 1, 100), count(*) FROM t GROUP BY ROLLUP(1 + 1)",
         },
         SqlTestCase {
-            name: "grouping_outside_grouping_sets_is_rejected",
-            description: "grouping() should still be rejected when the query is not using grouping sets semantics.",
-            setup_sqls: &["CREATE TABLE g(a UInt64, b UInt64, c UInt64)"],
-            sql: "SELECT a, grouping(a) FROM g GROUP BY a",
+            name: "literal_grouping_set_key_is_read_as_its_output",
+            description: "A literal that is a grouping-set key reads the key output, alone, in `grouping()` and inside another expression.",
+            setup_sqls: T,
+            sql: "SELECT 'x', grouping('x'), concat('x', 'y'), count(*) FROM t GROUP BY GROUPING SETS (('x'), ())",
         },
         SqlTestCase {
-            name: "grouping_rejects_non_group_item_argument",
-            description: "grouping() arguments must still be actual GROUP BY expressions inside grouping sets.",
-            setup_sqls: &["CREATE TABLE g(a UInt64, b UInt64, c UInt64)"],
-            sql: "SELECT a, grouping(c) FROM g GROUP BY GROUPING SETS ((a), ())",
+            name: "dependent_key_is_pruned",
+            description: "A key over another key, `a + 1` over `a`, is not a group item of its own and is computed above the aggregate.",
+            setup_sqls: T,
+            sql: "SELECT a, a + 1 AS k, sum(b) FROM t GROUP BY 1, 2",
         },
         SqlTestCase {
-            name: "cube_grouping_function_binds",
-            description: "CUBE should expand into grouping sets and allow grouping(...) to bind against the generated grouping id.",
-            setup_sqls: &["CREATE TABLE g(a UInt64, b UInt64, c UInt64)"],
-            sql: "SELECT a, b, sum(c) AS sc, grouping(a, b) FROM g GROUP BY CUBE(a, b)",
+            name: "cast_over_tuple_access_key_allocates_no_extra_symbol",
+            description: "Matching `s.2::INT` to the key `s.2` binds the tuple access once: the plan has one symbol for it and no other.",
+            setup_sqls: T,
+            sql: "SELECT s.2::INT, count(*) FROM (SELECT (a, b) AS s FROM t) d GROUP BY s.2",
         },
         SqlTestCase {
-            name: "aggregate_over_srf_from_sqllogictest_binds",
-            description: "A sqllogictest aggregate-over-SRF pattern should still bind with ProjectSet below Aggregate.",
-            setup_sqls: &["CREATE TABLE t_str(col2 String)"],
-            sql: "SELECT max(unnest(split(t.col2, ','))) FROM t_str AS t",
+            name: "sql_udf_argument_outside_aggregate_reads_key_output",
+            description: "The argument of a SQL UDF used outside the aggregate in its body reads the key output.",
+            setup_sqls: T_AGG_UDF,
+            sql: "SELECT agg_udf2(a, b) FROM t GROUP BY ROLLUP(b)",
         },
         SqlTestCase {
-            name: "unnest_over_wrapped_aggregate_from_sqllogictest_binds",
-            description: "A sqllogictest SRF-over-aggregate pattern with an extra scalar wrapper should still bind with ProjectSet above Aggregate.",
-            setup_sqls: &["CREATE TABLE t_str(col2 String)"],
-            sql: "SELECT unnest(split(max(t.col2), ',')) FROM t_str AS t",
+            name: "srf_key_by_alias_reads_key_output",
+            description: "A set-returning function named by its alias as a key is evaluated once, below the aggregate, and read as the key output.",
+            setup_sqls: T,
+            sql: "SELECT unnest([a, a + 1]) AS s, count(*) FROM t GROUP BY ROLLUP(s)",
         },
         SqlTestCase {
-            name: "grouping_function_inside_window_over_rollup_binds",
-            description: "A sqllogictest grouping() pattern should still rewrite correctly when used inside a window over rollup output.",
-            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
-            sql: "SELECT grouping(salary), grouping(depname), sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) FROM empsalary GROUP BY ROLLUP(depname, salary)",
+            name: "in_list_key_stays_a_list",
+            description: "An IN list that is a key is not rewritten to a join, so the SELECT item matches the key.",
+            setup_sqls: T,
+            sql: "SETTINGS (inlist_to_join_threshold = 2) SELECT a IN (1, 2, 3), count(*) FROM t GROUP BY ROLLUP(a IN (1, 2, 3))",
         },
         SqlTestCase {
-            name: "within_group_group_aggregate_binds",
-            description: "A non-window WITHIN GROUP aggregate should register its sort descriptors in the aggregate phase.",
-            setup_sqls: &["CREATE TABLE empsalary(empno UInt64, salary UInt64)"],
-            sql: "SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) FROM empsalary",
+            name: "in_list_join_over_key_reads_key_output",
+            description: "An IN list over a key that is rewritten to a join reads the key output above the aggregate.",
+            setup_sqls: T,
+            sql: "SETTINGS (inlist_to_join_threshold = 2) SELECT a, a IN (1, 2, 3) FROM t GROUP BY ROLLUP(a)",
         },
         SqlTestCase {
-            name: "grouping_sets_select_alias_with_grouping_func_does_not_shadow_column",
-            description: "A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.",
-            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
-            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d))",
+            name: "script_udf_key_reads_key_output",
+            description: "A script UDF call that is a key is read as the key output, not called again.",
+            setup_sqls: T_SCRIPT_UDF,
+            sql: "SELECT add_one(a), count(*) FROM t GROUP BY ROLLUP(add_one(a))",
         },
         SqlTestCase {
-            name: "grouping_alias_in_order_by_prefers_group_column",
-            description: "ORDER BY alias prebinding must resolve grouping() arguments to input group columns.",
-            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
-            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) ORDER BY k, d",
+            name: "nondeterministic_key_reads_key_output",
+            description: "A non-deterministic key is read as the key output, so the SELECT item has the value grouped by.",
+            setup_sqls: T,
+            sql: "SELECT rand(), count(*) FROM t GROUP BY rand()",
         },
         SqlTestCase {
-            name: "grouping_alias_in_having_prefers_group_column",
-            description: "HAVING alias prebinding must resolve grouping() arguments to input group columns.",
-            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
-            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING k IS NOT NULL",
+            name: "async_function_key_reads_key_output",
+            description: "An async function call that is a key is read as the key output.",
+            setup_sqls: T,
+            sql: "SELECT sleep(a), count(*) FROM t GROUP BY ROLLUP(sleep(a))",
         },
         SqlTestCase {
-            name: "grouping_in_order_by_falls_back_to_group_alias",
-            description: "GROUPING arguments should still fall back to a valid group alias when no input column has that name.",
-            setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
-            sql: "SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k",
+            name: "lambda_key_reads_key_output",
+            description: "A lambda function that is a key is read as the key output: its body refers to the parameter by position, so the SELECT item equals the key.",
+            setup_sqls: T,
+            sql: "SELECT array_transform([a], x -> x + 1), count(*) FROM t GROUP BY ROLLUP(array_transform([a], x -> x + 1))",
         },
         SqlTestCase {
-            name: "grouping_in_order_by_keeps_alias_that_is_group_item",
-            description: "GROUPING arguments must keep resolving to a same-name alias that is itself a group item, even when an input column shares the name.",
-            setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
-            sql: "SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i",
+            name: "internal_column_key_reads_key_output",
+            description: "An internal column that is a key is read as the key output.",
+            setup_sqls: T,
+            sql: "SELECT _row_id, count(*) FROM t GROUP BY ROLLUP(_row_id)",
         },
         SqlTestCase {
-            name: "grouping_alias_case_when_with_lateral_alias",
-            description: "CASE WHEN grouping() aliases over string group columns must bind in ORDER BY together with lateral aliases.",
-            setup_sqls: &["CREATE TABLE t(k String, v UInt64)"],
-            sql: "SELECT CASE WHEN grouping(k) = 1 THEN 'all' ELSE k END AS k, count(*) AS c, sum(v) AS s, s / nullif(c, 0) AS ratio FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY k",
+            name: "variant_cast_over_key_reads_key_output",
+            description: "A cast over a variant path key is the cast of the key output.",
+            setup_sqls: V,
+            sql: "SELECT j['a']::INT, count(*) FROM v GROUP BY ROLLUP(j['a'])",
         },
     ];
 
@@ -855,6 +1063,64 @@ async fn test_clause_prepass_skips_subquery_metadata_side_effects() -> Result<()
             "{} should only keep metadata for the outer query and the final subquery bind",
             case.name
         );
+    }
+
+    Ok(())
+}
+
+/// The SELECT list of a GROUPING SETS query is bound after the keys are known.
+/// Before that, only the items GROUP BY, WHERE or key matching refer to are
+/// bound, so a subquery elsewhere in the SELECT list is bound once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_grouping_sets_binds_select_subqueries_once() -> Result<()> {
+    let setup_sqls: &[&str] = &[
+        "CREATE TABLE t1(a Int32)",
+        "CREATE TABLE t2(b Int32)",
+        "CREATE TABLE t3(n Int32)",
+    ];
+    let cases = [
+        (
+            "correlated_select_subquery",
+            "SELECT a, (SELECT max(n) FROM t3 WHERE n <= t1.a) FROM t1 GROUP BY ROLLUP(a)",
+            2,
+        ),
+        // Binding every SELECT item twice would bind t3 twice and t2 four times.
+        (
+            "nested_grouping_sets",
+            "SELECT a, (SELECT (SELECT max(b) FROM t2) FROM t3 GROUP BY ROLLUP(n) LIMIT 1) FROM t1 GROUP BY ROLLUP(a)",
+            3,
+        ),
+        (
+            "order_by_alias_of_subquery",
+            "SELECT a, (SELECT max(n) FROM t3) AS m FROM t1 GROUP BY ROLLUP(a) ORDER BY m",
+            2,
+        ),
+        (
+            "having_alias_of_subquery",
+            "SELECT a, (SELECT max(n) FROM t3) AS m FROM t1 GROUP BY ROLLUP(a) HAVING m > 0",
+            2,
+        ),
+        // A key referenced by position is bound once, before the aggregate.
+        (
+            "subquery_key_by_position",
+            "SELECT (SELECT max(n) FROM t3) AS m, a FROM t1 GROUP BY ROLLUP(1, a)",
+            2,
+        ),
+    ];
+
+    for (name, sql, tables) in cases {
+        let case = SqlTestCase {
+            name,
+            description: "",
+            setup_sqls,
+            sql,
+        };
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(case.sql).await?;
+        let Plan::Query { metadata, .. } = plan else {
+            panic!("expected query plan for {name}");
+        };
+        assert_eq!(metadata.read().tables().len(), tables, "{name}");
     }
 
     Ok(())

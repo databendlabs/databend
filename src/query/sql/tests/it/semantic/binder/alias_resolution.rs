@@ -31,12 +31,12 @@ use crate::framework::golden::write_case_outcome;
 use crate::framework::golden::write_case_title;
 
 const ALIAS_MAIN_CONSUMERS: &[&str] = &[
-    "S0", "G0", "G1", "G2", "G3", "G4", "G5", "P0", "P1", "P2", "O0", "A0", "W0", "B0",
+    "S0", "G0", "G1", "G2", "G3", "G4", "G5", "G6", "P0", "P1", "P2", "O0", "A0", "W0", "B0",
 ];
 
 const ALIAS_MAIN_NAME_SHAPES: &[&str] = &["N0", "N1", "N2", "N3", "N4", "N5"];
 
-const ALIAS_MAIN_PRODUCERS: &[&str] = &["I0", "S0", "S1", "S2", "S3", "S4", "G0", "N0"];
+const ALIAS_MAIN_PRODUCERS: &[&str] = &["I0", "S0", "S1", "S2", "S3", "S4", "N0"];
 
 const ALIAS_MATRIX_DIR: &str = "tests/it/semantic/binder/alias_resolution_matrices";
 

@@ -514,6 +514,7 @@ mod async_functions;
 mod column;
 mod core_expr;
 mod date;
+mod folding;
 mod in_list;
 mod lambda;
 mod literal;

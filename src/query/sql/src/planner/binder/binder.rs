@@ -39,6 +39,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_storages_common_table_meta::table::is_stream_name;
 
 use super::Any;
@@ -78,6 +79,9 @@ use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
 
+/// The materialized-view bindings of source tables, by catalog name and source table id.
+pub(crate) type MVSourceBindings = HashMap<(String, u64), Arc<MVSourceBindingSnapshot>>;
+
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
 /// During this phase, it will:
@@ -101,6 +105,9 @@ pub struct Binder {
     pub m_cte_table_name: HashMap<String, String>,
     /// Binder-local table instances that take precedence over catalog resolution.
     pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
+    /// Materialized-view bindings of source tables already read while planning this statement,
+    /// which the materialized-view rewrite uses instead of reading them again.
+    pub(crate) pre_resolved_mv_bindings: MVSourceBindings,
 
     /// Where the SQL being bound was written. Authoritative: `BindContext` only
     /// carries a copy for binders created without access to this one.
@@ -139,6 +146,7 @@ impl Binder {
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
             pre_resolved_tables: HashMap::new(),
+            pre_resolved_mv_bindings: MVSourceBindings::new(),
             definition_scope: DefinitionScope::session(),
             enable_result_cache,
             enable_materialized_view_rewrite,
@@ -164,6 +172,11 @@ impl Binder {
 
     pub fn with_materialized_view_rewrite(mut self, enable: bool) -> Self {
         self.enable_materialized_view_rewrite = enable;
+        self
+    }
+
+    pub(crate) fn with_pre_resolved_mv_bindings(mut self, bindings: MVSourceBindings) -> Self {
+        self.pre_resolved_mv_bindings = bindings;
         self
     }
 

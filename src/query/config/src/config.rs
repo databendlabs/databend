@@ -3765,13 +3765,13 @@ impl Default for DiskCacheKeyReloadPolicy {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct DiskCacheConfig {
-    /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
-    #[clap(
-        long = "cache-disk-max-bytes",
-        value_name = "VALUE",
-        default_value = "21474836480"
-    )]
-    pub max_bytes: u64,
+    /// Max bytes of cached raw table data; 1024 or less disables it. Unset, it is sized at
+    /// start to the room the file system under `path` leaves 5 percent below `watermark_ratio`
+    /// (85% of it in use by default), the cache's own files counted in, at most 1 TiB; the
+    /// watermark is then held to 95 at most. Nodes sharing one file system each take that room:
+    /// set it for them.
+    #[clap(long = "cache-disk-max-bytes", value_name = "VALUE")]
+    pub max_bytes: Option<u64>,
 
     /// Table disk cache root path
     #[clap(
@@ -3851,9 +3851,9 @@ pub struct DiskCacheConfig {
     )]
     pub queue_wait_ms: u64,
 
-    /// Percent of the file system in use above which the disk cache evicts before it writes:
-    /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
-    /// Read at start only.
+    /// Percent of the file system in use, of its space or its inodes, above which the disk cache
+    /// evicts before it writes: other files share the disk, spill files among them. 1 to 100;
+    /// 100 never evicts for it. Read at start only.
     #[clap(
         long = "cache-disk-watermark-ratio",
         id = "cache_disk_watermark_ratio",
@@ -3875,7 +3875,7 @@ pub struct DiskCacheConfig {
 impl Default for DiskCacheConfig {
     fn default() -> Self {
         Self {
-            max_bytes: 21474836480,
+            max_bytes: None,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
             meta_max_ratio: 10,

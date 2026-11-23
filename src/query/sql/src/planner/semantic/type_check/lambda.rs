@@ -13,19 +13,24 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::Infallible;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::LambdaArgument;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnRef as ExprColumnRef;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Expr as EExpr;
+use databend_common_expression::ExprVisitor;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Symbol;
 use databend_common_expression::types::DataType;
@@ -33,9 +38,9 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
+use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
-use itertools::Itertools;
 use unicase::Ascii;
 
 use super::CoreExpr;
@@ -44,9 +49,11 @@ use super::CoreExprArgs;
 use super::CoreExprId;
 use super::TypeChecker;
 use crate::BindContext;
+use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::Visibility;
-use crate::binder::ExprContext;
+use crate::binder::AliasLookup;
+use crate::binder::SelectItems;
 use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -102,6 +109,43 @@ impl<'a> CoreExprArena<'a> {
         Ok(Some(self.lambda_function(span, func_name, args, lambda)?))
     }
 
+    /// Reject the nodes lowered from `first` on that a lambda body cannot
+    /// hold.
+    ///
+    /// A body must compile into the `RemoteExpr` that the expression
+    /// evaluator runs for each element: scalar functions, casts and other
+    /// lambdas over the parameters, the captured columns and constants.
+    /// Subqueries and aggregate, window, set-returning, async and search
+    /// functions are evaluated by operators of their own, so they are rejected
+    /// here, where they are lowered, with their spans. Script and server UDFs
+    /// are the one exception: only binding tells them from SQL UDFs, see
+    /// `reject_runtime_udf_in_lambda_body`.
+    pub(super) fn reject_lambda_body_nodes(&self, first: usize) -> Result<()> {
+        for node in &self.nodes[first..] {
+            let (span, kind) = match node {
+                CoreExpr::Subquery { span, .. } => (span, "subqueries"),
+                CoreExpr::AggregateFunction { span, .. } => (span, "aggregate functions"),
+                CoreExpr::AggregateWindowFunction { span, .. }
+                | CoreExpr::CountAllWindowFunction { span, .. }
+                | CoreExpr::GeneralWindowFunction { span, .. }
+                | CoreExpr::UdfCall {
+                    span,
+                    has_window: true,
+                    ..
+                } => (span, "window functions"),
+                CoreExpr::SetReturningFunction { span, .. } => (span, "set-returning functions"),
+                CoreExpr::AsyncFunction { span, .. } => (span, "async functions"),
+                CoreExpr::SearchFunction { span, .. } => (span, "search functions"),
+                _ => continue,
+            };
+            return Err(ErrorCode::SemanticError(format!(
+                "{kind} can not be used in lambda function"
+            ))
+            .set_span(*span));
+        }
+        Ok(())
+    }
+
     pub(super) fn lambda_function(
         &mut self,
         span: Span,
@@ -110,16 +154,28 @@ impl<'a> CoreExprArena<'a> {
         lambda: &'a Lambda,
     ) -> Result<CoreExprId> {
         let args = self.lower_expr_args(args)?;
-        let previous_in_lambda_function = self.in_lambda_function;
-        self.in_lambda_function = true;
-        let lambda_expr = self.lower_ast_expr(&lambda.expr);
-        self.in_lambda_function = previous_in_lambda_function;
-        let lambda_expr = lambda_expr?;
+        // A parameter is named by a plain identifier, without quotes or
+        // IDENTIFIER().
+        if let Some(param) = lambda
+            .params
+            .iter()
+            .find(|param| param.is_quoted() || param.is_hole() || param.is_variable())
+        {
+            return Err(ErrorCode::SemanticError(format!(
+                "lambda parameter {param} must be a plain identifier, without quotes or IDENTIFIER()"
+            ))
+            .set_span(param.span));
+        }
+        let first = self.nodes.len();
+        let lambda_expr = self.lower_ast_expr(&lambda.expr)?;
+        self.reject_lambda_body_nodes(first)?;
         Ok(self.alloc(CoreExpr::LambdaFunction {
             span,
             func_name,
             args,
-            lambda_params: &lambda.params,
+            lambda_params: self
+                .name_resolution_ctx
+                .normalize_lambda_params(&lambda.params),
             lambda_expr,
         }))
     }
@@ -128,53 +184,108 @@ impl<'a> CoreExprArena<'a> {
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
+    /// The parameter named `name` of the innermost lambda whose body is being
+    /// bound that has one. An unqualified name is a parameter before it is a
+    /// column, so a parameter shadows columns, and those of enclosing lambdas.
+    pub(super) fn lambda_param(&self, name: &str) -> Option<&ColumnBinding> {
+        self.lambda_params
+            .iter()
+            .rev()
+            .find_map(|params| params.iter().find(|param| param.column_name == name))
+    }
+
+    /// Bind the body of a lambda with `lambda_columns` as its parameters.
+    ///
+    /// The body is bound by this type checker, with the parameters in scope:
+    /// a name of a parameter is the parameter, and every other name resolves
+    /// as in the expression around the lambda, also to the output of a
+    /// grouping key, but never to a SELECT alias, see [`LambdaBodyState`] for
+    /// the state it is bound with. The parameters are numbered
+    /// in a range of their own, past those of the enclosing lambdas, and are
+    /// not registered in metadata: the compiled body refers to them by
+    /// position. Returns the bound body, its type and the parameters.
     fn resolve_core_lambda_expr(
         &mut self,
         arena: &CoreExprArena<'_>,
         func_name: &str,
         span: Span,
-        lambda_context: &mut BindContext,
         lambda_columns: &[(String, DataType)],
         lambda_expr: CoreExprId,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        lambda_context.expr_context = ExprContext::InLambdaFunction;
-
-        // Hide existing columns with the same name as lambda parameters
-        // to implement parameter shadowing for nested lambdas.
-        // Use UnqualifiedWildcardInVisible so that unqualified references
-        // resolve to the lambda parameter, while qualified references
-        // (e.g. table.column) still work.
-        for (lambda_column, _) in lambda_columns.iter() {
-            for col in lambda_context.columns.iter_mut() {
-                if col.column_name == *lambda_column {
-                    col.visibility = Visibility::UnqualifiedWildcardInVisible;
-                }
-            }
-        }
-
-        for (lambda_column, lambda_column_type) in lambda_columns.iter() {
-            let column_index = lambda_context.next_column_index();
-            lambda_context.add_column_binding(
+    ) -> Result<(ScalarExpr, DataType, Vec<ColumnBinding>)> {
+        let base = self
+            .lambda_params
+            .iter()
+            .flatten()
+            .map(|param| param.index.as_usize() + 1)
+            .fold(Symbol::MIN_LAMBDA_PARAMETER.as_usize(), usize::max);
+        let params = lambda_columns
+            .iter()
+            .enumerate()
+            .map(|(offset, (name, data_type))| {
                 ColumnBindingBuilder::new(
-                    lambda_column.clone(),
-                    column_index,
-                    Box::new(lambda_column_type.clone()),
+                    name.clone(),
+                    Symbol::new(base + offset),
+                    Box::new(data_type.clone()),
                     Visibility::Visible,
                 )
-                .build(),
-            );
-        }
+                .build()
+            })
+            .collect::<Vec<_>>();
 
-        let mut type_checker = TypeChecker::try_create_with_adapter(
-            lambda_context,
-            self.adapter.clone(),
-            self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-        )?;
-        let resolved = type_checker.resolve_core(arena, lambda_expr)?;
-        Self::reject_runtime_udf_in_lambda_body(func_name, span, &resolved.0)?;
-        Ok(resolved)
+        let state = LambdaBodyState::enter(self);
+        self.lambda_params.push(params);
+        let result = self.resolve_core(arena, lambda_expr);
+        let params = self.lambda_params.pop().unwrap();
+        state.leave(self);
+
+        let deref!((body, data_type)) = result?;
+        Self::reject_runtime_udf_in_lambda_body(func_name, span, &body)?;
+        Ok((body, data_type, params))
+    }
+
+    /// Compile the bound `body` of a lambda with `params` into the
+    /// `RemoteExpr` the evaluator runs for each element, over a schema of
+    /// `capture_fields` and then the parameters. Returns it with its display.
+    ///
+    /// Parameters, also those of enclosing lambdas that the body captures,
+    /// are displayed by name: their symbols differ each time a lambda is
+    /// bound, so with them, two bindings of the same lambda would differ.
+    fn compile_lambda_body(
+        &self,
+        body: &ScalarExpr,
+        params: &[ColumnBinding],
+        mut capture_fields: Vec<DataField>,
+    ) -> Result<(RemoteExpr, String)> {
+        capture_fields.extend(
+            params
+                .iter()
+                .map(|param| DataField::new(&param.index.to_string(), (*param.data_type).clone())),
+        );
+        let schema = DataSchema::new(capture_fields);
+        let param_names = self
+            .lambda_params
+            .iter()
+            .flatten()
+            .chain(params)
+            .filter_map(|param| {
+                let position = schema.index_of(&param.index.to_string()).ok()?;
+                Some((position, param.column_name.clone()))
+            })
+            .collect::<HashMap<_, _>>();
+        let expr = body
+            .type_check(&schema)?
+            .project_column_ref(|index| schema.index_of(&index.to_string()))?;
+        let expr = match visit_expr(&expr, &mut ParamNames(&param_names)) {
+            Ok(renamed) => renamed.unwrap_or(expr),
+            Err(never) => match never {},
+        };
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let names = params
+            .iter()
+            .map(|param| param.column_name.clone())
+            .collect::<Vec<_>>();
+        let display = format!("{:?} -> {}", names, expr.sql_display());
+        Ok((expr.as_remote_expr(), display))
     }
 
     /// A lambda body is compiled into a `RemoteExpr` and evaluated per element by
@@ -263,7 +374,7 @@ where A: super::TypeCheckAdapter
         span: Span,
         func_name: &str,
         args: &CoreExprArgs,
-        lambda_params: &[Identifier],
+        lambda_params: &[String],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if func_name == "json_path_transform" {
@@ -304,7 +415,7 @@ where A: super::TypeCheckAdapter
         func_name: &str,
         mut arg: ScalarExpr,
         mut arg_type: DataType,
-        lambda_params: &[Identifier],
+        lambda_params: &[String],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut func_name = func_name;
@@ -338,10 +449,7 @@ where A: super::TypeCheckAdapter
             is_cast_variant = true;
         }
 
-        let params = lambda_params
-            .iter()
-            .map(|param| param.name.to_lowercase())
-            .collect::<Vec<_>>();
+        let params = lambda_params.to_vec();
 
         self.check_lambda_param_count(func_name, params.len(), span)?;
 
@@ -382,15 +490,8 @@ where A: super::TypeCheckAdapter
             .map(|(col, ty)| (col.clone(), ty.clone()))
             .collect::<Vec<_>>();
 
-        let mut lambda_context = self.bind_context.clone();
-        let deref!((lambda_expr, lambda_type)) = self.resolve_core_lambda_expr(
-            arena,
-            func_name,
-            span,
-            &mut lambda_context,
-            &lambda_columns,
-            lambda_expr,
-        )?;
+        let (lambda_expr, lambda_type, lambda_params) =
+            self.resolve_core_lambda_expr(arena, func_name, span, &lambda_columns, lambda_expr)?;
 
         let return_type = if func_name == "array_filter" || func_name == "map_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
@@ -480,29 +581,13 @@ where A: super::TypeCheckAdapter
                 DataType::EmptyMap,
             ),
             _ => {
-                // Collect outer scope columns as arguments first.
-                let (mut lambda_args, mut lambda_fields) =
-                    self.collect_lambda_capture_args(&lambda_expr)?;
+                // The captured columns are the leading arguments, the parameters
+                // the trailing fields of the schema.
+                let (mut lambda_args, lambda_fields) =
+                    self.collect_lambda_capture_args(&lambda_expr, &lambda_params)?;
                 lambda_args.push(arg);
-                // Add lambda columns as arguments at end.
-                for (lambda_column_name, lambda_column_type) in lambda_columns.into_iter() {
-                    for column in lambda_context.all_column_bindings().iter().rev() {
-                        if column.column_name == lambda_column_name {
-                            let lambda_field =
-                                DataField::new(&format!("{}", column.index), lambda_column_type);
-                            lambda_fields.push(lambda_field);
-                            break;
-                        }
-                    }
-                }
-                let lambda_schema = DataSchema::new(lambda_fields);
-                let expr = lambda_expr
-                    .type_check(&lambda_schema)?
-                    .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
-                let (expr, _) =
-                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let remote_lambda_expr = expr.as_remote_expr();
-                let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
+                let (remote_lambda_expr, lambda_display) =
+                    self.compile_lambda_body(&lambda_expr, &lambda_params, lambda_fields)?;
 
                 (
                     LambdaFunc {
@@ -537,14 +622,23 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    /// Collects the outer scope columns referenced by a lambda body; they
-    /// become the lambda function's leading arguments and schema fields.
+    /// Collects the columns that a lambda body with `params` captures; they
+    /// become the leading arguments of the lambda function and fields of its
+    /// schema. A column of the body is a parameter of the lambda, or of a
+    /// lambda nested in it, which the nested one compiled away; otherwise it
+    /// is captured: a symbol that the context of the lambda owns, see
+    /// `BindContext::owns_symbol`, or a parameter of an enclosing lambda,
+    /// whose body binds the captures. The columns are collected after the body
+    /// is bound, so that those a masking policy expands to are found too.
     fn collect_lambda_capture_args(
         &self,
         lambda_expr: &ScalarExpr,
+        params: &[ColumnBinding],
     ) -> Result<(Vec<ScalarExpr>, Vec<DataField>)> {
         struct LambdaVisitor<'a> {
             bind_context: &'a BindContext,
+            enclosing_params: &'a [Vec<ColumnBinding>],
+            params: &'a [ColumnBinding],
             arg_index: HashSet<Symbol>,
             args: Vec<ScalarExpr>,
             fields: Vec<DataField>,
@@ -552,31 +646,42 @@ where A: super::TypeCheckAdapter
 
         impl<'a> Visitor<'a> for LambdaVisitor<'a> {
             fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                if self.arg_index.contains(&col.column.index) {
+                let index = col.column.index;
+                if !self.arg_index.insert(index) {
                     return Ok(());
                 }
-                self.arg_index.insert(col.column.index);
-                let is_outer_column = self
-                    .bind_context
-                    .all_column_bindings()
-                    .iter()
-                    .map(|c| c.index)
-                    .contains(&col.column.index);
-                if is_outer_column {
-                    let arg = ScalarExpr::BoundColumnRef(col.clone());
-                    self.args.push(arg);
-                    let field = DataField::new(
-                        &format!("{}", col.column.index),
-                        *col.column.data_type.clone(),
-                    );
-                    self.fields.push(field);
+                if self.params.iter().any(|param| param.index == index) {
+                    return Ok(());
                 }
-                Ok(())
+                if self.bind_context.owns_symbol(index)
+                    || self
+                        .enclosing_params
+                        .iter()
+                        .flatten()
+                        .any(|param| param.index == index)
+                {
+                    self.args.push(ScalarExpr::BoundColumnRef(col.clone()));
+                    self.fields.push(DataField::new(
+                        &format!("{index}"),
+                        *col.column.data_type.clone(),
+                    ));
+                    return Ok(());
+                }
+                // TODO: capture columns of outer queries. They would become
+                // correlated arguments of the lambda function, which
+                // decorrelation does not support yet.
+                Err(ErrorCode::SemanticError(format!(
+                    "lambda functions in a subquery can't reference column \"{}\" of an outer query",
+                    col.column.column_name
+                ))
+                .set_span(col.span))
             }
         }
 
         let mut lambda_visitor = LambdaVisitor {
             bind_context: self.bind_context,
+            enclosing_params: &self.lambda_params,
+            params,
             arg_index: HashSet::new(),
             args: Vec::new(),
             fields: Vec::new(),
@@ -595,7 +700,7 @@ where A: super::TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         span: Span,
         args: &CoreExprArgs,
-        lambda_params: &[Identifier],
+        lambda_params: &[String],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let func_name = "json_path_transform";
@@ -627,22 +732,12 @@ where A: super::TypeCheckAdapter
 
         let fold_to_null = json_type == DataType::Null || path_type == DataType::Null;
 
-        let params = lambda_params
-            .iter()
-            .map(|param| param.name.to_lowercase())
-            .collect::<Vec<_>>();
+        let params = lambda_params.to_vec();
         let param_type = DataType::Nullable(Box::new(DataType::Variant));
         let lambda_columns = vec![(params[0].clone(), param_type.clone())];
 
-        let mut lambda_context = self.bind_context.clone();
-        let deref!((lambda_scalar, lambda_type)) = self.resolve_core_lambda_expr(
-            arena,
-            func_name,
-            span,
-            &mut lambda_context,
-            &lambda_columns,
-            lambda_expr,
-        )?;
+        let (lambda_scalar, lambda_type, lambda_params) =
+            self.resolve_core_lambda_expr(arena, func_name, span, &lambda_columns, lambda_expr)?;
 
         let lambda_scalar = if lambda_type != param_type {
             ScalarExpr::CastExpr(CastExpr {
@@ -657,26 +752,12 @@ where A: super::TypeCheckAdapter
 
         // Argument layout is `[json, path, captures...]` so that EXPLAIN and
         // profile output keep the signature order; the evaluator relies on it.
-        let (capture_args, mut lambda_fields) = self.collect_lambda_capture_args(&lambda_scalar)?;
+        let (capture_args, lambda_fields) =
+            self.collect_lambda_capture_args(&lambda_scalar, &lambda_params)?;
         let mut lambda_args = vec![json_arg, path_arg];
         lambda_args.extend(capture_args);
-
-        // Add the lambda parameter as the last schema field.
-        for column in lambda_context.all_column_bindings().iter().rev() {
-            if column.column_name == params[0] {
-                let lambda_field = DataField::new(&format!("{}", column.index), param_type.clone());
-                lambda_fields.push(lambda_field);
-                break;
-            }
-        }
-
-        let lambda_schema = DataSchema::new(lambda_fields);
-        let expr = lambda_scalar
-            .type_check(&lambda_schema)?
-            .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
-        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let remote_lambda_expr = expr.as_remote_expr();
-        let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
+        let (remote_lambda_expr, lambda_display) =
+            self.compile_lambda_body(&lambda_scalar, &lambda_params, lambda_fields)?;
 
         // Fold NULL constants only after the lambda body passed normal
         // semantic and type validation.
@@ -736,5 +817,72 @@ where A: super::TypeCheckAdapter
             .set_span(span));
         }
         Ok(())
+    }
+}
+
+/// The state of a type checker that binding a lambda body sets, and restores
+/// after it.
+///
+/// The body is bound without SELECT aliases, nor the aliases of a WHERE that
+/// uses unmasked values, and not inside an aggregate function or a window
+/// function. Every other field is inherited from the expression around the
+/// lambda: the expression context of its clause, the grouping-key matching
+/// state and its memo, and so the folding policy that follows from them,
+/// whether masking policies apply and whether virtual computed columns are
+/// forbidden, which are the mode of the whole binding, and the parameters of enclosing lambdas, whose presence
+/// tells that a body is bound. Whether a masking policy is being bound is
+/// inherited too: a body in a policy is a part of it, and a column it refers
+/// to must not have the policy applied again, which would bind the policy
+/// without end.
+struct LambdaBodyState<'a> {
+    aliases: AliasLookup<'a>,
+    select_items: Option<SelectItems<'a>>,
+    in_aggregate_function: bool,
+    in_window_function: bool,
+    masking_where_aliases: Option<(&'a CoreExprArena<'a>, &'a [(String, CoreExprId)])>,
+    resolving_masking_where_aliases: Vec<String>,
+}
+
+impl<'a> LambdaBodyState<'a> {
+    fn enter<A: super::TypeCheckAdapter>(checker: &mut TypeChecker<'a, A>) -> Self {
+        Self {
+            aliases: std::mem::replace(&mut checker.aliases, AliasLookup::all(&[])),
+            select_items: checker.select_items.take(),
+            in_aggregate_function: std::mem::take(&mut checker.in_aggregate_function),
+            in_window_function: std::mem::take(&mut checker.in_window_function),
+            masking_where_aliases: checker.masking_where_aliases.take(),
+            resolving_masking_where_aliases: std::mem::take(
+                &mut checker.resolving_masking_where_aliases,
+            ),
+        }
+    }
+
+    fn leave<A: super::TypeCheckAdapter>(self, checker: &mut TypeChecker<'a, A>) {
+        checker.aliases = self.aliases;
+        checker.select_items = self.select_items;
+        checker.in_aggregate_function = self.in_aggregate_function;
+        checker.in_window_function = self.in_window_function;
+        checker.masking_where_aliases = self.masking_where_aliases;
+        checker.resolving_masking_where_aliases = self.resolving_masking_where_aliases;
+    }
+}
+
+/// Displays the column references at the positions of lambda parameters by
+/// the names of the parameters.
+struct ParamNames<'a>(&'a HashMap<usize, String>);
+
+impl ExprVisitor<usize> for ParamNames<'_> {
+    type Error = Infallible;
+
+    fn enter_column_ref(
+        &mut self,
+        column: &ExprColumnRef<usize>,
+    ) -> std::result::Result<Option<EExpr<usize>>, Infallible> {
+        Ok(self.0.get(&column.id).map(|name| {
+            EExpr::ColumnRef(ExprColumnRef {
+                display_name: name.clone(),
+                ..column.clone()
+            })
+        }))
     }
 }

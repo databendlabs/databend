@@ -46,6 +46,7 @@ pub use deserialize::dictionary_hint_fields;
 pub use encode::ColumnEncoding;
 pub use row_selection::RowSelection;
 
+use self::deserialize::column_chunks_record_reader;
 use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::FuseCaches;
@@ -98,23 +99,84 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
-        let has_selection = selection.is_some();
-        let parquet_selection = selection.map(|s| s.selection.clone());
         let record_batch = column_chunks_to_record_batch_with_codecs(
             &self.original_schema,
             num_rows,
             &column_chunks,
             files.default_compression(),
             |column_id| files.compression_of(column_id),
-            parquet_selection,
+            selection.map(|s| s.selection.clone()),
             self.parquet_hint_fields.as_ref(),
         )?;
-        let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
+        self.record_batch_to_block(
+            &record_batch,
+            result_rows,
+            &files,
+            &column_chunks,
+            selection,
+            &name_paths,
+        )
+    }
 
+    /// Cache entries and encodings describe the whole block, not a batch.
+    pub(crate) fn parquet_filter_batches<'a>(
+        &'a self,
+        part: &'a FuseBlockPartInfo,
+        column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
+        batch_rows: usize,
+    ) -> databend_common_exception::Result<
+        Option<impl Iterator<Item = databend_common_exception::Result<DataBlock>> + 'a>,
+    > {
+        if (self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
+            || !self.column_encodings.is_empty()
+            || column_chunks.is_empty()
+            || column_chunks
+                .values()
+                .any(|item| matches!(item, DataItem::ColumnArray(_)))
+        {
+            return Ok(None);
+        }
+        let data_files = part.data_files();
+        let files = DataFileLookup::new(&data_files);
+        let reader = column_chunks_record_reader(
+            &self.original_schema,
+            part.nums_rows,
+            column_chunks,
+            files.default_compression(),
+            |column_id| files.compression_of(column_id),
+            None,
+            self.parquet_hint_fields.as_ref(),
+            batch_rows,
+        )?;
+        let name_paths = column_name_paths(&self.projection, &self.original_schema);
+        Ok(Some(reader.map(move |batch| {
+            let batch = batch?;
+            self.record_batch_to_block(
+                &batch,
+                batch.num_rows(),
+                &DataFileLookup::new(&data_files),
+                column_chunks,
+                None,
+                &name_paths,
+            )
+        })))
+    }
+
+    fn record_batch_to_block(
+        &self,
+        record_batch: &RecordBatch,
+        result_rows: usize,
+        files: &DataFileLookup,
+        column_chunks: &HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+        name_paths: &[Vec<String>],
+    ) -> databend_common_exception::Result<DataBlock> {
+        let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let caches = FuseCaches::instance();
-        let array_cache = Some(&caches.column_arrays)
-            .filter(|cache| self.policy.memory.writes() && !has_selection && cache.is_enabled());
+        let array_cache = Some(&caches.column_arrays).filter(|cache| {
+            self.policy.memory.writes() && selection.is_none() && cache.is_enabled()
+        });
 
         for ((i, field), column_node) in self
             .projected_schema
@@ -143,7 +205,7 @@ impl BlockReader {
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(_)) => {
                     // get the deserialized arrow array, which may be a nested array
-                    let arrow_array = column_by_name(&record_batch, &name_paths[i]);
+                    let arrow_array = column_by_name(record_batch, &name_paths[i]);
                     // Nested columns are neither cached nor encoded.
                     let cache = array_cache.filter(|_| !column_node.is_nested);
                     let cache_key = || {

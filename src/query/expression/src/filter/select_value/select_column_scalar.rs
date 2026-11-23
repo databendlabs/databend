@@ -245,18 +245,17 @@ impl<'a> Selector<'a> {
             SelectStrategy::All => unsafe {
                 match validity {
                     Some(validity) => {
-                        // search the whole string buffer
                         if let LikePattern::SurroundByPercent(searcher) = like_pattern {
                             for idx in 0u32..count as u32 {
                                 let ret = if NOT {
                                     validity.get_bit_unchecked(idx as usize)
                                         && searcher
-                                            .search(column.index_unchecked_bytes(idx as usize))
+                                            .find(column.index_unchecked_bytes(idx as usize))
                                             .is_none()
                                 } else {
                                     validity.get_bit_unchecked(idx as usize)
                                         && searcher
-                                            .search(column.index_unchecked_bytes(idx as usize))
+                                            .find(column.index_unchecked_bytes(idx as usize))
                                             .is_some()
                                 };
                                 update_index(ret, idx, true_selection, false_selection);
@@ -277,16 +276,15 @@ impl<'a> Selector<'a> {
                         }
                     }
                     None => {
-                        // search the whole string buffer
                         if let LikePattern::SurroundByPercent(searcher) = like_pattern {
                             for idx in 0u32..count as u32 {
                                 let ret = if NOT {
                                     searcher
-                                        .search(column.index_unchecked_bytes(idx as usize))
+                                        .find(column.index_unchecked_bytes(idx as usize))
                                         .is_none()
                                 } else {
                                     searcher
-                                        .search(column.index_unchecked_bytes(idx as usize))
+                                        .find(column.index_unchecked_bytes(idx as usize))
                                         .is_some()
                                 };
                                 update_index(ret, idx, true_selection, false_selection);

@@ -52,6 +52,8 @@ impl CacheRegistry {
             .register::<inverted::Lookup>()
             .register::<inverted::Payload>()
             .register::<inverted::FullPayload>()
+            .register::<inverted::Searcher>()
+            .register::<inverted::TermInfo>()
             .register::<spatial::Index>()
             .register::<column::Data>()
             .register::<column::Array>();

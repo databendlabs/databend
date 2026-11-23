@@ -1,17 +1,17 @@
 matrix: window_spec_alias
 local_dimensions: []
 regions:
-  - description: window specifications can reuse aggregate aliases and grouped item aliases from the surrounding query block
+  - description: window specifications can reuse aggregate aliases and aliases of key items from the surrounding query block
     main:
       consumers: [W0]
       name_shapes: [N0, N2]
-      producers: [S2, G0]
+      producers: [S2, S1]
     masks:
       - when:
           main:
             name_shapes: [N0]
-            producers: [G0]
-        reason: group-item aliases are only relevant inside window expressions, not as bare SELECT alias names
+            producers: [S1]
+        reason: aliases of key items are only relevant inside window expressions, not as bare SELECT alias names
       - when:
           main:
             name_shapes: [N2]
@@ -24,8 +24,8 @@ regions:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0"
-      - key: W0N2G0_0_
-        name: window_spec_reuses_group_item_alias
+      - key: W0N2S1_0_
+        name: window_spec_reuses_key_item_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
@@ -58,10 +58,10 @@ regions:
     main:
       consumers: [W0]
       name_shapes: [N0, N1, N2, N3, N4, N5]
-      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+      producers: [I0, S0, S1, S2, S3, S4, N0]
     cases:
-      - key: W0N1G0_3_
-        name: window_spec_qualified_name_does_not_consume_group_alias
+      - key: W0N1S1_3_
+        name: window_spec_qualified_name_does_not_consume_key_item_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
         runs:

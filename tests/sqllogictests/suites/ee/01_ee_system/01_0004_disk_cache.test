@@ -84,6 +84,12 @@ statement ok
 call system$set_cache_capacity('memory_cache_inverted_index_payload', 0);
 
 statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_searcher', 0);
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_term_info', 0);
+
+statement ok
 call system$set_cache_capacity('memory_cache_virtual_column_file_meta_data', 0);
 
 # The first reads miss and fill the disk cache in the background.
@@ -307,6 +313,12 @@ call system$set_cache_capacity('memory_cache_inverted_index_lookup', 'default');
 
 statement ok
 call system$set_cache_capacity('memory_cache_inverted_index_payload', 'default');
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_searcher', 'default');
+
+statement ok
+call system$set_cache_capacity('memory_cache_inverted_index_term_info', 'default');
 
 statement ok
 call system$set_cache_capacity('memory_cache_virtual_column_file_meta_data', 'default');

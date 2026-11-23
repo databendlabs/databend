@@ -23,7 +23,7 @@ key: A0N0S0_0_10
 sql: SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3
 status: ok
 EvalScalar
-├── scalars: [sum(c1) (#2) AS (#2), number % 3 (#1) AS (#3)]
+├── scalars: [number % 3 (#1) AS (#1), sum(c1) (#2) AS (#2)]
 └── Aggregate(Initial)
     ├── group items: [modulo(t.number (#0), 3) AS (#1)]
     ├── aggregate functions: [sum(number % 3 (#1)) AS (#2)]
@@ -61,7 +61,7 @@ key: A0N0S0_0_11
 sql: SELECT number % 3 AS c1, weighted_avg(c1, 1) FROM udaf_prior_t GROUP BY number % 3
 status: ok
 EvalScalar
-├── scalars: [weighted_avg(c1, 1) (#4) AS (#4), number % 3 (#1) AS (#5)]
+├── scalars: [number % 3 (#1) AS (#1), weighted_avg(c1, 1) (#4) AS (#4)]
 └── Aggregate(Initial)
     ├── group items: [modulo(udaf_prior_t.number (#0), 3) AS (#1)]
     ├── aggregate functions: [weighted_avg(c1, 1) AS (#4)]
@@ -97,20 +97,9 @@ EvalScalar
 matrix: aggregate_argument_alias
 key: A0N0S2_1_100
 sql: SELECT count(*) AS c, sum(c) FROM t
-status: ok
-EvalScalar
-├── scalars: [COUNT(*) (#1) AS (#1), sum(c) (#3) AS (#3)]
-└── Aggregate(Initial)
-    ├── group items: []
-    ├── aggregate functions: [count() AS (#1), sum(sum_arg_0 (#2)) AS (#3)]
-    └── EvalScalar
-        ├── scalars: [count() AS (#2)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
+status: error
+code: 1065
+message: aggregate function calls cannot be nested
 
 === aggregate_argument_alias__aggregate_argument_rejects_duplicate_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
@@ -143,20 +132,9 @@ EvalScalar
 matrix: aggregate_argument_alias
 key: A0N0S2_1_101
 sql: SELECT count(*) AS c, weighted_avg(c, 1) FROM udaf_t
-status: ok
-EvalScalar
-├── scalars: [COUNT(*) (#1) AS (#1), weighted_avg(c, 1) (#4) AS (#4)]
-└── Aggregate(Initial)
-    ├── group items: []
-    ├── aggregate functions: [count() AS (#1), weighted_avg(c, 1) AS (#4)]
-    └── EvalScalar
-        ├── scalars: [CAST(count() AS Int32 NULL) AS (#2), CAST(1 AS Int32 NULL) AS (#3)]
-        └── Scan
-            ├── table: default.udaf_t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
+status: error
+code: 1065
+message: aggregate function calls cannot be nested
 
 === aggregate_argument_alias__udaf_argument_rejects_duplicate_prior_aggregate_alias ===
 matrix: aggregate_argument_alias

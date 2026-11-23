@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::sync::Mutex;
 use std::sync::Weak;
 use std::time::Instant;
 
@@ -33,8 +34,10 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_mill
 use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_cache::CacheRef;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::MemCache;
+use databend_storages_common_cache::Reader;
 use databend_storages_common_cache::kinds::inverted;
 use databend_storages_common_index::BundleExternalFiles;
 use databend_storages_common_index::BundleFileRanges;
@@ -44,10 +47,13 @@ use databend_storages_common_index::InvertedIndexBundleFooter;
 use databend_storages_common_index::InvertedIndexLookupBytes;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_index::InvertedIndexPayloadBytes;
+use databend_storages_common_index::InvertedIndexSearcher;
+use databend_storages_common_index::InvertedIndexTermInfo;
 use databend_storages_common_index::SearchPinDirectory;
 use databend_storages_common_index::inverted_index_meta_cache_key;
+use databend_storages_common_index::with_search_scope;
 use databend_storages_common_io::ReadSettings;
-use opendal::Operator;
+use parking_lot::Mutex;
 use tantivy::Directory;
 use tantivy::HasLen;
 use tantivy::directory::DirectoryLock;
@@ -63,6 +69,7 @@ use tantivy::directory::error::OpenReadError;
 use tantivy::directory::error::OpenWriteError;
 
 use crate::io::FuseCaches;
+use crate::io::InvertedIndexCache;
 
 const CACHE_PAGE_SIZE: usize = 64 * 1024;
 const MAX_MERGED_READ_SIZE: usize = 1024 * 1024;
@@ -121,9 +128,7 @@ static FETCH_LOCKS: LazyLock<Mutex<HashMap<String, Weak<FetchLock>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn fetch_lock(key: String) -> Arc<FetchLock> {
-    let mut locks = FETCH_LOCKS
-        .lock()
-        .expect("inverted-index fetch lock map poisoned");
+    let mut locks = FETCH_LOCKS.lock();
     if let Some(lock) = locks.get(&key).and_then(Weak::upgrade) {
         return lock;
     }
@@ -154,9 +159,23 @@ fn footer_fetch_lock(location: &str) -> Arc<FetchLock> {
     fetch_lock(format!("footer:{location}"))
 }
 
+tokio::task_local! {
+    static SEARCH_STORAGE: DiskCachedStorage;
+}
+
+/// Pins the warmed ranges and supplies the calling table's operator for any range misses.
+/// The cached searcher must not retain credentials or metrics from the query that opened it.
+pub(crate) async fn with_bundle_search_scope<F: Future>(
+    storage: DiskCachedStorage,
+    search: F,
+) -> F::Output {
+    SEARCH_STORAGE
+        .scope(storage, with_search_scope(search))
+        .await
+}
+
 #[derive(Clone)]
 struct RemoteBundleDirectory {
-    storage: DiskCachedStorage,
     location: Arc<str>,
     file_ranges: BundleFileRanges,
     external_files: BundleExternalFiles,
@@ -198,8 +217,6 @@ impl fmt::Debug for RemoteBundleDirectory {
 }
 
 struct RemoteBundleFileHandle {
-    /// Object storage behind the disk cache; pages and whole components are its units.
-    storage: DiskCachedStorage,
     /// Bundle location; cache keys and fetch locks are scoped by it.
     location: Arc<str>,
     /// Object actually read: the bundle itself or a sibling object for an external file.
@@ -340,35 +357,20 @@ impl RemoteBundleFileHandle {
         Ok(absolute_start..absolute_end)
     }
 
-    async fn fetch_range(&self, range: Range<usize>) -> io::Result<Bytes> {
-        self.fetch(range, None).await
-    }
-
-    /// `range` of the file as one unit of the disk cache of `kind`.
-    async fn fetch_unit(
-        &self,
-        kind: CacheKind,
-        fill: CacheFill,
-        range: Range<usize>,
-    ) -> io::Result<Bytes> {
-        self.fetch(range, Some((kind, fill))).await
-    }
-
     async fn fetch(
         &self,
+        storage: &DiskCachedStorage,
         range: Range<usize>,
         disk: Option<(CacheKind, CacheFill)>,
     ) -> io::Result<Bytes> {
         let absolute = self.absolute_range(&range)?;
         let start = Instant::now();
         let data = match disk {
-            Some((kind, fill)) => self
-                .storage
+            Some((kind, fill)) => storage
                 .read(kind, self.object.as_ref(), Some(absolute), fill)
                 .await
                 .map_err(io::Error::other)?,
-            None => self
-                .storage
+            None => storage
                 .operator()
                 .read_with(self.object.as_ref())
                 .range(absolute)
@@ -388,6 +390,7 @@ impl RemoteBundleFileHandle {
 
     async fn fetch_page_group(
         &self,
+        storage: &DiskCachedStorage,
         kind: PageCacheKind,
         first_page: usize,
         last_page: usize,
@@ -402,15 +405,17 @@ impl RemoteBundleFileHandle {
                 self.payload_cache.policy().disk,
             ),
         };
-        if self.storage.uses_disk(disk_kind, fill) {
+        if storage.uses_disk(disk_kind, fill) {
             return self
-                .fetch_disk_pages(disk_kind, fill, kind, first_page, last_page)
+                .fetch_disk_pages(storage, disk_kind, fill, kind, first_page..=last_page)
                 .await;
         }
 
         let logical_start = self.page_range(first_page)?.start;
         let logical_end = self.page_range(last_page)?.end;
-        let data = self.fetch_range(logical_start..logical_end).await?;
+        let data = self
+            .fetch(storage, logical_start..logical_end, None)
+            .await?;
 
         let mut pages = Vec::with_capacity(last_page - first_page + 1);
         for page_no in first_page..=last_page {
@@ -430,14 +435,14 @@ impl RemoteBundleFileHandle {
     /// request, as without it.
     async fn fetch_disk_pages(
         &self,
+        storage: &DiskCachedStorage,
         disk_kind: CacheKind,
         fill: CacheFill,
         kind: PageCacheKind,
-        first_page: usize,
-        last_page: usize,
+        pages: RangeInclusive<usize>,
     ) -> io::Result<Vec<(usize, Bytes)>> {
-        let mut units = Vec::with_capacity(last_page - first_page + 1);
-        for page_no in first_page..=last_page {
+        let mut units = Vec::with_capacity(pages.end() - pages.start() + 1);
+        for page_no in pages {
             let id = u32::try_from(page_no).map_err(io::Error::other)?;
             units.push((id, self.absolute_range(&self.page_range(page_no)?)?));
         }
@@ -448,8 +453,7 @@ impl RemoteBundleFileHandle {
             parquet_fast_read_bytes: 0,
         };
         let start = Instant::now();
-        let read = self
-            .storage
+        let read = storage
             .read_units(disk_kind, self.object.as_ref(), &units, fill, &settings)
             .await
             .map_err(io::Error::other)?;
@@ -483,7 +487,7 @@ impl RemoteBundleFileHandle {
             && matches!(self.component_name.as_str(), "idx" | "pos")
     }
 
-    async fn read_full_postings_file(&self) -> io::Result<OwnedBytes> {
+    async fn read_full_postings_file(&self, storage: &DiskCachedStorage) -> io::Result<OwnedBytes> {
         // The warmup planner explicitly requests the complete physical `.idx` / `.pos` through
         // the raw bundle directory, not Tantivy's footer-stripped field slices. Preserve one
         // full-read singleflight per component instead of translating it into page requests.
@@ -493,10 +497,13 @@ impl RemoteBundleFileHandle {
             return Ok(OwnedBytes::new(data.to_vec()));
         }
         let data = self
-            .fetch_unit(
-                CacheKind::of::<inverted::FullPayload>(),
-                self.full_payload_cache.policy().disk,
+            .fetch(
+                storage,
                 0..self.len(),
+                Some((
+                    CacheKind::of::<inverted::FullPayload>(),
+                    self.full_payload_cache.policy().disk,
+                )),
             )
             .await?;
         // Full components are stored as one entry in a separate memory pool. Oversized files
@@ -514,7 +521,11 @@ impl RemoteBundleFileHandle {
         Ok(OwnedBytes::new(Vec::<u8>::from(data)))
     }
 
-    async fn read_cached_lookup_file(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
+    async fn read_cached_lookup_file(
+        &self,
+        storage: &DiskCachedStorage,
+        range: Range<usize>,
+    ) -> io::Result<OwnedBytes> {
         let key = self.whole_lookup_key();
         if let Some(value) = self.lookup_cache.lookup(&key)
             && value.data.len() == self.len()
@@ -534,10 +545,13 @@ impl RemoteBundleFileHandle {
         }
 
         let data = self
-            .fetch_unit(
-                CacheKind::of::<inverted::Lookup>(),
-                self.lookup_cache.policy().disk,
+            .fetch(
+                storage,
                 0..self.len(),
+                Some((
+                    CacheKind::of::<inverted::Lookup>(),
+                    self.lookup_cache.policy().disk,
+                )),
             )
             .await?;
         self.lookup_cache
@@ -546,7 +560,11 @@ impl RemoteBundleFileHandle {
     }
 
     /// Dispatch whole-file, full-payload, paged, and uncached reads before entering page logic.
-    async fn read_range(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
+    async fn read_range(
+        &self,
+        storage: &DiskCachedStorage,
+        range: Range<usize>,
+    ) -> io::Result<OwnedBytes> {
         if range.end > self.len() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -564,14 +582,13 @@ impl RemoteBundleFileHandle {
         // refuses as too large would be fetched again by every read. One the disk cache already
         // holds, kept before its pool shrank, is read from there.
         let lookup_whole = self.lookup_cache.is_enabled()
-            || self.storage.admits(lookup, self.len() as u64, lookup_disk)
+            || storage.admits(lookup, self.len() as u64, lookup_disk)
             || self.absolute_range(&(0..self.len())).is_ok_and(|whole| {
-                self.storage
-                    .holds(lookup, self.object.as_ref(), Some(whole), lookup_disk)
+                storage.holds(lookup, self.object.as_ref(), Some(whole), lookup_disk)
             });
         match self.cache_policy {
             RangeCachePolicy::LookupWhole if lookup_whole => {
-                return self.read_cached_lookup_file(range).await;
+                return self.read_cached_lookup_file(storage, range).await;
             }
             RangeCachePolicy::Pages(kind) => {
                 if kind == PageCacheKind::Payload {
@@ -582,21 +599,20 @@ impl RemoteBundleFileHandle {
                     if self.is_full_postings_read(&range)
                         && (self.payload_cache.is_enabled()
                             || self.full_payload_cache.is_enabled()
-                            || self
-                                .storage
+                            || storage
                                 .uses_disk(full_payload, self.full_payload_cache.policy().disk))
                     {
-                        return self.read_full_postings_file().await;
+                        return self.read_full_postings_file(storage).await;
                     }
                 }
-                if self.pages_kept(kind, &range) {
-                    return self.read_pages(kind, range).await;
+                if self.pages_kept(storage, kind, &range) {
+                    return self.read_pages(storage, kind, range).await;
                 }
             }
             RangeCachePolicy::LookupWhole => {}
         }
 
-        self.fetch_range(range)
+        self.fetch(storage, range, None)
             .await
             .map(|data| OwnedBytes::new(data.to_vec()))
     }
@@ -604,7 +620,12 @@ impl RemoteBundleFileHandle {
     /// Whether the pages of `range` are worth reading whole: a tier can keep each of them, at
     /// its own length, or the disk cache holds it, kept before its pool shrank. Pages no tier
     /// keeps would be fetched again by every read; the range alone is read then.
-    fn pages_kept(&self, kind: PageCacheKind, range: &Range<usize>) -> bool {
+    fn pages_kept(
+        &self,
+        storage: &DiskCachedStorage,
+        kind: PageCacheKind,
+        range: &Range<usize>,
+    ) -> bool {
         let (memory, disk_kind, fill) = match kind {
             PageCacheKind::Lookup => (
                 self.lookup_cache.is_enabled(),
@@ -626,15 +647,19 @@ impl RemoteBundleFileHandle {
             let Ok(page) = self.page_range(page_no) else {
                 return false;
             };
-            self.storage.admits(disk_kind, page.len() as u64, fill)
+            storage.admits(disk_kind, page.len() as u64, fill)
                 || self.absolute_range(&page).is_ok_and(|page| {
-                    self.storage
-                        .holds(disk_kind, self.object.as_ref(), Some(page), fill)
+                    storage.holds(disk_kind, self.object.as_ref(), Some(page), fill)
                 })
         })
     }
 
-    async fn read_pages(&self, kind: PageCacheKind, range: Range<usize>) -> io::Result<OwnedBytes> {
+    async fn read_pages(
+        &self,
+        storage: &DiskCachedStorage,
+        kind: PageCacheKind,
+        range: Range<usize>,
+    ) -> io::Result<OwnedBytes> {
         let first_page = range.start / CACHE_PAGE_SIZE;
         let last_page = (range.end - 1) / CACHE_PAGE_SIZE;
         // Retain pages for this request even if the global cache evicts them before assembly.
@@ -644,7 +669,7 @@ impl RemoteBundleFileHandle {
                 request_pages.insert(page_no, page);
             }
         }
-        self.fill_missing_pages(kind, first_page, last_page, &mut request_pages)
+        self.fill_missing_pages(storage, kind, first_page, last_page, &mut request_pages)
             .await?;
 
         let mut output = Vec::with_capacity(range.len());
@@ -665,6 +690,7 @@ impl RemoteBundleFileHandle {
 
     async fn fill_missing_pages(
         &self,
+        storage: &DiskCachedStorage,
         kind: PageCacheKind,
         first_page: usize,
         last_page: usize,
@@ -683,7 +709,7 @@ impl RemoteBundleFileHandle {
             {
                 page_no += 1;
             }
-            self.fetch_missing_run(kind, missing_start, page_no, request_pages)
+            self.fetch_missing_run(storage, kind, missing_start, page_no, request_pages)
                 .await?;
             page_no += 1;
         }
@@ -692,6 +718,7 @@ impl RemoteBundleFileHandle {
 
     async fn fetch_missing_run(
         &self,
+        storage: &DiskCachedStorage,
         kind: PageCacheKind,
         first_page: usize,
         last_page: usize,
@@ -721,7 +748,10 @@ impl RemoteBundleFileHandle {
             while page_no < last_page && !request_pages.contains_key(&(page_no + 1)) {
                 page_no += 1;
             }
-            request_pages.extend(self.fetch_page_group(kind, fetch_start, page_no).await?);
+            request_pages.extend(
+                self.fetch_page_group(storage, kind, fetch_start, page_no)
+                    .await?,
+            );
             page_no += 1;
         }
         Ok(())
@@ -743,7 +773,10 @@ impl FileHandle for RemoteBundleFileHandle {
     }
 
     async fn read_bytes_async(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
-        self.read_range(range).await
+        let storage = SEARCH_STORAGE.try_with(Clone::clone).map_err(|_| {
+            io::Error::other("inverted-index range read outside a bundle search scope")
+        })?;
+        self.read_range(&storage, range).await
     }
 }
 
@@ -762,7 +795,6 @@ impl Directory for RemoteBundleDirectory {
         let component_name = component_name(path).to_owned();
         let cache_policy = range_cache_policy(&component_name, file_len_u64);
         Ok(Arc::new(RemoteBundleFileHandle {
-            storage: self.storage.clone(),
             location: self.location.clone(),
             object,
             file_range,
@@ -820,10 +852,6 @@ impl Directory for RemoteBundleDirectory {
     fn acquire_lock(&self, _lock: &Lock) -> std::result::Result<DirectoryLock, LockError> {
         Ok(DirectoryLock::from(Box::new(|| {})))
     }
-}
-
-pub(crate) struct BundleSearchDirectory {
-    pub directory: FooterDirectory,
 }
 
 struct FooterCacheState {
@@ -1011,39 +1039,95 @@ impl FooterCacheState {
     }
 }
 
-pub(crate) async fn load_bundle_search_directory(
-    operator: &Operator,
+/// Opens bundles for search: the footer, through its cache, then the Tantivy index.
+struct BundleSearcherReader<'a> {
+    storage: &'a DiskCachedStorage,
+    caches: &'a InvertedIndexCache,
+}
+
+impl Reader for BundleSearcherReader<'_> {
+    /// The location and size of the bundle object, and the policy its searches read under:
+    /// a searcher reads its pages under the policy it was opened with.
+    type Key = (String, u64, CachePolicy);
+    type Item = InvertedIndexSearcher;
+
+    fn cache_key<'a>(&self, (location, object_size, policy): &'a Self::Key) -> Cow<'a, str> {
+        Cow::Owned(format!(
+            "{location}:{object_size}:{:?}:{:?}",
+            policy.memory, policy.disk
+        ))
+    }
+
+    async fn read(
+        &self,
+        (location, object_size, policy): &Self::Key,
+        _: &CachePolicy,
+    ) -> Result<InvertedIndexSearcher> {
+        let caches = self.caches.with_policy(*policy);
+        let cache_state =
+            FooterCacheState::new(location, *object_size, caches.meta, caches.lookup.clone());
+        let footer = cache_state.load_or_fetch(self.storage, location).await?;
+        // The searcher keeps handles of the process-wide caches that hold it. Evicting it ends
+        // that cycle; the caches themselves live as long as the process.
+        let remote = RemoteBundleDirectory {
+            location: Arc::from(location.as_str()),
+            file_ranges: footer.file_ranges.clone(),
+            external_files: footer.external_files.clone(),
+            lookup_cache: caches.lookup,
+            payload_cache: caches.payload,
+            full_payload_cache: caches.full_payload,
+        };
+        let pin = SearchPinDirectory::shared(Arc::new(remote), InvertedIndexSearcher::retains);
+        InvertedIndexSearcher::open(FooterDirectory::new(pin, footer))
+    }
+}
+
+/// The searcher of a bundle, opened once for all its searches unless `policy` does not cache
+/// it, and the cache its searches keep term infos in. Index files are immutable, so the
+/// location and size identify one.
+pub(crate) async fn load_bundle_searcher(
+    storage: &DiskCachedStorage,
     location: &str,
     object_size: u64,
     policy: CachePolicy,
-) -> Result<BundleSearchDirectory> {
-    let caches = &FuseCaches::instance().inverted.with_policy(policy);
-    let cache_state = FooterCacheState::new(
-        location,
-        object_size,
-        caches.meta.clone(),
-        caches.lookup.clone(),
-    );
-    let storage = DiskCachedStorage::new(operator.clone());
-    let footer = cache_state.load_or_fetch(&storage, location).await?;
+) -> Result<(
+    CacheRef<InvertedIndexSearcher>,
+    MemCache<InvertedIndexTermInfo>,
+)> {
+    let caches = &FuseCaches::instance().inverted;
+    load_bundle_searcher_from(caches, storage, location, object_size, policy).await
+}
 
-    let remote = RemoteBundleDirectory {
-        storage,
-        location: Arc::from(location),
-        file_ranges: footer.file_ranges.clone(),
-        external_files: footer.external_files.clone(),
-        lookup_cache: caches.lookup.clone(),
-        payload_cache: caches.payload.clone(),
-        full_payload_cache: caches.full_payload.clone(),
+async fn load_bundle_searcher_from(
+    caches: &InvertedIndexCache,
+    storage: &DiskCachedStorage,
+    location: &str,
+    object_size: u64,
+    policy: CachePolicy,
+) -> Result<(
+    CacheRef<InvertedIndexSearcher>,
+    MemCache<InvertedIndexTermInfo>,
+)> {
+    let reader = BundleSearcherReader { storage, caches };
+    let searcher = caches
+        .searcher
+        .with_policy(policy)
+        .get(&reader, (location.to_string(), object_size, policy))
+        .await?;
+    // Term infos are keyed by searcher. A searcher the cache did not admit is opened again by
+    // the next search, under another key: the term infos of its searches would never be read.
+    let term_policy = if searcher.is_charged() {
+        policy
+    } else {
+        CachePolicy::BYPASS
     };
-    let search_pin = SearchPinDirectory::new(Arc::new(remote));
-    let directory = FooterDirectory::new(search_pin, footer);
-    Ok(BundleSearchDirectory { directory })
+    Ok((searcher, caches.term_info.with_policy(term_policy)))
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::sync::Mutex;
     use std::time::Duration;
 
     use databend_storages_common_cache::CacheKind;
@@ -1054,6 +1138,7 @@ mod tests {
     use databend_storages_common_cache::legacy::LegacyCapacity;
     use databend_storages_common_cache::legacy::LegacyStore;
     use databend_storages_common_index::BundleOpenSlice;
+    use opendal::Operator;
     use opendal::raw::Access;
     use opendal::raw::Layer;
     use opendal::raw::LayeredAccess;
@@ -1129,9 +1214,78 @@ mod tests {
         }
     }
 
+    /// Holds each read until released, then fails it: a connection whose credentials were
+    /// revoked while it read.
+    #[derive(Clone, Debug, Default)]
+    struct RevokedLayer {
+        reading: Arc<tokio::sync::Notify>,
+        release: Arc<tokio::sync::Notify>,
+    }
+
+    impl<A: Access> Layer<A> for RevokedLayer {
+        type LayeredAccess = RevokedAccessor<A>;
+
+        fn layer(&self, inner: A) -> Self::LayeredAccess {
+            RevokedAccessor {
+                inner,
+                gate: self.clone(),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    struct RevokedAccessor<A: Access> {
+        inner: A,
+        gate: RevokedLayer,
+    }
+
+    impl<A: Access> LayeredAccess for RevokedAccessor<A> {
+        type Inner = A;
+        type Reader = A::Reader;
+        type Writer = A::Writer;
+        type Lister = A::Lister;
+        type Deleter = A::Deleter;
+
+        fn inner(&self) -> &Self::Inner {
+            &self.inner
+        }
+
+        async fn read(&self, _: &str, _: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+            self.gate.reading.notify_one();
+            self.gate.release.notified().await;
+            Err(opendal::Error::new(
+                opendal::ErrorKind::PermissionDenied,
+                "credentials revoked",
+            ))
+        }
+
+        async fn write(
+            &self,
+            path: &str,
+            args: OpWrite,
+        ) -> opendal::Result<(RpWrite, Self::Writer)> {
+            self.inner.write(path, args).await
+        }
+
+        async fn list(&self, path: &str, args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+            self.inner.list(path, args).await
+        }
+
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+            self.inner.delete().await
+        }
+    }
+
     /// A cache of its own, so tests do not share process-wide state.
     fn local_cache<T: CachedItem>(kind: CacheKind, capacity: LegacyCapacity) -> MemCache<T> {
         MemCache::new(Arc::new(LegacyStore::new([(kind, capacity)])), kind)
+    }
+
+    fn term_info_cache() -> MemCache<InvertedIndexTermInfo> {
+        local_cache(
+            CacheKind::of::<inverted::TermInfo>(),
+            LegacyCapacity::Bytes(1 << 20),
+        )
     }
 
     fn lookup_cache(capacity: usize) -> MemCache<InvertedIndexLookupBytes> {
@@ -1167,14 +1321,17 @@ mod tests {
         location: &str,
         data: Vec<u8>,
         full_capacity: usize,
-    ) -> Result<(RemoteBundleFileHandle, Arc<Mutex<Vec<Range<u64>>>>)> {
+    ) -> Result<(
+        RemoteBundleFileHandle,
+        DiskCachedStorage,
+        Arc<Mutex<Vec<Range<u64>>>>,
+    )> {
         let layer = RecordingLayer::default();
         let ranges = layer.ranges.clone();
         let operator = Operator::new(Memory::default())?.layer(layer).finish();
         operator.write(location, data.clone()).await?;
         Ok((
             RemoteBundleFileHandle {
-                storage: DiskCachedStorage::with_disk(operator, None),
                 location: Arc::from(location),
                 object: Arc::from(location),
                 file_range: 0..u64::try_from(data.len()).unwrap(),
@@ -1187,6 +1344,7 @@ mod tests {
                 path: PathBuf::from("segment.idx"),
                 component_name: "idx".to_owned(),
             },
+            DiskCachedStorage::with_disk(operator, None),
             ranges,
         ))
     }
@@ -1194,7 +1352,11 @@ mod tests {
     async fn payload_file_handle(
         location: &str,
         data: Vec<u8>,
-    ) -> Result<(RemoteBundleFileHandle, Arc<Mutex<Vec<Range<u64>>>>)> {
+    ) -> Result<(
+        RemoteBundleFileHandle,
+        DiskCachedStorage,
+        Arc<Mutex<Vec<Range<u64>>>>,
+    )> {
         let full_capacity = data.len() * 2;
         payload_file_handle_with_full_capacity(location, data, full_capacity).await
     }
@@ -1233,7 +1395,8 @@ mod tests {
             .map(|index| index as u8)
             .collect::<Vec<_>>();
         for kind in [PageCacheKind::Lookup, PageCacheKind::Payload] {
-            let (mut file, ranges) = payload_file_handle("merged-pages", data.clone()).await?;
+            let (mut file, storage, ranges) =
+                payload_file_handle("merged-pages", data.clone()).await?;
             file.cache_policy = RangeCachePolicy::Pages(kind);
             if kind == PageCacheKind::Lookup {
                 file.path = PathBuf::from("segment.term");
@@ -1242,7 +1405,7 @@ mod tests {
             }
             for _ in 0..2 {
                 assert_eq!(
-                    file.read_range(0..requested_len).await?.as_ref(),
+                    file.read_range(&storage, 0..requested_len).await?.as_ref(),
                     &data[..requested_len]
                 );
             }
@@ -1277,12 +1440,11 @@ mod tests {
             [1 << 20, 1 << 29, 1 << 20],
             false,
         )?);
-        let (mut file, ranges) = payload_file_handle("disk-pages", data.clone()).await?;
-        file.storage =
-            DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk.clone()));
+        let (file, storage, ranges) = payload_file_handle("disk-pages", data.clone()).await?;
+        let storage = DiskCachedStorage::with_disk(storage.operator().clone(), Some(disk.clone()));
 
         assert_eq!(
-            file.read_range(0..requested_len).await?.as_ref(),
+            file.read_range(&storage, 0..requested_len).await?.as_ref(),
             &data[..requested_len]
         );
         assert_eq!(*ranges.lock().unwrap(), vec![
@@ -1313,7 +1475,7 @@ mod tests {
         }
         ranges.lock().unwrap().clear();
         assert_eq!(
-            file.read_range(0..requested_len).await?.as_ref(),
+            file.read_range(&storage, 0..requested_len).await?.as_ref(),
             &data[..requested_len]
         );
         assert!(ranges.lock().unwrap().is_empty());
@@ -1328,7 +1490,7 @@ mod tests {
                 .evict(&file.page_key(PageCacheKind::Payload, page_no));
         }
         assert_eq!(
-            file.read_range(0..requested_len).await?.as_ref(),
+            file.read_range(&storage, 0..requested_len).await?.as_ref(),
             &data[..requested_len]
         );
         assert_eq!(*ranges.lock().unwrap(), vec![0..CACHE_PAGE_SIZE as u64]);
@@ -1340,11 +1502,12 @@ mod tests {
         let data = (0..6 * CACHE_PAGE_SIZE)
             .map(|index| index as u8)
             .collect::<Vec<_>>();
-        let (file, ranges) = payload_file_handle("rechecked-page-holes", data.clone()).await?;
+        let (file, storage, ranges) =
+            payload_file_handle("rechecked-page-holes", data.clone()).await?;
         let lock = page_fetch_lock(&file.location, file.file_id, PageCacheKind::Payload, 0);
         let guard = lock.lock().await;
         let range = 7..5 * CACHE_PAGE_SIZE - 11;
-        let read = file.read_range(range.clone());
+        let read = file.read_range(&storage, range.clone());
         tokio::pin!(read);
         // Force the initial cache scan to finish, then populate pages while the read waits.
         assert!(futures::poll!(read.as_mut()).is_pending());
@@ -1370,6 +1533,7 @@ mod tests {
     async fn expansion_bundle_fixture() -> Result<(
         RemoteBundleDirectory,
         InvertedIndexBundleFooter,
+        DiskCachedStorage,
         Arc<Mutex<Vec<Range<u64>>>>,
     )> {
         use databend_storages_common_index::collect_index_open_slices;
@@ -1432,7 +1596,6 @@ mod tests {
         operator.write(location, data).await?;
         Ok((
             RemoteBundleDirectory {
-                storage: DiskCachedStorage::with_disk(operator, None),
                 location: Arc::from(location),
                 file_ranges: footer.file_ranges.clone(),
                 external_files: footer.external_files.clone(),
@@ -1441,6 +1604,7 @@ mod tests {
                 full_payload_cache: full_payload_cache(16 * 1024 * 1024),
             },
             footer,
+            DiskCachedStorage::with_disk(operator, None),
             ranges,
         ))
     }
@@ -1448,21 +1612,22 @@ mod tests {
     async fn execute_expansion_bundle_query(
         remote: &RemoteBundleDirectory,
         footer: &InvertedIndexBundleFooter,
+        storage: &DiskCachedStorage,
         text: &str,
         fuzziness: Option<u8>,
         has_score: bool,
     ) -> Result<Vec<u32>> {
-        use tantivy::Index;
         use tantivy::collector::DocSetCollector;
         use tantivy::collector::TopDocs;
         use tantivy::query::QueryParser;
         use tantivy::query_grammar::parse_query;
 
         let directory = FooterDirectory::new(
-            SearchPinDirectory::new(Arc::new(remote.clone())),
+            SearchPinDirectory::shared(Arc::new(remote.clone()), InvertedIndexSearcher::retains),
             footer.clone(),
         );
-        let index = Index::open(directory.clone())?;
+        let searcher = InvertedIndexSearcher::open(directory)?;
+        let index = searcher.searcher().index();
         let schema = index.schema();
         let body = schema.get_field("body")?;
         let mut parser = QueryParser::new(schema.clone(), vec![body], index.tokenizers().clone());
@@ -1478,38 +1643,41 @@ mod tests {
             &[body],
             fuzziness,
         )?;
-        let reader = index.reader()?;
-        let searcher = reader.searcher();
-        warmup
-            .warm_searcher(&searcher, &directory, has_score)
-            .await?;
-        // Search is synchronous and must succeed using pinned data, without remote reads.
-        let mut rows = if has_score {
-            searcher
-                .search(
-                    query.as_ref(),
-                    &TopDocs::with_limit(searcher.num_docs() as usize).order_by_score(),
-                )?
-                .into_iter()
-                .map(|(score, address)| {
-                    assert!(score.is_finite());
-                    address.doc_id
-                })
-                .collect::<Vec<_>>()
-        } else {
-            searcher
-                .search(query.as_ref(), &DocSetCollector)?
-                .into_iter()
-                .map(|address| address.doc_id)
-                .collect::<Vec<_>>()
-        };
+        let term_infos = term_info_cache();
+        let mut rows = with_bundle_search_scope(storage.clone(), async {
+            warmup
+                .warm_searcher(&searcher, &term_infos, has_score)
+                .await?;
+            // Search is synchronous and must succeed using pinned data, without remote reads.
+            let searcher = searcher.searcher();
+            Ok::<_, ErrorCode>(if has_score {
+                searcher
+                    .search(
+                        query.as_ref(),
+                        &TopDocs::with_limit(searcher.num_docs() as usize).order_by_score(),
+                    )?
+                    .into_iter()
+                    .map(|(score, address)| {
+                        assert!(score.is_finite());
+                        address.doc_id
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                searcher
+                    .search(query.as_ref(), &DocSetCollector)?
+                    .into_iter()
+                    .map(|address| address.doc_id)
+                    .collect::<Vec<_>>()
+            })
+        })
+        .await?;
         rows.sort_unstable();
         Ok(rows)
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_real_expansion_warmups_cache_physical_components() -> Result<()> {
-        let (fixture, footer, ranges) = expansion_bundle_fixture().await?;
+        let (fixture, footer, storage, ranges) = expansion_bundle_fixture().await?;
         let idx = footer
             .file_ranges
             .files
@@ -1544,7 +1712,8 @@ mod tests {
             ranges.lock().unwrap().clear();
 
             let rows =
-                execute_expansion_bundle_query(&remote, &footer, text, fuzziness, true).await?;
+                execute_expansion_bundle_query(&remote, &footer, &storage, text, fuzziness, true)
+                    .await?;
             let expected = (0..4000u32)
                 .filter(|row| {
                     row % 2 == 0
@@ -1585,17 +1754,408 @@ mod tests {
             // Reopening gives a new SearchPinDirectory, so this verifies cross-query full-cache
             // reuse rather than reuse of the first search's pin. No further payload GET is allowed.
             assert_eq!(
-                execute_expansion_bundle_query(&remote, &footer, text, fuzziness, false).await?,
+                execute_expansion_bundle_query(&remote, &footer, &storage, text, fuzziness, false)
+                    .await?,
                 expected
             );
             assert_eq!(payload_reads(), first_reads, "{text}");
             assert_eq!(
-                execute_expansion_bundle_query(&remote, &footer, "body:alpha", None, false).await?,
+                execute_expansion_bundle_query(
+                    &remote,
+                    &footer,
+                    &storage,
+                    "body:alpha",
+                    None,
+                    false
+                )
+                .await?,
                 (0..4000u32).filter(|row| row % 2 == 0).collect::<Vec<_>>(),
             );
             assert_eq!(payload_reads(), first_reads, "partial query after {text}");
             assert_eq!(page_cache.stats().items, 0, "{text}");
         }
+        Ok(())
+    }
+
+    /// The term infos the first search of a searcher looks up serve its second search, which
+    /// reads no term dictionary from storage. Scores with the document frequencies of the warmup
+    /// equal those of Tantivy's own statistics.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_term_infos_serve_later_searches_of_the_searcher() -> Result<()> {
+        use tantivy::Term;
+        use tantivy::collector::TopDocs;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, footer, storage, ranges) = expansion_bundle_fixture().await?;
+        let term_file = footer
+            .file_ranges
+            .files
+            .iter()
+            .find(|(path, _)| component_name(path) == "term")
+            .unwrap()
+            .1
+            .clone();
+        let pin = SearchPinDirectory::shared(Arc::new(remote), InvertedIndexSearcher::retains);
+        let directory = FooterDirectory::new(pin, footer);
+        let searcher = InvertedIndexSearcher::open(directory)?;
+        let index = searcher.searcher().index();
+        let schema = index.schema();
+        let body = schema.get_field("body")?;
+        let title = schema.get_field("title")?;
+        let parser = QueryParser::new(schema.clone(), vec![body], index.tokenizers().clone());
+        let text = "body:alpha OR title:needle OR body:absent";
+        let query = parser.parse_query(text)?;
+        let ast = parse_query(text).unwrap();
+        let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+            query.as_ref(),
+            &ast,
+            &schema,
+            &[body],
+            None,
+        )?;
+        let term_infos = term_info_cache();
+        let collector = TopDocs::with_limit(100).order_by_score();
+        let search = || {
+            with_bundle_search_scope(storage.clone(), async {
+                let statistics = warmup.warm_searcher(&searcher, &term_infos, true).await?;
+                let warmed = searcher.searcher().search_with_statistics_provider(
+                    query.as_ref(),
+                    &collector,
+                    &statistics,
+                )?;
+                let own = searcher.searcher().search(query.as_ref(), &collector)?;
+                Ok::<_, ErrorCode>((warmed, own))
+            })
+        };
+        let term_reads = || {
+            ranges
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|range| range.start < term_file.end && range.end > term_file.start)
+                .count()
+        };
+        let cached = |field, text| {
+            let key = searcher.term_key(&Term::from_field_text(field, text));
+            term_infos
+                .lookup(&key)
+                .map(|cached| cached.info.as_ref().map(|info| info.doc_freq))
+        };
+
+        let (first, own) = search().await?;
+        assert_eq!(first.len(), 100);
+        assert_eq!(first, own);
+        let first_reads = term_reads();
+        assert!(first_reads > 0);
+        assert_eq!(cached(body, "alpha"), Some(Some(2000)));
+        assert_eq!(cached(title, "needle"), Some(Some(1334)));
+        assert_eq!(cached(body, "absent"), Some(None));
+
+        let (second, _) = search().await?;
+        assert_eq!(second, first);
+        assert_eq!(term_reads(), first_reads);
+        Ok(())
+    }
+
+    /// The term infos of a searcher do not serve a searcher opened again from the same bundle:
+    /// its shared pin does not keep the dictionary blocks that its synchronous search reads.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_reopened_searcher_looks_its_terms_up_again() -> Result<()> {
+        use tantivy::collector::Count;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, footer, storage, _) = expansion_bundle_fixture().await?;
+        let open = || {
+            let remote = Arc::new(remote.clone());
+            let pin = SearchPinDirectory::shared(remote, InvertedIndexSearcher::retains);
+            InvertedIndexSearcher::open(FooterDirectory::new(pin, footer.clone()))
+        };
+        let term_infos = term_info_cache();
+        for searcher in [open()?, open()?] {
+            let index = searcher.searcher().index();
+            let schema = index.schema();
+            let body = schema.get_field("body")?;
+            let query = QueryParser::for_index(index, vec![body]).parse_query("alpha")?;
+            let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+                query.as_ref(),
+                &parse_query("alpha").unwrap(),
+                &schema,
+                &[body],
+                None,
+            )?;
+            let count = with_bundle_search_scope(storage.clone(), async {
+                let statistics = warmup.warm_searcher(&searcher, &term_infos, true).await?;
+                let searcher = searcher.searcher();
+                Ok::<_, ErrorCode>(searcher.search_with_statistics_provider(
+                    query.as_ref(),
+                    &Count,
+                    &statistics,
+                )?)
+            })
+            .await?;
+            assert_eq!(count, 2000);
+        }
+        assert_eq!(term_infos.stats().items, 2);
+        Ok(())
+    }
+
+    /// Searches of a searcher the cache did not admit cache no term infos: the next search opens
+    /// the bundle again, under another key. Searches of a cached searcher do, and keep finding
+    /// the same rows.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_term_infos_are_cached_only_for_cached_searchers() -> Result<()> {
+        use tantivy::collector::Count;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, _, storage, _) = expansion_bundle_fixture().await?;
+        let location = remote.location.to_string();
+        let object_size = storage.operator().read(&location).await?.len() as u64;
+        for (capacity, cached) in [
+            (LegacyCapacity::Disabled, false),
+            (LegacyCapacity::Bytes(1 << 24), true),
+        ] {
+            let caches = InvertedIndexCache {
+                meta: cache_state(&location, object_size).meta_cache,
+                lookup: no_lookup_cache(),
+                payload: payload_cache(16 * 1024 * 1024),
+                full_payload: full_payload_cache(0),
+                searcher: local_cache(CacheKind::of::<inverted::Searcher>(), capacity),
+                term_info: term_info_cache(),
+            };
+            let mut counts = Vec::new();
+            for _ in 0..2 {
+                let (searcher, term_infos) = load_bundle_searcher_from(
+                    &caches,
+                    &storage,
+                    &location,
+                    object_size,
+                    CachePolicy::DEFAULT,
+                )
+                .await?;
+                assert_eq!(searcher.is_charged(), cached);
+                let index = searcher.searcher().index();
+                let schema = index.schema();
+                let body = schema.get_field("body")?;
+                let query = QueryParser::for_index(index, vec![body]).parse_query("alpha")?;
+                let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+                    query.as_ref(),
+                    &parse_query("alpha").unwrap(),
+                    &schema,
+                    &[body],
+                    None,
+                )?;
+                let count = with_bundle_search_scope(storage.clone(), async {
+                    let statistics = warmup.warm_searcher(&searcher, &term_infos, true).await?;
+                    Ok::<_, ErrorCode>(searcher.searcher().search_with_statistics_provider(
+                        query.as_ref(),
+                        &Count,
+                        &statistics,
+                    )?)
+                })
+                .await?;
+                counts.push(count);
+            }
+            assert_eq!(counts, [2000, 2000], "cached searcher: {cached}");
+            let expected = usize::from(cached);
+            assert_eq!(caches.term_info.stats().items, expected, "cached: {cached}");
+        }
+        Ok(())
+    }
+
+    /// Term infos are cached as the policy of the search allows: `READ_ONLY` reads them without
+    /// putting any, `BYPASS` neither reads nor puts them.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_term_infos_follow_the_cache_policy() -> Result<()> {
+        use tantivy::Term;
+        use tantivy::query::Bm25StatisticsProvider;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, footer, storage, _) = expansion_bundle_fixture().await?;
+        let pin = SearchPinDirectory::shared(Arc::new(remote), InvertedIndexSearcher::retains);
+        let searcher = InvertedIndexSearcher::open(FooterDirectory::new(pin, footer))?;
+        let index = searcher.searcher().index();
+        let schema = index.schema();
+        let body = schema.get_field("body")?;
+        let query = QueryParser::for_index(index, vec![body]).parse_query("alpha")?;
+        let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+            query.as_ref(),
+            &parse_query("alpha").unwrap(),
+            &schema,
+            &[body],
+            None,
+        )?;
+        let alpha = Term::from_field_text(body, "alpha");
+        let term_infos = term_info_cache();
+        let doc_freq = |policy| {
+            let term_infos = term_infos.with_policy(policy);
+            let (warmup, searcher, alpha) = (&warmup, &searcher, &alpha);
+            with_bundle_search_scope(storage.clone(), async move {
+                let statistics = warmup.warm_searcher(searcher, &term_infos, true).await?;
+                Ok::<_, ErrorCode>(statistics.doc_freq(alpha)?)
+            })
+        };
+
+        assert_eq!(doc_freq(CachePolicy::READ_ONLY).await?, 2000);
+        assert_eq!(term_infos.stats().items, 0);
+        // A wrong info, as if cached: the policies that read it score with it.
+        let key = searcher.term_key(&alpha);
+        let key_len = key.len();
+        term_infos.put(&key, InvertedIndexTermInfo {
+            info: None,
+            key_len,
+        });
+        assert_eq!(doc_freq(CachePolicy::DEFAULT).await?, 0);
+        assert_eq!(doc_freq(CachePolicy::READ_ONLY).await?, 0);
+        assert_eq!(doc_freq(CachePolicy::BYPASS).await?, 2000);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_cached_searcher_reads_misses_with_the_current_operator() -> Result<()> {
+        use tantivy::collector::Count;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let (remote, _, old, old_reads) = expansion_bundle_fixture().await?;
+        let location = remote.location.to_string();
+        let bundle = old.operator().read(&location).await?;
+        let key = (location.clone(), bundle.len() as u64, CachePolicy::DEFAULT);
+        let layer = RecordingLayer::default();
+        let current_reads = layer.ranges.clone();
+        let operator = Operator::new(Memory::default())?.layer(layer).finish();
+        operator.write(&location, bundle).await?;
+        let current = DiskCachedStorage::with_disk(operator, None);
+        let caches = InvertedIndexCache {
+            meta: cache_state(&location, key.1).meta_cache,
+            lookup: no_lookup_cache(),
+            payload: local_cache(
+                CacheKind::of::<inverted::Payload>(),
+                LegacyCapacity::Disabled,
+            ),
+            full_payload: full_payload_cache(0),
+            searcher: local_cache(
+                CacheKind::of::<inverted::Searcher>(),
+                LegacyCapacity::Bytes(1 << 24),
+            ),
+            term_info: term_info_cache(),
+        };
+        let first = caches
+            .searcher
+            .get(
+                &BundleSearcherReader {
+                    storage: &old,
+                    caches: &caches,
+                },
+                key.clone(),
+            )
+            .await?;
+        // The old connection can no longer read the bundle. Keep the location and size.
+        old.operator().delete(&location).await?;
+        old_reads.lock().unwrap().clear();
+        let hit = caches
+            .searcher
+            .get(
+                &BundleSearcherReader {
+                    storage: &current,
+                    caches: &caches,
+                },
+                key,
+            )
+            .await?;
+        assert!(std::ptr::eq(&*first, &*hit));
+        assert!(
+            current_reads.lock().unwrap().is_empty(),
+            "searcher should hit the cache"
+        );
+
+        let index = hit.searcher().index();
+        let schema = index.schema();
+        let fields = [schema.get_field("body")?];
+        let query = QueryParser::for_index(index, fields.to_vec()).parse_query("alpha")?;
+        let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+            query.as_ref(),
+            &parse_query("alpha").unwrap(),
+            &schema,
+            &fields,
+            None,
+        )?;
+        let count = with_bundle_search_scope(current, async {
+            warmup.warm_searcher(&hit, &caches.term_info, false).await?;
+            Ok::<_, ErrorCode>(hit.searcher().search(query.as_ref(), &Count)?)
+        })
+        .await?;
+        assert_eq!(count, 2000);
+        assert!(old_reads.lock().unwrap().is_empty());
+        assert!(!current_reads.lock().unwrap().is_empty());
+        Ok(())
+    }
+
+    /// A query opening a bundle with a revoked connection fails alone: another one opening it
+    /// meanwhile, with the current connection, opens it with its own.
+    #[tokio::test]
+    async fn test_failed_searcher_load_fails_no_other_query() -> Result<()> {
+        use databend_storages_common_cache::CacheManager;
+
+        let (remote, _, storage, _) = expansion_bundle_fixture().await?;
+        let bundle = storage.operator().read(remote.location.as_ref()).await?;
+        let location = "revoked-connection-bundle";
+        let revoked = RevokedLayer::default();
+        let old = Operator::new(Memory::default())?
+            .layer(revoked.clone())
+            .finish();
+        old.write(location, bundle.clone()).await?;
+        let old = DiskCachedStorage::with_disk(old, None);
+        let current = Operator::new(Memory::default())?.finish();
+        current.write(location, bundle.clone()).await?;
+        let current = DiskCachedStorage::with_disk(current, None);
+
+        // A handle made as for the process, which shares loads if the kind does.
+        let kind = CacheKind::of::<inverted::Searcher>();
+        let store = LegacyStore::new([(kind, LegacyCapacity::Bytes(1 << 24))]);
+        let manager = CacheManager::new(Arc::new(store), None);
+        let key = (
+            location.to_string(),
+            bundle.len() as u64,
+            CachePolicy::DEFAULT,
+        );
+        let caches = InvertedIndexCache {
+            meta: cache_state(location, key.1).meta_cache,
+            lookup: no_lookup_cache(),
+            payload: payload_cache(16 * 1024 * 1024),
+            full_payload: full_payload_cache(0),
+            searcher: manager.cache::<inverted::Searcher>(),
+            term_info: term_info_cache(),
+        };
+        let first = databend_common_base::runtime::spawn({
+            let (caches, key) = (caches.clone(), key.clone());
+            async move {
+                let reader = BundleSearcherReader {
+                    storage: &old,
+                    caches: &caches,
+                };
+                caches.searcher.get(&reader, key).await.map(drop)
+            }
+        });
+        revoked.reading.notified().await;
+
+        // Fail the first load once the second one has started.
+        let release = async {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            revoked.release.notify_one();
+        };
+        let reader = BundleSearcherReader {
+            storage: &current,
+            caches: &caches,
+        };
+        let (_, second) = tokio::join!(release, caches.searcher.get(&reader, key.clone()));
+        assert!(first.await.unwrap().is_err());
+        let second = second?;
+        let hit = caches.searcher.get(&reader, key).await?;
+        assert!(std::ptr::eq(&*second, &*hit));
         Ok(())
     }
 
@@ -1610,14 +2170,17 @@ mod tests {
             } else {
                 data.len() * 2
             };
-            let (file, ranges) = payload_file_handle_with_full_capacity(
+            let (file, storage, ranges) = payload_file_handle_with_full_capacity(
                 "full-cache-fallback",
                 data.clone(),
                 capacity,
             )
             .await?;
-            file.read_range(0..CACHE_PAGE_SIZE).await?;
-            assert_eq!(file.read_range(0..data.len()).await?.as_ref(), data);
+            file.read_range(&storage, 0..CACHE_PAGE_SIZE).await?;
+            assert_eq!(
+                file.read_range(&storage, 0..data.len()).await?.as_ref(),
+                data
+            );
             if !oversized {
                 assert!(file.cached_full_payload().is_some());
                 file.full_payload_cache.evict(&file.full_payload_key());
@@ -1626,12 +2189,14 @@ mod tests {
             assert!(file.cached_page(PageCacheKind::Payload, 0)?.is_some());
             assert!(file.cached_page(PageCacheKind::Payload, 1)?.is_none());
             assert_eq!(
-                file.read_range(0..CACHE_PAGE_SIZE).await?.as_ref(),
+                file.read_range(&storage, 0..CACHE_PAGE_SIZE)
+                    .await?
+                    .as_ref(),
                 &data[..CACHE_PAGE_SIZE]
             );
             let partial = CACHE_PAGE_SIZE + 7..CACHE_PAGE_SIZE + 31;
             assert_eq!(
-                file.read_range(partial.clone()).await?.as_ref(),
+                file.read_range(&storage, partial.clone()).await?.as_ref(),
                 &data[partial]
             );
             assert_eq!(*ranges.lock().unwrap(), vec![
@@ -1656,15 +2221,19 @@ mod tests {
             [1 << 20, 1 << 20, 1 << 20],
             false,
         )?);
-        let (mut file, ranges) = payload_file_handle("lookup-oversized", data.clone()).await?;
-        file.storage = DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk));
+        let (mut file, storage, ranges) =
+            payload_file_handle("lookup-oversized", data.clone()).await?;
+        let storage = DiskCachedStorage::with_disk(storage.operator().clone(), Some(disk));
         file.path = PathBuf::from("segment.term");
         file.component_name = "term".to_owned();
         file.cache_policy = RangeCachePolicy::LookupWhole;
         file.lookup_cache = no_lookup_cache();
 
         let range = 7..31;
-        assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
+        assert_eq!(
+            file.read_range(&storage, range.clone()).await?.as_ref(),
+            &data[range]
+        );
         assert_eq!(*ranges.lock().unwrap(), vec![7..31]);
         Ok(())
     }
@@ -1684,9 +2253,9 @@ mod tests {
             [1 << 20, 128 << 10, 1 << 20],
             false,
         )?);
-        let (mut file, ranges) =
+        let (mut file, storage, ranges) =
             payload_file_handle("lookup-pages-oversized", data.clone()).await?;
-        file.storage = DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk));
+        let storage = DiskCachedStorage::with_disk(storage.operator().clone(), Some(disk));
         file.path = PathBuf::from("segment.term");
         file.component_name = "term".to_owned();
         file.cache_policy = RangeCachePolicy::Pages(PageCacheKind::Lookup);
@@ -1694,7 +2263,7 @@ mod tests {
 
         let range = 7..39;
         for _ in 0..2 {
-            let read = file.read_range(range.clone()).await?;
+            let read = file.read_range(&storage, range.clone()).await?;
             assert_eq!(read.as_ref(), &data[range.clone()]);
         }
         assert_eq!(*ranges.lock().unwrap(), vec![7..39, 7..39]);
@@ -1702,7 +2271,7 @@ mod tests {
         let last = 4 * CACHE_PAGE_SIZE;
         let range = last + 7..last + 39;
         ranges.lock().unwrap().clear();
-        let read = file.read_range(range.clone()).await?;
+        let read = file.read_range(&storage, range.clone()).await?;
         assert_eq!(read.as_ref(), &data[range]);
         let last = last as u64;
         assert_eq!(*ranges.lock().unwrap(), vec![last..last + 1024]);
@@ -1722,16 +2291,15 @@ mod tests {
             [1 << 20, 4 << 20, 1 << 20],
             false,
         )?);
-        let (mut file, ranges) = payload_file_handle("lookup-kept", data.clone()).await?;
-        file.storage =
-            DiskCachedStorage::with_disk(file.storage.operator().clone(), Some(disk.clone()));
+        let (mut file, storage, ranges) = payload_file_handle("lookup-kept", data.clone()).await?;
+        let storage = DiskCachedStorage::with_disk(storage.operator().clone(), Some(disk.clone()));
         file.path = PathBuf::from("segment.term");
         file.component_name = "term".to_owned();
         file.cache_policy = RangeCachePolicy::LookupWhole;
         file.lookup_cache = no_lookup_cache();
 
         let range = 7..31;
-        let read = file.read_range(range.clone()).await?;
+        let read = file.read_range(&storage, range.clone()).await?;
         assert_eq!(read.as_ref(), &data[range.clone()]);
         let whole = 0..data.len() as u64;
         assert_eq!(*ranges.lock().unwrap(), vec![whole.clone()]);
@@ -1745,7 +2313,10 @@ mod tests {
         disk.set_pool_cap(databend_storages_common_cache::Pool::Index, 1 << 20)?;
         assert!(disk.contains(CacheKind::of::<inverted::Lookup>(), &key));
         ranges.lock().unwrap().clear();
-        assert_eq!(file.read_range(range.clone()).await?.as_ref(), &data[range]);
+        assert_eq!(
+            file.read_range(&storage, range.clone()).await?.as_ref(),
+            &data[range]
+        );
         assert!(ranges.lock().unwrap().is_empty());
         Ok(())
     }
@@ -1755,7 +2326,8 @@ mod tests {
         let data = (0..CACHE_PAGE_SIZE + 23)
             .map(|index| index as u8)
             .collect::<Vec<_>>();
-        let (mut file, ranges) = payload_file_handle("lookup-singleflight", data.clone()).await?;
+        let (mut file, storage, ranges) =
+            payload_file_handle("lookup-singleflight", data.clone()).await?;
         file.path = PathBuf::from("segment.term");
         file.component_name = "term".to_owned();
         file.cache_policy = RangeCachePolicy::LookupWhole;
@@ -1769,8 +2341,8 @@ mod tests {
         let first_range = 7..31;
         let second_range = CACHE_PAGE_SIZE + 5..CACHE_PAGE_SIZE + 12;
         let (first, second) = tokio::try_join!(
-            file.read_range(first_range.clone()),
-            file.read_range(second_range.clone()),
+            file.read_range(&storage, first_range.clone()),
+            file.read_range(&storage, second_range.clone()),
         )?;
         assert_eq!(first.as_ref(), &data[first_range]);
         assert_eq!(second.as_ref(), &data[second_range]);
@@ -1785,14 +2357,15 @@ mod tests {
         let data = (0..page_count * CACHE_PAGE_SIZE)
             .map(|index| index as u8)
             .collect::<Vec<_>>();
-        let (file, ranges) = payload_file_handle("overlapping-pages", data.clone()).await?;
+        let (file, storage, ranges) =
+            payload_file_handle("overlapping-pages", data.clone()).await?;
         let left_end = MAX_MERGED_PAGES * CACHE_PAGE_SIZE;
         let right_start = 8 * CACHE_PAGE_SIZE;
         let right_end = page_count * CACHE_PAGE_SIZE;
 
         let (left, right) = tokio::try_join!(
-            file.read_range(0..left_end),
-            file.read_range(right_start..right_end),
+            file.read_range(&storage, 0..left_end),
+            file.read_range(&storage, right_start..right_end),
         )?;
 
         assert_eq!(left.as_ref(), &data[..left_end]);
@@ -1976,8 +2549,8 @@ mod tests {
         operator.write("index", object.clone()).await?;
         operator.write("index.idx", postings.clone()).await?;
         let footer = InvertedIndexBundleFooter::open(&object)?;
+        let storage = DiskCachedStorage::with_disk(operator, None);
         let remote = RemoteBundleDirectory {
-            storage: DiskCachedStorage::with_disk(operator, None),
             location: Arc::from("index"),
             file_ranges: footer.file_ranges.clone(),
             external_files: footer.external_files.clone(),
@@ -1992,7 +2565,9 @@ mod tests {
         assert_eq!(idx.len(), postings.len());
         let middle = CACHE_PAGE_SIZE + 10..2 * CACHE_PAGE_SIZE - 10;
         assert_eq!(
-            idx.read_bytes_async(middle.clone()).await?.as_ref(),
+            with_bundle_search_scope(storage.clone(), idx.read_bytes_async(middle.clone()))
+                .await?
+                .as_ref(),
             &postings[middle]
         );
         // The range is read from `index.idx` at its own offsets, not from the bundle object.
@@ -2000,7 +2575,8 @@ mod tests {
             CACHE_PAGE_SIZE as u64..(2 * CACHE_PAGE_SIZE) as u64
         ]);
         let term = remote.get_file_handle(Path::new("segment.term"))?;
-        assert_eq!(term.read_bytes_async(0..5).await?.as_ref(), b"terms");
+        let bytes = with_bundle_search_scope(storage, term.read_bytes_async(0..5)).await?;
+        assert_eq!(bytes.as_ref(), b"terms");
         Ok(())
     }
 }

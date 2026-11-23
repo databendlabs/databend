@@ -751,7 +751,8 @@ pub(super) fn merge_flushed_states(
     if let Some(states_layout) = row_layout.states_layout.as_ref() {
         for (aggr, loc) in aggrs.iter().zip(states_layout.states_loc.iter().cloned()) {
             let return_type = aggr.signature().return_type.clone();
-            let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
+            // The capacity is in rows: one result per row.
+            let mut builder = ColumnBuilder::with_capacity(&return_type, row_count);
             for place in &flush_state.state_places.as_slice()[0..row_count] {
                 aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
             }

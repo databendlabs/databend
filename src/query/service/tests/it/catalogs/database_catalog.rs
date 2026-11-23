@@ -208,3 +208,56 @@ async fn test_catalogs_table() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// A table read from a mutable database comes with the id `get_database` returns for it; one of
+/// an immutable (system) database does not.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_catalogs_get_table_with_db_id() -> anyhow::Result<()> {
+    let tenant = Tenant::new_literal("test");
+    let catalog = create_catalog().await?;
+
+    let req = CreateTableReq {
+        create_option: CreateOption::Create,
+        catalog_name: None,
+        name_ident: TableNameIdent {
+            tenant: tenant.clone(),
+            db_name: "default".to_string(),
+            table_name: "t_with_db_id".to_string(),
+        },
+        table_meta: TableMeta {
+            schema: Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )])),
+            engine: "MEMORY".to_string(),
+            created_on: Utc::now(),
+            ..TableMeta::default()
+        },
+        source_table_option: None,
+        as_dropped: false,
+        clone: None,
+        materialized_view: None,
+        table_properties: None,
+        table_partition: None,
+    };
+    catalog.create_table(req).await?;
+
+    let (table, db_id) = catalog
+        .get_table_with_db_id(&tenant, "default", "t_with_db_id")
+        .await?;
+    let db = catalog.get_database(&tenant, "default").await?;
+    assert_eq!(table.name(), "t_with_db_id");
+    assert_eq!(db_id, Some(db.get_db_info().database_id.db_id));
+
+    let (table, db_id) = catalog
+        .get_table_with_db_id(&tenant, "system", "databases")
+        .await?;
+    assert_eq!(table.name(), "databases");
+    assert_eq!(db_id, None);
+
+    let missing = catalog
+        .get_table_with_db_id(&tenant, "default", "no_such_table")
+        .await;
+    assert!(missing.is_err());
+    Ok(())
+}

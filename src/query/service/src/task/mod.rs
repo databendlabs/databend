@@ -15,5 +15,6 @@
 mod meta;
 pub mod service;
 mod session;
+mod subscription;
 
 pub use service::TaskService;

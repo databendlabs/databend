@@ -847,10 +847,8 @@ impl PrivilegeAccess {
             return Ok(None);
         }
 
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let (db_id, table_id) = self
-            .resolve_table_ids(&tenant, &catalog, db_name, table_name, false)
+            .bound_select_table_ids(catalog_name, db_name, table_name)
             .in_span(Span::enter_with_local_parent("Access.ResolveIdentity"))
             .await
             .map_err(|err| err.add_message("error on validating table access"))?;
@@ -863,6 +861,29 @@ impl PrivilegeAccess {
             return Ok(None);
         }
         Ok(Some((db_id, table_id)))
+    }
+
+    /// A SELECT reads its bound table. Do not populate the name lookup cache with its
+    /// database ID: DDL targets resolve the current database by name.
+    async fn bound_select_table_ids(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<(u64, u64)> {
+        let table = self
+            .ctx
+            .get_table(catalog_name, db_name, table_name)
+            .await?;
+        let db_id = match self.ctx.get_resolved_database_id(catalog_name, db_name) {
+            Some(id) => id,
+            None => {
+                let catalog = self.ctx.get_catalog(catalog_name).await?;
+                self.get_database_id(&self.ctx.get_tenant(), &catalog, db_name)
+                    .await?
+            }
+        };
+        Ok((db_id, table.get_id()))
     }
 
     /// Fetches, in batches, the table and database ownerships that

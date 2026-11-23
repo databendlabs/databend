@@ -28,13 +28,17 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnEntry;
+use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::ScalarExpr;
+use databend_common_sql::plans::Scan;
 
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
@@ -137,8 +141,11 @@ pub async fn build_runtime_filter(
         let build_key = &build_keys[index];
         let target_type = build_key.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
         let mut probe_targets = Vec::new();
-        for (probe_key, scan_id) in targets {
-            let Some(probe_key) = resolve_runtime_filter_probe_expr(metadata, probe_key)? else {
+        // The scan-side key of each kept target, in the order of `probe_targets`.
+        let mut probe_target_keys = Vec::new();
+        for (scan_probe_key, scan_id) in targets {
+            let Some(probe_key) = resolve_runtime_filter_probe_expr(metadata, scan_probe_key)?
+            else {
                 continue;
             };
             let Some(probe_key) =
@@ -146,16 +153,29 @@ pub async fn build_runtime_filter(
             else {
                 continue;
             };
-            if supported_probe_key_for_runtime_filter(&probe_key, &func_ctx) {
-                push_unique_target(&mut probe_targets, probe_key, *scan_id);
+            if supported_probe_key_for_runtime_filter(&probe_key, &func_ctx)
+                && push_unique_target(&mut probe_targets, probe_key, *scan_id)
+            {
+                probe_target_keys.push((scan_probe_key, *scan_id));
             }
         }
         if probe_targets.is_empty() {
             continue;
         }
 
-        let build_table_rows =
-            get_build_table_rows(ctx.clone(), metadata, &runtime_filter.build_key).await?;
+        let build_table_index = resolve_runtime_filter_build_table_index(
+            metadata,
+            build_side,
+            &runtime_filter.build_key,
+        );
+        let build_table_rows = get_table_rows(ctx.clone(), metadata, build_table_index).await?;
+        let probe_table_index = resolve_probe_table_index(
+            metadata,
+            s_expr.probe_side_child(),
+            &runtime_filter.probe_key,
+            &probe_target_keys,
+        );
+        let probe_table_rows = get_table_rows(ctx.clone(), metadata, probe_table_index).await?;
         let data_type = target_type.remove_nullable();
         let id = metadata.write().next_runtime_filter_id();
         filters.push(PhysicalRuntimeFilter {
@@ -163,6 +183,7 @@ pub async fn build_runtime_filter(
             build_key: build_key.clone(),
             probe_targets,
             build_table_rows,
+            probe_table_rows,
             enable_bloom_runtime_filter: is_type_supported_for_bloom_filter(&data_type),
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: is_type_supported_for_min_max_filter(&data_type),
@@ -191,24 +212,202 @@ fn collect_scan_runtime_filters(
     }
 }
 
-async fn get_build_table_rows(
+/// Resolve statistics for the bloom selectivity estimate, not permission to push
+/// a probe predicate through an operator. Keep the existing single-base-column
+/// expression behavior; derived keys must be direct MIN/MAX results.
+fn resolve_runtime_filter_build_table_index(
+    metadata: &MetadataRef,
+    build_side: &PExpr,
+    build_key: &ScalarExpr,
+) -> Option<IndexType> {
+    let columns = build_key.used_columns();
+    if columns.len() != 1 {
+        return None;
+    }
+    let column = *columns.iter().next()?;
+    if let ColumnEntry::BaseTableColumn(base) = metadata.read().column(column) {
+        return Some(base.table_index);
+    }
+    let ScalarExpr::BoundColumnRef(_) = build_key else {
+        return None;
+    };
+    min_max_output_table_index(metadata, build_side, column)
+}
+
+#[recursive::recursive]
+fn min_max_output_table_index(
+    metadata: &MetadataRef,
+    expr: &PExpr,
+    column: Symbol,
+) -> Option<IndexType> {
+    match expr.plan() {
+        PhysicalRelOperator::Aggregate(physical) => {
+            // A Partial output is an aggregate state, not a MIN/MAX value. Main
+            // clones the same logical arguments into Final and Partial; Final
+            // arguments still name pre-Partial columns, not state columns.
+            if physical.mode != AggregateMode::Final || physical.aggregate.grouping_sets.is_some() {
+                return None;
+            }
+            let item = physical
+                .aggregate
+                .aggregate_functions
+                .iter()
+                .find(|item| item.index == column)?;
+            let ScalarExpr::AggregateFunction(function) = &item.scalar else {
+                return None;
+            };
+            if !matches!(function.func_name.as_str(), "min" | "max")
+                || function.distinct
+                || !function.params.is_empty()
+                || !function.sort_descs.is_empty()
+                || function.args.len() != 1
+            {
+                return None;
+            }
+            let ScalarExpr::BoundColumnRef(source) = &function.args[0] else {
+                return None;
+            };
+            // MIN/MAX may add nullability (empty/all-NULL groups), but do not
+            // change the underlying value type. Do not mistake state types for
+            // value types or require nullable and non-nullable types to match.
+            if function.return_type.remove_nullable() != source.column.data_type.remove_nullable() {
+                return None;
+            }
+            let input = expr.unary_child();
+            let partial = match input.plan() {
+                PhysicalRelOperator::Exchange(_) => input.unary_child(),
+                _ => input,
+            };
+            let PhysicalRelOperator::Aggregate(partial_agg) = partial.plan() else {
+                return None;
+            };
+            if partial_agg.mode != AggregateMode::Partial
+                || partial_agg.aggregate.grouping_sets.is_some()
+                || !partial_agg
+                    .aggregate
+                    .aggregate_functions
+                    .iter()
+                    .any(|partial_item| partial_item == item)
+            {
+                return None;
+            }
+            direct_scan_table_index(metadata, partial.unary_child(), source.column.index)
+        }
+        PhysicalRelOperator::EvalScalar(eval) => {
+            let column = match eval.items.iter().find(|item| item.index == column) {
+                Some(item) => match &item.scalar {
+                    ScalarExpr::BoundColumnRef(source) => source.column.index,
+                    _ => return None,
+                },
+                None => column,
+            };
+            min_max_output_table_index(metadata, expr.unary_child(), column)
+        }
+        PhysicalRelOperator::Filter(_)
+        | PhysicalRelOperator::Sort(_)
+        | PhysicalRelOperator::Limit(_)
+        | PhysicalRelOperator::Exchange(_) => {
+            min_max_output_table_index(metadata, expr.unary_child(), column)
+        }
+        _ => None,
+    }
+}
+
+/// Require one actual scan and an unchanged column path to it. Metadata alone
+/// is insufficient: a derived/CTE output is not a base column, and even a base
+/// symbol must belong to this scan's table and output columns. Joins (including
+/// self joins), shared CTEs, nested aggregates and unknown operators are barriers.
+#[recursive::recursive]
+fn direct_scan_table_index(
+    metadata: &MetadataRef,
+    expr: &PExpr,
+    column: Symbol,
+) -> Option<IndexType> {
+    match expr.plan() {
+        PhysicalRelOperator::Scan(scan) => match metadata.read().column(column) {
+            ColumnEntry::BaseTableColumn(base)
+                if base.table_index == scan.table_index && scan.columns.contains(&column) =>
+            {
+                Some(scan.table_index)
+            }
+            _ => None,
+        },
+        PhysicalRelOperator::EvalScalar(eval) => {
+            let column = match eval.items.iter().find(|item| item.index == column) {
+                Some(item) => match &item.scalar {
+                    ScalarExpr::BoundColumnRef(source) => source.column.index,
+                    _ => return None,
+                },
+                None => column,
+            };
+            direct_scan_table_index(metadata, expr.unary_child(), column)
+        }
+        PhysicalRelOperator::Filter(_)
+        | PhysicalRelOperator::Sort(_)
+        | PhysicalRelOperator::Limit(_)
+        | PhysicalRelOperator::Exchange(_) => {
+            direct_scan_table_index(metadata, expr.unary_child(), column)
+        }
+        _ => None,
+    }
+}
+
+// Only a filter with one scan target, on the probe key's own base column, may
+// supply the probe denominator. Do not reuse the probe key's table statistics
+// for a target pushed to another column or scan, and do not impose any new
+// restriction on the existing build-statistics path.
+fn resolve_probe_table_index(
+    metadata: &MetadataRef,
+    probe_side: &PExpr,
+    probe_key: &ScalarExpr,
+    targets: &[(&ScalarExpr, usize)],
+) -> Option<IndexType> {
+    let [(target_key, target_scan_id)] = targets else {
+        return None;
+    };
+    let columns = probe_key.used_columns();
+    if columns.len() != 1 || target_key.used_columns() != columns {
+        return None;
+    }
+    let column = *columns.iter().next()?;
+    let metadata = metadata.read();
+    if metadata.base_column_scan_id(column) != Some(*target_scan_id) {
+        return None;
+    }
+    let ColumnEntry::BaseTableColumn(base) = metadata.column(column) else {
+        return None;
+    };
+    let scan = find_scan(probe_side, *target_scan_id)?;
+    (scan.table_index == base.table_index && scan.columns.contains(&column))
+        .then_some(scan.table_index)
+}
+
+#[recursive::recursive]
+fn find_scan(expr: &PExpr, scan_id: usize) -> Option<&Scan> {
+    if let PhysicalRelOperator::Scan(scan) = expr.plan() {
+        if scan.scan_id == scan_id {
+            return Some(scan);
+        }
+    }
+    expr.children().find_map(|child| find_scan(child, scan_id))
+}
+
+async fn get_table_rows(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
-    build_key: &ScalarExpr,
+    table_index: Option<IndexType>,
 ) -> Result<Option<u64>> {
-    let used_columns = build_key.used_columns();
-    if used_columns.len() != 1 {
+    let Some(table_index) = table_index else {
+        return Ok(None);
+    };
+    let table = metadata.read().table(table_index).table().clone();
+
+    // A change scan needs its ChangeType to define the row set. This
+    // denominator is optional: do not request whole-table statistics for
+    // CHANGES/stream sources or turn their absence into a planning error.
+    if table.has_changes_source() {
         return Ok(None);
     }
-    let column_idx = *used_columns.iter().next().unwrap();
-    let table = {
-        let metadata = metadata.read();
-        let ColumnEntry::BaseTableColumn(column) = metadata.column(column_idx) else {
-            return Ok(None);
-        };
-        metadata.table(column.table_index).table().clone()
-    };
-
     let table_stats = table.table_statistics(ctx, false, None).await?;
     Ok(table_stats.and_then(|s| s.num_rows))
 }
@@ -275,17 +474,20 @@ fn normalize_probe_target(
     Ok(Some(expr.as_remote_expr()))
 }
 
+/// Push a target unless it is already present. Returns whether it was pushed.
 fn push_unique_target(
     targets: &mut Vec<(RemoteExpr<String>, usize)>,
     expr: RemoteExpr<String>,
     scan_id: usize,
-) {
-    if !targets
+) -> bool {
+    if targets
         .iter()
         .any(|(target, target_scan_id)| target == &expr && *target_scan_id == scan_id)
     {
-        targets.push((expr, scan_id));
+        return false;
     }
+    targets.push((expr, scan_id));
+    true
 }
 
 #[cfg(test)]
@@ -470,5 +672,82 @@ mod tests {
             return_type: DataType::Number(NumberDataType::Int64),
         });
         assert!(!supported(lambda));
+    }
+
+    #[test]
+    fn test_probe_statistics_only_for_the_confirmed_target_scan() {
+        use databend_common_expression::TableDataType;
+        use databend_common_sql::ColumnBindingBuilder;
+        use databend_common_sql::Metadata;
+        use databend_common_sql::Symbol;
+        use databend_common_sql::Visibility;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::BoundColumnRef;
+        use databend_common_sql::plans::Join;
+        use databend_common_sql::plans::ScalarExpr;
+        use databend_common_sql::plans::Scan;
+        use parking_lot::RwLock;
+
+        let mut metadata = Metadata::default();
+        let source = metadata.add_base_table_column(
+            "a".into(),
+            TableDataType::Number(NumberDataType::Int32),
+            3,
+            None,
+            0,
+            None,
+            None,
+        );
+        let other = metadata.add_base_table_column(
+            "b".into(),
+            TableDataType::Number(NumberDataType::Int32),
+            3,
+            None,
+            1,
+            None,
+            None,
+        );
+        metadata
+            .add_base_column_scan_id(std::collections::HashMap::from([(source, 7), (other, 7)]));
+        let derived = metadata.add_derived_column("d".into(), DataType::Boolean);
+        let metadata = std::sync::Arc::new(RwLock::new(metadata));
+        let column_ref = |index: Symbol| {
+            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    index.to_string(),
+                    index,
+                    Box::new(DataType::Number(NumberDataType::Int32)),
+                    Visibility::Visible,
+                )
+                .build(),
+            })
+        };
+        let scan = |scan_id, table_index| {
+            PExpr::create_leaf(Scan {
+                scan_id,
+                table_index,
+                columns: [source, other].into_iter().collect(),
+                ..Default::default()
+            })
+        };
+        let key = column_ref(source);
+        let resolve = |plan: &PExpr, targets: &[(&ScalarExpr, usize)]| {
+            super::resolve_probe_table_index(&metadata, plan, &key, targets)
+        };
+        assert_eq!(resolve(&scan(7, 3), &[(&key, 7)]), Some(3));
+        assert_eq!(resolve(&scan(8, 3), &[(&key, 7)]), None);
+        assert_eq!(resolve(&scan(7, 4), &[(&key, 7)]), None);
+        assert_eq!(resolve(&scan(7, 3), &[(&key, 8)]), None);
+        assert_eq!(resolve(&scan(7, 3), &[(&key, 7), (&key, 8)]), None);
+        // A target pushed to another column does not use the key's statistics.
+        assert_eq!(resolve(&scan(7, 3), &[(&column_ref(other), 7)]), None);
+        let joined = PExpr::create_binary(Join::default(), scan(7, 3), scan(8, 4));
+        assert_eq!(resolve(&joined, &[(&key, 7)]), Some(3)); // No whole-side single-scan guard.
+        let derived = column_ref(derived);
+        assert_eq!(
+            super::resolve_probe_table_index(&metadata, &scan(7, 3), &derived, &[(&derived, 7)]),
+            None
+        );
     }
 }

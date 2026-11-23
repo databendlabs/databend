@@ -20,76 +20,29 @@ use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::ptr;
-use std::sync::Arc;
 
 use libc::c_int;
 use libc::c_void;
 use libc::dl_iterate_phdr;
 use libc::dl_phdr_info;
 use libc::size_t;
-use object::Object;
-use object::ObjectSymbol;
-use object::ObjectSymbolTable;
 
-use crate::elf::ElfFile;
 use crate::elf::library_manager::Library;
-use crate::elf::library_symbol::Symbol;
 
 #[derive(Debug)]
 pub struct LibraryLoader {
-    symbols: Vec<Symbol>,
     libraries: Vec<Library>,
 }
 
 impl LibraryLoader {
     pub fn load() -> LibraryLoader {
         unsafe {
-            let mut loader = LibraryLoader {
-                symbols: vec![],
-                libraries: vec![],
-            };
+            let mut loader = LibraryLoader { libraries: vec![] };
 
             dl_iterate_phdr(Some(callback), std::ptr::addr_of_mut!(loader).cast());
 
             loader
         }
-    }
-
-    pub unsafe fn load_symbols(&mut self, library: &mut Library) {
-        let library_data = library.data();
-
-        let Ok(elf) = ElfFile::parse(library_data) else {
-            return;
-        };
-
-        let symbol_table = match elf.symbol_table() {
-            Some(symbol_table) => symbol_table,
-            None => match elf.dynamic_symbol_table() {
-                Some(dynamic_symbol_table) => dynamic_symbol_table,
-                None => {
-                    return;
-                }
-            },
-        };
-
-        for symbol in symbol_table.symbols() {
-            let Ok(sym_name) = symbol.name() else {
-                continue;
-            };
-
-            if sym_name.is_empty() || symbol.size() == 0 {
-                continue;
-            }
-
-            self.symbols.push(Symbol {
-                #[allow(clippy::missing_transmute_annotations)]
-                name: unsafe { std::mem::transmute(sym_name) },
-                address_begin: library.address_begin as u64 + symbol.address(),
-                address_end: library.address_begin as u64 + symbol.address() + symbol.size(),
-            });
-        }
-
-        library.elf = Some(Arc::new(elf));
     }
 
     unsafe fn mmap_library(&mut self, library_path: PathBuf) -> std::io::Result<Library> {
@@ -207,8 +160,7 @@ impl LibraryLoader {
     }
 
     pub unsafe fn load_libraries(&mut self, info: &dl_phdr_info) {
-        if let Ok(mut library) = unsafe { self.load_library(info) } {
-            unsafe { self.load_symbols(&mut library) };
+        if let Ok(library) = unsafe { self.load_library(info) } {
             self.libraries.push(library);
         }
     }
@@ -222,15 +174,10 @@ impl LibraryLoader {
         }
     }
 
-    pub fn finalize(mut self) -> (Vec<Library>, Vec<Symbol>, Option<Vec<u8>>) {
-        self.symbols.sort_by(Symbol::sort_begin_address);
+    pub fn finalize(mut self) -> (Vec<Library>, Option<Vec<u8>>) {
         self.libraries.sort_by(Library::sort_begin_address);
-        self.symbols.dedup_by(Symbol::same_address);
-
-        match self.executable_build_id() {
-            Err(_) => (self.libraries, self.symbols, None),
-            Ok(build_id) => (self.libraries, self.symbols, build_id),
-        }
+        let build_id = self.executable_build_id().ok().flatten();
+        (self.libraries, build_id)
     }
 }
 

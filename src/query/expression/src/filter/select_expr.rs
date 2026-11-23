@@ -210,7 +210,7 @@ impl SelectExprBuilder {
                                         .unwrap_or(like_str.to_string())
                                         .into();
                                     let like_pattern: LikePattern<'static> =
-                                        generate_like_pattern(Cow::Owned(pattern), 0);
+                                        generate_like_pattern(Cow::Owned(pattern));
 
                                     SelectExprBuildResult::new(SelectExpr::Like((
                                         column.clone(),
