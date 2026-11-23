@@ -924,9 +924,9 @@ impl DefaultSettings {
                 }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
-                    desc: "Sql duplicate label for deduplication.",
+                    desc: "Retry token for SQL writes that support deduplication.",
                     mode: SettingMode::Write,
-                    scope: SettingScope::Both,
+                    scope: SettingScope::Session,
                     range: None,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
