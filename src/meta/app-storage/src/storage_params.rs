@@ -193,11 +193,13 @@ impl StorageParams {
                 s1.account_name = s2.account_name;
                 s1.account_key = s2.account_key;
                 s1.network_config = s2.network_config;
+                s1.allow_credential_chain = s2.allow_credential_chain;
                 Ok(Self::Azblob(s1))
             }
             (StorageParams::Gcs(mut s1), StorageParams::Gcs(s2)) => {
                 s1.credential = s2.credential;
                 s1.network_config = s2.network_config;
+                s1.allow_credential_chain = s2.allow_credential_chain;
                 Ok(Self::Gcs(s1))
             }
             (StorageParams::S3(mut s1), StorageParams::S3(s2)) => {
@@ -370,12 +372,16 @@ impl StorageParams {
             StorageParams::Azblob(cfg) => {
                 cfg.account_name.clear();
                 cfg.account_key.clear();
+                cfg.allow_credential_chain = None;
             }
             StorageParams::Ftp(cfg) => {
                 cfg.username.clear();
                 cfg.password.clear();
             }
-            StorageParams::Gcs(cfg) => cfg.credential.clear(),
+            StorageParams::Gcs(cfg) => {
+                cfg.credential.clear();
+                cfg.allow_credential_chain = None;
+            }
             StorageParams::Obs(cfg) => {
                 cfg.access_key_id.clear();
                 cfg.secret_access_key.clear();
@@ -562,6 +568,12 @@ pub struct StorageAzblobConfig {
     pub account_name: String,
     pub account_key: String,
     pub root: String,
+    /// Runtime-only override for whether ambient credential chains are allowed.
+    ///
+    /// This value is never serialized/persisted and is only used when building
+    /// operators in the current process.
+    #[serde(skip)]
+    pub allow_credential_chain: Option<bool>,
     pub network_config: Option<StorageNetworkParams>,
 }
 
@@ -573,6 +585,7 @@ impl Debug for StorageAzblobConfig {
             .field("root", &self.root)
             .field("account_name", &self.account_name)
             .field("account_key", &mask_string(&self.account_key, 3))
+            .field("allow_credential_chain", &self.allow_credential_chain)
             .finish()
     }
 }
@@ -635,6 +648,12 @@ pub struct StorageGcsConfig {
     pub bucket: String,
     pub root: String,
     pub credential: String,
+    /// Runtime-only override for whether ambient credential chains are allowed.
+    ///
+    /// This value is never serialized/persisted and is only used when building
+    /// operators in the current process.
+    #[serde(skip)]
+    pub allow_credential_chain: Option<bool>,
     pub network_config: Option<StorageNetworkParams>,
 }
 
@@ -645,6 +664,7 @@ impl Default for StorageGcsConfig {
             bucket: String::new(),
             root: String::new(),
             credential: String::new(),
+            allow_credential_chain: None,
             network_config: Default::default(),
         }
     }
@@ -657,6 +677,7 @@ impl Debug for StorageGcsConfig {
             .field("bucket", &self.bucket)
             .field("root", &self.root)
             .field("credential", &mask_string(&self.credential, 3))
+            .field("allow_credential_chain", &self.allow_credential_chain)
             .finish()
     }
 }
