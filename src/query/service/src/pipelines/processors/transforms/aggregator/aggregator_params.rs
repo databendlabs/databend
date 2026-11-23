@@ -41,7 +41,7 @@ pub struct AggregatorParams {
     pub max_block_bytes: usize,
 
     /// Set when the final aggregation feeds a top N: its output only needs the first rows
-    /// ordered by these columns of the result, see `PartitionedPayload::top_n_result`.
+    /// ordered by these columns of the result, see `TransformFinalAggregate::output_hashtable`.
     pub top_n: Option<(Vec<SortColumnDescription>, usize)>,
 
     /// Set when the consumer of the final aggregation merges a group that it receives more than

@@ -36,6 +36,7 @@ pub use databend_common_expression::aggregate::AggregatePayload;
 pub use databend_common_expression::aggregate::SerializedPayload;
 pub use databend_query_script_udf_support::create_udaf_script_function;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
+pub use transform_aggregate_final::TopNBoundary;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
 pub use transform_aggregate_partial::parse_partial_aggregate_mode;

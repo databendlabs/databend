@@ -356,6 +356,56 @@ fn compare_with_boundary<T: AccessType>(
     Some(keep)
 }
 
+/// How each row of `column` ranks against `boundary` under `desc`: `Less` when the sort puts the
+/// row before the boundary, `Greater` when after it, `Equal` when they tie. Values are compared
+/// with the `compare` the sort uses for the column type, and nulls are placed by `nulls_first`,
+/// on either side. `None` for the column types that `rows_within_boundary` does not support.
+pub fn rank_against_boundary(
+    column: &Column,
+    boundary: &Scalar,
+    desc: &SortColumnDescription,
+) -> Option<Vec<Ordering>> {
+    let (values, validity) = split_validity(column);
+    // A null sorts before every value with `nulls_first`, after every value without.
+    let null_before_value = match desc.nulls_first {
+        true => Ordering::Less,
+        false => Ordering::Greater,
+    };
+    let mut ranks = match boundary {
+        Scalar::Null => vec![null_before_value.reverse(); column.len()],
+        boundary => with_boundary_type!(values.data_type(), |T| {
+            rank_values::<T>(values, boundary, desc)
+        })?,
+    };
+    if let Some(validity) = validity {
+        for (row, valid) in validity.iter().enumerate() {
+            if !valid {
+                ranks[row] = match boundary {
+                    Scalar::Null => Ordering::Equal,
+                    _ => null_before_value,
+                };
+            }
+        }
+    }
+    Some(ranks)
+}
+
+fn rank_values<T: AccessType>(
+    column: &Column,
+    boundary: &Scalar,
+    desc: &SortColumnDescription,
+) -> Option<Vec<Ordering>> {
+    let column = T::try_downcast_column(column).ok()?;
+    let boundary = T::try_downcast_scalar(&boundary.as_ref()).ok()?;
+    let ranks = T::iter_column(&column)
+        .map(|value| match desc.asc {
+            true => T::compare(value, boundary.clone()),
+            false => T::compare(value, boundary.clone()).reverse(),
+        })
+        .collect();
+    Some(ranks)
+}
+
 /// Whether the sorted `block` holds at least `n` distinct keys under `sort_desc`. A row
 /// starts a new key when one of its key columns differs from the row before, compared with
 /// the `compare` the sort uses for the column type; nulls equal each other. A key column of

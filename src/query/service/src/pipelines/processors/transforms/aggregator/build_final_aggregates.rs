@@ -27,6 +27,7 @@ use databend_common_pipeline::core::TransformPipeBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::LocalScatterTransform;
+use crate::pipelines::processors::transforms::aggregator::TopNBoundary;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
@@ -69,6 +70,10 @@ pub fn build_final_aggregates(
     let mut builder = TransformPipeBuilder::create();
     let (tx, rx) = async_channel::unbounded();
     let next_task_id = Arc::new(AtomicU64::new(1));
+    let top_n_boundary = params
+        .top_n
+        .as_ref()
+        .map(|(order_by, _)| Arc::new(TopNBoundary::new(order_by.clone())));
     for id in 0..final_parallelism {
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
@@ -81,6 +86,7 @@ pub fn build_final_aggregates(
             tx.clone(),
             rx.clone(),
             next_task_id.clone(),
+            top_n_boundary.clone(),
         )?;
         builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
     }

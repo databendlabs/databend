@@ -622,3 +622,91 @@ fn test_payload_flush_all_with_reused_state() {
         }
     }
 }
+
+// A selective result builds the rows that its selection keeps only: the same rows as the full
+// result filtered by the same columns, read on demand, and it skips the batches that keep none.
+#[test]
+fn test_merge_selected_result() {
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_expression::types::AccessType;
+
+    // Key `k` of 5000 keys has `k % 13 + 1` rows, so the groups span several flush batches.
+    let keys = (0..5000_i64)
+        .flat_map(|k| std::iter::repeat_n(k, (k % 13 + 1) as usize))
+        .collect_vec();
+    let n = keys.len();
+    let group_columns = vec![Int64Type::from_data(keys.clone()).into()];
+    let aggrs = vec![
+        resolve_agg("count", Int64Type::data_type()),
+        resolve_agg("sum", Int64Type::data_type()),
+    ];
+    let params = aggrs.iter().map(|_| group_columns.clone()).collect_vec();
+    let params: Vec<ProjectedBlock> = params.iter().map(|v| v.into()).collect_vec();
+    let new_table = || {
+        let mut hashtable = AggregateHashTable::new(
+            vec![Int64Type::data_type()],
+            aggrs.clone(),
+            HashTableConfig::default(),
+            Arc::new(Bump::new()),
+        );
+        let mut state = ProbeState::default();
+        hashtable
+            .add_groups(
+                &mut state,
+                (&group_columns).into(),
+                &params,
+                (&[]).into(),
+                n,
+            )
+            .unwrap();
+        hashtable
+    };
+    let counts = |rank: &databend_common_expression::Column| {
+        UInt64Type::try_downcast_column(rank).unwrap().to_vec()
+    };
+
+    for min_count in [0, 10, 13, 14] {
+        let mut flush_state = PayloadFlushState::default();
+        let (mut blocks, mut batches) = (vec![], 0);
+        for payload in new_table().into_payloads() {
+            while let Some(block) = payload
+                .merge_selected_result(&mut flush_state, |columns| {
+                    batches += 1;
+                    // The result layout: the aggregates, then the group column.
+                    let count = columns.column(0)?;
+                    let key = columns.column(2)?;
+                    assert_eq!(count.len(), columns.num_rows());
+                    assert_eq!(key.len(), columns.num_rows());
+                    Ok(match min_count {
+                        0 => None,
+                        _ => Some(Bitmap::from_iter(
+                            counts(&count).into_iter().map(|c| c >= min_count),
+                        )),
+                    })
+                })
+                .unwrap()
+            {
+                blocks.push(block);
+            }
+            flush_state.clear();
+        }
+        assert!(batches > 1);
+
+        let full = merge_result_block(new_table(), aggrs.len());
+        let kept = Bitmap::from_iter(
+            counts(&full.get_by_offset(1).to_column())
+                .into_iter()
+                .map(|c| c >= min_count),
+        );
+        let expected = full.filter_with_bitmap(&kept).unwrap();
+        if expected.num_rows() == 0 {
+            assert!(blocks.is_empty());
+            continue;
+        }
+        let selected = DataBlock::concat(&blocks).unwrap();
+        let num_rows = selected.num_rows();
+        let mut entries = selected.take_columns();
+        entries.rotate_left(aggrs.len());
+        assert_block_value_sort_eq(&DataBlock::new(entries, num_rows), &expected);
+    }
+}

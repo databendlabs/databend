@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 
+use super::AggrState;
 use super::BATCH_SIZE;
 use super::StateAddr;
 use super::aggregate_function::AggregateStateSet;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
+use super::payload::merge_flushed_states;
 use super::payload_row::RowTypeVisitor;
 use super::payload_row::visit_row_type;
 use super::probe_state::ProbeState;
@@ -272,6 +275,52 @@ impl Payload {
         true
     }
 
+    /// Finalizes the next rows like `merge_result`, but only the rows that `select` keeps.
+    ///
+    /// `select` gets the columns of the result for all the rows of a batch on demand, see
+    /// [`BatchResultColumns`], and returns the rows to keep, or `None` to keep them all. Only
+    /// the kept rows have their full result built, so a top N builds it for the rows that can
+    /// still rank within it. A batch that keeps no row is skipped. The states of the dropped
+    /// rows stay in the payload, which releases them as usual.
+    pub fn merge_selected_result(
+        &self,
+        flush_state: &mut PayloadFlushState,
+        mut select: impl FnMut(&BatchResultColumns) -> Result<Option<Bitmap>>,
+    ) -> Result<Option<DataBlock>> {
+        loop {
+            if !self.scan_rows(flush_state) {
+                return Ok(None);
+            }
+            let keep = select(&BatchResultColumns {
+                payload: self,
+                flush_state,
+            })?;
+            if let Some(keep) = keep {
+                let mut kept = 0;
+                for (row, _) in keep.iter().enumerate().filter(|(_, keep)| *keep) {
+                    flush_state.addresses[kept] = flush_state.addresses[row];
+                    flush_state.state_places[kept] = flush_state.state_places[row];
+                    kept += 1;
+                }
+                if kept == 0 {
+                    continue;
+                }
+                flush_state.row_count = kept;
+            }
+
+            flush_state.group_columns.clear();
+            for col_index in 0..self.group_types.len() {
+                let rows = &flush_state.addresses[..flush_state.row_count];
+                let col = self.flush_column(col_index, rows);
+                flush_state.group_columns.push(col.into());
+            }
+            merge_flushed_states(&self.row_layout, &self.aggrs, flush_state)?;
+            let mut entries = flush_state.take_aggregate_results();
+            entries.extend(flush_state.take_group_columns());
+            return Ok(Some(DataBlock::new(entries, flush_state.row_count)));
+        }
+    }
+
     /// Scans the next rows like `flush`, without building their group columns.
     pub(super) fn scan_rows(&self, flush_state: &mut PayloadFlushState) -> bool {
         let Some(page) = self.pages.get(flush_state.flush_page) else {
@@ -325,5 +374,36 @@ impl Payload {
         } else {
             col
         }
+    }
+}
+
+/// The columns of the result of a batch of rows that `Payload::merge_selected_result` scanned,
+/// built on demand, for all the rows of the batch.
+pub struct BatchResultColumns<'a> {
+    payload: &'a Payload,
+    flush_state: &'a PayloadFlushState,
+}
+
+impl BatchResultColumns<'_> {
+    pub fn num_rows(&self) -> usize {
+        self.flush_state.row_count
+    }
+
+    /// Column `index` of the result in the layout of `Payload::merge_result`: the results of
+    /// the aggregates, then the group columns. The results are computed without consuming the
+    /// states, which the result of the kept rows consumes later.
+    pub fn column(&self, index: usize) -> Result<Column> {
+        let payload = self.payload;
+        let rows = self.flush_state.row_count;
+        let Some(group_index) = index.checked_sub(payload.aggrs.len()) else {
+            let states_layout = payload.row_layout.states_layout.as_ref().unwrap();
+            let (aggr, loc) = (&payload.aggrs[index], &states_layout.states_loc[index]);
+            let mut builder = ColumnBuilder::with_capacity(&aggr.signature().return_type, rows);
+            for place in &self.flush_state.state_places[..rows] {
+                aggr.merge_result_read_only(AggrState::new(*place, loc), &mut builder)?;
+            }
+            return Ok(builder.build());
+        };
+        Ok(payload.flush_column(group_index, &self.flush_state.addresses[..rows]))
     }
 }
