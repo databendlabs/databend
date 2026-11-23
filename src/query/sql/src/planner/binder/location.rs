@@ -46,6 +46,7 @@ use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::STDIN_FD;
 use databend_common_storage::auto_detect_storage_params;
 use databend_common_storage::check_storage_params_endpoints;
+use databend_common_storage::ensure_secure_storage_params;
 use log::LevelFilter;
 use log::info;
 use opendal::Scheme;
@@ -499,14 +500,16 @@ fn parse_huggingface_params(l: &mut UriLocation, root: String) -> Result<Storage
 pub async fn parse_storage_params_from_uri(
     l: &mut UriLocation,
     usage: &str,
-) -> Result<StorageParams> {
+    allow_insecure: bool,
+) -> databend_common_exception::Result<StorageParams> {
     if !l.path.ends_with('/') {
         return Err(Error::new(
             ErrorKind::InvalidInput,
             anyhow!("path in URL must end with '/' {usage}. Got '{}'.", l.path),
-        ));
+        )
+        .into());
     }
-    Ok(parse_uri_location(l).await?.0)
+    Ok(parse_uri_location(l, allow_insecure).await?.0)
 }
 
 struct ParsedUriLocation {
@@ -542,17 +545,28 @@ fn parse_uri_location_parts(l: &UriLocation) -> Result<ParsedUriLocation> {
     })
 }
 
-pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
+/// Parses a URI location into storage params.
+///
+/// `allow_insecure` (`storage.allow_insecure`) is enforced before any endpoint
+/// of the location is contacted.
+pub async fn parse_uri_location(
+    l: &mut UriLocation,
+    allow_insecure: bool,
+) -> databend_common_exception::Result<(StorageParams, String)> {
     let parts = parse_uri_location_parts(l)?;
 
     if l.connection.get("connection_name").is_some() {
         return Err(Error::new(
             ErrorKind::InvalidInput,
             anyhow!("can not use connection_name when create connection"),
-        ));
+        )
+        .into());
     }
 
-    parse_uri_location_resolved(l, parts).await
+    let (sp, path) = build_uri_storage_params(l, parts)?;
+    ensure_secure_storage_params(&sp, allow_insecure)?;
+    let sp = probe_uri_storage_params(sp).await?;
+    Ok((sp, path))
 }
 
 pub fn apply_uri_connection(
@@ -586,7 +600,8 @@ pub fn apply_uri_connection(
     Ok(())
 }
 
-async fn parse_uri_location_resolved(
+/// Builds storage params from the location without contacting any endpoint.
+fn build_uri_storage_params(
     l: &mut UriLocation,
     parts: ParsedUriLocation,
 ) -> Result<(StorageParams, String)> {
@@ -623,9 +638,6 @@ async fn parse_uri_location_resolved(
             };
 
             // HTTP is special that we don't support dir, always return / instead.
-            check_storage_params_endpoints(&StorageParams::Http(cfg.clone()))
-                .await
-                .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
             return Ok((StorageParams::Http(cfg), "/".to_string()));
         }
         Scheme::Fs => {
@@ -646,6 +658,10 @@ async fn parse_uri_location_resolved(
         }
     };
 
+    Ok((sp, path))
+}
+
+async fn probe_uri_storage_params(sp: StorageParams) -> Result<StorageParams> {
     // Validate every endpoint URL exposed by the resolved StorageParams
     // (including secondary URLs such as OSS presign_endpoint_url) against the
     // egress policy. Centralising the check here keeps each per-scheme parser
@@ -671,12 +687,13 @@ async fn parse_uri_location_resolved(
             )
         })?;
 
-    Ok((sp, path))
+    Ok(sp)
 }
 
 pub async fn get_storage_params_from_options(
     options: &BTreeMap<String, String>,
     resolved_connection: Option<UserDefinedConnection>,
+    allow_insecure: bool,
 ) -> databend_common_exception::Result<StorageParams> {
     let location = options
         .get("location")
@@ -700,7 +717,10 @@ pub async fn get_storage_params_from_options(
     } else {
         UriLocation::from_uri(location.to_string(), BTreeMap::new())?
     };
-    let sp =
-        parse_storage_params_from_uri(&mut location, "when loading/creating ICEBERG table").await?;
-    Ok(sp)
+    parse_storage_params_from_uri(
+        &mut location,
+        "when loading/creating ICEBERG table",
+        allow_insecure,
+    )
+    .await
 }

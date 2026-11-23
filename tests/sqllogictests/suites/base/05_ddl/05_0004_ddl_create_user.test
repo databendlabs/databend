@@ -112,6 +112,12 @@ CREATE user 'a\b' identified by '123'
 statement error 2218
 CREATE user 'a\f' identified by '123'
 
+statement error 2218
+CREATE user '..' identified by '123'
+
+statement error 2218
+CREATE user 'a/' identified by '123'
+
 statement ok
 drop user if exists 'a\b';
 

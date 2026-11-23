@@ -19,8 +19,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::StorageParams;
+use log::LevelFilter;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
@@ -130,6 +132,45 @@ pub enum EndpointUrlPolicy {
     /// (`allowed_hosts` or `allowed_cidrs`). This is the most restrictive
     /// mode: even public addresses are denied by default.
     Allowlist,
+}
+
+/// Process-wide `storage.allow_insecure`, for code paths that cannot reach the
+/// query config, such as opening an operator for a stored stage.
+#[derive(Clone, Copy, Debug)]
+struct StorageAllowInsecure(bool);
+
+pub struct StorageSecurityRegistry;
+
+impl StorageSecurityRegistry {
+    pub fn init(allow_insecure: bool) {
+        GlobalInstance::set(StorageAllowInsecure(allow_insecure));
+    }
+
+    /// Whether insecure storage is allowed on this node. Defaults to `true`
+    /// when the registry is not initialized, e.g. in unit tests.
+    pub fn allow_insecure() -> bool {
+        GlobalInstance::try_get::<StorageAllowInsecure>().is_none_or(|v| v.0)
+    }
+}
+
+/// Whether the current thread runs the node's own history log queries, whose
+/// storage comes from server config instead of user input.
+pub fn is_history_log_context() -> bool {
+    ThreadTracker::capture_log_settings().is_some_and(|settings| settings.level == LevelFilter::Off)
+}
+
+/// Rejects insecure storage (e.g. `fs://`, plain `http://`) unless allowed.
+pub fn ensure_secure_storage_params(
+    params: &StorageParams,
+    allow_insecure: bool,
+) -> databend_common_exception::Result<()> {
+    if params.is_secure() || allow_insecure || is_history_log_context() {
+        return Ok(());
+    }
+    Err(ErrorCode::StorageInsecure(format!(
+        "insecure storage {} is not allowed, set storage.allow_insecure to enable it",
+        params.storage_type()
+    )))
 }
 
 /// Runtime egress policy for external storage endpoint URLs.
