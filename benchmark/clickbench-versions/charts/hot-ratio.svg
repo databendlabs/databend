@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="470" viewBox="0 0 1500 470">
+<rect width="100%" height="100%" fill="white"/>
+<text x="750.0" y="26.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">Hot time ratio per query: official-main-prs / baseline (log scale; below 1 = main-prs faster)</text>
+<line x1="70.0" y1="400.0" x2="1470.0" y2="400.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="404.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">0.03</text>
+<line x1="70.0" y1="321.3" x2="1470.0" y2="321.3" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="325.3" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">0.1</text>
+<line x1="70.0" y1="261.3" x2="1470.0" y2="261.3" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="265.3" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">0.25</text>
+<line x1="70.0" y1="216.0" x2="1470.0" y2="216.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="220.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">0.5</text>
+<line x1="70.0" y1="170.7" x2="1470.0" y2="170.7" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="174.7" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">1</text>
+<line x1="70.0" y1="125.3" x2="1470.0" y2="125.3" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="129.3" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">2</text>
+<line x1="70.0" y1="80.0" x2="1470.0" y2="80.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="84.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">4</text>
+<text x="24.0" y="240.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif" transform="rotate(-90 24.0 240.0)">ratio</text>
+<rect x="73.3" y="91.0" width="8.2" height="79.7" fill="#e15759"><title>Q0 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 3.38</title></rect>
+<rect x="90.6" y="146.0" width="8.2" height="24.7" fill="#4e79a7"><title>Q0 vs official-967 (same build parameters): 1.46</title></rect>
+<text x="86.3" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q0</text>
+<rect x="105.8" y="134.9" width="8.2" height="35.7" fill="#e15759"><title>Q1 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.73</title></rect>
+<rect x="114.5" y="145.3" width="8.2" height="25.4" fill="#59a14f"><title>Q1 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 1.47</title></rect>
+<rect x="123.2" y="170.7" width="8.2" height="1.3" fill="#4e79a7"><title>Q1 vs official-967 (same build parameters): 0.981</title></rect>
+<text x="118.8" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q1</text>
+<rect x="138.4" y="127.8" width="8.2" height="42.8" fill="#e15759"><title>Q2 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.93</title></rect>
+<rect x="147.1" y="141.1" width="8.2" height="29.6" fill="#59a14f"><title>Q2 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 1.57</title></rect>
+<rect x="155.7" y="166.9" width="8.2" height="3.7" fill="#4e79a7"><title>Q2 vs official-967 (same build parameters): 1.06</title></rect>
+<text x="151.4" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q2</text>
+<rect x="170.9" y="116.7" width="8.2" height="54.0" fill="#e15759"><title>Q3 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 2.28</title></rect>
+<rect x="179.6" y="168.0" width="8.2" height="2.7" fill="#59a14f"><title>Q3 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 1.04</title></rect>
+<rect x="188.3" y="170.7" width="8.2" height="6.8" fill="#4e79a7"><title>Q3 vs official-967 (same build parameters): 0.901</title></rect>
+<text x="184.0" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q3</text>
+<rect x="203.5" y="170.7" width="8.2" height="15.5" fill="#e15759"><title>Q4 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.789</title></rect>
+<rect x="220.9" y="170.7" width="8.2" height="2.3" fill="#4e79a7"><title>Q4 vs official-967 (same build parameters): 0.965</title></rect>
+<text x="216.5" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q4</text>
+<rect x="236.0" y="170.7" width="8.2" height="11.3" fill="#e15759"><title>Q5 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.842</title></rect>
+<rect x="253.4" y="170.7" width="8.2" height="2.0" fill="#4e79a7"><title>Q5 vs official-967 (same build parameters): 0.97</title></rect>
+<text x="249.1" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q5</text>
+<rect x="268.6" y="163.1" width="8.2" height="7.5" fill="#e15759"><title>Q6 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.12</title></rect>
+<rect x="286.0" y="166.4" width="8.2" height="4.2" fill="#4e79a7"><title>Q6 vs official-967 (same build parameters): 1.07</title></rect>
+<text x="281.6" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q6</text>
+<rect x="301.2" y="138.3" width="8.2" height="32.4" fill="#e15759"><title>Q7 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.64</title></rect>
+<rect x="309.8" y="134.7" width="8.2" height="36.0" fill="#59a14f"><title>Q7 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 1.73</title></rect>
+<rect x="318.5" y="170.7" width="8.2" height="0.6" fill="#4e79a7"><title>Q7 vs official-967 (same build parameters): 0.991</title></rect>
+<text x="314.2" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q7</text>
+<rect x="333.7" y="170.7" width="8.2" height="9.0" fill="#e15759"><title>Q8 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.872</title></rect>
+<rect x="351.1" y="170.7" width="8.2" height="0.5" fill="#4e79a7"><title>Q8 vs official-967 (same build parameters): 0.992</title></rect>
+<text x="346.7" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q8</text>
+<rect x="366.3" y="155.2" width="8.2" height="15.4" fill="#e15759"><title>Q9 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.27</title></rect>
+<rect x="375.0" y="169.2" width="8.2" height="1.4" fill="#59a14f"><title>Q9 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 1.02</title></rect>
+<rect x="383.6" y="170.7" width="8.2" height="1.4" fill="#4e79a7"><title>Q9 vs official-967 (same build parameters): 0.978</title></rect>
+<text x="379.3" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q9</text>
+<rect x="398.8" y="162.9" width="8.2" height="7.7" fill="#e15759"><title>Q10 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.13</title></rect>
+<rect x="407.5" y="170.7" width="8.2" height="20.6" fill="#59a14f"><title>Q10 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.73</title></rect>
+<rect x="416.2" y="170.7" width="8.2" height="9.7" fill="#4e79a7"><title>Q10 vs official-967 (same build parameters): 0.862</title></rect>
+<text x="411.9" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q10</text>
+<rect x="431.4" y="152.9" width="8.2" height="17.7" fill="#e15759"><title>Q11 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.31</title></rect>
+<rect x="440.1" y="170.7" width="8.2" height="16.5" fill="#59a14f"><title>Q11 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.778</title></rect>
+<rect x="448.8" y="170.7" width="8.2" height="10.2" fill="#4e79a7"><title>Q11 vs official-967 (same build parameters): 0.856</title></rect>
+<text x="444.4" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q11</text>
+<rect x="464.0" y="170.7" width="8.2" height="6.2" fill="#e15759"><title>Q12 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.91</title></rect>
+<rect x="481.3" y="170.7" width="8.2" height="3.0" fill="#4e79a7"><title>Q12 vs official-967 (same build parameters): 0.956</title></rect>
+<text x="477.0" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q12</text>
+<rect x="496.5" y="170.7" width="8.2" height="0.8" fill="#e15759"><title>Q13 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.988</title></rect>
+<rect x="513.9" y="170.7" width="8.2" height="1.1" fill="#4e79a7"><title>Q13 vs official-967 (same build parameters): 0.983</title></rect>
+<text x="509.5" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q13</text>
+<rect x="529.1" y="170.7" width="8.2" height="9.1" fill="#e15759"><title>Q14 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.87</title></rect>
+<rect x="546.4" y="170.7" width="8.2" height="2.7" fill="#4e79a7"><title>Q14 vs official-967 (same build parameters): 0.96</title></rect>
+<text x="542.1" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q14</text>
+<rect x="561.6" y="170.7" width="8.2" height="20.1" fill="#e15759"><title>Q15 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.735</title></rect>
+<rect x="579.0" y="170.7" width="8.2" height="1.3" fill="#4e79a7"><title>Q15 vs official-967 (same build parameters): 0.98</title></rect>
+<text x="574.7" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q15</text>
+<rect x="594.2" y="170.7" width="8.2" height="51.5" fill="#e15759"><title>Q16 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.455</title></rect>
+<rect x="611.6" y="170.7" width="8.2" height="1.4" fill="#4e79a7"><title>Q16 vs official-967 (same build parameters): 0.979</title></rect>
+<text x="607.2" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q16</text>
+<rect x="626.7" y="170.7" width="8.2" height="187.6" fill="#e15759"><title>Q17 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.0568</title></rect>
+<rect x="644.1" y="164.2" width="8.2" height="6.5" fill="#4e79a7"><title>Q17 vs official-967 (same build parameters): 1.1</title></rect>
+<text x="639.8" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q17</text>
+<rect x="659.3" y="170.7" width="8.2" height="41.3" fill="#e15759"><title>Q18 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.532</title></rect>
+<rect x="676.7" y="170.7" width="8.2" height="2.0" fill="#4e79a7"><title>Q18 vs official-967 (same build parameters): 0.97</title></rect>
+<text x="672.3" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q18</text>
+<rect x="691.9" y="143.1" width="8.2" height="27.5" fill="#e15759"><title>Q19 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.52</title></rect>
+<rect x="709.2" y="164.2" width="8.2" height="6.4" fill="#4e79a7"><title>Q19 vs official-967 (same build parameters): 1.1</title></rect>
+<text x="704.9" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q19</text>
+<rect x="724.4" y="117.6" width="8.2" height="53.1" fill="#e15759"><title>Q20 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 2.25</title></rect>
+<rect x="733.1" y="170.7" width="8.2" height="22.1" fill="#59a14f"><title>Q20 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.713</title></rect>
+<rect x="741.8" y="170.7" width="8.2" height="20.9" fill="#4e79a7"><title>Q20 vs official-967 (same build parameters): 0.726</title></rect>
+<text x="737.4" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q20</text>
+<rect x="757.0" y="114.0" width="8.2" height="56.6" fill="#e15759"><title>Q21 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 2.38</title></rect>
+<rect x="765.7" y="170.7" width="8.2" height="12.8" fill="#59a14f"><title>Q21 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.823</title></rect>
+<rect x="774.3" y="170.7" width="8.2" height="5.3" fill="#4e79a7"><title>Q21 vs official-967 (same build parameters): 0.923</title></rect>
+<text x="770.0" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q21</text>
+<rect x="789.5" y="119.8" width="8.2" height="50.8" fill="#e15759"><title>Q22 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 2.18</title></rect>
+<rect x="798.2" y="170.7" width="8.2" height="17.4" fill="#59a14f"><title>Q22 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.766</title></rect>
+<rect x="806.9" y="170.7" width="8.2" height="4.6" fill="#4e79a7"><title>Q22 vs official-967 (same build parameters): 0.932</title></rect>
+<text x="802.6" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q22</text>
+<rect x="822.1" y="135.8" width="8.2" height="34.9" fill="#e15759"><title>Q23 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.7</title></rect>
+<rect x="830.8" y="170.7" width="8.2" height="219.2" fill="#59a14f"><title>Q23 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.035</title></rect>
+<rect x="839.5" y="170.7" width="8.2" height="1.6" fill="#4e79a7"><title>Q23 vs official-967 (same build parameters): 0.975</title></rect>
+<text x="835.1" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q23</text>
+<rect x="854.7" y="92.7" width="8.2" height="78.0" fill="#e15759"><title>Q24 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 3.29</title></rect>
+<rect x="863.3" y="170.7" width="8.2" height="122.0" fill="#59a14f"><title>Q24 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.155</title></rect>
+<rect x="872.0" y="170.7" width="8.2" height="10.7" fill="#4e79a7"><title>Q24 vs official-967 (same build parameters): 0.85</title></rect>
+<text x="867.7" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q24</text>
+<rect x="887.2" y="121.0" width="8.2" height="49.7" fill="#e15759"><title>Q25 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 2.14</title></rect>
+<rect x="895.9" y="170.7" width="8.2" height="5.1" fill="#59a14f"><title>Q25 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.925</title></rect>
+<rect x="904.6" y="170.7" width="8.2" height="4.8" fill="#4e79a7"><title>Q25 vs official-967 (same build parameters): 0.929</title></rect>
+<text x="900.2" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q25</text>
+<rect x="919.8" y="80.0" width="8.2" height="90.7" fill="#e15759"><title>Q26 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 4.12</title></rect>
+<rect x="928.4" y="170.7" width="8.2" height="102.5" fill="#59a14f"><title>Q26 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.209</title></rect>
+<rect x="937.1" y="170.7" width="8.2" height="8.7" fill="#4e79a7"><title>Q26 vs official-967 (same build parameters): 0.876</title></rect>
+<text x="932.8" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q26</text>
+<rect x="952.3" y="88.8" width="8.2" height="81.8" fill="#e15759"><title>Q27 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 3.5</title></rect>
+<rect x="961.0" y="170.7" width="8.2" height="21.2" fill="#59a14f"><title>Q27 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.724</title></rect>
+<rect x="969.7" y="170.7" width="8.2" height="4.2" fill="#4e79a7"><title>Q27 vs official-967 (same build parameters): 0.938</title></rect>
+<text x="965.3" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q27</text>
+<rect x="984.9" y="170.7" width="8.2" height="51.0" fill="#e15759"><title>Q28 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.458</title></rect>
+<rect x="1002.2" y="170.7" width="8.2" height="0.6" fill="#4e79a7"><title>Q28 vs official-967 (same build parameters): 0.991</title></rect>
+<text x="997.9" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q28</text>
+<rect x="1017.4" y="157.9" width="8.2" height="12.7" fill="#e15759"><title>Q29 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.21</title></rect>
+<rect x="1034.8" y="170.1" width="8.2" height="0.5" fill="#4e79a7"><title>Q29 vs official-967 (same build parameters): 1.01</title></rect>
+<text x="1030.5" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q29</text>
+<rect x="1050.0" y="145.8" width="8.2" height="24.8" fill="#e15759"><title>Q30 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.46</title></rect>
+<rect x="1058.7" y="170.7" width="8.2" height="10.4" fill="#59a14f"><title>Q30 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 0.854</title></rect>
+<rect x="1067.4" y="170.7" width="8.2" height="2.3" fill="#4e79a7"><title>Q30 vs official-967 (same build parameters): 0.966</title></rect>
+<text x="1063.0" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q30</text>
+<rect x="1082.6" y="165.7" width="8.2" height="5.0" fill="#e15759"><title>Q31 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.08</title></rect>
+<rect x="1099.9" y="170.7" width="8.2" height="4.9" fill="#4e79a7"><title>Q31 vs official-967 (same build parameters): 0.928</title></rect>
+<text x="1095.6" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q31</text>
+<rect x="1115.1" y="170.7" width="8.2" height="56.4" fill="#e15759"><title>Q32 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.422</title></rect>
+<rect x="1132.5" y="170.7" width="8.2" height="4.8" fill="#4e79a7"><title>Q32 vs official-967 (same build parameters): 0.93</title></rect>
+<text x="1128.1" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q32</text>
+<rect x="1147.7" y="170.7" width="8.2" height="11.1" fill="#e15759"><title>Q33 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.844</title></rect>
+<rect x="1165.0" y="170.7" width="8.2" height="1.3" fill="#4e79a7"><title>Q33 vs official-967 (same build parameters): 0.981</title></rect>
+<text x="1160.7" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q33</text>
+<rect x="1180.2" y="170.7" width="8.2" height="11.6" fill="#e15759"><title>Q34 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.838</title></rect>
+<rect x="1197.6" y="170.7" width="8.2" height="2.6" fill="#4e79a7"><title>Q34 vs official-967 (same build parameters): 0.962</title></rect>
+<text x="1193.3" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q34</text>
+<rect x="1212.8" y="170.7" width="8.2" height="22.4" fill="#e15759"><title>Q35 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 0.71</title></rect>
+<rect x="1230.2" y="170.7" width="8.2" height="2.4" fill="#4e79a7"><title>Q35 vs official-967 (same build parameters): 0.964</title></rect>
+<text x="1225.8" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q35</text>
+<rect x="1245.3" y="156.5" width="8.2" height="14.2" fill="#e15759"><title>Q36 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.24</title></rect>
+<rect x="1262.7" y="170.7" width="8.2" height="1.6" fill="#4e79a7"><title>Q36 vs official-967 (same build parameters): 0.976</title></rect>
+<text x="1258.4" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q36</text>
+<rect x="1277.9" y="164.1" width="8.2" height="6.6" fill="#e15759"><title>Q37 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.11</title></rect>
+<rect x="1295.3" y="167.6" width="8.2" height="3.1" fill="#4e79a7"><title>Q37 vs official-967 (same build parameters): 1.05</title></rect>
+<text x="1290.9" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q37</text>
+<rect x="1310.5" y="135.1" width="8.2" height="35.6" fill="#e15759"><title>Q38 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.72</title></rect>
+<rect x="1327.8" y="170.7" width="8.2" height="4.8" fill="#4e79a7"><title>Q38 vs official-967 (same build parameters): 0.929</title></rect>
+<text x="1323.5" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q38</text>
+<rect x="1343.0" y="170.0" width="8.2" height="0.7" fill="#e15759"><title>Q39 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.01</title></rect>
+<rect x="1360.4" y="170.7" width="8.2" height="2.0" fill="#4e79a7"><title>Q39 vs official-967 (same build parameters): 0.97</title></rect>
+<text x="1356.0" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q39</text>
+<rect x="1375.6" y="156.6" width="8.2" height="14.1" fill="#e15759"><title>Q40 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.24</title></rect>
+<rect x="1392.9" y="170.7" width="8.2" height="0.8" fill="#4e79a7"><title>Q40 vs official-967 (same build parameters): 0.988</title></rect>
+<text x="1388.6" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q40</text>
+<rect x="1408.1" y="142.0" width="8.2" height="28.7" fill="#e15759"><title>Q41 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.55</title></rect>
+<rect x="1416.8" y="164.3" width="8.2" height="6.3" fill="#59a14f"><title>Q41 vs v0.9.53 on the same format (both Parquet; 17 queries probed): 1.1</title></rect>
+<rect x="1425.5" y="170.7" width="8.2" height="5.8" fill="#4e79a7"><title>Q41 vs official-967 (same build parameters): 0.916</title></rect>
+<text x="1421.2" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q41</text>
+<rect x="1440.7" y="139.1" width="8.2" height="31.6" fill="#e15759"><title>Q42 vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native): 1.62</title></rect>
+<rect x="1458.1" y="167.2" width="8.2" height="3.5" fill="#4e79a7"><title>Q42 vs official-967 (same build parameters): 1.05</title></rect>
+<text x="1453.7" y="414.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q42</text>
+<line x1="70.0" y1="170.7" x2="1470.0" y2="170.7" stroke="#333" stroke-width="1.2"/>
+<line x1="70.0" y1="80.0" x2="70.0" y2="400.0" stroke="#999" stroke-width="1"/>
+<line x1="70.0" y1="400.0" x2="1470.0" y2="400.0" stroke="#999" stroke-width="1"/>
+<rect x="80.0" y="38.0" width="12.0" height="12.0" fill="#e15759"></rect>
+<text x="98.0" y="48.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native)</text>
+<rect x="560.0" y="38.0" width="12.0" height="12.0" fill="#59a14f"></rect>
+<text x="578.0" y="48.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">vs v0.9.53 on the same format (both Parquet; 17 queries probed)</text>
+<rect x="1090.0" y="38.0" width="12.0" height="12.0" fill="#4e79a7"></rect>
+<text x="1108.0" y="48.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">vs official-967 (same build parameters)</text>
+<text x="70.0" y="450.0" font-size="11" text-anchor="start" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">Sources: results/round*.json (red, blue) and probes/format.json (green). Bars are clamped to 0.03-4.</text>
+</svg>

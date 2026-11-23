@@ -37,6 +37,22 @@
    - 但 ClickBench 测的是默认表，新版只能用 Parquet，所以 22 道回退题在 ClickBench 上会保留，拉低逐题比值。要缩小这个差距，得让 Parquet 读路径在这些题上追上旧版 Native，而不是修某个回退。
    - Q01、Q02、Q07 这几道小查询每题多出的 10–20 ms 是真实存在的差距，值得单独查。
 
+## 图表
+
+由 `python3 charts.py` 用已提交的 `results/round*.json` 和 `probes/format.json` 生成，没有重跑测试。冷跑、热跑、峰值的定义和下面的表格一致。
+
+**逐题热跑比值**（official-main-prs / 基线，对数坐标，低于 1 表示 main-prs 更快）。红色是按 ClickBench 的方式直接比 v0.9.53（v0.9.53 读 Native）；绿色是同为 Parquet 时比 v0.9.53，只测了 17 题，数据来自补充测试自己的测量；蓝色是比同构建参数的 official-967。超出 0.03–4 的柱子被截断（Q26 红色实际是 4.12）。
+
+![逐题热跑比值](charts/hot-ratio.svg)
+
+**逐题峰值 RSS**（GiB，所有运行中的最大值）：official-967 对 official-main-prs。
+
+![逐题峰值 RSS](charts/peak-rss.svg)
+
+**43 题合计**（秒）：五个版本的冷跑和热跑总和。
+
+![43 题合计](charts/summary.svg)
+
 ## 同格式对比
 
 数据来自 `probes/format.json`，由 `python3 probes/run_probes.py format` 生成。每格先预热 1 次，再取 4 次中的最快值，单位为秒，默认配置。v0.9.53 的 Parquet 表是在 v0.9.53 里用 `INSERT INTO hits_parquet SELECT * FROM hits` 生成的，99997497 行。

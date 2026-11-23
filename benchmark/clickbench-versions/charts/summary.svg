@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+<rect width="100%" height="100%" fill="white"/>
+<text x="450.0" y="26.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">Sum over the 43 queries (seconds)</text>
+<line x1="70.0" y1="350.0" x2="870.0" y2="350.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="354.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">0</text>
+<line x1="70.0" y1="294.0" x2="870.0" y2="294.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="298.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">10</text>
+<line x1="70.0" y1="238.0" x2="870.0" y2="238.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="242.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">20</text>
+<line x1="70.0" y1="182.0" x2="870.0" y2="182.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="186.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">30</text>
+<line x1="70.0" y1="126.0" x2="870.0" y2="126.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="130.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">40</text>
+<line x1="70.0" y1="70.0" x2="870.0" y2="70.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="74.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">50</text>
+<text x="24.0" y="210.0" font-size="12" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif" transform="rotate(-90 24.0 210.0)">seconds</text>
+<rect x="86.0" y="133.5" width="63.5" height="216.5" fill="#f28e2b"><title>v0.9.53 cold: 38.7</title></rect>
+<rect x="150.0" y="180.0" width="63.5" height="170.0" fill="#4e79a7"><title>v0.9.53 hot: 30.4</title></rect>
+<text x="150.0" y="364.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">v0.9.53</text>
+<rect x="246.0" y="122.6" width="63.5" height="227.4" fill="#f28e2b"><title>v1.2.955 cold: 40.6</title></rect>
+<rect x="310.0" y="168.8" width="63.5" height="181.2" fill="#4e79a7"><title>v1.2.955 hot: 32.4</title></rect>
+<text x="310.0" y="364.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">v1.2.955</text>
+<rect x="406.0" y="172.3" width="63.5" height="177.7" fill="#f28e2b"><title>v1.2.967 cold: 31.7</title></rect>
+<rect x="470.0" y="218.8" width="63.5" height="131.2" fill="#4e79a7"><title>v1.2.967 hot: 23.4</title></rect>
+<text x="470.0" y="364.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">v1.2.967</text>
+<rect x="566.0" y="174.2" width="63.5" height="175.8" fill="#f28e2b"><title>official-967 cold: 31.4</title></rect>
+<rect x="630.0" y="217.8" width="63.5" height="132.2" fill="#4e79a7"><title>official-967 hot: 23.6</title></rect>
+<text x="630.0" y="364.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">official-967</text>
+<rect x="726.0" y="178.6" width="63.5" height="171.4" fill="#f28e2b"><title>official-main-prs cold: 30.6</title></rect>
+<rect x="790.0" y="224.2" width="63.5" height="125.8" fill="#4e79a7"><title>official-main-prs hot: 22.5</title></rect>
+<text x="790.0" y="364.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">official-main-prs</text>
+<line x1="70.0" y1="70.0" x2="70.0" y2="350.0" stroke="#999" stroke-width="1"/>
+<line x1="70.0" y1="350.0" x2="870.0" y2="350.0" stroke="#999" stroke-width="1"/>
+<text x="118.0" y="129.5" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">38.66</text>
+<text x="182.0" y="176.0" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">30.36</text>
+<text x="278.0" y="118.6" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">40.61</text>
+<text x="342.0" y="164.8" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">32.36</text>
+<text x="438.0" y="168.3" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">31.74</text>
+<text x="502.0" y="214.8" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">23.43</text>
+<text x="598.0" y="170.2" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">31.39</text>
+<text x="662.0" y="213.8" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">23.61</text>
+<text x="758.0" y="174.6" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">30.61</text>
+<text x="822.0" y="220.2" font-size="11" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">22.47</text>
+<rect x="740.0" y="38.0" width="12.0" height="12.0" fill="#f28e2b"></rect>
+<text x="758.0" y="48.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">cold (run 1)</text>
+<rect x="740.0" y="56.0" width="12.0" height="12.0" fill="#4e79a7"></rect>
+<text x="758.0" y="66.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">hot (min of runs 2-3)</text>
+<text x="70.0" y="400.0" font-size="11" text-anchor="start" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">Source: results/round*.json, 2 rounds; cold = mean over rounds, hot = min over rounds.</text>
+</svg>

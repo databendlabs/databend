@@ -18,6 +18,7 @@
 | `bin/NAME/build-info.json` | 每个本地构建的提交、git log、rustc、cargo 命令、环境变量、profile、起止时间、sha256 |
 | `bench.py` | 导入（`load`）、记录环境（`manifest`）、交错测试（`run`） |
 | `report.py` → `report.md` | 汇总、结果一致性、逐题、逐 case 对比 |
+| `charts.py` → `charts/*.svg` | 用 `results/` 和 `probes/format.json` 画三张图：逐题热跑比值、逐题峰值 RSS、43 题合计；只用 Python 标准库 |
 | `manifest.json` | 机器（CPU、内核、调频、THP、cgroup、磁盘）、脚本与 SQL 的 sha256、源数据 sha256、配置模板、每个二进制的 sha256 和 `--version` |
 | `loads/NAME.json` | 导入用的 SQL、COPY/INSERT 耗时、行数、块数、数据大小、`SHOW CREATE TABLE`、完整 `system.configs`、与默认值不同的 settings |
 | `results/round{0,1}.json` | 每格（轮、题、版本）的时间戳、开始前主机 CPU 占用、启动耗时、3 次运行的耗时、峰值 RSS、行数、结果哈希，以及第 1 次运行的前 20 行结果 |
@@ -74,6 +75,7 @@ for n in v0.9.53 v1.2.955 v1.2.967 official-967 official-main-prs; do python3 be
 python3 bench.py manifest && python3 bench.py run 2
 for n in v0.9.53 v1.2.955 v1.2.967 official-967 official-main-prs; do cp /tmp/cb-versions/$n/load.json loads/$n.json; done
 python3 report.py > report.md
+python3 charts.py
 # 4. 补充测试（需要 v0.9.53 和 official-main-prs 的表已导入；format 会在 v0.9.53 里多建一张约 15 GB 的 hits_parquet）
 for p in format q03 small; do python3 probes/run_probes.py $p > probes/$p.log 2>&1; done
 ```
