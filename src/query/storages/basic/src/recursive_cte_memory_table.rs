@@ -23,6 +23,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -266,7 +267,7 @@ impl Table for RecursiveCteMemoryTable {
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
-        _deduplicated_label: Option<String>,
+        _deduplicated_label: Option<DmlDeduplicationId>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(

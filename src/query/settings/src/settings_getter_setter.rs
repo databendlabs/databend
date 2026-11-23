@@ -24,6 +24,7 @@ use databend_common_io::GeometryDataType;
 use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::schema::DmlDeduplicationToken;
 use databend_common_meta_app::storage::S3StorageClass;
 
 use crate::ChangeValue;
@@ -719,13 +720,10 @@ impl Settings {
     }
 
     /// # Safety
-    pub unsafe fn get_deduplicate_label(&self) -> Result<Option<String>> {
-        let deduplicate_label = unsafe { self.unchecked_try_get_string("deduplicate_label")? };
-        if deduplicate_label.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(deduplicate_label))
-        }
+    pub unsafe fn get_deduplicate_label(&self) -> Result<Option<DmlDeduplicationToken>> {
+        DmlDeduplicationToken::from_setting(unsafe {
+            self.unchecked_try_get_string("deduplicate_label")?
+        })
     }
 
     /// # Safety

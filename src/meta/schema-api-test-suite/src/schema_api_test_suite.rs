@@ -98,6 +98,10 @@ use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
+use databend_common_meta_app::schema::DmlDeduplicationEffect;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationMarker;
+use databend_common_meta_app::schema::DmlDeduplicationOperation;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -150,7 +154,6 @@ use databend_common_meta_app::schema::TableCloneBinding;
 use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
-use databend_common_meta_app::schema::TableDeduplicationLabelIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdList;
@@ -4084,8 +4087,17 @@ impl SchemaApiTestSuite {
     {
         let mut util = DbTableHarness::new(mt, "deduplication", "db", "stream", "STREAM");
         let tenant = util.tenant();
-        let label = "stream-retry";
-        let key = TableDeduplicationLabelIdent::new(&tenant, label).to_string_key();
+        let id = DmlDeduplicationId {
+            principal: databend_common_meta_app::principal::UserIdentity::new("loader", "%"),
+            catalog_id: 0,
+            table_id: 1,
+            operation: DmlDeduplicationOperation::Insert,
+            token: "stream/retry".to_owned().try_into()?,
+        };
+        let unrelated = DmlDeduplicationMarker {
+            id: id.clone(),
+            effect: DmlDeduplicationEffect::Table(1),
+        };
 
         for update_temp_tables in [vec![], vec![UpdateTempTableReq {
             table_id: 1,
@@ -4096,7 +4108,7 @@ impl SchemaApiTestSuite {
             let err = mt
                 .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
                     update_temp_tables,
-                    deduplicated_labels: vec![label.to_string()],
+                    deduplication_markers: vec![unrelated.clone()],
                     ..Default::default()
                 })
                 .await
@@ -4105,7 +4117,7 @@ impl SchemaApiTestSuite {
                 err,
                 KVAppError::AppError(AppError::DeduplicationLabelWithoutMetaUpdate)
             );
-            assert!(mt.get_kv(&key).await?.is_none());
+            assert!(!mt.has_dml_deduplication_marker(&tenant, &id).await?);
         }
 
         util.create_db().await?;
@@ -4113,19 +4125,41 @@ impl SchemaApiTestSuite {
         let stream = util.get_table().await?;
         let mut options = stream.meta.options.clone();
         options.insert("offset".to_string(), "42".to_string());
-        mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
-            update_stream_metas: vec![UpdateStreamMetaReq {
-                stream_id: stream.ident.table_id,
-                seq: MatchSeq::Exact(stream.ident.seq),
-                options: options.clone(),
-            }],
-            deduplicated_labels: vec![label.to_string()],
+        let updates = vec![UpdateStreamMetaReq {
+            stream_id: stream.ident.table_id,
+            seq: MatchSeq::Exact(stream.ident.seq),
+            options: options.clone(),
+        }];
+        let req = UpdateMultiTableMetaReq {
+            update_stream_metas: updates,
+            deduplication_markers: vec![unrelated],
             ..Default::default()
+        };
+        let err = mt
+            .update_multi_table_meta(&tenant, req.clone())
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err,
+            KVAppError::AppError(AppError::DeduplicationMarkerEffectMismatch)
+        );
+        assert_eq!(util.get_table().await?.ident, stream.ident);
+        assert!(!mt.has_dml_deduplication_marker(&tenant, &id).await?);
+
+        let marker =
+            DmlDeduplicationMarker::for_stream_updates(id.clone(), &req.update_stream_metas);
+        mt.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+            deduplication_markers: vec![marker],
+            ..req
         })
         .await?
         .unwrap();
         assert_eq!(util.get_table().await?.meta.options, options);
-        assert!(mt.get_kv(&key).await?.is_some());
+        assert!(mt.has_dml_deduplication_marker(&tenant, &id).await?);
+        assert!(
+            !mt.has_dml_deduplication_marker(&Tenant::new_literal("other"), &id)
+                .await?
+        );
 
         Ok(())
     }

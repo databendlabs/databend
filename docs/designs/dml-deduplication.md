@@ -18,21 +18,21 @@ This document distinguishes the current behavior from the target contract.
 
 Retain existing precedence: statement settings override the query header,
 which overrides session settings. Within SQL, a `SETTINGS` clause takes
-precedence over `SET_VAR` hints when both appear. Apply the same token
-validation to all accepted forms. Do not inherit an outer label as a separate
-retry token for each nested statement in a script or procedure; a client
-retrying a whole script needs a separate contract. Explicit labels on individual
-statements follow the rules below.
+precedence over `SET_VAR` hints when both appear. All accepted forms limit the
+label to 256 UTF-8 bytes. An empty label means no token. Do not inherit an outer
+label as a separate retry token for each nested statement in a script or
+procedure; a client retrying a whole script needs a separate contract. Explicit
+labels on individual statements follow the rules below.
 
 ## Supported operations
 
 | Operation | Current behavior | Target behavior |
 | --- | --- | --- |
-| Single-target `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, `MERGE`, and `COPY INTO <table>` on a persistent Fuse-backed table | The interpreter can check a label before execution, and the Fuse commit path can record it. A label is currently shared across statement kinds and targets within the tenant. | Support a bounded token scoped to the authenticated principal, catalog, target, and operation kind. A retry must use the same token for the same logical operation. A successful retry may return an already-committed outcome rather than replaying the original result. |
+| Single-target `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, `MERGE`, and `COPY INTO <table>` on a persistent Fuse-backed table | For the default catalog, Query uses the same versioned identity for preflight lookup and commit: tenant, authenticated account (name and host), catalog ID, table ID, operation kind, and token. Meta checks that each marker names an update in the commit. Table renames preserve the ID; recreation assigns a new one. | Support a bounded token scoped to the authenticated principal, catalog, target, and operation kind. A retry must use the same token for the same logical operation. A successful retry may return an already-committed outcome rather than replaying the original result. |
 | Supported DML that consumes a stream but changes no table rows | A stream-offset-only commit can record a marker. | Keep this path: advancing an offset is a durable effect. A statement with no durable effect leaves no persistent marker. |
 | Supported statements inside an explicit transaction | The open transaction checks buffered labels. Only statements with persistent updates contribute markers at commit. | Keep duplicate handling local to the open transaction until commit and publish only markers tied to durable effects. Rollback leaves no persistent marker. A conflicting marker must not cause a transaction containing new work to report success. A statement token does not identify or replay the whole transaction. |
 | Temporary-table-only writes | No persistent marker is written. A label is buffered only for duplicate checks within an open transaction. | Reject a token before execution until a session-local retry contract exists. Never persist a marker for a temporary-table-only write. |
-| `COPY INTO <location>` | It consults the same lookup as table writes, but the stage sink does not record a matching marker. | Reject a token before execution until an export-specific contract exists. A table-write marker does not prove that an external file was written. |
+| `COPY INTO <location>` | A nonempty token is rejected before building the export pipeline. Exports never look up or write table markers. | Reject a token before execution until an export-specific contract exists. A table-write marker does not prove that an external file was written. |
 | Multi-table `INSERT`, other storage engines without marker support, and other statements without a retry contract | Not consistently covered; for example, multi-table `INSERT` does not pass a label to its commit plan. | Reject an explicit token on unsupported operations before execution. Do not silently run an unsupported labeled write as an ordinary write. |
 
 The supported table-write contract covers the durable commit, not all work done

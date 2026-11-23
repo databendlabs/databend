@@ -23,6 +23,7 @@ use databend_common_config::default_server_memory_limit;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::schema::DmlDeduplicationToken;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
 use once_cell::sync::OnceCell;
@@ -1942,6 +1943,9 @@ impl DefaultSettings {
 
     /// Converts and validates a setting value based on its key.
     pub fn convert_value(k: String, v: String) -> Result<(String, UserSettingValue)> {
+        if k == "deduplicate_label" {
+            DmlDeduplicationToken::validate_setting(&v)?;
+        }
         // Retrieve the default settings instance
         let default_settings = DefaultSettings::instance()?;
 

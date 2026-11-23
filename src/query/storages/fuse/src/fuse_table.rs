@@ -71,6 +71,7 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -1308,7 +1309,7 @@ impl Table for FuseTable {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
-        deduplicated_label: Option<String>,
+        deduplicated_label: Option<DmlDeduplicationId>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         self.do_commit(

@@ -33,6 +33,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationMarker;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TruncateTableReq;
@@ -127,7 +129,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
-    deduplicated_label: Option<String>,
+    deduplicated_label: Option<DmlDeduplicationId>,
     table_meta_timestamps: TableMetaTimestamps,
     vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
     // Tracks whether the ongoing mutation produced no physical changes.
@@ -159,11 +161,19 @@ where F: SnapshotGenerator + Send + Sync + 'static
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
         prev_snapshot_id: Option<SnapshotId>,
-        deduplicated_label: Option<String>,
+        deduplicated_label: Option<DmlDeduplicationId>,
         table_meta_timestamps: TableMetaTimestamps,
         acquire_commit_lock: bool,
         expected_ttl: Option<String>,
     ) -> Result<ProcessorPtr> {
+        let info = table.get_table_info();
+        if deduplicated_label.as_ref().is_some_and(|id| {
+            id.table_id != info.ident.table_id || id.catalog_id != info.catalog_info.id.catalog_id
+        }) {
+            return Err(ErrorCode::InvalidOperation(
+                "Deduplication target changed before commit",
+            ));
+        }
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
         let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
         let vacuum_handler = if LicenseManagerSwitch::instance()
@@ -452,12 +462,23 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         let table_info = self.table.get_table_info();
         let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
+        let mut req = UpdateMultiTableMetaReq {
+            update_stream_metas: self.update_stream_meta.clone(),
+            ..Default::default()
+        };
+        if let Some(id) = self.deduplicated_label.clone() {
+            if self.table.is_temp() {
+                req.local_deduplication_token = Some(id);
+            } else {
+                req.deduplication_markers
+                    .push(DmlDeduplicationMarker::for_stream_updates(
+                        id,
+                        &self.update_stream_meta,
+                    ));
+            }
+        }
         catalog
-            .update_multi_table_meta(&self.ctx.get_tenant(), UpdateMultiTableMetaReq {
-                update_stream_metas: self.update_stream_meta.clone(),
-                deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
-                ..Default::default()
-            })
+            .update_multi_table_meta(&self.ctx.get_tenant(), req)
             .await?;
 
         let stream_descriptions = self

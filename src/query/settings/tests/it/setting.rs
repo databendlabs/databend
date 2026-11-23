@@ -231,7 +231,9 @@ fn test_deduplicate_label_is_session_scoped() {
         .set_setting(key.to_string(), "daily_import".to_string())
         .unwrap();
     assert_eq!(
-        unsafe { settings.get_deduplicate_label().unwrap() }.as_deref(),
+        unsafe { settings.get_deduplicate_label().unwrap() }
+            .as_ref()
+            .map(|token| token.as_str()),
         Some("daily_import")
     );
 }

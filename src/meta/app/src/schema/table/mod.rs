@@ -41,6 +41,10 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
+use crate::app_error::AppError;
+use crate::schema::DmlDeduplicationEffect;
+use crate::schema::DmlDeduplicationId;
+use crate::schema::DmlDeduplicationMarker;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::materialized_view::CreateMaterializedViewMeta;
@@ -879,7 +883,9 @@ pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
-    pub deduplicated_labels: Vec<String>,
+    pub deduplication_markers: Vec<DmlDeduplicationMarker>,
+    /// Used for duplicate checks in an open transaction; never stored in Meta.
+    pub local_deduplication_token: Option<DmlDeduplicationId>,
     pub update_temp_tables: Vec<UpdateTempTableReq>,
 }
 
@@ -888,8 +894,38 @@ impl UpdateMultiTableMetaReq {
         self.update_table_metas.is_empty()
             && self.copied_files.is_empty()
             && self.update_stream_metas.is_empty()
-            && self.deduplicated_labels.is_empty()
+            && self.deduplication_markers.is_empty()
+            && self.local_deduplication_token.is_none()
             && self.update_temp_tables.is_empty()
+    }
+
+    pub fn validate_deduplication_markers(&self) -> std::result::Result<(), AppError> {
+        if !self.deduplication_markers.is_empty() && !self.has_persistent_updates() {
+            return Err(AppError::DeduplicationLabelWithoutMetaUpdate);
+        }
+        for marker in &self.deduplication_markers {
+            let matches = match &marker.effect {
+                DmlDeduplicationEffect::Table(id) => {
+                    marker.id.table_id == *id
+                        && self.update_table_metas.iter().any(|(req, info)| {
+                            req.table_id == *id
+                                && info.catalog_info.id.catalog_id == marker.id.catalog_id
+                        })
+                }
+                DmlDeduplicationEffect::Streams(ids) => {
+                    !ids.is_empty()
+                        && ids.iter().all(|id| {
+                            self.update_stream_metas
+                                .iter()
+                                .any(|req| req.stream_id == *id)
+                        })
+                }
+            };
+            if !matches {
+                return Err(AppError::DeduplicationMarkerEffectMismatch);
+            }
+        }
+        Ok(())
     }
 
     /// Deduplication labels and temporary table updates are not persistent work.

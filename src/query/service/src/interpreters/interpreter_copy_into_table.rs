@@ -46,6 +46,8 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileCompression;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationOperation;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::Pipeline;
@@ -67,8 +69,9 @@ use log::info;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::DmlDeduplication;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::check_dml_deduplication;
 use crate::physical_plans::CopyIntoTable;
 use crate::physical_plans::CopyIntoTableSource;
 use crate::physical_plans::Exchange;
@@ -84,6 +87,7 @@ use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
+use crate::sql::plans::CopyIntoTableMode;
 use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
 use crate::stream::DataBlockStream;
@@ -830,7 +834,7 @@ impl CopyIntoTableInterpreter {
         files_to_copy: Vec<StageFileInfo>,
         duplicated_files_detected: Vec<String>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
-        deduplicated_label: Option<String>,
+        deduplicated_label: Option<DmlDeduplicationId>,
         path_prefix: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
         new_schema: Option<TableSchemaRef>,
@@ -964,11 +968,6 @@ impl Interpreter for CopyIntoTableInterpreter {
         Box::pin(async move {
             debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
-
             let plan = &self.plan;
             let to_table = self
                 .ctx
@@ -987,6 +986,20 @@ impl Interpreter for CopyIntoTableInterpreter {
             );
 
             to_table.check_mutable()?;
+            let operation = match plan.write_mode {
+                CopyIntoTableMode::Copy => DmlDeduplicationOperation::CopyIntoTable,
+                CopyIntoTableMode::Insert { overwrite: false } => DmlDeduplicationOperation::Insert,
+                CopyIntoTableMode::Insert { overwrite: true } => {
+                    DmlDeduplicationOperation::InsertOverwrite
+                }
+                CopyIntoTableMode::Replace => DmlDeduplicationOperation::Replace,
+            };
+            let DmlDeduplication::Proceed(deduplication) =
+                check_dml_deduplication(self.ctx.as_ref(), to_table.as_ref(), operation).await?
+            else {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            };
 
             if self.plan.no_file_to_copy {
                 self.ctx.attach_query_lineage(None);
@@ -1030,7 +1043,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                     files_to_copy,
                     duplicated_files_detected,
                     update_stream_meta,
-                    unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                    deduplication,
                     self.plan.path_prefix.clone(),
                     table_meta_timestamps,
                     new_schema,

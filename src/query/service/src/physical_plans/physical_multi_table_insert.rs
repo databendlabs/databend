@@ -984,7 +984,6 @@ pub struct ChunkCommitInsert {
     pub input: PhysicalPlan,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub overwrite: bool,
-    pub deduplicated_label: Option<String>,
     pub input_commit_meta: bool,
     pub targets: Vec<SerializableTable>,
 }
@@ -1023,7 +1022,6 @@ impl IPhysicalPlan for ChunkCommitInsert {
             input,
             update_stream_meta: self.update_stream_meta.clone(),
             overwrite: self.overwrite,
-            deduplicated_label: self.deduplicated_label.clone(),
             input_commit_meta: self.input_commit_meta,
             targets: self.targets.clone(),
         })
@@ -1052,7 +1050,6 @@ impl IPhysicalPlan for ChunkCommitInsert {
                     builder.ctx.clone(),
                     self.overwrite,
                     self.update_stream_meta.clone(),
-                    self.deduplicated_label.clone(),
                     catalog.clone(),
                     table_meta_timestampss.clone(),
                 ),

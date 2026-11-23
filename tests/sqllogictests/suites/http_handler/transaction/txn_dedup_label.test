@@ -13,29 +13,35 @@ begin;
 statement ok
 INSERT /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 (a, b) VALUES(1, false);
 
+# A second attempt of the same statement is skipped inside the transaction.
+statement ok
+INSERT /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 (a, b) VALUES(1, false);
+
+# UPDATE and REPLACE use a separate retry scope even with the same token.
 statement ok
 UPDATE /*+ SET_VAR(deduplicate_label='databend') */ t1 SET a = 20 WHERE b = false;
 
-query II
+query IB
 SELECT * FROM t1;
 ----
-1 0
+20 0
 
 statement ok
 commit;
 
-query II
+query IB
 SELECT * FROM t1;
 ----
-1 0
+20 0
 
 statement ok
 REPLACE /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 on(a,b) VALUES(40, false);
 
-query II
-SELECT * FROM t1;
+query IB
+SELECT * FROM t1 ORDER BY a;
 ----
-1 0
+20 0
+40 0
 
 statement ok
 drop database test_txn_dedup_label;

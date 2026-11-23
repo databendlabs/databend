@@ -45,6 +45,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -745,7 +746,7 @@ impl Table for IcebergTable {
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
-        _deduplicated_label: Option<String>,
+        _deduplicated_label: Option<DmlDeduplicationId>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         if overwrite {

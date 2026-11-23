@@ -47,6 +47,7 @@ use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -766,6 +767,16 @@ impl Catalog for DatabaseCatalog {
     ) -> Result<UpsertTableOptionReply> {
         self.mutable_catalog
             .upsert_table_option(tenant, db_name, req)
+            .await
+    }
+
+    async fn has_dml_deduplication_marker(
+        &self,
+        tenant: &Tenant,
+        id: &DmlDeduplicationId,
+    ) -> Result<bool> {
+        self.mutable_catalog
+            .has_dml_deduplication_marker(tenant, id)
             .await
     }
 

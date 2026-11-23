@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -25,7 +26,6 @@ use log::info;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
 use crate::physical_plans::CopyIntoLocation;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
@@ -33,6 +33,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::CopyIntoLocationPlan;
 use crate::sql::plans::Plan;
@@ -128,9 +129,10 @@ impl Interpreter for CopyIntoLocationInterpreter {
         Box::pin(async move {
             debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
 
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
+            if unsafe { self.ctx.get_settings().get_deduplicate_label()? }.is_some() {
+                return Err(ErrorCode::InvalidOperation(
+                    "COPY INTO <location> does not support deduplicate_label",
+                ));
             }
 
             let (mut pipeline_build_result, update_stream_reqs) = self

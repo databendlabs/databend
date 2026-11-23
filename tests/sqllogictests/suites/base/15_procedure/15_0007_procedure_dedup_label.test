@@ -15,6 +15,7 @@ statement ok
 CREATE PROCEDURE test_dedup_operations() RETURNS string not null LANGUAGE SQL AS $$
 BEGIN
     INSERT /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 (a, b) VALUES(1, false);
+    INSERT /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 (a, b) VALUES(1, false);
     UPDATE /*+ SET_VAR(deduplicate_label='databend') */ t1 SET a = 20 WHERE b = false;
     RETURN 'dedup operations completed';
 END;
@@ -29,7 +30,7 @@ call procedure test_dedup_operations();
 query IB
 SELECT * FROM t1;
 ----
-1 0
+20 0
 
 statement ok
 commit;
@@ -37,16 +38,17 @@ commit;
 query IB
 SELECT * FROM t1;
 ----
-1 0
+20 0
 
 # Test REPLACE with deduplication label outside procedure
 statement ok
 REPLACE /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 on(a,b) VALUES(40, false);
 
 query IB
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY a;
 ----
-1 0
+20 0
+40 0
 
 statement ok
 drop procedure if exists test_dedup_operations();

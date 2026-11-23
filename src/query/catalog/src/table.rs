@@ -31,6 +31,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -290,7 +291,7 @@ pub trait Table: Sync + Send {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
-        _deduplicated_label: Option<String>,
+        _deduplicated_label: Option<DmlDeduplicationId>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _, _, _, _) = (

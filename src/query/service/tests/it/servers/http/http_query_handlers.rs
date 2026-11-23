@@ -26,12 +26,14 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
+use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::schema::DmlDeduplicationToken;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::CustomClaims;
@@ -448,6 +450,135 @@ async fn test_query_error_is_returned_unscrubbed() -> anyhow::Result<()> {
         assert_eq!(status, StatusCode::OK, "{:?}", result);
         let message = result.error.map(|e| e.message).unwrap_or_default();
         assert!(message.contains(kept), "{sql}: {message}");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_dml_deduplication_ingress_byte_limit() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    let token = format!("/{}/", "a".repeat(DmlDeduplicationToken::MAX_BYTES - 2));
+    for token in [token.clone(), format!("{token}/")] {
+        let should_pass = token.len() == DmlDeduplicationToken::MAX_BYTES;
+        let mut headers = HeaderMap::new();
+        headers.insert(HEADER_DEDUPLICATE_LABEL, HeaderValue::from_str(&token)?);
+        let (_, header) = post_sql_to_endpoint_new_session(&ep, "SELECT 1", 5, headers).await?;
+        let (_, session) = post_json_to_endpoint(
+            &ep,
+            &serde_json::json!({
+                "sql": "SELECT 1",
+                "session": {"settings": {"deduplicate_label": token}},
+            }),
+            HeaderMap::new(),
+        )
+        .await?;
+        let (_, hint) = post_sql_to_endpoint(
+            &ep,
+            &format!("SELECT /*+ SET_VAR(deduplicate_label='{token}') */ 1"),
+            5,
+        )
+        .await?;
+        let (_, settings) = post_sql_to_endpoint(
+            &ep,
+            &format!("SETTINGS (deduplicate_label='{token}') SELECT 1"),
+            5,
+        )
+        .await?;
+        let (_, set) =
+            post_sql_to_endpoint(&ep, &format!("SET deduplicate_label = '{token}'"), 5).await?;
+        for response in [header, session, hint, settings, set] {
+            if should_pass {
+                assert!(response.error.is_none(), "{response:?}");
+            } else {
+                assert_eq!(
+                    response.error.as_ref().map(|e| e.code),
+                    Some(ErrorCode::WRONG_VALUE_FOR_VARIABLE),
+                    "{response:?}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_dml_deduplication_retry_across_sessions() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let table = format!("{}.retry_writes", fixture.default_db_name());
+    fixture
+        .execute_command(&format!("CREATE TABLE {table}(id INT)"))
+        .await?;
+    let ep = create_endpoint()?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        HEADER_DEDUPLICATE_LABEL,
+        HeaderValue::from_static("daily/import%"),
+    );
+    for _ in 0..2 {
+        let (status, result) = post_sql_to_endpoint_new_session(
+            &ep,
+            &format!("INSERT INTO {table} VALUES (1)"),
+            10,
+            headers.clone(),
+        )
+        .await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{result:?}");
+    }
+    let other = format!("{}.other_writes", fixture.default_db_name());
+    let renamed = format!("{}.renamed_writes", fixture.default_db_name());
+    fixture
+        .execute_command(&format!("CREATE TABLE {other}(id INT)"))
+        .await?;
+    for sql in [
+        format!("INSERT INTO {other} VALUES (3)"),
+        format!("UPDATE {table} SET id = id + 1"),
+    ] {
+        let (_, result) = post_sql_to_endpoint_new_session(&ep, &sql, 10, headers.clone()).await?;
+        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{result:?}");
+    }
+    fixture
+        .execute_command(&format!("ALTER TABLE {table} RENAME TO renamed_writes"))
+        .await?;
+    fixture
+        .execute_command(&format!("CREATE TABLE {table}(id INT)"))
+        .await?;
+    for target in [&renamed, &table] {
+        let (_, result) = post_sql_to_endpoint_new_session(
+            &ep,
+            &format!("INSERT INTO {target} VALUES (1)"),
+            10,
+            headers.clone(),
+        )
+        .await?;
+        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{result:?}");
+    }
+    for (target, value) in [(&renamed, "2"), (&table, "1"), (&other, "3")] {
+        let (_, result) =
+            post_sql_to_endpoint(&ep, &format!("SELECT id FROM {target}"), 10).await?;
+        assert_eq!(
+            result.data,
+            [[Some(value.to_string())]],
+            "{target}: {result:?}"
+        );
+    }
+    #[cfg(feature = "storage-stage")]
+    {
+        fixture.execute_command("CREATE STAGE retry_stage").await?;
+        let (_, result) = post_sql_to_endpoint_new_session(
+            &ep,
+            "COPY INTO @retry_stage FROM (SELECT 1) FILE_FORMAT = (TYPE = CSV)",
+            10,
+            headers,
+        )
+        .await?;
+        assert_eq!(
+            result.error.as_ref().map(|err| err.code),
+            Some(ErrorCode::INVALID_OPERATION),
+            "{result:?}"
+        );
     }
     Ok(())
 }

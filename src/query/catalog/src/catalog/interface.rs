@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -475,6 +476,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         db_name: &str,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
+
+    async fn has_dml_deduplication_marker(
+        &self,
+        _tenant: &Tenant,
+        _id: &DmlDeduplicationId,
+    ) -> Result<bool> {
+        Ok(false)
+    }
 
     async fn retryable_update_multi_table_meta(
         &self,

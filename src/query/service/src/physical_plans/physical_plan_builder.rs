@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::ColumnSet;
@@ -497,6 +498,7 @@ impl PhysicalPlanBuilder {
 
 #[derive(Clone)]
 pub struct MutationBuildInfo {
+    pub deduplication: Option<DmlDeduplicationId>,
     pub table_info: TableInfo,
     pub table_snapshot: Option<Arc<TableSnapshot>>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,

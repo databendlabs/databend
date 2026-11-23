@@ -951,6 +951,9 @@ pub enum AppError {
     #[error("Deduplication labels require a persistent metadata update")]
     DeduplicationLabelWithoutMetaUpdate,
 
+    #[error("Deduplication marker does not match the metadata updates in its request")]
+    DeduplicationMarkerEffectMismatch,
+
     #[error(transparent)]
     SharedTableSecurityPolicy(#[from] SharedTableSecurityPolicy),
 
@@ -1485,7 +1488,8 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
-            AppError::DeduplicationLabelWithoutMetaUpdate => {
+            AppError::DeduplicationLabelWithoutMetaUpdate
+            | AppError::DeduplicationMarkerEffectMismatch => {
                 ErrorCode::InvalidArgument(app_err.to_string())
             }
             AppError::SharedTableSecurityPolicy(err) => ErrorCode::AlterTableError(err.message()),
