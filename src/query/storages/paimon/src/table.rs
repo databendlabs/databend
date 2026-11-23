@@ -452,7 +452,6 @@ impl Table for PaimonTable {
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
-        _deduplicated_label: Option<String>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         self.validate_insert(overwrite)?;

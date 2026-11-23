@@ -127,7 +127,6 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
-    deduplicated_label: Option<String>,
     table_meta_timestamps: TableMetaTimestamps,
     vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
     // Tracks whether the ongoing mutation produced no physical changes.
@@ -159,7 +158,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
         prev_snapshot_id: Option<SnapshotId>,
-        deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
         acquire_commit_lock: bool,
         expected_ttl: Option<String>,
@@ -198,7 +196,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
             prev_snapshot_id,
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
-            deduplicated_label,
             table_meta_timestamps,
             vacuum_handler,
             pending_noop_commit: false,
@@ -441,10 +438,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
     /// Used when the mutation produced no table changes but still consumed streams. The update
     /// goes through the catalog, so it is buffered in an active explicit transaction and follows
     /// the transaction's commit / rollback semantics, or is committed directly in autocommit mode.
-    ///
-    /// The deduplication label is committed together with the stream offsets: the statement has
-    /// observable effects (the stream is consumed), so a retry with the same label must be
-    /// recognized as a duplicate instead of consuming the next batch.
     async fn commit_stream_meta_only(&self) -> Result<()> {
         if self.update_stream_meta.is_empty() {
             return Ok(());
@@ -455,7 +448,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
         catalog
             .update_multi_table_meta(&self.ctx.get_tenant(), UpdateMultiTableMetaReq {
                 update_stream_metas: self.update_stream_meta.clone(),
-                deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
                 ..Default::default()
             })
             .await?;
@@ -774,7 +766,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             &self.update_stream_meta,
                             &self.dal,
                             lvt_check,
-                            self.deduplicated_label.clone(),
                         )
                         .await
                 }

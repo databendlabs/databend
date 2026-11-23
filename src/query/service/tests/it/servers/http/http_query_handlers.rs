@@ -453,6 +453,32 @@ async fn test_query_error_is_returned_unscrubbed() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_legacy_deduplication_header_has_no_effect() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let table = format!("{}.writes", fixture.default_db_name());
+    fixture
+        .execute_command(&format!("CREATE TABLE {table}(id INT) ENGINE=FUSE"))
+        .await?;
+    let ep = create_endpoint()?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        "x-databend-deduplicate-label",
+        HeaderValue::from_static("legacy"),
+    );
+    let insert = format!("INSERT INTO {table} VALUES (1)");
+    for _ in 0..2 {
+        let (_, result) =
+            post_sql_to_endpoint_new_session(&ep, &insert, 10, headers.clone()).await?;
+        assert_eq!(result.state, ExecuteStateKind::Succeeded, "{result:?}");
+    }
+    let (_, result) =
+        post_sql_to_endpoint(&ep, &format!("SELECT count() FROM {table}"), 10).await?;
+    assert_eq!(result.data, [[Some("2".to_string())]]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_simple_sql() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 

@@ -266,7 +266,6 @@ impl Table for RecursiveCteMemoryTable {
         _update_stream_meta: Vec<UpdateStreamMetaReq>,
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
-        _deduplicated_label: Option<String>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(

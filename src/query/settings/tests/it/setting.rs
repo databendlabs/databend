@@ -17,8 +17,6 @@ use databend_common_config::InnerConfig;
 use databend_common_config::default_server_memory_limit;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_settings::DefaultSettings;
-use databend_common_settings::SettingScope;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
 
@@ -222,17 +220,14 @@ async fn test_set_global_settings() {
 }
 
 #[test]
-fn test_deduplicate_label_is_session_scoped() {
-    let key = "deduplicate_label";
-    assert!(DefaultSettings::check_setting_scope(key, SettingScope::Global).is_err());
-
+fn test_deduplicate_label_is_not_a_setting() {
     let settings = Settings::create(Tenant::new_literal("test"));
-    settings
-        .set_setting(key.to_string(), "daily_import".to_string())
-        .unwrap();
+    let err = settings
+        .set_setting("deduplicate_label".to_string(), "legacy".to_string())
+        .unwrap_err();
     assert_eq!(
-        unsafe { settings.get_deduplicate_label().unwrap() }.as_deref(),
-        Some("daily_import")
+        err.code(),
+        databend_common_exception::ErrorCode::UNKNOWN_VARIABLE
     );
 }
 

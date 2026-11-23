@@ -192,7 +192,6 @@ impl FuseTable {
                 input,
                 None,
                 Some(previous),
-                None,
                 timestamps,
                 false,
                 None,
