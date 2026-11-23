@@ -45,6 +45,7 @@ impl CacheRegistry {
             .register::<parquet::Meta>()
             .register::<iceberg::Table>()
             .register::<table::PruneResult>()
+            .register::<table::Condition>()
             .register::<bloom::Filter>()
             .register::<zone_map::Chunk>()
             .register::<vector::Index>()

@@ -79,6 +79,8 @@ impl ReadBlockContext {
         Ok(ParquetDataSource {
             data,
             virtual_data: virtual_source,
+            condition: None,
+            io_skipped: false,
         })
     }
 

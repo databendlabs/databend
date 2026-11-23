@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_storages_common_cache::BlockCondition;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_cache::CachedVectorIndex;
@@ -62,6 +63,8 @@ pub struct FuseCaches {
     pub vector_refine_pages: MemCache<VectorIndexFile>,
     /// Pruning results of deterministic scans (`enable_prune_cache`).
     pub prune_results: MemCache<(PartStatistics, Partitions)>,
+    /// Prewhere results by filter and block (`enable_condition_cache`).
+    pub conditions: MemCache<BlockCondition>,
     pub inverted: InvertedIndexCache,
     /// Decoded HNSW indexes. Readers holding one keep it charged.
     pub vector_indexes: MemCache<CachedVectorIndex>,
@@ -161,6 +164,7 @@ impl FuseCaches {
             spatial_files: manager.cache::<spatial::Index>(),
             vector_refine_pages: manager.cache::<vector::Refine>(),
             prune_results: manager.cache::<table::PruneResult>(),
+            conditions: manager.cache::<table::Condition>(),
             inverted: InvertedIndexCache {
                 meta: manager.cache::<inverted::Meta>(),
                 lookup: manager.cache::<inverted::Lookup>(),
@@ -195,6 +199,7 @@ impl FuseCaches {
             spatial_files: self.spatial_files.with_policy(policy),
             vector_refine_pages: self.vector_refine_pages.with_policy(policy),
             prune_results: self.prune_results.with_policy(policy),
+            conditions: self.conditions.with_policy(policy),
             inverted: self.inverted.with_policy(policy),
             vector_indexes: self.vector_indexes.with_policy(policy),
             column_arrays: self.column_arrays.with_policy(policy),
