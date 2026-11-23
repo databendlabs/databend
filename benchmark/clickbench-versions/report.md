@@ -1,11 +1,11 @@
-## 环境
+## Environment
 
-- 生成：2026-11-21T21:01:32Z；CPU：12th Gen Intel(R) Core(TM) i9-12900KF；内核 6.17.6-arch1-1；调频 `powersave`；THP `[always] madvise never`
-- 绑核 `taskset -c 0-15`；cgroup cpu.max `max 100000`，memory.max `max`；drop_caches 可写：no: [Errno 30] Read-only file system: '/proc/sys/vm/drop_caches'
-- 源数据 `/tmp/tpch-local/hits/hits.parquet`，14779976446 字节，sha256 `a390f6cb782f6aae…`
-- 轮数 2；每格开始前等主机 CPU 占用 < 10%（1 秒采样，最多等 300 秒），实测最大 9.8%
+- Recorded 2026-11-21T21:01:32Z; CPU 12th Gen Intel(R) Core(TM) i9-12900KF; kernel 6.17.6-arch1-1; governor `powersave`; THP `[always] madvise never`
+- Pinned with `taskset -c 0-15`; cgroup cpu.max `max 100000`, memory.max `max`; drop_caches writable: no: [Errno 30] Read-only file system: '/proc/sys/vm/drop_caches'
+- Source data `/tmp/tpch-local/hits/hits.parquet`, 14779976446 bytes, sha256 `a390f6cb782f6aae…`
+- 2 rounds; before each cell the harness waits until host CPU use is below 10% (1 s sample, at most 300 s); the highest observed was 9.8%
 
-| 版本 | 来源 | databend-query sha256 | `--version` |
+| release | source | databend-query sha256 | `--version` |
 |---|---|---|---|
 | v0.9.53 | official release v0.9.53-nightly (the version ClickBench uses) | `ed24921e5697` | `databend-query v0.9.53-nightly-c960892(rust-1.68.0-nightly-2023-02-26T07:06:28.204406701Z)` |
 | v1.2.955 | official release v1.2.955-nightly, commit 058a1e8fbd, before encoded columns #20819 | `aa0e764d2774` | `databend-query v1.2.955-058a1e8fbd(rust-1.100.0-nightly-2026-10-25T22:13:30.190776770Z)` |
@@ -13,19 +13,19 @@
 | official-967 | commit 25ca45599d (= v1.2.967) built locally by build-official.sh with the release CI parameters; meta from the v1.2.967 package | `7c531a49ca62` | `databend-query v1.2.967-25ca45599d(rust-1.101.0-nightly-2026-11-21T20:09:51.167759719Z)` |
 | official-main-prs | upstream/main 177b395dd3 + #21138 + #21144 (581c894436) built by build-official.sh; meta from the v1.2.967 package | `6c59b5f5ed49` | `databend-query v1.2.967-581c894436(rust-1.101.0-nightly-2026-11-21T20:24:58.225847978Z)` |
 
-## 导入
+## Load
 
-| 版本 | COPY | INSERT … SELECT | 合计 | 行数 | 块数 | 数据大小 | 非默认 settings |
+| release | COPY | INSERT … SELECT | total | rows | blocks | data size | non-default settings |
 |---|---:|---:|---:|---:|---:|---:|---|
-| v0.9.53 | 48.2 s | 164.0 s | 212.2 s | 99997497 | 779 | 20.75 GB | 无 |
-| v1.2.955 | 57.2 s | 55.8 s | 112.9 s | 99997497 | 731 | 14.79 GB | 无 |
-| v1.2.967 | 57.1 s | 56.5 s | 113.6 s | 99997497 | 729 | 14.78 GB | 无 |
-| official-967 | 58.0 s | 57.0 s | 115.0 s | 99997497 | 730 | 14.79 GB | 无 |
-| official-main-prs | 58.1 s | 57.1 s | 115.2 s | 99997497 | 735 | 14.78 GB | 无 |
+| v0.9.53 | 48.2 s | 164.0 s | 212.2 s | 99997497 | 779 | 20.75 GB | none |
+| v1.2.955 | 57.2 s | 55.8 s | 112.9 s | 99997497 | 731 | 14.79 GB | none |
+| v1.2.967 | 57.1 s | 56.5 s | 113.6 s | 99997497 | 729 | 14.78 GB | none |
+| official-967 | 58.0 s | 57.0 s | 115.0 s | 99997497 | 730 | 14.79 GB | none |
+| official-main-prs | 58.1 s | 57.1 s | 115.2 s | 99997497 | 735 | 14.78 GB | none |
 
-## 汇总（43 / 43 题全部成功）
+## Summary (43 / 43 queries succeeded on every release)
 
-| 版本 | 冷跑总和 | 热跑总和 | 热跑总和 R1 | 热跑总和 R2 | Q32 峰值 RSS | 启动中位数 | 热跑几何平均 / v0.9.53 | 热跑几何平均 / official-967 |
+| release | cold sum | hot sum | hot sum R1 | hot sum R2 | Q32 peak RSS | median startup | hot geomean / v0.9.53 | hot geomean / official-967 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | v0.9.53 | 38.66 s | 30.36 s | 30.59 s | 30.63 s | 13.1 GiB | 0.21 s | 1.000 | 0.815 |
 | v1.2.955 | 40.61 s | 32.36 s | 32.61 s | 33.15 s | 15.0 GiB | 1.54 s | 1.582 | 1.289 |
@@ -33,62 +33,62 @@
 | official-967 | 31.39 s | 23.61 s | 23.80 s | 23.89 s | 16.6 GiB | 1.53 s | 1.227 | 1.000 |
 | official-main-prs | 30.61 s | 22.47 s | 22.59 s | 22.99 s | 13.3 GiB | 1.28 s | 1.189 | 0.969 |
 
-轮间噪声（同一版本两轮热跑之比的几何平均绝对偏差）：v0.9.53 5.0%，v1.2.955 5.0%，v1.2.967 8.2%，official-967 3.8%，official-main-prs 3.6%
+Round-to-round noise (geomean absolute deviation of the hot-time ratio between the two rounds of a release): v0.9.53 5.0%, v1.2.955 5.0%, v1.2.967 8.2%, official-967 3.8%, official-main-prs 3.6%
 
-## 结果一致性
+## Result consistency
 
-每题第 1 次运行的行数与结果哈希（行排序后）。不同版本的数值格式可能不同，哈希不同不一定是结果错。
+Row count and result hash (rows sorted) of run 1 of every query. Releases may format numbers differently, so a different hash does not by itself mean a wrong result.
 
-- Q03 哈希分组：v0.9.53 / v1.2.955、v1.2.967、official-967、official-main-prs
-- Q17 v0.9.53：同一版本 3 次运行结果不同
-- Q17 哈希分组：v0.9.53 / v1.2.955、v1.2.967、official-967、official-main-prs
-- Q24 v1.2.955：同一版本 3 次运行结果不同
-- Q24 v1.2.967：同一版本 3 次运行结果不同
-- Q24 official-967：同一版本 3 次运行结果不同
-- Q24 official-main-prs：同一版本 3 次运行结果不同
-- Q24 哈希分组：v0.9.53 / v1.2.955、official-967 / v1.2.967 / official-main-prs
-- Q27 哈希分组：v0.9.53 / v1.2.955、v1.2.967、official-967、official-main-prs
-- Q28 哈希分组：v0.9.53 / v1.2.955、v1.2.967、official-967、official-main-prs
-- Q30 v0.9.53：同一版本 3 次运行结果不同
-- Q30 v1.2.955：同一版本 3 次运行结果不同
-- Q30 official-967：同一版本 3 次运行结果不同
-- Q30 official-main-prs：同一版本 3 次运行结果不同
-- Q30 哈希分组：v0.9.53、official-main-prs / v1.2.955、v1.2.967、official-967
-- Q31 v1.2.955：同一版本 3 次运行结果不同
-- Q31 v1.2.967：同一版本 3 次运行结果不同
-- Q31 official-967：同一版本 3 次运行结果不同
-- Q31 official-main-prs：同一版本 3 次运行结果不同
-- Q31 哈希分组：v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
-- Q32 v0.9.53：同一版本 3 次运行结果不同
-- Q32 v1.2.955：同一版本 3 次运行结果不同
-- Q32 v1.2.967：同一版本 3 次运行结果不同
-- Q32 official-967：同一版本 3 次运行结果不同
-- Q32 official-main-prs：同一版本 3 次运行结果不同
-- Q32 哈希分组：v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
-- Q38 v1.2.955：同一版本 3 次运行结果不同
-- Q38 v1.2.967：同一版本 3 次运行结果不同
-- Q38 official-967：同一版本 3 次运行结果不同
-- Q38 official-main-prs：同一版本 3 次运行结果不同
-- Q38 哈希分组：v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
-- Q39 v0.9.53：同一版本 3 次运行结果不同
-- Q39 v1.2.955：同一版本 3 次运行结果不同
-- Q39 v1.2.967：同一版本 3 次运行结果不同
-- Q39 official-967：同一版本 3 次运行结果不同
-- Q39 official-main-prs：同一版本 3 次运行结果不同
-- Q39 哈希分组：v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
-- Q40 v0.9.53：同一版本 3 次运行结果不同
-- Q40 v1.2.955：同一版本 3 次运行结果不同
-- Q40 v1.2.967：同一版本 3 次运行结果不同
-- Q40 official-967：同一版本 3 次运行结果不同
-- Q40 official-main-prs：同一版本 3 次运行结果不同
-- Q40 哈希分组：v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
-- Q41 v1.2.955：同一版本 3 次运行结果不同
-- Q41 v1.2.967：同一版本 3 次运行结果不同
-- Q41 official-967：同一版本 3 次运行结果不同
-- Q41 official-main-prs：同一版本 3 次运行结果不同
-- Q41 哈希分组：v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
+- Q03 hash groups: v0.9.53 / v1.2.955, v1.2.967, official-967, official-main-prs
+- Q17 v0.9.53: the 3 runs of this release return different results
+- Q17 hash groups: v0.9.53 / v1.2.955, v1.2.967, official-967, official-main-prs
+- Q24 v1.2.955: the 3 runs of this release return different results
+- Q24 v1.2.967: the 3 runs of this release return different results
+- Q24 official-967: the 3 runs of this release return different results
+- Q24 official-main-prs: the 3 runs of this release return different results
+- Q24 hash groups: v0.9.53 / v1.2.955, official-967 / v1.2.967 / official-main-prs
+- Q27 hash groups: v0.9.53 / v1.2.955, v1.2.967, official-967, official-main-prs
+- Q28 hash groups: v0.9.53 / v1.2.955, v1.2.967, official-967, official-main-prs
+- Q30 v0.9.53: the 3 runs of this release return different results
+- Q30 v1.2.955: the 3 runs of this release return different results
+- Q30 official-967: the 3 runs of this release return different results
+- Q30 official-main-prs: the 3 runs of this release return different results
+- Q30 hash groups: v0.9.53, official-main-prs / v1.2.955, v1.2.967, official-967
+- Q31 v1.2.955: the 3 runs of this release return different results
+- Q31 v1.2.967: the 3 runs of this release return different results
+- Q31 official-967: the 3 runs of this release return different results
+- Q31 official-main-prs: the 3 runs of this release return different results
+- Q31 hash groups: v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
+- Q32 v0.9.53: the 3 runs of this release return different results
+- Q32 v1.2.955: the 3 runs of this release return different results
+- Q32 v1.2.967: the 3 runs of this release return different results
+- Q32 official-967: the 3 runs of this release return different results
+- Q32 official-main-prs: the 3 runs of this release return different results
+- Q32 hash groups: v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
+- Q38 v1.2.955: the 3 runs of this release return different results
+- Q38 v1.2.967: the 3 runs of this release return different results
+- Q38 official-967: the 3 runs of this release return different results
+- Q38 official-main-prs: the 3 runs of this release return different results
+- Q38 hash groups: v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
+- Q39 v0.9.53: the 3 runs of this release return different results
+- Q39 v1.2.955: the 3 runs of this release return different results
+- Q39 v1.2.967: the 3 runs of this release return different results
+- Q39 official-967: the 3 runs of this release return different results
+- Q39 official-main-prs: the 3 runs of this release return different results
+- Q39 hash groups: v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
+- Q40 v0.9.53: the 3 runs of this release return different results
+- Q40 v1.2.955: the 3 runs of this release return different results
+- Q40 v1.2.967: the 3 runs of this release return different results
+- Q40 official-967: the 3 runs of this release return different results
+- Q40 official-main-prs: the 3 runs of this release return different results
+- Q40 hash groups: v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
+- Q41 v1.2.955: the 3 runs of this release return different results
+- Q41 v1.2.967: the 3 runs of this release return different results
+- Q41 official-967: the 3 runs of this release return different results
+- Q41 official-main-prs: the 3 runs of this release return different results
+- Q41 hash groups: v0.9.53 / v1.2.955 / v1.2.967 / official-967 / official-main-prs
 
-## 逐题（冷 / 热，秒；比值为热跑）
+## Per query (cold / hot, seconds; ratios are hot)
 
 | Q | v0.9.53 | v1.2.955 | v1.2.967 | official-967 | official-main-prs | official-main-prs / official-967 | official-main-prs / v0.9.53 | official-967 / v1.2.967 |
 |---|---|---|---|---|---|---:|---:|---:|
@@ -136,15 +136,15 @@
 | Q41 | 0.162 / 0.010 | 0.152 / 0.018 | 0.131 / 0.016 | 0.144 / 0.017 | 0.156 / 0.015 | 0.92 | 1.55 ↑ | 1.03 |
 | Q42 | 0.155 / 0.009 | 0.178 / 0.019 | 0.144 / 0.015 | 0.135 / 0.015 | 0.144 / 0.015 | 1.05 | 1.62 ↑ | 0.97 |
 
-↓ / ↑：每一轮都快 / 慢 5% 以上且超过 5 ms。
+↓ / ↑: faster / slower in every round by more than 5% and more than 5 ms.
 
-## 逐 case 对比
+## Per-case comparison
 
-### 代码改动：main + #21138 + #21144 对 v1.2.967 的提交（同一构建参数）
+### Code change: main + #21138 + #21144 vs the v1.2.967 commit (same build parameters)
 
-热跑几何平均 0.969，热跑总和 23.61 → 22.47 s，峰值几何平均 0.831。稳定变快 9 题，稳定变慢 0 题，其余 34 题在噪声内。
+Hot geomean 0.969, hot sum 23.61 → 22.47 s, peak geomean 0.831. 9 queries consistently faster, 0 consistently slower, 34 within noise.
 
-| 变快 | official-967 热 | official-main-prs 热 | 比值 | official-967 峰值 | official-main-prs 峰值 |
+| faster | official-967 hot | official-main-prs hot | ratio | official-967 peak | official-main-prs peak |
 |---|---:|---:|---:|---:|---:|
 | Q20 | 0.978 | 0.710 | 0.73 | 2.5 GiB | 1.4 GiB |
 | Q24 | 0.060 | 0.051 | 0.85 | 1.4 GiB | 1.2 GiB |
@@ -156,15 +156,15 @@
 | Q31 | 0.722 | 0.670 | 0.93 | 3.7 GiB | 4.3 GiB |
 | Q27 | 1.119 | 1.050 | 0.94 | 2.5 GiB | 2.2 GiB |
 
-### 构建复现：本地按 CI 参数构建的 967 对官方包
+### Build reproduction: 967 built locally with the CI parameters vs the official package
 
-热跑几何平均 1.029，热跑总和 23.43 → 23.61 s，峰值几何平均 1.061。稳定变快 0 题，稳定变慢 0 题，其余 43 题在噪声内。
+Hot geomean 1.029, hot sum 23.43 → 23.61 s, peak geomean 1.061. 0 queries consistently faster, 0 consistently slower, 43 within noise.
 
-### 最新代码对 ClickBench 现用的 v0.9.53
+### Latest code vs v0.9.53, the release ClickBench runs
 
-热跑几何平均 1.189，热跑总和 30.36 → 22.47 s，峰值几何平均 0.997。稳定变快 14 题，稳定变慢 22 题，其余 7 题在噪声内。
+Hot geomean 1.189, hot sum 30.36 → 22.47 s, peak geomean 0.997. 14 queries consistently faster, 22 consistently slower, 7 within noise.
 
-| 变快 | v0.9.53 热 | official-main-prs 热 | 比值 | v0.9.53 峰值 | official-main-prs 峰值 |
+| faster | v0.9.53 hot | official-main-prs hot | ratio | v0.9.53 peak | official-main-prs peak |
 |---|---:|---:|---:|---:|---:|
 | Q17 | 0.764 | 0.043 | 0.06 | 8.5 GiB | 1.1 GiB |
 | Q32 | 3.810 | 1.609 | 0.42 | 13.1 GiB | 13.3 GiB |
@@ -181,7 +181,7 @@
 | Q08 | 0.395 | 0.345 | 0.87 | 1.9 GiB | 2.8 GiB |
 | Q12 | 0.465 | 0.423 | 0.91 | 4.2 GiB | 2.6 GiB |
 
-| 变慢 | v0.9.53 热 | official-main-prs 热 | 比值 | v0.9.53 峰值 | official-main-prs 峰值 |
+| slower | v0.9.53 hot | official-main-prs hot | ratio | v0.9.53 peak | official-main-prs peak |
 |---|---:|---:|---:|---:|---:|
 | Q10 | 0.133 | 0.150 | 1.13 | 1.1 GiB | 1.4 GiB |
 | Q29 | 0.052 | 0.063 | 1.21 | 0.9 GiB | 0.8 GiB |

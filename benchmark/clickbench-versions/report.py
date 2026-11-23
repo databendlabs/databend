@@ -57,26 +57,26 @@ def consistent(a, b, q):
 
 out = []
 p = out.append
-p('## 环境\n')
+p('## Environment\n')
 mc = M['machine']
-p(f"- 生成：{M['created']}；CPU：{mc['cpu'].split(':', 1)[1].strip()}；内核 {mc['kernel']}；调频 `{mc['governor']}`；THP `{mc['thp'].splitlines()[0]}`")
-p(f"- 绑核 `taskset -c {mc['cpu_pinning']}`；cgroup cpu.max `{mc['cgroup_cpu_max']}`，memory.max `{mc['cgroup_mem_max']}`；drop_caches 可写：{mc['drop_caches_writable']}")
-p(f"- 源数据 `{M['source_data']['path']}`，{M['source_data']['bytes']} 字节，sha256 `{M['source_data']['sha256'][:16]}…`")
-p(f"- 轮数 {len(ROUNDS)}；每格开始前等主机 CPU 占用 < 10%（1 秒采样，最多等 300 秒），实测最大 {max(c['busy_before'] for R in ROUNDS for c in R.values()):.1f}%\n")
-p('| 版本 | 来源 | databend-query sha256 | `--version` |')
+p(f"- Recorded {M['created']}; CPU {mc['cpu'].split(':', 1)[1].strip()}; kernel {mc['kernel']}; governor `{mc['governor']}`; THP `{mc['thp'].splitlines()[0]}`")
+p(f"- Pinned with `taskset -c {mc['cpu_pinning']}`; cgroup cpu.max `{mc['cgroup_cpu_max']}`, memory.max `{mc['cgroup_mem_max']}`; drop_caches writable: {mc['drop_caches_writable']}")
+p(f"- Source data `{M['source_data']['path']}`, {M['source_data']['bytes']} bytes, sha256 `{M['source_data']['sha256'][:16]}…`")
+p(f"- {len(ROUNDS)} rounds; before each cell the harness waits until host CPU use is below 10% (1 s sample, at most 300 s); the highest observed was {max(c['busy_before'] for R in ROUNDS for c in R.values()):.1f}%\n")
+p('| release | source | databend-query sha256 | `--version` |')
 p('|---|---|---|---|')
 for n in NAMES:
     r = M['releases'][n]
     p(f"| {n} | {r['source']} | `{r['databend-query']['sha256'][:12]}` | `{r['databend-query']['version']}` |")
-p('\n## 导入\n')
-p('| 版本 | COPY | INSERT … SELECT | 合计 | 行数 | 块数 | 数据大小 | 非默认 settings |')
+p('\n## Load\n')
+p('| release | COPY | INSERT … SELECT | total | rows | blocks | data size | non-default settings |')
 p('|---|---:|---:|---:|---:|---:|---:|---|')
 for n in NAMES:
     L = LOADS[n]; nd = L['non_default_settings']
-    p(f"| {n} | {L['copy_s']} s | {L['insert_s']} s | {L['load_s']} s | {L['rows']} | {L['blocks']} | {L['data_bytes'] / 1e9:.2f} GB | {'无' if nd == [] else nd} |")
-p(f'\n## 汇总（{len(OK)} / 43 题全部成功）\n')
-hdr = ' | '.join(f'热跑总和 R{r + 1}' for r in range(len(ROUNDS)))
-p(f'| 版本 | 冷跑总和 | 热跑总和 | {hdr} | Q32 峰值 RSS | 启动中位数 | 热跑几何平均 / v0.9.53 | 热跑几何平均 / {OLD} |')
+    p(f"| {n} | {L['copy_s']} s | {L['insert_s']} s | {L['load_s']} s | {L['rows']} | {L['blocks']} | {L['data_bytes'] / 1e9:.2f} GB | {'none' if nd == [] else nd} |")
+p(f'\n## Summary ({len(OK)} / 43 queries succeeded on every release)\n')
+hdr = ' | '.join(f'hot sum R{r + 1}' for r in range(len(ROUNDS)))
+p(f'| release | cold sum | hot sum | {hdr} | Q32 peak RSS | median startup | hot geomean / v0.9.53 | hot geomean / {OLD} |')
 p('|---|---:|---:|' + '---:|' * len(ROUNDS) + '---:|---:|---:|---:|')
 for n in NAMES:
     st = statistics.median(c['startup_s'] for R in ROUNDS for k, c in R.items() if k.startswith(n + '/'))
@@ -85,10 +85,10 @@ for n in NAMES:
       f"{agg(n, 32)['peak'] / 1024:.1f} GiB | {st:.2f} s | {geo(agg(n, q)['hot'] / agg(BASE, q)['hot'] for q in OK):.3f} | "
       f"{geo(agg(n, q)['hot'] / agg(OLD, q)['hot'] for q in OK):.3f} |")
 if len(ROUNDS) > 1:
-    p('\n轮间噪声（同一版本两轮热跑之比的几何平均绝对偏差）：' + '，'.join(
+    p('\nRound-to-round noise (geomean absolute deviation of the hot-time ratio between the two rounds of a release): ' + ', '.join(
         f"{n} {100 * (geo(max(hot_r(0, n, q), hot_r(1, n, q)) / min(hot_r(0, n, q), hot_r(1, n, q)) for q in OK) - 1):.1f}%" for n in NAMES))
-p('\n## 结果一致性\n')
-p('每题第 1 次运行的行数与结果哈希（行排序后）。不同版本的数值格式可能不同，哈希不同不一定是结果错。\n')
+p('\n## Result consistency\n')
+p('Row count and result hash (rows sorted) of run 1 of every query. Releases may format numbers differently, so a different hash does not by itself mean a wrong result.\n')
 bad = []
 for q in Q:
     rows = {n: cell(0, n, q)['runs'][0]['rows'] for n in NAMES if cell(0, n, q)}
@@ -99,19 +99,19 @@ for q in Q:
             hashes.setdefault(c['runs'][0]['hash'], []).append(n)
         runs_same = c and len({x['hash'] for x in c['runs']}) == 1
         if c and not runs_same:
-            bad.append(f'Q{q:02d} {n}：同一版本 3 次运行结果不同')
+            bad.append(f'Q{q:02d} {n}: the 3 runs of this release return different results')
     if len(set(rows.values())) > 1:
-        bad.append(f'Q{q:02d} 行数不同：{rows}')
+        bad.append(f'Q{q:02d} row counts differ: {rows}')
     elif len(hashes) > 1:
-        bad.append(f'Q{q:02d} 哈希分组：' + ' / '.join('、'.join(v) for v in hashes.values()))
-p('\n'.join(f'- {b}' for b in bad) if bad else '- 所有题在所有版本上行数和哈希都一致')
+        bad.append(f'Q{q:02d} hash groups: ' + ' / '.join(', '.join(v) for v in hashes.values()))
+p('\n'.join(f'- {b}' for b in bad) if bad else '- Every query has the same row count and hash on every release')
 
 
 def fmt(a):
     return f"{a['cold']:.3f} / {a['hot']:.3f}"
 
 
-p('\n## 逐题（冷 / 热，秒；比值为热跑）\n')
+p('\n## Per query (cold / hot, seconds; ratios are hot)\n')
 p('| Q | ' + ' | '.join(NAMES) + f' | {NEW} / {OLD} | {NEW} / {BASE} | {OLD} / {REF} |')
 p('|---|' + '---|' * len(NAMES) + '---:|---:|---:|')
 for q in Q:
@@ -121,22 +121,22 @@ for q in Q:
     mark = lambda a, b: {1: ' ↓', -1: ' ↑', 0: ''}[consistent(a, b, q)]
     p(f'| Q{q:02d} | ' + ' | '.join(fmt(agg(n, q)) for n in NAMES) +
       f' | {h(NEW) / h(OLD):.2f}{mark(NEW, OLD)} | {h(NEW) / h(BASE):.2f}{mark(NEW, BASE)} | {h(OLD) / h(REF):.2f}{mark(OLD, REF)} |')
-p('\n↓ / ↑：每一轮都快 / 慢 5% 以上且超过 5 ms。\n')
+p('\n↓ / ↑: faster / slower in every round by more than 5% and more than 5 ms.\n')
 
-p('## 逐 case 对比\n')
-for a, b, title in ((NEW, OLD, '代码改动：main + #21138 + #21144 对 v1.2.967 的提交（同一构建参数）'),
-                    (OLD, REF, '构建复现：本地按 CI 参数构建的 967 对官方包'),
-                    (NEW, BASE, '最新代码对 ClickBench 现用的 v0.9.53')):
+p('## Per-case comparison\n')
+for a, b, title in ((NEW, OLD, 'Code change: main + #21138 + #21144 vs the v1.2.967 commit (same build parameters)'),
+                    (OLD, REF, 'Build reproduction: 967 built locally with the CI parameters vs the official package'),
+                    (NEW, BASE, 'Latest code vs v0.9.53, the release ClickBench runs')):
     fast = [q for q in OK if consistent(a, b, q) == 1]
     slow = [q for q in OK if consistent(a, b, q) == -1]
     p(f'### {title}\n')
-    p(f'热跑几何平均 {geo(agg(a, q)["hot"] / agg(b, q)["hot"] for q in OK):.3f}，热跑总和 '
-      f'{sum(agg(b, q)["hot"] for q in OK):.2f} → {sum(agg(a, q)["hot"] for q in OK):.2f} s，'
-      f'峰值几何平均 {geo(agg(a, q)["peak"] / agg(b, q)["peak"] for q in OK):.3f}。'
-      f'稳定变快 {len(fast)} 题，稳定变慢 {len(slow)} 题，其余 {len(OK) - len(fast) - len(slow)} 题在噪声内。\n')
-    for label, qs in (('变快', fast), ('变慢', slow)):
+    p(f'Hot geomean {geo(agg(a, q)["hot"] / agg(b, q)["hot"] for q in OK):.3f}, hot sum '
+      f'{sum(agg(b, q)["hot"] for q in OK):.2f} → {sum(agg(a, q)["hot"] for q in OK):.2f} s, '
+      f'peak geomean {geo(agg(a, q)["peak"] / agg(b, q)["peak"] for q in OK):.3f}. '
+      f'{len(fast)} queries consistently faster, {len(slow)} consistently slower, {len(OK) - len(fast) - len(slow)} within noise.\n')
+    for label, qs in (('faster', fast), ('slower', slow)):
         if qs:
-            p(f'| {label} | {b} 热 | {a} 热 | 比值 | {b} 峰值 | {a} 峰值 |')
+            p(f'| {label} | {b} hot | {a} hot | ratio | {b} peak | {a} peak |')
             p('|---|---:|---:|---:|---:|---:|')
             for q in sorted(qs, key=lambda q: agg(a, q)['hot'] / agg(b, q)['hot']):
                 x, y = agg(b, q), agg(a, q)

@@ -1,81 +1,81 @@
-# ClickBench 本地版本对比（构建参数对齐，可复盘）
+# ClickBench: Databend releases compared locally (aligned build parameters, reproducible)
 
-日期：2026-11-21。所有输入、脚本、原始结果都在本目录 `benchmark/clickbench-versions/`。结论见 `RESULTS.md`。仅作测试记录，不打算合入。
+Date: 2026-11-21. All inputs, scripts and raw results are in this directory, `benchmark/clickbench-versions/`. Conclusions are in `RESULTS.md`. This is a record of a benchmark run and is not meant to be merged.
 
-本目录复制自测试时的工作目录 `/home/kould/tmp-build/clickbench-versions/`，以下几点和原目录不同：
+This directory was copied from the working directory of the run, `/home/kould/tmp-build/clickbench-versions/`, with these differences:
 
-- 两个本地构建的 `databend-query`（各约 650 MB）没有复制进来，仍在 `/home/kould/tmp-build/clickbench-versions/bin/NAME/`。它们的 sha256 记录在 `bin/NAME/build-info.json` 和 `manifest.json` 里。
-- `build-official.sh` 与测试时完全相同，sha256 和 `manifest.json` 一致。它会把输出写到 `/home/kould/tmp-build/clickbench-versions/bin/NAME/`。
-- `bench.py`、`releases.json`、`clickbench/*.sql` 的 sha256 也和 `manifest.json` 一致。
-- `report.py` 在 manifest 记录之后改过一行：导入记录改从 `loads/` 读取，原来是从 `/tmp/cb-versions/NAME/load.json` 读取。在本目录运行 `python3 report.py`，生成的内容与 `report.md` 完全相同。
+- The two locally built `databend-query` binaries (about 650 MB each) are not included; they remain in `/home/kould/tmp-build/clickbench-versions/bin/NAME/`. Their sha256 are recorded in `bin/NAME/build-info.json` and `manifest.json`.
+- `build-official.sh` is unchanged from the run, so its sha256 matches `manifest.json`. It writes its output to `/home/kould/tmp-build/clickbench-versions/bin/NAME/`.
+- The sha256 of `bench.py`, `releases.json` and `clickbench/*.sql` also match `manifest.json`.
+- `report.py` changed after the manifest was recorded: it reads the load records from `loads/` instead of `/tmp/cb-versions/NAME/load.json`, and its output text was translated to English. The numbers it produces are unchanged.
 
-## 目录
+## Files
 
-| 路径 | 内容 |
+| path | content |
 |---|---|
-| `releases.json` | 参测的 5 个版本、来源、顺序 |
-| `build-official.sh` | 按 x86_64 nightly 发布 CI 的参数在干净 worktree 里构建 databend-query |
-| `bin/NAME/build-info.json` | 每个本地构建的提交、git log、rustc、cargo 命令、环境变量、profile、起止时间、sha256 |
-| `bench.py` | 导入（`load`）、记录环境（`manifest`）、交错测试（`run`） |
-| `report.py` → `report.md` | 汇总、结果一致性、逐题、逐 case 对比 |
-| `charts.py` → `charts/*.svg` | 用 `results/` 和 `probes/format.json` 画三张图：逐题热跑比值、逐题峰值 RSS、43 题合计；只用 Python 标准库 |
-| `manifest.json` | 机器（CPU、内核、调频、THP、cgroup、磁盘）、脚本与 SQL 的 sha256、源数据 sha256、配置模板、每个二进制的 sha256 和 `--version` |
-| `loads/NAME.json` | 导入用的 SQL、COPY/INSERT 耗时、行数、块数、数据大小、`SHOW CREATE TABLE`、完整 `system.configs`、与默认值不同的 settings |
-| `results/round{0,1}.json` | 每格（轮、题、版本）的时间戳、开始前主机 CPU 占用、启动耗时、3 次运行的耗时、峰值 RSS、行数、结果哈希，以及第 1 次运行的前 20 行结果 |
-| `clickbench/` | 所用的 ClickBench databend 脚本副本（`create.sql`、`queries.sql`、原始 `benchmark.sh` 等） |
-| `logs/run.log` | 测试过程输出 |
-| `probes/run_probes.py` | 补充测试（2026-11-23）：`format` 在 v0.9.53 里建 Parquet 表做同格式对比，`q03` 对比单列聚合，`small` 测小查询的 segment 统计、block meta 缓存，以及 `length` 和 `octet_length` |
-| `probes/{format,q03,small}.json`、`*.log` | 补充测试的结果和输出 |
+| `releases.json` | the 5 releases, their sources and order |
+| `build-official.sh` | builds databend-query in a clean worktree with the parameters of the x86_64 nightly release CI |
+| `bin/NAME/build-info.json` | per local build: commit, git log, rustc, cargo command, environment variables, profile, start and end time, sha256 |
+| `bench.py` | loads data (`load`), records the environment (`manifest`), runs the interleaved benchmark (`run`) |
+| `report.py` → `report.md` | summary, result consistency, per-query and per-case comparisons |
+| `charts.py` → `charts/*.svg` | draws three charts from `results/` and `probes/format.json`: per-query hot ratios, per-query peak RSS, 43-query sums; Python standard library only |
+| `manifest.json` | machine (CPU, kernel, governor, THP, cgroup, disk), sha256 of the scripts and SQL, sha256 of the source data, config template, sha256 and `--version` of every binary |
+| `loads/NAME.json` | load SQL, COPY/INSERT times, rows, blocks, data size, `SHOW CREATE TABLE`, the full `system.configs`, and settings that differ from their defaults |
+| `results/round{0,1}.json` | per cell (round, query, release): timestamp, host CPU use before the cell, startup time, the 3 run times, peak RSS, row count, result hash, and the first 20 rows of run 1 |
+| `clickbench/` | copy of the ClickBench databend scripts used (`create.sql`, `queries.sql`, the original `benchmark.sh`, ...) |
+| `logs/run.log` | benchmark output |
+| `probes/run_probes.py` | follow-up probes (2026-11-23): `format` builds a Parquet table in v0.9.53 for a same-format comparison, `q03` compares single-column aggregates, `small` collects segment statistics of small queries, the block meta cache comparison, and `length` vs `octet_length` |
+| `probes/{format,q03,small}.json`, `*.log` | probe results and output |
 
-## 版本与构建参数
+## Releases and build parameters
 
-| 名称 | 来源 |
+| name | source |
 |---|---|
-| `v0.9.53` | 官方包 `v0.9.53-nightly`，ClickBench 现用版本 |
-| `v1.2.955` | 官方包，`058a1e8fbd`，编码列 #20819 之前 |
-| `v1.2.967` | 官方包，`25ca45599d` |
-| `official-967` | `25ca45599d` 本地构建 |
-| `official-main-prs` | upstream/main `177b395dd3`（含 #21129）+ #21138 + #21144，提交 `581c894436`（本地分支 `bench/main-with-prs`，未推送） |
+| `v0.9.53` | official package `v0.9.53-nightly`, the release ClickBench runs |
+| `v1.2.955` | official package, `058a1e8fbd`, before encoded columns #20819 |
+| `v1.2.967` | official package, `25ca45599d` |
+| `official-967` | `25ca45599d` built locally |
+| `official-main-prs` | upstream/main `177b395dd3` (includes #21129) + #21138 + #21144, commit `581c894436` (local branch `bench/main-with-prs`, not pushed) |
 
-两个本地构建都按 `.github/workflows/release.yml`（build_default，x86_64-unknown-linux-gnu）和 `.github/actions/build_linux` 的参数构建：
+Both local builds follow `.github/workflows/release.yml` (build_default, x86_64-unknown-linux-gnu) and `.github/actions/build_linux`:
 
-- Cargo.toml 的 `[profile.release]`：`lto = "thin"`、`codegen-units = 1`、`debug = "line-tables-only"`；
-- `CARGO_PROFILE_RELEASE_OPT_LEVEL=s`、`CARGO_INCREMENTAL=0`、`--features default`、`--target x86_64-unknown-linux-gnu`；
-- `RUSTFLAGS="-C target-feature=+sse4.2"`；
-- 构建后用 `objcopy`/`strip --strip-debug` 剥离调试信息，和 CI 一样。
+- Cargo.toml `[profile.release]`: `lto = "thin"`, `codegen-units = 1`, `debug = "line-tables-only"`;
+- `CARGO_PROFILE_RELEASE_OPT_LEVEL=s`, `CARGO_INCREMENTAL=0`, `--features default`, `--target x86_64-unknown-linux-gnu`;
+- `RUSTFLAGS="-C target-feature=+sse4.2"`;
+- debug info split off and stripped with `objcopy`/`strip --strip-debug` afterwards, as in CI.
 
-唯一的偏差：`RUSTFLAGS` 里多了 `-C link-arg=-fuse-ld=mold`。设置 `RUSTFLAGS` 会覆盖 `.cargo/config.toml` 里的 mold 配置，而官方构建镜像用的是它自己的链接器。链接器不改变生成的代码：本地构建的 `.text` 是 165.7 MiB，官方包是 165.6 MiB；`.symtab/.strtab` 本地更大（28/324 MiB 对 21/236 MiB）。工具链是 `rust-toolchain.toml` 指定的 `nightly-2026-10-25`，两个提交一样。本地构建的 meta 用的是 v1.2.967 官方包里的 `databend-meta`。
+The one deviation: `RUSTFLAGS` also passes `-C link-arg=-fuse-ld=mold`. Setting `RUSTFLAGS` drops the mold setting of `.cargo/config.toml`, and the official build image links with its own toolchain. The linker does not change the generated code: `.text` is 165.7 MiB in the local build and 165.6 MiB in the official package; `.symtab/.strtab` are larger locally (28/324 MiB vs 21/236 MiB). The toolchain is `nightly-2026-10-25` from `rust-toolchain.toml`, the same for both commits. The local builds use `databend-meta` from the official v1.2.967 package.
 
-## 测法
+## Method
 
-- 配置：ClickBench 的 `config.toml`（fs 存储加 meta），其余全部默认。1.x 额外加了 `tenant_id`、`cluster_id` 和 root 用户，否则无法启动或登录。`loads/*.json` 里记录了每个版本"与默认值不同的 settings"，全部为空。
-- 表：ClickBench 的 `create.sql`，带 `CLUSTER BY`。从 `hits.parquet` 分两步导入，先 COPY 进 `hits_raw`，再 `INSERT … SELECT` 进 `hits`。原因是 v0.9.53 不能把 Parquet 里的整数秒/天直接 COPY 进 `TIMESTAMP`/`DATE` 列。五个版本用的是同一组 SQL。
-- 每格（轮 r、题 q、版本 v）的步骤：
-  1. 等主机 CPU 占用低于 10%；
-  2. 停掉 query 和 meta；
-  3. 用 `posix_fadvise(DONTNEED)` 把五个版本的全部文件逐出页缓存（容器里 `/proc/sys` 只读，`drop_caches` 不能用）；
-  4. 先启动 meta，再启动 query，两者都 `taskset -c 0-15`；
-  5. 等 `SELECT 1` 返回后，连跑 3 次。
-- 第 1 次运行算冷跑，热跑取 `min(第 2 次, 第 3 次)`。
-- 交错顺序：每一题依次跑完五个版本再进入下一题。第 0 轮按 `releases.json` 的顺序，第 1 轮倒序，让机器状态的漂移平均落到各个版本上。
-- 汇总时，冷跑取两轮的平均，热跑取两轮中的最小值，峰值取全部运行中的最大 RSS。只有两轮都快或都慢超过 5%、并且差值超过 5 ms，才标为"稳定"变化。
+- Configuration: ClickBench's `config.toml` (fs storage plus meta), everything else default. 1.x additionally needs `tenant_id`, `cluster_id` and a root user to start and log in. `loads/*.json` records the settings that differ from their defaults for every release; all are empty.
+- Table: ClickBench's `create.sql`, with `CLUSTER BY`. Loaded from `hits.parquet` in two steps: COPY into `hits_raw`, then `INSERT … SELECT` into `hits`. v0.9.53 cannot COPY Parquet's integer seconds/days straight into `TIMESTAMP`/`DATE` columns. All five releases use the same SQL.
+- Steps for each cell (round r, query q, release v):
+  1. wait until host CPU use is below 10%;
+  2. stop query and meta;
+  3. evict all files of the five releases from the page cache with `posix_fadvise(DONTNEED)` (`/proc/sys` is read-only in this container, so `drop_caches` is unavailable);
+  4. start meta, then query, both under `taskset -c 0-15`;
+  5. once `SELECT 1` answers, run the query 3 times.
+- Run 1 is cold; hot is `min(run 2, run 3)`.
+- Interleaving: each query runs on all five releases before the next query. Round 0 follows the `releases.json` order and round 1 the reverse, so drift in machine state spreads over all releases.
+- In the summaries, cold is the mean over the two rounds, hot is the minimum over the two rounds, and peak is the maximum RSS over all runs. A change counts as consistent only when both rounds move the same way by more than 5% and by more than 5 ms.
 
-## 复盘步骤
+## Reproduce
 
 ```bash
-cd benchmark/clickbench-versions   # bench.py / report.py 以脚本所在目录为根
-# 1. 官方包解压到 /tmp/cb-versions/{v0.9.53,v1.2.955,v1.2.967}/（bin/databend-query、bin/databend-meta）
-# 2. 本地构建（每个约 15 分钟）
+cd benchmark/clickbench-versions   # bench.py / report.py use their own directory as the root
+# 1. Extract the official packages to /tmp/cb-versions/{v0.9.53,v1.2.955,v1.2.967}/ (bin/databend-query, bin/databend-meta)
+# 2. Local builds (about 15 minutes each)
 ./build-official.sh official-967 25ca45599d
-./build-official.sh official-main-prs 581c894436   # 需要本地分支 bench/main-with-prs
+./build-official.sh official-main-prs 581c894436   # needs the local branch bench/main-with-prs
 for n in official-967 official-main-prs; do mkdir -p /tmp/cb-versions/$n/bin
   cp /home/kould/tmp-build/clickbench-versions/bin/$n/databend-query /tmp/cb-versions/$n/bin/; cp /tmp/cb-versions/v1.2.967/bin/databend-meta /tmp/cb-versions/$n/bin/; done
-# 3. 导入（每个约 2–4 分钟，5 个合计约 80 GB），记录环境，跑两轮（约 45 分钟），出报告
+# 3. Load (2-4 minutes each, about 80 GB for all five), record the environment, run two rounds (about 45 minutes), report
 for n in v0.9.53 v1.2.955 v1.2.967 official-967 official-main-prs; do python3 bench.py load $n; done
 python3 bench.py manifest && python3 bench.py run 2
 for n in v0.9.53 v1.2.955 v1.2.967 official-967 official-main-prs; do cp /tmp/cb-versions/$n/load.json loads/$n.json; done
 python3 report.py > report.md
 python3 charts.py
-# 4. 补充测试（需要 v0.9.53 和 official-main-prs 的表已导入；format 会在 v0.9.53 里多建一张约 15 GB 的 hits_parquet）
+# 4. Follow-up probes (need the v0.9.53 and official-main-prs tables loaded; `format` adds a ~15 GB hits_parquet table to v0.9.53)
 for p in format q03 small; do python3 probes/run_probes.py $p > probes/$p.log 2>&1; done
 ```
