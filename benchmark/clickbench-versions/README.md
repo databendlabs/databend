@@ -18,7 +18,7 @@ This directory was copied from the working directory of the run, `/home/kould/tm
 | `bin/NAME/build-info.json` | per local build: commit, git log, rustc, cargo command, environment variables, profile, start and end time, sha256 |
 | `bench.py` | loads data (`load`), records the environment (`manifest`), runs the interleaved benchmark (`run`) |
 | `report.py` → `report.md` | summary, result consistency, per-query and per-case comparisons |
-| `charts.py` → `charts/*.svg` | draws three charts from `results/` and `probes/format.json`: per-query hot ratios, per-query peak RSS, 43-query sums; Python standard library only |
+| `charts.py` → `charts/*.svg` | draws five charts from `results/` and `probes/format.json`: per-query speedups against v0.9.53, against v0.9.53 on the same format and against official-967, per-query peak RSS, 43-query sums; Python standard library only |
 | `manifest.json` | machine (CPU, kernel, governor, THP, cgroup, disk), sha256 of the scripts and SQL, sha256 of the source data, config template, sha256 and `--version` of every binary |
 | `loads/NAME.json` | load SQL, COPY/INSERT times, rows, blocks, data size, `SHOW CREATE TABLE`, the full `system.configs`, and settings that differ from their defaults |
 | `results/round{0,1}.json` | per cell (round, query, release): timestamp, host CPU use before the cell, startup time, the 3 run times, peak RSS, row count, result hash, and the first 20 rows of run 1 |

@@ -1,6 +1,6 @@
 """Draw the comparison charts as plain SVG from the committed results; no third-party packages.
 
-usage: charts.py        writes charts/{hot-ratio,peak-rss,summary}.svg
+usage: charts.py        writes charts/{speedup-vs-v0.9.53,speedup-same-format,speedup-vs-967,peak-rss,summary}.svg
 Definitions match report.py: per query and release, cold = mean of run 1 over rounds,
 hot = min over rounds of min(run 2, run 3), peak = max RSS over all runs. The same-format
 series comes from probes/format.json, where both sides are measured by the probe itself
@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parent
 NAMES = list(json.loads((ROOT / 'releases.json').read_text()))
 ROUNDS = [json.loads(p.read_text()) for p in sorted((ROOT / 'results').glob('round*.json'))]
 FORMAT = json.loads((ROOT / 'probes' / 'format.json').read_text())
+ALL_SQL = [q.strip() for q in (ROOT / 'clickbench' / 'queries.sql').read_text().strip().split('\n') if q.strip()]
 OUT = ROOT / 'charts'
 BASE, OLD, NEW = 'v0.9.53', 'official-967', 'official-main-prs'
 COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1']
@@ -88,24 +89,80 @@ def grouped_bars(svg, left, top, width, height, series, ys, ylog, ylabel, xlabel
     svg.line(left, top + height, left + width, top + height, '#999')
 
 
-def hot_ratio():
-    qs = list(range(43))
-    new = {q: agg(NEW, q)['hot'] for q in qs}
-    s1 = [new[q] / agg(BASE, q)['hot'] for q in qs]
-    s2 = [FORMAT['main-prs parquet'][str(q)] / FORMAT['v0.9.53 parquet'][str(q)] if str(q) in FORMAT['main-prs parquet'] else None for q in qs]
-    s3 = [new[q] / agg(OLD, q)['hot'] for q in qs]
-    svg = Svg(1500, 470)
-    svg.text(750, 26, 'Hot time ratio per query: official-main-prs / baseline (log scale; below 1 = main-prs faster)', 15, 'middle', 'bold')
-    grouped_bars(svg, 70, 80, 1400, 320, [
-        ('vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native)', COLORS[3], s1),
-        ('vs v0.9.53 on the same format (both Parquet; 17 queries probed)', COLORS[2], s2),
-        ('vs official-967 (same build parameters)', COLORS[0], s3),
-    ], [0.03, 0.1, 0.25, 0.5, 1, 2, 4], True, 'ratio', [f'Q{q}' for q in qs], baseline=1)
-    svg.legend(80, 48, [('vs v0.9.53 as ClickBench runs it (v0.9.53 reads Native)', COLORS[3])])
-    svg.legend(560, 48, [('vs v0.9.53 on the same format (both Parquet; 17 queries probed)', COLORS[2])])
-    svg.legend(1090, 48, [('vs official-967 (same build parameters)', COLORS[0])])
-    svg.text(70, 450, 'Sources: results/round*.json (red, blue) and probes/format.json (green). Bars are clamped to 0.03-4.', 11, fill='#555')
-    svg.save('hot-ratio.svg')
+def speedup_chart(fname, title, subtitle, rows, note):
+    """One horizontal bar per query, sorted from biggest speedup to biggest slowdown.
+
+    rows: [(label, baseline_s, new_s, significant)]. A bar goes left (green) when the new
+    build is faster and right (red) when it is slower; its length is log2 of the speedup, and
+    its label says "N× faster" / "N× slower" with both times. Grey bars are within noise."""
+    rows = sorted(rows, key=lambda r: r[2] / r[1])
+    span = max(abs(math.log2(r[2] / r[1])) for r in rows)
+    span = max(1.0, math.ceil(span))
+    row_h, top, label_w, bar_w = 18, 92, 380, 560
+    mid = label_w + bar_w / 2
+    width, height = label_w + bar_w + 230, top + row_h * len(rows) + 44
+    unit = (bar_w / 2) / span
+    svg = Svg(width, height)
+    svg.text(16, 26, title, 16, weight='bold')
+    svg.text(16, 46, subtitle, 12, fill='#444')
+    svg.rect(16, 58, 12, 12, '#59a14f'); svg.text(34, 68, 'faster', 12)
+    svg.rect(90, 58, 12, 12, '#e15759'); svg.text(108, 68, 'slower', 12)
+    svg.rect(166, 58, 12, 12, '#bbbbbb'); svg.text(184, 68, 'within noise', 12)
+    for k in range(1, int(span) + 1):
+        for sign, word in ((-1, 'faster'), (1, 'slower')):
+            x = mid + sign * k * unit
+            svg.line(x, top - 6, x, top + row_h * len(rows), '#eeeeee')
+            svg.text(x, top - 10, f'{2 ** k}× {word}', 10, 'middle', fill='#777')
+    for i, (label, base, new, significant) in enumerate(rows):
+        y = top + i * row_h
+        r = new / base
+        lg = math.log2(r)
+        color = '#bbbbbb' if not significant else ('#59a14f' if r < 1 else '#e15759')
+        x0, x1 = sorted((mid, mid + lg * unit))
+        svg.rect(x0, y + 3, x1 - x0, row_h - 6, color, f'{label}: {base * 1000:.1f} ms -> {new * 1000:.1f} ms')
+        svg.text(label_w - 8, y + 13, label, 11, 'end')
+        factor = 1 / r if r < 1 else r
+        word = 'faster' if r < 1 else 'slower'
+        svg.text(label_w + bar_w + 8, y + 13, f'{factor:.2f}× {word}   {base * 1000:.0f} → {new * 1000:.0f} ms', 11,
+                 fill='#222' if significant else '#888')
+    svg.line(mid, top - 4, mid, top + row_h * len(rows), '#333', 1.2)
+    svg.text(16, height - 14, note, 11, fill='#555')
+    svg.save(fname)
+
+
+def query_label(q, n=52):
+    sql = ALL_SQL[q].rstrip(';')
+    return f'Q{q:02d}  ' + (sql if len(sql) <= n else sql[:n - 1] + '…')
+
+
+def consistent(a, b, q):
+    """Same rule as report.py: every round moves the same way by > 5% and > 5 ms."""
+    s = set()
+    for R in ROUNDS:
+        ca, cb = R[f'{a}/{q}'], R[f'{b}/{q}']
+        x, y = min(ca['runs'][1]['s'], ca['runs'][2]['s']), min(cb['runs'][1]['s'], cb['runs'][2]['s'])
+        if abs(x - y) <= 0.005 or abs(x / y - 1) <= 0.05:
+            return False
+        s.add(x < y)
+    return len(s) == 1
+
+
+def speedups():
+    for base, fname, title, subtitle in (
+            (BASE, 'speedup-vs-v0.9.53.svg', 'official-main-prs vs v0.9.53, as ClickBench runs them',
+             'Hot time per query. v0.9.53 reads its default Native format; 1.x can only use Parquet.'),
+            (OLD, 'speedup-vs-967.svg', 'official-main-prs vs official-967: effect of the recent PRs',
+             'Hot time per query. Same build parameters; main + #21138 + #21144 against the v1.2.967 commit.')):
+        rows = [(query_label(q), agg(base, q)['hot'], agg(NEW, q)['hot'], consistent(NEW, base, q)) for q in range(43)]
+        speedup_chart(fname, title, subtitle, rows,
+                      'Source: results/round*.json (2 rounds). Grey: not faster/slower by > 5% and > 5 ms in both rounds.')
+    rows = []
+    for q in FORMAT['queries']:
+        b, n = FORMAT['v0.9.53 parquet'][str(q)], FORMAT['main-prs parquet'][str(q)]
+        rows.append((query_label(q), b, n, abs(n / b - 1) > 0.05 and abs(n - b) > 0.005))
+    speedup_chart('speedup-same-format.svg', 'official-main-prs vs v0.9.53, both reading Parquet',
+                  'Hot time per query for the 17 queries probed. v0.9.53 reads a Parquet copy of hits, so the format is the same.',
+                  rows, 'Source: probes/format.json (fastest of 4 hot runs). Grey: within 5% or 5 ms.')
 
 
 def peak_rss():
@@ -145,5 +202,5 @@ def summary():
 
 
 if __name__ == '__main__':
-    hot_ratio(); peak_rss(); summary()
+    speedups(); peak_rss(); summary()
     print('charts written:', sorted(p.name for p in OUT.glob('*.svg')))

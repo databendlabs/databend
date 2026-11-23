@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1170" height="910" viewBox="0 0 1170 910">
+<rect width="100%" height="100%" fill="white"/>
+<text x="16.0" y="26.0" font-size="16" text-anchor="start" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">official-main-prs vs v0.9.53, as ClickBench runs them</text>
+<text x="16.0" y="46.0" font-size="12" text-anchor="start" font-weight="normal" fill="#444" font-family="Helvetica, Arial, sans-serif">Hot time per query. v0.9.53 reads its default Native format; 1.x can only use Parquet.</text>
+<rect x="16.0" y="58.0" width="12.0" height="12.0" fill="#59a14f"></rect>
+<text x="34.0" y="68.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">faster</text>
+<rect x="90.0" y="58.0" width="12.0" height="12.0" fill="#e15759"></rect>
+<text x="108.0" y="68.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">slower</text>
+<rect x="166.0" y="58.0" width="12.0" height="12.0" fill="#bbbbbb"></rect>
+<text x="184.0" y="68.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">within noise</text>
+<line x1="604.0" y1="86.0" x2="604.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="604.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">2× faster</text>
+<line x1="716.0" y1="86.0" x2="716.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="716.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">2× slower</text>
+<line x1="548.0" y1="86.0" x2="548.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="548.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">4× faster</text>
+<line x1="772.0" y1="86.0" x2="772.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="772.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">4× slower</text>
+<line x1="492.0" y1="86.0" x2="492.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="492.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">8× faster</text>
+<line x1="828.0" y1="86.0" x2="828.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="828.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">8× slower</text>
+<line x1="436.0" y1="86.0" x2="436.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="436.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">16× faster</text>
+<line x1="884.0" y1="86.0" x2="884.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="884.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">16× slower</text>
+<line x1="380.0" y1="86.0" x2="380.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="380.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">32× faster</text>
+<line x1="940.0" y1="86.0" x2="940.0" y2="866.0" stroke="#eeeeee" stroke-width="1"/>
+<text x="940.0" y="82.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#777" font-family="Helvetica, Arial, sans-serif">32× slower</text>
+<rect x="428.3" y="95.0" width="231.7" height="12.0" fill="#59a14f"><title>Q17  SELECT UserID, SearchPhrase, COUNT(*) FROM hits GRO…: 764.1 ms -&gt; 43.4 ms</title></rect>
+<text x="372.0" y="105.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q17  SELECT UserID, SearchPhrase, COUNT(*) FROM hits GRO…</text>
+<text x="948.0" y="105.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">17.61× faster   764 → 43 ms</text>
+<rect x="590.4" y="113.0" width="69.6" height="12.0" fill="#59a14f"><title>Q32  SELECT WatchID, ClientIP, COUNT(*) AS c, SUM(IsRefr…: 3809.7 ms -&gt; 1609.2 ms</title></rect>
+<text x="372.0" y="123.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q32  SELECT WatchID, ClientIP, COUNT(*) AS c, SUM(IsRefr…</text>
+<text x="948.0" y="123.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.37× faster   3810 → 1609 ms</text>
+<rect x="596.4" y="131.0" width="63.6" height="12.0" fill="#59a14f"><title>Q16  SELECT UserID, SearchPhrase, COUNT(*) FROM hits GRO…: 1541.2 ms -&gt; 701.5 ms</title></rect>
+<text x="372.0" y="141.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q16  SELECT UserID, SearchPhrase, COUNT(*) FROM hits GRO…</text>
+<text x="948.0" y="141.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.20× faster   1541 → 702 ms</text>
+<rect x="596.9" y="149.0" width="63.1" height="12.0" fill="#59a14f"><title>Q28  SELECT REGEXP_REPLACE(Referer, '^https?://(?:www\.)…: 9255.2 ms -&gt; 4240.5 ms</title></rect>
+<text x="372.0" y="159.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q28  SELECT REGEXP_REPLACE(Referer, '^https?://(?:www\.)…</text>
+<text x="948.0" y="159.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.18× faster   9255 → 4240 ms</text>
+<rect x="609.0" y="167.0" width="51.0" height="12.0" fill="#59a14f"><title>Q18  SELECT UserID, extract(minute FROM EventTime) AS m,…: 2534.8 ms -&gt; 1348.4 ms</title></rect>
+<text x="372.0" y="177.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q18  SELECT UserID, extract(minute FROM EventTime) AS m,…</text>
+<text x="948.0" y="177.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.88× faster   2535 → 1348 ms</text>
+<rect x="632.4" y="185.0" width="27.6" height="12.0" fill="#59a14f"><title>Q35  SELECT ClientIP, ClientIP - 1, ClientIP - 2, Client…: 401.3 ms -&gt; 285.1 ms</title></rect>
+<text x="372.0" y="195.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q35  SELECT ClientIP, ClientIP - 1, ClientIP - 2, Client…</text>
+<text x="948.0" y="195.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.41× faster   401 → 285 ms</text>
+<rect x="635.2" y="203.0" width="24.8" height="12.0" fill="#59a14f"><title>Q15  SELECT UserID, COUNT(*) FROM hits GROUP BY UserID O…: 450.3 ms -&gt; 331.1 ms</title></rect>
+<text x="372.0" y="213.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q15  SELECT UserID, COUNT(*) FROM hits GROUP BY UserID O…</text>
+<text x="948.0" y="213.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.36× faster   450 → 331 ms</text>
+<rect x="640.9" y="221.0" width="19.1" height="12.0" fill="#59a14f"><title>Q04  SELECT COUNT(DISTINCT UserID) FROM hits: 351.4 ms -&gt; 277.4 ms</title></rect>
+<text x="372.0" y="231.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q04  SELECT COUNT(DISTINCT UserID) FROM hits</text>
+<text x="948.0" y="231.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.27× faster   351 → 277 ms</text>
+<rect x="645.7" y="239.0" width="14.3" height="12.0" fill="#59a14f"><title>Q34  SELECT 1, URL, COUNT(*) AS c FROM hits GROUP BY 1, …: 2389.8 ms -&gt; 2002.2 ms</title></rect>
+<text x="372.0" y="249.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q34  SELECT 1, URL, COUNT(*) AS c FROM hits GROUP BY 1, …</text>
+<text x="948.0" y="249.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.19× faster   2390 → 2002 ms</text>
+<rect x="646.1" y="257.0" width="13.9" height="12.0" fill="#59a14f"><title>Q05  SELECT COUNT(DISTINCT SearchPhrase) FROM hits: 410.0 ms -&gt; 345.1 ms</title></rect>
+<text x="372.0" y="267.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q05  SELECT COUNT(DISTINCT SearchPhrase) FROM hits</text>
+<text x="948.0" y="267.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.19× faster   410 → 345 ms</text>
+<rect x="646.3" y="275.0" width="13.7" height="12.0" fill="#59a14f"><title>Q33  SELECT URL, COUNT(*) AS c FROM hits GROUP BY URL OR…: 2368.3 ms -&gt; 1999.0 ms</title></rect>
+<text x="372.0" y="285.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q33  SELECT URL, COUNT(*) AS c FROM hits GROUP BY URL OR…</text>
+<text x="948.0" y="285.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.18× faster   2368 → 1999 ms</text>
+<rect x="648.7" y="293.0" width="11.3" height="12.0" fill="#59a14f"><title>Q14  SELECT SearchEngineID, SearchPhrase, COUNT(*) AS c …: 532.0 ms -&gt; 462.6 ms</title></rect>
+<text x="372.0" y="303.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q14  SELECT SearchEngineID, SearchPhrase, COUNT(*) AS c …</text>
+<text x="948.0" y="303.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.15× faster   532 → 463 ms</text>
+<rect x="648.9" y="311.0" width="11.1" height="12.0" fill="#59a14f"><title>Q08  SELECT RegionID, COUNT(DISTINCT UserID) AS u FROM h…: 395.4 ms -&gt; 344.8 ms</title></rect>
+<text x="372.0" y="321.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q08  SELECT RegionID, COUNT(DISTINCT UserID) AS u FROM h…</text>
+<text x="948.0" y="321.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.15× faster   395 → 345 ms</text>
+<rect x="652.4" y="329.0" width="7.6" height="12.0" fill="#59a14f"><title>Q12  SELECT SearchPhrase, COUNT(*) AS c FROM hits WHERE …: 464.8 ms -&gt; 422.9 ms</title></rect>
+<text x="372.0" y="339.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q12  SELECT SearchPhrase, COUNT(*) AS c FROM hits WHERE …</text>
+<text x="948.0" y="339.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.10× faster   465 → 423 ms</text>
+<rect x="659.1" y="347.0" width="0.9" height="12.0" fill="#bbbbbb"><title>Q13  SELECT SearchPhrase, COUNT(DISTINCT UserID) AS u FR…: 703.6 ms -&gt; 695.4 ms</title></rect>
+<text x="372.0" y="357.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q13  SELECT SearchPhrase, COUNT(DISTINCT UserID) AS u FR…</text>
+<text x="948.0" y="357.0" font-size="11" text-anchor="start" font-weight="normal" fill="#888" font-family="Helvetica, Arial, sans-serif">1.01× faster   704 → 695 ms</text>
+<rect x="660.0" y="365.0" width="0.9" height="12.0" fill="#bbbbbb"><title>Q39  SELECT TraficSourceID, SearchEngineID, AdvEngineID,…: 64.3 ms -&gt; 65.0 ms</title></rect>
+<text x="372.0" y="375.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q39  SELECT TraficSourceID, SearchEngineID, AdvEngineID,…</text>
+<text x="948.0" y="375.0" font-size="11" text-anchor="start" font-weight="normal" fill="#888" font-family="Helvetica, Arial, sans-serif">1.01× slower   64 → 65 ms</text>
+<rect x="660.0" y="383.0" width="6.2" height="12.0" fill="#bbbbbb"><title>Q31  SELECT WatchID, ClientIP, COUNT(*) AS c, SUM(IsRefr…: 620.4 ms -&gt; 669.7 ms</title></rect>
+<text x="372.0" y="393.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q31  SELECT WatchID, ClientIP, COUNT(*) AS c, SUM(IsRefr…</text>
+<text x="948.0" y="393.0" font-size="11" text-anchor="start" font-weight="normal" fill="#888" font-family="Helvetica, Arial, sans-serif">1.08× slower   620 → 670 ms</text>
+<rect x="660.0" y="401.0" width="8.1" height="12.0" fill="#bbbbbb"><title>Q37  SELECT Title, COUNT(*) AS PageViews FROM hits WHERE…: 19.8 ms -&gt; 21.9 ms</title></rect>
+<text x="372.0" y="411.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q37  SELECT Title, COUNT(*) AS PageViews FROM hits WHERE…</text>
+<text x="948.0" y="411.0" font-size="11" text-anchor="start" font-weight="normal" fill="#888" font-family="Helvetica, Arial, sans-serif">1.11× slower   20 → 22 ms</text>
+<rect x="660.0" y="419.0" width="9.3" height="12.0" fill="#bbbbbb"><title>Q06  SELECT MIN(EventDate), MAX(EventDate) FROM hits: 15.6 ms -&gt; 17.5 ms</title></rect>
+<text x="372.0" y="429.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q06  SELECT MIN(EventDate), MAX(EventDate) FROM hits</text>
+<text x="948.0" y="429.0" font-size="11" text-anchor="start" font-weight="normal" fill="#888" font-family="Helvetica, Arial, sans-serif">1.12× slower   16 → 18 ms</text>
+<rect x="660.0" y="437.0" width="9.6" height="12.0" fill="#e15759"><title>Q10  SELECT MobilePhoneModel, COUNT(DISTINCT UserID) AS …: 132.9 ms -&gt; 149.6 ms</title></rect>
+<text x="372.0" y="447.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q10  SELECT MobilePhoneModel, COUNT(DISTINCT UserID) AS …</text>
+<text x="948.0" y="447.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.13× slower   133 → 150 ms</text>
+<rect x="660.0" y="455.0" width="15.7" height="12.0" fill="#e15759"><title>Q29  SELECT SUM(ResolutionWidth), SUM(ResolutionWidth + …: 52.1 ms -&gt; 63.3 ms</title></rect>
+<text x="372.0" y="465.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q29  SELECT SUM(ResolutionWidth), SUM(ResolutionWidth + …</text>
+<text x="948.0" y="465.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.21× slower   52 → 63 ms</text>
+<rect x="660.0" y="473.0" width="17.4" height="12.0" fill="#bbbbbb"><title>Q40  SELECT URLHash, EventDate, COUNT(*) AS PageViews FR…: 12.9 ms -&gt; 16.0 ms</title></rect>
+<text x="372.0" y="483.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q40  SELECT URLHash, EventDate, COUNT(*) AS PageViews FR…</text>
+<text x="948.0" y="483.0" font-size="11" text-anchor="start" font-weight="normal" fill="#888" font-family="Helvetica, Arial, sans-serif">1.24× slower   13 → 16 ms</text>
+<rect x="660.0" y="491.0" width="17.5" height="12.0" fill="#e15759"><title>Q36  SELECT URL, COUNT(*) AS PageViews FROM hits WHERE C…: 33.1 ms -&gt; 41.1 ms</title></rect>
+<text x="372.0" y="501.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q36  SELECT URL, COUNT(*) AS PageViews FROM hits WHERE C…</text>
+<text x="948.0" y="501.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.24× slower   33 → 41 ms</text>
+<rect x="660.0" y="509.0" width="19.0" height="12.0" fill="#e15759"><title>Q09  SELECT RegionID, SUM(AdvEngineID), COUNT(*) AS c, A…: 442.7 ms -&gt; 560.4 ms</title></rect>
+<text x="372.0" y="519.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q09  SELECT RegionID, SUM(AdvEngineID), COUNT(*) AS c, A…</text>
+<text x="948.0" y="519.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.27× slower   443 → 560 ms</text>
+<rect x="660.0" y="527.0" width="21.9" height="12.0" fill="#e15759"><title>Q11  SELECT MobilePhone, MobilePhoneModel, COUNT(DISTINC…: 122.4 ms -&gt; 160.5 ms</title></rect>
+<text x="372.0" y="537.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q11  SELECT MobilePhone, MobilePhoneModel, COUNT(DISTINC…</text>
+<text x="948.0" y="537.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.31× slower   122 → 160 ms</text>
+<rect x="660.0" y="545.0" width="30.7" height="12.0" fill="#e15759"><title>Q30  SELECT SearchEngineID, ClientIP, COUNT(*) AS c, SUM…: 325.2 ms -&gt; 475.4 ms</title></rect>
+<text x="372.0" y="555.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q30  SELECT SearchEngineID, ClientIP, COUNT(*) AS c, SUM…</text>
+<text x="948.0" y="555.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.46× slower   325 → 475 ms</text>
+<rect x="660.0" y="563.0" width="34.0" height="12.0" fill="#bbbbbb"><title>Q19  SELECT UserID FROM hits WHERE UserID = 435090932899…: 4.2 ms -&gt; 6.4 ms</title></rect>
+<text x="372.0" y="573.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q19  SELECT UserID FROM hits WHERE UserID = 435090932899…</text>
+<text x="948.0" y="573.0" font-size="11" text-anchor="start" font-weight="normal" fill="#888" font-family="Helvetica, Arial, sans-serif">1.52× slower   4 → 6 ms</text>
+<rect x="660.0" y="581.0" width="35.5" height="12.0" fill="#e15759"><title>Q41  SELECT WindowClientWidth, WindowClientHeight, COUNT…: 9.8 ms -&gt; 15.2 ms</title></rect>
+<text x="372.0" y="591.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q41  SELECT WindowClientWidth, WindowClientHeight, COUNT…</text>
+<text x="948.0" y="591.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.55× slower   10 → 15 ms</text>
+<rect x="660.0" y="599.0" width="39.0" height="12.0" fill="#e15759"><title>Q42  SELECT DATE_TRUNC('minute', EventTime) AS M, COUNT(…: 9.5 ms -&gt; 15.4 ms</title></rect>
+<text x="372.0" y="609.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q42  SELECT DATE_TRUNC('minute', EventTime) AS M, COUNT(…</text>
+<text x="948.0" y="609.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.62× slower   10 → 15 ms</text>
+<rect x="660.0" y="617.0" width="40.0" height="12.0" fill="#e15759"><title>Q07  SELECT AdvEngineID, COUNT(*) FROM hits WHERE AdvEng…: 20.6 ms -&gt; 33.8 ms</title></rect>
+<text x="372.0" y="627.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q07  SELECT AdvEngineID, COUNT(*) FROM hits WHERE AdvEng…</text>
+<text x="948.0" y="627.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.64× slower   21 → 34 ms</text>
+<rect x="660.0" y="635.0" width="43.1" height="12.0" fill="#e15759"><title>Q23  SELECT * FROM hits WHERE URL LIKE '%google%' ORDER …: 123.8 ms -&gt; 211.0 ms</title></rect>
+<text x="372.0" y="645.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q23  SELECT * FROM hits WHERE URL LIKE '%google%' ORDER …</text>
+<text x="948.0" y="645.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.70× slower   124 → 211 ms</text>
+<rect x="660.0" y="653.0" width="44.0" height="12.0" fill="#e15759"><title>Q38  SELECT URL, COUNT(*) AS PageViews FROM hits WHERE C…: 13.0 ms -&gt; 22.4 ms</title></rect>
+<text x="372.0" y="663.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q38  SELECT URL, COUNT(*) AS PageViews FROM hits WHERE C…</text>
+<text x="948.0" y="663.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.72× slower   13 → 22 ms</text>
+<rect x="660.0" y="671.0" width="44.2" height="12.0" fill="#e15759"><title>Q01  SELECT COUNT(*) FROM hits WHERE AdvEngineID &lt;&gt; 0: 17.6 ms -&gt; 30.4 ms</title></rect>
+<text x="372.0" y="681.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q01  SELECT COUNT(*) FROM hits WHERE AdvEngineID &lt;&gt; 0</text>
+<text x="948.0" y="681.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.73× slower   18 → 30 ms</text>
+<rect x="660.0" y="689.0" width="52.9" height="12.0" fill="#e15759"><title>Q02  SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWi…: 28.1 ms -&gt; 54.1 ms</title></rect>
+<text x="372.0" y="699.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q02  SELECT SUM(AdvEngineID), COUNT(*), AVG(ResolutionWi…</text>
+<text x="948.0" y="699.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">1.93× slower   28 → 54 ms</text>
+<rect x="660.0" y="707.0" width="61.4" height="12.0" fill="#e15759"><title>Q25  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…: 109.7 ms -&gt; 234.5 ms</title></rect>
+<text x="372.0" y="717.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q25  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…</text>
+<text x="948.0" y="717.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.14× slower   110 → 234 ms</text>
+<rect x="660.0" y="725.0" width="62.8" height="12.0" fill="#e15759"><title>Q22  SELECT SearchPhrase, MIN(URL), MIN(Title), COUNT(*)…: 741.4 ms -&gt; 1613.3 ms</title></rect>
+<text x="372.0" y="735.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q22  SELECT SearchPhrase, MIN(URL), MIN(Title), COUNT(*)…</text>
+<text x="948.0" y="735.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.18× slower   741 → 1613 ms</text>
+<rect x="660.0" y="743.0" width="65.5" height="12.0" fill="#e15759"><title>Q20  SELECT COUNT(*) FROM hits WHERE URL LIKE '%google%': 315.6 ms -&gt; 710.3 ms</title></rect>
+<text x="372.0" y="753.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q20  SELECT COUNT(*) FROM hits WHERE URL LIKE '%google%'</text>
+<text x="948.0" y="753.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.25× slower   316 → 710 ms</text>
+<rect x="660.0" y="761.0" width="66.7" height="12.0" fill="#e15759"><title>Q03  SELECT AVG(UserID) FROM hits: 28.2 ms -&gt; 64.4 ms</title></rect>
+<text x="372.0" y="771.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q03  SELECT AVG(UserID) FROM hits</text>
+<text x="948.0" y="771.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.28× slower   28 → 64 ms</text>
+<rect x="660.0" y="779.0" width="70.0" height="12.0" fill="#e15759"><title>Q21  SELECT SearchPhrase, MIN(URL), COUNT(*) AS c FROM h…: 390.4 ms -&gt; 928.2 ms</title></rect>
+<text x="372.0" y="789.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q21  SELECT SearchPhrase, MIN(URL), COUNT(*) AS c FROM h…</text>
+<text x="948.0" y="789.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">2.38× slower   390 → 928 ms</text>
+<rect x="660.0" y="797.0" width="96.3" height="12.0" fill="#e15759"><title>Q24  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…: 15.6 ms -&gt; 51.4 ms</title></rect>
+<text x="372.0" y="807.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q24  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…</text>
+<text x="948.0" y="807.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">3.29× slower   16 → 51 ms</text>
+<rect x="660.0" y="815.0" width="98.5" height="12.0" fill="#e15759"><title>Q00  SELECT COUNT(*) FROM hits: 4.7 ms -&gt; 15.9 ms</title></rect>
+<text x="372.0" y="825.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q00  SELECT COUNT(*) FROM hits</text>
+<text x="948.0" y="825.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">3.38× slower   5 → 16 ms</text>
+<rect x="660.0" y="833.0" width="101.1" height="12.0" fill="#e15759"><title>Q27  SELECT CounterID, AVG(length(URL)) AS l, COUNT(*) A…: 300.4 ms -&gt; 1049.9 ms</title></rect>
+<text x="372.0" y="843.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q27  SELECT CounterID, AVG(length(URL)) AS l, COUNT(*) A…</text>
+<text x="948.0" y="843.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">3.50× slower   300 → 1050 ms</text>
+<rect x="660.0" y="851.0" width="114.3" height="12.0" fill="#e15759"><title>Q26  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…: 16.3 ms -&gt; 67.1 ms</title></rect>
+<text x="372.0" y="861.0" font-size="11" text-anchor="end" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Q26  SELECT SearchPhrase FROM hits WHERE SearchPhrase &lt;&gt;…</text>
+<text x="948.0" y="861.0" font-size="11" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">4.12× slower   16 → 67 ms</text>
+<line x1="660.0" y1="88.0" x2="660.0" y2="866.0" stroke="#333" stroke-width="1.2"/>
+<text x="16.0" y="896.0" font-size="11" text-anchor="start" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">Source: results/round*.json (2 rounds). Grey: not faster/slower by &gt; 5% and &gt; 5 ms in both rounds.</text>
+</svg>
