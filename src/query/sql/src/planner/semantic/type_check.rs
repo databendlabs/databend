@@ -561,6 +561,7 @@ pub struct TypeChecker<'a, A> {
     // The parameters of the lambdas whose bodies are being bound, the
     // innermost last, see `lambda.rs`.
     lambda_params: Vec<Vec<ColumnBinding>>,
+    require_context_independent: bool,
 }
 
 #[cfg(test)]

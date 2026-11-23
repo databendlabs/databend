@@ -38,12 +38,13 @@ use crate::statistics::partition_values;
 
 #[derive(Clone)]
 pub struct PartitionPruningInfo {
-    pub partition_keys: Vec<RemoteExpr<String>>,
+    /// One slot per stored partition value. A None slot must not be used for pruning.
+    pub partition_keys: Vec<Option<RemoteExpr<String>>>,
     pub partition_key_id: Option<u32>,
 }
 
 pub struct PartitionPruner {
-    partition_keys: Vec<Expr<String>>,
+    partition_keys: Vec<Option<Expr<String>>>,
     partition_key_id: Option<u32>,
     filter: Expr<String>,
     func_ctx: FunctionContext,
@@ -57,7 +58,7 @@ impl PartitionPruner {
     ) -> Option<Self> {
         let filter = filter?.clone();
         let info = info?;
-        if info.partition_keys.is_empty() {
+        if info.partition_keys.iter().all(Option::is_none) {
             return None;
         }
 
@@ -65,13 +66,15 @@ impl PartitionPruner {
             .partition_keys
             .into_iter()
             .map(|expr| {
-                ConstantFolder::fold(
-                    Cow::Owned(expr.as_expr(&BUILTIN_FUNCTIONS)),
-                    &func_ctx,
-                    &BUILTIN_FUNCTIONS,
-                )
-                .0
-                .into_owned()
+                expr.map(|expr| {
+                    ConstantFolder::fold(
+                        Cow::Owned(expr.as_expr(&BUILTIN_FUNCTIONS)),
+                        &func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    )
+                    .0
+                    .into_owned()
+                })
             })
             .collect();
 
@@ -90,7 +93,12 @@ impl PartitionPruner {
             return true;
         };
 
-        let replacements = self.partition_keys.iter().zip(values).collect::<Vec<_>>();
+        let replacements = self
+            .partition_keys
+            .iter()
+            .zip(values)
+            .filter_map(|(expr, value)| Some((expr.as_ref()?, value)))
+            .collect();
         let mut visitor = PartitionPredicateRewriter {
             replacements,
             func_ctx: &self.func_ctx,
@@ -525,7 +533,7 @@ mod tests {
         }]);
 
         let pruner = PartitionPruner {
-            partition_keys: vec![partition_expr],
+            partition_keys: vec![Some(partition_expr)],
             partition_key_id: Some(1),
             filter,
             func_ctx: FunctionContext::default(),
@@ -543,6 +551,26 @@ mod tests {
         assert!(pruner.should_keep(Some(&legacy)));
         let current_key = PartitionStatistics::new(1, old_key.values);
         assert!(!pruner.should_keep(Some(&current_key)));
+    }
+
+    #[test]
+    fn test_prunes_with_original_position_of_context_independent_key() {
+        let key = column_ref("p", DataType::Number(NumberDataType::Int64));
+        let filter = call("eq", vec![key.clone(), int64(1)]);
+        let pruner = PartitionPruner::try_create(
+            FunctionContext::default(),
+            Some(&filter),
+            Some(PartitionPruningInfo {
+                partition_keys: vec![None, Some(key.as_remote_expr())],
+                partition_key_id: Some(1),
+            }),
+        )
+        .unwrap();
+
+        let stats =
+            |p: i64| PartitionStatistics::new(1, vec![Scalar::Date(0), Scalar::Number(p.into())]);
+        assert!(pruner.should_keep(Some(&stats(1))));
+        assert!(!pruner.should_keep(Some(&stats(2))));
     }
 
     #[test]

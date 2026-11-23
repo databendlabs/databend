@@ -1318,5 +1318,112 @@ FROM (
 ----
 0
 
+# Partition values are computed in the writer's time zone. A reader in another
+# time zone must not prune with keys that depend on it.
+statement ok
+SET timezone = 'UTC'
+
+statement ok
+CREATE TABLE tz_date(id INT, ts TIMESTAMP) PARTITION BY (to_date(ts))
+
+statement ok
+INSERT INTO tz_date VALUES (1, '2024-01-31 20:00:00'), (2, '2024-01-31 10:00:00'), (3, '2024-02-01 10:00:00')
+
+statement ok
+CREATE TABLE tz_month(id INT, ts TIMESTAMP) PARTITION BY (to_yyyymm(ts))
+
+statement ok
+INSERT INTO tz_month SELECT * FROM tz_date
+
+statement ok
+CREATE TABLE tz_day(id INT, ts TIMESTAMP) PARTITION BY (date_trunc(day, ts))
+
+statement ok
+INSERT INTO tz_day SELECT * FROM tz_date
+
+# The implicit string-to-timestamp cast is folded while binding the key.
+statement ok
+CREATE TABLE tz_boundary(id INT, ts TIMESTAMP) PARTITION BY (if(ts >= '2024-02-01', 1, 0))
+
+statement ok
+INSERT INTO tz_boundary SELECT * FROM tz_date
+
+# An unsafe leading key must not disable pruning with the stable second key.
+statement ok
+SET max_threads=1
+
+statement ok
+CREATE TABLE tz_mixed(id INT, ts TIMESTAMP) PARTITION BY (CAST(ts AS DATE), id % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO tz_mixed SELECT (2 * number)::INT, TIMESTAMP '2024-01-31 20:00:00' FROM numbers(2)
+
+statement ok
+INSERT INTO tz_mixed SELECT (2 * number + 1)::INT, TIMESTAMP '2024-01-31 20:00:00' FROM numbers(2)
+
+statement ok
+SET timezone = 'Asia/Shanghai'
+
+query I
+SELECT id FROM tz_date WHERE to_date(ts) = '2024-02-01' ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM tz_date WHERE ts >= '2024-02-01' AND ts < '2024-02-02' ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM tz_month WHERE ts = '2024-02-01 04:00:00'
+----
+1
+
+query I
+SELECT id FROM tz_day WHERE ts >= '2024-02-01' AND ts < '2024-02-02' ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM tz_boundary WHERE if(ts >= '2024-02-01', 1, 0) = 1 ORDER BY id
+----
+1
+3
+
+query T
+EXPLAIN SELECT id FROM tz_mixed WHERE id % 2 = 1
+----
+<slt:ignore>segments: <slt:ignore>range pruning: 2 to 1<slt:ignore>
+
+query I
+SELECT id FROM tz_mixed WHERE CAST(ts AS DATE) = '2024-02-01' AND id % 2 = 1 ORDER BY id
+----
+1
+3
+
+statement ok
+UPDATE tz_month SET id = 10 WHERE ts = '2024-02-01 04:00:00'
+
+query I
+SELECT id FROM tz_month ORDER BY id
+----
+2
+3
+10
+
+statement ok
+DELETE FROM tz_date WHERE to_date(ts) = '2024-02-01'
+
+query I
+SELECT id FROM tz_date
+----
+2
+
+statement ok
+UNSET timezone
+
 statement ok
 DROP DATABASE db_09_0054

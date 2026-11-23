@@ -24,10 +24,12 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::FunctionKind;
 use crate::Symbol;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::type_check::resolve_cast_function;
 use crate::types::DataType;
 use crate::values::Scalar;
 
@@ -1008,6 +1010,36 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
+        }
+    }
+
+    /// Whether this expression can be compared across function contexts.
+    /// Unknown dispatch (such as composite casts) is conservatively not trusted.
+    #[recursive::recursive]
+    pub fn is_context_independent(&self, registry: &FunctionRegistry) -> bool {
+        match self {
+            Expr::ColumnRef(_) | Expr::Constant(_) => true,
+            Expr::Cast(cast) => {
+                let source = cast.expr.data_type();
+                let dest = &cast.dest_type;
+                (source.remove_nullable_ref() == dest.remove_nullable_ref()
+                    || resolve_cast_function(cast.span, cast.is_try, source, dest, registry)
+                        .is_some_and(|call| !registry.is_context_dependent(&call.id)))
+                    && cast.expr.is_context_independent(registry)
+            }
+            Expr::FunctionCall(call) => {
+                registry
+                    .get_property(&call.function.signature.name)
+                    .is_some_and(|property| {
+                        property.kind == FunctionKind::Scalar && !property.non_deterministic
+                    })
+                    && !registry.is_context_dependent(&call.id)
+                    && call
+                        .args
+                        .iter()
+                        .all(|arg| arg.is_context_independent(registry))
+            }
+            Expr::LambdaFunctionCall(_) => false,
         }
     }
 
