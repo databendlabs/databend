@@ -26,6 +26,7 @@ use std::sync::Arc;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -36,6 +37,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::KeysState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::hash_util::hash_keys_state_by_method;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -122,9 +124,50 @@ impl EncodedBuild {
     /// Partition hashes of an encoded block. For equal keys they are the hashes `get_hashes`
     /// gives on the probe side: both hash the key the hash method encodes.
     pub fn hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
-        let key = block.get_last_column().clone().remove_nullable();
-        let keys_state = keys_state(&self.method, key)?;
-        hash_keys_state_by_method(&self.method, &keys_state, hashes)
+        let entry = block.columns().last().ok_or_else(|| {
+            ErrorCode::Internal("spilled hash join build block has no key column")
+        })?;
+        key_hashes(&self.method, entry, block.num_rows(), hashes)
+    }
+}
+
+/// Partition hashes of an encoded key entry. Rows with NULL keys never match on probing; after a
+/// Parquet round-trip their entry can be a `Const(Null)` or have empty byte slices in a fixed-width
+/// binary key column, so only valid keys are decoded and hashed.
+fn key_hashes(
+    method: &HashMethodKind,
+    entry: &BlockEntry,
+    num_rows: usize,
+    hashes: &mut Vec<u64>,
+) -> Result<()> {
+    if matches!(entry, BlockEntry::Const(Scalar::Null, _, _)) {
+        hashes.resize(hashes.len() + num_rows, 0);
+        return Ok(());
+    }
+
+    match entry.to_column() {
+        Column::Nullable(key) if key.validity().null_count() > 0 => {
+            let (key, validity) = key.destructure();
+            let num_keys = validity.true_count();
+            if num_keys == 0 {
+                hashes.resize(hashes.len() + num_rows, 0);
+                return Ok(());
+            }
+
+            let keys_state = keys_state(method, key.filter(&validity))?;
+            let mut valid_hashes = Vec::with_capacity(num_keys);
+            hash_keys_state_by_method(method, &keys_state, &mut valid_hashes)?;
+            let mut valid_hashes = valid_hashes.into_iter();
+            hashes.extend(validity.iter().map(|valid| match valid {
+                true => valid_hashes.next().unwrap_or(0),
+                false => 0,
+            }));
+            Ok(())
+        }
+        key => {
+            let keys_state = keys_state(method, key.remove_nullable())?;
+            hash_keys_state_by_method(method, &keys_state, hashes)
+        }
     }
 }
 
@@ -279,18 +322,28 @@ fn fixed_width_keys<T, const N: usize>(key: &Column, decode: fn([u8; N]) -> T) -
 
 #[cfg(test)]
 mod tests {
+    use bytes::Bytes;
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchema;
     use databend_common_expression::FromData;
     use databend_common_expression::HashMethodKind;
     use databend_common_expression::ProjectedBlock;
+    use databend_common_expression::Scalar;
     use databend_common_expression::hash_util::hash_by_method;
     use databend_common_expression::hash_util::hash_keys_state_by_method;
     use databend_common_expression::types::*;
     use ethnum::U256;
+    use parquet::arrow::ArrowWriter;
+    use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
     use super::arena_keys;
     use super::key_column;
+    use super::key_hashes;
+    use super::key_type;
     use super::keys_state;
     use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
     use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
@@ -298,6 +351,18 @@ mod tests {
     use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHashMap;
     use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
     use crate::pipelines::processors::transforms::new_hash_join::memory::BuildArena;
+
+    fn parquet_roundtrip(schema: &DataSchema, block: DataBlock) -> DataBlock {
+        let batch = block.to_record_batch_with_dataschema(schema).unwrap();
+        let mut buf = Vec::new();
+        let mut writer = ArrowWriter::try_new(&mut buf, batch.schema(), None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
+
+        let mut reader = ParquetRecordBatchReader::try_new(Bytes::from(buf), usize::MAX).unwrap();
+        let batch = reader.next().unwrap().unwrap();
+        DataBlock::from_record_batch_keep_null_const(schema, &batch).unwrap()
+    }
 
     /// Insert `keys` into the hash table `final_build` would choose for them and check that the
     /// keys taken from the arena are the keys the hash method encodes, and that they hash like
@@ -362,9 +427,10 @@ mod tests {
             data: arena,
         };
         // The chunk also has rows with NULL keys behind the valid ones.
-        let from_arena = arena_keys(&method, &arena, num_keys + null_key_rows);
-        assert_eq!(from_arena.len(), num_keys + null_key_rows);
-        let from_arena = from_arena.slice(0..num_keys);
+        let total_rows = num_keys + null_key_rows;
+        let from_arena_all = arena_keys(&method, &arena, total_rows);
+        assert_eq!(from_arena_all.len(), total_rows);
+        let from_arena = from_arena_all.slice(0..num_keys);
 
         let encoded = key_column(state);
         assert_eq!(from_arena, encoded, "{method:?}");
@@ -375,6 +441,59 @@ mod tests {
         let state = keys_state(&method, from_arena).unwrap();
         hash_keys_state_by_method(&method, &state, &mut spill_hashes).unwrap();
         assert_eq!(spill_hashes, probe_hashes, "{method:?}");
+
+        // Round-trip mixed valid + NULL keys and all-NULL keys through Parquet, as recursive
+        // grace spilling does when re-partitioning restored row groups.
+        let schema = DataSchema::new(vec![DataField::new(
+            "_join_build_key",
+            key_type(&method).wrap_nullable(),
+        )]);
+        let mixed_validity =
+            Bitmap::from_trusted_len_iter((0..total_rows).map(|row| row < num_keys));
+        let mixed_block = DataBlock::new(
+            vec![
+                from_arena_all
+                    .clone()
+                    .wrap_nullable(Some(mixed_validity))
+                    .into(),
+            ],
+            total_rows,
+        );
+        let restored_mixed = parquet_roundtrip(&schema, mixed_block);
+        let mut restored_hashes = vec![];
+        key_hashes(
+            &method,
+            restored_mixed.columns().last().unwrap(),
+            total_rows,
+            &mut restored_hashes,
+        )
+        .unwrap();
+        let mut expected_hashes = probe_hashes;
+        expected_hashes.resize(total_rows, 0);
+        assert_eq!(restored_hashes, expected_hashes, "{method:?}");
+
+        let all_null_block = DataBlock::new(
+            vec![
+                from_arena_all
+                    .wrap_nullable(Some(Bitmap::new_constant(false, total_rows)))
+                    .into(),
+            ],
+            total_rows,
+        );
+        let restored_nulls = parquet_roundtrip(&schema, all_null_block);
+        assert!(matches!(
+            restored_nulls.columns().last().unwrap(),
+            BlockEntry::Const(Scalar::Null, _, _)
+        ));
+        let mut null_hashes = vec![];
+        key_hashes(
+            &method,
+            restored_nulls.columns().last().unwrap(),
+            total_rows,
+            &mut null_hashes,
+        )
+        .unwrap();
+        assert_eq!(null_hashes, vec![0; total_rows], "{method:?}");
     }
 
     #[test]

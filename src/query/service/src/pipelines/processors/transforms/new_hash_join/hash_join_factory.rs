@@ -91,7 +91,7 @@ impl HashJoinFactory {
         let join = self.create_hybrid_join(typ, states)?;
         // A cache scan reads the build chunks from the shared state, so they must stay there.
         if shared_build_chunks {
-            return Ok(Box::new(join));
+            return Ok(Box::new(join.without_spill()));
         }
 
         Ok(Box::new(join.with_spill_in_final_build()))

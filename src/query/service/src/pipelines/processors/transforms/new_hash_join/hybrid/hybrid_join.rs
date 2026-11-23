@@ -76,6 +76,10 @@ pub struct HybridHashJoin {
     // restored blocks of the lower levels already are.
     encoded_build: Arc<EncodedBuild>,
 
+    // Cleared when another operator reads `basic_state.chunks` during probing, so the build
+    // chunks must stay in memory.
+    allow_spill: bool,
+
     // Set when this join can spill while building the hash table. Only the top-level join can:
     // switching needs a stage barrier to discard the partial hash table, which restore rounds
     // do not have.
@@ -108,8 +112,16 @@ impl HybridHashJoin {
             encoded_build: state.factory.encoded_build(),
             state,
             mode: HybridJoinMode::Memory(memory_join),
+            allow_spill: true,
             spill_in_final_build: false,
         }
+    }
+
+    /// Keep the build chunks in memory, e.g. when another operator reads them from the shared
+    /// state during probing.
+    pub fn without_spill(mut self) -> HybridHashJoin {
+        self.allow_spill = false;
+        self
     }
 
     /// Allow spilling while the in-memory hash table is built. The caller must run the build
@@ -123,7 +135,7 @@ impl HybridHashJoin {
         // Grace partitions rows by join keys. Without keys every row lands in the same
         // partition, so spilling cannot shrink the working set and would only round-trip
         // both sides (possibly blocks without any columns) through storage.
-        self.state.can_next_layer_join() && !self.desc.build_keys.is_empty()
+        self.allow_spill && self.state.can_next_layer_join() && !self.desc.build_keys.is_empty()
     }
 
     fn need_final_build_spill(&self) -> bool {
@@ -308,6 +320,10 @@ impl Join for HybridHashJoin {
         *self.basic_state.hash_table.as_mut() = HashJoinHashTable::Null;
         self.basic_state.columns.as_mut().clear();
         self.basic_state.column_types.as_mut().clear();
+        *self.basic_state.build_rows.as_mut() = 0;
+        self.basic_state.build_queue.as_mut().clear();
+        self.basic_state.scan_map.as_mut().clear();
+        self.basic_state.scan_queue.as_mut().clear();
 
         let mut arenas = std::mem::take(self.basic_state.arenas.as_mut())
             .into_iter()
