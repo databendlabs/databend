@@ -86,18 +86,10 @@ impl DeserializeDataTransform {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
-        let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
-        if let Some(virtual_reader) = virtual_reader.as_ref() {
-            let mut fields = src_schema.fields().clone();
-            for virtual_column_field in &virtual_reader.virtual_column_info.virtual_column_fields {
-                let field = DataField::new(
-                    &virtual_column_field.name,
-                    DataType::from(&*virtual_column_field.data_type),
-                );
-                fields.push(field);
-            }
-            src_schema = DataSchema::new(fields);
-        }
+        let src_schema = with_virtual_fields(
+            (block_reader.schema().as_ref()).into(),
+            virtual_reader.as_ref().as_ref(),
+        );
 
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
@@ -197,12 +189,18 @@ impl Processor for DeserializeDataTransform {
             let part = FuseBlockPartInfo::from_part(&part)?;
 
             if self.read_state.is_none() {
-                self.read_state = Some(ReadState::create(
+                let read_state = ReadState::create(
                     self.ctx.clone(),
                     self.scan_id,
                     self.prewhere_info.as_ref(),
                     self.block_reader.clone(),
-                )?);
+                )?;
+                // The read state leaves out the columns only its early stage reads.
+                self.src_schema = with_virtual_fields(
+                    read_state.output_schema.clone(),
+                    self.virtual_reader.as_ref().as_ref(),
+                );
+                self.read_state = Some(read_state);
             }
 
             let ReadStateOutput {
@@ -285,4 +283,22 @@ impl Processor for DeserializeDataTransform {
 
         Ok(())
     }
+}
+
+/// `schema` followed by the virtual columns, in the order they are appended to blocks.
+fn with_virtual_fields(
+    schema: DataSchema,
+    virtual_reader: Option<&VirtualColumnReader>,
+) -> DataSchema {
+    let Some(virtual_reader) = virtual_reader else {
+        return schema;
+    };
+    let mut fields = schema.fields().clone();
+    for virtual_column_field in &virtual_reader.virtual_column_info.virtual_column_fields {
+        fields.push(DataField::new(
+            &virtual_column_field.name,
+            DataType::from(&*virtual_column_field.data_type),
+        ));
+    }
+    DataSchema::new(fields)
 }
