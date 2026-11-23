@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Field;
-use arrow_schema::Fields;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -38,6 +37,8 @@ use opendal::Operator;
 
 use crate::BlockReadResult;
 use crate::io::read::block::parquet::ColumnEncoding;
+use crate::io::read::block::parquet::ParquetReadSchema;
+use crate::io::read::block::parquet::column_name_paths;
 use crate::io::read::block::parquet::dictionary_hint_fields;
 
 // TODO: make BlockReader as a trait.
@@ -58,9 +59,12 @@ pub struct BlockReader {
     pub(crate) column_encodings: Arc<HashMap<ColumnId, ColumnEncoding>>,
     /// Config `cache.table_data_encoded_dictionary_ndv_ratio`, read once here.
     pub(crate) dictionary_ndv_ratio: u64,
-    /// Arrow fields the Parquet columns are read as, if they differ from the original schema,
-    /// see [`dictionary_hint_fields`]. Fixed per reader, so computed once here.
-    pub(crate) parquet_hint_fields: Option<Fields>,
+    /// Schema forms the Parquet column chunks are read with, including the Arrow fields the
+    /// columns are read as (see [`dictionary_hint_fields`]). Fixed per reader, so built once
+    /// here instead of per block.
+    pub(crate) parquet_read_schema: Arc<ParquetReadSchema>,
+    /// Name path of each projected column in the record batches read, by projection order.
+    pub(crate) parquet_name_paths: Arc<Vec<Vec<String>>>,
 
     pub original_schema: TableSchemaRef,
 }
@@ -198,6 +202,12 @@ impl BlockReader {
                 .map(|field| field.column_id),
         );
 
+        let parquet_read_schema = Arc::new(ParquetReadSchema::try_new(
+            &original_schema,
+            parquet_hint_fields,
+        )?);
+        let parquet_name_paths = Arc::new(column_name_paths(&projection, &original_schema));
+
         Ok(Arc::new(BlockReader {
             ctx,
             operator,
@@ -210,7 +220,8 @@ impl BlockReader {
             policy,
             column_encodings: Arc::new(column_encodings),
             dictionary_ndv_ratio,
-            parquet_hint_fields,
+            parquet_read_schema,
+            parquet_name_paths,
             original_schema,
         }))
     }

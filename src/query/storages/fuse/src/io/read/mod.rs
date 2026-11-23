@@ -29,6 +29,7 @@ pub use block::BlockReadContext;
 pub use block::BlockReadResult;
 pub use block::BlockReader;
 pub use block::DataItem;
+pub use block::FieldLevelsCache;
 pub use block::FuseLowLevelBlockReadOptions;
 pub use block::FuseLowLevelBlockReader;
 pub use block::FuseLowLevelColumnBatchReader;

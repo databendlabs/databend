@@ -45,6 +45,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::DataItem;
+use crate::io::FieldLevelsCache;
 use crate::io::RowSelection;
 use crate::pruning::ExprBloomFilter;
 
@@ -125,6 +126,10 @@ pub struct ReadStateOutput {
 pub struct ReadState {
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
+    /// Field levels of the blocks read by `pre_reader` and `remain_reader`. Each processor
+    /// owns its `ReadState`, so they are reused across its blocks without synchronization.
+    pre_field_levels: FieldLevelsCache,
+    remain_field_levels: FieldLevelsCache,
     pub filters: Option<Expr>,
     prewhere_selector: Option<FilterExecutor>,
     /// Whether `filters` is set and deterministic. Evaluating a non-deterministic filter (e.g.
@@ -234,6 +239,8 @@ impl ReadState {
             .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS));
 
         Ok(Self {
+            pre_field_levels: prewhere_reader.field_levels_cache(),
+            remain_field_levels: remain_reader.field_levels_cache(),
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
@@ -341,6 +348,7 @@ impl ReadState {
                 part,
                 &pre_columns_chunks,
                 FILTER_BATCH_ROWS,
+                Some(&mut self.pre_field_levels),
             )?
         {
             let mut bytes = 0;
@@ -371,9 +379,12 @@ impl ReadState {
             });
         }
 
-        let mut preread_block = self
-            .pre_reader
-            .deserialize_part(part, pre_columns_chunks, None)?;
+        let mut preread_block = self.pre_reader.deserialize_part(
+            part,
+            pre_columns_chunks,
+            None,
+            Some(&mut self.pre_field_levels),
+        )?;
         let mut scan_stats = BlockScanStats {
             rows: part.nums_rows,
             bytes: preread_block.memory_size(),
@@ -442,6 +453,7 @@ impl ReadState {
             part,
             remain_columns_chunks,
             row_selection.as_ref(),
+            Some(&mut self.remain_field_levels),
         )?;
         if push_down_row_selection {
             scan_stats.bytes += estimate_block_bytes(
