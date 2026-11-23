@@ -12,45 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::TableDeduplicationLabelIdent;
-use databend_common_users::UserApiProvider;
-use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::kvapi::StructKey;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationOperation;
+use databend_common_storages_fuse::FuseTable;
 
-use crate::meta_service_error;
 use crate::sessions::TableContext;
 
-/// Checks if a duplicate label exists in the meta store.
-///
-/// # Arguments
-///
-/// * `ctx` - The table context. Must implement the `TableContext` trait and be wrapped in an `Arc`.
-///
-/// # Returns
-///
-/// Returns a `Result` containing a `bool` indicating whether specific duplicate label exists (`true`) or not (`false`).
-pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool> {
-    match unsafe { ctx.get_settings().get_deduplicate_label()? } {
-        None => Ok(false),
-        Some(deduplicate_label) => {
-            let is_exists = if ctx.txn_mgr().lock().is_active() {
-                ctx.txn_mgr()
-                    .lock()
-                    .contains_deduplicated_label(&deduplicate_label)
-            } else {
-                let ident =
-                    TableDeduplicationLabelIdent::new_generic(ctx.get_tenant(), deduplicate_label);
-                UserApiProvider::instance()
-                    .get_meta_store_client()
-                    .get_kv(&ident.to_string_key())
-                    .await
-                    .map_err(meta_service_error)?
-                    .is_some()
-            };
-            Ok(is_exists)
-        }
+pub enum DmlDeduplication {
+    AlreadyApplied,
+    Proceed(Option<DmlDeduplicationId>),
+}
+
+/// Call after the interpreter factory authorizes the statement and the target
+/// is resolved. Carry the returned identity unchanged to the commit sink.
+pub async fn check_dml_deduplication(
+    ctx: &dyn TableContext,
+    table: &dyn databend_common_catalog::table::Table,
+    operation: DmlDeduplicationOperation,
+) -> Result<DmlDeduplication> {
+    let Some(token) = (unsafe { ctx.get_settings().get_deduplicate_label()? }) else {
+        return Ok(DmlDeduplication::Proceed(None));
+    };
+    let info = table.get_table_info();
+    if info.catalog() != CATALOG_DEFAULT || table.as_any().downcast_ref::<FuseTable>().is_none() {
+        return Err(ErrorCode::InvalidOperation(
+            "deduplicate_label requires a Fuse table in the default catalog",
+        ));
     }
+
+    let id = DmlDeduplicationId {
+        principal: ctx.get_current_user()?.identity(),
+        catalog_id: info.catalog_info.id.catalog_id,
+        table_id: info.ident.table_id,
+        operation,
+        token,
+    };
+    let tenant = ctx.get_tenant();
+    let local_match = {
+        let txn_mgr = ctx.txn_mgr();
+        let txn = txn_mgr.lock();
+        txn.is_active()
+            .then(|| txn.tenant().as_ref() == Some(&tenant) && txn.contains_deduplicated_label(&id))
+    };
+    let already_applied = if let Some(local_match) = local_match {
+        local_match
+    } else if table.is_temp() {
+        false
+    } else {
+        ctx.get_default_catalog()?
+            .has_dml_deduplication_marker(&tenant, &id)
+            .await?
+    };
+    Ok(if already_applied {
+        DmlDeduplication::AlreadyApplied
+    } else {
+        DmlDeduplication::Proceed(Some(id))
+    })
 }

@@ -42,6 +42,7 @@ use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -574,6 +575,14 @@ impl Catalog for SessionCatalog {
         }
     }
 
+    async fn has_dml_deduplication_marker(
+        &self,
+        tenant: &Tenant,
+        id: &DmlDeduplicationId,
+    ) -> Result<bool> {
+        self.inner.has_dml_deduplication_marker(tenant, id).await
+    }
+
     async fn retryable_update_multi_table_meta(
         &self,
         tenant: &Tenant,
@@ -582,7 +591,9 @@ impl Catalog for SessionCatalog {
         let state = self.txn_mgr.lock().state();
         match state {
             TxnState::AutoCommit => {
+                req.validate_deduplication_markers()?;
                 let update_temp_tables = std::mem::take(&mut req.update_temp_tables);
+                req.local_deduplication_token = None;
                 let reply = if !req.has_persistent_updates() {
                     Ok(Default::default())
                 } else {

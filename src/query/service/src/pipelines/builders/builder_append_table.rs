@@ -24,6 +24,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::group_hash_entries;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::basic::Exchange;
@@ -232,7 +233,7 @@ impl PipelineBuilder {
         copied_files: Option<UpsertTableCopiedFileReq>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
-        deduplicated_label: Option<String>,
+        deduplicated_label: Option<DmlDeduplicationId>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;

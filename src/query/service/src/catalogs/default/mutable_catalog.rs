@@ -62,6 +62,7 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropSequenceReply;
@@ -791,6 +792,19 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn has_dml_deduplication_marker(
+        &self,
+        tenant: &Tenant,
+        id: &DmlDeduplicationId,
+    ) -> Result<bool> {
+        self.ctx
+            .meta
+            .has_dml_deduplication_marker(tenant, id)
+            .await
+            .map_err(meta_service_error)
+    }
+
+    #[async_backtrace::framed]
     async fn retryable_update_multi_table_meta(
         &self,
         tenant: &Tenant,
@@ -820,11 +834,11 @@ impl Catalog for MutableCatalog {
             .collect();
 
         info!(
-            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], copied_files_len={}, deduplicated_labels_len={}, update_temp_tables_len={}",
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], copied_files_len={}, deduplication_markers_len={}, update_temp_tables_len={}",
             table_updates.join("; "),
             stream_updates.join("; "),
             req.copied_files.len(),
-            req.deduplicated_labels.len(),
+            req.deduplication_markers.len(),
             req.update_temp_tables.len()
         );
         let begin = Instant::now();

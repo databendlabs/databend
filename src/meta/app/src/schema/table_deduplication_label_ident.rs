@@ -15,7 +15,7 @@
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::resource::TenantResource;
 
-/// The tenant-scoped key of a committed DML deduplication label.
+/// Legacy tenant-only DML marker key. New readers and writers do not use it.
 pub type TableDeduplicationLabelIdent = TIdent<TableDeduplicationLabelResource>;
 
 pub struct TableDeduplicationLabelResource;

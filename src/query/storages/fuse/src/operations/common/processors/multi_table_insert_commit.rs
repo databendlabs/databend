@@ -63,7 +63,6 @@ pub struct CommitMultiTableInsert {
     ctx: Arc<dyn TableContext>,
     overwrite: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
-    deduplicated_label: Option<String>,
     catalog: Arc<dyn Catalog>,
     table_meta_timestampss: HashMap<u64, TableMetaTimestamps>,
 }
@@ -74,7 +73,6 @@ impl CommitMultiTableInsert {
         ctx: Arc<dyn TableContext>,
         overwrite: bool,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
-        deduplicated_label: Option<String>,
         catalog: Arc<dyn Catalog>,
         table_meta_timestampss: HashMap<u64, TableMetaTimestamps>,
     ) -> Self {
@@ -85,7 +83,6 @@ impl CommitMultiTableInsert {
             ctx,
             overwrite,
             update_stream_meta,
-            deduplicated_label,
             catalog,
             table_meta_timestampss,
         }
@@ -156,7 +153,6 @@ impl AsyncSink for CommitMultiTableInsert {
             let update_multi_table_meta_req = build_non_temp_update_multi_table_meta_req(
                 update_table_metas.clone(),
                 self.update_stream_meta.clone(),
-                self.deduplicated_label.clone(),
             );
 
             let update_meta_result = if update_multi_table_meta_req.is_empty() {
@@ -339,12 +335,10 @@ impl AsyncSink for CommitMultiTableInsert {
 fn build_non_temp_update_multi_table_meta_req(
     update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     update_stream_metas: Vec<UpdateStreamMetaReq>,
-    deduplicated_label: Option<String>,
 ) -> UpdateMultiTableMetaReq {
     UpdateMultiTableMetaReq {
         update_table_metas,
         update_stream_metas,
-        deduplicated_labels: deduplicated_label.into_iter().collect(),
         ..Default::default()
     }
 }
@@ -509,13 +503,12 @@ mod tests {
 
     #[test]
     fn non_temp_update_req_does_not_carry_temp_table_updates() {
-        let req =
-            build_non_temp_update_multi_table_meta_req(vec![], vec![], Some("label".to_string()));
+        let req = build_non_temp_update_multi_table_meta_req(vec![], vec![]);
 
         assert!(req.update_table_metas.is_empty());
         assert!(req.copied_files.is_empty());
         assert!(req.update_stream_metas.is_empty());
-        assert_eq!(req.deduplicated_labels, vec!["label".to_string()]);
+        assert!(req.deduplication_markers.is_empty());
         assert!(req.update_temp_tables.is_empty());
     }
 
@@ -532,7 +525,7 @@ mod tests {
         assert!(req.update_table_metas.is_empty());
         assert!(req.copied_files.is_empty());
         assert!(req.update_stream_metas.is_empty());
-        assert!(req.deduplicated_labels.is_empty());
+        assert!(req.deduplication_markers.is_empty());
         assert_eq!(req.update_temp_tables.len(), 1);
     }
 }

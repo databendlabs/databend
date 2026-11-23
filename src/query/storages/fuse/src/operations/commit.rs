@@ -25,6 +25,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
+use databend_common_meta_app::schema::DmlDeduplicationEffect;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationMarker;
 use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableLvtCheck;
@@ -103,7 +106,7 @@ impl FuseTable {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
-        deduplicated_label: Option<String>,
+        deduplicated_label: Option<DmlDeduplicationId>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
@@ -260,7 +263,7 @@ impl FuseTable {
         update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
         lvt_check: Option<TableLvtCheck>,
-        deduplicated_label: Option<String>,
+        deduplicated_label: Option<DmlDeduplicationId>,
     ) -> Result<()> {
         // 1. prepare table meta
         let new_table_meta =
@@ -295,13 +298,31 @@ impl FuseTable {
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
         }
 
-        // 3. let's roll
+        let mut deduplication_markers = vec![];
+        let mut local_deduplication_token = None;
+        if let Some(id) = deduplicated_label {
+            if id.table_id != table_id || id.catalog_id != table_info.catalog_info.id.catalog_id {
+                return Err(ErrorCode::InvalidOperation(
+                    "Deduplication target changed before commit",
+                ));
+            }
+            if update_table_metas.is_empty() {
+                local_deduplication_token = Some(id);
+            } else {
+                deduplication_markers.push(DmlDeduplicationMarker {
+                    id,
+                    effect: DmlDeduplicationEffect::Table(table_id),
+                });
+            }
+        }
+
         catalog
             .update_multi_table_meta(&ctx.get_tenant(), UpdateMultiTableMetaReq {
                 update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
                 copied_files: copied_files_req,
-                deduplicated_labels: deduplicated_label.into_iter().collect(),
+                deduplication_markers,
+                local_deduplication_token,
                 update_temp_tables,
             })
             .await?;

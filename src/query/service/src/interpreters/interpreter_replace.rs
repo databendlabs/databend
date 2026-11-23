@@ -22,6 +22,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationOperation;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::BindContext;
@@ -47,8 +49,9 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::DmlDeduplication;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::check_dml_deduplication;
 #[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::physical_plans::CommitSink;
@@ -94,15 +97,27 @@ impl Interpreter for ReplaceInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            if check_deduplicate_label(self.ctx.clone()).await? {
+            let table = self
+                .ctx
+                .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                .await?;
+            table.check_mutable()?;
+            let DmlDeduplication::Proceed(deduplication) = check_dml_deduplication(
+                self.ctx.as_ref(),
+                table.as_ref(),
+                DmlDeduplicationOperation::Replace,
+            )
+            .await?
+            else {
                 self.ctx.attach_query_lineage(None);
                 return Ok(PipelineBuildResult::create());
-            }
+            };
 
             self.check_on_conflicts()?;
 
             // replace
-            let (physical_plan, purge_info) = self.build_physical_plan().await?;
+            let (physical_plan, purge_info) =
+                self.build_physical_plan(table, deduplication).await?;
             let mut pipeline =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
@@ -141,25 +156,19 @@ impl Interpreter for ReplaceInterpreter {
 impl ReplaceInterpreter {
     async fn build_physical_plan(
         &self,
+        table: Arc<dyn Table>,
+        deduplication: Option<DmlDeduplicationId>,
     ) -> Result<(
         PhysicalPlan,
         Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
     )> {
         let plan = &self.plan;
-        let table = self
-            .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
-            .await?;
-
         self.ctx.update_query_lineage_target_id(
             &plan.catalog,
             &plan.database,
             &plan.table,
             table.get_table_info().ident.table_id,
         );
-
-        // check mutability
-        table.check_mutable()?;
 
         let schema = table.schema();
         let mut on_conflicts = Vec::with_capacity(plan.on_conflict_fields.len());
@@ -380,7 +389,7 @@ impl ReplaceInterpreter {
                 merge_meta: false,
             },
             update_stream_meta: update_stream_meta.clone(),
-            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            deduplicated_label: deduplication,
             table_meta_timestamps,
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),

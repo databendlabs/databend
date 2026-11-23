@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -50,7 +51,7 @@ pub struct CommitSink {
     pub table_info: TableInfo,
     pub commit_type: CommitType,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
-    pub deduplicated_label: Option<String>,
+    pub deduplicated_label: Option<DmlDeduplicationId>,
     pub table_meta_timestamps: TableMetaTimestamps,
 
     // Used for recluster.

@@ -35,6 +35,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::Constraint;
+use databend_common_meta_app::schema::DmlDeduplicationOperation;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
@@ -67,8 +68,9 @@ use crate::clusters::ClusterHelper;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::common::DmlDeduplication;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::check_dml_deduplication;
 use crate::physical_plans::AggregateFinal;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DistributedInsertSelect;
@@ -412,10 +414,6 @@ impl Interpreter for InsertInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
             let table = if let Some(table_info) = &self.plan.table_info {
                 // if table_info is provided, we should instantiated table with it.
                 self.ctx
@@ -440,6 +438,21 @@ impl Interpreter for InsertInterpreter {
             if self.materialized_view_refresh_target != Some(table.get_id()) {
                 table.check_mutable()?;
             }
+
+            let operation = if self.plan.overwrite {
+                DmlDeduplicationOperation::InsertOverwrite
+            } else {
+                DmlDeduplicationOperation::Insert
+            };
+            let deduplication = if self.materialized_view_refresh_target.is_some() {
+                DmlDeduplication::Proceed(None)
+            } else {
+                check_dml_deduplication(self.ctx.as_ref(), table.as_ref(), operation).await?
+            };
+            let DmlDeduplication::Proceed(deduplication) = deduplication else {
+                self.ctx.attach_query_lineage(None);
+                return Ok(PipelineBuildResult::create());
+            };
 
             let table_meta_timestamps = if is_fuse_backed_engine(table.engine()) {
                 let fuse_table =
@@ -511,7 +524,7 @@ impl Interpreter for InsertInterpreter {
                             vec![],
                             self.plan.overwrite,
                             None,
-                            unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                            deduplication,
                             table_meta_timestamps,
                         )?;
 
@@ -655,7 +668,7 @@ impl Interpreter for InsertInterpreter {
                         update_stream_meta,
                         self.plan.overwrite,
                         None,
-                        unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                        deduplication,
                         table_meta_timestamps,
                     )?;
 
@@ -723,7 +736,7 @@ impl Interpreter for InsertInterpreter {
                 None,
                 vec![],
                 self.plan.overwrite,
-                unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                deduplication,
                 table_meta_timestamps,
             )?;
 

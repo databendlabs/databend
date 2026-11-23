@@ -525,7 +525,12 @@ impl<E> HTTPSessionEndpoint<E> {
         let deduplicate_label = req
             .headers()
             .get(HEADER_DEDUPLICATE_LABEL)
-            .map(|id| id.to_str().unwrap().to_string());
+            .map(|label| {
+                label.to_str().map(str::to_owned).map_err(|_| {
+                    ErrorCode::WrongValueForVariable("Invalid deduplicate_label header")
+                })
+            })
+            .transpose()?;
 
         let expected_node_id = req
             .headers()

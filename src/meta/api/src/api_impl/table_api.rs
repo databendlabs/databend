@@ -65,6 +65,7 @@ use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DmlDeduplicationId;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
@@ -1581,6 +1582,18 @@ where
         }
     }
 
+    /// Whether this tenant has a committed marker for the retry token.
+    async fn has_dml_deduplication_marker(
+        &self,
+        tenant: &Tenant,
+        id: &DmlDeduplicationId,
+    ) -> Result<bool, MetaError> {
+        Ok(self
+            .get_kv(&id.key(tenant).to_string_key())
+            .await?
+            .is_some())
+    }
+
     /// `tenant` scopes deduplication labels and MV source binding generations.
     async fn update_multi_table_meta(
         &self,
@@ -1598,16 +1611,14 @@ where
         req: UpdateMultiTableMetaReq,
         txn_sender: &IdempotentKVTxnSender,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
-        if !req.deduplicated_labels.is_empty() && !req.has_persistent_updates() {
-            return Err(AppError::DeduplicationLabelWithoutMetaUpdate.into());
-        }
+        req.validate_deduplication_markers()?;
 
         let UpdateMultiTableMetaReq {
             mut update_table_metas,
             copied_files,
             update_stream_metas,
-            deduplicated_labels,
-            update_temp_tables: _,
+            deduplication_markers,
+            ..
         } = req;
 
         let mut tbl_seqs = HashMap::new();
@@ -1835,11 +1846,9 @@ where
             txn.if_then.push(txn_put_pb(&stream_id, &new_stream_meta));
         }
 
-        for deduplicated_label in deduplicated_labels {
-            txn.if_then.push(build_upsert_table_deduplicated_label(
-                tenant,
-                deduplicated_label,
-            ));
+        for marker in deduplication_markers {
+            txn.if_then
+                .push(build_upsert_table_deduplicated_label(tenant, &marker.id));
         }
 
         // Keep these after the table metadata gets: failure parsing relies on the first N

@@ -22,6 +22,9 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::DmlDeduplicationEffect;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationMarker;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -101,8 +104,8 @@ pub struct TxnBuffer {
     lvt_check: HashMap<u64, TableLvtCheck>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
-    local_deduplication_labels: HashSet<String>,
-    persistent_deduplication_labels: HashSet<String>,
+    local_deduplication_tokens: HashSet<DmlDeduplicationId>,
+    deduplication_effects: HashMap<DmlDeduplicationId, DmlDeduplicationEffect>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
     // These must be discarded with the buffer on rollback or failure as well.
@@ -161,15 +164,33 @@ impl TxnBuffer {
         tenant: &Tenant,
         mut req: UpdateMultiTableMetaReq,
     ) -> Result<()> {
+        req.validate_deduplication_markers()?;
+        for marker in &req.deduplication_markers {
+            if let DmlDeduplicationEffect::Streams(ids) = &marker.effect {
+                for update in &req.update_stream_metas {
+                    if ids.contains(&update.stream_id)
+                        && self
+                            .update_stream_meta
+                            .get(&update.stream_id)
+                            .is_some_and(|first| first != update)
+                    {
+                        // The transaction retains the first update to each stream.
+                        return Err(ErrorCode::InvalidOperation(format!(
+                            "The pending metadata update for stream {} differs from the labeled update",
+                            update.stream_id
+                        )));
+                    }
+                }
+            }
+        }
         self.bind_tenant(tenant)?;
-
-        // Classify labels before merging this statement with unrelated durable updates.
-        let labels = if req.has_persistent_updates() {
-            &mut self.persistent_deduplication_labels
-        } else {
-            &mut self.local_deduplication_labels
-        };
-        labels.extend(req.deduplicated_labels);
+        self.local_deduplication_tokens
+            .extend(req.local_deduplication_token);
+        for marker in req.deduplication_markers {
+            self.deduplication_effects
+                .entry(marker.id)
+                .or_insert(marker.effect);
+        }
 
         for (req, table_info) in req.update_table_metas {
             let table_id = req.table_id;
@@ -520,12 +541,16 @@ impl TxnManager {
                 .values()
                 .cloned()
                 .collect(),
-            deduplicated_labels: self
+            deduplication_markers: self
                 .txn_buffer
-                .persistent_deduplication_labels
+                .deduplication_effects
                 .iter()
-                .cloned()
+                .map(|(id, effect)| DmlDeduplicationMarker {
+                    id: id.clone(),
+                    effect: effect.clone(),
+                })
                 .collect(),
+            local_deduplication_token: None,
             update_temp_tables: self
                 .txn_buffer
                 .mutated_temp_tables
@@ -540,12 +565,9 @@ impl TxnManager {
         }
     }
 
-    pub fn contains_deduplicated_label(&self, label: &str) -> bool {
-        self.txn_buffer.local_deduplication_labels.contains(label)
-            || self
-                .txn_buffer
-                .persistent_deduplication_labels
-                .contains(label)
+    pub fn contains_deduplicated_label(&self, id: &DmlDeduplicationId) -> bool {
+        self.txn_buffer.local_deduplication_tokens.contains(id)
+            || self.txn_buffer.deduplication_effects.contains_key(id)
     }
 
     pub fn get_table_copied_file_info(
@@ -660,6 +682,10 @@ impl TxnManager {
 mod tests {
     use chrono::DateTime;
     use chrono::Utc;
+    use databend_common_meta_app::schema::DmlDeduplicationEffect;
+    use databend_common_meta_app::schema::DmlDeduplicationId;
+    use databend_common_meta_app::schema::DmlDeduplicationMarker;
+    use databend_common_meta_app::schema::DmlDeduplicationOperation;
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableLvtCheck;
     use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -683,9 +709,21 @@ mod tests {
         assert_eq!(table, "tbl");
     }
 
+    fn deduplication_id(table_id: u64) -> DmlDeduplicationId {
+        DmlDeduplicationId {
+            principal: Default::default(),
+            catalog_id: 0,
+            table_id,
+            operation: DmlDeduplicationOperation::Insert,
+            token: "retry".to_owned().try_into().unwrap(),
+        }
+    }
+
     #[test]
     fn test_transaction_keeps_temporary_write_labels_local() {
         let tenant = Tenant::new_literal("tenant");
+        let local = deduplication_id(TEMP_TBL_ID_BEGIN);
+        let stream = deduplication_id(7);
         let txn_mgr = TxnManager::init();
         let mut txn = txn_mgr.lock();
         txn.begin();
@@ -696,14 +734,15 @@ mod tests {
                 new_table_meta: Default::default(),
                 copied_files: Default::default(),
             }],
-            deduplicated_labels: vec!["local".to_string()],
+            local_deduplication_token: Some(local.clone()),
             ..Default::default()
         })
         .unwrap();
-        assert!(txn.contains_deduplicated_label("local"));
+        assert!(txn.contains_deduplicated_label(&local));
         let req = txn.req();
         assert_eq!(req.update_temp_tables.len(), 1);
-        assert!(req.deduplicated_labels.is_empty());
+        assert!(req.deduplication_markers.is_empty());
+        assert!(req.local_deduplication_token.is_none());
 
         txn.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
             update_stream_metas: vec![UpdateStreamMetaReq {
@@ -711,17 +750,64 @@ mod tests {
                 seq: MatchSeq::Exact(1),
                 options: Default::default(),
             }],
-            deduplicated_labels: vec!["stream".to_string()],
+            deduplication_markers: vec![DmlDeduplicationMarker {
+                id: stream.clone(),
+                effect: DmlDeduplicationEffect::Streams(vec![7]),
+            }],
             ..Default::default()
         })
         .unwrap();
-        assert!(txn.contains_deduplicated_label("local"));
-        assert!(txn.contains_deduplicated_label("stream"));
-        assert_eq!(txn.req().deduplicated_labels, ["stream"]);
+        assert!(txn.contains_deduplicated_label(&local));
+        assert!(txn.contains_deduplicated_label(&stream));
+        assert_eq!(txn.req().deduplication_markers, [DmlDeduplicationMarker {
+            id: stream.clone(),
+            effect: DmlDeduplicationEffect::Streams(vec![7]),
+        }]);
 
         txn.clear();
-        assert!(!txn.contains_deduplicated_label("local"));
-        assert!(!txn.contains_deduplicated_label("stream"));
+        assert!(!txn.contains_deduplicated_label(&local));
+        assert!(!txn.contains_deduplicated_label(&stream));
+    }
+
+    #[test]
+    fn test_transaction_rejects_marker_for_discarded_stream_update() {
+        let tenant = Tenant::new_literal("tenant");
+        let txn_mgr = TxnManager::init();
+        let mut txn = txn_mgr.lock();
+        txn.begin();
+        let first_update = UpdateStreamMetaReq {
+            stream_id: 7,
+            seq: MatchSeq::Exact(1),
+            options: Default::default(),
+        };
+        txn.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+            update_stream_metas: vec![first_update.clone()],
+            ..Default::default()
+        })
+        .unwrap();
+
+        let token = deduplication_id(7);
+        let mut later_update = first_update.clone();
+        later_update
+            .options
+            .insert("offset".to_string(), "42".to_string());
+        let err = txn
+            .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
+                deduplication_markers: vec![DmlDeduplicationMarker::for_stream_updates(
+                    token.clone(),
+                    std::slice::from_ref(&later_update),
+                )],
+                update_stream_metas: vec![later_update],
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert_eq!(
+            err.code(),
+            databend_common_exception::ErrorCode::INVALID_OPERATION
+        );
+        assert!(!txn.contains_deduplicated_label(&token));
+        assert_eq!(txn.req().update_stream_metas, [first_update]);
+        assert!(txn.req().deduplication_markers.is_empty());
     }
 
     #[test]

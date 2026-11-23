@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use databend_common_catalog::session_type::SessionType;
-use databend_common_meta_app::schema::TableDeduplicationLabelIdent;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationOperation;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
-use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::kvapi::StructKey;
 use databend_query::sessions::SessionManager;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::OSSSetup;
 use databend_query::test_kits::TestFixture;
@@ -135,23 +134,43 @@ async fn test_temp_table_deduplication_is_transaction_local() -> anyhow::Result<
         .execute_command(&format!("CREATE TEMP TABLE {table}(id INT)"))
         .await?;
 
-    let meta = UserApiProvider::instance().get_meta_store_client();
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let info = ctx
+        .get_table("default", &fixture.default_db_name(), "temp_writes")
+        .await?
+        .get_table_info()
+        .clone();
     let tenant = fixture.default_tenant();
+    let principal = fixture.default_session().get_current_user()?.identity();
+    let deduplication_id = |label: &str| DmlDeduplicationId {
+        principal: principal.clone(),
+        catalog_id: info.catalog_info.id.catalog_id,
+        table_id: info.ident.table_id,
+        operation: DmlDeduplicationOperation::Insert,
+        token: label.to_owned().try_into().unwrap(),
+    };
     let insert = |label, id| {
         format!("INSERT /*+ SET_VAR(deduplicate_label='{label}') */ INTO {table} VALUES ({id})")
     };
 
     fixture.execute_command(&insert("autocommit", 1)).await?;
-    let key = TableDeduplicationLabelIdent::new(&tenant, "autocommit").to_string_key();
-    assert!(meta.get_kv(&key).await?.is_none());
+    assert!(
+        !catalog
+            .has_dml_deduplication_marker(&tenant, &deduplication_id("autocommit"))
+            .await?
+    );
 
     fixture.execute_command("BEGIN").await?;
     let statement = insert("transaction", 2);
     fixture.execute_command(&statement).await?;
     fixture.execute_command(&statement).await?;
     fixture.execute_command("COMMIT").await?;
-    let key = TableDeduplicationLabelIdent::new(&tenant, "transaction").to_string_key();
-    assert!(meta.get_kv(&key).await?.is_none());
+    assert!(
+        !catalog
+            .has_dml_deduplication_marker(&tenant, &deduplication_id("transaction"))
+            .await?
+    );
 
     let blocks = fixture
         .execute_query(&format!("SELECT id FROM {table} ORDER BY id"))

@@ -124,7 +124,7 @@ impl IPhysicalPlan for CopyIntoLocation {
             None,
             vec![],
             false,
-            unsafe { builder.settings.get_deduplicate_label()? },
+            None,
             dummy_table_meta_timestamps,
         )
     }

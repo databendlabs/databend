@@ -26,6 +26,8 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
+use databend_common_meta_app::schema::DmlDeduplicationId;
+use databend_common_meta_app::schema::DmlDeduplicationOperation;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::EmptySink;
 use databend_common_sql::binder::MutationStrategy;
@@ -42,8 +44,9 @@ use log::info;
 
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::DmlDeduplication;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::check_dml_deduplication;
 use crate::physical_plans::MutationBuildInfo;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -112,15 +115,36 @@ impl Interpreter for MutationInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
-
             let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
+            let deduplication = if self.materialized_view_refresh_target.is_some() {
+                None
+            } else {
+                let table = self
+                    .ctx
+                    .get_table(
+                        &mutation.catalog_name,
+                        &mutation.database_name,
+                        &mutation.table_name,
+                    )
+                    .await?;
+                table.check_mutable()?;
+                let operation = match mutation.mutation_type {
+                    MutationType::Update => DmlDeduplicationOperation::Update,
+                    MutationType::Delete => DmlDeduplicationOperation::Delete,
+                    MutationType::Merge => DmlDeduplicationOperation::Merge,
+                };
+                let DmlDeduplication::Proceed(id) =
+                    check_dml_deduplication(self.ctx.as_ref(), table.as_ref(), operation).await?
+                else {
+                    self.ctx.attach_query_lineage(None);
+                    return Ok(PipelineBuildResult::create());
+                };
+                id
+            };
 
-            // Build physical plan.
-            let physical_plan = self.build_physical_plan(&mutation, false).await?;
+            let physical_plan = self
+                .build_physical_plan_with_deduplication(&mutation, false, deduplication)
+                .await?;
 
             let query_plan = {
                 let metadata = self.metadata.read();
@@ -191,14 +215,25 @@ impl MutationInterpreter {
         mutation: &Mutation,
         dry_run: bool,
     ) -> Result<PhysicalPlan> {
+        self.build_physical_plan_with_deduplication(mutation, dry_run, None)
+            .await
+    }
+
+    async fn build_physical_plan_with_deduplication(
+        &self,
+        mutation: &Mutation,
+        dry_run: bool,
+        deduplication: Option<DmlDeduplicationId>,
+    ) -> Result<PhysicalPlan> {
         // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let mutation_build_info = build_mutation_info(
+        let mut mutation_build_info = build_mutation_info(
             self.ctx.clone(),
             mutation,
             dry_run,
             self.materialized_view_refresh_target,
         )
         .await?;
+        mutation_build_info.deduplication = deduplication;
         // Build physical plan.
         let mut builder =
             PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), dry_run);
@@ -271,6 +306,7 @@ pub async fn build_mutation_info(
         table_info,
         table_snapshot,
         update_stream_meta,
+        deduplication: None,
         partitions,
         statistics,
         table_meta_timestamps,
