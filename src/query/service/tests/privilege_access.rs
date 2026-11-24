@@ -857,9 +857,23 @@ async fn test_select_grants_respect_auth_role_and_secondary_roles() -> anyhow::R
     )
     .await?;
 
-    // A restricted AUTH ROLE must not acquire grants from the user's other available roles.
+    // A restricted AUTH ROLE must not activate even a role granted directly to the user.
+    let restricted_session = fixture.new_session_with_type(SessionType::Dummy).await?;
+    restricted_session
+        .set_authed_user(user.clone(), Some("limited".into()))
+        .await?;
+    restricted_session
+        .set_secondary_roles_checked(Some(vec![]))
+        .await?;
+    let error = restricted_session
+        .set_secondary_roles_checked(Some(vec!["reader".into()]))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::INVALID_ROLE);
+    assert_eq!(restricted_session.get_secondary_roles(), Some(vec![]));
+
     let error = check_access(
-        user_context(&fixture, user.clone(), Some("limited".into())).await?,
+        restricted_session.create_query_context(&BUILD_INFO).await?,
         "SELECT * FROM select_access.t",
     )
     .await

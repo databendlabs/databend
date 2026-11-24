@@ -14,6 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use databend_common_catalog::session_type::SessionType;
@@ -66,6 +68,8 @@ pub struct HttpQueryContext {
     pub fixed_coordinator_node: bool,
     pub client_caps: ClientCapabilities,
     pub version: BuildInfoRef,
+    /// Set when restoring the request's secondary roles failed role validation.
+    pub(crate) secondary_roles_rejected: Arc<AtomicBool>,
 }
 
 impl HttpQueryContext {
@@ -104,6 +108,14 @@ impl HttpQueryContext {
 
     pub fn set_fail(&self) {
         self.session.txn_mgr().lock().set_fail();
+    }
+
+    pub(crate) fn mark_secondary_roles_rejected(&self) {
+        self.secondary_roles_rejected.store(true, Ordering::Relaxed);
+    }
+
+    pub(crate) fn secondary_roles_rejected(&self) -> bool {
+        self.secondary_roles_rejected.load(Ordering::Relaxed)
     }
 
     pub fn check_node_id(&self, query_id: &str) -> poem::Result<()> {

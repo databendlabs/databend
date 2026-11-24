@@ -1,0 +1,20 @@
+>>>> DROP USER IF EXISTS streaming_load_10_user;
+>>>> DROP ROLE IF EXISTS streaming_load_10_role;
+>>>> CREATE OR REPLACE TABLE streaming_load_10 (c1 int);
+>>>> CREATE USER streaming_load_10_user IDENTIFIED BY 'password';
+>>>> CREATE ROLE streaming_load_10_role;
+>>>> GRANT INSERT ON default.streaming_load_10 TO streaming_load_10_user;
+>>>> GRANT ROLE streaming_load_10_role TO streaming_load_10_user;
+>>>> REVOKE ROLE streaming_load_10_role FROM streaming_load_10_user;
+-- a session that still names the revoked role fails once and gets NONE back
+400
+secondary_roles: []
+1
+-- replaying the returned session succeeds
+200
+secondary_roles: []
+>>>> SELECT count(*) FROM streaming_load_10;
+1
+>>>> DROP USER streaming_load_10_user;
+>>>> DROP ROLE streaming_load_10_role;
+>>>> DROP TABLE streaming_load_10;

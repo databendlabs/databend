@@ -104,7 +104,11 @@ pub struct HttpQueryRequest {
 }
 
 impl HttpQueryRequest {
-    pub(crate) fn fail_to_start_sql(&self, err: ErrorCode) -> impl IntoResponse {
+    pub(crate) fn fail_to_start_sql(
+        &self,
+        ctx: &HttpQueryContext,
+        err: ErrorCode,
+    ) -> impl IntoResponse {
         metrics_incr_http_response_errors_count(err.name(), err.code());
         // `SessionTimeout` here means the server checked for the temporary
         // tables this session claims to own and found none: they expired on
@@ -113,10 +117,13 @@ impl HttpQueryRequest {
         // deliberately not handled: it also covers misroutes, where the tables
         // still exist on the original node.
         let temp_tables_gone = err.code() == ErrorCode::SESSION_TIMEOUT;
-        let session = self
-            .session
-            .as_ref()
-            .map(|s| s.after_failed_start(temp_tables_gone));
+        let session = self.session.as_ref().map(|s| {
+            let mut session = s.after_failed_start(temp_tables_gone);
+            if ctx.secondary_roles_rejected() {
+                session.reset_rejected_secondary_roles();
+            }
+            session
+        });
         Json(QueryResponse::failed_to_start(session, err))
     }
 
@@ -370,6 +377,14 @@ impl HttpSessionConf {
             ..self.clone()
         }
     }
+
+    /// Hand back `NONE` after the request's secondary roles failed validation, e.g. because
+    /// a role was revoked. Clients store the response session before checking the error, so
+    /// echoing the rejected list would fail every later request on the session, including
+    /// `SET SECONDARY ROLES`. Omitting the field would mean `ALL` instead.
+    pub(crate) fn reset_rejected_secondary_roles(&mut self) {
+        self.secondary_roles = Some(vec![]);
+    }
 }
 
 impl QueryResponse {
@@ -498,9 +513,15 @@ impl HttpSessionConf {
             }
         }
         // if the secondary_roles are None (which is the common case), it will not send any rpc on validation.
-        session
+        if let Err(err) = session
             .set_secondary_roles_checked(self.secondary_roles.clone())
-            .await?;
+            .await
+        {
+            if err.code() == ErrorCode::INVALID_ROLE {
+                http_ctx.mark_secondary_roles_rejected();
+            }
+            return Err(err);
+        }
         if let Some(state) = &self.internal {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)
