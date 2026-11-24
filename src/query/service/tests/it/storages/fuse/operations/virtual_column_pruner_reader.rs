@@ -22,6 +22,7 @@ use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
@@ -260,10 +261,10 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         Some(VirtualColumnSharedDataType::String)
     );
 
+    let source_schema = DataSchema::from(schema.as_ref());
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal.clone(),
-        schema.clone(),
         virtual_column_info,
         write_settings.table_compression,
         CachePolicy::DEFAULT,
@@ -279,8 +280,12 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         )
         .await
         .expect("virtual block read result");
-    let result_block =
-        reader.deserialize_virtual_columns(block.clone(), Some(virtual_data), None)?;
+    let result_block = reader.deserialize_virtual_columns(
+        block.clone(),
+        &source_schema,
+        Some(virtual_data),
+        None,
+    )?;
 
     assert_eq!(
         result_block.num_columns(),
@@ -345,6 +350,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let empty_selection = RowSelection::from(vec![RowSelector::skip(block.num_rows())]);
     let empty_block = reader.deserialize_virtual_columns(
         block.slice(0..0),
+        &source_schema,
         Some(virtual_data),
         Some(empty_selection),
     )?;
@@ -454,10 +460,10 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         DataType::from(&draft_meta.column_meta.data_type())
     );
 
+    let source_schema = DataSchema::from(schema.as_ref());
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal,
-        schema,
         VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
             ignorable_source_column_ids: HashSet::from([source_column_id]),
@@ -472,7 +478,8 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         .read_parquet_data_by_merge_io(&read_settings, &Some(&index), block.num_rows())
         .await
         .unwrap();
-    let result = reader.deserialize_virtual_columns(block, Some(virtual_data), None)?;
+    let result =
+        reader.deserialize_virtual_columns(block, &source_schema, Some(virtual_data), None)?;
     assert_variant_column(&result.get_by_offset(2).to_column(), &[
         Some("1"),
         Some("2"),
