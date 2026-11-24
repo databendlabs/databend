@@ -37,8 +37,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_pruning_milliseconds;
 use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_after;
@@ -63,15 +65,160 @@ use crate::io::read::VectorIndexIdentity;
 use crate::io::read::VectorIndexReader;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
+use crate::pruning::row_filter::BlockRows;
+use crate::pruning::row_filter::ColumnFilter;
+use crate::pruning::row_filter::ScoreConjuncts;
+use crate::pruning::row_filter::conjuncts;
+use crate::pruning::row_filter::filter_blocks;
+use crate::pruning::row_filter::split_score_conjuncts;
+
+/// How the pruner answers a vector TopN, from its filters and order.
+#[derive(Clone)]
+enum TopNStrategy {
+    /// Ascending, with optional deterministic filters on other columns and an
+    /// optional upper bound on the score: HNSW search of the rows the column
+    /// filters pass, then the bound applied to the rows found.
+    Hnsw {
+        columns: Option<Arc<ColumnFilter>>,
+        /// Over the score at position 0.
+        max_score: Option<Expr>,
+    },
+    /// Descending, or another filter on the score only: every row is scored.
+    Scores { asc: bool, filter: ScoreFilter },
+}
+
+/// The filter of [`TopNStrategy::Scores`].
+#[derive(Clone)]
+enum ScoreFilter {
+    None,
+    Deterministic(Expr),
+    /// Such as `d > rand()`: it runs again after reading and may reject the rows
+    /// selected here, so the whole blocks are read.
+    Volatile(Expr),
+}
+
+impl ScoreFilter {
+    fn expr(&self) -> Option<&Expr> {
+        match self {
+            Self::None => None,
+            Self::Deterministic(expr) | Self::Volatile(expr) => Some(expr),
+        }
+    }
+}
+
+impl TopNStrategy {
+    /// The name of the strategy in logs.
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Hnsw { columns: None, .. } => "hnsw",
+            Self::Hnsw {
+                columns: Some(_), ..
+            } => "filtered hnsw",
+            Self::Scores { .. } => "calculate score",
+        }
+    }
+
+    /// `None` when the filters can only run after reading, and every row is
+    /// scored without pruning: a conjunct reads the score and other columns
+    /// (`d < 0.5 OR id > 10`), or the column filters are volatile, read columns
+    /// the pruner cannot read, or come with descending order or a score filter
+    /// that is not an upper bound.
+    fn try_create(
+        pruning_ctx: &PruningContext,
+        func_ctx: &FunctionContext,
+        schema: TableSchemaRef,
+        filters: Option<&Filters>,
+        asc: bool,
+    ) -> Result<Option<Self>> {
+        let ScoreConjuncts { score, columns } = match filters {
+            Some(filters) => {
+                let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+                match split_score_conjuncts(filter)? {
+                    Some(parts) => parts,
+                    None => return Ok(None),
+                }
+            }
+            None => ScoreConjuncts::default(),
+        };
+        let hnsw = asc
+            && score.as_ref().is_none_or(|expr| {
+                expr.is_deterministic(&BUILTIN_FUNCTIONS) && is_score_upper_bound(expr)
+            });
+        if hnsw {
+            // A volatile filter (`id > rand()`) may reject the selected rows after
+            // reading.
+            let columns = match columns {
+                None => None,
+                Some(expr) if expr.is_deterministic(&BUILTIN_FUNCTIONS) => {
+                    match ColumnFilter::try_create(pruning_ctx, func_ctx.clone(), schema, expr)? {
+                        Some(column_filter) => Some(Arc::new(column_filter)),
+                        None => return Ok(None),
+                    }
+                }
+                Some(_) => return Ok(None),
+            };
+            let max_score = score
+                .map(|expr| expr.project_column_ref(|_| Ok(0)))
+                .transpose()?;
+            return Ok(Some(Self::Hnsw { columns, max_score }));
+        }
+        if columns.is_some() {
+            return Ok(None);
+        }
+        let filter = match score {
+            None => ScoreFilter::None,
+            Some(expr) => {
+                let deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+                let expr = expr.project_column_ref(|_| Ok(0))?;
+                if deterministic {
+                    ScoreFilter::Deterministic(expr)
+                } else {
+                    ScoreFilter::Volatile(expr)
+                }
+            }
+        };
+        Ok(Some(Self::Scores { asc, filter }))
+    }
+}
+
+/// Whether `filter` is a conjunction of `d < c`, `d <= c`, `c > d` or `c >= d`
+/// on the score `d`. Every row nearer than a passing row passes too, so an
+/// ascending search finds the passing rows.
+fn is_score_upper_bound(filter: &Expr<String>) -> bool {
+    conjuncts(filter.clone()).iter().all(|conjunct| {
+        let Expr::FunctionCall(call) = conjunct else {
+            return false;
+        };
+        let [left, right] = call.args.as_slice() else {
+            return false;
+        };
+        let is_constant = |expr: &Expr<String>| matches!(expr, Expr::Constant(_));
+        match call.function.signature.name.as_str() {
+            "lt" | "lte" => is_score(left) && is_constant(right),
+            "gt" | "gte" => is_constant(left) && is_score(right),
+            _ => false,
+        }
+    })
+}
+
+/// The vector score, possibly cast to a type that keeps its order.
+fn is_score(expr: &Expr<String>) -> bool {
+    match expr {
+        Expr::ColumnRef(column) => column.id == VECTOR_SCORE_COL_NAME,
+        Expr::Cast(cast) => {
+            matches!(
+                cast.dest_type.remove_nullable(),
+                DataType::Number(NumberDataType::Float32 | NumberDataType::Float64)
+                    | DataType::Decimal(_)
+            ) && is_score(&cast.expr)
+        }
+        _ => false,
+    }
+}
 
 #[derive(Clone)]
 struct VectorTopNParam {
-    has_filter: bool,
-    filter_expr: Option<Expr>,
-    /// Whether `filter_expr` is set and deterministic: the rows it selects pass it
-    /// again after reading, unlike with a volatile one such as `d > rand()`.
-    deterministic_score_filter: bool,
-    asc: bool,
+    strategy: TopNStrategy,
     limit: usize,
     candidate_limit: usize,
     /// Whether the rows that tie with the last TopN row are kept: only a later
@@ -95,7 +242,7 @@ pub struct VectorIndexPruner {
 impl VectorIndexPruner {
     pub fn create(
         pruning_ctx: Arc<PruningContext>,
-        _schema: TableSchemaRef,
+        schema: TableSchemaRef,
         vector_index: VectorIndexInfo,
         filters: Option<Filters>,
         sort: Vec<(RemoteExpr<String>, bool, bool)>,
@@ -111,8 +258,7 @@ impl VectorIndexPruner {
             _ => unreachable!(),
         };
 
-        let query_values =
-            unsafe { std::mem::transmute::<Vec<F32>, Vec<f32>>(vector_index.query_values.clone()) };
+        let query_values: Vec<f32> = vector_index.query_values.iter().map(|v| v.0).collect();
         let vector_distance_type = distance_type.vector_distance_type();
 
         let query_settings = pruning_ctx.ctx.get_settings();
@@ -121,35 +267,23 @@ impl VectorIndexPruner {
             query_settings.get_vector_refine_factor()?,
             query_settings.get_vector_search_ef()?,
         )?;
+        let identity = VectorIndexIdentity {
+            name: vector_index.index_name.clone(),
+            version: vector_index.index_version.clone(),
+            column_id: vector_index.column_id,
+        };
         let vector_reader = VectorIndexReader::create(
             pruning_ctx.dal.clone(),
             settings,
             pruning_ctx.ctx.cache_policy(),
             distance_type,
             query_values.clone(),
-            VectorIndexIdentity {
-                name: vector_index.index_name.clone(),
-                version: vector_index.index_version.clone(),
-                column_id: vector_index.column_id,
-            },
+            identity,
             refine_options,
         );
 
-        // A filter on the vector score column only can be applied to the scores.
-        let filter_expr = match &filters {
-            Some(filters) => {
-                let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
-                let column_refs = filter.column_refs();
-                if column_refs.len() == 1 && column_refs.contains_key(VECTOR_SCORE_COL_NAME) {
-                    Some(filter.project_column_ref(|_| Ok(0))?)
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
-
-        // Ordering by the vector score first with a limit allows vector TopN pruning.
+        // Ordering by the vector score first with a limit allows vector TopN
+        // pruning, unless the filters are evaluated after reading only.
         let vector_topn_param = match (sort.first(), limit) {
             (Some((RemoteExpr::ColumnRef { id, .. }, asc, _)), Some(limit))
                 if id == VECTOR_SCORE_COL_NAME =>
@@ -160,18 +294,13 @@ impl VectorIndexPruner {
                     Some(factor) => limit.saturating_mul(factor),
                     None => limit,
                 };
-                let deterministic_score_filter = filter_expr
-                    .as_ref()
-                    .is_some_and(|filter| filter.is_deterministic(&BUILTIN_FUNCTIONS));
-                Some(VectorTopNParam {
-                    has_filter: filters.is_some(),
-                    filter_expr,
-                    deterministic_score_filter,
-                    asc: *asc,
-                    limit,
-                    candidate_limit,
-                    keep_ties: has_tie_breaker(&sort),
-                })
+                TopNStrategy::try_create(&pruning_ctx, &func_ctx, schema, filters.as_ref(), *asc)?
+                    .map(|strategy| VectorTopNParam {
+                        strategy,
+                        limit,
+                        candidate_limit,
+                        keep_ties: has_tie_breaker(&sort),
+                    })
             }
             _ => None,
         };
@@ -193,17 +322,9 @@ impl VectorIndexPruner {
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let Some(param) = &self.vector_topn_param else {
-            // Not a vector TopN: only compute the scores.
+            // Not a prunable vector TopN: only compute the scores.
             return self.vector_index_scores(metas).await;
         };
-        if self.refine_options.refine_factor.is_some()
-            && param.has_filter
-            && param.filter_expr.is_none()
-        {
-            // Ordinary column predicates are evaluated after reading the data, so
-            // scores of rows that fail them must not cause blocks to be discarded.
-            return self.vector_index_scores(metas).await;
-        }
 
         let start = Instant::now();
         let block_size = metas.iter().map(|(_, m)| m.block_size).sum();
@@ -213,14 +334,24 @@ impl VectorIndexPruner {
             .pruning_stats
             .set_blocks_vector_index_pruning_before(metas.len() as u64);
 
-        // Without filters, ascending order is answered by HNSW search; otherwise all
-        // scores are computed, then filtered or ordered descending.
-        let use_hnsw = !param.has_filter && param.asc;
         let topn = async {
-            if use_hnsw {
-                self.vector_index_hnsw_topn_prune(param, metas).await
-            } else {
-                self.vector_index_topn_prune(param, metas).await
+            if param.limit == 0 || metas.is_empty() {
+                return Ok(Vec::new());
+            }
+            match &param.strategy {
+                TopNStrategy::Hnsw { columns, max_score } => {
+                    self.vector_index_hnsw_topn_prune(
+                        param,
+                        columns.as_ref(),
+                        max_score.as_ref(),
+                        metas,
+                    )
+                    .await
+                }
+                TopNStrategy::Scores { asc, filter } => {
+                    self.vector_index_topn_prune(param, *asc, filter, metas)
+                        .await
+                }
             }
         };
         let pruned_metas = self
@@ -237,76 +368,138 @@ impl VectorIndexPruner {
             .pruning_stats
             .set_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
         metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
-        let kind = if use_hnsw { "hnsw" } else { "calculate score" };
-        info!("Vector index {kind} topn prune elapsed: {elapsed}");
+        info!(
+            "Vector index {} topn prune elapsed: {elapsed}",
+            param.strategy.name()
+        );
         Ok(pruned_metas)
     }
 
-    /// Ascending TopN without filters, answered by HNSW search of each block.
+    /// Ascending TopN by HNSW search of each block. `columns` are evaluated per
+    /// block first to choose its `BlockSearchMode`; `max_score` is applied to
+    /// the rows found.
     async fn vector_index_hnsw_topn_prune(
         &self,
         param: &VectorTopNParam,
+        columns: Option<&Arc<ColumnFilter>>,
+        max_score: Option<&Expr>,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let limit = param.limit;
         let candidate_limit = param.candidate_limit;
         let keep_ties = param.keep_ties;
-        if limit == 0 || metas.is_empty() {
-            return Ok(Vec::new());
-        }
-        let refine = self.refine_options.refine_factor.is_some();
-        let candidates = self.vector_prune_candidates(metas)?;
-        // Statistics bound the original Float32 vectors, not the FP16 scores used by
-        // refinement, so blocks are only pruned by them without refinement.
-        let candidates = if refine {
-            candidates
-        } else {
-            let (candidates, skipped_blocks) =
-                self.filter_candidates_by_topn_stats(candidates, limit);
-            if skipped_blocks > 0 {
-                info!("Vector stat pruned {skipped_blocks} blocks before hnsw topn");
+        let (metas, block_modes) = match columns {
+            Some(columns) => {
+                let (metas, block_modes) = self
+                    .block_search_modes(columns, metas, candidate_limit)
+                    .await?;
+                if metas.is_empty() {
+                    return Ok(Vec::new());
+                }
+                (metas, Some(block_modes))
             }
-            candidates
+            None => (self.prune_by_vector_stats(metas, param.limit)?, None),
         };
-        let metas = candidates
-            .into_iter()
-            .map(|candidate| (candidate.block_meta_index, candidate.block_meta))
-            .collect();
 
-        // Each block returns its `candidate_limit` nearest rows, and their ties
-        // with `keep_ties`.
+        // Each block returns its `candidate_limit` nearest passing rows, and
+        // their ties with `keep_ties`.
         let mut results = self
-            .score_blocks(metas, move |reader, row_count, location| async move {
-                reader
-                    .prune(candidate_limit, keep_ties, row_count, &location)
-                    .await
+            .score_blocks(metas, move |reader, block_idx, row_count, location| {
+                let block_modes = block_modes.clone();
+                async move {
+                    let mode = block_modes
+                        .as_ref()
+                        .map(|block_modes| &block_modes[block_idx]);
+                    if let Some(BlockSearchMode::BruteForce(rows)) = mode {
+                        let mut scores = reader
+                            .generate_scores(row_count, &location, Some(rows))
+                            .await?;
+                        if !keep_ties && scores.len() > candidate_limit {
+                            scores.sort_by(|a, b| a.score.total_cmp(&b.score));
+                            scores.truncate(candidate_limit);
+                        }
+                        return Ok(scores);
+                    }
+                    let rows = mode.and_then(BlockSearchMode::rows);
+                    reader
+                        .prune(candidate_limit, keep_ties, row_count, &location, rows)
+                        .await
+                }
             })
             .await?;
-        if refine {
-            let candidates = select_refine_candidates(
-                || {
-                    results
-                        .iter()
-                        .flat_map(|result| result.scores.iter().cloned())
-                },
-                candidate_limit,
-                keep_ties,
-            );
+
+        if self.refine_options.refine_factor.is_some() {
+            let candidates =
+                select_refine_candidates(all_scores(&results), candidate_limit, keep_ties);
             results = self.refine_candidates(results, candidates).await?;
         }
-
-        // Keep the global TopK rows (and their ties), attached to their blocks.
+        let passed = self.eval_score_filters(max_score, &results)?;
         let top_scores = topn_with_ties(
-            || {
-                results
-                    .iter()
-                    .flat_map(|result| result.scores.iter().cloned())
-            },
-            limit,
+            ranked_scores(&results, &passed, true),
+            param.limit,
             keep_ties,
         );
-        let rows_only = fills_topn(&top_scores, limit);
+        // With an upper bound, fewer rows than the limit means no other row
+        // passes: each block returned at least `limit` nearest rows. Unscored
+        // rows are not read, as their placeholder score may pass a large bound.
+        let rows_only = max_score.is_some() || fills_topn(&top_scores, param.limit);
         Ok(topn_block_metas(results, top_scores, rows_only))
+    }
+
+    /// Drops the blocks that cannot hold TopN rows, by vector statistics. Only
+    /// without refinement: statistics bound the Float32 vectors, not FP16 scores.
+    /// Still valid with an upper bound on the score, as it rejects farther rows
+    /// too.
+    fn prune_by_vector_stats(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+        limit: usize,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        if self.refine_options.refine_factor.is_some() {
+            return Ok(metas);
+        }
+        let candidates = self.vector_prune_candidates(metas)?;
+        let (candidates, skipped_blocks) = self.filter_candidates_by_topn_stats(candidates, limit);
+        if skipped_blocks > 0 {
+            info!("Vector stat pruned {skipped_blocks} blocks before hnsw topn");
+        }
+        Ok(candidates
+            .into_iter()
+            .map(|candidate| (candidate.block_meta_index, candidate.block_meta))
+            .collect())
+    }
+
+    /// The search mode of each block from `column_filter`; blocks without
+    /// passing rows are dropped.
+    async fn block_search_modes(
+        &self,
+        column_filter: &Arc<ColumnFilter>,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+        candidate_limit: usize,
+    ) -> Result<(
+        Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+        Arc<Vec<BlockSearchMode>>,
+    )> {
+        let start = Instant::now();
+        let blocks_before = metas.len();
+        let (metas, block_modes) =
+            filter_blocks(column_filter, &self.pruning_ctx, metas, move |rows| {
+                BlockSearchMode::try_create(rows, candidate_limit, BRUTE_FORCE_PERCENT)
+            })
+            .await?;
+        let (mut graph_blocks, mut brute_force_blocks) = (0, 0);
+        for mode in &block_modes {
+            match mode {
+                BlockSearchMode::Unfiltered => {}
+                BlockSearchMode::Graph(_) => graph_blocks += 1,
+                BlockSearchMode::BruteForce(_) => brute_force_blocks += 1,
+            }
+        }
+        info!(
+            "Vector filtered topn: blocks={blocks_before}, rejected={}, graph_filtered={graph_blocks}, brute_force={brute_force_blocks}, filter_elapsed_ms={}",
+            blocks_before - metas.len(),
+            start.elapsed().as_millis()
+        );
+        Ok((metas, Arc::new(block_modes)))
     }
 
     /// TopN with a score filter or in descending order: every row is scored. A
@@ -314,11 +507,10 @@ impl VectorIndexPruner {
     async fn vector_index_topn_prune(
         &self,
         param: &VectorTopNParam,
+        asc: bool,
+        filter: &ScoreFilter,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        if param.limit == 0 || metas.is_empty() {
-            return Ok(Vec::new());
-        }
         // Descending order and score filters need the scores of every row to select
         // the TopN rows: a row without a score would get the placeholder score,
         // which ranks first in descending order and passes a lower-bound filter.
@@ -327,26 +519,27 @@ impl VectorIndexPruner {
         // the FP16 scores.
         let refine = self.refine_options.refine_factor.is_some();
         let results = self
-            .score_blocks(metas, move |reader, row_count, location| async move {
+            .score_blocks(metas, move |reader, _, row_count, location| async move {
                 if refine {
                     reader.generate_refined_scores(row_count, &location).await
                 } else {
-                    reader.generate_scores(row_count, &location).await
+                    reader.generate_scores(row_count, &location, None).await
                 }
             })
             .await?;
 
-        let passed = self.eval_score_filters(param.filter_expr.as_ref(), &results)?;
+        let passed = self.eval_score_filters(filter.expr(), &results)?;
         let top_scores = topn_with_ties(
-            || ranked_scores(&results, &passed, param.asc),
+            ranked_scores(&results, &passed, asc),
             param.limit,
             param.keep_ties,
         );
         // Read only the TopN rows (and their ties) for ascending order with
         // deterministic score filters only. The filter runs again after reading,
         // so a volatile one (`d > rand()`) needs the other rows too.
-        let rows_only =
-            param.asc && param.deterministic_score_filter && fills_topn(&top_scores, param.limit);
+        let rows_only = asc
+            && matches!(filter, ScoreFilter::Deterministic(_))
+            && fills_topn(&top_scores, param.limit);
         if rows_only {
             return Ok(topn_block_metas(results, top_scores, true));
         }
@@ -368,21 +561,21 @@ impl VectorIndexPruner {
     ) -> Result<Vec<VectorPruneResult>> {
         let start = Instant::now();
         let candidate_rows: usize = candidates.values().map(Vec::len).sum();
-        let mut offsets_by_path = HashMap::with_capacity(candidates.len());
+        // The offsets of each kept block, in the order `score_blocks` numbers them.
+        let mut block_offsets = Vec::with_capacity(candidates.len());
         let mut metas = Vec::with_capacity(candidates.len());
         for result in results {
             if let Some(offsets) = candidates.remove(&result.block_idx) {
-                let location = self.index_file(&result.block_meta)?;
-                offsets_by_path.insert(location.path().to_string(), offsets);
+                block_offsets.push(offsets);
                 metas.push((result.block_meta_index, result.block_meta));
             }
         }
-        let offsets_by_path = Arc::new(offsets_by_path);
+        let block_offsets = Arc::new(block_offsets);
         let refined = self
-            .score_blocks(metas, move |reader, row_count, location| {
-                let offsets_by_path = offsets_by_path.clone();
+            .score_blocks(metas, move |reader, block_idx, row_count, location| {
+                let block_offsets = block_offsets.clone();
                 async move {
-                    let offsets = &offsets_by_path[location.path()];
+                    let offsets = &block_offsets[block_idx];
                     reader.refine_scores(row_count, &location, offsets).await
                 }
             })
@@ -440,11 +633,11 @@ impl VectorIndexPruner {
         // limit. Each block's FP16 data is read whole in one uncached request
         // (vector_refine_factor = 0 uses SQ8 scores instead).
         let refine = self.refine_options.refine_factor.is_some();
-        let scoring = self.score_blocks(metas, move |reader, row_count, location| async move {
+        let scoring = self.score_blocks(metas, move |reader, _, row_count, location| async move {
             if refine {
                 reader.generate_refined_scores(row_count, &location).await
             } else {
-                reader.generate_scores(row_count, &location).await
+                reader.generate_scores(row_count, &location, None).await
             }
         });
         let results = self
@@ -480,13 +673,14 @@ impl VectorIndexPruner {
 
     /// Runs `op` on the index file of every block, concurrently (bounded by the
     /// pruning semaphore), and returns the scores of each block in block order.
+    /// `op` gets the block position in `metas` as `block_idx`.
     async fn score_blocks<F, Fut>(
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
         op: F,
     ) -> Result<Vec<VectorPruneResult>>
     where
-        F: Fn(VectorIndexReader, usize, IndexFileLocation) -> Fut + Clone + Send + 'static,
+        F: Fn(VectorIndexReader, usize, usize, IndexFileLocation) -> Fut + Clone + Send + 'static,
         Fut: Future<Output = Result<Vec<ScoredPointOffset>>> + Send,
     {
         let mut metas = metas.into_iter().enumerate();
@@ -503,7 +697,7 @@ impl VectorIndexPruner {
                 let _permit = permit;
                 pruning_ctx.check_aborting()?;
                 let row_count = block_meta.row_count as usize;
-                let scores = op(reader, row_count, location?)
+                let scores = op(reader, block_idx, row_count, location?)
                     .await?
                     .into_iter()
                     .map(|score| VectorScore {
@@ -549,8 +743,7 @@ impl VectorIndexPruner {
                 Ok(VectorPruneCandidate {
                     block_meta_index,
                     block_meta,
-                    score_domain: vector_stat.map(|(score_domain, _)| score_domain),
-                    vector_stat_row_count: vector_stat.map(|(_, row_count)| row_count),
+                    vector_stat,
                 })
             })
             .collect()
@@ -561,11 +754,6 @@ impl VectorIndexPruner {
         candidates: Vec<VectorPruneCandidate>,
         limit: usize,
     ) -> (Vec<VectorPruneCandidate>, usize) {
-        if limit == 0 {
-            let skipped_blocks = candidates.len();
-            return (Vec::new(), skipped_blocks);
-        }
-
         // Build a safe threshold for ascending vector TopN.
         //
         // Each block vector stat gives a score interval [lower, upper] that
@@ -586,12 +774,11 @@ impl VectorIndexPruner {
         let mut upper_bounds = candidates
             .iter()
             .filter_map(|candidate| {
-                let (_, upper_bound) = candidate.score_domain?;
-                let row_count = candidate.vector_stat_row_count?;
+                let ((_, upper_bound), row_count) = candidate.vector_stat?;
                 Some((upper_bound, row_count))
             })
             .collect::<Vec<_>>();
-        upper_bounds.sort_by(|left, right| left.0.partial_cmp(&right.0).unwrap_or(Ordering::Equal));
+        upper_bounds.sort_by(|left, right| left.0.total_cmp(&right.0));
 
         let target_rows = limit as u64;
         let mut row_count = 0u64;
@@ -650,13 +837,71 @@ impl VectorIndexPruner {
     }
 }
 
+/// Blocks passing at most this percent of their rows are scored row by row. On
+/// 1M Cohere 768-dim rows in 66k-row blocks, this beats the filtered graph
+/// search (ACORN) up to about 20% and loses beyond 25%.
+const BRUTE_FORCE_PERCENT: usize = 20;
+
+/// How a block is searched, from the rows that pass the column filters.
+enum BlockSearchMode {
+    /// Every row passes.
+    Unfiltered,
+    /// Graph search skipping the rows that fail.
+    Graph(Bitmap),
+    /// Few rows pass: scored row by row.
+    BruteForce(Bitmap),
+}
+
+impl BlockSearchMode {
+    /// `None` without passing rows. Brute force when the passing rows are at
+    /// most `brute_force_percent` of the block or `candidate_limit` rows.
+    fn try_create(
+        rows: BlockRows,
+        candidate_limit: usize,
+        brute_force_percent: usize,
+    ) -> Option<Self> {
+        let bitmap = match rows {
+            BlockRows::All => return Some(Self::Unfiltered),
+            BlockRows::Rows(bitmap) => bitmap,
+        };
+        let passed = bitmap.true_count();
+        if passed == 0 {
+            return None;
+        }
+        if passed == bitmap.len() {
+            return Some(Self::Unfiltered);
+        }
+        let scan = passed <= candidate_limit || passed * 100 <= bitmap.len() * brute_force_percent;
+        Some(if scan {
+            Self::BruteForce(bitmap)
+        } else {
+            Self::Graph(bitmap)
+        })
+    }
+
+    /// The passing rows; `None` when all rows pass.
+    fn rows(&self) -> Option<&Bitmap> {
+        match self {
+            Self::Unfiltered => None,
+            Self::Graph(rows) | Self::BruteForce(rows) => Some(rows),
+        }
+    }
+}
+
+/// The scores of every block of `results`, in block order.
+fn all_scores(results: &[VectorPruneResult]) -> impl Iterator<Item = VectorScore> + Clone + '_ {
+    results
+        .iter()
+        .flat_map(|result| result.scores.iter().copied())
+}
+
 /// Scores that pass the score filter, ranked so that the best is the lowest
 /// (negated for descending order).
 fn ranked_scores<'a>(
     results: &'a [VectorPruneResult],
     passed: &'a [Option<Bitmap>],
     asc: bool,
-) -> impl Iterator<Item = VectorScore> + 'a {
+) -> impl Iterator<Item = VectorScore> + Clone + 'a {
     results
         .iter()
         .zip(passed)
@@ -666,13 +911,11 @@ fn ranked_scores<'a>(
                 .iter()
                 .enumerate()
                 .filter(move |(i, _)| passed.as_ref().is_none_or(|bitmap| bitmap.get_bit(*i)))
-                .map(move |(_, score)| {
-                    if asc {
-                        score.clone()
-                    } else {
-                        score.negative_score()
-                    }
-                })
+                .map(
+                    move |(_, score)| {
+                        if asc { *score } else { score.negative_score() }
+                    },
+                )
         })
 }
 
@@ -717,8 +960,8 @@ fn has_tie_breaker(sort: &[(RemoteExpr<String>, bool, bool)]) -> bool {
 /// order), plus, with `keep_ties`, the rows that tie with the last of them. Another
 /// sort key, such as `id` in `ORDER BY d, id`, may choose any tied row, so all of
 /// them are kept; without one, any tied row is a correct result.
-fn topn_with_ties<I: Iterator<Item = VectorScore>>(
-    scores: impl Fn() -> I,
+fn topn_with_ties(
+    scores: impl Iterator<Item = VectorScore> + Clone,
     limit: usize,
     keep_ties: bool,
 ) -> Vec<VectorScore> {
@@ -726,7 +969,7 @@ fn topn_with_ties<I: Iterator<Item = VectorScore>>(
         return Vec::new();
     }
     let mut queue = FixedLengthPriorityQueue::new(limit);
-    for score in scores() {
+    for score in scores.clone() {
         queue.push(score);
     }
     let mut top_scores = queue.into_sorted_vec();
@@ -739,14 +982,14 @@ fn topn_with_ties<I: Iterator<Item = VectorScore>>(
     };
     // Replace the selected rows at the last score with every row at that score.
     top_scores.retain(|score| score.score < last);
-    top_scores.extend(scores().filter(|score| score.score == last));
+    top_scores.extend(scores.filter(|score| score.score == last));
     top_scores
 }
 
 /// Keeps the `candidate_limit` lowest scores (callers negate scores for descending
 /// order), and their ties with `keep_ties`, and groups their row ids by block.
-fn select_refine_candidates<I: Iterator<Item = VectorScore>>(
-    scores: impl Fn() -> I,
+fn select_refine_candidates(
+    scores: impl Iterator<Item = VectorScore> + Clone,
     candidate_limit: usize,
     keep_ties: bool,
 ) -> HashMap<usize, Vec<u32>> {
@@ -760,13 +1003,13 @@ fn select_refine_candidates<I: Iterator<Item = VectorScore>>(
 struct VectorPruneCandidate {
     block_meta_index: BlockMetaIndex,
     block_meta: Arc<BlockMeta>,
-    score_domain: Option<(f32, f32)>,
-    vector_stat_row_count: Option<u64>,
+    /// Score domain `(lower, upper)` and row count, from vector statistics.
+    vector_stat: Option<((f32, f32), u64)>,
 }
 
 impl VectorPruneCandidate {
     fn score_lower_bound(&self) -> Option<f32> {
-        self.score_domain.map(|(lower_bound, _)| lower_bound)
+        self.vector_stat.map(|((lower_bound, _), _)| lower_bound)
     }
 }
 
@@ -809,7 +1052,7 @@ impl VectorPruneResult {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct VectorScore {
     index: usize,
     row_idx: u32,
@@ -842,10 +1085,129 @@ impl VectorScore {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::DataType;
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Constant;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::F64;
+    use databend_common_expression::types::NumberScalar;
     use databend_storages_common_table_meta::meta::Compression;
 
     use super::*;
+
+    #[test]
+    fn test_is_score_upper_bound() -> Result<()> {
+        let score = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: VECTOR_SCORE_COL_NAME.to_string(),
+            data_type: DataType::Number(NumberDataType::Float32),
+            display_name: VECTOR_SCORE_COL_NAME.to_string(),
+        });
+        let constant = |scalar: NumberScalar| {
+            Expr::Constant(Constant {
+                span: None,
+                data_type: DataType::Number(scalar.data_type()),
+                scalar: Scalar::Number(scalar),
+            })
+        };
+        let c32 = constant(NumberScalar::Float32(F32::from(0.5_f32)));
+        let c64 = constant(NumberScalar::Float64(F64::from(0.5_f64)));
+        let call = |name: &str, args: Vec<Expr<String>>| {
+            check_function(None, name, &[], &args, &BUILTIN_FUNCTIONS)
+        };
+        let upper =
+            |expr: Result<Expr<String>>| -> Result<bool> { Ok(is_score_upper_bound(&expr?)) };
+
+        assert!(upper(call("lt", vec![score.clone(), c32.clone()]))?);
+        assert!(upper(call("lte", vec![score.clone(), c64.clone()]))?);
+        assert!(upper(call("gt", vec![c64.clone(), score.clone()]))?);
+        assert!(upper(call("gte", vec![c32.clone(), score.clone()]))?);
+        assert!(upper(call("and_filters", vec![
+            call("lt", vec![score.clone(), c32.clone()])?,
+            call("lte", vec![score.clone(), c64.clone()])?,
+        ]))?);
+
+        // Lower bounds, ranges, and other comparisons.
+        assert!(!upper(call("gt", vec![score.clone(), c32.clone()]))?);
+        assert!(!upper(call("gte", vec![score.clone(), c64.clone()]))?);
+        assert!(!upper(call("lt", vec![c32.clone(), score.clone()]))?);
+        assert!(!upper(call("and_filters", vec![
+            call("lt", vec![score.clone(), c32.clone()])?,
+            call("gt", vec![score.clone(), c64.clone()])?,
+        ]))?);
+        assert!(!upper(call("eq", vec![score.clone(), c32.clone()]))?);
+        assert!(!upper(call("noteq", vec![score.clone(), c32.clone()]))?);
+        // A function of the score may not keep its order.
+        assert!(!upper(call("lt", vec![
+            call("minus", vec![c32.clone(), score.clone()])?,
+            c32.clone(),
+        ]))?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_block_search_mode_try_create() {
+        let bitmap = |passed: usize, rows: usize| -> BlockRows {
+            BlockRows::Rows((0..rows).map(|i| i < passed).collect())
+        };
+        assert!(matches!(
+            BlockSearchMode::try_create(BlockRows::All, 10, 25),
+            Some(BlockSearchMode::Unfiltered)
+        ));
+        assert!(BlockSearchMode::try_create(bitmap(0, 100), 10, 25).is_none());
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(100, 100), 10, 25),
+            Some(BlockSearchMode::Unfiltered)
+        ));
+        // At most the percent of the rows: brute force.
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(25, 100), 10, 25),
+            Some(BlockSearchMode::BruteForce(_))
+        ));
+        // No more rows than the candidates: brute force, the graph would return
+        // them all; one more row is searched through the graph.
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(30, 100), 30, 25),
+            Some(BlockSearchMode::BruteForce(_))
+        ));
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(31, 100), 30, 25),
+            Some(BlockSearchMode::Graph(_))
+        ));
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(99, 100), 10, 25),
+            Some(BlockSearchMode::Graph(_))
+        ));
+        // Percent 0 scans only the blocks with no more passing rows than candidates.
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(11, 100), 10, 0),
+            Some(BlockSearchMode::Graph(_))
+        ));
+        // Percent 100 scans every partially passing block.
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(99, 100), 10, 100),
+            Some(BlockSearchMode::BruteForce(_))
+        ));
+        // The percent in use.
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(20, 100), 10, BRUTE_FORCE_PERCENT),
+            Some(BlockSearchMode::BruteForce(_))
+        ));
+        assert!(matches!(
+            BlockSearchMode::try_create(bitmap(21, 100), 10, BRUTE_FORCE_PERCENT),
+            Some(BlockSearchMode::Graph(_))
+        ));
+        // The bitmap is kept as the rows to search.
+        match BlockSearchMode::try_create(bitmap(26, 100), 10, 25) {
+            Some(BlockSearchMode::Graph(rows)) => assert_eq!(rows.true_count(), 26),
+            other => panic!("expected a graph search, got {}", match other {
+                None => "none",
+                Some(BlockSearchMode::Unfiltered) => "all",
+                Some(BlockSearchMode::BruteForce(_)) => "brute force",
+                Some(BlockSearchMode::Graph(_)) => unreachable!(),
+            }),
+        }
+    }
 
     #[test]
     fn test_refine_candidate_budget_is_global() {
@@ -859,7 +1221,7 @@ mod tests {
             .collect::<Vec<_>>();
         for keep_ties in [false, true] {
             assert_eq!(
-                select_refine_candidates(|| scores.iter().cloned(), 2, keep_ties),
+                select_refine_candidates(scores.iter().copied(), 2, keep_ties),
                 HashMap::from([(0, vec![17]), (1, vec![42])])
             );
         }
@@ -871,10 +1233,10 @@ mod tests {
             score: F32::from(0.2_f32),
         });
         assert_eq!(
-            select_refine_candidates(|| scores.iter().cloned(), 2, true),
+            select_refine_candidates(scores.iter().copied(), 2, true),
             HashMap::from([(0, vec![17]), (1, vec![42]), (2, vec![5])])
         );
-        let candidates = select_refine_candidates(|| scores.iter().cloned(), 2, false);
+        let candidates = select_refine_candidates(scores.iter().copied(), 2, false);
         assert_eq!(candidates.values().map(Vec::len).sum::<usize>(), 2);
         assert_eq!(candidates[&1], vec![42]);
     }
@@ -890,7 +1252,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let rows = |limit, keep_ties| {
-            let mut rows = topn_with_ties(|| scores.iter().cloned(), limit, keep_ties)
+            let mut rows = topn_with_ties(scores.iter().copied(), limit, keep_ties)
                 .into_iter()
                 .map(|score| (score.index, score.row_idx))
                 .collect::<Vec<_>>();

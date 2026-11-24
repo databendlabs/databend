@@ -1923,21 +1923,45 @@ pub fn walk_window_mut<'a, V: VisitorMut<'a>>(
     Ok(())
 }
 
+/// Classifies the columns a predicate reads: the matches and scores of an
+/// inverted index (`_search_matched`, `_search_score`), the vector score
+/// (`_vector_score`), or the columns of the table.
 pub struct IndexPredicateChecker {
-    allow_search_columns: bool,
-    allow_vector_columns: bool,
-    pub has_index_column: bool,
-    pub valid: bool,
+    /// Whether the columns of the table are allowed, besides the index columns:
+    /// the vector index pruner evaluates predicates on them per block.
+    allow_table_columns: bool,
+    has_search_column: bool,
+    has_vector_column: bool,
+    valid: bool,
 }
 
 impl IndexPredicateChecker {
-    pub fn new(allow_search_columns: bool, allow_vector_columns: bool) -> Self {
+    pub fn new(allow_table_columns: bool) -> Self {
         Self {
-            allow_search_columns,
-            allow_vector_columns,
-            has_index_column: false,
+            allow_table_columns,
+            has_search_column: false,
+            has_vector_column: false,
             valid: true,
         }
+    }
+
+    /// Whether the predicate reads the matches or scores of an inverted index.
+    pub fn has_search_column(&self) -> bool {
+        self.has_search_column
+    }
+
+    /// Whether the predicate reads the vector score.
+    pub fn has_vector_column(&self) -> bool {
+        self.has_vector_column
+    }
+
+    pub fn has_index_column(&self) -> bool {
+        self.has_search_column || self.has_vector_column
+    }
+
+    /// False once the predicate reads a column that is not allowed.
+    pub fn valid(&self) -> bool {
+        self.valid
     }
 }
 
@@ -1951,14 +1975,11 @@ impl<'a> Visitor<'a> for IndexPredicateChecker {
 
     fn visit_bound_column_ref(&mut self, column: &'a BoundColumnRef) -> Result<()> {
         let name = column.column.column_name.as_str();
-        let is_search_column = name == SEARCH_MATCHED_COL_NAME || name == SEARCH_SCORE_COL_NAME;
-        let is_vector_column = name == VECTOR_SCORE_COL_NAME;
-
-        if (is_search_column && self.allow_search_columns)
-            || (is_vector_column && self.allow_vector_columns)
-        {
-            self.has_index_column = true;
-        } else {
+        if name == SEARCH_MATCHED_COL_NAME || name == SEARCH_SCORE_COL_NAME {
+            self.has_search_column = true;
+        } else if name == VECTOR_SCORE_COL_NAME {
+            self.has_vector_column = true;
+        } else if !self.allow_table_columns {
             self.valid = false;
         }
 

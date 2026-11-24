@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod index_predicates;
 mod rule_eliminate_filter;
 mod rule_filter_nulls;
 mod rule_merge_filter;

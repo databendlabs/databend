@@ -15,6 +15,7 @@
 
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorScalarRef;
 
@@ -121,19 +122,28 @@ impl RawScorer<'_> {
 
 pub struct FilteredScorer<'a> {
     raw_scorer: &'a RawScorer<'a>,
+    /// Qdrant's filter context: the points the search may return, one bit per
+    /// row of the block. `None` allows every point. Other points are neither
+    /// scored nor expanded, so a filter that passes few points leaves the graph
+    /// with holes; callers score such blocks without the graph.
+    filter_context: Option<&'a Bitmap>,
     points_buffer: Vec<ScoredPointOffset>,
 }
 
 impl<'a> FilteredScorer<'a> {
-    pub fn new(raw_scorer: &'a RawScorer) -> Self {
+    pub fn new(raw_scorer: &'a RawScorer, filter_context: Option<&'a Bitmap>) -> Self {
         FilteredScorer {
             raw_scorer,
+            filter_context,
             points_buffer: Vec::new(),
         }
     }
 
-    pub fn check_vector(&self, _point_id: PointOffsetType) -> bool {
-        true
+    /// Return true if vector satisfies current search context for given point:
+    /// it satisfies the filter context.
+    pub fn check_vector(&self, point_id: PointOffsetType) -> bool {
+        self.filter_context
+            .is_none_or(|filter| filter.get_bit(point_id as usize))
     }
 
     /// Method filters and calculates scores for the given slice of points IDs
@@ -147,18 +157,27 @@ impl<'a> FilteredScorer<'a> {
     /// * `limit` - limits the number of points to process after filtering.
     pub fn score_points(
         &mut self,
-        point_ids: &mut [PointOffsetType],
+        point_ids: &mut Vec<PointOffsetType>,
         limit: usize,
     ) -> &[ScoredPointOffset] {
-        if limit == 0 {
-            self.points_buffer
-                .resize_with(point_ids.len(), ScoredPointOffset::default);
-        } else {
-            self.points_buffer
-                .resize_with(limit, ScoredPointOffset::default);
+        point_ids.retain(|&point_id| self.check_vector(point_id));
+        if limit != 0 {
+            point_ids.truncate(limit);
         }
-        let count = point_ids.len().min(self.points_buffer.len());
-        let point_ids = &point_ids[..count];
+
+        self.score_points_unfiltered(point_ids)
+    }
+
+    /// Scores `point_ids` as they are: the caller has checked them.
+    pub fn score_points_unfiltered(
+        &mut self,
+        point_ids: &[PointOffsetType],
+    ) -> &[ScoredPointOffset] {
+        let count = point_ids.len();
+        if self.points_buffer.len() < count {
+            self.points_buffer
+                .resize_with(count, ScoredPointOffset::default);
+        }
         // Prefetch `near` vectors ahead into L1 and `far` vectors ahead into L2,
         // so that a bounded number of loads overlap with scoring. Tiny batches and
         // nearly consecutive ids gain nothing from hints.
@@ -265,7 +284,7 @@ mod tests {
             query: vectors.encode_query(&query),
             vector: &vectors,
         });
-        let mut scorer = FilteredScorer::new(&raw_scorer);
+        let mut scorer = FilteredScorer::new(&raw_scorer, None);
         for (len, limit) in [(0, 0), (2, 0), (40, 0), (40, 16), (10, 32)] {
             let mut ids: Vec<u32> = (0..len).map(|i| (i * 977 % count) as u32).collect();
             let expected: Vec<ScoredPointOffset> = ids
@@ -279,6 +298,62 @@ mod tests {
             assert_eq!(scorer.score_points(&mut ids, limit), expected.as_slice());
         }
         Ok(())
+    }
+
+    /// A filter keeps the search to its points: the others are neither scored
+    /// nor returned, and `check_vector` reports them.
+    #[test]
+    fn test_score_points_with_filter() {
+        let (dim, count) = (4, 16);
+        let values: Vec<F32> = (0..dim * count)
+            .map(|i| F32::from((i % 7) as f32 - 3.0))
+            .collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        let raw_scorer = RawScorer::Original(OriginalRawScorer {
+            distance_type: DistanceType::L2,
+            index: 0,
+            column: &column,
+        });
+        // Even rows pass.
+        let filter: Bitmap = (0..count).map(|i| i % 2 == 0).collect();
+        let mut scorer = FilteredScorer::new(&raw_scorer, Some(&filter));
+        assert!(scorer.check_vector(0));
+        assert!(!scorer.check_vector(1));
+        for limit in [0, 3] {
+            let mut ids: Vec<u32> = (0..count as u32).collect();
+            let scores = scorer.score_points(&mut ids, limit);
+            let expected: Vec<u32> = (0..count as u32)
+                .filter(|id| id % 2 == 0)
+                .take(if limit == 0 { count } else { limit })
+                .collect();
+            assert_eq!(
+                scores.iter().map(|score| score.idx).collect::<Vec<_>>(),
+                expected
+            );
+            assert!(
+                scores
+                    .iter()
+                    .all(|score| score.score == raw_scorer.score_point(score.idx))
+            );
+        }
+        // Without a filter every point passes.
+        let scorer = FilteredScorer::new(&raw_scorer, None);
+        assert!((0..count as u32).all(|id| scorer.check_vector(id)));
+
+        // `score_points_unfiltered` scores the points as given, filter or not:
+        // ACORN checks them itself.
+        let mut scorer = FilteredScorer::new(&raw_scorer, Some(&filter));
+        let ids: Vec<u32> = vec![1, 2, 3];
+        let scores = scorer.score_points_unfiltered(&ids);
+        assert_eq!(
+            scores.iter().map(|score| score.idx).collect::<Vec<_>>(),
+            ids
+        );
+        assert!(
+            scores
+                .iter()
+                .all(|score| score.score == raw_scorer.score_point(score.idx))
+        );
     }
 
     /// The build scores original vectors through the same prefetch loop, and
@@ -297,7 +372,7 @@ mod tests {
                 column: &column,
             });
             assert_eq!(raw_scorer.prefetch_windows(), Some((1, 0)));
-            let mut scorer = FilteredScorer::new(&raw_scorer);
+            let mut scorer = FilteredScorer::new(&raw_scorer, None);
             for (len, limit) in [(0, 0), (2, 0), (3, 0), (40, 0), (40, 16), (10, 32)] {
                 let mut ids: Vec<u32> = (0..len).map(|i| (i * 977 % count) as u32).collect();
                 let expected: Vec<ScoredPointOffset> = ids

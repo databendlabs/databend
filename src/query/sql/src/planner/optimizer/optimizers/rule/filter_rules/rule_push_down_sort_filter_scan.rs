@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use super::index_predicates::filter_evaluated_by_index_pruners;
 use crate::match_op;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -23,18 +24,18 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
-use crate::plans::IndexPredicateChecker;
 use crate::plans::RelOperator;
-use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::SortItem;
 use crate::plans::TopN;
-use crate::plans::Visitor;
 
 /// Matches: (Sort | TopN) -> [EvalScalar ->] Filter -> Scan
 ///
 /// Push down order_by and limit from Sort to Scan when filter predicates
-/// use inverted_index or vector_index.
+/// use inverted_index or vector_index, or, with a vector_index, when they are
+/// deterministic predicates on the columns of the table: the vector index pruner
+/// evaluates them per block before the HNSW search, which then returns only rows
+/// that pass them.
 ///
 /// Note: When `secure_predicates` has not been applied by prewhere, this rule
 /// bails out because storage TopK pruning would return N rows before RAP row
@@ -103,14 +104,23 @@ impl Rule for RulePushDownSortFilterScan {
         //    in Filter to ensure that all filter conditions are pushed down.
         //    (Filter `predicates` has been pushed down in `RulePushDownFilterScan` rule.)
         // 3. Sort must have limit in order to prune unused blocks.
-        // 4. RAP must already participate in row selection if present.
+        // 4. The predicates use the index columns only, or, with a vector index, are
+        //    deterministic predicates on the columns of the table, which the vector
+        //    index pruner evaluates per block before the search
+        //    (`filter_evaluated_by_index_pruners`).
+        // 5. RAP must already participate in row selection if present.
         let push_down_predicates = scan.push_down_predicates.clone().unwrap_or_default();
         let has_inverted_index = scan.inverted_index.is_some();
         let has_vector_index = scan.vector_index.is_some();
         if (!has_inverted_index && !has_vector_index)
             || push_down_predicates.len() != filter.predicates.len()
             || sort_limit.is_none()
-            || !filter_contains_only_index_predicates(&filter, has_inverted_index, has_vector_index)
+            || !filter_evaluated_by_index_pruners(
+                &filter,
+                has_inverted_index,
+                has_vector_index,
+                true,
+            )
             || scan.has_secure_predicates_not_applied_by_prewhere()
         {
             return Ok(());
@@ -144,25 +154,4 @@ impl Default for RulePushDownSortFilterScan {
     fn default() -> Self {
         Self::new()
     }
-}
-
-fn filter_contains_only_index_predicates(
-    filter: &Filter,
-    has_inverted_index: bool,
-    has_vector_index: bool,
-) -> bool {
-    if !has_inverted_index && !has_vector_index {
-        return false;
-    }
-
-    filter
-        .predicates
-        .iter()
-        .all(|predicate| is_index_predicate(predicate, has_inverted_index, has_vector_index))
-}
-
-fn is_index_predicate(predicate: &ScalarExpr, allow_inverted: bool, allow_vector: bool) -> bool {
-    let mut checker = IndexPredicateChecker::new(allow_inverted, allow_vector);
-    let _ = checker.visit(predicate);
-    checker.valid && checker.has_index_column
 }

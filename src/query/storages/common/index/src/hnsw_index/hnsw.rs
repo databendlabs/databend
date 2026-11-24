@@ -26,7 +26,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorColumn;
@@ -43,7 +42,9 @@ use crate::hnsw_index::common::hugepage::HugePageBytes;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
 use crate::hnsw_index::common::utils::check_process_stopped;
+use crate::hnsw_index::graph_layers::FilteredPoints;
 use crate::hnsw_index::graph_layers::GraphLayers;
+use crate::hnsw_index::graph_layers::SearchAlgorithm;
 use crate::hnsw_index::graph_layers_builder::GraphLayersBuilder;
 use crate::hnsw_index::graph_links::GraphLinksFormat;
 use crate::hnsw_index::point_scorer::FilteredScorer;
@@ -136,6 +137,31 @@ pub struct HNSWIndex {
     validity: Option<Bitmap>,
 }
 
+/// Maximum selectivity of filters to enable ACORN: the share of the rows of a
+/// block that pass them. ACORN improves the recall of searches with
+/// low-selectivity filters, at cost of performance. Qdrant's default; measured
+/// on 1M Cohere 768-dim rows in 66k-row blocks, ACORN keeps recall@100 at 0.994
+/// up to 25% of the rows and 0.975 at 40%, where the plain search gets 0.953 at
+/// 1.5 times the throughput. Beyond, ACORN costs 30% to 45% of the throughput
+/// for 2 to 3 points of recall.
+pub const ACORN_MAX_SELECTIVITY: f64 = 0.4;
+
+/// The graph search algorithm for a filter: ACORN when the filter passes at most
+/// `max_selectivity` of the rows, as the links of the rows it rejects are then
+/// needed to reach the rows it passes.
+pub fn filtered_graph_algorithm(filter: &Bitmap, max_selectivity: f64) -> SearchAlgorithm {
+    let selectivity = if filter.is_empty() {
+        1.0
+    } else {
+        filter.true_count() as f64 / filter.len() as f64
+    };
+    if selectivity <= max_selectivity {
+        SearchAlgorithm::Acorn
+    } else {
+        SearchAlgorithm::Hnsw
+    }
+}
+
 impl HNSWIndex {
     /// Opens the four serialized components in `HNSW_COMPONENT_SUFFIXES` order.
     pub fn open(
@@ -199,19 +225,40 @@ impl HNSWIndex {
                 .map_or(0, |bitmap| bitmap.as_slice().0.len())
     }
 
-    pub fn search(&self, limit: usize, query_values: &[f32]) -> Result<Vec<ScoredPointOffset>> {
-        self.search_with_ef(limit, None, query_values, false)
-    }
-
     /// The `limit` nearest rows found, plus, with `keep_ties`, the other rows
     /// found at the distance of the farthest of them: another sort key, such as
     /// `id` in `ORDER BY d, id`, may choose any tied row.
+    ///
+    /// With `filter`, one bit per row of the block, only its rows are found: the
+    /// search neither scores nor returns the others. A filter that passes few
+    /// rows leaves the graph with holes, so the search then explores the links
+    /// of the rejected rows too (ACORN, when the filter passes at most
+    /// [`ACORN_MAX_SELECTIVITY`] of the rows, see `filtered_graph_algorithm`);
+    /// callers score blocks with very few passing rows with `generate_scores`
+    /// instead.
     pub fn search_with_ef(
         &self,
         limit: usize,
         search_ef: Option<usize>,
         query_values: &[f32],
         keep_ties: bool,
+        filter: Option<&Bitmap>,
+    ) -> Result<Vec<ScoredPointOffset>> {
+        let algorithm = filter.map_or(SearchAlgorithm::Hnsw, |filter| {
+            filtered_graph_algorithm(filter, ACORN_MAX_SELECTIVITY)
+        });
+        self.search_with_algorithm(limit, search_ef, query_values, keep_ties, filter, algorithm)
+    }
+
+    /// [`Self::search_with_ef`] with the given search algorithm.
+    pub fn search_with_algorithm(
+        &self,
+        limit: usize,
+        search_ef: Option<usize>,
+        query_values: &[f32],
+        keep_ties: bool,
+        filter: Option<&Bitmap>,
+        algorithm: SearchAlgorithm,
     ) -> Result<Vec<ScoredPointOffset>> {
         let query_encode = self.encoded_vectors.encode_query(query_values);
 
@@ -226,24 +273,47 @@ impl HNSWIndex {
         let ef = search_ef
             .unwrap_or_else(|| limit.saturating_mul(4))
             .max(limit);
-        let query_filter_scorer = FilteredScorer::new(&raw_scorer);
+        let query_filter_scorer = FilteredScorer::new(&raw_scorer, filter);
 
         let is_stopped = AtomicBool::new(false);
         // To find the ties, return all `ef` rows: the search is the same as for
         // `limit` rows, which are the first of them.
         let top = if keep_ties { ef } else { limit };
-        let values = self
-            .graph_layers
-            .search(top, ef, query_filter_scorer, None, &is_stopped)?;
+        // When no entry point of the graph passes the filter, the search starts
+        // from the first rows that do.
+        let filtered_points = filter.map(|filter| {
+            move |n: usize| -> Vec<PointOffsetType> {
+                TrueIdxIter::new(filter.len(), Some(filter))
+                    .take(n)
+                    .map(|idx| idx as PointOffsetType)
+                    .collect()
+            }
+        });
+        let filtered_points = filtered_points
+            .as_ref()
+            .map(|reader| reader as &FilteredPoints<'_>);
+        let values = self.graph_layers.search(
+            top,
+            ef,
+            algorithm,
+            query_filter_scorer,
+            None,
+            filtered_points,
+            &is_stopped,
+        )?;
 
         let values = Self::postprocess_score(self.distance_type, values);
         Ok(truncate_with_ties(values, limit))
     }
 
+    /// The SQ8 scores of the valid rows of `filter` (one bit per row of the block),
+    /// or of every valid row without one: a scan of the rows, not a graph search,
+    /// for blocks where a filter passes too few rows for the graph.
     pub fn generate_scores(
         &self,
         row_nums: u32,
         query_values: &[f32],
+        filter: Option<&Bitmap>,
     ) -> Result<Vec<ScoredPointOffset>> {
         let query_encode = self.encoded_vectors.encode_query(query_values);
 
@@ -257,9 +327,15 @@ impl HNSWIndex {
             score: raw_scorer.score_point(idx),
         };
         // NULL rows keep their slot, so `idx` is the block row; skip them here as
-        // this path does not go through the graph. The bitmap covers the whole
+        // this path does not go through the graph. The bitmaps cover the whole
         // block, which is exactly `row_nums` rows.
-        let values = match &self.validity {
+        let rows = match (&self.validity, filter) {
+            (Some(validity), Some(filter)) => Some(validity & filter),
+            (Some(validity), None) => Some(validity.clone()),
+            (None, Some(filter)) => Some(filter.clone()),
+            (None, None) => None,
+        };
+        let values = match &rows {
             Some(bitmap) => TrueIdxIter::new(row_nums as usize, Some(bitmap))
                 .map(|idx| score(idx as u32))
                 .collect(),
@@ -323,7 +399,7 @@ impl HNSWIndex {
             .collect();
 
         let (data, dim) = vector_column.as_float32().unwrap();
-        let data = unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(data.clone()) };
+        let data = as_f32_slice(data.as_slice());
 
         let stopped = AtomicBool::new(false);
 
@@ -338,7 +414,7 @@ impl HNSWIndex {
                 index: vector_id,
                 column: &column,
             });
-            let points_scorer = FilteredScorer::new(&raw_scorer);
+            let points_scorer = FilteredScorer::new(&raw_scorer, None);
             graph_layers_builder.link_new_point(vector_id as PointOffsetType, points_scorer);
 
             Ok::<_, ErrorCode>(())
@@ -400,7 +476,7 @@ impl HNSWIndex {
         // NULL rows hold a placeholder vector: encode them to keep point ids as
         // block rows, but fit the value range on the real vectors only.
         let encoded_vectors = EncodedVectorsU8::encode(
-            (0..params.count).map(|i| &data.as_ref()[i * params.dim..(i + 1) * params.dim]),
+            (0..params.count).map(|i| &data[i * params.dim..(i + 1) * params.dim]),
             (0..params.count).map(|i| validity.as_ref().is_none_or(|bitmap| bitmap.get_bit(i))),
             builder,
             &params,
@@ -485,11 +561,11 @@ fn preprocess(distance_type: DistanceType, column: VectorColumn) -> VectorColumn
             let len = column.len();
             let mut builder = VectorColumnBuilder::with_capacity(&ty, len);
             for scalar in column.iter() {
-                let val = scalar.as_float32().unwrap();
-                let val = unsafe { std::mem::transmute::<Vec<F32>, Vec<f32>>(val.to_vec()) };
-
-                let new_val = cosine_preprocess(val);
-                let new_val = unsafe { std::mem::transmute::<Vec<f32>, Vec<F32>>(new_val) };
+                let val = as_f32_slice(scalar.as_float32().unwrap());
+                let new_val = match cosine_norm(val) {
+                    Some(length) => val.iter().map(|x| F32::from(x / length)).collect(),
+                    None => val.iter().copied().map(F32::from).collect(),
+                };
                 let new_scalar = VectorScalar::Float32(new_val);
                 builder.push(&new_scalar.as_ref());
             }
@@ -503,13 +579,25 @@ fn is_length_zero_or_normalized(length: f32) -> bool {
     length < f32::EPSILON || (length - 1.0).abs() <= 1.0e-6
 }
 
+/// The length that normalizes `vector` for cosine distance; `None` when it is
+/// zero or the vector is already normalized.
+fn cosine_norm(vector: &[f32]) -> Option<f32> {
+    let length: f32 = vector.iter().map(|x| x * x).sum();
+    (!is_length_zero_or_normalized(length)).then(|| length.sqrt())
+}
+
 fn cosine_preprocess(vector: Vec<f32>) -> Vec<f32> {
-    let mut length: f32 = vector.iter().map(|x| x * x).sum();
-    if is_length_zero_or_normalized(length) {
-        return vector;
+    match cosine_norm(&vector) {
+        Some(length) => vector.iter().map(|x| x / length).collect(),
+        None => vector,
     }
-    length = length.sqrt();
-    vector.iter().map(|x| x / length).collect()
+}
+
+/// `values` as plain `f32`s, without copying them.
+fn as_f32_slice(values: &[F32]) -> &[f32] {
+    // SAFETY: `F32` is `OrderedFloat<f32>`, which is `#[repr(transparent)]` over
+    // `f32` and permits every value, so both slices have the same layout.
+    unsafe { std::slice::from_raw_parts(values.as_ptr().cast::<f32>(), values.len()) }
 }
 
 #[cfg(test)]
@@ -566,7 +654,8 @@ mod tests {
 
         // An ef of every row visits the whole graph, so the result is exact.
         let search = |limit, keep_ties| -> Result<Vec<u32>> {
-            let rows = index.search_with_ef(limit, Some(vectors.len()), &[1.0; 4], keep_ties)?;
+            let rows =
+                index.search_with_ef(limit, Some(vectors.len()), &[1.0; 4], keep_ties, None)?;
             assert!(rows.iter().all(|row| row.score == rows[0].score));
             let mut ids: Vec<_> = rows.iter().map(|row| row.idx).collect();
             ids.sort_unstable();
@@ -578,6 +667,76 @@ mod tests {
         let one = search(1, false)?;
         assert!(one == [3] || one == [9], "{one:?}");
         assert_eq!(search(2, false)?, [3, 9]);
+        Ok(())
+    }
+
+    /// A filtered search returns only rows of the filter, the nearest of them
+    /// first; a scan of the filter's rows scores exactly those rows.
+    #[test]
+    fn test_search_with_filter() -> Result<()> {
+        // Row i is at distance i from the query [0,0,0,0].
+        let vectors: Vec<[f32; 4]> = (0..32).map(|i| [i as f32, 0.0, 0.0, 0.0]).collect();
+        let values: Vec<F32> = vectors.iter().flatten().map(|&v| F32::from(v)).collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), 4)));
+        let (_, entries) = HNSWIndex::build(4, 16, 0, column, DistanceType::L2)?;
+        let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
+        let components: Vec<_> = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect();
+        let index = HNSWIndex::open(DistanceType::L2, 4, vectors.len(), &components, None)?;
+        let query = [0.0; 4];
+
+        // Rows 5, 7, 9, ... pass: odd rows from 5. On a line, the graph links a row
+        // mostly to its adjacent rows, which the filter rejects: the plain filtered
+        // search cannot leave its entry point, while ACORN crosses one rejected row
+        // to the next passing one. 14 of 32 rows pass, above `ACORN_MAX_SELECTIVITY`,
+        // so `search_with_ef` would take the plain search: the algorithm is given.
+        let filter: Bitmap = (0..vectors.len()).map(|i| i % 2 == 1 && i >= 5).collect();
+        let search = |algorithm| {
+            index.search_with_algorithm(
+                3,
+                Some(vectors.len()),
+                &query,
+                false,
+                Some(&filter),
+                algorithm,
+            )
+        };
+        let found = search(SearchAlgorithm::Acorn)?;
+        let mut ids: Vec<_> = found.iter().map(|point| point.idx).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, [5, 7, 9]);
+        assert!(found.iter().all(|point| filter.get_bit(point.idx as usize)));
+        // The plain search returns rows of the filter only, if not the nearest.
+        let plain = search(SearchAlgorithm::Hnsw)?;
+        assert!(!plain.is_empty());
+        assert!(plain.iter().all(|point| filter.get_bit(point.idx as usize)));
+
+        // The same rows by scanning them; the whole block without a filter.
+        let scanned = index.generate_scores(vectors.len() as u32, &query, Some(&filter))?;
+        let mut ids: Vec<_> = scanned.iter().map(|point| point.idx).collect();
+        ids.sort_unstable();
+        assert_eq!(ids, (5..32).step_by(2).collect::<Vec<u32>>());
+        assert_eq!(
+            index
+                .generate_scores(vectors.len() as u32, &query, None)?
+                .len(),
+            vectors.len()
+        );
+
+        // A filter that passes nothing finds nothing, through the graph or the scan.
+        let none: Bitmap = (0..vectors.len()).map(|_| false).collect();
+        assert!(
+            index
+                .search_with_ef(3, Some(vectors.len()), &query, false, Some(&none),)?
+                .is_empty()
+        );
+        assert!(
+            index
+                .generate_scores(vectors.len() as u32, &query, Some(&none))?
+                .is_empty()
+        );
         Ok(())
     }
 
@@ -644,7 +803,7 @@ mod tests {
         // An ef of every row visits the whole graph, so a row that is not returned
         // was never linked, or linked where the entry points do not reach.
         let reached: Vec<usize> = index
-            .search_with_ef(num_points, Some(num_points), &vectors[0], false)?
+            .search_with_ef(num_points, Some(num_points), &vectors[0], false, None)?
             .iter()
             .map(|row| row.idx as usize)
             .collect();
@@ -657,7 +816,7 @@ mod tests {
         );
 
         for row in (0..num_points).step_by(64) {
-            let found = index.search_with_ef(1, Some(num_points), &vectors[row], false)?;
+            let found = index.search_with_ef(1, Some(num_points), &vectors[row], false, None)?;
             let nearest = found.first().map(|point| point.idx as usize);
             assert_eq!(nearest, Some(row), "nearest row of {row}");
         }
@@ -710,7 +869,7 @@ mod tests {
             let mut exact: Vec<usize> = (0..num_points).collect();
             exact.sort_by(|&a, &b| cosine(query, &rows[b]).total_cmp(&cosine(query, &rows[a])));
             let query = HNSWIndex::preprocess_query(DistanceType::Dot, query.clone());
-            let found = index.search_with_ef(limit, Some(ef), &query, false)?;
+            let found = index.search_with_ef(limit, Some(ef), &query, false, None)?;
             hits += found
                 .iter()
                 .filter(|point| exact[..limit].contains(&(point.idx as usize)))
@@ -718,6 +877,88 @@ mod tests {
         }
         let recall = hits as f64 / (num_queries * limit) as f64;
         assert!(recall >= RECALL_THRESHOLD, "cosine recall {recall}");
+        Ok(())
+    }
+
+    /// A sparse filter leaves the graph with holes: the search expands only the
+    /// rows it passes, so it may get stuck. ACORN explores the links of the
+    /// rejected rows too and reaches the passing rows; `search_with_ef` picks
+    /// it for a filter that passes at most `ACORN_MAX_SELECTIVITY`.
+    #[test]
+    fn test_acorn_search_recall_with_sparse_filter() -> Result<()> {
+        use rand::Rng as _;
+        use rand::SeedableRng as _;
+        use rand::rngs::StdRng;
+
+        // Measured: ACORN 0.97, plain filtered search 0.68; the threshold sits
+        // between them.
+        const RECALL_THRESHOLD: f64 = 0.85;
+        let (dim, num_points, num_queries, limit, ef) = (16, 4000, 50, 10, 32);
+        let mut rng = StdRng::seed_from_u64(11);
+        let mut vector = || -> Vec<f32> { (0..dim).map(|_| rng.gen_range(-1.0..1.0)).collect() };
+        let queries: Vec<Vec<f32>> = (0..num_queries).map(|_| vector()).collect();
+        let rows: Vec<Vec<f32>> = (0..num_points).map(|_| vector()).collect();
+        let values: Vec<F32> = rows.iter().flatten().map(|&v| F32::from(v)).collect();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), dim)));
+        let (_, entries) = HNSWIndex::build(8, 64, 0, column, DistanceType::L2)?;
+        let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
+        let components: Vec<_> = columns
+            .iter()
+            .map(|column| column.as_binary().unwrap().index(0).unwrap())
+            .collect();
+        let index = HNSWIndex::open(DistanceType::L2, dim, num_points, &components, None)?;
+
+        // One row in ten passes.
+        let filter: Bitmap = (0..num_points).map(|i| i % 10 == 0).collect();
+        assert_eq!(
+            filtered_graph_algorithm(&filter, ACORN_MAX_SELECTIVITY),
+            SearchAlgorithm::Acorn
+        );
+        let dense: Bitmap = (0..num_points).map(|i| i % 2 == 0).collect();
+        assert_eq!(
+            filtered_graph_algorithm(&dense, ACORN_MAX_SELECTIVITY),
+            SearchAlgorithm::Hnsw
+        );
+        assert_eq!(
+            filtered_graph_algorithm(&dense, 0.5),
+            SearchAlgorithm::Acorn
+        );
+
+        let l2 =
+            |a: &[f32], b: &[f32]| -> f32 { a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum() };
+        let recall = |algorithm: Option<SearchAlgorithm>| -> Result<f64> {
+            let mut hits = 0;
+            for query in &queries {
+                let mut exact: Vec<usize> = (0..num_points).filter(|i| i % 10 == 0).collect();
+                exact.sort_by(|&a, &b| l2(query, &rows[a]).total_cmp(&l2(query, &rows[b])));
+                let found = match algorithm {
+                    Some(algorithm) => index.search_with_algorithm(
+                        limit,
+                        Some(ef),
+                        query,
+                        false,
+                        Some(&filter),
+                        algorithm,
+                    )?,
+                    None => index.search_with_ef(limit, Some(ef), query, false, Some(&filter))?,
+                };
+                assert!(found.iter().all(|point| filter.get_bit(point.idx as usize)));
+                hits += found
+                    .iter()
+                    .filter(|point| exact[..limit].contains(&(point.idx as usize)))
+                    .count();
+            }
+            Ok(hits as f64 / (num_queries * limit) as f64)
+        };
+        let acorn = recall(Some(SearchAlgorithm::Acorn))?;
+        let plain = recall(Some(SearchAlgorithm::Hnsw))?;
+        let chosen = recall(None)?;
+        assert!(acorn >= RECALL_THRESHOLD, "acorn recall {acorn}");
+        assert!(
+            acorn > plain,
+            "acorn recall {acorn} <= plain filtered recall {plain}"
+        );
+        assert_eq!(chosen, acorn, "search_with_ef did not pick ACORN");
         Ok(())
     }
 }

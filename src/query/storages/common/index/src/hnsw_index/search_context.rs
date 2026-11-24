@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use std::collections::BinaryHeap;
-use std::iter::FromIterator;
 
 use num_traits::float::FloatCore;
 
 use crate::hnsw_index::common::fixed_length_priority_queue::FixedLengthPriorityQueue;
 use crate::hnsw_index::common::types::ScoreType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
+use crate::hnsw_index::visited_pool::VisitedListHandle;
 
 /// Structure that holds context of the search
 pub struct SearchContext {
@@ -31,13 +31,26 @@ pub struct SearchContext {
 }
 
 impl SearchContext {
-    pub fn new(entry_point: ScoredPointOffset, ef: usize) -> Self {
-        let mut nearest = FixedLengthPriorityQueue::new(ef);
-        nearest.push(entry_point);
+    pub fn new(ef: usize) -> Self {
         SearchContext {
-            nearest,
-            candidates: BinaryHeap::from_iter([entry_point]),
+            nearest: FixedLengthPriorityQueue::new(ef),
+            candidates: BinaryHeap::new(),
         }
+    }
+
+    /// Create search context from `entries`, marking them as visited.
+    pub fn with_entries(
+        ef: usize,
+        entries: &[ScoredPointOffset],
+        visited_list: &mut VisitedListHandle,
+    ) -> Self {
+        let mut search_context = Self::new(ef);
+        for &entry in entries {
+            if !visited_list.check_and_update_visited(entry.idx) {
+                search_context.process_candidate(entry);
+            }
+        }
+        search_context
     }
 
     pub fn lower_bound(&self) -> ScoreType {
