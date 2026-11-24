@@ -200,6 +200,9 @@ fn register_cast_chains(registry: &mut FunctionRegistry) {
     let int64 = DataType::Number(NumberDataType::Int64);
     let uint64 = DataType::Number(NumberDataType::UInt64);
 
+    // Known issue: these include casts that fail on almost every value, e.g. a timestamp, in
+    // microseconds, to Int8, Int16 or UInt8, and lose precision to Float32. They type check as
+    // they did before, so they are kept.
     for src in [DataType::Date, DataType::Timestamp] {
         for dest in ALL_NUMERICS_TYPES {
             if *dest != NumberDataType::Int64 {

@@ -235,6 +235,13 @@ pub fn check_cast<Index: ColumnIndex>(
     }
 }
 
+/// The destination type of `TRY_CAST` to `ty`: nullable, with nullable array elements and tuple
+/// fields, so that a failed element or field becomes NULL on its own.
+///
+/// Known issue: the values of a map are not made nullable, so a value that fails makes the whole
+/// map NULL, e.g. `TRY_CAST({'a': 1000} AS MAP(STRING, INT8))`. The base type checked the same
+/// destination, and failed at runtime instead; the type is kept so that the result types of
+/// existing queries do not change.
 #[recursive::recursive]
 pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {

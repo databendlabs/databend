@@ -81,8 +81,13 @@ pub enum CastStep {
     /// Casts each field.
     Tuple(Vec<CastPlan>),
     /// Casts the elements of each JSON array; a value that is not an array has none.
+    ///
+    /// Known issue: so a value that is not an array becomes `[]`, for `TRY_CAST` too, which
+    /// follows `CAST` here instead of returning NULL. Whether NULL suits better is open; the
+    /// result of `CAST` is kept as before.
     VariantToArray(Box<CastPlan>),
-    /// Casts the values of each JSON object; a value that is not an object has none.
+    /// Casts the values of each JSON object; a value that is not an object has none, and
+    /// becomes `{}` as in [`CastStep::VariantToArray`].
     VariantToMap(Box<CastPlan>),
     /// Converts a String, Variant or numeric Array value to a vector.
     ToVector,

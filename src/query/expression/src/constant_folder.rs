@@ -554,6 +554,11 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     changed |= arg.is_changed();
                     // A temporary hack to make `and_filters` shortcut on false.
                     // TODO(andylokandy): make it a rule in the optimizer.
+                    //
+                    // Known issue: the arguments before the constant are dropped with their errors,
+                    // e.g. `and_filters(CAST(s AS Int32) > 0, false)` folds to `false`, while a row
+                    // with `s = 'abc'` fails without folding. Kept as before; the shortcut on a
+                    // domain below is safe, since an argument that may fail has no domain.
                     if let Expr::Constant(Constant { scalar, .. }) = arg.as_ref()
                         && filter.is_absorbing(scalar)
                     {

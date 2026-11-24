@@ -143,6 +143,13 @@ pub enum FunctionDomain<T: AccessType> {
     /// value the type can represent.
     MayThrow,
     /// The function may return error, and the value of a row that does not is in the domain.
+    ///
+    /// A call counts it as `MayThrow`: a row that fails is an error, so the call has no domain.
+    /// The domain is used by a cast step under `TRY_CAST`, and by `error_to_null`, where a failed
+    /// row is NULL. Only the number casts and `to_date(String)` return it. Other functions that
+    /// compute a domain but may fail still return `MayThrow`, e.g. the decimal casts, and the
+    /// nullable variants of `register_passthrough_nullable_2_arg` and wider lose it through
+    /// `normalize`; neither is changed for now.
     MayThrowDomain(T::Domain),
     /// The function must not return error, and the return value can be
     /// any valid value the type can represent.

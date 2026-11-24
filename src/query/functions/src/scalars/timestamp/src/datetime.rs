@@ -153,6 +153,10 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 /// The casts between dates, timestamps and their numeric and string forms.
+///
+/// Known issue: a number out of the range of Date or Timestamp converts to `DATE_MIN` or
+/// `TIMESTAMP_MIN` instead of failing, for `CAST` and `TRY_CAST` alike (`clamp_date`,
+/// `clamp_timestamp`). This is the conversion policy since #16634, and is kept.
 pub fn register_casts(registry: &mut FunctionRegistry) {
     let int64 = DataType::Number(NumberDataType::Int64);
     for (src, dest) in [
