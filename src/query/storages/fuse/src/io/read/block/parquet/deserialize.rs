@@ -42,6 +42,8 @@ use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 /// dropped for its column chunks without a dictionary page.
 type FieldLevelsKey = (Vec<usize>, Vec<usize>);
 
+const MAX_CACHED_FIELD_LEVEL_LAYOUTS: usize = 16;
+
 /// What reading Parquet column chunks of a table schema needs besides the chunks: the Arrow
 /// and Parquet forms of the schema, the Parquet leaf of every column id, and the fields to
 /// read the columns as.
@@ -100,8 +102,8 @@ impl ParquetReadSchema {
 }
 
 /// Field levels computed with one [`ParquetReadSchema`], by the leaves read and the dictionary
-/// hints dropped. A reading processor owns one per reader and passes it along with every block,
-/// so the field levels of each block layout are computed once, without synchronization.
+/// hints dropped. A reading processor owns one per reader and passes it along with every block.
+/// Once the cache is full, it reuses existing layouts but does not retain new ones.
 pub struct FieldLevelsCache {
     read_schema: Arc<ParquetReadSchema>,
     levels: HashMap<FieldLevelsKey, FieldLevels>,
@@ -286,17 +288,22 @@ pub(super) fn column_chunks_record_reader(
     });
     let computed;
     let field_levels = match cache {
-        Some(cache) => match cache.levels.entry(key) {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => {
-                let levels = read_schema.field_levels(entry.key())?;
-                entry.insert(levels)
+        Some(cache) if cache.levels.len() < MAX_CACHED_FIELD_LEVEL_LAYOUTS => {
+            match cache.levels.entry(key) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => {
+                    let levels = read_schema.field_levels(entry.key())?;
+                    entry.insert(levels)
+                }
+            }
+        }
+        cache => match cache.and_then(|cache| cache.levels.get(&key)) {
+            Some(levels) => levels,
+            None => {
+                computed = read_schema.field_levels(&key)?;
+                &computed
             }
         },
-        None => {
-            computed = read_schema.field_levels(&key)?;
-            &computed
-        }
     };
     Ok(ParquetRecordBatchReader::try_new_with_row_groups(
         field_levels,
