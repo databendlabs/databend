@@ -292,9 +292,21 @@ impl Recluster {
                 .fields()
                 .iter()
                 .any(|field| matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))));
-        // The coordinator cannot see this node's live memory pressure. Recheck
-        // the local budget when sort spill is disabled, except for multiway merge.
-        if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
+        let block_thresholds = table.get_block_thresholds();
+        let schema = table.schema_with_stream();
+        let mut cluster_stats_gen = table.get_cluster_stats_gen(
+            builder.ctx.clone(),
+            task.level + 1,
+            block_thresholds,
+            DataSchema::from(schema.clone()).into(),
+        )?;
+        let blockwise_sort = task.kind == ReclusterTaskKind::SortBlocks
+            && cluster_stats_gen.is_linear()
+            && !is_materialized_view_engine(table.engine());
+
+        // Blockwise sort cannot spill, so recheck the worker's input budget
+        // even when sort spilling is enabled. Multiway merge manages its own budget.
+        if !multiway_merge && (blockwise_sort || !builder.ctx.get_enable_sort_spill()) {
             let max_memory_usage = settings.get_max_memory_usage()? as usize;
             // `max_memory_usage == 0` means memory usage is unlimited.
             if max_memory_usage != 0 {
@@ -309,9 +321,7 @@ impl Recluster {
             }
         }
         let recluster_block_nums = task.parts.len();
-        let block_thresholds = table.get_block_thresholds();
         let table_info = table.get_table_info();
-        let schema = table.schema_with_stream();
         let description = task.stats.get_description(&table_info.desc);
         let plan = DataSourcePlan {
             source_info: DataSourceInfo::TableSource(table_info.clone()),
@@ -328,16 +338,6 @@ impl Recluster {
             table_index: usize::MAX,
             scan_id: usize::MAX,
         };
-
-        let mut cluster_stats_gen = table.get_cluster_stats_gen(
-            builder.ctx.clone(),
-            task.level + 1,
-            block_thresholds,
-            DataSchema::from(schema.clone()).into(),
-        )?;
-        let blockwise_sort = task.kind == ReclusterTaskKind::SortBlocks
-            && cluster_stats_gen.is_linear()
-            && !is_materialized_view_engine(table.engine());
 
         {
             metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
@@ -906,6 +906,15 @@ mod tests {
                     source.build_pipeline2(&mut builder).unwrap_err().code(),
                     ErrorCode::MemoryExceedsLimit("").code(),
                 );
+                if task_count == 1 {
+                    ctx.set_enable_sort_spill(true);
+                    let mut task = source.tasks[0].clone();
+                    task.kind = ReclusterTaskKind::SortBlocks;
+                    let err = source
+                        .build_task_pipeline(&mut builder, &task, 1, 1, 0)
+                        .unwrap_err();
+                    assert_eq!(err.code(), ErrorCode::MEMORY_EXCEEDS_LIMIT);
+                }
             }
             ctx.set_enable_sort_spill(true);
             ctx.get_settings().set_max_memory_usage(max_memory)?;
