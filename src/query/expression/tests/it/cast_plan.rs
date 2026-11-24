@@ -322,6 +322,22 @@ fn run_on_block(
     (result, CONVERTED.with(|rows| rows.take()))
 }
 
+#[test]
+fn test_equality_with_out_of_range_literal() {
+    let column = UInt8Type::from_data(vec![0]);
+    let raw = parse_raw_expr("x = 300", &[("x", column.data_type())], &BUILTIN_FUNCTIONS);
+    let expr = type_check::check(&raw, &BUILTIN_FUNCTIONS).unwrap();
+    let block = DataBlock::new_from_columns(vec![column]);
+    let func_ctx = FunctionContext::default();
+    let result = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+        .run(&expr)
+        .unwrap();
+    assert_eq!(
+        result.into_column().unwrap(),
+        BooleanType::from_data(vec![false])
+    );
+}
+
 /// TRY_CAST does not convert the rows outside the validity of its caller.
 #[test]
 fn test_try_cast_skips_inactive_rows() {
