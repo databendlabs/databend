@@ -59,6 +59,45 @@ impl CacheDef for SnapshotStats {
     const DISK: bool = true;
 }
 
+/// The rows of a block that a deterministic prewhere filter selects (`enable_condition_cache`),
+/// by filter and block.
+pub struct Condition;
+
+impl CacheDef for Condition {
+    type Value = BlockCondition;
+    const NAME: &'static str = "memory_cache_condition";
+    const POOL: Pool = Pool::Index;
+}
+
+/// The limit of the legacy backend; the shared one bounds the kind by its pool.
+pub const CONDITION_CACHE_BYTES: usize = 256 * 1024 * 1024;
+
+/// The rows of a block a filter selects, kept exactly when few rows pass and as granules
+/// otherwise, so that an entry takes at most a few KiB.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlockCondition {
+    /// No row.
+    Nothing,
+    /// Every row.
+    All,
+    /// The offsets of the rows, ascending.
+    Rows(Box<[u32]>),
+    /// For each granule of `granule_rows` rows, whether the filter selects a row in it: a
+    /// superset of the rows.
+    Granules { granule_rows: u32, bits: Box<[u64]> },
+}
+
+impl CachedItem for BlockCondition {
+    fn mem_bytes(&self) -> usize {
+        size_of::<Self>()
+            + match self {
+                BlockCondition::Nothing | BlockCondition::All => 0,
+                BlockCondition::Rows(rows) => rows.len() * size_of::<u32>(),
+                BlockCondition::Granules { bits, .. } => bits.len() * size_of::<u64>(),
+            }
+    }
+}
+
 /// Pruning results of deterministic scans (`enable_prune_cache`).
 pub struct PruneResult;
 

@@ -14,6 +14,7 @@
 
 use databend_common_expression::BlockMetaInfo;
 
+use super::condition_cache::CachedCondition;
 use crate::io::BlockReadResult;
 use crate::io::VirtualBlockReadResult;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
@@ -21,6 +22,22 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 pub struct ParquetDataSource {
     pub data: BlockReadResult,
     pub virtual_data: Option<VirtualBlockReadResult>,
+    /// The condition cache entry of the block, see `condition_cache`.
+    pub condition: Option<CachedCondition>,
+    /// Whether the block was not read, as its entry has the rows and the scan outputs no column.
+    pub io_skipped: bool,
+}
+
+impl ParquetDataSource {
+    /// A block that is not read: the scan outputs only the rows of `condition`.
+    pub fn skipped(condition: CachedCondition) -> Self {
+        ParquetDataSource {
+            data: BlockReadResult::merge(vec![]),
+            virtual_data: None,
+            condition: Some(condition),
+            io_skipped: true,
+        }
+    }
 }
 
 #[typetag::serde(name = "fuse_data_source")]

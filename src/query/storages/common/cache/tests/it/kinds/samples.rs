@@ -40,6 +40,7 @@ use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorColumn;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_storage::MetaHLL;
+use databend_storages_common_cache::BlockCondition;
 use databend_storages_common_cache::CacheDef;
 use databend_storages_common_cache::CachedColumnArray;
 use databend_storages_common_cache::CachedItem;
@@ -160,6 +161,12 @@ impl Sample for table::PruneResult {
     fn sample(_seed: u32) -> (PartStatistics, Partitions) {
         let partitions = Partitions::create(PartitionsShuffleKind::Seq, vec![]);
         (PartStatistics::default(), partitions)
+    }
+}
+
+impl Sample for table::Condition {
+    fn sample(seed: u32) -> BlockCondition {
+        BlockCondition::Rows((0..64 + seed % 64).collect())
     }
 }
 

@@ -85,6 +85,7 @@ fn test_each_kind_reads_its_option() {
         ("memory_cache_parquet_meta_data", Items(3000)),
         ("memory_cache_iceberg_table", Items(11)),
         ("memory_cache_prune_partitions", Items(12)),
+        ("memory_cache_condition", Bytes(268435456)),
         ("memory_cache_bloom_index_filter", Bytes(13)),
         ("memory_cache_segment_zone_map_chunk", Bytes(536870912)),
         ("memory_cache_vector_index_file", Bytes(14)),
