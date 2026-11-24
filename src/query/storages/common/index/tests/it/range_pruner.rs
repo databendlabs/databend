@@ -181,6 +181,18 @@ fn test_range_index_folds_string_comparisons_with_empty_string() {
     // A null row fails the filter.
     assert_eq!(fold("n <> ''", ("a", "z"), 0), Some(true));
     assert_eq!(fold("n <> ''", ("a", "z"), 3), None);
+    // So do the lengths: positive when the min is not empty, exact for a single value.
+    for filter in ["octet_length(u) > 0", "length(u) > 0", "length(u) >= 1"] {
+        assert_eq!(fold(filter, ("a", "z"), 0), Some(true), "{filter}");
+        assert_eq!(fold(filter, ("", "z"), 0), None, "{filter}");
+    }
+    assert_eq!(fold("octet_length(u) = 0", ("a", "z"), 0), Some(false));
+    assert_eq!(fold("length(u) = 0", ("", "z"), 0), None);
+    assert_eq!(fold("octet_length(u) = 3", ("数据", "数据"), 0), Some(false));
+    assert_eq!(fold("octet_length(u) = 6", ("数据", "数据"), 0), Some(true));
+    assert_eq!(fold("length(u) = 2", ("数据", "数据"), 0), Some(true));
+    assert_eq!(fold("length(u) > 5", ("a", "z"), 0), None);
+    assert_eq!(fold("length(n) > 0", ("a", "z"), 3), None);
     // Every conjunct must hold.
     assert_eq!(fold("u <> '' and u < 'zz'", ("a", "z"), 0), Some(true));
     assert_eq!(fold("u <> '' and u < 'm'", ("a", "z"), 0), None);

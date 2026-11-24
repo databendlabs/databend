@@ -41,6 +41,26 @@ select count(*) from t where s = ''
 20
 
 query I
+select count(*) from t where octet_length(s) > 0
+----
+4980
+
+query I
+select count(*) from t where length(s) > 0
+----
+4980
+
+query I
+select count(*) from t where length(s) >= 1 and id >= 2000
+----
+3000
+
+query I
+select count(*) from t where octet_length(s) = 0
+----
+20
+
+query I
 select count(*) from t where s >= 'v'
 ----
 4980
