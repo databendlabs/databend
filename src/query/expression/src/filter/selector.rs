@@ -602,20 +602,16 @@ impl<'a> Selector<'a> {
                 let mut eval_options = EvaluateOptions::new_for_select(selection);
                 let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
                 let src_type = expr.data_type();
-                let result = if *is_try {
-                    self.evaluator
-                        .run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
-                } else {
-                    self.evaluator.run_cast(
-                        *span,
-                        src_type,
-                        dest_type,
-                        value,
-                        None,
-                        &|| expr.sql_display(),
-                        &mut eval_options,
-                    )?
-                };
+                let result = self.evaluator.run_cast(
+                    *span,
+                    *is_try,
+                    src_type,
+                    dest_type,
+                    value,
+                    None,
+                    &|| expr.sql_display(),
+                    &mut eval_options,
+                )?;
                 (result, dest_type.clone())
             }
             Expr::LambdaFunctionCall(LambdaFunctionCall {
