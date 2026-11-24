@@ -1039,6 +1039,11 @@ fn string_domain_to_date_domain(
     ctx: &FunctionContext,
     d: &StringDomain,
 ) -> FunctionDomain<DateType> {
+    // AUTO accepts epoch days as well as date strings, so string order cannot bound the dates.
+    if ctx.enable_auto_detect_datetime_format {
+        return FunctionDomain::MayThrow;
+    }
+
     let max = d.max.clone().unwrap_or_default();
     let mut res = Vec::with_capacity(2);
     for (i, v) in [&d.min, &max].iter().enumerate() {

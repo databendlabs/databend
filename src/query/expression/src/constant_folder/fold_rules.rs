@@ -349,11 +349,8 @@ impl FoldRules {
             //
             // Known issue: for a call that may throw, the domain comes from the two ends of the
             // argument domain, and a value between them may still fail. The domain is then taken
-            // as one that does not fail, so a call whose ends convert to the same value folds to
-            // a constant, e.g. `to_date(s)` of the strings `2022-01-10`, `2022-01-10 99` and
-            // `2022-01-10T12:00:00`, whose second row fails at runtime. The base had it too, and the
-            // cast changes keep it: `CAST` does not take this path, and the SQL binder binds
-            // `to_date(x)` as a cast.
+            // as one that does not fail, so a call whose ends convert to the same value can fold
+            // to a constant and hide an interior error.
             (
                 FunctionDomain::MayThrow | FunctionDomain::MayThrowDomain(_) | FunctionDomain::Full,
                 true,
