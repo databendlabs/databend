@@ -1394,7 +1394,10 @@ if [ -z "$old_leader" ]; then
 fi
 
 echo "Restarting the meta leader node-${old_leader}"
-pkill -9 -f "databend-meta-node-${old_leader}.toml" || { echo "❌ No process of meta node-${old_leader}"; exit 1; }
+pkill -9 -f "databend-meta-node-${old_leader}.toml" || {
+    echo "❌ No process of meta node-${old_leader}"
+    exit 1
+}
 
 new_leader=""
 for _ in {1..30}; do
