@@ -88,6 +88,12 @@ SELECT info:max_depth::int > 8 FROM clustering_information('test_virtual_column_
 ----
 1
 
+# With several threads, which reader takes which input block is a race, so the
+# output block boundaries differ between runs. The block meta comparison below
+# needs both tables split identically.
+statement ok
+SET max_threads = 1
+
 statement ok
 SET enable_recluster_early_virtual_column = 1
 
@@ -105,6 +111,9 @@ ALTER TABLE t_writer RECLUSTER FINAL
 
 statement ok
 UNSET enable_recluster_early_virtual_column
+
+statement ok
+UNSET max_threads
 
 query ITTTTT
 SELECT id, v['a'], v['b']['c'], v['n'], v['e'], w['x'] FROM t_before_sort ORDER BY id
