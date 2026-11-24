@@ -15,6 +15,26 @@ permissions:
   contents: read
 
 jobs:
+  hold_dependabot_ci:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      contains(fromJSON('["opened", "reopened", "synchronize"]'), github.event.action)
+    runs-on: ubuntu-latest
+    concurrency:
+      group: hold-dependabot-ci-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      # pull_request_target checks out the base, never the PR's code.
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Apply the default hold-ci label
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { applyDefaultPRCIHold } = require('./.github/scripts/pr_ci_lifecycle.js');
+            await applyDefaultPRCIHold(github, context);
+
   title:
     runs-on: ubuntu-latest
     steps:

@@ -1,3 +1,4 @@
+const HOLD_CI_LABEL = 'hold-ci';
 const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
 const ACTIVE_STATUSES = new Set(['queued', 'in_progress', 'waiting', 'pending', 'requested']);
 // Every PR retry reruns all failed jobs, which can fan out to dozens of
@@ -9,6 +10,33 @@ const DEFAULT_MAX_AUTO_RETRIES = 3;
 
 function maxAutoRetries(run) {
     return PR_EVENTS.has(run?.event) ? PR_MAX_AUTO_RETRIES : DEFAULT_MAX_AUTO_RETRIES;
+}
+
+async function getPRCIHoldReason(github, context) {
+    // Read live labels so a full rerun after removing hold-ci sees the change.
+    const number = context.issue.number;
+    const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
+    if (pr.labels.some(label => label.name === HOLD_CI_LABEL)) return 'label';
+    if (pr.user.login !== 'dependabot[bot]') return null;
+
+    // Dev can start before PR Assistant adds the label. Only an explicit
+    // removal releases the default hold, even if the labeling job is delayed.
+    const events = await github.paginate(github.rest.issues.listEvents, {
+        ...context.repo,
+        issue_number: number,
+        per_page: 100
+    });
+    return events.some(event => event.event === 'unlabeled' && event.label?.name === HOLD_CI_LABEL)
+        ? null : 'dependabot';
+}
+
+async function applyDefaultPRCIHold(github, context) {
+    if (await getPRCIHoldReason(github, context) !== 'dependabot') return;
+    await github.rest.issues.addLabels({
+        ...context.repo,
+        issue_number: context.issue.number,
+        labels: [HOLD_CI_LABEL]
+    });
 }
 
 async function getRunPR(github, context, core, run) {
@@ -112,4 +140,4 @@ async function cancelClosedPRRuns({ github, context, core }) {
     }
 }
 
-module.exports = { canRetryWorkflowRun, cancelClosedPRRuns, maxAutoRetries };
+module.exports = { applyDefaultPRCIHold, canRetryWorkflowRun, cancelClosedPRRuns, getPRCIHoldReason, maxAutoRetries };
