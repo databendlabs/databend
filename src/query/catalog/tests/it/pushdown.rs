@@ -24,6 +24,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -147,4 +148,61 @@ fn test_inverted_index_top_k_rejects_unsafe_pushdowns() {
             dest_type: DataType::Number(NumberDataType::Float64),
         };
     });
+}
+
+fn vector_top_n() -> PushDownInfo {
+    PushDownInfo {
+        vector_index: Some(VectorIndexInfo {
+            index_name: "vector".to_string(),
+            index_version: "v1".to_string(),
+            index_options: Default::default(),
+            column_id: 0,
+            func_name: "l2_distance".to_string(),
+            query_values: vec![],
+        }),
+        order_by: vec![(
+            column(
+                VECTOR_SCORE_COL_NAME,
+                DataType::Number(NumberDataType::Float32),
+            ),
+            true,
+            false,
+        )],
+        limit: Some(10),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn test_index_top_k_accepts_covering_scans() {
+    assert!(score_top_k().index_top_k_score().is_some());
+    let mut push_down = vector_top_n();
+    assert!(push_down.index_top_k_score().is_some());
+    // Only specialize ordering by the indexed score alone.
+    push_down.order_by.push((
+        column("id", DataType::Number(NumberDataType::UInt64)),
+        true,
+        false,
+    ));
+    assert!(push_down.index_top_k_score().is_none());
+}
+
+#[test]
+fn test_index_top_k_rejects_scans_the_index_cannot_answer() {
+    fn rejects(change: impl FnOnce(&mut PushDownInfo)) {
+        let mut push_down = vector_top_n();
+        change(&mut push_down);
+        assert!(push_down.index_top_k_score().is_none(), "{push_down:?}");
+    }
+
+    assert!(PushDownInfo::default().index_top_k_score().is_none());
+    rejects(|p| p.vector_index = None);
+    rejects(|p| p.limit = None);
+    rejects(|p| p.limit = Some(0));
+    rejects(|p| p.order_by.clear());
+    // Farthest rows: every row is scored, so the pruned rows are not covering.
+    rejects(|p| p.order_by[0].1 = false);
+    rejects(|p| p.order_by[0].0 = column("id", DataType::Number(NumberDataType::UInt64)));
+    rejects(|p| p.filters = score_top_k().filters);
+    rejects(|p| p.inverted_index = score_top_k().inverted_index);
 }

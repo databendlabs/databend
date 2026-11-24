@@ -39,7 +39,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
-use super::parquet_data_source::ParquetDataSource;
+use super::parquet_data_source::BlockSource;
 use super::read_state::ReadState;
 use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
@@ -62,7 +62,7 @@ pub struct DeserializeDataTransform {
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
-    chunks: Vec<ParquetDataSource>,
+    chunks: Vec<BlockSource>,
 
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
@@ -168,7 +168,7 @@ impl Processor for DeserializeDataTransform {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(source_meta) = data_block.take_meta() {
                 if let Some(source_meta) =
-                    DataSourceWithMeta::<ParquetDataSource>::downcast_from(source_meta)
+                    DataSourceWithMeta::<BlockSource>::downcast_from(source_meta)
                 {
                     self.parts = source_meta.meta;
                     self.chunks = source_meta.data;
@@ -192,9 +192,26 @@ impl Processor for DeserializeDataTransform {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {
+            let part = FuseBlockPartInfo::from_part(&part)?;
+            let read_res = match read_res {
+                BlockSource::Parquet(source) => source,
+                BlockSource::IndexRows(offsets) => {
+                    // Use the same row-id and score mapping as a filtered scan. The
+                    // index can return rows in score order, not block-offset order.
+                    let rows = offsets.len() as usize;
+                    self.scan_progress.incr(&ProgressValues { rows, bytes: 0 });
+                    self.output_data = Some(add_data_block_meta(
+                        DataBlock::empty_with_rows(rows),
+                        part,
+                        Some(offsets),
+                        self.base_block_ids.clone(),
+                        &self.block_meta_options,
+                    )?);
+                    return Ok(());
+                }
+            };
             let start = Instant::now();
             let columns_chunks = read_res.data.columns_chunks()?;
-            let part = FuseBlockPartInfo::from_part(&part)?;
 
             if self.read_state.is_none() {
                 self.read_state = Some(ReadState::create(

@@ -270,6 +270,9 @@ impl IPhysicalPlan for FinalTopNPlan {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        if super::index_top_n::try_build(self, builder)? {
+            return Ok(());
+        }
         self.input.build_pipeline(builder)?;
 
         let input_schema = self.input.output_schema()?;

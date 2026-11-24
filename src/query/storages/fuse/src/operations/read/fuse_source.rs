@@ -18,15 +18,18 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::SourcePipeBuilder;
@@ -36,6 +39,7 @@ use super::block_format::FuseParquetBlockFormat;
 use super::read_block_context::ReadBlockContext;
 use super::read_data_transform::ReadDataTransform;
 use crate::FuseStorageFormat;
+use crate::FuseTable;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
@@ -162,9 +166,26 @@ pub(crate) fn build_fuse_read_transform_pipeline(
         output_schema.remove_internal_fields();
         !output_schema.fields().is_empty()
     };
+    // Both lazy segment pruning and the block-meta exchange feed this reader.
+    // Decide coverage per incoming block, not when choosing how to prune segments.
+    // `enable_top_n = 0` keeps the ordinary scan as a differential baseline.
+    let index_score = if !outputs_columns
+        && block_reader.schema().fields().is_empty()
+        && plan.block_meta_options.query_internal_columns
+        && !plan.block_meta_options.update_stream_columns
+        && !plan.block_meta_options.reserve_block_index
+        && ctx.get_settings().get_enable_top_n()?
+    {
+        plan.push_downs
+            .as_ref()
+            .and_then(PushDownInfo::index_top_k_score)
+    } else {
+        None
+    };
     pipeline.add_transform(|input, output| {
         ReadDataTransform::create(
             plan.scan_id,
+            index_score.clone(),
             ctx.clone(),
             table_schema.clone(),
             block_reader.clone(),
@@ -302,13 +323,37 @@ pub fn adjust_threads_and_request(
     mut max_io_requests: usize,
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
-    if plan.parts.partitions_type() == PartInfoType::BlockLevel {
-        let block_nums = std::cmp::max(plan.parts.partitions.len(), 1);
-
-        max_threads = std::cmp::min(max_threads, block_nums);
-        max_io_requests = std::cmp::min(max_io_requests, block_nums);
+    let blocks = if plan.parts.partitions_type() == PartInfoType::BlockLevel {
+        Some(plan.parts.len().max(1))
+    } else if let DataSourceInfo::TableSource(info) = &plan.source_info
+        && plan
+            .push_downs
+            .as_ref()
+            .and_then(PushDownInfo::index_top_k_score)
+            .is_some()
+    {
+        lazy_index_scan_blocks(info, plan.parts.len())
+    } else {
+        None
+    };
+    if let Some(blocks) = blocks {
+        max_threads = max_threads.min(blocks);
+        max_io_requests = max_io_requests.min(blocks);
     }
     (max_threads, max_io_requests)
+}
+
+/// The block count of a table whose segments are pruned lazily, from table
+/// metadata: the coordinator does not open segments to size the scan. A lazy
+/// part is a segment of one block or more, so a stale count never cuts the
+/// scan below `lazy_parts`. Attached tables refresh only the snapshot location
+/// of their metadata, not its statistics; they keep the configured width.
+fn lazy_index_scan_blocks(info: &TableInfo, lazy_parts: usize) -> Option<usize> {
+    if FuseTable::is_table_attached(&info.meta.options) {
+        return None;
+    }
+    let blocks = usize::try_from(info.meta.statistics.number_of_blocks?).ok()?;
+    Some(blocks.max(lazy_parts)).filter(|&blocks| blocks > 0)
 }
 
 #[cfg(test)]
@@ -483,5 +528,30 @@ mod tests {
             "with_nulls",
             "no_stats"
         ]);
+    }
+
+    #[test]
+    fn test_lazy_index_scan_blocks_from_table_statistics() {
+        let table = |blocks: Option<u64>, attached: bool| {
+            let mut info = TableInfo::default();
+            info.meta.statistics.number_of_blocks = blocks;
+            if attached {
+                info.meta.options.insert(
+                    databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI
+                        .to_string(),
+                    "s3://bucket/table/".to_string(),
+                );
+            }
+            info
+        };
+        // Four blocks in three surviving segments: four readers suffice.
+        assert_eq!(lazy_index_scan_blocks(&table(Some(4), false), 3), Some(4));
+        // A count below the surviving segments is stale; each segment has a block.
+        assert_eq!(lazy_index_scan_blocks(&table(Some(2), false), 5), Some(5));
+        // No statistics: keep the configured width.
+        assert_eq!(lazy_index_scan_blocks(&table(None, false), 3), None);
+        assert_eq!(lazy_index_scan_blocks(&table(Some(0), false), 0), None);
+        // Attached tables do not refresh these statistics.
+        assert_eq!(lazy_index_scan_blocks(&table(Some(4), true), 3), None);
     }
 }

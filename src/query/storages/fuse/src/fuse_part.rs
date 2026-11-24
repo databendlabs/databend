@@ -22,14 +22,18 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::compute_row_id;
+use databend_common_catalog::plan::compute_row_id_prefix;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::F32;
 use databend_storages_common_cache::size::btree_map;
 use databend_storages_common_cache::size::column_statistics;
 use databend_storages_common_cache::size::hash_map;
@@ -234,6 +238,52 @@ impl FuseBlockPartInfo {
             })
     }
 
+    /// Covering index entries for this partition, only if they describe *every* row
+    /// the scan would emit. A vector index can attach scores without restricting the
+    /// scan to those rows (the other rows then have a placeholder score).
+    pub(crate) fn covering_matches(&self, key: &InternalColumnType) -> Option<&IndexMatches> {
+        let meta = self.block_meta_index.as_ref()?;
+        if meta.range.is_some() {
+            return None;
+        }
+        let entries = match (
+            key,
+            &meta.inverted_index_matches,
+            &meta.vector_index_matches,
+        ) {
+            (InternalColumnType::SearchScore, Some(entries), None)
+            | (InternalColumnType::VectorScore, None, Some(entries)) => entries,
+            _ => return None,
+        };
+        let scores = entries.scores.as_ref()?;
+        if !entries.rows_only
+            || entries.rows.len() != scores.len()
+            || entries
+                .rows
+                .iter()
+                .any(|&row| row as usize >= self.nums_rows)
+        {
+            return None;
+        }
+        Some(entries)
+    }
+
+    pub fn scored_rows(
+        &self,
+        key: &InternalColumnType,
+    ) -> Option<impl ExactSizeIterator<Item = (F32, u64)> + '_> {
+        let entries = self.covering_matches(key)?;
+        let scores = entries.scores.as_ref()?;
+        let meta = self.block_meta_index.as_ref()?;
+        let prefix = compute_row_id_prefix(meta.segment_idx as u64, meta.block_id as u64);
+        Some(
+            scores
+                .iter()
+                .zip(&entries.rows)
+                .map(move |(&score, &row)| (score, compute_row_id(prefix, u64::from(row)))),
+        )
+    }
+
     pub fn range(&self) -> Option<&Range<usize>> {
         self.block_meta_index
             .as_ref()
@@ -392,5 +442,88 @@ mod tests {
         assert_eq!((stats.in_cache, stats.resident), (0, bytes));
         drop(held);
         assert_eq!(store.kind_stats(kind).resident, 0);
+    }
+
+    fn scored_part(
+        rows: u64,
+        fts: Option<IndexMatches>,
+        vector: Option<IndexMatches>,
+        range: Option<Range<usize>>,
+    ) -> PartInfoPtr {
+        FuseBlockPartInfo::create(
+            "1/2/_b/block.parquet".to_string(),
+            None,
+            0,
+            rows,
+            HashMap::new(),
+            None,
+            Compression::Lz4Raw,
+            None,
+            Some(BlockMetaIndex {
+                segment_idx: 3,
+                block_id: 5,
+                range,
+                inverted_index_matches: fts,
+                vector_index_matches: vector,
+                ..Default::default()
+            }),
+            None,
+            vec![],
+        )
+    }
+
+    fn matches(rows: &[u32], scores: Option<&[f32]>, rows_only: bool) -> IndexMatches {
+        IndexMatches {
+            rows: rows.to_vec(),
+            scores: scores.map(|s| s.iter().map(|&v| F32::from(v)).collect()),
+            rows_only,
+        }
+    }
+
+    /// Index matches replace the scan of a block only when they are all the rows it
+    /// outputs, each with its score.
+    #[test]
+    fn test_covering_matches_require_every_output_row_scored() {
+        let fts = InternalColumnType::SearchScore;
+        let vector = InternalColumnType::VectorScore;
+        let covered = |part: PartInfoPtr, key: &InternalColumnType| {
+            FuseBlockPartInfo::from_part(&part)
+                .unwrap()
+                .covering_matches(key)
+                .is_some()
+        };
+        let hits = || Some(matches(&[7, 2], Some(&[0.5, 0.9]), true));
+
+        assert!(covered(scored_part(10, hits(), None, None), &fts));
+        assert!(covered(scored_part(10, None, hits(), None), &vector));
+        // The other index, or both indexes on one block.
+        assert!(!covered(scored_part(10, hits(), None, None), &vector));
+        assert!(!covered(scored_part(10, hits(), hits(), None), &fts));
+        // A vector block scored without restricting the scan (the TopN is not full).
+        let unrestricted = Some(matches(&[7, 2], Some(&[0.5, 0.9]), false));
+        assert!(!covered(scored_part(10, None, unrestricted, None), &vector));
+        // No scores, a score per row missing, a row past the block, a row range.
+        assert!(!covered(
+            scored_part(10, Some(matches(&[7], None, true)), None, None),
+            &fts
+        ));
+        let short = Some(matches(&[7, 2], Some(&[0.5]), true));
+        assert!(!covered(scored_part(10, short, None, None), &fts));
+        assert!(!covered(scored_part(7, hits(), None, None), &fts));
+        assert!(!covered(scored_part(10, hits(), None, Some(0..5)), &fts));
+        // No index metadata at all.
+        assert!(!covered(part(1), &fts));
+
+        let part = scored_part(10, hits(), None, None);
+        let prefix = compute_row_id_prefix(3, 5);
+        let rows: Vec<_> = FuseBlockPartInfo::from_part(&part)
+            .unwrap()
+            .scored_rows(&fts)
+            .unwrap()
+            .collect();
+        assert_eq!(rows, vec![
+            (F32::from(0.5), compute_row_id(prefix, 7)),
+            (F32::from(0.9), compute_row_id(prefix, 2)),
+        ]);
     }
 }

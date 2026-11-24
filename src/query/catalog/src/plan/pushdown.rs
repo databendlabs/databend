@@ -29,6 +29,7 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
@@ -38,6 +39,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use jsonb::keypath::OwnedKeyPaths;
 
 use crate::plan::InternalColumn;
+use crate::plan::InternalColumnType;
 use crate::plan::Projection;
 
 /// Information of Virtual Columns.
@@ -351,6 +353,30 @@ impl PushDownInfo {
             }
             _ => None,
         }
+    }
+
+    /// Score column a zero-column scan may read from a pruned block. The reader
+    /// must still check that this particular block contains *all* output rows.
+    pub fn index_top_k_score(&self) -> Option<InternalColumnType> {
+        if self.prewhere.is_some()
+            || self.secure_filters.is_some()
+            || self.sample.is_some()
+            || self.change_type.is_some()
+        {
+            return None;
+        }
+        if self.inverted_index_top_k().is_some() {
+            return Some(InternalColumnType::SearchScore);
+        }
+        (self.vector_index.is_some()
+            && self.inverted_index.is_none()
+            && self.filters.is_none()
+            && self.limit.is_some_and(|limit| limit > 0)
+            && matches!(
+                self.order_by.as_slice(),
+                [(RemoteExpr::ColumnRef { id, .. }, true, _)] if id == VECTOR_SCORE_COL_NAME
+            ))
+        .then_some(InternalColumnType::VectorScore)
     }
 
     pub fn filter_only_use_index(&self) -> bool {
