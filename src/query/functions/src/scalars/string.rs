@@ -1336,6 +1336,24 @@ fn is_utf8_continuation_byte(byte: u8) -> bool {
     (byte & 0b1100_0000) == 0b1000_0000
 }
 
+/// The lengths (by `len`) of the strings of `domain`. Its bounds do not bound the lengths of the
+/// strings between them, but a string greater than or equal to a non-empty one is not empty, and
+/// a domain of one string has its length: `length(s) > 0` holds for every row of a block whose
+/// min `s` is not empty.
+fn string_length_domain(
+    domain: &StringDomain,
+    len: impl Fn(&str) -> usize,
+) -> FunctionDomain<NumberType<u64>> {
+    if domain.max.as_ref() == Some(&domain.min) {
+        let len = len(&domain.min) as u64;
+        return FunctionDomain::Domain(SimpleDomain { min: len, max: len });
+    }
+    FunctionDomain::Domain(SimpleDomain {
+        min: u64::from(!domain.min.is_empty()),
+        max: u64::MAX,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::string::StringColumnBuilder;
@@ -1362,22 +1380,4 @@ mod tests {
         assert_eq!(eval_substr("a你b", 2, 1), "你");
         assert_eq!(eval_substr("こんにちは", 2, 1), "ん");
     }
-}
-
-/// The lengths (by `len`) of the strings of `domain`. Its bounds do not bound the lengths of the
-/// strings between them, but a string greater than or equal to a non-empty one is not empty, and
-/// a domain of one string has its length: `length(s) > 0` holds for every row of a block whose
-/// min `s` is not empty.
-fn string_length_domain(
-    domain: &StringDomain,
-    len: impl Fn(&str) -> usize,
-) -> FunctionDomain<NumberType<u64>> {
-    if domain.max.as_ref() == Some(&domain.min) {
-        let len = len(&domain.min) as u64;
-        return FunctionDomain::Domain(SimpleDomain { min: len, max: len });
-    }
-    FunctionDomain::Domain(SimpleDomain {
-        min: u64::from(!domain.min.is_empty()),
-        max: u64::MAX,
-    })
 }

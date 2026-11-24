@@ -188,7 +188,10 @@ fn test_range_index_folds_string_comparisons_with_empty_string() {
     }
     assert_eq!(fold("octet_length(u) = 0", ("a", "z"), 0), Some(false));
     assert_eq!(fold("length(u) = 0", ("", "z"), 0), None);
-    assert_eq!(fold("octet_length(u) = 3", ("数据", "数据"), 0), Some(false));
+    assert_eq!(
+        fold("octet_length(u) = 3", ("数据", "数据"), 0),
+        Some(false)
+    );
     assert_eq!(fold("octet_length(u) = 6", ("数据", "数据"), 0), Some(true));
     assert_eq!(fold("length(u) = 2", ("数据", "数据"), 0), Some(true));
     assert_eq!(fold("length(u) > 5", ("a", "z"), 0), None);
