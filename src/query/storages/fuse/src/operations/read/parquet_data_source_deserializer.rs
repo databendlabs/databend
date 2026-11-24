@@ -85,6 +85,10 @@ pub struct DeserializeDataTransform {
 struct PendingBlock {
     part: PartInfoPtr,
     batches: BlockBatches,
+    /// The scan of the block reported so far. The scan is reported as the batches are
+    /// decoded: the processor may be dropped without finishing the block, e.g. when a
+    /// nested executor stops pulling.
+    reported: BlockScanStats,
     /// Time spent decoding the batches so far.
     elapsed: Duration,
 }
@@ -162,14 +166,15 @@ impl DeserializeDataTransform {
                 }))
     }
 
-    /// Decodes the next batch of the pending block with output rows and queues its output
-    /// blocks; records the scan of the block once it is done.
+    /// Decodes the next batch of the pending block with output rows, queues its output
+    /// blocks and reports the scan of the batches decoded.
     fn process_pending(&mut self) -> Result<()> {
         let Some(pending) = self.pending.as_mut() else {
             return Ok(());
         };
         let start = Instant::now();
-        let part = FuseBlockPartInfo::from_part(&pending.part)?;
+        let part_info = pending.part.clone();
+        let part = FuseBlockPartInfo::from_part(&part_info)?;
         let read_state = self.read_state.as_mut().unwrap();
         let mut done = false;
         let mut batches = vec![];
@@ -183,6 +188,13 @@ impl DeserializeDataTransform {
             }
         }
         pending.elapsed += start.elapsed();
+        let scan_stats = pending.batches.scan_stats();
+        let increase = BlockScanStats {
+            rows: scan_stats.rows - pending.reported.rows,
+            bytes: scan_stats.bytes - pending.reported.bytes,
+        };
+        pending.reported = scan_stats;
+        self.record_scan_progress(increase);
         for ReadStateBatch { block, offsets } in batches {
             let data_block = block.resort(&self.src_schema, &self.output_schema)?;
             self.output_data.push_back(add_data_block_meta(
@@ -199,11 +211,10 @@ impl DeserializeDataTransform {
         Ok(())
     }
 
-    /// Records the scan of the pending block: the whole block when it is done, else the
-    /// batches decoded before downstream stopped pulling.
+    /// Drops the pending block, if any, and records the time spent decoding it.
     fn finish_pending(&mut self) {
         if let Some(pending) = self.pending.take() {
-            self.record_scan(pending.elapsed, pending.batches.scan_stats());
+            metrics_inc_remote_io_deserialize_milliseconds(pending.elapsed.as_millis() as u64);
         }
     }
 
@@ -212,7 +223,10 @@ impl DeserializeDataTransform {
         {
             metrics_inc_remote_io_deserialize_milliseconds(elapsed.as_millis() as u64);
         }
+        self.record_scan_progress(scan_stats);
+    }
 
+    fn record_scan_progress(&self, scan_stats: BlockScanStats) {
         // Report the rows and bytes the scan actually processed, not what
         // survived prewhere / runtime filters: scan progress drives
         // `system.processes`, `system_history.query_history` and the
@@ -324,6 +338,7 @@ impl Processor for DeserializeDataTransform {
                 self.pending = Some(PendingBlock {
                     part: part.clone(),
                     batches,
+                    reported: BlockScanStats::default(),
                     elapsed: start.elapsed(),
                 });
                 return self.process_pending();

@@ -1110,11 +1110,13 @@ impl BlockBatches {
         Ok(Some(out))
     }
 
-    /// The scan workload of the block, see [`BlockScanStats`]. Once the block is done it
-    /// matches whole-block decoding; before, it covers the batches decoded so far.
+    /// The scan workload of the block so far, see [`BlockScanStats`]: all its rows, and the
+    /// bytes of the batches decoded so far. It never decreases, so callers can report the
+    /// increase after each batch; once the block is done it matches whole-block decoding,
+    /// which scales the bytes decoded with a pushed-down selection up to the block.
     pub(crate) fn scan_stats(&self) -> BlockScanStats {
         let pending = match &self.stage {
-            BatchStage::Remain(stage) => stage.scan_bytes(self.nums_rows),
+            BatchStage::Remain(stage) => stage.decoded_bytes,
             BatchStage::Pre { .. } | BatchStage::Done => 0,
         };
         BlockScanStats {
@@ -1485,10 +1487,12 @@ fn bitmap_offsets_at(
 /// Yields original block row offsets in chunks of `count` surviving rows.
 enum RowOffsetCursor {
     Contiguous(usize),
-    /// The rows `selection` sets, from row `next` on.
+    /// The rows `selection` sets: the rest of a run already started, then the runs from
+    /// row `scan` on. Each bit is scanned once over the whole block.
     Selected {
         selection: Bitmap,
-        next: usize,
+        pending: Option<(usize, usize)>,
+        scan: usize,
     },
 }
 
@@ -1496,7 +1500,11 @@ impl RowOffsetCursor {
     fn new(selection: Option<Bitmap>) -> Self {
         match selection {
             None => Self::Contiguous(0),
-            Some(selection) => Self::Selected { selection, next: 0 },
+            Some(selection) => Self::Selected {
+                selection,
+                pending: None,
+                scan: 0,
+            },
         }
     }
 
@@ -1507,27 +1515,57 @@ impl RowOffsetCursor {
                 offsets.insert_range(*next as u64..(*next + count) as u64);
                 *next += count;
             }
-            Self::Selected { selection, next } => {
-                let rest = selection.clone().sliced(*next, selection.len() - *next);
+            Self::Selected {
+                selection,
+                pending,
+                scan,
+            } => {
                 let mut remaining = count;
-                for (start, len) in SlicesIterator::new(&rest) {
-                    let start = *next + start;
+                while remaining > 0 {
+                    let (start, len) = match pending.take() {
+                        Some(run) => run,
+                        None => {
+                            let start = find_bit(selection, *scan, true);
+                            assert!(
+                                start < selection.len(),
+                                "bitmap selection must cover every decoded row"
+                            );
+                            let end = find_bit(selection, start, false);
+                            *scan = end;
+                            (start, end - start)
+                        }
+                    };
                     let take = remaining.min(len);
                     offsets.insert_range(start as u64..(start + take) as u64);
                     remaining -= take;
-                    if remaining == 0 {
-                        *next = start + take;
-                        break;
+                    if take < len {
+                        *pending = Some((start + take, len - take));
                     }
                 }
-                assert_eq!(
-                    remaining, 0,
-                    "bitmap selection must cover every decoded row"
-                );
             }
         }
         offsets
     }
+}
+
+/// The first row from `from` on whose bit in `bitmap` is `value`, or the length of `bitmap`.
+fn find_bit(bitmap: &Bitmap, from: usize, value: bool) -> usize {
+    let (bytes, offset, len) = bitmap.as_slice();
+    let mut row = from;
+    while row < len {
+        let bit = offset + row;
+        let byte = if value {
+            bytes[bit / 8]
+        } else {
+            !bytes[bit / 8]
+        };
+        let rest = byte >> (bit % 8);
+        if rest != 0 {
+            return (row + rest.trailing_zeros() as usize).min(len);
+        }
+        row += 8 - bit % 8;
+    }
+    len
 }
 
 /// FIFO queue of filtered prewhere batches, consumed in row order by the remain batches
@@ -1718,6 +1756,24 @@ mod tests {
         assert_eq!(cursor.take(2).iter().collect::<Vec<_>>(), vec![0, 1]);
         assert_eq!(cursor.take(3).iter().collect::<Vec<_>>(), vec![2, 5, 6]);
         assert_eq!(cursor.take(1).iter().collect::<Vec<_>>(), vec![9]);
+
+        // A sliced bitmap with runs crossing bytes: rows 1..21 and 30..37 of the slice.
+        let bits: Bitmap = (0..43)
+            .map(|i| (4..24).contains(&i) || (33..40).contains(&i))
+            .collect();
+        let mut cursor = RowOffsetCursor::new(Some(bits.sliced(3, 40)));
+        assert_eq!(
+            cursor.take(5).iter().collect::<Vec<_>>(),
+            (1..6).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            cursor.take(17).iter().collect::<Vec<_>>(),
+            (6..21).chain(30..32).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            cursor.take(5).iter().collect::<Vec<_>>(),
+            (32..37).collect::<Vec<_>>()
+        );
     }
 
     #[test]
