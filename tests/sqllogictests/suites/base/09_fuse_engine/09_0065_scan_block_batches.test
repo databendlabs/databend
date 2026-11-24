@@ -238,6 +238,14 @@ join (select _row_id as rid, s from t_staged where b = 3 and s <> 'x7') cur
 query II
 select count(*), count(distinct w.rid)
 from r_staged_whole w
+join (select a, _row_id as rid, s from t_staged where a % 7 = 0 and a + length(s) > 10000) cur
+  on w.a = cur.a and w.rid = cur.rid and w.s = cur.s;
+----
+2857 2857
+
+query II
+select count(*), count(distinct w.rid)
+from r_staged_whole w
 join (select a, _row_id as rid, s, p from t_staged where a % 7 = 0 and a + length(s) > 10000) cur
   on w.a = cur.a and w.rid = cur.rid and w.s = cur.s and w.p = cur.p;
 ----
@@ -248,10 +256,31 @@ select count(*) from t_staged where b = 3 and s <> 'x7';
 ----
 2285
 
+# Non-prunable 0-row early predicate: exercises PreStageStart::Empty on both PreOnly
+# and TwoStage (remain column `p` prevents count-only fast path).
 query I
-select count(*) from t_staged where a < 0 and s <> '';
+select count(*) from t_staged where a % 7 = 8 and s <> '';
 ----
 0
+
+query IT
+select count(*), min(p) from t_staged where a % 7 = 8 and s <> '';
+----
+0 NULL
+
+# Runtime filter combined with staged early prewhere.
+query II
+select count(*), count(distinct w.rid)
+from r_staged_whole w
+join (
+  select t.a, t._row_id as rid, t.s, t.p
+  from t_staged t
+  join small_keys k on t.a = k.id
+  where t.b = 3 and t.s <> 'x50'
+) cur
+  on w.a = cur.a and w.rid = cur.rid and w.s = cur.s and w.p = cur.p;
+----
+19 19
 
 # Non-pushdown early-stage path (high selectivity: ~50% pass early stage).
 statement ok
@@ -270,6 +299,46 @@ select count(*), count(distinct w.rid)
 from r_staged_whole w
 join (select _row_id as rid, s from t_staged where a % 2 = 0 and s <> 'x6') cur
   on w.rid = cur.rid and w.s = cur.s;
+----
+14700 14700
+
+# Larger batch_rows (> MIN_BATCH_ROWS = 8192): exercises retained-early decoding and
+# coalescing at batch_rows, filter-only early at MIN_BATCH_ROWS, and LIMIT early stop.
+statement ok
+set max_block_size = 16384;
+
+statement ok
+set prewhere_selectivity_threshold = 80;
+
+query II
+select count(*), count(distinct w.rid)
+from r_staged_whole w
+join (select _row_id as rid, s, p from t_staged where b = 3 and s <> 'x7') cur
+  on w.rid = cur.rid and w.s = cur.s and w.p = cur.p;
+----
+2285 2285
+
+query II
+select count(*), count(distinct w.rid)
+from r_staged_whole w
+join (select a, _row_id as rid, s, p from t_staged where a % 7 = 0 and a + length(s) > 10000) cur
+  on w.a = cur.a and w.rid = cur.rid and w.s = cur.s and w.p = cur.p;
+----
+2857 2857
+
+query I
+select count(*) from (select a, s from t_staged where b = 3 and s <> 'x7' limit 10);
+----
+10
+
+statement ok
+set prewhere_selectivity_threshold = 10;
+
+query II
+select count(*), count(distinct w.rid)
+from r_staged_whole w
+join (select a, _row_id as rid, s, p from t_staged where a % 2 = 0 and s <> 'x6') cur
+  on w.a = cur.a and w.rid = cur.rid and w.s = cur.s and w.p = cur.p;
 ----
 14700 14700
 

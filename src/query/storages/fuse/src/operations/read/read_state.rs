@@ -1140,8 +1140,11 @@ struct EarlyBatchesOutput {
     bytes: usize,
 }
 
-/// Evaluates the early stage in [`MIN_BATCH_ROWS`] batches and keeps any retained early
-/// columns in a [`BlockQueue`] without concatenating. Caller must have checked
+/// Evaluates the early stage in `decode_batch_rows` batches and keeps any retained early
+/// columns in a [`BlockQueue`]. When `coalesce_rows` is `Some(max_rows)`, surviving retained
+/// blocks smaller than `max_rows` are coalesced up to `max_rows` rows so downstream stages do
+/// not slice late batches at tiny early-batch boundaries; when `None`, each filtered batch is
+/// pushed as is (for callers that concatenate the whole queue once). Caller must have checked
 /// `early.reader.can_parquet_batches(chunks)`.
 fn run_early_stage_batches(
     early: &mut EarlyStage,
@@ -1149,13 +1152,16 @@ fn run_early_stage_batches(
     part: &FuseBlockPartInfo,
     chunks: &HashMap<ColumnId, DataItem>,
     pruned: Option<&Bitmap>,
+    decode_batch_rows: usize,
+    coalesce_rows: Option<usize>,
 ) -> Result<EarlyBatchesOutput> {
     let mut batches = early
         .reader
-        .parquet_batches(part, chunks, None, MIN_BATCH_ROWS)?;
+        .parquet_batches(part, chunks, None, decode_batch_rows)?;
     let mut bytes = 0;
     let mut bits = MutableBitmap::with_capacity(part.nums_rows);
-    let mut retained = (!early.retained_indices.is_empty()).then(BlockQueue::default);
+    let mut retained =
+        (!early.retained_indices.is_empty()).then(|| BlockCoalescer::new(coalesce_rows));
     while let Some(batch) = batches.next_block(part) {
         let batch = batch?;
         bytes += block_logical_bytes(&batch);
@@ -1171,17 +1177,17 @@ fn run_early_stage_batches(
             Some(rows) => &bitmap & &rows.clone().sliced(bits.len(), bitmap.len()),
             None => bitmap,
         };
-        if let Some(queue) = retained.as_mut()
+        if let Some(coalescer) = retained.as_mut()
             && let Some(kept) =
                 filter_surviving(batch.project(&early.retained_indices), Some(&bitmap))?
         {
-            queue.push(kept);
+            coalescer.push(kept)?;
         }
         bits.extend_from_bitmap(&bitmap);
     }
     Ok(EarlyBatchesOutput {
         selection: bits.into(),
-        retained,
+        retained: retained.map(BlockCoalescer::finish).transpose()?,
         bytes,
     })
 }
@@ -1249,7 +1255,15 @@ fn filter_early_stage(
             selection,
             retained,
             bytes,
-        } = run_early_stage_batches(early, func_ctx, part, &chunks, pruned.as_ref())?;
+        } = run_early_stage_batches(
+            early,
+            func_ctx,
+            part,
+            &chunks,
+            pruned.as_ref(),
+            MIN_BATCH_ROWS,
+            None,
+        )?;
         let retained = retained
             .map(BlockQueue::into_concat_block)
             .transpose()?
@@ -1432,9 +1446,14 @@ fn block_logical_bytes(block: &DataBlock) -> usize {
 /// The batches of one block from [`ReadState::start_batches`], decoded as they are pulled:
 /// each pull decompresses and decodes the pages of one more batch, and the pages of the
 /// batches already pulled are released as soon as downstream drops them. The compressed
-/// column chunks stay alive until the last batch. With [`ReadPlan::TwoStage`], the prewhere
-/// pass has already run over the whole block, so its selection and the surviving rows of
-/// the output prewhere columns are held until the remaining columns catch up with them.
+/// column chunks stay alive until the last batch.
+///
+/// Passes whose selection may be pushed down as a `RowSelection` run over the whole block
+/// up front: the early prewhere stage (for both [`ReadPlan::PreOnly`] and
+/// [`ReadPlan::TwoStage`]) holds its selection and any surviving retained early columns until
+/// the late prewhere batches consume them, and [`ReadPlan::TwoStage`] likewise holds the
+/// combined selection and surviving output prewhere columns until the remaining columns catch
+/// up with them.
 pub(crate) struct BlockBatches {
     stage: BatchStage,
     nums_rows: usize,
@@ -1472,6 +1491,14 @@ fn start_pre_stage(
 ) -> Result<PreStageStart> {
     let raw_bytes = raw_bytes_of_chunks(pre_chunks);
     if let Some(early) = early {
+        // Keep filter-only early passes at `MIN_BATCH_ROWS`; when early columns are retained
+        // for later stages, decode and coalesce them to `batch_rows` so late batches are not
+        // fragmented into tiny slices.
+        let decode_batch_rows = if early.retained_indices.is_empty() {
+            MIN_BATCH_ROWS
+        } else {
+            batch_rows
+        };
         let EarlyBatchesOutput {
             selection,
             retained,
@@ -1482,6 +1509,8 @@ fn start_pre_stage(
             part,
             early_chunks.expect("early chunks must exist when early stage is present"),
             index_selection.as_ref(),
+            decode_batch_rows,
+            Some(batch_rows),
         )?;
         if selection.null_count() == selection.len() {
             return Ok(PreStageStart::Empty {
@@ -2225,6 +2254,60 @@ impl BlockQueue {
     }
 }
 
+/// Accumulates filtered blocks into a [`BlockQueue`], optionally coalescing consecutive
+/// blocks whose combined row count stays within `max_rows`.
+struct BlockCoalescer {
+    queue: BlockQueue,
+    pending: Vec<DataBlock>,
+    pending_rows: usize,
+    max_rows: Option<usize>,
+}
+
+impl BlockCoalescer {
+    fn new(max_rows: Option<usize>) -> Self {
+        Self {
+            queue: BlockQueue::default(),
+            pending: Vec::new(),
+            pending_rows: 0,
+            max_rows,
+        }
+    }
+
+    fn push(&mut self, block: DataBlock) -> Result<()> {
+        let Some(max_rows) = self.max_rows else {
+            self.queue.push(block);
+            return Ok(());
+        };
+        let rows = block.num_rows();
+        if !self.pending.is_empty() && self.pending_rows + rows > max_rows {
+            self.flush()?;
+        }
+        if self.pending.is_empty() && rows >= max_rows {
+            self.queue.push(block);
+        } else {
+            self.pending_rows += rows;
+            self.pending.push(block);
+        }
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        if self.pending.len() == 1 {
+            self.queue.push(self.pending.pop().unwrap());
+        } else if !self.pending.is_empty() {
+            self.queue.push(DataBlock::concat(&self.pending)?);
+            self.pending.clear();
+        }
+        self.pending_rows = 0;
+        Ok(())
+    }
+
+    fn finish(mut self) -> Result<BlockQueue> {
+        self.flush()?;
+        Ok(self.queue)
+    }
+}
+
 fn should_push_down_row_selection(bitmap: &Bitmap, threshold: u64) -> bool {
     let total_rows = bitmap.len();
     if threshold == 0 || total_rows == 0 {
@@ -2431,6 +2514,46 @@ mod tests {
         assert_eq!(int64_values(&queue.pop_front(3)), vec![4, 5]);
         assert_eq!(int64_values(&queue.pop_front(1)), vec![6]);
         assert_eq!(int64_values(&queue.pop_front(5)), vec![7, 8]);
+        assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn test_block_coalescer() {
+        let mut coalescer = BlockCoalescer::new(Some(4));
+        // Two small blocks coalesce into one block of 4 rows.
+        coalescer.push(int64_block(vec![0, 1])).unwrap();
+        coalescer.push(int64_block(vec![2, 3])).unwrap();
+        // A block already at max_rows passes through without copying.
+        let full = int64_block(vec![4, 5, 6, 7]);
+        let full_ptr = int64_values_ptr(&full);
+        coalescer.push(full).unwrap();
+        // A single pending block flushed by an incoming block that won't fit is not copied.
+        let solo = int64_block(vec![8, 9, 10]);
+        let solo_ptr = int64_values_ptr(&solo);
+        coalescer.push(solo).unwrap();
+        coalescer.push(int64_block(vec![11, 12])).unwrap();
+        coalescer.push(int64_block(vec![13])).unwrap();
+        let mut queue = coalescer.finish().unwrap();
+
+        let b0 = queue.pop_front(10);
+        assert_eq!(int64_values(&b0), vec![0, 1, 2, 3]);
+        let b1 = queue.pop_front(10);
+        assert_eq!(int64_values(&b1), vec![4, 5, 6, 7]);
+        assert_eq!(int64_values_ptr(&b1), full_ptr);
+        let b2 = queue.pop_front(10);
+        assert_eq!(int64_values(&b2), vec![8, 9, 10]);
+        assert_eq!(int64_values_ptr(&b2), solo_ptr);
+        let b3 = queue.pop_front(10);
+        assert_eq!(int64_values(&b3), vec![11, 12, 13]);
+        assert!(queue.is_empty());
+
+        // Without coalescing, each pushed block stays separate.
+        let mut passthrough = BlockCoalescer::new(None);
+        passthrough.push(int64_block(vec![1])).unwrap();
+        passthrough.push(int64_block(vec![2])).unwrap();
+        let mut queue = passthrough.finish().unwrap();
+        assert_eq!(int64_values(&queue.pop_front(10)), vec![1]);
+        assert_eq!(int64_values(&queue.pop_front(10)), vec![2]);
         assert!(queue.is_empty());
     }
 
