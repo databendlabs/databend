@@ -269,7 +269,7 @@ pub struct FunctionRegistry {
     pub aliases: HashMap<String, String>,
 
     /// Default cast rules for all functions.
-    pub default_cast_rules: Vec<(DataType, DataType)>,
+    default_cast_rules: Vec<(DataType, DataType)>,
     /// Cast rules for specific functions, which will override the default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
@@ -467,16 +467,22 @@ impl FunctionRegistry {
             .unwrap_or(&self.default_cast_rules)
     }
 
-    pub fn is_auto_try_cast_rule(&self, arg_type: &DataType, sig_type: &DataType) -> bool {
-        self.auto_try_cast_rules
-            .iter()
-            .any(|(src_ty, dest_ty)| arg_type == src_ty && sig_type == dest_ty)
-    }
-
     pub fn get_property(&self, func_name: &str) -> Option<FunctionProperty> {
         let func_name = func_name.to_lowercase();
         if !self.contains(&func_name) {
             return None;
+    /// The cast rules of functions without rules of their own. They also find the common type of
+    /// values that are not arguments of one function, e.g. the rows of `VALUES` or the sides of
+    /// `UNION`.
+    pub fn default_cast_rules(&self) -> &[(DataType, DataType)] {
+        &self.default_cast_rules
+    }
+
+    /// The cast rules of the comparison functions. They also find the common type of join keys.
+    pub fn comparison_cast_rules(&self) -> &[(DataType, DataType)] {
+        self.get_auto_cast_rules("eq")
+    }
+
         }
 
         // Properties are stored under canonical function names, and aliases point directly to
@@ -720,7 +726,8 @@ impl FunctionRegistry {
             .extend(additional_cast_rules);
     }
 
-    // Note that, if additional_cast_rules is not empty, the default cast rules will not be used
+    /// Registers a rule that decides an automatic cast of an argument of `fn_name` by its types.
+    /// It applies together with the static rules of the function.
     pub fn register_dynamic_cast_rules(
         &mut self,
         fn_name: &str,

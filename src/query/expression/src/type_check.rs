@@ -29,6 +29,8 @@ use crate::ExprVisitor;
 use crate::FoldRules;
 use crate::FunctionContext;
 use crate::Scalar;
+use crate::auto_cast_rules::decimal_auto_cast;
+use crate::auto_cast_rules::is_auto_try_cast;
 use crate::cast_scalar;
 use crate::expr::*;
 use crate::expression::Expr;
@@ -759,7 +761,7 @@ pub fn try_check_function<Index: ColumnIndex>(
         .zip(&sig.args_type)
         .map(|(arg, sig_type)| {
             let sig_type = subst.apply(sig_type)?;
-            let is_try = fn_registry.is_auto_try_cast_rule(arg.data_type(), &sig_type);
+            let is_try = is_auto_try_cast(arg.data_type(), &sig_type);
             check_cast(arg.span(), is_try, arg.clone(), &sig_type, fn_registry)
         })
         .collect::<Result<Vec<_>>>()?;
@@ -958,20 +960,7 @@ pub fn can_auto_cast_to(
                     can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
                 })
         }
-        (DataType::String, DataType::Decimal(_)) => true,
-        (DataType::Decimal(x), DataType::Decimal(y)) => {
-            x.scale() <= y.scale()
-                && (x.leading_digits() <= y.leading_digits()
-                    || y.precision() == i256::MAX_PRECISION)
-        }
-        (DataType::Number(n), DataType::Decimal(d)) if !n.is_float() => {
-            let properties = n.get_decimal_properties().unwrap();
-            properties.scale() <= d.scale()
-                && properties.precision() - properties.scale() <= d.leading_digits()
-        }
-        // Only available for decimal --> f64, otherwise `sqrt(1234.56789)` will have signature: `sqrt(1234.56789::Float32)`
-        (DataType::Decimal(_), DataType::Number(n)) if n.is_float64() => true,
-        _ => false,
+        (src_ty, dest_ty) => decimal_auto_cast(src_ty, dest_ty),
     }
 }
 

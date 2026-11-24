@@ -16,14 +16,13 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use super::DynamicCastRules;
 use super::Function;
 use super::FunctionEval;
 use super::FunctionFactory;
 use super::FunctionProperty;
 use super::FunctionRegistry;
-use super::NullableInput;
 use super::FunctionSignature;
+use super::NullableInput;
 use super::ScalarFunction;
 use super::ScalarFunctionDomain;
 use super::function_factory::PassthroughNullableDomain;
@@ -71,12 +70,10 @@ pub struct FunctionBuilder<'a, const IS_FACTORY: bool> {
     name: String,
     property: Option<FunctionProperty>,
     aliases: Vec<String>,
+    functions: Vec<Function>,
     /// The positions in `functions` of the functions followed by their
     /// passthrough nullable variant.
     passthrough_pairs: Vec<usize>,
-    additional_cast_rules: Vec<(DataType, DataType)>,
-    dynamic_cast_rules: DynamicCastRules,
-    functions: Vec<Function>,
     factory: Option<FunctionFactory>,
 }
 
@@ -88,12 +85,10 @@ impl<'a, const IS_FACTORY: bool> FunctionBuilder<'a, IS_FACTORY> {
         Self {
             registry,
             name,
-            passthrough_pairs: Vec::new(),
             property: None,
             aliases: Vec::new(),
-            additional_cast_rules: Vec::new(),
-            dynamic_cast_rules: Vec::new(),
             functions: Vec::new(),
+            passthrough_pairs: Vec::new(),
             factory: None,
         }
     }
@@ -109,35 +104,16 @@ impl<'a, const IS_FACTORY: bool> FunctionBuilder<'a, IS_FACTORY> {
         self
     }
 
-    pub fn additional_cast_rules(
-        mut self,
-        cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
-    ) -> Self {
-        self.additional_cast_rules.extend(cast_rules);
-        self
-    }
-
-    pub fn dynamic_cast_rules(
-        mut self,
-        rules: impl IntoIterator<Item = Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>>,
-    ) -> Self {
-        self.dynamic_cast_rules.extend(rules);
-        self
-    }
-
     fn register_common(
         registry: &mut FunctionRegistry,
         name: &str,
         property: Option<FunctionProperty>,
         aliases: Vec<String>,
-        additional_cast_rules: Vec<(DataType, DataType)>,
-        dynamic_cast_rules: DynamicCastRules,
     ) {
         if let Some(property) = property {
             registry.properties.insert(name.to_string(), property);
         }
 
-            passthrough_pairs,
         if !aliases.is_empty() {
             for alias in aliases {
                 let previous = registry.aliases.insert(alias, name.to_string());
@@ -145,29 +121,6 @@ impl<'a, const IS_FACTORY: bool> FunctionBuilder<'a, IS_FACTORY> {
                     unreachable!();
                 }
             }
-        }
-        let first = registry.next_function_id(&name);
-
-        if !additional_cast_rules.is_empty() {
-            registry
-                .additional_cast_rules
-        for position in passthrough_pairs {
-            let id = first + position;
-            registry.record_nullable_input(&name, id, NullableInput::PassthroughVariant {
-                variant: id + 1,
-            });
-        }
-                .entry(name.to_string())
-                .or_default()
-                .extend(additional_cast_rules);
-        }
-
-        if !dynamic_cast_rules.is_empty() {
-            registry
-                .dynamic_cast_rules
-                .entry(name.to_string())
-                .or_default()
-                .extend(dynamic_cast_rules);
         }
     }
 }
@@ -183,9 +136,8 @@ impl<'a> ScalarBuilder<'a> {
             name,
             property,
             aliases,
-            additional_cast_rules,
-            dynamic_cast_rules,
             mut functions,
+            passthrough_pairs,
             ..
         } = self;
 
@@ -194,19 +146,19 @@ impl<'a> ScalarBuilder<'a> {
             "at least one function must be provided before registering"
         );
 
+        let first = registry.next_function_id(&name);
         for function in functions.drain(..) {
             assert_eq!(function.signature.name, name);
             registry.register_function(function);
         }
+        for position in passthrough_pairs {
+            let id = first + position;
+            registry.record_nullable_input(&name, id, NullableInput::PassthroughVariant {
+                variant: id + 1,
+            });
+        }
 
-        Self::register_common(
-            registry,
-            &name,
-            property,
-            aliases,
-            additional_cast_rules,
-            dynamic_cast_rules,
-        );
+        Self::register_common(registry, &name, property, aliases);
 
         registry
     }
@@ -215,12 +167,6 @@ impl<'a> ScalarBuilder<'a> {
 impl<'a> FactoryBuilder<'a> {
     pub fn factory(
         mut self,
-
-    /// Collect the passthrough nullable variant of the function collected
-    /// last, if any: a factory collects it alone.
-    fn collect_nullable_variant(&mut self, function: Function) {
-        self.collect(function);
-    }
         create: impl Fn(
             &[Scalar],
             &[DataType],
@@ -233,16 +179,6 @@ impl<'a> FactoryBuilder<'a> {
         let name = self.name.clone();
         self.factory = Some(FunctionFactory::Closure(Box::new(move |params, args| {
             create(params, args, ScalarFunctionArityBuilder {
-
-    fn collect_nullable_variant(&mut self, function: Function) {
-        let base = self
-            .functions
-            .len()
-            .checked_sub(1)
-            .expect("a nullable variant follows its function");
-        self.passthrough_pairs.push(base);
-        self.functions.push(function);
-    }
                 builder: InlineFunctionBuilder::new(name.clone()),
             })
             .map(|builder| Arc::new(builder.finish()))
@@ -256,8 +192,6 @@ impl<'a> FactoryBuilder<'a> {
             name,
             property,
             aliases,
-            additional_cast_rules,
-            dynamic_cast_rules,
             factory,
             ..
         } = self;
@@ -266,14 +200,7 @@ impl<'a> FactoryBuilder<'a> {
 
         registry.register_function_factory(&name, factory);
 
-        Self::register_common(
-            registry,
-            &name,
-            property,
-            aliases,
-            additional_cast_rules,
-            dynamic_cast_rules,
-        );
+        Self::register_common(registry, &name, property, aliases);
 
         registry
     }
@@ -288,6 +215,12 @@ pub trait ScalarFunctionCollect {
     const FOR_FACTORY: bool;
     fn name(&self) -> &str;
     fn collect(&mut self, function: Function);
+
+    /// Collect the passthrough nullable variant of the function collected
+    /// last, if any: a factory collects it alone.
+    fn collect_nullable_variant(&mut self, function: Function) {
+        self.collect(function);
+    }
 }
 
 impl<'a> ScalarFunctionCollect for ScalarBuilder<'a> {
@@ -298,6 +231,16 @@ impl<'a> ScalarFunctionCollect for ScalarBuilder<'a> {
     }
 
     fn collect(&mut self, function: Function) {
+        self.functions.push(function);
+    }
+
+    fn collect_nullable_variant(&mut self, function: Function) {
+        let base = self
+            .functions
+            .len()
+            .checked_sub(1)
+            .expect("a nullable variant follows its function");
+        self.passthrough_pairs.push(base);
         self.functions.push(function);
     }
 }

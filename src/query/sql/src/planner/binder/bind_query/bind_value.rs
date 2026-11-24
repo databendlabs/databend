@@ -471,7 +471,7 @@ pub fn bind_values(
                     match common_super_type(
                         common_type.clone(),
                         data_type.clone(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                        BUILTIN_FUNCTIONS.default_cast_rules(),
                     ) {
                         Some(new_common_type) => column_common_type[column_idx] = new_common_type,
                         None => {
