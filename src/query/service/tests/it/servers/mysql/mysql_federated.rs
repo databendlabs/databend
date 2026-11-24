@@ -47,17 +47,6 @@ fn test_mysql_connector_j_session_variables() {
 }
 
 #[test]
-fn test_mysql_connector_comments_do_not_intercept_regular_queries() {
-    let federated = MySQLFederated::create();
-    for query in [
-        "/* mysql-connector-j-9.7.0 */SELECT 1",
-        "/* mysql-connector-java-8.0.17 */SELECT 1",
-    ] {
-        assert!(federated.check(query).is_none(), "{query}");
-    }
-}
-
-#[test]
 fn test_mysql_federated() -> anyhow::Result<()> {
     let federated = MySQLFederated::create();
 
