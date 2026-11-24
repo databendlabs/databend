@@ -306,5 +306,12 @@ unset enable_encoded_columns
 statement ok
 unset prewhere_selectivity_threshold
 
+# `a` is decoded by early, then reused by the late predicate and the output.
+# Selected rows straddle the 8192-row early batch boundary.
+query II
+select count(*), sum(a) from t where a % 4200 = 7 and a + length(s) > 9
+----
+4 42028
+
 statement ok
 drop database db_09_0065

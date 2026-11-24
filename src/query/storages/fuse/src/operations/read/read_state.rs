@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -89,15 +90,17 @@ fn prewhere_selector(
 }
 
 /// The conjuncts of a filter, split at the non-nullable ANDs.
-fn split_conjuncts(expr: &Expr<String>) -> Vec<Expr<String>> {
+fn split_conjuncts(expr: &Expr<String>, conjuncts: &mut Vec<Expr<String>>) {
     match expr {
         Expr::FunctionCall(FunctionCall { function, args, .. })
             if matches!(function.signature.name.as_str(), "and" | "and_filters")
                 && expr.data_type() == &DataType::Boolean =>
         {
-            args.iter().flat_map(split_conjuncts).collect()
+            for arg in args {
+                split_conjuncts(arg, conjuncts);
+            }
         }
-        _ => vec![expr.clone()],
+        _ => conjuncts.push(expr.clone()),
     }
 }
 
@@ -114,12 +117,14 @@ fn conjunction(mut conjuncts: Vec<Expr<String>>) -> Result<Expr<String>> {
     check_function(None, name, &[], &conjuncts, &BUILTIN_FUNCTIONS)
 }
 
-/// The first stage of a prewhere that has columns only its filter reads: the conjuncts that
-/// reference only such columns are evaluated on them first, and the other prewhere columns
-/// are then decoded for the rows that pass only.
+/// The first stage of a prewhere: the leading conjuncts are evaluated on their columns first,
+/// and the other prewhere columns are then decoded for the rows that pass only. The early
+/// columns that the later stages or the output read are kept for those rows, not decoded again.
 struct EarlyStage {
     reader: Arc<BlockReader>,
     column_ids: HashSet<ColumnId>,
+    /// Offsets in the early reader's block, in its column order.
+    retained_indices: BTreeSet<FieldIndex>,
     filter: Expr,
     selector: Option<FilterExecutor>,
 }
@@ -127,19 +132,34 @@ struct EarlyStage {
 struct EarlyStagePlan {
     /// The columns of the early stage.
     projection: Projection,
-    early_conjuncts: Vec<Expr<String>>,
-    late_conjuncts: Vec<Expr<String>>,
+    /// Offsets in `projection` of the early columns that are kept after the early stage.
+    retained_indices: BTreeSet<FieldIndex>,
+    filter: Expr<String>,
+    /// The conjuncts left to the later stage, if any.
+    late_filter: Option<Expr<String>>,
 }
 
-/// The prewhere columns and conjuncts of the early stage, if the prewhere has any: the leading
-/// conjuncts whose columns are neither output, nor read by a runtime filter or by a later
-/// conjunct. `None` unless the later prewhere stage still reads columns.
+/// The early stage of a prewhere, if it has one: the longest prefix of the conjuncts that
+/// leaves some prewhere columns to the later stage. `None` if the first conjunct already
+/// reads all of them.
 fn plan_early_stage(
     prewhere_info: &PrewhereInfo,
     schema: &databend_common_expression::TableSchema,
     runtime_filter_columns: &[&String],
     preread_projection: &Projection,
 ) -> Result<Option<EarlyStagePlan>> {
+    let (
+        Projection::Columns(pre_columns),
+        Projection::Columns(output_columns),
+        Projection::Columns(remain_columns),
+    ) = (
+        preread_projection,
+        &prewhere_info.output_columns,
+        &prewhere_info.remain_columns,
+    )
+    else {
+        return Ok(None);
+    };
     if prewhere_info
         .virtual_column_ids
         .as_ref()
@@ -152,77 +172,63 @@ fn plan_early_stage(
     if !filter.is_deterministic(&BUILTIN_FUNCTIONS) {
         return Ok(None);
     }
-    let output: HashSet<String> = prewhere_info
-        .output_columns
-        .project_schema(schema)
-        .fields()
-        .iter()
-        .map(|field| field.name().clone())
-        .collect();
-    let conjuncts: Vec<(Expr<String>, HashSet<String>)> = split_conjuncts(&filter)
-        .into_iter()
-        .map(|conjunct| {
-            let columns = conjunct.column_refs().into_keys().collect();
-            (conjunct, columns)
-        })
-        .collect();
-    let qualifies = |columns: &HashSet<String>| {
-        !columns.is_empty()
-            && columns.iter().all(|name| {
-                // Internal columns, e.g. `_row_id`, are not in the schema.
-                schema.index_of(name).is_ok()
-                    && !output.contains(name)
-                    && !runtime_filter_columns.contains(&name)
-            })
-    };
+
     // The early conjuncts are a prefix, so that the conjuncts are evaluated in their order: a
-    // conjunct may fail on rows an earlier one rejects (e.g. `b <> 0 AND 3 / b = 1`). A column
-    // a later conjunct reads ends the prefix.
-    let mut prefix = conjuncts
-        .iter()
-        .take_while(|(_, columns)| qualifies(columns))
-        .count();
-    loop {
-        let later: HashSet<&String> = conjuncts[prefix..]
-            .iter()
-            .flat_map(|(_, columns)| columns)
-            .collect();
-        let end = conjuncts[..prefix]
-            .iter()
-            .position(|(_, columns)| columns.iter().any(|name| later.contains(name)))
-            .unwrap_or(prefix);
-        if end == prefix {
+    // conjunct may fail on rows an earlier one rejects (e.g. `b <> 0 AND 3 / b = 1`). Internal
+    // columns, e.g. `_row_id`, are not in the schema and end the prefix.
+    let mut conjuncts = Vec::new();
+    split_conjuncts(&filter, &mut conjuncts);
+    let column_index = |name: &String| {
+        let (index, _) = schema.column_with_name(name)?;
+        pre_columns.contains(&index).then_some(index)
+    };
+    let mut early_columns = BTreeSet::new();
+    let mut prefix = 0;
+    for conjunct in &conjuncts {
+        let refs = conjunct.column_refs();
+        let Some(new_columns) = refs.keys().try_fold(0, |count, name| {
+            let index = column_index(name)?;
+            Some(count + usize::from(!early_columns.contains(&index)))
+        }) else {
+            break;
+        };
+        // Stop before a conjunct that would leave no prewhere column to the later stage.
+        if refs.is_empty() || early_columns.len() + new_columns == pre_columns.len() {
             break;
         }
-        prefix = end;
+        early_columns.extend(refs.keys().filter_map(column_index));
+        prefix += 1;
     }
-    let early_columns: Vec<&String> = conjuncts[..prefix]
+    if prefix == 0 {
+        return Ok(None);
+    }
+
+    let late_conjuncts = conjuncts.split_off(prefix);
+    let late_filter = (!late_conjuncts.is_empty())
+        .then(|| conjunction(late_conjuncts))
+        .transpose()?;
+    let late_columns = late_filter
+        .as_ref()
+        .map(|filter| filter.column_refs())
+        .unwrap_or_default();
+    // `remain_columns` can contain physical sources of virtual output columns.
+    let retained_indices = early_columns
         .iter()
-        .flat_map(|(_, columns)| columns)
-        .collect::<HashSet<_>>()
-        .into_iter()
+        .enumerate()
+        .filter(|(_, index)| {
+            let name = schema.field(**index).name();
+            output_columns.contains(index)
+                || remain_columns.contains(index)
+                || late_columns.contains_key(name)
+                || runtime_filter_columns.contains(&name)
+        })
+        .map(|(offset, _)| offset)
         .collect();
-    if early_columns.is_empty() {
-        return Ok(None);
-    }
-    let early_projection = Projection::from_column_names(schema, &early_columns)?;
-    let late_projection = preread_projection.difference(&early_projection);
-    if late_projection.is_empty() {
-        return Ok(None);
-    }
-    let mut early_conjuncts = Vec::with_capacity(prefix);
-    let mut late_conjuncts = Vec::with_capacity(conjuncts.len() - prefix);
-    for (i, (conjunct, _)) in conjuncts.into_iter().enumerate() {
-        if i < prefix {
-            early_conjuncts.push(conjunct);
-        } else {
-            late_conjuncts.push(conjunct);
-        }
-    }
     Ok(Some(EarlyStagePlan {
-        projection: early_projection,
-        early_conjuncts,
-        late_conjuncts,
+        projection: Projection::Columns(early_columns.into_iter().collect()),
+        retained_indices,
+        filter: conjunction(conjuncts)?,
+        late_filter,
     }))
 }
 
@@ -279,6 +285,7 @@ pub struct ReadState {
     pub remain_column_ids: HashSet<ColumnId>,
     pub func_ctx: FunctionContext,
     pub output_schema: DataSchema,
+    merged_schema: DataSchema,
     pub prewhere_selectivity_threshold: u64,
     pub use_single_prewhere_reader: bool,
 }
@@ -330,20 +337,21 @@ impl ReadState {
             block_reader.projection.difference(&preread_projection)
         };
         let staged = match prewhere_info {
-            Some(prewhere_info) if !use_single_prewhere_reader => plan_early_stage(
-                prewhere_info,
-                original_schema,
-                &runtime_filter_column_names,
-                &preread_projection,
-            )?,
+            Some(prewhere_info)
+                if !use_single_prewhere_reader
+                    && matches!(block_reader.projection, Projection::Columns(_)) =>
+            {
+                plan_early_stage(
+                    prewhere_info,
+                    original_schema,
+                    &runtime_filter_column_names,
+                    &preread_projection,
+                )?
+            }
             _ => None,
         };
-        let mut late_conjuncts = None;
-        let mut early_plan = None;
-        if let Some(plan) = staged {
+        if let Some(plan) = staged.as_ref() {
             preread_projection = preread_projection.difference(&plan.projection);
-            late_conjuncts = Some(plan.late_conjuncts);
-            early_plan = Some((plan.projection, plan.early_conjuncts));
         }
         let prewhere_reader = if use_single_prewhere_reader {
             block_reader.clone()
@@ -354,7 +362,46 @@ impl ReadState {
         let pre_column_ids = prewhere_reader.schema().to_leaf_column_id_set();
         let remain_column_ids = remain_reader.schema().to_leaf_column_id_set();
 
-        let prewhere_schema: DataSchema = (prewhere_reader.schema().as_ref()).into();
+        let func_ctx = ctx.get_function_context()?;
+        let max_block_size = (ctx.get_settings().get_max_block_size()? as usize).max(1);
+        let mut output_schema = block_reader.data_schema();
+        let mut prewhere_fields = prewhere_reader.data_fields();
+        let (early, late_filter) = if let Some(plan) = staged {
+            let reader = block_reader.change_projection(plan.projection)?;
+            let schema = reader.data_schema();
+            let filter = plan
+                .filter
+                .project_column_ref(|name| schema.index_of(name))?;
+            prewhere_fields.extend(
+                plan.retained_indices
+                    .iter()
+                    .map(|&offset| schema.fields()[offset].clone()),
+            );
+            output_schema = output_schema.project_by_fields(
+                output_schema
+                    .fields()
+                    .iter()
+                    .filter(|field| {
+                        schema
+                            .column_with_name(field.name())
+                            .is_none_or(|(offset, _)| plan.retained_indices.contains(&offset))
+                    })
+                    .cloned()
+                    .collect(),
+            );
+            let early = EarlyStage {
+                column_ids: reader.schema().to_leaf_column_id_set(),
+                retained_indices: plan.retained_indices,
+                selector: prewhere_selector(&filter, &func_ctx, max_block_size),
+                reader,
+                filter,
+            };
+            (Some(early), Some(plan.late_filter))
+        } else {
+            (None, None)
+        };
+        // Order matches the block: newly decoded late columns, followed by retained early columns.
+        let prewhere_schema = DataSchema::new(prewhere_fields);
 
         let runtime_filters: Vec<BloomRuntimeFilterRef> = runtime_filter_entries
             .into_iter()
@@ -373,46 +420,16 @@ impl ReadState {
             })
             .collect();
 
-        let prewhere_filter = match (prewhere_info, late_conjuncts) {
-            (_, Some(conjuncts)) if conjuncts.is_empty() => None,
-            (_, Some(conjuncts)) => Some(conjunction(conjuncts)?),
-            (Some(prewhere_info), None) => Some(prewhere_info.filter.as_expr(&BUILTIN_FUNCTIONS)),
-            (None, None) => None,
+        let prewhere_filter = match late_filter {
+            Some(late_filter) => late_filter,
+            None => prewhere_info.map(|info| info.filter.as_expr(&BUILTIN_FUNCTIONS)),
         };
         let prewhere_filter = prewhere_filter
-            .map(|filter| {
-                filter.project_column_ref(|name| {
-                    Ok(prewhere_schema.column_with_name(name).unwrap().0)
-                })
-            })
+            .map(|filter| filter.project_column_ref(|name| prewhere_schema.index_of(name)))
             .transpose()?;
-
-        let func_ctx = ctx.get_function_context()?;
-        let max_block_size = (ctx.get_settings().get_max_block_size()? as usize).max(1);
-        let mut output_schema = block_reader.data_schema();
-        let early = early_plan
-            .map(|(projection, conjuncts)| -> Result<EarlyStage> {
-                let reader = block_reader.change_projection(projection)?;
-                let schema = reader.data_schema();
-                let filter = conjunction(conjuncts)?
-                    .project_column_ref(|name| Ok(schema.column_with_name(name).unwrap().0))?;
-                // The early columns are not output.
-                output_schema = DataSchema::new(
-                    output_schema
-                        .fields()
-                        .iter()
-                        .filter(|field| schema.column_with_name(field.name()).is_none())
-                        .cloned()
-                        .collect(),
-                );
-                Ok(EarlyStage {
-                    column_ids: reader.schema().to_leaf_column_id_set(),
-                    selector: prewhere_selector(&filter, &func_ctx, max_block_size),
-                    reader,
-                    filter,
-                })
-            })
-            .transpose()?;
+        let mut merged_fields = prewhere_schema.fields().clone();
+        merged_fields.extend(remain_reader.data_fields());
+        let merged_schema = DataSchema::new(merged_fields);
         let prewhere_selector = prewhere_filter
             .as_ref()
             .and_then(|filter| prewhere_selector(filter, &func_ctx, max_block_size));
@@ -432,6 +449,7 @@ impl ReadState {
             remain_column_ids,
             func_ctx,
             output_schema,
+            merged_schema,
             prewhere_selectivity_threshold,
             use_single_prewhere_reader,
         })
@@ -551,102 +569,74 @@ impl ReadState {
         };
         // The early stage selects the rows that the later prewhere stage decodes and filters:
         // `num_rows` is then the number of these rows.
-        let early_selection = match self.early.as_mut() {
+        let (early_selection, retained_early) = match self.early.as_mut() {
             Some(early) => {
-                let (selection, bytes) =
-                    filter_early_stage(early, &self.func_ctx, part, &columns_chunks)?;
-                scan_stats.bytes += bytes;
-                Some(selection)
-            }
-            None => None,
-        };
-        let (mut preread_block, num_rows) = match &early_selection {
-            None => {
-                let block = self
-                    .pre_reader
-                    .deserialize_part(part, pre_columns_chunks, None)?;
-                scan_stats.bytes += block.memory_size();
-                (block, part.nums_rows)
-            }
-            Some(selection) => {
-                let rows = selection.len() - selection.null_count();
-                if rows == 0 {
-                    // Nothing else is decoded: account for the chunks that were read, as when
-                    // a pushed down selection decodes no row.
-                    scan_stats.bytes += raw_bytes_of_chunks(&pre_columns_chunks)
-                        + raw_bytes_of_chunks(&Self::filter_column_chunks(
-                            &columns_chunks,
-                            &self.remain_column_ids,
-                        )?);
-                    return Ok(ReadStateOutput {
-                        block: DataBlock::empty_with_schema(&self.output_schema),
-                        bitmap_selection: Some(selection.clone()),
-                        scan_stats,
-                    });
-                }
-                let block = if should_push_down_row_selection(
+                let EarlyStageOutput {
                     selection,
-                    self.prewhere_selectivity_threshold,
-                ) {
-                    let raw_bytes = raw_bytes_of_chunks(&pre_columns_chunks);
-                    let block = self.pre_reader.deserialize_part(
-                        part,
-                        pre_columns_chunks,
-                        Some(&RowSelection::from(selection)),
-                    )?;
-                    scan_stats.bytes += estimate_block_bytes(
-                        block.memory_size(),
-                        block.num_rows(),
-                        part.nums_rows,
-                        raw_bytes,
-                    );
-                    block
-                } else {
-                    let block = self
-                        .pre_reader
-                        .deserialize_part(part, pre_columns_chunks, None)?;
-                    scan_stats.bytes += block.memory_size();
-                    block.filter_with_bitmap(selection)?
-                };
-                (block, rows)
+                    retained,
+                    bytes,
+                } = filter_early_stage(early, &self.func_ctx, part, &columns_chunks)?;
+                scan_stats.bytes += bytes;
+                (Some(selection), retained)
             }
+            None => (None, None),
+        };
+        let num_rows = early_selection
+            .as_ref()
+            .map_or(part.nums_rows, |selection| {
+                selection.len() - selection.null_count()
+            });
+        if let Some(selection) = &early_selection
+            && num_rows == 0
+        {
+            // Nothing else is decoded: account for the chunks that were read, as when a pushed
+            // down selection decodes no row.
+            scan_stats.bytes += raw_bytes_of_chunks(&pre_columns_chunks)
+                + columns_chunks
+                    .iter()
+                    .filter(|(id, _)| self.remain_column_ids.contains(id))
+                    .map(|(_, item)| raw_bytes_of_item(item))
+                    .sum::<usize>();
+            return Ok(ReadStateOutput {
+                block: DataBlock::empty_with_schema(&self.output_schema),
+                bitmap_selection: Some(selection.clone()),
+                scan_stats,
+            });
+        }
+        let mut preread_block = deserialize_selected(
+            &self.pre_reader,
+            part,
+            pre_columns_chunks,
+            early_selection.as_ref(),
+            self.prewhere_selectivity_threshold,
+            &mut scan_stats.bytes,
+        )?;
+
+        if let Some(retained) = retained_early {
+            // Both sides are already in early-selection row order.
+            preread_block.merge_block(retained);
+        }
+        let filter_bitmap = self.filter(&preread_block, num_rows)?.map(Bitmap::from);
+        let runtime_filter_bitmap = match &filter_bitmap {
+            // Expensive probe expressions are evaluated only for rows surviving the static
+            // prewhere predicate. Expand their bitmap back to the rows of `preread_block`.
+            Some(filter_bitmap) if !self.runtime_filters.is_empty() => {
+                let filtered_block = preread_block.clone().filter_with_bitmap(filter_bitmap)?;
+                self.runtime_filter(&filtered_block, filtered_block.num_rows())?
+                    .map(|bitmap| expand_selection(filter_bitmap, &bitmap.into()))
+            }
+            // Also called without Bloom filters, to preserve the profile entry emitted before
+            // expression probes were supported.
+            _ => self
+                .runtime_filter(&preread_block, num_rows)?
+                .map(Bitmap::from),
         };
 
-        let filter_bitmap = self.filter(&preread_block, num_rows)?;
-        // Expensive probe expressions are evaluated only for rows surviving
-        // the static prewhere predicate. Expand their bitmap back to the
-        // original row positions before combining it with prewhere.
-        let runtime_filter_bitmap = if self.runtime_filters.is_empty() {
-            // Preserve the profile entry emitted before expression probes were
-            // supported, even when there is no Bloom filter to evaluate.
-            self.runtime_filter(&preread_block, num_rows)?
-        } else if let Some(filter_bitmap) = &filter_bitmap {
-            let filter_bitmap: Bitmap = filter_bitmap.clone().into();
-            let filtered_block = preread_block.clone().filter_with_bitmap(&filter_bitmap)?;
-            self.runtime_filter(&filtered_block, filtered_block.num_rows())?
-                .map(|runtime_bitmap| expand_runtime_filter_bitmap(&filter_bitmap, &runtime_bitmap))
-        } else {
-            self.runtime_filter(&preread_block, num_rows)?
-        };
-
-        let bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
-            (Some(filter_bitmap), Some(runtime_filter_bitmap)) => {
-                let rhs: Bitmap = runtime_filter_bitmap.into();
-                Some((filter_bitmap & &rhs).into())
-            }
-            (Some(filter_bitmap), None) => Some(filter_bitmap.into()),
-            (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
-            (None, None) => None,
-        };
+        let mut bitmap_selection = and_selection(filter_bitmap, runtime_filter_bitmap);
         // The early stage applied the pruner's selection.
-        let bitmap_selection = match (bitmap_selection, early_selection.is_none()) {
-            (Some(selection), true) => match selected_rows(part) {
-                Some(rows) => Some(&selection & &rows),
-                None => Some(selection),
-            },
-            (None, true) => selected_rows(part),
-            (selection, false) => selection,
-        };
+        if early_selection.is_none() {
+            bitmap_selection = and_selection(bitmap_selection, selected_rows(part));
+        }
 
         if let Some(ref bitmap) = bitmap_selection {
             preread_block = preread_block.filter_with_bitmap(bitmap)?;
@@ -668,46 +658,18 @@ impl ReadState {
 
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
-        // Only built when pushed down to the remaining reader.
-        let row_selection = bitmap_selection
-            .as_ref()
-            .filter(|bitmap| {
-                should_push_down_row_selection(bitmap, self.prewhere_selectivity_threshold)
-            })
-            .map(RowSelection::from);
-        let push_down_row_selection = row_selection.is_some();
-        let remain_raw_bytes = if push_down_row_selection {
-            raw_bytes_of_chunks(&remain_columns_chunks)
-        } else {
-            0
-        };
-
-        let mut remain_block = self.remain_reader.deserialize_part(
+        let remain_block = deserialize_selected(
+            &self.remain_reader,
             part,
             remain_columns_chunks,
-            row_selection.as_ref(),
+            bitmap_selection.as_ref(),
+            self.prewhere_selectivity_threshold,
+            &mut scan_stats.bytes,
         )?;
-        if push_down_row_selection {
-            scan_stats.bytes += estimate_block_bytes(
-                remain_block.memory_size(),
-                remain_block.num_rows(),
-                part.nums_rows,
-                remain_raw_bytes,
-            );
-        } else {
-            scan_stats.bytes += remain_block.memory_size();
-            if let Some(bitmap) = bitmap_selection.as_ref() {
-                remain_block = remain_block.filter_with_bitmap(bitmap)?;
-            }
-        }
-
-        let mut merged_fields = self.pre_reader.data_fields();
-        merged_fields.extend(self.remain_reader.data_fields());
-        let merged_schema = DataSchema::new(merged_fields);
 
         preread_block.merge_block(remain_block);
 
-        let data_block = preread_block.resort(&merged_schema, &self.output_schema)?;
+        let data_block = preread_block.resort(&self.merged_schema, &self.output_schema)?;
 
         Ok(ReadStateOutput {
             block: data_block,
@@ -732,62 +694,76 @@ impl ReadState {
 
 const FILTER_BATCH_ROWS: usize = 8192;
 
-/// The rows of the block that the early stage selects, with the pruner's selection, and the
-/// bytes it decoded. The early columns are not output: they are decoded in batches when
-/// possible, see [`BlockReader::parquet_filter_batches`].
+struct EarlyStageOutput {
+    selection: Bitmap,
+    retained: Option<DataBlock>,
+    bytes: usize,
+}
+
+/// The rows of the block that the early stage selects, with the pruner's selection, the
+/// retained early columns of these rows, and the bytes it decoded. The early columns are
+/// decoded in batches when possible, see [`BlockReader::parquet_filter_batches`].
 fn filter_early_stage(
     early: &mut EarlyStage,
     func_ctx: &FunctionContext,
     part: &FuseBlockPartInfo,
     columns_chunks: &HashMap<ColumnId, DataItem>,
-) -> Result<(Bitmap, usize)> {
+) -> Result<EarlyStageOutput> {
     let chunks = ReadState::filter_column_chunks(columns_chunks, &early.column_ids)?;
     let mut bytes = 0;
-    let batches = if part.nums_rows > FILTER_BATCH_ROWS {
-        early
-            .reader
-            .parquet_filter_batches(part, &chunks, FILTER_BATCH_ROWS)?
+    let mut bits = MutableBitmap::with_capacity(part.nums_rows);
+    let mut retained = Vec::new();
+    let pruned = selected_rows(part);
+    let mut filter_batch = |block: DataBlock| -> Result<()> {
+        let bitmap: Bitmap = eval_filter(
+            &early.filter,
+            early.selector.as_mut(),
+            func_ctx,
+            &block,
+            block.num_rows(),
+        )?
+        .into();
+        let bitmap = match &pruned {
+            Some(rows) => &bitmap & &rows.clone().sliced(bits.len(), bitmap.len()),
+            None => bitmap,
+        };
+        if !early.retained_indices.is_empty() && bitmap.null_count() < bitmap.len() {
+            let block = block.project(&early.retained_indices);
+            retained.push(block.filter_with_bitmap(&bitmap)?);
+        }
+        bits.extend_from_bitmap(&bitmap);
+        Ok(())
+    };
+    if part.nums_rows > FILTER_BATCH_ROWS
+        && let Some(batches) =
+            early
+                .reader
+                .parquet_filter_batches(part, &chunks, FILTER_BATCH_ROWS)?
+    {
+        for batch in batches {
+            let batch = batch?;
+            // Adjacent batches can reference the same page; count logical decoded bytes.
+            bytes += batch
+                .columns()
+                .iter()
+                .map(|entry| entry.memory_size_with_options(true))
+                .sum::<usize>();
+            filter_batch(batch)?;
+        }
     } else {
-        None
+        let block = early.reader.deserialize_part(part, chunks, None)?;
+        bytes += block.memory_size();
+        filter_batch(block)?;
+    }
+    let retained = if retained.len() > 1 {
+        Some(DataBlock::concat(&retained)?)
+    } else {
+        retained.pop()
     };
-    let bitmap: Bitmap = match batches {
-        Some(batches) => {
-            let mut bits = MutableBitmap::with_capacity(part.nums_rows);
-            for batch in batches {
-                let batch = batch?;
-                // Adjacent batches can reference the same page; count logical decoded bytes.
-                bytes += batch
-                    .columns()
-                    .iter()
-                    .map(|entry| entry.memory_size_with_options(true))
-                    .sum::<usize>();
-                let bitmap = eval_filter(
-                    &early.filter,
-                    early.selector.as_mut(),
-                    func_ctx,
-                    &batch,
-                    batch.num_rows(),
-                )?;
-                bits.extend_from_bitmap(&bitmap.into());
-            }
-            bits.into()
-        }
-        None => {
-            let block = early.reader.deserialize_part(part, chunks.clone(), None)?;
-            bytes += block.memory_size();
-            eval_filter(
-                &early.filter,
-                early.selector.as_mut(),
-                func_ctx,
-                &block,
-                part.nums_rows,
-            )?
-            .into()
-        }
-    };
-    Ok(match selected_rows(part) {
-        Some(rows) => (&bitmap & &rows, bytes),
-        None => (bitmap, bytes),
+    Ok(EarlyStageOutput {
+        selection: bits.into(),
+        retained,
+        bytes,
     })
 }
 
@@ -845,33 +821,56 @@ fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
     part.block_meta_index()?.selected_rows(part.nums_rows)
 }
 
-fn expand_runtime_filter_bitmap(
-    prewhere_bitmap: &Bitmap,
-    runtime_filter_bitmap: &MutableBitmap,
-) -> MutableBitmap {
-    let mut runtime_filter_bits = runtime_filter_bitmap.iter();
-    let mut expanded = MutableBitmap::with_capacity(prewhere_bitmap.len());
-    for survives_prewhere in prewhere_bitmap.iter() {
-        expanded.push(
-            survives_prewhere
-                && runtime_filter_bits
-                    .next()
-                    .expect("runtime filter bitmap must match surviving rows"),
+/// Decodes `chunks` for the rows `selection` sets and adds the bytes of the whole block to
+/// `bytes`. A selective enough selection is pushed down to the decoder; otherwise the block is
+/// decoded and then filtered.
+fn deserialize_selected(
+    reader: &BlockReader,
+    part: &FuseBlockPartInfo,
+    chunks: HashMap<ColumnId, DataItem>,
+    selection: Option<&Bitmap>,
+    threshold: u64,
+    bytes: &mut usize,
+) -> Result<DataBlock> {
+    if let Some(selection) =
+        selection.filter(|selection| should_push_down_row_selection(selection, threshold))
+    {
+        let raw_bytes = raw_bytes_of_chunks(&chunks);
+        let block = reader.deserialize_part(part, chunks, Some(&RowSelection::from(selection)))?;
+        *bytes += estimate_block_bytes(
+            block.memory_size(),
+            block.num_rows(),
+            part.nums_rows,
+            raw_bytes,
         );
+        return Ok(block);
     }
-    debug_assert!(runtime_filter_bits.next().is_none());
-    expanded
+    let block = reader.deserialize_part(part, chunks, None)?;
+    *bytes += block.memory_size();
+    match selection {
+        Some(selection) => block.filter_with_bitmap(selection),
+        None => Ok(block),
+    }
+}
+
+/// The rows both selections set, where `None` sets every row.
+fn and_selection(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+    match (lhs, rhs) {
+        (Some(lhs), Some(rhs)) => Some(&lhs & &rhs),
+        (selection, None) | (None, selection) => selection,
+    }
 }
 
 /// Size of the column chunks as they were read, before decoding.
 fn raw_bytes_of_chunks(columns_chunks: &HashMap<ColumnId, DataItem>) -> usize {
-    columns_chunks
-        .values()
-        .map(|item| match item {
-            DataItem::RawData(buffer) => buffer.len(),
-            DataItem::ColumnArray(array) => array.1,
-        })
-        .sum()
+    columns_chunks.values().map(raw_bytes_of_item).sum()
+}
+
+fn raw_bytes_of_item(item: &DataItem) -> usize {
+    match item {
+        DataItem::RawData(buffer) => buffer.len(),
+        DataItem::ColumnArray(array) => array.1,
+    }
 }
 
 /// Estimate the uncompressed size of some columns for the whole block when
@@ -978,11 +977,11 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_runtime_filter_bitmap_after_prewhere() {
-        let prewhere: Bitmap = [false, true, true, false, true].into_iter().collect();
-        let runtime_filter: MutableBitmap = [true, false, true].into_iter().collect();
+    fn test_expand_selection() {
+        let outer: Bitmap = [false, true, true, false, true].into_iter().collect();
+        let inner: Bitmap = [true, false, true].into_iter().collect();
 
-        let expanded = expand_runtime_filter_bitmap(&prewhere, &runtime_filter);
+        let expanded = expand_selection(&outer, &inner);
         assert_eq!(expanded.iter().collect::<Vec<_>>(), vec![
             false, true, false, false, true
         ]);
@@ -1039,40 +1038,41 @@ mod tests {
         })
     }
 
-    /// `(early projection, early conjuncts, late conjuncts)` of a prewhere with `filter` over
-    /// columns `a`, `b` and `s` that outputs `output`, as column names and conjunct counts.
+    /// Early columns, retained early columns, and the columns of the late filter.
     fn plan(
         filter: Expr<String>,
         output: &[usize],
         runtime_filter_columns: &[&String],
-    ) -> Option<(Vec<String>, usize, usize)> {
+    ) -> Option<(Vec<String>, Vec<String>, Vec<String>)> {
         let schema = TableSchema::new(vec![
             TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
             TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
             TableField::new("s", TableDataType::Number(NumberDataType::Int32)),
         ]);
-        let mut names: Vec<String> = filter.column_refs().into_keys().collect();
-        names.sort();
-        let prewhere_columns = Projection::from_column_names(&schema, &names).unwrap();
+        let names: Vec<String> = filter.column_refs().into_keys().collect();
         let info = PrewhereInfo {
             output_columns: Projection::Columns(output.to_vec()),
-            prewhere_columns: prewhere_columns.clone(),
+            prewhere_columns: Projection::from_column_names(&schema, &names).unwrap(),
             remain_columns: Projection::Columns(vec![]),
             filter: filter.as_remote_expr(),
             virtual_column_ids: None,
         };
-        plan_early_stage(&info, &schema, runtime_filter_columns, &prewhere_columns)
-            .unwrap()
-            .map(|plan| {
-                let names = plan
-                    .projection
-                    .project_schema(&schema)
-                    .fields()
-                    .iter()
-                    .map(|field| field.name().clone())
-                    .collect();
-                (names, plan.early_conjuncts.len(), plan.late_conjuncts.len())
-            })
+        let mut preread = Projection::from_column_names(&schema, runtime_filter_columns).unwrap();
+        preread.merge(&info.prewhere_columns);
+        let plan = plan_early_stage(&info, &schema, runtime_filter_columns, &preread).unwrap()?;
+        let schema = plan.projection.project_schema(&schema);
+        let names = schema.fields().iter().map(|f| f.name().clone()).collect();
+        let retained = plan
+            .retained_indices
+            .iter()
+            .map(|&index| schema.field(index).name().clone())
+            .collect();
+        let mut late: Vec<String> = plan
+            .late_filter
+            .map(|filter| filter.column_refs().into_keys().collect())
+            .unwrap_or_default();
+        late.sort();
+        Some((names, retained, late))
     }
 
     #[test]
@@ -1086,70 +1086,44 @@ mod tests {
         let s_lt = call("lt", &[s.clone(), int(3)]);
         let filter = |conjuncts: &[Expr<String>]| call("and_filters", conjuncts);
 
-        // `a` and `b` are only filtered on.
-        let expected = Some((vec!["a".to_string(), "b".to_string()], 2, 1));
+        let ab = vec!["a".to_string(), "b".to_string()];
+        let only_s = vec!["s".to_string()];
+        let clauses = filter(&[a_eq.clone(), b_gt.clone(), s_lt.clone()]);
         assert_eq!(
-            plan(
-                filter(&[a_eq.clone(), b_gt.clone(), s_lt.clone()]),
-                &[2],
-                &[]
-            ),
-            expected
+            plan(clauses.clone(), &[2], &[]),
+            Some((ab.clone(), vec![], only_s.clone()))
         );
-        // Nested ANDs are split.
         let nested = filter(&[filter(&[a_eq.clone(), b_gt.clone()]), s_lt.clone()]);
-        assert_eq!(plan(nested, &[2], &[]), expected);
-        // An output column is not early.
         assert_eq!(
-            plan(
-                filter(&[a_eq.clone(), b_gt.clone(), s_lt.clone()]),
-                &[1, 2],
-                &[]
-            ),
-            Some((vec!["a".to_string()], 1, 2))
+            plan(nested, &[2], &[]),
+            Some((ab.clone(), vec![], only_s.clone()))
         );
-        // A column a later conjunct reads ends the early conjuncts.
+
+        // Output and runtime filter dependencies keep early columns, without moving the split.
+        let retained_b = Some((ab.clone(), vec!["b".to_string()], only_s));
+        assert_eq!(plan(clauses.clone(), &[1, 2], &[]), retained_b);
+        assert_eq!(plan(clauses, &[2], &[&"b".to_string()]), retained_b);
+
+        // Also keep columns shared with a late conjunct.
         let a_plus_s = call("gt", &[call("plus", &[a.clone(), s.clone()]), int(0)]);
         assert_eq!(
-            plan(
-                filter(&[b_gt.clone(), a_eq.clone(), a_plus_s.clone()]),
-                &[2],
-                &[]
-            ),
-            Some((vec!["b".to_string()], 1, 2))
-        );
-        assert_eq!(
             plan(filter(&[a_eq.clone(), b_gt.clone(), a_plus_s]), &[2], &[]),
-            None
+            Some((ab.clone(), vec!["a".to_string()], vec![
+                "a".to_string(),
+                "s".to_string()
+            ]))
         );
-        // The conjuncts keep their order: one on an output column comes first.
-        assert_eq!(plan(filter(&[s_lt.clone(), a_eq.clone()]), &[2], &[]), None);
-        // Nor a column a runtime filter reads.
-        let b_name = "b".to_string();
+        // A new runtime filter column is enough to justify a late read.
         assert_eq!(
-            plan(
-                filter(&[a_eq.clone(), b_gt.clone(), s_lt.clone()]),
-                &[2],
-                &[&b_name]
-            ),
-            Some((vec!["a".to_string()], 1, 2))
+            plan(filter(&[a_eq.clone(), b_gt]), &[], &[&"s".to_string()]),
+            Some((ab, vec![], vec![]))
         );
-        // Without a later stage to read, there is nothing to stage.
-        assert_eq!(plan(filter(&[a_eq.clone(), b_gt.clone()]), &[], &[]), None);
-        // One conjunct over an output column only.
+        // The first conjunct already reads every prewhere column. Do not move the second up.
+        let a_plus_s = call("gt", &[call("plus", &[s.clone(), a.clone()]), int(0)]);
+        assert_eq!(plan(filter(&[a_plus_s, a_eq]), &[2], &[]), None);
         assert_eq!(plan(s_lt.clone(), &[2], &[]), None);
         // A non-deterministic filter is evaluated as a whole.
         let random = call("gt", &[call("rand", &[]), call("to_float64", &[int(0)])]);
         assert_eq!(plan(filter(&[random, s_lt.clone()]), &[2], &[]), None);
-    }
-
-    #[test]
-    fn test_expand_selection() {
-        let outer: Bitmap = [false, true, true, false, true].into_iter().collect();
-        let inner: Bitmap = [true, false, true].into_iter().collect();
-        assert_eq!(
-            expand_selection(&outer, &inner).iter().collect::<Vec<_>>(),
-            vec![false, true, false, false, true]
-        );
     }
 }
