@@ -341,7 +341,9 @@ impl Planner {
         // SQL can bind differently in a stored definition and as an ordinary query.
         let mut plan_cache_context =
             if enable_materialized_view_rewrite && self.definition_scope.is_session() {
-                self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)
+                let distributed =
+                    self.enable_distributed_optimization(force_disable_distributed_optimization)?;
+                self.build_plan_cache_context(name_resolution_ctx.clone(), stmt, distributed)
                     .await?
             } else {
                 None
@@ -402,9 +404,7 @@ impl Planner {
         let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone(), func_ctx)
             .with_settings(&settings)?
             .set_enable_distributed_optimization(
-                !force_disable_distributed_optimization
-                    && !self.ctx.get_cluster().is_empty()
-                    && !settings.get_enforce_local()?,
+                self.enable_distributed_optimization(force_disable_distributed_optimization)?,
             )
             .set_sample_executor(self.query_executor.clone())
             .clone();
@@ -420,6 +420,17 @@ impl Planner {
             start.elapsed()
         );
         Ok(optimized_plan)
+    }
+
+    /// Whether to optimize a statement for distributed execution: it runs on a cluster of more
+    /// than one node, and neither the caller nor `enforce_local` keeps it on this node.
+    fn enable_distributed_optimization(
+        &self,
+        force_disable_distributed_optimization: bool,
+    ) -> Result<bool> {
+        Ok(!force_disable_distributed_optimization
+            && !self.ctx.get_cluster().is_empty()
+            && !self.ctx.get_settings().get_enforce_local()?)
     }
 
     fn add_max_rows_limit(&self, statement: &mut Statement) {

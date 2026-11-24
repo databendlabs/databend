@@ -134,6 +134,11 @@ impl GlobalServices {
         );
         log_labels.insert("node_id".to_string(), config.query.node_id.clone());
         GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);
+        // The config is loaded before logging is set up: a warning about it logged while loading
+        // reaches no log, so log it now.
+        if let Some(warning) = config.cache.deprecated_ownership_cache_warning() {
+            log::warn!("{warning}");
+        }
 
         // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;

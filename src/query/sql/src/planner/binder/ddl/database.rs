@@ -565,21 +565,18 @@ impl Binder {
             let storage_params = crate::binder::parse_storage_params_from_uri(
                 &mut uri_location,
                 "when setting database DEFAULT_STORAGE_PATH",
+                GlobalConfig::instance().storage.allow_insecure,
             )
             .await
             .map_err(|e| {
+                if e.code() == ErrorCode::STORAGE_INSECURE {
+                    return e;
+                }
                 ErrorCode::BadArguments(format!(
                     "Invalid storage path '{}': {}",
                     path_prop.value, e
                 ))
             })?;
-
-            // Check if storage is secure when required
-            if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
-                return Err(ErrorCode::StorageInsecure(
-                    "Database default storage path points to insecure storage, which is not allowed",
-                ));
-            }
 
             // Probe using the class selected for tables inheriting these defaults.
             let storage_class = match storage_class {

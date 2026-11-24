@@ -26,6 +26,7 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
@@ -55,6 +56,7 @@ use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_sql::binder::parse_stage_location;
 use databend_common_sql::binder::parse_stage_name;
+use databend_common_sql::binder::validate_stage_path_traversal_policy;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
@@ -313,7 +315,13 @@ impl ReadFileContext {
                 path
             )));
         }
+        Self::validate_path_traversal(path)?;
         Ok(path.to_string())
+    }
+
+    fn validate_path_traversal(path: &str) -> Result<()> {
+        let policy = GlobalConfig::instance().storage.stage_path_traversal_policy;
+        validate_stage_path_traversal_policy(policy, path, false)
     }
 
     async fn stage_info_for(&mut self, ctx: &QueryContext, stage_name: &str) -> Result<StageInfo> {
@@ -376,6 +384,7 @@ impl ReadFileContext {
                 location
             )));
         }
+        Self::validate_path_traversal(&path)?;
 
         let stage_info = self.stage_info_for(ctx, &stage_name).await?;
         let operator = self.operator_for_stage(&stage_info)?;

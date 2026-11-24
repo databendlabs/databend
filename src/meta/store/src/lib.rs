@@ -147,6 +147,10 @@ impl MetaStore {
 
         let name = format!("Semaphore-{prefix}-{id}");
 
+        // A failed attempt is retried after this delay, doubled after each failure in a row: an
+        // attempt can fail as soon as it starts, such as while no meta node serves its watch.
+        let mut retry_delay = Duration::from_millis(100);
+
         let mut ith = 0;
         loop {
             ith += 1;
@@ -179,9 +183,11 @@ impl MetaStore {
                 Ok(permit) => return Ok(permit),
                 Err(err) => {
                     warn!(
-                        "{} attempt {} to acquire semaphore failed: {:?}; retry at once",
-                        name, ith, err
+                        "{} attempt {} to acquire semaphore failed: {:?}; retry in {:?}",
+                        name, ith, err, retry_delay
                     );
+                    tokio::time::sleep(retry_delay).await;
+                    retry_delay = (retry_delay * 2).min(Duration::from_secs(2));
                     continue;
                 }
             }

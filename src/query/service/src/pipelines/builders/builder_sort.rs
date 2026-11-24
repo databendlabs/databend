@@ -47,6 +47,7 @@ pub struct SortPipelineBuilder {
     enable_fixed_rows: bool,
     enable_sort_spill_prefetch: bool,
     enable_sort_spill_stream_regroup: bool,
+    max_threads: Option<usize>,
 }
 
 impl SortPipelineBuilder {
@@ -72,6 +73,7 @@ impl SortPipelineBuilder {
             enable_fixed_rows,
             enable_sort_spill_prefetch,
             enable_sort_spill_stream_regroup,
+            max_threads: None,
         })
     }
 
@@ -83,6 +85,12 @@ impl SortPipelineBuilder {
     // The expected output block size, the actual output block size will be equal to or less than the given value.
     pub fn with_block_size_hit(mut self, block_size: usize) -> Self {
         self.block_size = self.block_size.min(block_size);
+        self
+    }
+
+    /// Limit one branch without overriding the query's settings or executor budget.
+    pub fn with_max_threads(mut self, max_threads: usize) -> Self {
+        self.max_threads = Some(max_threads.max(1));
         self
     }
 
@@ -176,7 +184,9 @@ impl SortPipelineBuilder {
         // Multi-pipelines merge sort
         let settings = self.ctx.get_settings();
         if settings.get_enable_parallel_multi_merge_sort()? {
-            let max_threads = settings.get_max_threads()? as usize;
+            let max_threads = self
+                .max_threads
+                .unwrap_or(settings.get_max_threads()? as usize);
             add_k_way_merge_sort(
                 pipeline,
                 self.key_desc.clone(),

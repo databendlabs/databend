@@ -17,35 +17,10 @@ use databend_common_config::InnerConfig;
 use databend_common_config::default_server_memory_limit;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_settings::DefaultSettings;
+use databend_common_settings::SettingScope;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
-
-#[test]
-fn test_recluster_task_selection_v2_setting() {
-    let settings = Settings::create(Tenant::new_literal("test"));
-    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
-    for value in ["1", "0"] {
-        settings
-            .set_setting(
-                "enable_recluster_task_selection_v2".to_string(),
-                value.to_string(),
-            )
-            .unwrap();
-        assert_eq!(
-            settings.get_enable_recluster_task_selection_v2().unwrap(),
-            value == "1"
-        );
-    }
-    assert!(
-        settings
-            .set_setting(
-                "enable_recluster_task_selection_v2".to_string(),
-                "2".to_string()
-            )
-            .is_err()
-    );
-    assert!(!settings.get_enable_recluster_task_selection_v2().unwrap());
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
@@ -244,6 +219,21 @@ async fn test_set_global_settings() {
         .await;
     let expect = "UnknownVariable. Code: 2801, Text = Unknown variable: \"query_flight_compression_notfound\".";
     assert_eq!(expect, format!("{}", result.unwrap_err()));
+}
+
+#[test]
+fn test_deduplicate_label_is_session_scoped() {
+    let key = "deduplicate_label";
+    assert!(DefaultSettings::check_setting_scope(key, SettingScope::Global).is_err());
+
+    let settings = Settings::create(Tenant::new_literal("test"));
+    settings
+        .set_setting(key.to_string(), "daily_import".to_string())
+        .unwrap();
+    assert_eq!(
+        unsafe { settings.get_deduplicate_label().unwrap() }.as_deref(),
+        Some("daily_import")
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -25,10 +25,16 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::TableLockIdentV2;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_store::WatchStream;
 use databend_common_metrics::lock::record_acquired_lock_nums;
 use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::watch_request::FilterType;
 use futures_util::StreamExt;
@@ -38,6 +44,43 @@ use crate::locks::lease_keeper::LeaseKeeper;
 use crate::locks::lease_keeper::LeaseOps;
 use crate::meta_service_error;
 use crate::sessions::SessionManager;
+
+/// How long a waiter whose watch failed waits before it lists the revisions again.
+const WATCH_RETRY_DELAY: Duration = Duration::from_secs(1);
+
+/// The meta-service reads a waiter makes on the revision before its own. A trait, so that a test
+/// can refuse the watch.
+#[async_trait]
+trait PrevRevisionApi: Send + Sync {
+    /// Watch for the deletion of `key`.
+    async fn watch_deletion(
+        &self,
+        key: &TableLockIdentV2,
+    ) -> std::result::Result<WatchStream, MetaError>;
+
+    async fn get_lock(
+        &self,
+        key: &TableLockIdentV2,
+    ) -> std::result::Result<Option<SeqV<LockMeta>>, MetaError>;
+}
+
+#[async_trait]
+impl PrevRevisionApi for MetaStore {
+    async fn watch_deletion(
+        &self,
+        key: &TableLockIdentV2,
+    ) -> std::result::Result<WatchStream, MetaError> {
+        let req = WatchRequest::new(key.to_string_key(), None).with_filter(FilterType::Delete);
+        self.watch(req).await
+    }
+
+    async fn get_lock(
+        &self,
+        key: &TableLockIdentV2,
+    ) -> std::result::Result<Option<SeqV<LockMeta>>, MetaError> {
+        self.get_pb(key).await
+    }
+}
 
 struct TableLockLeaseOps {
     catalog: Arc<dyn Catalog>,
@@ -89,6 +132,26 @@ impl LockHolder {
         should_retry: bool,
         acquire_timeout: Duration,
     ) -> Result<u64> {
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        self.acquire(
+            catalog,
+            req,
+            should_retry,
+            acquire_timeout,
+            meta_api.as_ref(),
+        )
+        .await
+    }
+
+    /// [`Self::try_acquire_lock`], with `prev_api` for the reads on the revision before this one.
+    async fn acquire(
+        self: &Arc<Self>,
+        catalog: Arc<dyn Catalog>,
+        req: CreateLockRevReq,
+        should_retry: bool,
+        acquire_timeout: Duration,
+        prev_api: &dyn PrevRevisionApi,
+    ) -> Result<u64> {
         let start = Instant::now();
 
         let ttl = req.ttl;
@@ -99,7 +162,6 @@ impl LockHolder {
 
         let revision = self.start(catalog.clone(), req).await?;
 
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
         let list_table_lock_req = ListLockRevReq::new(lock_key.clone());
 
         loop {
@@ -148,12 +210,28 @@ impl LockHolder {
             let watch_delete_ident = lock_key.gen_v2_key(prev_revision);
 
             // Get the previous revision, watch the delete event.
-            let req = WatchRequest::new(watch_delete_ident.to_string_key(), None)
-                .with_filter(FilterType::Delete);
-            let mut watch_stream = meta_api.watch(req).await.map_err(meta_service_error)?;
+            let mut watch_stream = match prev_api.watch_deletion(&watch_delete_ident).await {
+                Ok(watch_stream) => watch_stream,
+                Err(error) => {
+                    // A meta node refuses a watch while it cannot serve one, such as during a
+                    // leader election, and the client gives up once no node it knows serves it.
+                    // Listing the revisions again finds the lock if it was released meanwhile.
+                    let remaining = acquire_timeout.saturating_sub(start.elapsed());
+                    let delay = WATCH_RETRY_DELAY.min(remaining);
+                    log::warn!(
+                        "Failed to watch the previous table lock revision (rev: {}, prev: {}): {}; listing the revisions again in {:?}",
+                        revision,
+                        prev_revision,
+                        error,
+                        delay
+                    );
+                    tokio::time::sleep(delay).await;
+                    continue;
+                }
+            };
 
-            let Some(lock_meta) = meta_api
-                .get_pb(&watch_delete_ident)
+            let Some(lock_meta) = prev_api
+                .get_lock(&watch_delete_ident)
                 .await
                 .map_err(meta_service_error)?
             else {
@@ -235,5 +313,125 @@ impl LockHolder {
 
     pub fn shutdown(&self) {
         self.keeper.shutdown();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
+    use async_trait::async_trait;
+    use databend_common_meta_app::schema::CreateLockRevReq;
+    use databend_common_meta_app::schema::LockKey;
+    use databend_common_meta_app::schema::LockMeta;
+    use databend_common_meta_app::schema::TableLockIdentV2;
+    use databend_common_meta_store::MetaStore;
+    use databend_common_meta_store::WatchStream;
+    use databend_meta_client::types::MetaError;
+    use databend_meta_client::types::MetaNetworkError;
+    use databend_meta_client::types::SeqV;
+    use databend_meta_runtime::DatabendRuntime;
+
+    use super::LockHolder;
+    use super::PrevRevisionApi;
+    use crate::sessions::TableContextTableAccess;
+    use crate::test_kits::ConfigBuilder;
+    use crate::test_kits::TestFixture;
+
+    /// Refuses the first `refusals` watches, as a meta node that cannot serve a watch does, and
+    /// passes everything else on to `meta`.
+    struct RefusingWatches {
+        meta: MetaStore,
+        refusals: usize,
+        watches: AtomicUsize,
+    }
+
+    #[async_trait]
+    impl PrevRevisionApi for RefusingWatches {
+        async fn watch_deletion(
+            &self,
+            key: &TableLockIdentV2,
+        ) -> std::result::Result<WatchStream, MetaError> {
+            if self.watches.fetch_add(1, Ordering::SeqCst) < self.refusals {
+                let refused = tonic::Status::unavailable("this node serves no watch");
+                return Err(MetaNetworkError::from(refused).into());
+            }
+            self.meta.watch_deletion(key).await
+        }
+
+        async fn get_lock(
+            &self,
+            key: &TableLockIdentV2,
+        ) -> std::result::Result<Option<SeqV<LockMeta>>, MetaError> {
+            self.meta.get_lock(key).await
+        }
+    }
+
+    /// A waiter whose watch is refused lists the revisions again, and acquires the lock once its
+    /// holder releases it, instead of failing.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_refused_watch_keeps_waiting_for_the_lock() -> anyhow::Result<()> {
+        // The catalog and the waiter's reads must use the same Meta; the default fixture gives
+        // the catalog an embedded Meta of its own.
+        let meta = MetaStore::new_local_testing::<DatabendRuntime>().await;
+        let mut config = ConfigBuilder::create().build();
+        config.meta.endpoints = meta.inner().get_cached_endpoints().await?;
+        config.meta.auto_sync_interval = 0;
+        let fixture = TestFixture::setup_with_config(&config).await?;
+        fixture.create_default_database().await?;
+        fixture.create_default_table().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
+        let lock_key = LockKey::Table {
+            tenant: fixture.default_tenant(),
+            table_id: fixture.latest_default_table().await?.get_id(),
+        };
+        let acquire_timeout = Duration::from_secs(30);
+        let req = |query_id: &str| {
+            let ttl = Duration::from_secs(30);
+            CreateLockRevReq::new(
+                lock_key.clone(),
+                "root".into(),
+                "node".into(),
+                query_id.into(),
+                ttl,
+            )
+        };
+
+        let holder = Arc::new(LockHolder::default());
+        holder
+            .try_acquire_lock(catalog.clone(), req("holder"), true, acquire_timeout)
+            .await?;
+
+        let prev_api = RefusingWatches {
+            meta,
+            refusals: 2,
+            watches: AtomicUsize::new(0),
+        };
+        let waiter = Arc::new(LockHolder::default());
+        let release_after_refusals = async {
+            // Release the lock once the waiter watches again after its refusals: the third watch
+            // is served. A waiter that stopped at a refusal never watches again, so stop waiting
+            // after a while, and let it fail the test instead of hanging it.
+            let third_watch = async {
+                while prev_api.watches.load(Ordering::SeqCst) <= prev_api.refusals {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            };
+            let _ = tokio::time::timeout(Duration::from_secs(10), third_watch).await;
+            holder.shutdown();
+        };
+        let (acquired, _) = tokio::join!(
+            waiter.acquire(catalog, req("waiter"), true, acquire_timeout, &prev_api),
+            release_after_refusals
+        );
+        waiter.shutdown();
+
+        acquired?;
+        assert_eq!(prev_api.watches.load(Ordering::SeqCst), 3);
+        Ok(())
     }
 }

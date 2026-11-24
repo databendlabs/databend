@@ -1,0 +1,153 @@
+# A direct SRF matching a group key reads the key output, whether or not its
+# arguments reference columns. Non-key SRFs still expand after the aggregate.
+# run-with-settings: grouping_sets_to_union=0
+
+# SRFs in one ProjectSet zip to the longest output and pad the shorter side.
+query II rowsort
+SELECT unnest([1, 2]), unnest([10, 20, 30])
+----
+1 10
+2 20
+NULL 30
+
+# Repeated SRFs share the same key, not a second expansion above Aggregate.
+query III rowsort
+SELECT unnest([1, 2]), unnest([1, 2]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2])
+----
+1 1 1
+2 2 1
+
+query III rowsort
+SELECT unnest([1, 2]) AS x, unnest([10, 20, 30]) AS y, count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2]), unnest([10, 20, 30])
+----
+1 10 1
+2 20 1
+NULL 30 1
+
+# Alias and position keys have the same results as direct-expression keys.
+query III rowsort
+SELECT unnest([1, 2]) AS x, unnest([10, 20, 30]) AS y, count(*) FROM (VALUES (1)) v(a) GROUP BY x, y
+----
+1 10 1
+2 20 1
+NULL 30 1
+
+query III rowsort
+SELECT unnest([1, 2]) AS x, unnest([10, 20, 30]) AS y, count(*) FROM (VALUES (1)) v(a) GROUP BY 1, 2
+----
+1 10 1
+2 20 1
+NULL 30 1
+
+# A non-key SRF expands for each fixed group key, without re-expanding that key.
+query III rowsort
+SELECT unnest([1, 2]), unnest([10, 20, 30]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2])
+----
+1 10 1
+1 20 1
+1 30 1
+2 10 1
+2 20 1
+2 30 1
+
+# Column-dependent SRF keys retain the same behavior.
+query III rowsort
+SELECT unnest([a, a + 1]), unnest([a + 10, a + 20, a + 30]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([a, a + 1]), unnest([a + 10, a + 20, a + 30])
+----
+1 11 1
+2 21 1
+NULL 31 1
+
+# GROUPING distinguishes a real NULL key from subtotal/grand-total NULLs.
+query IIII rowsort
+SELECT unnest([1, 2]), unnest([10, 20, 30]), grouping(unnest([1, 2]), unnest([10, 20, 30])), count(*) FROM (VALUES (1)) v(a) GROUP BY ROLLUP(unnest([1, 2]), unnest([10, 20, 30]))
+----
+1 10 0 1
+1 NULL 1 1
+2 20 0 1
+2 NULL 1 1
+NULL 30 0 1
+NULL NULL 1 1
+NULL NULL 3 3
+
+# Empty SRFs still follow the ProjectSet padding and empty-input rules.
+query III rowsort
+SELECT unnest([]), unnest([10, 20]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([]), unnest([10, 20])
+----
+NULL 10 1
+NULL 20 1
+
+query III rowsort
+SELECT unnest([]), unnest([]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([])
+----
+
+# A scalar expression can read a direct SRF key through its child.
+query II rowsort
+SELECT unnest([1, 2]) + 10, count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2])
+----
+11 1
+12 1
+
+# An SRF hidden inside a composite key is not itself a key. Reject a
+# post-aggregate call instead of silently expanding it for every group.
+statement error (?s)1065.*set-returning function.*is used inside a GROUP BY expression
+SELECT unnest([1, 2]) + 10, count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2]) + 10
+
+statement error (?s)1065.*set-returning function.*is used inside a GROUP BY expression
+SELECT unnest([1, 2]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2]) + 10
+
+statement error (?s)1065.*set-returning function.*is used inside a GROUP BY expression
+SELECT unnest([1, 2]) + 10, count(*) FROM (VALUES (1)) v(a) GROUP BY ROLLUP(unnest([1, 2]) + 10)
+
+statement error (?s)1065.*set-returning function.*is used inside a GROUP BY expression
+SELECT count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2]) + 10 ORDER BY unnest([1, 2])
+
+# The same restriction applies to column arguments, without adding key matching.
+statement error (?s)1065.*set-returning function.*is used inside a GROUP BY expression
+SELECT unnest([a, a + 1]) + 10, count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([a, a + 1]) + 10
+
+# Grouping-set key comparison keeps the argument structure rather than folding it.
+statement error (?s)1065.*set-returning function.*is used inside a GROUP BY expression
+SELECT unnest([1 + 1, 3]) + 10, count(*) FROM (VALUES (1)) v(a) GROUP BY ROLLUP(unnest([1 + 1, 3]) + 10)
+
+# Alias and position paths can still read the whole composite key.
+query II rowsort
+SELECT unnest([1, 2]) + 10 AS x, count(*) FROM (VALUES (1)) v(a) GROUP BY x
+----
+11 1
+12 1
+
+query II rowsort
+SELECT unnest([1, 2]) + 10, count(*) FROM (VALUES (1)) v(a) GROUP BY 1
+----
+11 1
+12 1
+
+# A different non-key SRF remains a legitimate post-aggregate expansion.
+query II rowsort
+SELECT unnest([3, 4]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2]) + 10
+----
+3 1
+3 1
+4 1
+4 1
+
+# ORDER BY can also read the existing key, without executing another SRF.
+query II
+SELECT unnest([1, 2]), count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2]) ORDER BY unnest([1, 2]) DESC
+----
+2 1
+1 1
+
+# Keep the existing restriction on writing an SRF directly in HAVING,
+# even when it is also a group key.
+statement error (?s)1065.*set-returning functions cannot be used in HAVING clause
+SELECT count(*) FROM (VALUES (1)) v(a) GROUP BY unnest([1, 2]) HAVING unnest([1, 2]) = 2
+
+# An SRF in an aggregate argument is not itself a group key: the output call
+# remains in the other phase even when the expressions are identical.
+query II rowsort
+SELECT sum(unnest([1, 2])), unnest([1, 2]) FROM (VALUES (1)) v(a)
+----
+3 1
+3 2

@@ -287,7 +287,7 @@ where
         usage: &str,
     ) -> Result<StorageParams> {
         self.resolve_uri_connection(uri).await?;
-        Ok(parse_storage_params_from_uri(uri, usage).await?)
+        parse_storage_params_from_uri(uri, usage, self.storage_allow_insecure).await
     }
 
     #[async_backtrace::framed]
@@ -300,7 +300,7 @@ where
         } else {
             None
         };
-        get_storage_params_from_options(options, connection).await
+        get_storage_params_from_options(options, connection, self.storage_allow_insecure).await
     }
 
     #[async_backtrace::framed]
@@ -309,7 +309,7 @@ where
         uri: &mut UriLocation,
     ) -> Result<(StorageParams, String)> {
         self.resolve_uri_connection(uri).await?;
-        Ok(parse_uri_location(uri).await?)
+        parse_uri_location(uri, self.storage_allow_insecure).await
     }
 
     async fn resolve_uri_connection(&self, uri: &mut UriLocation) -> Result<()> {
@@ -332,14 +332,8 @@ where
             FileLocation::Stage(location) => self.resolve_stage_location(&location, access).await,
             FileLocation::Uri(mut uri) => {
                 let (storage_params, path) = self.resolve_uri_location(&mut uri).await?;
-                if !storage_params.is_secure() && !self.storage_allow_insecure {
-                    Err(ErrorCode::StorageInsecure(
-                        "copy from insecure storage is not allowed",
-                    ))
-                } else {
-                    let stage_info = StageInfo::new_external_stage(storage_params, true);
-                    Ok((stage_info, path))
-                }
+                let stage_info = StageInfo::new_external_stage(storage_params, true);
+                Ok((stage_info, path))
             }
         }
     }

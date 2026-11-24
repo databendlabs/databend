@@ -105,6 +105,21 @@ impl DerivedColumnScope {
         self.resolve(old).unwrap_or(old)
     }
 
+    // TODO: an outer column of an enclosing query that only a doubly nested
+    // subquery reads, e.g. `t.a` in `SELECT (SELECT (SELECT t.a + 1)) FROM t`,
+    // is not derived and fails here. Subqueries are decorrelated bottom-up,
+    // and `try_rewrite_subquery` takes a subquery with any outer column as
+    // correlated to the input it is in, so the innermost one is flattened
+    // against the middle query's input, which does not produce `t.a`.
+    //
+    // Correlating only the outer columns of the current input, and joining
+    // the subquery with the others left as outer columns, is not enough on
+    // its own: the binder outputs `SELECT t.a` as `t.a (#0) AS (#0)`, so once
+    // joined, the subquery looks like it produces `#0`, `#0` is no longer an
+    // outer column of the middle query, and the enclosing query takes it as
+    // uncorrelated, e.g. `SELECT (SELECT max(n) FROM u WHERE n > (SELECT
+    // t.a)) FROM t`. The binder would have to output an outer column of a
+    // subquery as a column of its own.
     pub(crate) fn must_resolve(&self, old: Symbol) -> Result<Symbol> {
         self.resolve(old)
             .ok_or_else(|| ErrorCode::Internal(format!("Missing derived column {old}")))

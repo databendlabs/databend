@@ -277,6 +277,8 @@ impl Processor for DeserializeDataTransform {
                 columns_chunks,
                 part,
                 no_output_columns,
+                read_res.condition.as_ref(),
+                read_res.io_skipped,
             )?;
 
             // Virtual columns are read in addition to the columns `ReadState`
