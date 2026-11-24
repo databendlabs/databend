@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -35,12 +36,15 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FilterExecutor;
+use databend_common_expression::FunctionCall;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::SelectExpr;
 use databend_common_expression::SelectExprBuilder;
 use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use roaring::RoaringTreemap;
@@ -97,6 +101,152 @@ fn prewhere_selector(
     ))
 }
 
+/// The conjuncts of a filter, split at the non-nullable ANDs.
+fn split_conjuncts(expr: &Expr<String>, conjuncts: &mut Vec<Expr<String>>) {
+    match expr {
+        Expr::FunctionCall(FunctionCall { function, args, .. })
+            if matches!(function.signature.name.as_str(), "and" | "and_filters")
+                && expr.data_type() == &DataType::Boolean =>
+        {
+            for arg in args {
+                split_conjuncts(arg, conjuncts);
+            }
+        }
+        _ => conjuncts.push(expr.clone()),
+    }
+}
+
+/// A non-nullable boolean filter of the conjuncts.
+fn conjunction(mut conjuncts: Vec<Expr<String>>) -> Result<Expr<String>> {
+    if conjuncts.len() == 1 && conjuncts[0].data_type() == &DataType::Boolean {
+        return Ok(conjuncts.pop().unwrap());
+    }
+    let name = if conjuncts.len() == 1 {
+        "is_true"
+    } else {
+        "and_filters"
+    };
+    check_function(None, name, &[], &conjuncts, &BUILTIN_FUNCTIONS)
+}
+
+/// The first stage of a prewhere: the leading conjuncts are evaluated on their columns first,
+/// and the other prewhere columns are then decoded for the rows that pass only. The early
+/// columns that the later stages or the output read are kept for those rows, not decoded again.
+struct EarlyStage {
+    reader: Arc<BlockReader>,
+    column_ids: HashSet<ColumnId>,
+    /// Offsets in the early reader's block, in its column order.
+    retained_indices: BTreeSet<FieldIndex>,
+    filter: Expr,
+    selector: Option<FilterExecutor>,
+}
+
+struct EarlyStagePlan {
+    /// The columns of the early stage.
+    projection: Projection,
+    /// Offsets in `projection` of the early columns that are kept after the early stage.
+    retained_indices: BTreeSet<FieldIndex>,
+    filter: Expr<String>,
+    /// The number of conjuncts in `filter`.
+    conjuncts: usize,
+    /// The conjuncts left to the later stage, if any.
+    late_filter: Option<Expr<String>>,
+}
+
+/// The early stage of a prewhere, if it has one: the longest prefix of the conjuncts that
+/// leaves some prewhere columns to the later stage. `None` if the first conjunct already
+/// reads all of them.
+fn plan_early_stage(
+    prewhere_info: &PrewhereInfo,
+    schema: &databend_common_expression::TableSchema,
+    runtime_filter_columns: &[&String],
+    preread_projection: &Projection,
+) -> Result<Option<EarlyStagePlan>> {
+    let (
+        Projection::Columns(pre_columns),
+        Projection::Columns(output_columns),
+        Projection::Columns(remain_columns),
+    ) = (
+        preread_projection,
+        &prewhere_info.output_columns,
+        &prewhere_info.remain_columns,
+    )
+    else {
+        return Ok(None);
+    };
+    if prewhere_info
+        .virtual_column_ids
+        .as_ref()
+        .is_some_and(|ids| !ids.is_empty())
+        || !matches!(prewhere_info.prewhere_columns, Projection::Columns(_))
+    {
+        return Ok(None);
+    }
+    let filter = prewhere_info.filter.as_expr(&BUILTIN_FUNCTIONS);
+    if !filter.is_deterministic(&BUILTIN_FUNCTIONS) {
+        return Ok(None);
+    }
+
+    // The early conjuncts are a prefix, so that the conjuncts are evaluated in their order: a
+    // conjunct may fail on rows an earlier one rejects (e.g. `b <> 0 AND 3 / b = 1`). Internal
+    // columns, e.g. `_row_id`, are not in the schema and end the prefix.
+    let mut conjuncts = Vec::new();
+    split_conjuncts(&filter, &mut conjuncts);
+    let column_index = |name: &String| {
+        let (index, _) = schema.column_with_name(name)?;
+        pre_columns.contains(&index).then_some(index)
+    };
+    let mut early_columns = BTreeSet::new();
+    let mut prefix = 0;
+    for conjunct in &conjuncts {
+        let refs = conjunct.column_refs();
+        let Some(new_columns) = refs.keys().try_fold(0, |count, name| {
+            let index = column_index(name)?;
+            Some(count + usize::from(!early_columns.contains(&index)))
+        }) else {
+            break;
+        };
+        // Stop before a conjunct that would leave no prewhere column to the later stage.
+        if refs.is_empty() || early_columns.len() + new_columns == pre_columns.len() {
+            break;
+        }
+        early_columns.extend(refs.keys().filter_map(column_index));
+        prefix += 1;
+    }
+    if prefix == 0 {
+        return Ok(None);
+    }
+
+    let late_conjuncts = conjuncts.split_off(prefix);
+    let late_filter = (!late_conjuncts.is_empty())
+        .then(|| conjunction(late_conjuncts))
+        .transpose()?;
+    let late_columns = late_filter
+        .as_ref()
+        .map(|filter| filter.column_refs())
+        .unwrap_or_default();
+    // `remain_columns` can contain physical sources of virtual output columns.
+    let retained_indices = early_columns
+        .iter()
+        .enumerate()
+        .filter(|(_, index)| {
+            let name = schema.field(**index).name();
+            output_columns.contains(index)
+                || remain_columns.contains(index)
+                || late_columns.contains_key(name)
+                || runtime_filter_columns.contains(&name)
+        })
+        .map(|(offset, _)| offset)
+        .collect();
+    Ok(Some(EarlyStagePlan {
+        projection: Projection::Columns(early_columns.into_iter().collect()),
+        retained_indices,
+        filter: conjunction(conjuncts)?,
+        conjuncts: prefix,
+        late_filter,
+    }))
+}
+
 /// Scan workload of one block, measured before prewhere and runtime filters
 /// drop rows. This is what `scan_progress` and the `ScanBytes` profile report,
 /// so filtering inside the scan must not shrink it.
@@ -143,6 +293,8 @@ pub(crate) struct ReadStateBatch {
 }
 
 pub struct ReadState {
+    /// See [`EarlyStage`]; `pre_reader` and `filters` are then the later prewhere stage.
+    early: Option<EarlyStage>,
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
     pub filters: Option<Expr>,
@@ -165,15 +317,17 @@ pub struct ReadState {
     batch_rows: usize,
     /// The key of the prewhere filter in the condition cache, if it is cached.
     condition_key: Option<u128>,
-    /// The leading conjunct of the prewhere filter in the condition cache, if it has several.
+    /// The key of the leading conjunct of the prewhere filter in the condition cache, if it has
+    /// several and its rows are recorded: with an early stage, when the early stage is that
+    /// conjunct.
+    leading_key: Option<u128>,
+    /// Without an early stage, how the leading conjunct is evaluated to record its rows.
     leading: Option<LeadingFilter>,
 }
 
-/// The first conjunct of a prewhere filter, its key in the condition cache, and the other
-/// conjuncts. To record its rows, it is evaluated on the block, and the others on the rows it
-/// selects, as the filter would.
+/// The first conjunct of a prewhere filter and the other conjuncts. To record its rows, it is
+/// evaluated on the block, and the others on the rows it selects, as the filter would.
 struct LeadingFilter {
-    key: u128,
     conjunct: Expr,
     conjunct_selector: Option<FilterExecutor>,
     rest: Expr,
@@ -226,6 +380,23 @@ impl ReadState {
         } else {
             block_reader.projection.difference(&preread_projection)
         };
+        let staged = match prewhere_info {
+            Some(prewhere_info)
+                if !use_single_prewhere_reader
+                    && matches!(block_reader.projection, Projection::Columns(_)) =>
+            {
+                plan_early_stage(
+                    prewhere_info,
+                    original_schema,
+                    &runtime_filter_column_names,
+                    &preread_projection,
+                )?
+            }
+            _ => None,
+        };
+        if let Some(plan) = staged.as_ref() {
+            preread_projection = preread_projection.difference(&plan.projection);
+        }
         let prewhere_reader = if use_single_prewhere_reader {
             block_reader.clone()
         } else {
@@ -235,7 +406,47 @@ impl ReadState {
         let pre_column_ids = prewhere_reader.schema().to_leaf_column_id_set();
         let remain_column_ids = remain_reader.schema().to_leaf_column_id_set();
 
-        let prewhere_schema: DataSchema = (prewhere_reader.schema().as_ref()).into();
+        let func_ctx = ctx.get_function_context()?;
+        let max_block_size = (ctx.get_settings().get_max_block_size()? as usize).max(1);
+        let mut output_schema = block_reader.data_schema();
+        let mut prewhere_fields = prewhere_reader.data_fields();
+        let early_conjuncts = staged.as_ref().map(|plan| plan.conjuncts);
+        let (early, late_filter) = if let Some(plan) = staged {
+            let reader = block_reader.change_projection(plan.projection)?;
+            let schema = reader.data_schema();
+            let filter = plan
+                .filter
+                .project_column_ref(|name| schema.index_of(name))?;
+            prewhere_fields.extend(
+                plan.retained_indices
+                    .iter()
+                    .map(|&offset| schema.fields()[offset].clone()),
+            );
+            output_schema = output_schema.project_by_fields(
+                output_schema
+                    .fields()
+                    .iter()
+                    .filter(|field| {
+                        schema
+                            .column_with_name(field.name())
+                            .is_none_or(|(offset, _)| plan.retained_indices.contains(&offset))
+                    })
+                    .cloned()
+                    .collect(),
+            );
+            let early = EarlyStage {
+                column_ids: reader.schema().to_leaf_column_id_set(),
+                retained_indices: plan.retained_indices,
+                selector: prewhere_selector(&filter, &func_ctx, max_block_size),
+                reader,
+                filter,
+            };
+            (Some(early), Some(plan.late_filter))
+        } else {
+            (None, None)
+        };
+        // Order matches the block: newly decoded late columns, followed by retained early columns.
+        let prewhere_schema = DataSchema::new(prewhere_fields);
 
         let runtime_filters: Vec<BloomRuntimeFilterRef> = runtime_filter_entries
             .into_iter()
@@ -254,18 +465,13 @@ impl ReadState {
             })
             .collect();
 
-        let prewhere_filter = if let Some(prewhere_info) = prewhere_info {
-            let filter = prewhere_info
-                .filter
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| Ok(prewhere_schema.column_with_name(name).unwrap().0))?;
-            Some(filter)
-        } else {
-            None
+        let prewhere_filter = match late_filter {
+            Some(late_filter) => late_filter,
+            None => prewhere_info.map(|info| info.filter.as_expr(&BUILTIN_FUNCTIONS)),
         };
-
-        let func_ctx = ctx.get_function_context()?;
-        let max_block_size = (ctx.get_settings().get_max_block_size()? as usize).max(1);
+        let prewhere_filter = prewhere_filter
+            .map(|filter| filter.project_column_ref(|name| prewhere_schema.index_of(name)))
+            .transpose()?;
         let prewhere_selector = prewhere_filter
             .as_ref()
             .and_then(|filter| prewhere_selector(filter, &func_ctx, max_block_size));
@@ -279,18 +485,22 @@ impl ReadState {
             _ => None,
         };
         let condition_key = condition_keys.as_ref().map(|keys| keys.whole);
-        let leading = condition_keys
-            .and_then(|keys| keys.leading)
+        let leading_conjunct = condition_keys.and_then(|keys| keys.leading);
+        // The early stage evaluates the first conjuncts on the block: their rows are those of
+        // the leading conjunct when it is the only one.
+        let leading_key = leading_conjunct
+            .as_ref()
+            .filter(|_| early_conjuncts.is_none_or(|conjuncts| conjuncts == 1))
+            .map(|leading| leading.key);
+        let leading = leading_conjunct
+            .filter(|_| early_conjuncts.is_none())
             .map(|leading| -> Result<LeadingFilter> {
                 let project = |expr: Expr<String>| {
-                    expr.project_column_ref(|name| {
-                        Ok(prewhere_schema.column_with_name(name).unwrap().0)
-                    })
+                    expr.project_column_ref(|name| prewhere_schema.index_of(name))
                 };
                 let conjunct = project(leading.conjunct)?;
                 let rest = project(leading.rest)?;
                 Ok(LeadingFilter {
-                    key: leading.key,
                     conjunct_selector: self::prewhere_selector(
                         &conjunct,
                         &func_ctx,
@@ -303,7 +513,6 @@ impl ReadState {
             })
             .transpose()?;
 
-        let output_schema = block_reader.data_schema();
         let remain_schema = DataSchema::new(remain_reader.data_fields());
         let plan = ReadPlan::new(
             &prewhere_schema,
@@ -313,6 +522,7 @@ impl ReadState {
         )?;
 
         Ok(Self {
+            early,
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
@@ -328,6 +538,7 @@ impl ReadState {
             plan,
             batch_rows: max_block_size.max(MIN_BATCH_ROWS),
             condition_key,
+            leading_key,
             leading,
         })
     }
@@ -357,14 +568,16 @@ impl ReadState {
         } else {
             block.clone().filter_with_bitmap(&conjunct)?
         };
-        let rest = eval_filter(
+        let rest: Bitmap = eval_filter(
             &leading.rest,
             leading.rest_selector.as_mut(),
             &self.func_ctx,
             &rows,
             selected,
-        )?;
-        Ok((expand_runtime_filter_bitmap(&conjunct, &rest), conjunct))
+        )?
+        .into();
+        let filter = expand_selection(&conjunct, &rest);
+        Ok((filter.iter().collect(), conjunct))
     }
 
     pub fn filter(&mut self, block: &DataBlock, num_rows: usize) -> Result<Option<MutableBitmap>> {
@@ -406,17 +619,14 @@ impl ReadState {
         let record = self
             .condition_key
             .filter(|_| !matches!(condition, Some(CachedCondition::Whole(_))));
-        let record_leading = condition.is_none() && self.leading.is_some();
+        let record_leading = self.leading_key.filter(|_| condition.is_none());
         let exact = condition.is_some_and(CachedCondition::is_exact);
         let cached_rows = condition
             .and_then(|condition| condition_cache::rows_of(condition.condition(), part.nums_rows));
         if io_skipped {
             // Nothing is output: the block is read only for the rows it selects.
             debug_assert!(exact && no_output_columns);
-            let rows = match (cached_rows, selected_rows(part)) {
-                (Some(cached), Some(rows)) => Some(&cached & &rows),
-                (cached, rows) => cached.or(rows),
-            };
+            let rows = and_selection(cached_rows, selected_rows(part));
             let num_rows = rows
                 .as_ref()
                 .map_or(part.nums_rows, |rows| rows.len() - rows.null_count());
@@ -431,6 +641,7 @@ impl ReadState {
         }
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
         if no_output_columns
+            && self.early.is_none()
             && condition.is_none()
             && self.filters_deterministic
             && self.runtime_filters.is_empty()
@@ -447,7 +658,7 @@ impl ReadState {
             while let Some(batch) = batches.next_block(part) {
                 let batch = batch?;
                 bytes += block_logical_bytes(&batch);
-                let bitmap = if record_leading {
+                let bitmap = if record_leading.is_some() {
                     let (bitmap, leading) = self.filter_with_leading(&batch, batch.num_rows())?;
                     leading_bits.extend_from_bitmap(&leading);
                     bitmap
@@ -456,18 +667,15 @@ impl ReadState {
                 };
                 bits.extend_from_bitmap(&bitmap.into());
             }
-            // Apply the pruner's selection in original block coordinates.
-            let mut bitmap: Bitmap = bits.into();
+            let bitmap: Bitmap = bits.into();
             if let Some(key) = record {
                 condition_cache::insert(key, part, &bitmap);
             }
-            if record_leading {
-                let key = self.leading.as_ref().unwrap().key;
+            if let Some(key) = record_leading {
                 condition_cache::insert(key, part, &leading_bits.into());
             }
-            if let Some(rows) = selected_rows(part) {
-                bitmap = &bitmap & &rows;
-            }
+            // Apply the pruner's selection in original block coordinates.
+            let bitmap = and_selection(Some(bitmap), selected_rows(part)).unwrap();
             return Ok(ReadStateOutput {
                 block: DataBlock::empty_with_rows(bitmap.len() - bitmap.null_count()),
                 bitmap_selection: Some(bitmap),
@@ -478,102 +686,136 @@ impl ReadState {
             });
         }
 
-        // Without cached granules, `num_rows` is the rows of the block; otherwise the prewhere
-        // columns are decoded for the rows of the granules only.
-        let (mut preread_block, num_rows, bytes) = match &cached_rows {
-            None => {
-                let block = self
-                    .pre_reader
-                    .deserialize_part(part, pre_columns_chunks, None)?;
-                let bytes = block.memory_size();
-                (block, part.nums_rows, bytes)
-            }
-            Some(rows) => {
-                let raw_bytes = raw_bytes_of_chunks(&pre_columns_chunks);
-                let block = self.pre_reader.deserialize_part(
-                    part,
-                    pre_columns_chunks,
-                    Some(&RowSelection::from(rows)),
-                )?;
-                let bytes = estimate_block_bytes(
-                    block.memory_size(),
-                    block.num_rows(),
-                    part.nums_rows,
-                    raw_bytes,
-                );
-                (block, rows.len() - rows.null_count(), bytes)
-            }
-        };
         let mut scan_stats = BlockScanStats {
             rows: part.nums_rows,
-            bytes,
+            bytes: 0,
         };
+        // The rows the later prewhere stage decodes and filters: those the early stage selects,
+        // with the pruner's selection, or the cached rows. `num_rows` is then the number of
+        // these rows.
+        let (candidates, retained_early) = match self.early.as_mut() {
+            Some(early) => {
+                let EarlyStageOutput {
+                    selection,
+                    retained,
+                    bytes,
+                } = filter_early_stage(
+                    early,
+                    &self.func_ctx,
+                    part,
+                    &columns_chunks,
+                    cached_rows.as_ref(),
+                    exact,
+                )?;
+                scan_stats.bytes += bytes;
+                (Some(selection), retained)
+            }
+            None => (cached_rows, None),
+        };
+        // Without the pruner's selection, the early selection holds the rows the early
+        // conjuncts select, so the filter's rows can be recorded.
+        let unpruned = selected_rows(part).is_none();
+        if let (Some(key), Some(selection), true) = (record_leading, &candidates, unpruned)
+            && self.early.is_some()
+        {
+            condition_cache::insert(key, part, selection);
+        }
+        let num_rows = candidates.as_ref().map_or(part.nums_rows, |selection| {
+            selection.len() - selection.null_count()
+        });
+        if let Some(selection) = &candidates
+            && num_rows == 0
+        {
+            if let (Some(key), true) = (record, unpruned) {
+                condition_cache::insert(key, part, selection);
+            }
+            // Nothing else is decoded: account for the chunks that were read, as when a pushed
+            // down selection decodes no row.
+            scan_stats.bytes += raw_bytes_of_chunks(&pre_columns_chunks)
+                + columns_chunks
+                    .iter()
+                    .filter(|(id, _)| self.remain_column_ids.contains(id))
+                    .map(|(_, item)| raw_bytes_of_item(item))
+                    .sum::<usize>();
+            return Ok(ReadStateOutput {
+                block: DataBlock::empty_with_schema(&self.output_schema),
+                bitmap_selection: Some(selection.clone()),
+                scan_stats,
+            });
+        }
+        let mut preread_block = deserialize_selected(
+            &self.pre_reader,
+            part,
+            pre_columns_chunks,
+            candidates.as_ref(),
+            self.prewhere_selectivity_threshold,
+            &mut scan_stats.bytes,
+        )?;
 
+        if let Some(retained) = retained_early {
+            // Both sides are already in early-selection row order.
+            preread_block.merge_block(retained);
+        }
         // The rows of an exact entry all pass the filter.
         let filter_bitmap = if exact {
             None
-        } else if record_leading {
+        } else if let (Some(key), None) = (record_leading, &self.early) {
             let (bitmap, leading) = self.filter_with_leading(&preread_block, num_rows)?;
-            condition_cache::insert(self.leading.as_ref().unwrap().key, part, &leading);
+            condition_cache::insert(key, part, &leading);
             Some(bitmap)
         } else {
             self.filter(&preread_block, num_rows)?
-        };
-        if let (Some(key), Some(bitmap)) = (record, &filter_bitmap) {
+        }
+        .map(Bitmap::from);
+        if let Some(key) = record
+            && (self.early.is_none() || unpruned)
+        {
             // In the rows of the block.
-            let bitmap: Bitmap = bitmap.clone().into();
-            let bitmap = match &cached_rows {
-                Some(rows) => expand_selection(rows, &bitmap),
+            let bitmap = filter_bitmap
+                .clone()
+                .unwrap_or_else(|| MutableBitmap::from_len_set(num_rows).into());
+            let bitmap = match &candidates {
+                Some(candidates) => expand_selection(candidates, &bitmap),
                 None => bitmap,
             };
             condition_cache::insert(key, part, &bitmap);
         }
-        // Expensive probe expressions are evaluated only for rows surviving
-        // the static prewhere predicate. Expand their bitmap back to the
-        // original row positions before combining it with prewhere.
-        let runtime_filter_bitmap = if self.runtime_filters.is_empty() {
-            // Preserve the profile entry emitted before expression probes were
-            // supported, even when there is no Bloom filter to evaluate.
-            self.runtime_filter(&preread_block, num_rows)?
-        } else if let Some(filter_bitmap) = &filter_bitmap {
-            let filter_bitmap: Bitmap = filter_bitmap.clone().into();
-            let filtered_block = preread_block.clone().filter_with_bitmap(&filter_bitmap)?;
-            self.runtime_filter(&filtered_block, filtered_block.num_rows())?
-                .map(|runtime_bitmap| expand_runtime_filter_bitmap(&filter_bitmap, &runtime_bitmap))
-        } else {
-            self.runtime_filter(&preread_block, num_rows)?
+        let runtime_filter_bitmap = match &filter_bitmap {
+            // Expensive probe expressions are evaluated only for rows surviving the static
+            // prewhere predicate. Expand their bitmap back to the rows of `preread_block`.
+            Some(filter_bitmap) if !self.runtime_filters.is_empty() => {
+                let filtered_block = preread_block.clone().filter_with_bitmap(filter_bitmap)?;
+                self.runtime_filter(&filtered_block, filtered_block.num_rows())?
+                    .map(|bitmap| expand_selection(filter_bitmap, &bitmap.into()))
+            }
+            // Also called without Bloom filters, to preserve the profile entry emitted before
+            // expression probes were supported.
+            _ => self
+                .runtime_filter(&preread_block, num_rows)?
+                .map(Bitmap::from),
         };
 
-        let bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
-            (Some(filter_bitmap), Some(runtime_filter_bitmap)) => {
-                let rhs: Bitmap = runtime_filter_bitmap.into();
-                Some((filter_bitmap & &rhs).into())
-            }
-            (Some(filter_bitmap), None) => Some(filter_bitmap.into()),
-            (None, Some(runtime_filter_bitmap)) => Some(runtime_filter_bitmap.into()),
-            (None, None) => None,
-        };
-        // Back to the rows of the block.
-        let bitmap_selection = match &cached_rows {
-            Some(rows) => Some(expand_selection(
-                rows,
-                &bitmap_selection.unwrap_or_else(|| MutableBitmap::from_len_set(num_rows).into()),
-            )),
-            None => bitmap_selection,
-        };
-        let bitmap_selection = match (bitmap_selection, selected_rows(part)) {
-            (Some(selection), Some(rows)) => Some(&selection & &rows),
-            (selection, rows) => selection.or(rows),
-        };
+        let mut bitmap_selection = and_selection(filter_bitmap, runtime_filter_bitmap);
+        // The early stage applied the pruner's selection.
+        if self.early.is_none()
+            && let Some(rows) = selected_rows(part)
+        {
+            let rows = match &candidates {
+                Some(candidates) => compress_selection(candidates, &rows),
+                None => rows,
+            };
+            bitmap_selection = and_selection(bitmap_selection, Some(rows));
+        }
 
         if let Some(ref bitmap) = bitmap_selection {
-            preread_block = match &cached_rows {
-                Some(rows) => {
-                    preread_block.filter_with_bitmap(&compress_selection(rows, bitmap))?
-                }
-                None => preread_block.filter_with_bitmap(bitmap)?,
-            };
+            preread_block = preread_block.filter_with_bitmap(bitmap)?;
         }
+        // Back to the rows of the block.
+        let bitmap_selection = match (candidates, bitmap_selection) {
+            (Some(candidates), Some(later)) => Some(expand_selection(&candidates, &later)),
+            (Some(candidates), None) => Some(candidates),
+            (None, selection) => selection,
+        };
 
         if self.use_single_prewhere_reader {
             return Ok(ReadStateOutput {
@@ -585,39 +827,14 @@ impl ReadState {
 
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
-        // Only built when pushed down to the remaining reader.
-        let row_selection = bitmap_selection
-            .as_ref()
-            .filter(|bitmap| {
-                should_push_down_row_selection(bitmap, self.prewhere_selectivity_threshold)
-            })
-            .map(RowSelection::from);
-        let push_down_row_selection = row_selection.is_some();
-        let remain_raw_bytes = if push_down_row_selection {
-            raw_bytes_of_chunks(&remain_columns_chunks)
-        } else {
-            0
-        };
-
-        let mut remain_block = self.remain_reader.deserialize_part(
+        let remain_block = deserialize_selected(
+            &self.remain_reader,
             part,
             remain_columns_chunks,
-            row_selection.as_ref(),
+            bitmap_selection.as_ref(),
+            self.prewhere_selectivity_threshold,
+            &mut scan_stats.bytes,
         )?;
-        if push_down_row_selection {
-            scan_stats.bytes += estimate_block_bytes(
-                remain_block.memory_size(),
-                remain_block.num_rows(),
-                part.nums_rows,
-                remain_raw_bytes,
-            );
-        } else {
-            scan_stats.bytes += remain_block.memory_size();
-            if let Some(bitmap) = bitmap_selection.as_ref() {
-                remain_block = remain_block.filter_with_bitmap(bitmap)?;
-            }
-        }
-
         let data_block = match &self.plan {
             ReadPlan::Empty => DataBlock::empty_with_rows(remain_block.num_rows()),
             ReadPlan::RemainOnly { output_indices } => {
@@ -647,11 +864,12 @@ impl ReadState {
     /// least [`MIN_BATCH_ROWS`]), each holding its own Parquet page buffers. The batches are
     /// decoded one at a time by [`BlockBatches::next_batches`], as the caller pulls them.
     ///
-    /// Supports unfiltered scans, deterministic prewhere predicates, Bloom runtime filters,
-    /// and index row selections (`BlockMetaIndex::selected_rows`). Returns `None` when the
-    /// block does not need splitting or must be decoded whole (non-deterministic filter,
-    /// count-only scan without runtime filters, condition cache, deserialized column cache, or
-    /// encoded columns).
+    /// Supports unfiltered scans, deterministic prewhere predicates (including staged early
+    /// conjuncts), Bloom runtime filters, and index row selections
+    /// (`BlockMetaIndex::selected_rows`). Returns `None` when the block does not need
+    /// splitting or must be decoded whole (non-deterministic filter, count-only scan without
+    /// early stage or runtime filters, condition cache, deserialized column cache, or encoded
+    /// columns).
     pub(crate) fn start_batches(
         &mut self,
         columns_chunks: &HashMap<ColumnId, DataItem>,
@@ -683,31 +901,65 @@ impl ReadState {
                 )?
             }
             ReadPlan::PreOnly { .. } => {
+                let early_chunks = self
+                    .early
+                    .as_ref()
+                    .map(|early| Self::filter_column_chunks(columns_chunks, &early.column_ids))
+                    .transpose()?;
                 let pre_chunks = Self::filter_column_chunks(columns_chunks, &self.pre_column_ids)?;
-                if !self.pre_reader.can_parquet_batches(&pre_chunks) {
+                if !self.early.as_ref().is_none_or(|early| {
+                    early
+                        .reader
+                        .can_parquet_batches(early_chunks.as_ref().unwrap())
+                }) || !self.pre_reader.can_parquet_batches(&pre_chunks)
+                {
                     return Ok(None);
                 }
-                let batches =
-                    self.pre_reader
-                        .parquet_batches(part, &pre_chunks, None, self.batch_rows)?;
-                let stage = BatchStage::Pre {
-                    batches,
+                match start_pre_stage(
+                    self.early.as_mut(),
+                    &self.pre_reader,
+                    &self.func_ctx,
+                    self.prewhere_selectivity_threshold,
+                    self.batch_rows,
+                    part,
+                    early_chunks.as_ref(),
+                    &pre_chunks,
                     index_selection,
-                    row_offset: 0,
-                };
-                (stage, 0)
+                )? {
+                    PreStageStart::Empty { bytes } => (BatchStage::Done, bytes),
+                    PreStageStart::Ready { stage, early_bytes } => {
+                        let offset_cursor = need_row_offsets
+                            .then(|| RowOffsetCursor::new(stage.early_selection.clone()));
+                        (
+                            BatchStage::Pre {
+                                stage,
+                                offset_cursor,
+                            },
+                            early_bytes,
+                        )
+                    }
+                }
             }
             ReadPlan::TwoStage {
                 pre_output_indices,
                 merge_sources,
             } => {
-                // Check both readers before Pass 1 so we never mutate runtime filter stats and
+                // Check every reader before Pass 1 so we never mutate runtime filter stats and
                 // then fall back to `deserialize_and_filter`. The check holds for the block even
                 // if the column array cache is enabled meanwhile: batches never fill it.
+                let early_chunks = self
+                    .early
+                    .as_ref()
+                    .map(|early| Self::filter_column_chunks(columns_chunks, &early.column_ids))
+                    .transpose()?;
                 let pre_chunks = Self::filter_column_chunks(columns_chunks, &self.pre_column_ids)?;
                 let remain_chunks =
                     Self::filter_column_chunks(columns_chunks, &self.remain_column_ids)?;
-                if !self.pre_reader.can_parquet_batches(&pre_chunks)
+                if !self.early.as_ref().is_none_or(|early| {
+                    early
+                        .reader
+                        .can_parquet_batches(early_chunks.as_ref().unwrap())
+                }) || !self.pre_reader.can_parquet_batches(&pre_chunks)
                     || !self.remain_reader.can_parquet_batches(&remain_chunks)
                 {
                     return Ok(None);
@@ -716,63 +968,92 @@ impl ReadState {
                 // Pass 1 runs over the whole block: reading the remaining columns with a pushed
                 // down `RowSelection` needs the selection of every row up front. Only the
                 // selection and the surviving rows of the output prewhere columns are kept.
-                let mut whole_bitmap = MutableBitmap::with_capacity(part.nums_rows);
-                let mut any_filtered = false;
-                let mut kept_pre = (!pre_output_indices.is_empty()).then(BlockQueue::default);
-                let mut filter_eval = FilterEvaluator {
-                    filters: self.filters.as_ref(),
-                    selector: self.prewhere_selector.as_mut(),
-                    runtime_filters: &self.runtime_filters,
-                    func_ctx: &self.func_ctx,
-                };
-                let pre_bytes = filter_eval.for_each_pre_batch(
+                match start_pre_stage(
+                    self.early.as_mut(),
                     &self.pre_reader,
-                    part,
-                    &pre_chunks,
-                    index_selection.as_ref(),
+                    &self.func_ctx,
+                    self.prewhere_selectivity_threshold,
                     self.batch_rows,
-                    |batch, batch_sel, _| {
-                        let batch_len = batch.num_rows();
-                        match &batch_sel {
-                            Some(b) => {
-                                any_filtered |= b.null_count() > 0;
-                                whole_bitmap.extend_from_bitmap(b);
-                            }
-                            None => whole_bitmap.extend_constant(batch_len, true),
-                        }
-                        if let Some(queue) = kept_pre.as_mut()
-                            && let Some(kept) = project_and_filter(
-                                batch,
-                                Some(pre_output_indices),
-                                batch_sel.as_ref(),
-                            )?
-                        {
-                            queue.push(kept);
-                        }
-                        Ok(())
-                    },
-                )?;
-
-                let selection: Option<Bitmap> = any_filtered.then(|| whole_bitmap.into());
-                let assembler = RemainAssembler::Merge {
-                    kept_pre,
-                    sources: merge_sources.clone(),
-                };
-                let (stage, remain_bytes) = self.remain_stage(
                     part,
-                    &remain_chunks,
-                    selection,
-                    assembler,
-                    need_row_offsets,
-                )?;
-                (stage, pre_bytes + remain_bytes)
+                    early_chunks.as_ref(),
+                    &pre_chunks,
+                    index_selection,
+                )? {
+                    PreStageStart::Empty { bytes } => (
+                        BatchStage::Done,
+                        bytes + raw_bytes_of_chunks(&remain_chunks),
+                    ),
+                    PreStageStart::Ready {
+                        stage: mut pre_stage,
+                        early_bytes,
+                    } => {
+                        let expected_rows = pre_stage
+                            .early_selection
+                            .as_ref()
+                            .map_or(part.nums_rows, |s| s.len() - s.null_count());
+                        let mut late_bits = MutableBitmap::with_capacity(expected_rows);
+                        let mut any_late_filtered = false;
+                        let mut kept_pre =
+                            (!pre_output_indices.is_empty()).then(BlockQueue::default);
+                        {
+                            let mut filter_eval = FilterEvaluator {
+                                filters: self.filters.as_ref(),
+                                selector: self.prewhere_selector.as_mut(),
+                                runtime_filters: &self.runtime_filters,
+                                func_ctx: &self.func_ctx,
+                            };
+                            while pre_stage.next_pieces(part, |piece, idx_slice| {
+                                let piece_len = piece.num_rows();
+                                let piece_sel =
+                                    filter_eval.eval_selection(&piece, piece_len, idx_slice)?;
+                                match &piece_sel {
+                                    Some(b) => {
+                                        any_late_filtered |= b.null_count() > 0;
+                                        late_bits.extend_from_bitmap(b);
+                                    }
+                                    None => late_bits.extend_constant(piece_len, true),
+                                }
+                                if let Some(queue) = kept_pre.as_mut()
+                                    && let Some(kept) = project_and_filter(
+                                        piece,
+                                        Some(pre_output_indices),
+                                        piece_sel.as_ref(),
+                                    )?
+                                {
+                                    queue.push(kept);
+                                }
+                                Ok(())
+                            })? {}
+                        }
+                        let pre_bytes = pre_stage.scan_bytes(part.nums_rows);
+                        let selection: Option<Bitmap> = match pre_stage.early_selection {
+                            Some(early_sel) => Some(if any_late_filtered {
+                                expand_selection(&early_sel, &late_bits.into())
+                            } else {
+                                early_sel
+                            }),
+                            None => any_late_filtered.then(|| late_bits.into()),
+                        };
+                        let assembler = RemainAssembler::Merge {
+                            kept_pre,
+                            sources: merge_sources.clone(),
+                        };
+                        let (stage, remain_bytes) = self.remain_stage(
+                            part,
+                            &remain_chunks,
+                            selection,
+                            assembler,
+                            need_row_offsets,
+                        )?;
+                        (stage, early_bytes + pre_bytes + remain_bytes)
+                    }
+                }
             }
         };
 
         Ok(Some(BlockBatches {
             stage,
             nums_rows: part.nums_rows,
-            need_row_offsets,
             bytes,
         }))
     }
@@ -785,7 +1066,7 @@ impl ReadState {
                 .filters
                 .as_ref()
                 .is_none_or(|_| self.filters_deterministic)
-            && !(no_output_columns && self.runtime_filters.is_empty())
+            && !(no_output_columns && self.early.is_none() && self.runtime_filters.is_empty())
             && !(self.pre_column_ids.is_empty()
                 && (self.filters.is_some() || !self.runtime_filters.is_empty()))
     }
@@ -847,6 +1128,171 @@ impl ReadState {
     }
 }
 
+struct EarlyStageOutput {
+    selection: Bitmap,
+    retained: Option<DataBlock>,
+    bytes: usize,
+}
+
+struct EarlyBatchesOutput {
+    selection: Bitmap,
+    retained: Option<BlockQueue>,
+    bytes: usize,
+}
+
+/// Evaluates the early stage in [`MIN_BATCH_ROWS`] batches and keeps any retained early
+/// columns in a [`BlockQueue`] without concatenating. Caller must have checked
+/// `early.reader.can_parquet_batches(chunks)`.
+fn run_early_stage_batches(
+    early: &mut EarlyStage,
+    func_ctx: &FunctionContext,
+    part: &FuseBlockPartInfo,
+    chunks: &HashMap<ColumnId, DataItem>,
+    pruned: Option<&Bitmap>,
+) -> Result<EarlyBatchesOutput> {
+    let mut batches = early
+        .reader
+        .parquet_batches(part, chunks, None, MIN_BATCH_ROWS)?;
+    let mut bytes = 0;
+    let mut bits = MutableBitmap::with_capacity(part.nums_rows);
+    let mut retained = (!early.retained_indices.is_empty()).then(BlockQueue::default);
+    while let Some(batch) = batches.next_block(part) {
+        let batch = batch?;
+        bytes += block_logical_bytes(&batch);
+        let bitmap: Bitmap = eval_filter(
+            &early.filter,
+            early.selector.as_mut(),
+            func_ctx,
+            &batch,
+            batch.num_rows(),
+        )?
+        .into();
+        let bitmap = match pruned {
+            Some(rows) => &bitmap & &rows.clone().sliced(bits.len(), bitmap.len()),
+            None => bitmap,
+        };
+        if let Some(queue) = retained.as_mut()
+            && let Some(kept) =
+                filter_surviving(batch.project(&early.retained_indices), Some(&bitmap))?
+        {
+            queue.push(kept);
+        }
+        bits.extend_from_bitmap(&bitmap);
+    }
+    Ok(EarlyBatchesOutput {
+        selection: bits.into(),
+        retained,
+        bytes,
+    })
+}
+
+/// The rows of the block that the early stage selects, with the pruner's selection, the
+/// retained early columns of these rows, and the bytes it decoded. The early columns are
+/// decoded in batches when possible, see [`BlockReader::parquet_batches`].
+///
+/// With `candidates`, the condition cache rows, the early columns are decoded for these rows
+/// only, and the early filter is not evaluated when they are `exact`.
+fn filter_early_stage(
+    early: &mut EarlyStage,
+    func_ctx: &FunctionContext,
+    part: &FuseBlockPartInfo,
+    columns_chunks: &HashMap<ColumnId, DataItem>,
+    candidates: Option<&Bitmap>,
+    exact: bool,
+) -> Result<EarlyStageOutput> {
+    let chunks = ReadState::filter_column_chunks(columns_chunks, &early.column_ids)?;
+    if let Some(candidates) = candidates {
+        let raw_bytes = raw_bytes_of_chunks(&chunks);
+        let block =
+            early
+                .reader
+                .deserialize_part(part, chunks, Some(&RowSelection::from(candidates)))?;
+        let bytes = estimate_block_bytes(
+            block.memory_size(),
+            block.num_rows(),
+            part.nums_rows,
+            raw_bytes,
+        );
+        let bitmap: Bitmap = if exact {
+            MutableBitmap::from_len_set(block.num_rows()).into()
+        } else {
+            eval_filter(
+                &early.filter,
+                early.selector.as_mut(),
+                func_ctx,
+                &block,
+                block.num_rows(),
+            )?
+            .into()
+        };
+        let bitmap = and_selection(
+            Some(bitmap),
+            selected_rows(part).map(|rows| compress_selection(candidates, &rows)),
+        )
+        .unwrap();
+        let retained = (!early.retained_indices.is_empty() && bitmap.null_count() < bitmap.len())
+            .then(|| {
+                block
+                    .project(&early.retained_indices)
+                    .filter_with_bitmap(&bitmap)
+            })
+            .transpose()?;
+        return Ok(EarlyStageOutput {
+            selection: expand_selection(candidates, &bitmap),
+            retained,
+            bytes,
+        });
+    }
+    let pruned = selected_rows(part);
+    if part.nums_rows > MIN_BATCH_ROWS && early.reader.can_parquet_batches(&chunks) {
+        let EarlyBatchesOutput {
+            selection,
+            retained,
+            bytes,
+        } = run_early_stage_batches(early, func_ctx, part, &chunks, pruned.as_ref())?;
+        let retained = retained
+            .map(BlockQueue::into_concat_block)
+            .transpose()?
+            .flatten();
+        return Ok(EarlyStageOutput {
+            selection,
+            retained,
+            bytes,
+        });
+    }
+    let block = early.reader.deserialize_part(part, chunks, None)?;
+    let bytes = block.memory_size();
+    let bitmap: Bitmap = eval_filter(
+        &early.filter,
+        early.selector.as_mut(),
+        func_ctx,
+        &block,
+        block.num_rows(),
+    )?
+    .into();
+    let bitmap = and_selection(Some(bitmap), pruned).unwrap();
+    let retained = if early.retained_indices.is_empty() {
+        None
+    } else {
+        filter_surviving(block.project(&early.retained_indices), Some(&bitmap))?
+    };
+    Ok(EarlyStageOutput {
+        selection: bitmap,
+        retained,
+        bytes,
+    })
+}
+
+/// Sets the rows of `outer` to the bits of `inner`, which has a bit per row `outer` sets.
+fn expand_selection(outer: &Bitmap, inner: &Bitmap) -> Bitmap {
+    debug_assert_eq!(outer.len() - outer.null_count(), inner.len());
+    let mut inner = inner.iter();
+    outer
+        .iter()
+        .map(|set| set && inner.next().unwrap())
+        .collect()
+}
+
 /// The rows of `block` that `filter` selects, with the selector if any.
 fn eval_filter(
     filter: &Expr,
@@ -878,16 +1324,6 @@ fn eval_filter(
     Ok(FilterHelpers::filter_to_bitmap(filter_result, num_rows))
 }
 
-/// Sets the rows of `outer` to the bits of `inner`, which has a bit per row `outer` sets.
-fn expand_selection(outer: &Bitmap, inner: &Bitmap) -> Bitmap {
-    debug_assert_eq!(outer.len() - outer.null_count(), inner.len());
-    let mut inner = inner.iter();
-    outer
-        .iter()
-        .map(|set| set && inner.next().unwrap())
-        .collect()
-}
-
 /// The bits of `selection` at the rows `outer` sets: the inverse of [`expand_selection`].
 fn compress_selection(outer: &Bitmap, selection: &Bitmap) -> Bitmap {
     outer
@@ -910,33 +1346,56 @@ fn selected_rows(part: &FuseBlockPartInfo) -> Option<Bitmap> {
     part.block_meta_index()?.selected_rows(part.nums_rows)
 }
 
-fn expand_runtime_filter_bitmap(
-    prewhere_bitmap: &Bitmap,
-    runtime_filter_bitmap: &MutableBitmap,
-) -> MutableBitmap {
-    let mut runtime_filter_bits = runtime_filter_bitmap.iter();
-    let mut expanded = MutableBitmap::with_capacity(prewhere_bitmap.len());
-    for survives_prewhere in prewhere_bitmap.iter() {
-        expanded.push(
-            survives_prewhere
-                && runtime_filter_bits
-                    .next()
-                    .expect("runtime filter bitmap must match surviving rows"),
+/// Decodes `chunks` for the rows `selection` sets and adds the bytes of the whole block to
+/// `bytes`. A selective enough selection is pushed down to the decoder; otherwise the block is
+/// decoded and then filtered.
+fn deserialize_selected(
+    reader: &BlockReader,
+    part: &FuseBlockPartInfo,
+    chunks: HashMap<ColumnId, DataItem>,
+    selection: Option<&Bitmap>,
+    threshold: u64,
+    bytes: &mut usize,
+) -> Result<DataBlock> {
+    if let Some(selection) =
+        selection.filter(|selection| should_push_down_row_selection(selection, threshold))
+    {
+        let raw_bytes = raw_bytes_of_chunks(&chunks);
+        let block = reader.deserialize_part(part, chunks, Some(&RowSelection::from(selection)))?;
+        *bytes += estimate_block_bytes(
+            block.memory_size(),
+            block.num_rows(),
+            part.nums_rows,
+            raw_bytes,
         );
+        return Ok(block);
     }
-    debug_assert!(runtime_filter_bits.next().is_none());
-    expanded
+    let block = reader.deserialize_part(part, chunks, None)?;
+    *bytes += block.memory_size();
+    match selection {
+        Some(selection) => block.filter_with_bitmap(selection),
+        None => Ok(block),
+    }
+}
+
+/// The rows both selections set, where `None` sets every row.
+fn and_selection(lhs: Option<Bitmap>, rhs: Option<Bitmap>) -> Option<Bitmap> {
+    match (lhs, rhs) {
+        (Some(lhs), Some(rhs)) => Some(&lhs & &rhs),
+        (selection, None) | (None, selection) => selection,
+    }
 }
 
 /// Size of the column chunks as they were read, before decoding.
 fn raw_bytes_of_chunks(columns_chunks: &HashMap<ColumnId, DataItem>) -> usize {
-    columns_chunks
-        .values()
-        .map(|item| match item {
-            DataItem::RawData(buffer) => buffer.len(),
-            DataItem::ColumnArray(array) => array.1,
-        })
-        .sum()
+    columns_chunks.values().map(raw_bytes_of_item).sum()
+}
+
+fn raw_bytes_of_item(item: &DataItem) -> usize {
+    match item {
+        DataItem::RawData(buffer) => buffer.len(),
+        DataItem::ColumnArray(array) => array.1,
+    }
 }
 
 /// Estimate the uncompressed size of some columns for the whole block when
@@ -979,7 +1438,6 @@ fn block_logical_bytes(block: &DataBlock) -> usize {
 pub(crate) struct BlockBatches {
     stage: BatchStage,
     nums_rows: usize,
-    need_row_offsets: bool,
     /// Scan bytes of the stages that are done.
     bytes: usize,
 }
@@ -987,13 +1445,181 @@ pub(crate) struct BlockBatches {
 enum BatchStage {
     /// [`ReadPlan::PreOnly`]: filters each batch of the prewhere columns as it is decoded.
     Pre {
-        batches: ParquetBatches,
-        index_selection: Option<Bitmap>,
-        row_offset: usize,
+        stage: PreStage,
+        offset_cursor: Option<RowOffsetCursor>,
     },
     /// [`ReadPlan::RemainOnly`] and the second pass of [`ReadPlan::TwoStage`].
     Remain(RemainStage),
     Done,
+}
+
+enum PreStageStart {
+    Empty { bytes: usize },
+    Ready { stage: PreStage, early_bytes: usize },
+}
+
+#[allow(clippy::too_many_arguments)]
+fn start_pre_stage(
+    early: Option<&mut EarlyStage>,
+    pre_reader: &Arc<BlockReader>,
+    func_ctx: &FunctionContext,
+    selectivity_threshold: u64,
+    batch_rows: usize,
+    part: &FuseBlockPartInfo,
+    early_chunks: Option<&HashMap<ColumnId, DataItem>>,
+    pre_chunks: &HashMap<ColumnId, DataItem>,
+    index_selection: Option<Bitmap>,
+) -> Result<PreStageStart> {
+    let raw_bytes = raw_bytes_of_chunks(pre_chunks);
+    if let Some(early) = early {
+        let EarlyBatchesOutput {
+            selection,
+            retained,
+            bytes: early_bytes,
+        } = run_early_stage_batches(
+            early,
+            func_ctx,
+            part,
+            early_chunks.expect("early chunks must exist when early stage is present"),
+            index_selection.as_ref(),
+        )?;
+        if selection.null_count() == selection.len() {
+            return Ok(PreStageStart::Empty {
+                bytes: early_bytes + raw_bytes,
+            });
+        }
+        let row_selection = should_push_down_row_selection(&selection, selectivity_threshold)
+            .then(|| RowSelection::from(&selection));
+        let batches =
+            pre_reader.parquet_batches(part, pre_chunks, row_selection.as_ref(), batch_rows)?;
+        return Ok(PreStageStart::Ready {
+            stage: PreStage {
+                batches,
+                early_selection: Some(selection),
+                pushed_down: row_selection.is_some(),
+                retained_early: retained,
+                index_selection: None,
+                row_offset: 0,
+                decoded_bytes: 0,
+                decoded_rows: 0,
+                raw_bytes,
+            },
+            early_bytes,
+        });
+    }
+    let batches = pre_reader.parquet_batches(part, pre_chunks, None, batch_rows)?;
+    Ok(PreStageStart::Ready {
+        stage: PreStage {
+            batches,
+            early_selection: None,
+            pushed_down: false,
+            retained_early: None,
+            index_selection,
+            row_offset: 0,
+            decoded_bytes: 0,
+            decoded_rows: 0,
+            raw_bytes,
+        },
+        early_bytes: 0,
+    })
+}
+
+struct PreStage {
+    batches: ParquetBatches,
+    /// Rows surviving the early stage (already ANDed with index selection), `None` when there
+    /// is no early stage.
+    early_selection: Option<Bitmap>,
+    /// Whether `early_selection` was pushed down to `batches`.
+    pushed_down: bool,
+    /// Retained early columns in `early_selection` row order, merged onto each late batch.
+    retained_early: Option<BlockQueue>,
+    /// Index selection to apply per batch when there is no early stage.
+    index_selection: Option<Bitmap>,
+    /// First row of the next batch in the block, when `pushed_down` is false.
+    row_offset: usize,
+    decoded_bytes: usize,
+    decoded_rows: usize,
+    raw_bytes: usize,
+}
+
+impl PreStage {
+    /// Decodes one batch from `pre_reader`, filters by `early_selection` if not pushed down,
+    /// pairs with `retained_early` if present, and invokes `on_piece` for each resulting piece
+    /// in `prewhere_schema` order. Returns `false` once all batches have been decoded.
+    fn next_pieces(
+        &mut self,
+        part: &FuseBlockPartInfo,
+        mut on_piece: impl FnMut(DataBlock, Option<Bitmap>) -> Result<()>,
+    ) -> Result<bool> {
+        let Some(batch) = self.batches.next_block(part) else {
+            if let Some(q) = &self.retained_early {
+                assert!(
+                    q.is_empty(),
+                    "retained early columns must be fully consumed by late prewhere batches"
+                );
+            }
+            return Ok(false);
+        };
+        let batch = batch?;
+        let batch_len = batch.num_rows();
+        self.decoded_bytes += block_logical_bytes(&batch);
+        self.decoded_rows += batch_len;
+
+        let (surviving, idx_slice) = if self.pushed_down {
+            debug_assert!(self.index_selection.is_none());
+            ((batch_len > 0).then_some(batch), None)
+        } else {
+            let batch_start = self.row_offset;
+            self.row_offset += batch_len;
+            if let Some(early_sel) = self.early_selection.as_ref() {
+                debug_assert!(self.index_selection.is_none());
+                let slice = early_sel.clone().sliced(batch_start, batch_len);
+                (filter_surviving(batch, Some(&slice))?, None)
+            } else {
+                let idx_slice = self
+                    .index_selection
+                    .as_ref()
+                    .map(|rows| rows.clone().sliced(batch_start, batch_len));
+                ((batch_len > 0).then_some(batch), idx_slice)
+            }
+        };
+
+        if let Some(late_batch) = surviving {
+            if let Some(queue) = self.retained_early.as_mut() {
+                debug_assert!(idx_slice.is_none());
+                let rows = late_batch.num_rows();
+                let mut start = 0;
+                while start < rows {
+                    let early = queue.pop_front(rows - start);
+                    let len = early.num_rows();
+                    let mut piece = if start == 0 && len == rows {
+                        late_batch.clone()
+                    } else {
+                        late_batch.slice(start..start + len)
+                    };
+                    piece.merge_block(early);
+                    on_piece(piece, None)?;
+                    start += len;
+                }
+            } else {
+                on_piece(late_batch, idx_slice)?;
+            }
+        }
+        Ok(true)
+    }
+
+    fn scan_bytes(&self, nums_rows: usize) -> usize {
+        if self.pushed_down {
+            estimate_block_bytes(
+                self.decoded_bytes,
+                self.decoded_rows,
+                nums_rows,
+                self.raw_bytes,
+            )
+        } else {
+            self.decoded_bytes
+        }
+    }
 }
 
 struct RemainStage {
@@ -1035,25 +1661,13 @@ impl BlockBatches {
         state: &mut ReadState,
         part: &FuseBlockPartInfo,
     ) -> Result<Option<Vec<ReadStateBatch>>> {
-        let need_row_offsets = self.need_row_offsets;
         let mut out = Vec::new();
         match &mut self.stage {
             BatchStage::Done => return Ok(None),
             BatchStage::Pre {
-                batches,
-                index_selection,
-                row_offset,
+                stage,
+                offset_cursor,
             } => {
-                let Some(batch) = batches.next_block(part) else {
-                    self.stage = BatchStage::Done;
-                    return Ok(None);
-                };
-                let batch = batch?;
-                let batch_len = batch.num_rows();
-                self.bytes += block_logical_bytes(&batch);
-                let batch_start = *row_offset;
-                *row_offset += batch_len;
-
                 let ReadPlan::PreOnly { output_indices } = &state.plan else {
                     unreachable!("prewhere-only batches come from ReadPlan::PreOnly");
                 };
@@ -1063,16 +1677,23 @@ impl BlockBatches {
                     runtime_filters: &state.runtime_filters,
                     func_ctx: &state.func_ctx,
                 };
-                let idx_slice = index_selection
-                    .as_ref()
-                    .map(|rows| rows.clone().sliced(batch_start, batch_len));
-                let batch_sel = filter_eval.eval_selection(&batch, batch_len, idx_slice)?;
-                if let Some(block) =
-                    project_and_filter(batch, output_indices.as_deref(), batch_sel.as_ref())?
-                {
-                    let offsets = need_row_offsets
-                        .then(|| bitmap_offsets_at(batch_sel.as_ref(), batch_start, batch_len));
-                    out.push(ReadStateBatch { block, offsets });
+                let has_more = stage.next_pieces(part, |piece, idx_slice| {
+                    let piece_len = piece.num_rows();
+                    let piece_sel = filter_eval.eval_selection(&piece, piece_len, idx_slice)?;
+                    let offsets = offset_cursor
+                        .as_mut()
+                        .map(|c| c.take_filtered(piece_len, piece_sel.as_ref()));
+                    if let Some(block) =
+                        project_and_filter(piece, output_indices.as_deref(), piece_sel.as_ref())?
+                    {
+                        out.push(ReadStateBatch { block, offsets });
+                    }
+                    Ok(())
+                })?;
+                if !has_more {
+                    self.bytes += stage.scan_bytes(self.nums_rows);
+                    self.stage = BatchStage::Done;
+                    return Ok(None);
                 }
             }
             BatchStage::Remain(stage) => {
@@ -1116,8 +1737,9 @@ impl BlockBatches {
     /// which scales the bytes decoded with a pushed-down selection up to the block.
     pub(crate) fn scan_stats(&self) -> BlockScanStats {
         let pending = match &self.stage {
+            BatchStage::Pre { stage, .. } => stage.decoded_bytes,
             BatchStage::Remain(stage) => stage.decoded_bytes,
-            BatchStage::Pre { .. } | BatchStage::Done => 0,
+            BatchStage::Done => 0,
         };
         BlockScanStats {
             rows: self.nums_rows,
@@ -1331,65 +1953,29 @@ impl FilterEvaluator<'_> {
         num_rows: usize,
         index_selection: Option<Bitmap>,
     ) -> Result<Option<Bitmap>> {
-        let filter_bitmap = self.eval_prewhere(block, num_rows)?;
-        let runtime_filter_bitmap = if self.runtime_filters.is_empty() {
-            // Preserve the profile entry even when there is no Bloom filter to evaluate.
-            eval_runtime_filters(self.runtime_filters, self.func_ctx, block, num_rows)?
-        } else if let Some(filter_bitmap) = &filter_bitmap {
-            let filter_bitmap: Bitmap = filter_bitmap.clone().into();
-            let filtered_block = if filter_bitmap.null_count() == 0 {
-                block.clone()
-            } else {
-                block.clone().filter_with_bitmap(&filter_bitmap)?
-            };
-            eval_runtime_filters(
-                self.runtime_filters,
-                self.func_ctx,
-                &filtered_block,
-                filtered_block.num_rows(),
-            )?
-            .map(|runtime_bitmap| expand_runtime_filter_bitmap(&filter_bitmap, &runtime_bitmap))
-        } else {
-            eval_runtime_filters(self.runtime_filters, self.func_ctx, block, num_rows)?
-        };
-
-        let selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
-            (Some(f), Some(rf)) => {
-                let rhs: Bitmap = rf.into();
-                Some((f & &rhs).into())
+        let filter_bitmap = self.eval_prewhere(block, num_rows)?.map(Bitmap::from);
+        let runtime_filter_bitmap = match &filter_bitmap {
+            Some(filter_bitmap) if !self.runtime_filters.is_empty() => {
+                let filtered_block = if filter_bitmap.null_count() == 0 {
+                    block.clone()
+                } else {
+                    block.clone().filter_with_bitmap(filter_bitmap)?
+                };
+                eval_runtime_filters(
+                    self.runtime_filters,
+                    self.func_ctx,
+                    &filtered_block,
+                    filtered_block.num_rows(),
+                )?
+                .map(|runtime_bitmap| expand_selection(filter_bitmap, &runtime_bitmap.into()))
             }
-            (Some(f), None) => Some(f.into()),
-            (None, Some(rf)) => Some(rf.into()),
-            (None, None) => None,
+            // Preserve the profile entry even when there is no Bloom filter to evaluate.
+            _ => eval_runtime_filters(self.runtime_filters, self.func_ctx, block, num_rows)?
+                .map(Bitmap::from),
         };
-        Ok(match (selection, index_selection) {
-            (Some(s), Some(rows)) => Some(&s & &rows),
-            (s, rows) => s.or(rows),
-        })
-    }
 
-    fn for_each_pre_batch(
-        &mut self,
-        pre_reader: &Arc<BlockReader>,
-        part: &FuseBlockPartInfo,
-        pre_chunks: &HashMap<ColumnId, DataItem>,
-        index_selection: Option<&Bitmap>,
-        batch_rows: usize,
-        mut on_batch: impl FnMut(DataBlock, Option<Bitmap>, usize) -> Result<()>,
-    ) -> Result<usize> {
-        let mut pre_batches = pre_reader.parquet_batches(part, pre_chunks, None, batch_rows)?;
-        let mut scan_bytes = 0usize;
-        let mut row_offset = 0usize;
-        while let Some(batch) = pre_batches.next_block(part) {
-            let batch = batch?;
-            let batch_len = batch.num_rows();
-            scan_bytes += block_logical_bytes(&batch);
-            let idx_slice = index_selection.map(|rows| rows.clone().sliced(row_offset, batch_len));
-            let batch_sel = self.eval_selection(&batch, batch_len, idx_slice)?;
-            on_batch(batch, batch_sel, row_offset)?;
-            row_offset += batch_len;
-        }
-        Ok(scan_bytes)
+        let selection = and_selection(filter_bitmap, runtime_filter_bitmap);
+        Ok(and_selection(selection, index_selection))
     }
 }
 
@@ -1464,26 +2050,6 @@ fn filter_surviving(block: DataBlock, selection: Option<&Bitmap>) -> Result<Opti
     }
 }
 
-fn bitmap_offsets_at(
-    selection: Option<&Bitmap>,
-    row_offset: usize,
-    batch_len: usize,
-) -> RoaringTreemap {
-    let mut offsets = RoaringTreemap::new();
-    match selection {
-        Some(bitmap) => {
-            for (start, len) in SlicesIterator::new(bitmap) {
-                let abs_start = (row_offset + start) as u64;
-                offsets.insert_range(abs_start..abs_start + len as u64);
-            }
-        }
-        None => {
-            offsets.insert_range(row_offset as u64..(row_offset + batch_len) as u64);
-        }
-    }
-    offsets
-}
-
 /// Yields original block row offsets in chunks of `count` surviving rows.
 enum RowOffsetCursor {
     Contiguous(usize),
@@ -1510,9 +2076,50 @@ impl RowOffsetCursor {
 
     fn take(&mut self, count: usize) -> RoaringTreemap {
         let mut offsets = RoaringTreemap::new();
+        self.consume(count, Some(&mut offsets));
+        offsets
+    }
+
+    /// Advances by `count` rows and returns the original block row offsets of the rows that
+    /// `filter` selects (all `count` rows when `filter` is `None`).
+    fn take_filtered(&mut self, count: usize, filter: Option<&Bitmap>) -> RoaringTreemap {
+        match filter {
+            None => self.take(count),
+            Some(bitmap) => {
+                debug_assert_eq!(bitmap.len(), count);
+                if bitmap.null_count() == 0 {
+                    return self.take(count);
+                }
+                if bitmap.null_count() == count {
+                    self.consume(count, None);
+                    return RoaringTreemap::new();
+                }
+                let mut offsets = RoaringTreemap::new();
+                let mut pos = 0;
+                for (start, len) in SlicesIterator::new(bitmap) {
+                    if start > pos {
+                        self.consume(start - pos, None);
+                    }
+                    self.consume(len, Some(&mut offsets));
+                    pos = start + len;
+                }
+                if pos < count {
+                    self.consume(count - pos, None);
+                }
+                offsets
+            }
+        }
+    }
+
+    fn consume(&mut self, count: usize, mut out: Option<&mut RoaringTreemap>) {
+        if count == 0 {
+            return;
+        }
         match self {
             Self::Contiguous(next) => {
-                offsets.insert_range(*next as u64..(*next + count) as u64);
+                if let Some(offsets) = out {
+                    offsets.insert_range(*next as u64..(*next + count) as u64);
+                }
                 *next += count;
             }
             Self::Selected {
@@ -1536,7 +2143,9 @@ impl RowOffsetCursor {
                         }
                     };
                     let take = remaining.min(len);
-                    offsets.insert_range(start as u64..(start + take) as u64);
+                    if let Some(offsets) = out.as_deref_mut() {
+                        offsets.insert_range(start as u64..(start + take) as u64);
+                    }
                     remaining -= take;
                     if take < len {
                         *pending = Some((start + take, len - take));
@@ -1544,7 +2153,6 @@ impl RowOffsetCursor {
                 }
             }
         }
-        offsets
     }
 }
 
@@ -1604,6 +2212,16 @@ impl BlockQueue {
             self.offset = end;
         }
         piece
+    }
+
+    fn into_concat_block(mut self) -> Result<Option<DataBlock>> {
+        debug_assert_eq!(self.offset, 0);
+        if self.blocks.len() > 1 {
+            let blocks: Vec<DataBlock> = self.blocks.into_iter().collect();
+            Ok(Some(DataBlock::concat(&blocks)?))
+        } else {
+            Ok(self.blocks.pop_front())
+        }
     }
 }
 
@@ -1689,20 +2307,10 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_runtime_filter_bitmap_after_prewhere() {
-        let prewhere: Bitmap = [false, true, true, false, true].into_iter().collect();
-        let runtime_filter: MutableBitmap = [true, false, true].into_iter().collect();
-
-        let expanded = expand_runtime_filter_bitmap(&prewhere, &runtime_filter);
-        assert_eq!(expanded.iter().collect::<Vec<_>>(), vec![
-            false, true, false, false, true
-        ]);
-    }
-
-    #[test]
     fn test_expand_and_compress_selection() {
         let outer: Bitmap = [false, true, true, false, true].into_iter().collect();
         let inner: Bitmap = [true, false, true].into_iter().collect();
+
         let expanded = expand_selection(&outer, &inner);
         assert_eq!(expanded.iter().collect::<Vec<_>>(), vec![
             false, true, false, false, true
@@ -1745,6 +2353,15 @@ mod tests {
         let mut contiguous = RowOffsetCursor::new(None);
         assert_eq!(contiguous.take(3).iter().collect::<Vec<_>>(), vec![0, 1, 2]);
         assert_eq!(contiguous.take(2).iter().collect::<Vec<_>>(), vec![3, 4]);
+        let mask: Bitmap = [false, true, false, true].into_iter().collect();
+        assert_eq!(
+            contiguous
+                .take_filtered(4, Some(&mask))
+                .iter()
+                .collect::<Vec<_>>(),
+            vec![6, 8]
+        );
+        assert_eq!(contiguous.take(1).iter().collect::<Vec<_>>(), vec![9]);
 
         // Set bits at: 0, 1, 2, 5, 6, 9
         let bitmap: Bitmap = [
@@ -1752,10 +2369,31 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        let mut cursor = RowOffsetCursor::new(Some(bitmap));
+        let mut cursor = RowOffsetCursor::new(Some(bitmap.clone()));
         assert_eq!(cursor.take(2).iter().collect::<Vec<_>>(), vec![0, 1]);
         assert_eq!(cursor.take(3).iter().collect::<Vec<_>>(), vec![2, 5, 6]);
         assert_eq!(cursor.take(1).iter().collect::<Vec<_>>(), vec![9]);
+
+        // Filtered take advances past skipped rows, including all-false masks.
+        let mut filtered = RowOffsetCursor::new(Some(bitmap));
+        let mask_a: Bitmap = [false, true, false].into_iter().collect();
+        let mask_empty: Bitmap = [false, false].into_iter().collect();
+        let mask_all: Bitmap = [true].into_iter().collect();
+        assert_eq!(
+            filtered
+                .take_filtered(3, Some(&mask_a))
+                .iter()
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+        assert!(filtered.take_filtered(2, Some(&mask_empty)).is_empty());
+        assert_eq!(
+            filtered
+                .take_filtered(1, Some(&mask_all))
+                .iter()
+                .collect::<Vec<_>>(),
+            vec![9]
+        );
 
         // A sliced bitmap with runs crossing bytes: rows 1..21 and 30..37 of the slice.
         let bits: Bitmap = (0..43)
@@ -1857,5 +2495,115 @@ mod tests {
         Int64Type::try_downcast_column(&block.get_by_offset(0).to_column())
             .unwrap()
             .as_ptr()
+    }
+
+    fn column(name: &str, data_type: DataType) -> Expr<String> {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: name.to_string(),
+            data_type,
+            display_name: name.to_string(),
+        })
+    }
+
+    fn call(name: &str, args: &[Expr<String>]) -> Expr<String> {
+        check_function(None, name, &[], args, &BUILTIN_FUNCTIONS).unwrap()
+    }
+
+    fn int(value: i32) -> Expr<String> {
+        Expr::Constant(databend_common_expression::Constant {
+            span: None,
+            scalar: databend_common_expression::Scalar::Number(value.into()),
+            data_type: DataType::Number(NumberDataType::Int32),
+        })
+    }
+
+    /// Early columns, retained early columns, and the columns of the late filter.
+    fn plan(
+        filter: Expr<String>,
+        output: &[usize],
+        runtime_filter_columns: &[&String],
+    ) -> Option<(Vec<String>, Vec<String>, Vec<String>)> {
+        let schema = TableSchema::new(vec![
+            TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("s", TableDataType::Number(NumberDataType::Int32)),
+        ]);
+        let names: Vec<String> = filter.column_refs().into_keys().collect();
+        let info = PrewhereInfo {
+            output_columns: Projection::Columns(output.to_vec()),
+            prewhere_columns: Projection::from_column_names(&schema, &names).unwrap(),
+            remain_columns: Projection::Columns(vec![]),
+            filter: filter.as_remote_expr(),
+            virtual_column_ids: None,
+        };
+        let mut preread = Projection::from_column_names(&schema, runtime_filter_columns).unwrap();
+        preread.merge(&info.prewhere_columns);
+        let plan = plan_early_stage(&info, &schema, runtime_filter_columns, &preread).unwrap()?;
+        let schema = plan.projection.project_schema(&schema);
+        let names = schema.fields().iter().map(|f| f.name().clone()).collect();
+        let retained = plan
+            .retained_indices
+            .iter()
+            .map(|&index| schema.field(index).name().clone())
+            .collect();
+        let mut late: Vec<String> = plan
+            .late_filter
+            .map(|filter| filter.column_refs().into_keys().collect())
+            .unwrap_or_default();
+        late.sort();
+        Some((names, retained, late))
+    }
+
+    #[test]
+    fn test_plan_early_stage() {
+        let int32 = DataType::Number(NumberDataType::Int32);
+        let a = column("a", int32.clone());
+        let b = column("b", int32.clone());
+        let s = column("s", int32.clone());
+        let a_eq = call("eq", &[a.clone(), int(1)]);
+        let b_gt = call("gt", &[b.clone(), int(2)]);
+        let s_lt = call("lt", &[s.clone(), int(3)]);
+        let filter = |conjuncts: &[Expr<String>]| call("and_filters", conjuncts);
+
+        let ab = vec!["a".to_string(), "b".to_string()];
+        let only_s = vec!["s".to_string()];
+        let clauses = filter(&[a_eq.clone(), b_gt.clone(), s_lt.clone()]);
+        assert_eq!(
+            plan(clauses.clone(), &[2], &[]),
+            Some((ab.clone(), vec![], only_s.clone()))
+        );
+        let nested = filter(&[filter(&[a_eq.clone(), b_gt.clone()]), s_lt.clone()]);
+        assert_eq!(
+            plan(nested, &[2], &[]),
+            Some((ab.clone(), vec![], only_s.clone()))
+        );
+
+        // Output and runtime filter dependencies keep early columns, without moving the split.
+        let retained_b = Some((ab.clone(), vec!["b".to_string()], only_s));
+        assert_eq!(plan(clauses.clone(), &[1, 2], &[]), retained_b);
+        assert_eq!(plan(clauses, &[2], &[&"b".to_string()]), retained_b);
+
+        // Also keep columns shared with a late conjunct.
+        let a_plus_s = call("gt", &[call("plus", &[a.clone(), s.clone()]), int(0)]);
+        assert_eq!(
+            plan(filter(&[a_eq.clone(), b_gt.clone(), a_plus_s]), &[2], &[]),
+            Some((ab.clone(), vec!["a".to_string()], vec![
+                "a".to_string(),
+                "s".to_string()
+            ]))
+        );
+        // A new runtime filter column is enough to justify a late read.
+        assert_eq!(
+            plan(filter(&[a_eq.clone(), b_gt]), &[], &[&"s".to_string()]),
+            Some((ab, vec![], vec![]))
+        );
+        // The first conjunct already reads every prewhere column. Do not move the second up.
+        let a_plus_s = call("gt", &[call("plus", &[s.clone(), a.clone()]), int(0)]);
+        assert_eq!(plan(filter(&[a_plus_s, a_eq]), &[2], &[]), None);
+        assert_eq!(plan(s_lt.clone(), &[2], &[]), None);
+        // A non-deterministic filter is evaluated as a whole.
+        let random = call("gt", &[call("rand", &[]), call("to_float64", &[int(0)])]);
+        assert_eq!(plan(filter(&[random, s_lt.clone()]), &[2], &[]), None);
     }
 }

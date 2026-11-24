@@ -1,0 +1,317 @@
+statement ok
+create or replace database db_09_0065
+
+statement ok
+use db_09_0065
+
+# `a`, `b` and `n` are only filtered on, `s` and `p` are also output: the leading conjuncts on
+# the former are evaluated first, and the other prewhere columns decoded for the rows that pass.
+statement ok
+create or replace table t (a int not null, b int not null, n int null, s string not null, p string not null) row_per_block = 9000
+
+statement ok
+insert into t select number, number % 13, if(number % 5 = 0, null, number % 10), concat('x', (number % 100)::string), concat('payload-', number::string, '-', repeat('y', number % 30)) from numbers(20000)
+
+statement ok
+set prewhere_selectivity_threshold = 0
+
+query ITT
+select count(*), min(s), max(p) from t where b = 3 and s <> 'x7'
+----
+1523 x0 payload-9987-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+
+query TT
+select s, p from t where a % 7 = 3 and s like '%5%' order by p limit 5
+----
+x55 payload-10055-yyyyy
+x25 payload-10125-yyyyyyyyyyyyyyy
+x53 payload-10153-yyyyyyyyyyyyy
+x95 payload-10195-yyyyyyyyyyyyyyyyyyyyyyyyy
+x25 payload-1025-yyyyy
+
+query IT
+select count(*), min(s) from t where a > 10 and a + length(s) > 19990
+----
+12 x88
+
+query IT
+select count(*), max(p) from t where n > 5 and s = 'x9'
+----
+200 payload-9909-yyyyyyyyy
+
+query IT
+select count(*), max(s) from t where a < 0 and s <> ''
+----
+0 NULL
+
+query IT
+select count(*), min(p) from t where a >= 0 and s = 'x42'
+----
+200 payload-10042-yyyyyyyyyyyyyyyyyyyyyy
+
+query IT
+select count(*), max(p) from t where (a = 100 or b = 12) and s like '%1'
+----
+154 payload-9931-y
+
+query TT
+select s, p from t where b = 0 and a < 200 order by p
+----
+x0 payload-0-
+x4 payload-104-yyyyyyyyyyyyyy
+x17 payload-117-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+x13 payload-13-yyyyyyyyyyyyy
+x30 payload-130-yyyyyyyyyy
+x43 payload-143-yyyyyyyyyyyyyyyyyyyyyyy
+x56 payload-156-yyyyyy
+x69 payload-169-yyyyyyyyyyyyyyyyyyy
+x82 payload-182-yy
+x95 payload-195-yyyyyyyyyyyyyyy
+x26 payload-26-yyyyyyyyyyyyyyyyyyyyyyyyyy
+x39 payload-39-yyyyyyyyy
+x52 payload-52-yyyyyyyyyyyyyyyyyyyyyy
+x65 payload-65-yyyyy
+x78 payload-78-yyyyyyyyyyyyyyyyyy
+x91 payload-91-y
+
+query II
+select count(*), sum(length(p)) from t where b < 4 and n <> 3 and s <> 'x1' and length(p) > 20
+----
+3333 106605
+
+query I
+select count(*) from t where b = 5 and s = 'x5' and _row_id >= 0
+----
+16
+
+statement ok
+unset prewhere_selectivity_threshold
+
+query ITT
+select count(*), min(s), max(p) from t where b = 3 and s <> 'x7'
+----
+1523 x0 payload-9987-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+
+query TT
+select s, p from t where a % 7 = 3 and s like '%5%' order by p limit 5
+----
+x55 payload-10055-yyyyy
+x25 payload-10125-yyyyyyyyyyyyyyy
+x53 payload-10153-yyyyyyyyyyyyy
+x95 payload-10195-yyyyyyyyyyyyyyyyyyyyyyyyy
+x25 payload-1025-yyyyy
+
+query IT
+select count(*), min(s) from t where a > 10 and a + length(s) > 19990
+----
+12 x88
+
+query IT
+select count(*), max(p) from t where n > 5 and s = 'x9'
+----
+200 payload-9909-yyyyyyyyy
+
+query IT
+select count(*), max(s) from t where a < 0 and s <> ''
+----
+0 NULL
+
+query IT
+select count(*), min(p) from t where a >= 0 and s = 'x42'
+----
+200 payload-10042-yyyyyyyyyyyyyyyyyyyyyy
+
+query IT
+select count(*), max(p) from t where (a = 100 or b = 12) and s like '%1'
+----
+154 payload-9931-y
+
+query TT
+select s, p from t where b = 0 and a < 200 order by p
+----
+x0 payload-0-
+x4 payload-104-yyyyyyyyyyyyyy
+x17 payload-117-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+x13 payload-13-yyyyyyyyyyyyy
+x30 payload-130-yyyyyyyyyy
+x43 payload-143-yyyyyyyyyyyyyyyyyyyyyyy
+x56 payload-156-yyyyyy
+x69 payload-169-yyyyyyyyyyyyyyyyyyy
+x82 payload-182-yy
+x95 payload-195-yyyyyyyyyyyyyyy
+x26 payload-26-yyyyyyyyyyyyyyyyyyyyyyyyyy
+x39 payload-39-yyyyyyyyy
+x52 payload-52-yyyyyyyyyyyyyyyyyyyyyy
+x65 payload-65-yyyyy
+x78 payload-78-yyyyyyyyyyyyyyyyyy
+x91 payload-91-y
+
+query II
+select count(*), sum(length(p)) from t where b < 4 and n <> 3 and s <> 'x1' and length(p) > 20
+----
+3333 106605
+
+query I
+select count(*) from t where b = 5 and s = 'x5' and _row_id >= 0
+----
+16
+
+statement ok
+set prewhere_selectivity_threshold = 10
+
+query ITT
+select count(*), min(s), max(p) from t where b = 3 and s <> 'x7'
+----
+1523 x0 payload-9987-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+
+query TT
+select s, p from t where a % 7 = 3 and s like '%5%' order by p limit 5
+----
+x55 payload-10055-yyyyy
+x25 payload-10125-yyyyyyyyyyyyyyy
+x53 payload-10153-yyyyyyyyyyyyy
+x95 payload-10195-yyyyyyyyyyyyyyyyyyyyyyyyy
+x25 payload-1025-yyyyy
+
+query IT
+select count(*), min(s) from t where a > 10 and a + length(s) > 19990
+----
+12 x88
+
+query IT
+select count(*), max(p) from t where n > 5 and s = 'x9'
+----
+200 payload-9909-yyyyyyyyy
+
+query IT
+select count(*), max(s) from t where a < 0 and s <> ''
+----
+0 NULL
+
+query IT
+select count(*), min(p) from t where a >= 0 and s = 'x42'
+----
+200 payload-10042-yyyyyyyyyyyyyyyyyyyyyy
+
+query IT
+select count(*), max(p) from t where (a = 100 or b = 12) and s like '%1'
+----
+154 payload-9931-y
+
+query TT
+select s, p from t where b = 0 and a < 200 order by p
+----
+x0 payload-0-
+x4 payload-104-yyyyyyyyyyyyyy
+x17 payload-117-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+x13 payload-13-yyyyyyyyyyyyy
+x30 payload-130-yyyyyyyyyy
+x43 payload-143-yyyyyyyyyyyyyyyyyyyyyyy
+x56 payload-156-yyyyyy
+x69 payload-169-yyyyyyyyyyyyyyyyyyy
+x82 payload-182-yy
+x95 payload-195-yyyyyyyyyyyyyyy
+x26 payload-26-yyyyyyyyyyyyyyyyyyyyyyyyyy
+x39 payload-39-yyyyyyyyy
+x52 payload-52-yyyyyyyyyyyyyyyyyyyyyy
+x65 payload-65-yyyyy
+x78 payload-78-yyyyyyyyyyyyyyyyyy
+x91 payload-91-y
+
+query II
+select count(*), sum(length(p)) from t where b < 4 and n <> 3 and s <> 'x1' and length(p) > 20
+----
+3333 106605
+
+query I
+select count(*) from t where b = 5 and s = 'x5' and _row_id >= 0
+----
+16
+
+statement ok
+set enable_encoded_columns = 1
+
+query ITT
+select count(*), min(s), max(p) from t where b = 3 and s <> 'x7'
+----
+1523 x0 payload-9987-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+
+query TT
+select s, p from t where a % 7 = 3 and s like '%5%' order by p limit 5
+----
+x55 payload-10055-yyyyy
+x25 payload-10125-yyyyyyyyyyyyyyy
+x53 payload-10153-yyyyyyyyyyyyy
+x95 payload-10195-yyyyyyyyyyyyyyyyyyyyyyyyy
+x25 payload-1025-yyyyy
+
+query IT
+select count(*), min(s) from t where a > 10 and a + length(s) > 19990
+----
+12 x88
+
+query IT
+select count(*), max(p) from t where n > 5 and s = 'x9'
+----
+200 payload-9909-yyyyyyyyy
+
+query IT
+select count(*), max(s) from t where a < 0 and s <> ''
+----
+0 NULL
+
+query IT
+select count(*), min(p) from t where a >= 0 and s = 'x42'
+----
+200 payload-10042-yyyyyyyyyyyyyyyyyyyyyy
+
+query IT
+select count(*), max(p) from t where (a = 100 or b = 12) and s like '%1'
+----
+154 payload-9931-y
+
+query TT
+select s, p from t where b = 0 and a < 200 order by p
+----
+x0 payload-0-
+x4 payload-104-yyyyyyyyyyyyyy
+x17 payload-117-yyyyyyyyyyyyyyyyyyyyyyyyyyy
+x13 payload-13-yyyyyyyyyyyyy
+x30 payload-130-yyyyyyyyyy
+x43 payload-143-yyyyyyyyyyyyyyyyyyyyyyy
+x56 payload-156-yyyyyy
+x69 payload-169-yyyyyyyyyyyyyyyyyyy
+x82 payload-182-yy
+x95 payload-195-yyyyyyyyyyyyyyy
+x26 payload-26-yyyyyyyyyyyyyyyyyyyyyyyyyy
+x39 payload-39-yyyyyyyyy
+x52 payload-52-yyyyyyyyyyyyyyyyyyyyyy
+x65 payload-65-yyyyy
+x78 payload-78-yyyyyyyyyyyyyyyyyy
+x91 payload-91-y
+
+query II
+select count(*), sum(length(p)) from t where b < 4 and n <> 3 and s <> 'x1' and length(p) > 20
+----
+3333 106605
+
+query I
+select count(*) from t where b = 5 and s = 'x5' and _row_id >= 0
+----
+16
+
+statement ok
+unset enable_encoded_columns
+
+statement ok
+unset prewhere_selectivity_threshold
+
+# `a` is decoded by early, then reused by the late predicate and the output.
+# Selected rows straddle the 8192-row early batch boundary.
+query II
+select count(*), sum(a) from t where a % 4200 = 7 and a + length(s) > 9
+----
+4 42028
+
+statement ok
+drop database db_09_0065
