@@ -23,6 +23,7 @@ use crate::aggregates::registry::AGGR_REGISTRY;
 
 pub mod aggregates;
 mod cast_rules;
+mod casts;
 pub mod scalars;
 pub mod srfs;
 pub mod topk_count;
@@ -127,6 +128,7 @@ fn builtin_functions() -> FunctionRegistry {
 
     cast_rules::register(&mut registry);
     scalars::register(&mut registry);
+    casts::register(&mut registry);
     srfs::register(&mut registry);
 
     registry.check_ambiguity();

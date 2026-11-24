@@ -151,6 +151,28 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_context_dependent(register_timestamp_tz_from_parts);
 }
 
+/// The casts between dates, timestamps and their numeric and string forms.
+pub fn register_casts(registry: &mut FunctionRegistry) {
+    let int64 = DataType::Number(NumberDataType::Int64);
+    for (src, dest) in [
+        (DataType::String, DataType::Date),
+        (DataType::String, DataType::Timestamp),
+        (DataType::String, DataType::TimestampTz),
+        (DataType::Date, DataType::Timestamp),
+        (DataType::Timestamp, DataType::Date),
+        (DataType::Timestamp, DataType::TimestampTz),
+        (DataType::TimestampTz, DataType::Timestamp),
+        (DataType::Date, DataType::TimestampTz),
+        (DataType::TimestampTz, DataType::Date),
+        (int64.clone(), DataType::Timestamp),
+        (int64.clone(), DataType::Date),
+        (DataType::Date, int64.clone()),
+        (DataType::Timestamp, int64.clone()),
+    ] {
+        registry.register_cast(Some(src), dest);
+    }
+}
+
 fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     domain: &SimpleDomain<T>,
 ) -> Option<SimpleDomain<i64>> {

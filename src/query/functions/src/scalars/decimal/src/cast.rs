@@ -1123,6 +1123,20 @@ fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
     }
 }
 
+/// The casts to and from decimals.
+pub fn register_decimal_casts(registry: &mut FunctionRegistry) {
+    let decimal = DataType::Decimal(DecimalSize::default());
+
+    let mut sources = vec![DataType::Boolean, decimal.clone(), DataType::String];
+    sources.extend(ALL_NUMERICS_TYPES.iter().map(|num| DataType::Number(*num)));
+    for src in sources {
+        registry.register_cast(Some(src), decimal.clone());
+    }
+    for num in ALL_NUMERICS_TYPES {
+        registry.register_cast(Some(decimal.clone()), DataType::Number(*num));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::types::NumberScalar;

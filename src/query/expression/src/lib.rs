@@ -43,6 +43,7 @@ mod block;
 pub mod aggregate;
 pub mod auto_cast_rules;
 mod block_vec;
+pub mod cast_plan;
 mod constant_folder;
 pub mod conversion;
 pub mod converts;
