@@ -20,6 +20,7 @@ use std::sync::Arc;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -477,6 +478,152 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         Some("1"),
         Some("2"),
     ]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_virtual_column_pruner_reads_shared_jsonb_dictionary() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table = fixture.latest_default_table().await?;
+    let schema = table.get_table_info().meta.schema.clone();
+    let source_column_id = schema.column_id_of("v")?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let dal = fuse_table.get_operator();
+    let ctx: Arc<dyn TableContext> = ctx;
+    ctx.get_settings()
+        .set_setting("enable_encoded_columns".to_string(), "1".to_string())?;
+    let read_settings = ReadSettings::from_ctx(&ctx)?;
+
+    let rows = 128;
+    let block = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![0; rows]).into(),
+            VariantType::from_opt_data(
+                [
+                    r#"{"a":"1","nested":{"b":1}}"#,
+                    r#"{"a":1,"nested":{"b":"1"}}"#,
+                    r#"{"a":null,"nested":{"b":null}}"#,
+                    r#"{"nested":{"b":1}}"#,
+                ]
+                .into_iter()
+                .cycle()
+                .take(rows)
+                .map(|row| Some(OwnedJsonb::from_str(row).unwrap().to_vec()))
+                .collect::<Vec<_>>(),
+            )
+            .into(),
+        ],
+        rows,
+    );
+    let first_id = schema.next_column_id();
+    let info = VirtualColumnInfo {
+        source_column_ids: HashSet::from([source_column_id]),
+        ignorable_source_column_ids: HashSet::from([source_column_id]),
+        virtual_column_fields: ["{a}", "{nested,b}"]
+            .into_iter()
+            .zip(first_id..)
+            .map(|(path, id)| {
+                build_virtual_column_field(
+                    source_column_id,
+                    "v",
+                    id,
+                    parse_key_paths(path.as_bytes()).unwrap().to_owned(),
+                )
+            })
+            .collect(),
+    };
+    let pruner = VirtualColumnPruner::try_create(
+        dal.clone(),
+        CachePolicy::DEFAULT,
+        &Some(PushDownInfo {
+            virtual_column: Some(info.clone()),
+            ..Default::default()
+        }),
+    )?
+    .unwrap();
+    let mut settings = fuse_table.get_write_settings();
+    let reader = VirtualColumnReader::try_create(
+        ctx,
+        dal.clone(),
+        schema.clone(),
+        info,
+        settings.table_compression,
+        CachePolicy::DEFAULT,
+    )?;
+
+    for dictionary in [false, true] {
+        settings.enable_parquet_dictionary = dictionary;
+        let mut builder = VirtualColumnBuilder::try_create(schema.clone(), Default::default())?
+            .with_exact_layout(Arc::new(VirtualColumnLayout::default()));
+        builder.add_block(&block)?;
+        let state = builder.finalize(
+            &settings,
+            &(
+                format!("_b/shared_jsonb_dictionary_{dictionary}.parquet"),
+                0,
+            ),
+        )?;
+        let meta = state.draft_virtual_block_meta.virtual_columns.unwrap();
+        dal.write(&meta.virtual_location.0, state.data).await?;
+        let index = pruner
+            .prune_virtual_columns(
+                &Some(VirtualBlockMeta {
+                    virtual_column_metas: HashMap::new(),
+                    virtual_column_size: meta.virtual_column_size,
+                    virtual_location: meta.virtual_location,
+                    virtual_columns_complete: false,
+                }),
+                None,
+            )
+            .await?
+            .unwrap();
+        assert!(
+            matches!((&index.fields[&first_id], &index.fields[&(first_id + 1)]), (
+            VirtualFieldReadPlan::Shared { value_slot: a, .. },
+            VirtualFieldReadPlan::Shared { value_slot: b, .. },
+        ) if a == b)
+        );
+        let sidecar = reader
+            .read_parquet_data_by_merge_io(&read_settings, &Some(&index), rows)
+            .await
+            .unwrap();
+        let block = reader.deserialize_virtual_columns(
+            block.slice(1..5),
+            Some(sidecar),
+            Some(RowSelection::from(vec![
+                RowSelector::skip(1),
+                RowSelector::select(4),
+                RowSelector::skip(rows - 5),
+            ])),
+        )?;
+        let [a, b] = [2, 3].map(|offset| block.get_by_offset(offset).to_column());
+        assert_eq!(a.is_dict_encoded(), dictionary);
+        assert_eq!(b.is_dict_encoded(), dictionary);
+        assert_variant_column(&a, &[Some("1"), Some("null"), None, Some(r#""1""#)]);
+        assert_variant_column(&b, &[Some(r#""1""#), Some("null"), Some("1"), Some("1")]);
+        if dictionary {
+            let [a, b] = [&a, &b].map(|column| {
+                &column
+                    .as_nullable()
+                    .unwrap()
+                    .column()
+                    .as_encoded()
+                    .unwrap()
+                    .as_dict()
+                    .unwrap()
+                    .values
+            });
+            assert_eq!(a.len(), 3);
+            assert_eq!(a, b);
+            assert!(std::ptr::eq(
+                a.as_variant().unwrap().index(0).unwrap(),
+                b.as_variant().unwrap().index(0).unwrap(),
+            ));
+        }
+    }
     Ok(())
 }
 

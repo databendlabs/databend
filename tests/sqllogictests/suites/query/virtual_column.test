@@ -908,5 +908,38 @@ select id from t_empty_prewhere where id % 2 = 1 and val['d']['e'] > 20 order by
 statement ok
 drop table t_empty_prewhere
 
+# Keep the always-present id path Direct so the two sparse JSONB paths share a value leaf.
+statement ok
+create table t_shared_virtual (v json) storage_format = 'parquet' enable_virtual_column = true virtual_column_max_direct_columns = 1
+
+statement ok
+insert into t_shared_virtual
+select parse_json(concat('{"id":', to_string(number), case number % 4
+    when 0 then ',"a":"1","nested":{"b":1}}'
+    when 1 then ',"a":1,"nested":{"b":"1"}}'
+    when 2 then ',"a":null,"nested":{"b":null}}'
+    else '}' end))
+from numbers(1024)
+
+statement ok
+refresh virtual column on t_shared_virtual
+
+statement ok
+set enable_encoded_columns = 1
+
+query TT
+select v['a'], v['nested']['b'] from t_shared_virtual where v['id']::int < 4 order by v['id']::int
+----
+"1" 1
+1 "1"
+null null
+NULL NULL
+
+statement ok
+unset enable_encoded_columns
+
+statement ok
+drop table t_shared_virtual
+
 statement ok
 DROP DATABASE test_virtual_column

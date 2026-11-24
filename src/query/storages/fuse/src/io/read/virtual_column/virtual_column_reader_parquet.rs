@@ -17,7 +17,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use arrow_array::Array;
+use arrow_array::DictionaryArray;
+use arrow_array::MapArray;
 use arrow_array::RecordBatch;
+use arrow_array::UInt32Array;
+use arrow_array::types::UInt32Type;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::Fields;
+use arrow_schema::Schema;
+use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -62,6 +71,7 @@ use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
 use crate::BlockReadResult;
+use crate::io::read::block::parquet::ColumnEncoding;
 use crate::io::read::block::parquet::column_chunks_to_record_batch;
 
 pub struct VirtualBlockReadResult {
@@ -224,16 +234,20 @@ impl VirtualColumnReader {
             .map(|virtual_data| virtual_data.read_slots.clone())
             .unwrap_or_default();
         let record_batch = virtual_data
+            .as_ref()
             .filter(|virtual_data| !virtual_data.schema.fields().is_empty())
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
+                let hints = self.dictionary_ndv_ratio.and_then(|_| {
+                    shared_jsonb_dictionary_hints(virtual_data, &self.virtual_column_info)
+                });
                 column_chunks_to_record_batch(
                     &virtual_data.schema,
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
                     row_selection,
-                    None,
+                    hints.as_ref(),
                 )
             })
             .transpose()?;
@@ -266,6 +280,9 @@ impl VirtualColumnReader {
                             &virtual_read_slots,
                             &func_ctx,
                             data_block.num_rows(),
+                            self.dictionary_ndv_ratio.filter(|_| {
+                                target_type.remove_nullable_ref() == &DataType::Variant
+                            }),
                         )?
                     }
                 };
@@ -316,6 +333,78 @@ impl VirtualColumnReader {
 
         Ok(data_block)
     }
+}
+
+/// Keep the value dictionary only for standalone Shared fields read as Variant.
+fn shared_jsonb_dictionary_hints(
+    virtual_data: &VirtualBlockReadResult,
+    info: &VirtualColumnInfo,
+) -> Option<Fields> {
+    let shared_maps: HashSet<_> = info
+        .virtual_column_fields
+        .iter()
+        .filter_map(|field| {
+            if field.data_type.remove_nullable() != TableDataType::Variant {
+                return None;
+            }
+            let VirtualFieldReadPlan::Shared {
+                key_slot,
+                value_slot,
+                ..
+            } = virtual_data.fields.get(&field.query_column_id)?
+            else {
+                return None;
+            };
+            let value_type = &virtual_data
+                .read_slots
+                .get(value_slot.as_usize())?
+                .data_type;
+            (value_type.remove_nullable_ref() == &DataType::Variant).then_some(key_slot.0)
+        })
+        .collect();
+    if shared_maps.is_empty() {
+        return None;
+    }
+
+    let schema = Schema::from(virtual_data.schema.as_ref());
+    Some(
+        virtual_data
+            .schema
+            .fields()
+            .iter()
+            .zip(schema.fields())
+            .map(|(field, arrow)| {
+                if shared_maps.contains(&field.column_id())
+                    && let ArrowDataType::Map(entries, sorted) = arrow.data_type()
+                    && let ArrowDataType::Struct(fields) = entries.data_type()
+                    && let [key, value] = &fields[..]
+                {
+                    // The key stays UInt32: it identifies a path, not a dictionary value.
+                    let value = value
+                        .as_ref()
+                        .clone()
+                        .with_data_type(ArrowDataType::Dictionary(
+                            Box::new(ArrowDataType::UInt32),
+                            Box::new(ArrowDataType::LargeBinary),
+                        ));
+                    let entries = entries
+                        .as_ref()
+                        .clone()
+                        .with_data_type(ArrowDataType::Struct(
+                            vec![key.clone(), Arc::new(value)].into(),
+                        ));
+                    Arc::new(
+                        arrow
+                            .as_ref()
+                            .clone()
+                            .with_data_type(ArrowDataType::Map(Arc::new(entries), *sorted)),
+                    )
+                } else {
+                    arrow.clone()
+                }
+            })
+            .collect(),
+    )
 }
 
 /// Cast a virtual-column value to the user-requested target type when the stored type differs.
@@ -476,6 +565,7 @@ fn eval_read_plan(
     read_slots: &[VirtualReadSlot],
     func_ctx: &FunctionContext,
     num_rows: usize,
+    dictionary_ndv_ratio: Option<u64>,
 ) -> Result<(Value<AnyType>, DataType)> {
     match plan {
         VirtualFieldReadPlan::Missing => Ok((Value::Scalar(Scalar::Null), DataType::Null)),
@@ -501,6 +591,7 @@ fn eval_read_plan(
                 read_slots,
                 func_ctx,
                 num_rows,
+                None,
             )?;
             if suffix_path.is_empty() {
                 return Ok((value, data_type));
@@ -530,14 +621,22 @@ fn eval_read_plan(
                 .get(value_slot.as_usize())
                 .ok_or_else(|| ErrorCode::Internal("virtual shared value slot is out of bounds"))?;
             let shared_data_type = shared_data_type_from_physical(&value_slot.data_type)?;
-            let (column, data_type) =
-                column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string())?
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "virtual shared key slot {} is missing from the sidecar record batch",
-                            key_slot.0
-                        ))
-                    })?;
+            let name = key_slot.0.to_string();
+            if let Some(ratio) = dictionary_ndv_ratio
+                && shared_data_type == VirtualColumnSharedDataType::Jsonb
+                && let Some(column) = record_batch.column_by_name(&name)
+                && let Some(column) =
+                    extract_shared_jsonb_dictionary(column.as_ref(), *index, num_rows, ratio)?
+            {
+                return Ok((Value::Column(column), DataType::Variant.wrap_nullable()));
+            }
+            let (column, data_type) = column_from_record_batch(record_batch, orig_schema, &name)?
+                .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "virtual shared key slot {} is missing from the sidecar record batch",
+                    key_slot.0
+                ))
+            })?;
             materialize_shared_map_value(column, data_type, shared_data_type, *index, num_rows)
         }
         VirtualFieldReadPlan::Coalesce { plans } => materialize_coalesce_read_plan(
@@ -579,6 +678,7 @@ fn materialize_coalesce_read_plan(
             read_slots,
             func_ctx,
             num_rows,
+            None,
         )?);
     }
 
@@ -654,6 +754,7 @@ fn materialize_object_read_plan(
             read_slots,
             func_ctx,
             num_rows,
+            None,
         )?;
         child_values.push((entries[entry_idx].0.as_str(), value));
     }
@@ -781,6 +882,57 @@ fn append_shared_object_group_values<'a>(
     }
 
     Ok(())
+}
+
+fn extract_shared_jsonb_dictionary(
+    column: &dyn Array,
+    path_id: u32,
+    num_rows: usize,
+    max_ndv_ratio: u64,
+) -> Result<Option<Column>> {
+    let Some(map) = column.as_any().downcast_ref::<MapArray>() else {
+        return Ok(None);
+    };
+    let Some(dict) = map
+        .values()
+        .as_any()
+        .downcast_ref::<DictionaryArray<UInt32Type>>()
+    else {
+        return Ok(None);
+    };
+    if map.len() != num_rows {
+        return Err(ErrorCode::Internal(format!(
+            "Virtual column shared map row count mismatch, expected {num_rows}, got {}",
+            map.len(),
+        )));
+    }
+    let path_ids = map
+        .keys()
+        .as_any()
+        .downcast_ref::<UInt32Array>()
+        .ok_or_else(|| ErrorCode::Internal("Virtual column shared map key should be UInt32"))?;
+    let codes = dict.keys();
+    let keys = map
+        .value_offsets()
+        .windows(2)
+        .map(|range| {
+            // The last match wins, as in the plain reader. Missing paths are SQL NULL;
+            // an explicit JSON null still has a valid code.
+            (range[0] as usize..range[1] as usize)
+                .rev()
+                .find(|&pos| path_ids.value(pos) == path_id)
+                .and_then(|pos| codes.is_valid(pos).then(|| codes.value(pos)))
+        })
+        .collect::<UInt32Array>();
+    let extracted = DictionaryArray::try_new(keys, dict.values().clone())?;
+    ColumnEncoding::Dictionary
+        .encode(
+            Arc::new(extracted),
+            &DataType::Variant.wrap_nullable(),
+            max_ndv_ratio,
+            false, // Only reuse an existing dictionary; never build one.
+        )
+        .map(Some)
 }
 
 fn materialize_shared_map_value(

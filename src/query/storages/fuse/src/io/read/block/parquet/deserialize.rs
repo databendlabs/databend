@@ -141,14 +141,41 @@ pub(super) fn column_chunks_record_reader(
 ) -> databend_common_exception::Result<ParquetRecordBatchReader> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
-    let hint_fields = hint_fields.unwrap_or(arrow_schema.fields());
-
     let column_id_to_dfs_id = original_schema
         .to_leaf_column_ids()
         .iter()
         .enumerate()
         .map(|(dfs_id, column_id)| (*column_id, dfs_id))
         .collect::<HashMap<_, _>>();
+    // (Top-level Arrow field position, Parquet leaf ordinal) for each dictionary hint.
+    let dictionary_hint_leaves = hint_fields
+        .into_iter()
+        .flat_map(|fields| fields.iter())
+        .zip(original_schema.fields())
+        .enumerate()
+        .filter_map(|(index, (hint, field))| {
+            let column_id = match hint.data_type() {
+                ArrowDataType::Dictionary(..) => field.column_id(),
+                ArrowDataType::Map(entries, _) => {
+                    let ArrowDataType::Struct(children) = entries.data_type() else {
+                        return None;
+                    };
+                    if !matches!(children.get(1)?.data_type(), ArrowDataType::Dictionary(..)) {
+                        return None;
+                    }
+                    // The Shared Map hint is on the value leaf, not the path ID leaf.
+                    let [_, value_id] = field.leaf_column_ids()[..] else {
+                        return None;
+                    };
+                    value_id
+                }
+                _ => return None,
+            };
+            Some((index, *column_id_to_dfs_id.get(&column_id)?))
+        })
+        .collect::<Vec<_>>();
+    let hint_fields = hint_fields.unwrap_or(arrow_schema.fields());
+
     let mut projection_mask = Vec::with_capacity(column_chunks.len());
     let mut builder = RowGroupImplBuilder::new(
         num_rows,
@@ -172,18 +199,10 @@ pub(super) fn column_chunks_record_reader(
     projection_mask.sort_unstable();
 
     let mut adjusted_fields: Option<Vec<FieldRef>> = None;
-    for (index, field) in hint_fields.iter().enumerate() {
-        let column_id = original_schema.fields()[index].column_id();
-        if matches!(field.data_type(), ArrowDataType::Dictionary(..))
-            && column_id_to_dfs_id
-                .get(&column_id)
-                // Whether a column chunk is dictionary encoded was decided when writing it, from
-                // its distinct values (dictionary disabled for high NDV, or the arrow-rs writer
-                // falling back to plain pages once the dictionary page is too large). A chunk
-                // that fell back is read as its regular type: the reader would otherwise
-                // rebuild a dictionary of all the plain values, row by row.
-                .is_some_and(|dfs_id| !builder.all_pages_dictionary_encoded(*dfs_id))
-        {
+    for (index, leaf) in dictionary_hint_leaves {
+        // Read chunks that contain plain pages as their regular type, rather than making
+        // Arrow rebuild a dictionary from the decoded values.
+        if !builder.all_pages_dictionary_encoded(leaf) {
             adjusted_fields.get_or_insert_with(|| hint_fields.to_vec())[index] =
                 arrow_schema.fields()[index].clone();
         }

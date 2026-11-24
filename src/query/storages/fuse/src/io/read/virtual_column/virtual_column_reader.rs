@@ -18,6 +18,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
@@ -67,6 +68,8 @@ pub struct VirtualColumnReader {
     pub(super) compression: TableCompression,
     /// How the sidecar files are read: the policy of the scan.
     pub(super) policy: CachePolicy,
+    /// Maximum dictionary NDV percentage, or `None` if the scan does not keep encoded columns.
+    pub(super) dictionary_ndv_ratio: Option<u64>,
     pub virtual_column_info: VirtualColumnInfo,
 }
 
@@ -79,12 +82,22 @@ impl VirtualColumnReader {
         compression: TableCompression,
         policy: CachePolicy,
     ) -> Result<Self> {
+        let dictionary_ndv_ratio = (policy.memory.writes()
+            && ctx.get_settings().get_enable_encoded_columns()?)
+        .then(|| {
+            GlobalConfig::instance()
+                .cache
+                .table_data_encoded_dictionary_ndv_ratio
+                .min(100)
+        })
+        .filter(|ratio| *ratio > 0);
         Ok(Self {
             ctx,
             dal,
             source_schema,
             compression,
             policy,
+            dictionary_ndv_ratio,
             virtual_column_info,
         })
     }
