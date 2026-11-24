@@ -47,6 +47,7 @@ fn test_builtin_kinds() {
         "memory_cache_iceberg_table",
         "memory_cache_prune_partitions",
         "memory_cache_condition",
+        "memory_cache_top_n_boundary",
         "memory_cache_bloom_index_filter",
         "memory_cache_segment_zone_map_chunk",
         "memory_cache_vector_index_file",
@@ -78,7 +79,7 @@ fn test_pools_and_shared_defaults() {
             .collect::<Vec<_>>()
     };
     assert_eq!(in_pool(Pool::Meta).len(), 15);
-    assert_eq!(in_pool(Pool::Index).len(), 11);
+    assert_eq!(in_pool(Pool::Index).len(), 12);
     assert_eq!(in_pool(Pool::Data), [
         "memory_cache_column_data",
         "memory_cache_table_data"

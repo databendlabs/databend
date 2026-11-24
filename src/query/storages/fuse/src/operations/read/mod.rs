@@ -23,6 +23,7 @@ mod read_block_context;
 mod read_data_transform;
 mod read_state;
 pub(crate) mod runtime_filter_wait;
+pub mod top_n_boundary_cache;
 
 mod block_partition_meta;
 mod data_source_with_meta;

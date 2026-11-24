@@ -1,0 +1,200 @@
+statement ok
+create or replace database test_top_n_boundary_cache
+
+statement ok
+use test_top_n_boundary_cache
+
+# Blocks of 7 rows, so that the runtime TopN filter prunes blocks by the boundary. With
+# `enable_condition_cache`, a TopN records the boundary it reached, and a TopN over the same rows
+# (table snapshot, filters) with the same first sort key and as many top rows starts with it.
+statement ok
+create or replace table t(k int not null, v int null, s string not null) row_per_block = 7
+
+statement ok
+insert into t select number, if(number >= 190, null, number), to_string(10000 + number) from numbers(100)
+
+statement ok
+insert into t select number + 100, if(number + 100 >= 190, null, number + 100), to_string(10100 + number) from numbers(100)
+
+statement ok
+set enable_condition_cache = 1
+
+# Each query runs twice: it records the boundary, then starts with it.
+query I
+select k from t order by k desc limit 4
+----
+199
+198
+197
+196
+
+query I
+select k from t order by k desc limit 4
+----
+199
+198
+197
+196
+
+query I
+select hit > 0 from system.caches where name = 'memory_cache_top_n_boundary'
+----
+1
+
+# Other filters select other rows, whose boundaries are recorded apart.
+query I
+select k from t where k < 100 order by k desc limit 4
+----
+99
+98
+97
+96
+
+query I
+select k from t where k < 100 order by k desc limit 4
+----
+99
+98
+97
+96
+
+query I
+select k from t where k % 3 = 1 order by k desc limit 2
+----
+199
+196
+
+query I
+select k from t where k % 3 = 2 order by k desc limit 2
+----
+197
+194
+
+query I
+select k from t where k % 3 = 2 order by k desc limit 2
+----
+197
+194
+
+# As do more top rows, an offset, and the other direction.
+query I
+select k from t order by k desc limit 6
+----
+199
+198
+197
+196
+195
+194
+
+query I
+select k from t order by k desc limit 2 offset 5
+----
+194
+193
+
+query I
+select k from t order by k desc limit 2 offset 5
+----
+194
+193
+
+query I
+select k from t order by k asc limit 3
+----
+0
+1
+2
+
+query I
+select k from t order by k asc limit 3
+----
+0
+1
+2
+
+# Later sort keys do not change the boundary of the first one.
+query II
+select v, k from t order by v desc nulls last, k desc limit 3
+----
+189 189
+188 188
+187 187
+
+query II
+select v, k from t order by v desc nulls last, k asc limit 3
+----
+189 189
+188 188
+187 187
+
+query II
+select v, k from t order by v asc nulls first, k asc limit 3
+----
+NULL 190
+NULL 191
+NULL 192
+
+query II
+select v, k from t order by v asc nulls first, k asc limit 3
+----
+NULL 190
+NULL 191
+NULL 192
+
+query I
+select k from t order by s desc limit 2
+----
+199
+198
+
+query I
+select k from t order by s desc limit 2
+----
+199
+198
+
+# A new snapshot has its own boundaries.
+statement ok
+insert into t values (500, 500, '20500'), (300, 300, '20300')
+
+query I
+select k from t order by k desc limit 4
+----
+500
+300
+199
+198
+
+query I
+select k from t order by k desc limit 4
+----
+500
+300
+199
+198
+
+statement ok
+delete from t where k >= 199
+
+query I
+select k from t order by k desc limit 4
+----
+198
+197
+196
+195
+
+query I
+select k from t order by k desc limit 4
+----
+198
+197
+196
+195
+
+statement ok
+unset enable_condition_cache
+
+statement ok
+drop database test_top_n_boundary_cache

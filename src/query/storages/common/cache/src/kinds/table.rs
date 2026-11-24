@@ -21,6 +21,7 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_expression::Scalar;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
@@ -95,6 +96,30 @@ impl CachedItem for BlockCondition {
                 BlockCondition::Rows(rows) => rows.len() * size_of::<u32>(),
                 BlockCondition::Granules { bits, .. } => bits.len() * size_of::<u64>(),
             }
+    }
+}
+
+/// The boundaries the runtime TopN filters of scans reached (`enable_condition_cache`), by scan:
+/// the first sort key of the last of the top rows, so that a scan with the same filters and
+/// order over the same snapshot prunes by it from its start.
+pub struct TopNBoundary;
+
+impl CacheDef for TopNBoundary {
+    type Value = TopNBoundaryValue;
+    const NAME: &'static str = "memory_cache_top_n_boundary";
+    const POOL: Pool = Pool::Index;
+}
+
+/// The limit of the legacy backend; the shared one bounds the kind by its pool.
+pub const TOP_N_BOUNDARY_CACHE_BYTES: usize = 16 * 1024 * 1024;
+
+/// A boundary of a runtime TopN filter, never null.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TopNBoundaryValue(pub Scalar);
+
+impl CachedItem for TopNBoundaryValue {
+    fn mem_bytes(&self) -> usize {
+        size_of::<Self>() + scalar(&self.0)
     }
 }
 

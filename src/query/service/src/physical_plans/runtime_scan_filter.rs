@@ -20,12 +20,16 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::runtime_filter_info::RuntimeLimitFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
 use databend_common_catalog::runtime_filter_info::RuntimeTopNFilter;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::types::DataType;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::SortDesc;
+use databend_common_storages_fuse::operations::read::top_n_boundary_cache::lookup_top_n_boundary;
+use databend_common_storages_fuse::operations::read::top_n_boundary_cache::top_n_boundary_key;
 use databend_storages_common_table_meta::meta::supported_stat_type;
 
 use crate::physical_plans::EvalScalar;
@@ -49,6 +53,51 @@ pub(super) fn register_runtime_top_n_filter(
         ctx.register_runtime_scan_filter(scan_id, filter);
     }
     Some(boundary)
+}
+
+/// Under `enable_condition_cache`, start `boundary`, of a TopN over `input` that keeps
+/// `candidate_count` rows, with the boundary a TopN of the same scan reached, and return the key
+/// the TopN records its boundary under when it finishes, see `top_n_boundary_cache`.
+///
+/// Only for a standalone query, and a TopN over a single scan whose rows reach it as they are:
+/// across `EvalScalar` only.
+pub(super) fn cache_runtime_top_n_boundary(
+    ctx: &QueryContext,
+    input: &PhysicalPlan,
+    order_by: &[SortDesc],
+    candidate_count: usize,
+    boundary: &RuntimeTopNBoundary,
+) -> Option<String> {
+    if !ctx.get_settings().get_enable_condition_cache().ok()? || !ctx.get_cluster().is_empty() {
+        return None;
+    }
+    let source = top_n_cache_source(input)?;
+    let desc = order_by.first()?;
+    let func_ctx = ctx.get_function_context().ok()?;
+    let key = top_n_boundary_key(
+        source,
+        desc.asc,
+        desc.nulls_first,
+        candidate_count,
+        &func_ctx,
+    )?;
+    if let Some(cached) = lookup_top_n_boundary(&key) {
+        boundary.update(&cached);
+    }
+    Some(key)
+}
+
+/// The scan whose rows reach `plan` as they are.
+#[recursive::recursive]
+fn top_n_cache_source(plan: &PhysicalPlan) -> Option<&DataSourcePlan> {
+    if let Some(scan) = plan.as_any().downcast_ref::<FuseBlockRead>() {
+        return Some(&scan.source);
+    }
+    if let Some(scan) = plan.as_any().downcast_ref::<TableScan>() {
+        return Some(&scan.source);
+    }
+    let eval_scalar = plan.as_any().downcast_ref::<EvalScalar>()?;
+    top_n_cache_source(&eval_scalar.input)
 }
 
 pub(super) fn register_runtime_limit_filter(

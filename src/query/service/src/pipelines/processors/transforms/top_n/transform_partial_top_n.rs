@@ -26,6 +26,7 @@ use databend_common_pipeline_transforms::sorts::core::RowConverter;
 use databend_common_pipeline_transforms::sorts::core::Rows;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
+use databend_common_storages_fuse::operations::read::top_n_boundary_cache::insert_top_n_boundary;
 use databend_common_storages_parquet::ReadSettings;
 
 use super::SpilledCandidates;
@@ -68,6 +69,9 @@ pub struct TransformPartialTopN<R: Rows> {
     /// offset of the first source sort column, from which boundary values are
     /// published.
     runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
+    /// The key the boundary is recorded under when the input is consumed, see
+    /// `top_n_boundary_cache`.
+    boundary_cache_key: Option<String>,
 }
 
 impl<R: Rows> TransformPartialTopN<R> {
@@ -83,6 +87,7 @@ impl<R: Rows> TransformPartialTopN<R> {
         writer_pool_bytes: usize,
         read_settings: ReadSettings,
         runtime_top_n_filter: Option<(usize, Arc<RuntimeTopNBoundary>)>,
+        boundary_cache_key: Option<String>,
     ) -> Self {
         Self {
             candidates: TopNCandidates::new(capacity, sort_row_offset),
@@ -97,6 +102,7 @@ impl<R: Rows> TransformPartialTopN<R> {
             spilled: vec![],
             ctx,
             runtime_top_n_filter,
+            boundary_cache_key,
         }
     }
 
@@ -234,6 +240,13 @@ where R::Converter: Send
         }
 
         self.restore_spilled_candidates()?;
+        // The boundary of all the streams so far: each of them is tight enough.
+        if let (Some(key), Some((_, filter))) =
+            (&self.boundary_cache_key, &self.runtime_top_n_filter)
+            && let Some(boundary) = filter.boundary()
+        {
+            insert_top_n_boundary(key, boundary);
+        }
 
         let Some((block, _)) = self.candidates.finish() else {
             return Ok(vec![]);
