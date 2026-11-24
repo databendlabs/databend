@@ -182,14 +182,25 @@ impl FoldRules {
                 });
                 (output, may_fail)
             }
-            CastStep::EmptyArray => (domain.clone(), false),
-            CastStep::Array(inner) => match domain.as_array()? {
-                Some(values) => {
-                    let (values, may_fail) = nested(inner, values)?;
-                    (Domain::Array(Some(Box::new(values))), may_fail)
-                }
-                None => (Domain::Array(None), false),
-            },
+            CastStep::Empty => (domain.clone(), false),
+            // The key-value tuples of a map convert as the elements of an array do.
+            CastStep::Elements(inner) => {
+                let (values, may_fail) = match domain {
+                    Domain::Array(values) | Domain::Map(values) => match values {
+                        Some(values) => {
+                            let (values, may_fail) = nested(inner, values)?;
+                            (Some(Box::new(values)), may_fail)
+                        }
+                        None => (None, false),
+                    },
+                    _ => return None,
+                };
+                let output = match dest_type {
+                    DataType::Map(_) => Domain::Map(values),
+                    _ => Domain::Array(values),
+                };
+                (output, may_fail)
+            }
             CastStep::Tuple(fields) => {
                 let mut may_fail = false;
                 let fields = domain
@@ -204,15 +215,6 @@ impl FoldRules {
                     .collect::<Option<Vec<_>>>()?;
                 (Domain::Tuple(fields), may_fail)
             }
-            CastStep::EmptyMap => (domain.clone(), false),
-            // The entries of a map convert as the elements of an array do.
-            CastStep::Map(inner) => match domain.as_map()? {
-                Some(entries) => {
-                    let (entries, may_fail) = nested(inner, entries)?;
-                    (Domain::Map(Some(Box::new(entries))), may_fail)
-                }
-                None => (Domain::Map(None), false),
-            },
             CastStep::VariantToArray(_) | CastStep::VariantToMap(_) | CastStep::ToVector => {
                 return None;
             }

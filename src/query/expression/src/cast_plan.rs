@@ -72,12 +72,11 @@ pub enum CastStep {
     FromNullable(Box<CastPlan>),
     /// `T1 -> T2 NULL`.
     ToNullable(Box<CastPlan>),
-    EmptyArray,
-    EmptyMap,
-    /// Casts the elements of each array.
-    Array(Box<CastPlan>),
-    /// Casts the key-value tuples of each map.
-    Map(Box<CastPlan>),
+    /// An empty array or map to an array or map, as the destination is: `[]` or `{}`.
+    Empty,
+    /// Casts the elements of each array, or the key-value tuples of each map, as the destination
+    /// is.
+    Elements(Box<CastPlan>),
     /// Casts each field.
     Tuple(Vec<CastPlan>),
     /// Casts the elements of each JSON array; a value that is not an array has none.
@@ -176,8 +175,10 @@ pub fn resolve_cast_plan(
         (DataType::AggregateState(state), _) => {
             resolve_cast_plan(state.physical_type(), dest_type, fn_registry)
         }
-        (DataType::EmptyArray, DataType::Array(_)) => plan(CastStep::EmptyArray),
-        (DataType::Array(src), DataType::Array(dest)) => plan(CastStep::Array(nested(src, dest)?)),
+        (DataType::EmptyArray, DataType::Array(_)) => plan(CastStep::Empty),
+        (DataType::Array(src), DataType::Array(dest)) => {
+            plan(CastStep::Elements(nested(src, dest)?))
+        }
         (DataType::Variant, DataType::Array(dest)) => {
             plan(CastStep::VariantToArray(nested(&DataType::Variant, dest)?))
         }
@@ -189,8 +190,8 @@ pub fn resolve_cast_plan(
                 &fields[1],
             )?))
         }
-        (DataType::EmptyMap, DataType::Map(_)) => plan(CastStep::EmptyMap),
-        (DataType::Map(src), DataType::Map(dest)) => plan(CastStep::Map(nested(src, dest)?)),
+        (DataType::EmptyMap, DataType::Map(_)) => plan(CastStep::Empty),
+        (DataType::Map(src), DataType::Map(dest)) => plan(CastStep::Elements(nested(src, dest)?)),
         (DataType::Tuple(src_fields), DataType::Tuple(dest_fields))
             if src_fields.len() == dest_fields.len() =>
         {
@@ -472,10 +473,12 @@ impl fmt::Display for CastPlan {
             CastStep::Nullable(inner) => write!(f, "nullable({inner})"),
             CastStep::FromNullable(inner) => write!(f, "from_nullable({inner})"),
             CastStep::ToNullable(inner) => write!(f, "to_nullable({inner})"),
-            CastStep::EmptyArray => write!(f, "empty_array"),
-            CastStep::EmptyMap => write!(f, "empty_map"),
-            CastStep::Array(inner) => write!(f, "array({inner})"),
-            CastStep::Map(inner) => write!(f, "map({inner})"),
+            CastStep::Empty if matches!(self.dest_type, DataType::Map(_)) => write!(f, "empty_map"),
+            CastStep::Empty => write!(f, "empty_array"),
+            CastStep::Elements(inner) if matches!(self.dest_type, DataType::Map(_)) => {
+                write!(f, "map({inner})")
+            }
+            CastStep::Elements(inner) => write!(f, "array({inner})"),
             CastStep::Tuple(fields) => {
                 write!(f, "tuple(")?;
                 for (i, field) in fields.iter().enumerate() {

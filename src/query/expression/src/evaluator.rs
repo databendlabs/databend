@@ -967,7 +967,7 @@ impl<'a> Evaluator<'a> {
                 };
                 (value, failed)
             }
-            CastStep::EmptyArray | CastStep::EmptyMap => {
+            CastStep::Empty => {
                 let inner_type = match dest_type {
                     DataType::Array(inner) | DataType::Map(inner) => inner,
                     _ => unreachable!("destination: {}", dest_type),
@@ -986,8 +986,8 @@ impl<'a> Evaluator<'a> {
                 };
                 (value, None)
             }
-            CastStep::Array(inner) | CastStep::Map(inner) => {
-                let is_map = matches!(plan.step, CastStep::Map(_));
+            CastStep::Elements(inner) => {
+                let is_map = matches!(dest_type, DataType::Map(_));
                 match value {
                     Value::Scalar(Scalar::Array(values) | Scalar::Map(values)) => {
                         let len = values.len();
