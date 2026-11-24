@@ -318,7 +318,7 @@ impl PhysicalPlanBuilder {
         }
         fields.sort_by_key(|(_, _, id)| *id);
         // `mutation_source.schema` lacks only the virtual computed columns of
-        // `schema_with_stream()`, which a table that takes partial UPDATEs does not have.
+        // `schema_with_stream()`, which a table that takes partial updates does not have.
         let read_columns = partial_update.then(|| {
             fields
                 .iter()

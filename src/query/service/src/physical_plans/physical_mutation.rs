@@ -498,7 +498,7 @@ impl PhysicalPlanBuilder {
                         &mut field_id_to_schema_index,
                     );
 
-                    // A table that takes partial UPDATEs has no computed columns.
+                    // A table that takes partial updates has no computed columns.
                     let computed_expr = if partial_update_fields.is_some() {
                         vec![]
                     } else {

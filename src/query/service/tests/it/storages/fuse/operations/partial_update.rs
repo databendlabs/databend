@@ -15,7 +15,7 @@
 //! UPDATE of a table with `enable_partial_update` writes only the columns it changes, into a new
 //! column group file of each block it changes.
 //!
-//! Each test runs the same statements on `t`, which takes partial UPDATEs, and on `t_ref`, which
+//! Each test runs the same statements on `t`, which takes partial updates, and on `t_ref`, which
 //! does not, and compares the results.
 
 use std::collections::BTreeSet;
@@ -170,7 +170,11 @@ async fn test_partial_update_writes_set_columns() -> anyhow::Result<()> {
         fields(&["id", "b", "s", "n", "c"]),
         fields(&["a"])
     ]);
-    assert!(files[1..].iter().all(|block| block == std::slice::from_ref(&legacy)));
+    assert!(
+        files[1..]
+            .iter()
+            .all(|block| block == std::slice::from_ref(&legacy))
+    );
     assert_same(&fixture, "select * from {t} order by id").await?;
 
     // The design example: UPDATE a, UPDATE b, UPDATE a.
