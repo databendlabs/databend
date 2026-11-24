@@ -90,6 +90,9 @@ impl LegacyKinds {
                 "table_prune_partitions_count",
                 |c, _| c.table_prune_partitions_count,
             ))
+            .register::<table::Condition>(LegacyKind::bytes("", |_, _| {
+                table::CONDITION_CACHE_BYTES as u64
+            }))
             .register::<bloom::Filter>(LegacyKind::bytes(
                 "table_bloom_index_filter_size",
                 |c, _| c.table_bloom_index_filter_size,

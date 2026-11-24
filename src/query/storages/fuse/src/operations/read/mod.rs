@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod block_format;
+mod condition_cache;
 mod fuse_rows_fetcher;
 pub mod fuse_source;
 mod parquet_data_source;
