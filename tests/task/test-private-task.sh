@@ -23,6 +23,9 @@ for node in 1 2; do
     echo "Creating private task config for node-${node}"
     cp "$SOURCE_CONFIG_FILE" "$CONFIG_FILE"
     sed -i '/^cloud_control_grpc_server_address/d' $CONFIG_FILE
+    # List every meta node: only the leader serves watches, and a client follows a refused watch
+    # only to a leader it lists. The test of a meta leader restart at the end relies on it.
+    sed -i 's/^endpoints = .*/endpoints = ["0.0.0.0:9191", "0.0.0.0:28202", "0.0.0.0:28302"]/' "$CONFIG_FILE"
     printf '\n' >> "$CONFIG_FILE"
     cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
     printf '\n' >> "$CONFIG_FILE"
@@ -1462,5 +1465,102 @@ else
     echo "❌ Mismatch"
     echo "Expected: $expected"
     echo "Actual  : $actual"
+    exit 1
+fi
+
+# Test that a scheduled task keeps running when the meta leader restarts: every watch of the task
+# messages ends with the leader, and the task service must watch again to run the task. The leader
+# stops right after a run has finished, seconds before the next one starts: a run in flight while
+# no leader is elected can fail to record its end, and then stays EXECUTING and blocks every later
+# run.
+
+META_ADMIN_PORTS=([1]=28101 [2]=28201 [3]=28301)
+META_GRPC_PORTS=([1]=9191 [2]=28202 [3]=28302)
+
+# Print the id of the meta node that reports itself as the leader, or nothing.
+meta_leader() {
+    for id in 1 2 3; do
+        if [ "$(curl -s "http://127.0.0.1:${META_ADMIN_PORTS[$id]}/v1/cluster/status" | jq -r '.is_leader' 2>/dev/null)" = "true" ]; then
+            echo "$id"
+            return
+        fi
+    done
+}
+
+# Print the numbers of the succeeded and of the executing runs of leader_change_task, or "0 0"
+# while the query fails.
+leader_change_task_runs() {
+    local runs
+    runs=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SUCCEEDED'), count_if(state = 'EXECUTING') FROM system_task.task_run WHERE task_name = 'leader_change_task'" |
+        jq -r 'select(.state == "Succeeded") | .data[0] | join(" ")' 2>/dev/null) || true
+    echo "${runs:-0 0}"
+}
+
+response=$(query_sql_with_auth "root:" "CREATE TASK leader_change_task SCHEDULE = 5 SECOND AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK leader_change_task RESUME")
+check_response_error "$response"
+
+# Wait until the second run has finished.
+second_run_done=false
+for _ in {1..300}; do
+    read -r succeeded_before executing <<<"$(leader_change_task_runs)"
+    if [ "$succeeded_before" -ge 2 ] && [ "$executing" -eq 0 ]; then
+        second_run_done=true
+        break
+    fi
+    sleep 0.1
+done
+if [ "$second_run_done" != true ]; then
+    echo "❌ Expected the scheduled task to run before the meta leader restarts"
+    echo "Succeeded runs: $succeeded_before, executing runs: $executing"
+    exit 1
+fi
+
+old_leader=$(meta_leader)
+if [ -z "$old_leader" ]; then
+    echo "❌ Expected a meta node to be the leader"
+    exit 1
+fi
+
+echo "Restarting the meta leader node-${old_leader}"
+pkill -9 -f "databend-meta-node-${old_leader}.toml" || { echo "❌ No process of meta node-${old_leader}"; exit 1; }
+
+new_leader=""
+for _ in {1..30}; do
+    new_leader=$(meta_leader)
+    if [ -n "$new_leader" ] && [ "$new_leader" != "$old_leader" ]; then
+        break
+    fi
+    sleep 1
+done
+if [ -z "$new_leader" ] || [ "$new_leader" = "$old_leader" ]; then
+    echo "❌ Expected another meta node to become the leader"
+    exit 1
+fi
+echo "Meta node-${new_leader} is the new leader"
+
+nohup "./target/${BUILD_PROFILE}/databend-meta" -c "scripts/ci/deploy/config/databend-meta-node-${old_leader}.toml" >>"./.databend/meta-${old_leader}.out" 2>&1 &
+python3 scripts/ci/wait_tcp.py --timeout 30 --port "${META_GRPC_PORTS[$old_leader]}"
+
+succeeded=0
+for _ in {1..120}; do
+    read -r succeeded _ <<<"$(leader_change_task_runs)"
+    if [ "$succeeded" -ge $((succeeded_before + 3)) ]; then
+        break
+    fi
+    sleep 1
+done
+
+response=$(query_sql_with_auth "root:" "ALTER TASK leader_change_task SUSPEND")
+check_response_error "$response"
+
+if [ "$succeeded" -ge $((succeeded_before + 3)) ]; then
+    echo "✅ Scheduled task keeps running after the meta leader restarts"
+else
+    echo "❌ Expected the scheduled task to keep running after the meta leader restarts"
+    echo "Succeeded runs before the restart: $succeeded_before"
+    echo "Succeeded runs after the restart : $succeeded"
     exit 1
 fi
