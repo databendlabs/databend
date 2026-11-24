@@ -1426,4 +1426,7 @@ statement ok
 UNSET timezone
 
 statement ok
+UNSET max_threads
+
+statement ok
 DROP DATABASE db_09_0054
