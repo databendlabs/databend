@@ -1,0 +1,606 @@
+====================================================================================================
+Casts between numbers, NULL and booleans
+
+Each case runs as CAST. TRY_CAST follows a case only when CAST fails at runtime, to show which rows
+become NULL. Where CAST succeeds, TRY_CAST is checked to return the same values and is not listed;
+where CAST fails type checking, TRY_CAST is checked to fail it too.
+====================================================================================================
+
+
+----------------------------------------------------------------------------------------------------
+Numbers and NULL
+
+A number converts to another number type when its value fits, and fails otherwise; a float drops its
+fraction under the default function context. NULL converts to NULL of a nullable type, and CAST to a
+type that is not nullable fails on it. Arrays and tuples convert element by element.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : CAST(0 AS UINT8)
+raw expr       : CAST(0 AS UInt8)
+checked expr   : 0_u8
+output type    : UInt8
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST(0 AS UINT8 NULL)
+raw expr       : CAST(0 AS UInt8 NULL)
+checked expr   : CAST<UInt8>(0_u8 AS UInt8 NULL)
+optimized expr : 0_u8
+output type    : UInt8 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST('str' AS STRING)
+raw expr       : CAST('str' AS String)
+checked expr   : "str"
+output type    : String
+output domain  : {"str"..="str"}
+output         : 'str'
+
+
+ast            : CAST('str' AS STRING NULL)
+raw expr       : CAST('str' AS String NULL)
+checked expr   : CAST<String>("str" AS String NULL)
+optimized expr : "str"
+output type    : String NULL
+output domain  : {"str"..="str"}
+output         : 'str'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS UINT8)
+  | ^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `UInt8`, during run expr: `CAST(NULL AS UInt8)`
+
+
+
+ast            : TRY_CAST(NULL AS UINT8)
+raw expr       : TRY_CAST(NULL AS UInt8)
+checked expr   : TRY_CAST<NULL>(NULL AS UInt8 NULL)
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(NULL AS UINT8 NULL)
+raw expr       : CAST(NULL AS UInt8 NULL)
+checked expr   : CAST<NULL>(NULL AS UInt8 NULL)
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS STRING)
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `String`, during run expr: `CAST(NULL AS String)`
+
+
+
+ast            : TRY_CAST(NULL AS STRING)
+raw expr       : TRY_CAST(NULL AS String)
+checked expr   : TRY_CAST<NULL>(NULL AS String NULL)
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : CAST(NULL AS STRING NULL)
+raw expr       : CAST(NULL AS String NULL)
+checked expr   : CAST<NULL>(NULL AS String NULL)
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(1024 AS UINT8)
+  | ^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(1024)` in expr `CAST(1024 AS UInt8)`
+
+
+
+ast            : TRY_CAST(1024 AS UINT8)
+raw expr       : TRY_CAST(1024 AS UInt8)
+checked expr   : TRY_CAST<UInt16>(1024_u16 AS UInt8 NULL)
+optimized expr : NULL
+output type    : UInt8 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS UINT8)
+  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint8(512)` in expr `CAST(a AS UInt8)`
+
+
+
+ast            : TRY_CAST(a AS UINT8)
+raw expr       : TRY_CAST(a::UInt16 AS UInt8)
+checked expr   : TRY_CAST<UInt16>(a AS UInt8 NULL)
+evaluation:
++--------+------------+--------------------+
+|        | a          | Output             |
++--------+------------+--------------------+
+| Type   | UInt16     | UInt8 NULL         |
+| Domain | {0..=1024} | {0..=255} ∪ {NULL} |
+| Row 0  | 0          | 0                  |
+| Row 1  | 64         | 64                 |
+| Row 2  | 255        | 255                |
+| Row 3  | 512        | NULL               |
+| Row 4  | 1024       | NULL               |
++--------+------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| a      | Column(UInt16([0, 64, 255, 512, 1024]))                                      |
+| Output | NullableColumn { column: UInt8([0, 64, 255, 0, 0]), validity: [0b___00111] } |
++--------+------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS UINT16)
+  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4)` in expr `CAST(a AS UInt16)`
+
+
+
+ast            : TRY_CAST(a AS UINT16)
+raw expr       : TRY_CAST(a::Int16 AS UInt16)
+checked expr   : TRY_CAST<Int16>(a AS UInt16 NULL)
+evaluation:
++--------+----------+------------------+
+|        | a        | Output           |
++--------+----------+------------------+
+| Type   | Int16    | UInt16 NULL      |
+| Domain | {-4..=3} | {0..=3} ∪ {NULL} |
+| Row 0  | 0        | 0                |
+| Row 1  | 1        | 1                |
+| Row 2  | 2        | 2                |
+| Row 3  | 3        | 3                |
+| Row 4  | -4       | NULL             |
++--------+----------+------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | Column(Int16([0, 1, 2, 3, -4]))                                            |
+| Output | NullableColumn { column: UInt16([0, 1, 2, 3, 0]), validity: [0b___01111] } |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : CAST(a AS INT64)
+raw expr       : CAST(a::Int16 AS Int64)
+checked expr   : CAST<Int16>(a AS Int64)
+evaluation:
++--------+----------+----------+
+|        | a        | Output   |
++--------+----------+----------+
+| Type   | Int16    | Int64    |
+| Domain | {-4..=3} | {-4..=3} |
+| Row 0  | 0        | 0        |
+| Row 1  | 1        | 1        |
+| Row 2  | 2        | 2        |
+| Row 3  | 3        | 3        |
+| Row 4  | -4       | -4       |
++--------+----------+----------+
+evaluation (internal):
++--------+---------------------------------+
+| Column | Data                            |
++--------+---------------------------------+
+| a      | Column(Int16([0, 1, 2, 3, -4])) |
+| Output | Int64([0, 1, 2, 3, -4])         |
++--------+---------------------------------+
+
+
+error: 
+  --> SQL:1:22
+  |
+1 | (CAST(a AS FLOAT32), CAST(a AS INT32), CAST(b AS FLOAT32), CAST(b AS INT32))
+  |                      ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int32(4294967295)` in expr `CAST(a AS Int32)`, during run expr: `tuple(CAST(a AS Float32), CAST(a AS Int32), CAST(b AS Float32), CAST(b AS Int32))`
+
+
+
+ast            : (TRY_CAST(a AS FLOAT32), TRY_CAST(a AS INT32), TRY_CAST(b AS FLOAT32), TRY_CAST(b AS INT32))
+raw expr       : tuple(TRY_CAST(a::UInt64 AS Float32), TRY_CAST(a::UInt64 AS Int32), TRY_CAST(b::Float64 AS Float32), TRY_CAST(b::Float64 AS Int32))
+checked expr   : tuple<Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL>(TRY_CAST<UInt64>(a AS Float32 NULL), TRY_CAST<UInt64>(a AS Int32 NULL), TRY_CAST<Float64>(b AS Float32 NULL), TRY_CAST<Float64>(b AS Int32 NULL))
+evaluation:
++--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
+|        | a                          | b                                                                                                                                                                                                                                                                                                                              | Output                                                                                                     |
++--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
+| Type   | UInt64                     | Float64                                                                                                                                                                                                                                                                                                                        | Tuple(Float32 NULL, Int32 NULL, Float32 NULL, Int32 NULL)                                                  |
+| Domain | {0..=18446744073709551615} | {-179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000..=inf} | ({0..=18446744073709551616}, {0..=2147483647} ∪ {NULL}, {-inf..=inf}, {-2147483648..=2147483647} ∪ {NULL}) |
+| Row 0  | 0                          | 0                                                                                                                                                                                                                                                                                                                              | (0, 0, 0, 0)                                                                                               |
+| Row 1  | 1                          | 4294967295                                                                                                                                                                                                                                                                                                                     | (1, 1, 4294967296, NULL)                                                                                   |
+| Row 2  | 255                        | 18446744073709551616                                                                                                                                                                                                                                                                                                           | (255, 255, 18446744073709551616, NULL)                                                                     |
+| Row 3  | 65535                      | -179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000         | (65535, 65535, -inf, NULL)                                                                                 |
+| Row 4  | 4294967295                 | 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000          | (4294967296, NULL, inf, NULL)                                                                              |
+| Row 5  | 18446744073709551615       | inf                                                                                                                                                                                                                                                                                                                            | (18446744073709551616, NULL, inf, NULL)                                                                    |
++--------+----------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Column(UInt64([0, 1, 255, 65535, 4294967295, 18446744073709551615]))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| b      | Column(Float64([0, 4294967295, 18446744073709551616, -179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, inf])) |
+| Output | Tuple([NullableColumn { column: Float32([0, 1, 255, 65535, 4294967296, 18446744073709551616]), validity: [0b__111111] }, NullableColumn { column: Int32([0, 1, 255, 65535, 0, 0]), validity: [0b__001111] }, NullableColumn { column: Float32([0, 4294967296, 18446744073709551616, -inf, inf, inf]), validity: [0b__111111] }, NullableColumn { column: Int32([0, 0, 0, 0, 0, 0]), validity: [0b__000001] }])                                                                                                                                                                                                                                                                                             |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST([[a, b], NULL, NULL] AS Array(Array(Int8)))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Array(Int8)`, during run expr: `CAST(array(CAST(array(a, b) AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL)) AS Array(Array(Int8)))`
+
+
+
+ast            : TRY_CAST([[a, b], NULL, NULL] AS Array(Array(Int8)))
+raw expr       : TRY_CAST(array(array(a::Int16, b::Int16), NULL, NULL) AS Array(Array(Int8)))
+checked expr   : TRY_CAST<Array(Array(Int16) NULL)>(array<T0=Array(Int16) NULL><T0, T0, T0>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(a, b) AS Array(Int16) NULL), CAST<NULL>(NULL AS Array(Int16) NULL), CAST<NULL>(NULL AS Array(Int16) NULL)) AS Array(Array(Int8 NULL) NULL) NULL)
+optimized expr : TRY_CAST<Array(Array(Int16) NULL)>(array<T0=Array(Int16) NULL><T0, T0, T0>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(a, b) AS Array(Int16) NULL), NULL, NULL) AS Array(Array(Int8 NULL) NULL) NULL)
+evaluation:
++--------+-----------+------------+------------------------------------+
+|        | a         | b          | Output                             |
++--------+-----------+------------+------------------------------------+
+| Type   | Int16     | Int16      | Array(Array(Int8 NULL) NULL) NULL  |
+| Domain | {0..=255} | {-129..=0} | [[{-128..=127} ∪ {NULL}] ∪ {NULL}] |
+| Row 0  | 0         | 0          | [[0, 0], NULL, NULL]               |
+| Row 1  | 1         | -1         | [[1, -1], NULL, NULL]              |
+| Row 2  | 2         | -127       | [[2, -127], NULL, NULL]            |
+| Row 3  | 127       | -128       | [[127, -128], NULL, NULL]          |
+| Row 4  | 255       | -129       | [[NULL, NULL], NULL, NULL]         |
++--------+-----------+------------+------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                                        |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Column(Int16([0, 1, 2, 127, 255]))                                                                                                                                                                                                                                                                                                                                          |
+| b      | Column(Int16([0, -1, -127, -128, -129]))                                                                                                                                                                                                                                                                                                                                    |
+| Output | NullableColumn { column: ArrayColumn { values: NullableColumn { column: ArrayColumn { values: NullableColumn { column: Int8([0, 0, 1, -1, 2, -127, 127, -128, 0, 0]), validity: [0b11111111, 0b______00] }, offsets: [0, 2, 2, 2, 4, 4, 4, 6, 6, 6, 8, 8, 8, 10, 10, 10] }, validity: [0b01001001, 0b_0010010] }, offsets: [0, 3, 6, 9, 12, 15] }, validity: [0b___11111] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(256)` in expr `CAST(tuple(a, b, NULL) AS Tuple(Int8, UInt8, Boolean NULL))`
+
+
+
+ast            : TRY_CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
+raw expr       : TRY_CAST(tuple(a::Int16, b::Int16, NULL) AS Tuple(Int8, UInt8, Boolean NULL))
+checked expr   : TRY_CAST<Tuple(Int16, Int16, NULL)>(tuple<Int16, Int16, NULL>(a, b, NULL) AS Tuple(Int8 NULL, UInt8 NULL, Boolean NULL) NULL)
+evaluation:
++--------+-----------+------------+-------------------------------------------------+
+|        | a         | b          | Output                                          |
++--------+-----------+------------+-------------------------------------------------+
+| Type   | Int16     | Int16      | Tuple(Int8 NULL, UInt8 NULL, Boolean NULL) NULL |
+| Domain | {0..=256} | {-129..=1} | ({0..=127} ∪ {NULL}, {0..=1} ∪ {NULL}, {NULL})  |
+| Row 0  | 0         | 0          | (0, 0, NULL)                                    |
+| Row 1  | 1         | 1          | (1, 1, NULL)                                    |
+| Row 2  | 2         | -127       | (2, NULL, NULL)                                 |
+| Row 3  | 127       | -128       | (127, NULL, NULL)                               |
+| Row 4  | 256       | -129       | (NULL, NULL, NULL)                              |
++--------+-----------+------------+-------------------------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                        |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Column(Int16([0, 1, 2, 127, 256]))                                                                                                                                                                                                                                                          |
+| b      | Column(Int16([0, 1, -127, -128, -129]))                                                                                                                                                                                                                                                     |
+| Output | NullableColumn { column: Tuple([NullableColumn { column: Int8([0, 1, 2, 127, 0]), validity: [0b___01111] }, NullableColumn { column: UInt8([0, 1, 0, 0, 0]), validity: [0b___00011] }, NullableColumn { column: Boolean([0b___00000]), validity: [0b___00000] }]), validity: [0b___11111] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(a AS INT16)
+raw expr       : CAST(a::Float64 AS Int16)
+checked expr   : CAST<Float64>(a AS Int16)
+evaluation:
++--------+--------------+----------+
+|        | a            | Output   |
++--------+--------------+----------+
+| Type   | Float64      | Int16    |
+| Domain | {-4.4..=3.3} | {-4..=3} |
+| Row 0  | 0            | 0        |
+| Row 1  | 1.1          | 1        |
+| Row 2  | 2.2          | 2        |
+| Row 3  | 3.3          | 3        |
+| Row 4  | -4.4         | -4       |
++--------+--------------+----------+
+evaluation (internal):
++--------+-------------------------------------------+
+| Column | Data                                      |
++--------+-------------------------------------------+
+| a      | Column(Float64([0, 1.1, 2.2, 3.3, -4.4])) |
+| Output | Int16([0, 1, 2, 3, -4])                   |
++--------+-------------------------------------------+
+
+
+ast            : CAST(b AS INT16)
+raw expr       : CAST(b::Int8 AS Int16)
+checked expr   : CAST<Int8>(b AS Int16)
+evaluation:
++--------+----------+----------+
+|        | b        | Output   |
++--------+----------+----------+
+| Type   | Int8     | Int16    |
+| Domain | {-4..=3} | {-4..=3} |
+| Row 0  | 0        | 0        |
+| Row 1  | 1        | 1        |
+| Row 2  | 2        | 2        |
+| Row 3  | 3        | 3        |
+| Row 4  | -4       | -4       |
++--------+----------+----------+
+evaluation (internal):
++--------+--------------------------------+
+| Column | Data                           |
++--------+--------------------------------+
+| b      | Column(Int8([0, 1, 2, 3, -4])) |
+| Output | Int16([0, 1, 2, 3, -4])        |
++--------+--------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS UINT16)
+  | ^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_uint16(-4)` in expr `CAST(a AS UInt16)`
+
+
+
+ast            : TRY_CAST(a AS UINT16)
+raw expr       : TRY_CAST(a::Int16 AS UInt16)
+checked expr   : TRY_CAST<Int16>(a AS UInt16 NULL)
+evaluation:
++--------+----------+------------------+
+|        | a        | Output           |
++--------+----------+------------------+
+| Type   | Int16    | UInt16 NULL      |
+| Domain | {-4..=3} | {0..=3} ∪ {NULL} |
+| Row 0  | 0        | 0                |
+| Row 1  | 1        | 1                |
+| Row 2  | 2        | 2                |
+| Row 3  | 3        | 3                |
+| Row 4  | -4       | NULL             |
++--------+----------+------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| a      | Column(Int16([0, 1, 2, 3, -4]))                                            |
+| Output | NullableColumn { column: UInt16([0, 1, 2, 3, 0]), validity: [0b___01111] } |
++--------+----------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(c AS INT16)
+  | ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int16(11111111111)` in expr `CAST(c AS Int16)`
+
+
+
+ast            : TRY_CAST(c AS INT16)
+raw expr       : TRY_CAST(c::Int64 AS Int16)
+checked expr   : TRY_CAST<Int64>(c AS Int16 NULL)
+evaluation:
++--------+--------------------+-----------------------+
+|        | c                  | Output                |
++--------+--------------------+-----------------------+
+| Type   | Int64              | Int16 NULL            |
+| Domain | {-4..=11111111111} | {-4..=32767} ∪ {NULL} |
+| Row 0  | 0                  | 0                     |
+| Row 1  | 11111111111        | NULL                  |
+| Row 2  | 2                  | 2                     |
+| Row 3  | 3                  | 3                     |
+| Row 4  | -4                 | -4                    |
++--------+--------------------+-----------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| c      | Column(Int64([0, 11111111111, 2, 3, -4]))                                  |
+| Output | NullableColumn { column: Int16([0, 0, 2, 3, -4]), validity: [0b___11101] } |
++--------+----------------------------------------------------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+Numbers and booleans
+
+A number is true when it is not zero. A boolean converts to 1 or 0.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : CAST(0 AS BOOLEAN)
+raw expr       : CAST(0 AS Boolean)
+checked expr   : CAST<UInt8>(0_u8 AS Boolean)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : CAST(1 AS BOOLEAN)
+raw expr       : CAST(1 AS Boolean)
+checked expr   : CAST<UInt8>(1_u8 AS Boolean)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : CAST(false AS UINT64)
+raw expr       : CAST(false AS UInt64)
+checked expr   : CAST<Boolean>(false AS UInt64)
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST(true AS INT64)
+raw expr       : CAST(true AS Int64)
+checked expr   : CAST<Boolean>(true AS Int64)
+optimized expr : 1_i64
+output type    : Int64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : CAST(0.0 AS BOOLEAN)
+raw expr       : CAST(0.0 AS Boolean)
+checked expr   : CAST<Decimal(1, 1)>(0.0_d64(1,1) AS Boolean)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : CAST(1.0 AS BOOLEAN)
+raw expr       : CAST(1.0 AS Boolean)
+checked expr   : CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Boolean)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : CAST(false AS FLOAT32)
+raw expr       : CAST(false AS Float32)
+checked expr   : CAST<Boolean>(false AS Float32)
+optimized expr : 0_f32
+output type    : Float32
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST(true AS FLOAT64)
+raw expr       : CAST(true AS Float64)
+checked expr   : CAST<Boolean>(true AS Float64)
+optimized expr : 1_f64
+output type    : Float64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : CAST(false AS DECIMAL(4,3))
+raw expr       : CAST(false AS Decimal(4, 3))
+checked expr   : CAST<Boolean>(false AS Decimal(4, 3))
+optimized expr : 0.000_d64(4,3)
+output type    : Decimal(4, 3)
+output domain  : {0.000..=0.000}
+output         : 0.000
+
+
+ast            : CAST(true AS DECIMAL(4,2))
+raw expr       : CAST(true AS Decimal(4, 2))
+checked expr   : CAST<Boolean>(true AS Decimal(4, 2))
+optimized expr : 1.00_d64(4,2)
+output type    : Decimal(4, 2)
+output domain  : {1.00..=1.00}
+output         : 1.00
+
+
+ast            : CAST(num AS BOOLEAN)
+raw expr       : CAST(num::Int64 AS Boolean)
+checked expr   : CAST<Int64>(num AS Boolean)
+evaluation:
++--------+----------+---------------+
+|        | num      | Output        |
++--------+----------+---------------+
+| Type   | Int64    | Boolean       |
+| Domain | {-1..=2} | {FALSE, TRUE} |
+| Row 0  | 0        | false         |
+| Row 1  | -1       | true          |
+| Row 2  | 1        | true          |
+| Row 3  | 2        | true          |
++--------+----------+---------------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| num    | Column(Int64([0, -1, 1, 2])) |
+| Output | Boolean([0b____1110])        |
++--------+------------------------------+
+
+
+ast            : CAST(num AS BOOLEAN)
+raw expr       : CAST(num::UInt64 AS Boolean)
+checked expr   : CAST<UInt64>(num AS Boolean)
+evaluation:
++--------+---------+---------------+
+|        | num     | Output        |
++--------+---------+---------------+
+| Type   | UInt64  | Boolean       |
+| Domain | {0..=2} | {FALSE, TRUE} |
+| Row 0  | 0       | false         |
+| Row 1  | 1       | true          |
+| Row 2  | 2       | true          |
++--------+---------+---------------+
+evaluation (internal):
++--------+---------------------------+
+| Column | Data                      |
++--------+---------------------------+
+| num    | Column(UInt64([0, 1, 2])) |
+| Output | Boolean([0b_____110])     |
++--------+---------------------------+
+
+
+ast            : CAST(bool AS UINT64)
+raw expr       : CAST(bool::Boolean AS UInt64)
+checked expr   : CAST<Boolean>(bool AS UInt64)
+evaluation:
++--------+---------------+---------+
+|        | bool          | Output  |
++--------+---------------+---------+
+| Type   | Boolean       | UInt64  |
+| Domain | {FALSE, TRUE} | {0..=1} |
+| Row 0  | false         | 0       |
+| Row 1  | true          | 1       |
++--------+---------------+---------+
+evaluation (internal):
++--------+-------------------------------+
+| Column | Data                          |
++--------+-------------------------------+
+| bool   | Column(Boolean([0b______10])) |
+| Output | UInt64([0, 1])                |
++--------+-------------------------------+
+
+
+ast            : CAST(bool AS INT64)
+raw expr       : CAST(bool::Boolean AS Int64)
+checked expr   : CAST<Boolean>(bool AS Int64)
+evaluation:
++--------+---------------+---------+
+|        | bool          | Output  |
++--------+---------------+---------+
+| Type   | Boolean       | Int64   |
+| Domain | {FALSE, TRUE} | {0..=1} |
+| Row 0  | false         | 0       |
+| Row 1  | true          | 1       |
++--------+---------------+---------+
+evaluation (internal):
++--------+-------------------------------+
+| Column | Data                          |
++--------+-------------------------------+
+| bool   | Column(Boolean([0b______10])) |
+| Output | Int64([0, 1])                 |
++--------+-------------------------------+
+
+

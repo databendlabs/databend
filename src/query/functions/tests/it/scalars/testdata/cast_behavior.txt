@@ -1,0 +1,1116 @@
+====================================================================================================
+Rules that every cast follows
+
+Each section shows one rule with a few cases. The rules that hold for every pair of types are also
+checked over all sample types by `test_cast_invariants`, without a golden file.
+====================================================================================================
+
+
+----------------------------------------------------------------------------------------------------
+Casts without an implementation
+
+A cast without an implementation fails type checking, instead of failing on every row.
+----------------------------------------------------------------------------------------------------
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(1.5 AS DATE)
+  | ^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(2, 1)` to type `Date`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST(to_binary('ab') AS INT32)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Binary` to type `Int32`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(to_interval('1 day') AS INT64)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Interval` to type `Int64`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | TRY_CAST(parse_json('1') AS BITMAP)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Variant` to type `Bitmap`
+
+
+
+----------------------------------------------------------------------------------------------------
+TRY_CAST fails by row
+
+`TRY_CAST` turns a row that fails into NULL and converts the other rows.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : TRY_CAST(s AS INT32)
+raw expr       : TRY_CAST(s::String AS Int32)
+checked expr   : TRY_CAST<String>(s AS Int32 NULL)
+evaluation:
++--------+----------------+-------------------------------------+
+|        | s              | Output                              |
++--------+----------------+-------------------------------------+
+| Type   | String         | Int32 NULL                          |
+| Domain | {"-1"..="abc"} | {-2147483648..=2147483647} ∪ {NULL} |
+| Row 0  | '1'            | 1                                   |
+| Row 1  | 'abc'          | NULL                                |
+| Row 2  | '2147483648'   | NULL                                |
+| Row 3  | '-1'           | -1                                  |
++--------+----------------+-------------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| s      | Column(StringColumn[1, abc, 2147483648, -1])                            |
+| Output | NullableColumn { column: Int32([1, 0, 0, -1]), validity: [0b____1001] } |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(s AS UINT8)
+raw expr       : TRY_CAST(s::String AS UInt8)
+checked expr   : TRY_CAST<String>(s AS UInt8 NULL)
+evaluation:
++--------+----------------+--------------------+
+|        | s              | Output             |
++--------+----------------+--------------------+
+| Type   | String         | UInt8 NULL         |
+| Domain | {"-1"..="abc"} | {0..=255} ∪ {NULL} |
+| Row 0  | '1'            | 1                  |
+| Row 1  | 'abc'          | NULL               |
+| Row 2  | '2147483648'   | NULL               |
+| Row 3  | '-1'           | NULL               |
++--------+----------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| s      | Column(StringColumn[1, abc, 2147483648, -1])                           |
+| Output | NullableColumn { column: UInt8([1, 0, 0, 0]), validity: [0b____0001] } |
++--------+------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(s AS DATE)
+raw expr       : TRY_CAST(s::String AS Date)
+checked expr   : TRY_CAST<String>(s AS Date NULL)
+evaluation:
++--------+----------------------------+------------------------------+
+|        | s                          | Output                       |
++--------+----------------------------+------------------------------+
+| Type   | String                     | Date NULL                    |
+| Domain | {"2000-01-01"..="invalid"} | {-719162..=2932896} ∪ {NULL} |
+| Row 0  | '2000-01-01'               | '2000-01-01'                 |
+| Row 1  | 'invalid'                  | NULL                         |
++--------+----------------------------+------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| s      | Column(StringColumn[2000-01-01, invalid])                           |
+| Output | NullableColumn { column: Date([10957, 0]), validity: [0b______01] } |
++--------+---------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(s AS DATE) IS NULL
+raw expr       : not(is_not_null(TRY_CAST(s::String AS Date)))
+checked expr   : not<Boolean>(is_not_null<T0=Date><T0 NULL>(TRY_CAST<String>(s AS Date NULL)))
+evaluation:
++--------+----------------------------+---------------+
+|        | s                          | Output        |
++--------+----------------------------+---------------+
+| Type   | String                     | Boolean       |
+| Domain | {"2000-01-01"..="invalid"} | {FALSE, TRUE} |
+| Row 0  | '2000-01-01'               | false         |
+| Row 1  | 'invalid'                  | true          |
++--------+----------------------------+---------------+
+evaluation (internal):
++--------+-------------------------------------------+
+| Column | Data                                      |
++--------+-------------------------------------------+
+| s      | Column(StringColumn[2000-01-01, invalid]) |
+| Output | Boolean([0b______10])                     |
++--------+-------------------------------------------+
+
+
+ast            : TRY_CAST(s AS TIMESTAMP)
+raw expr       : TRY_CAST(s::String AS Timestamp)
+checked expr   : TRY_CAST<String>(s AS Timestamp NULL)
+evaluation:
++--------+----------------------------+----------------------------------------------------+
+|        | s                          | Output                                             |
++--------+----------------------------+----------------------------------------------------+
+| Type   | String                     | Timestamp NULL                                     |
+| Domain | {"2000-01-01"..="invalid"} | {-62135683200000000..=253402300799999999} ∪ {NULL} |
+| Row 0  | '2000-01-01'               | '2000-01-01 00:00:00.000000'                       |
+| Row 1  | 'invalid'                  | NULL                                               |
++--------+----------------------------+----------------------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------+
+| Column | Data                                                                               |
++--------+------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[2000-01-01, invalid])                                          |
+| Output | NullableColumn { column: Timestamp([946684800000000, 0]), validity: [0b______01] } |
++--------+------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(n AS INT8)
+raw expr       : TRY_CAST(n::Int64 NULL AS Int8)
+checked expr   : TRY_CAST<Int64 NULL>(n AS Int8 NULL)
+evaluation:
++--------+------------------------+-----------------------+
+|        | n                      | Output                |
++--------+------------------------+-----------------------+
+| Type   | Int64 NULL             | Int8 NULL             |
+| Domain | {-129..=1000} ∪ {NULL} | {-128..=127} ∪ {NULL} |
+| Row 0  | 1                      | 1                     |
+| Row 1  | 1000                   | NULL                  |
+| Row 2  | NULL                   | NULL                  |
+| Row 3  | -129                   | NULL                  |
++--------+------------------------+-----------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------+
+| Column | Data                                                                                 |
++--------+--------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Int64([1, 1000, 0, -129]), validity: [0b____1011] }) |
+| Output | NullableColumn { column: Int8([1, 0, 0, 0]), validity: [0b____0001] }                |
++--------+--------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(parse_json(s) AS INT32)
+raw expr       : TRY_CAST(parse_json(s::String) AS Int32)
+checked expr   : TRY_CAST<Variant>(CAST<String>(s AS Variant) AS Int32 NULL)
+evaluation:
++--------+--------------------+------------+
+|        | s                  | Output     |
++--------+--------------------+------------+
+| Type   | String             | Int32 NULL |
+| Domain | {"\"a\""..="null"} | Unknown    |
+| Row 0  | '1'                | 1          |
+| Row 1  | '"a"'              | NULL       |
+| Row 2  | 'null'             | NULL       |
+| Row 3  | '1.5'              | 2          |
+| Row 4  | '[1]'              | NULL       |
++--------+--------------------+------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------+
+| Column | Data                                                                      |
++--------+---------------------------------------------------------------------------+
+| s      | Column(StringColumn[1, "a", null, 1.5, [1]])                              |
+| Output | NullableColumn { column: Int32([1, 0, 0, 2, 0]), validity: [0b___01001] } |
++--------+---------------------------------------------------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+TRY_CAST converts like CAST
+
+`TRY_CAST` converts a value as `CAST` does, and only differs on the rows that fail.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : CAST(CAST(s AS DECIMAL(38, 9)) AS STRING)
+raw expr       : CAST(CAST(s::String AS Decimal(38, 9)) AS String)
+checked expr   : CAST<Decimal(38, 9)>(CAST<String>(s AS Decimal(38, 9)) AS String)
+evaluation:
++--------+-----------------------------------------------------+----------------------------------+
+|        | s                                                   | Output                           |
++--------+-----------------------------------------------------+----------------------------------+
+| Type   | String                                              | String                           |
+| Domain | {"-0.000000001"..="12345678901234567890.123456789"} | Unknown                          |
+| Row 0  | '1.1'                                               | '1.100000000'                    |
+| Row 1  | '-0.000000001'                                      | '-0.000000001'                   |
+| Row 2  | '12345678901234567890.123456789'                    | '12345678901234567890.123456789' |
++--------+-----------------------------------------------------+----------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| s      | Column(StringColumn[1.1, -0.000000001, 12345678901234567890.123456789]) |
+| Output | StringColumn[1.100000000, -0.000000001, 12345678901234567890.123456789] |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(CAST(s AS DECIMAL(38, 9)) AS STRING)
+raw expr       : TRY_CAST(CAST(s::String AS Decimal(38, 9)) AS String)
+checked expr   : TRY_CAST<Decimal(38, 9)>(CAST<String>(s AS Decimal(38, 9)) AS String NULL)
+evaluation:
++--------+-----------------------------------------------------+----------------------------------+
+|        | s                                                   | Output                           |
++--------+-----------------------------------------------------+----------------------------------+
+| Type   | String                                              | String NULL                      |
+| Domain | {"-0.000000001"..="12345678901234567890.123456789"} | Unknown                          |
+| Row 0  | '1.1'                                               | '1.100000000'                    |
+| Row 1  | '-0.000000001'                                      | '-0.000000001'                   |
+| Row 2  | '12345678901234567890.123456789'                    | '12345678901234567890.123456789' |
++--------+-----------------------------------------------------+----------------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                       |
++--------+----------------------------------------------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[1.1, -0.000000001, 12345678901234567890.123456789])                                                    |
+| Output | NullableColumn { column: StringColumn[1.100000000, -0.000000001, 12345678901234567890.123456789], validity: [0b_____111] } |
++--------+----------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(to_timestamp_tz('2024-01-02 03:04:05 +0800') AS STRING)
+raw expr       : TRY_CAST(to_timestamp_tz('2024-01-02 03:04:05 +0800') AS String)
+checked expr   : TRY_CAST<TimestampTz>(CAST<String>("2024-01-02 03:04:05 +0800" AS TimestampTz) AS String NULL)
+optimized expr : "2024-01-02 03:04:05.000000 +0800"
+output type    : String NULL
+output domain  : {"2024-01-02 03:04:05.000000 +0800"..="2024-01-02 03:04:05.000000 +0800"}
+output         : '2024-01-02 03:04:05.000000 +0800'
+
+
+ast            : TRY_CAST(to_interval('1 day 2 hours') AS STRING)
+raw expr       : TRY_CAST(to_interval('1 day 2 hours') AS String)
+checked expr   : TRY_CAST<Interval>(CAST<String>("1 day 2 hours" AS Interval) AS String NULL)
+optimized expr : "1 day 2:00:00"
+output type    : String NULL
+output domain  : {"1 day 2:00:00"..="1 day 2:00:00"}
+output         : '1 day 2:00:00'
+
+
+ast            : TRY_CAST(to_bitmap('1,3') AS STRING)
+raw expr       : TRY_CAST(to_bitmap('1,3') AS String)
+checked expr   : TRY_CAST<Bitmap>(CAST<String>("1,3" AS Bitmap) AS String NULL)
+optimized expr : "1,3"
+output type    : String NULL
+output domain  : {"1,3"..="1,3"}
+output         : '1,3'
+
+
+ast            : TRY_CAST(s AS BITMAP)
+raw expr       : TRY_CAST(s::String AS Bitmap)
+checked expr   : TRY_CAST<String>(s AS Bitmap NULL)
+evaluation:
++--------+-----------------+--------------------+
+|        | s               | Output             |
++--------+-----------------+--------------------+
+| Type   | String          | Bitmap NULL        |
+| Domain | {"1,3"..="abc"} | Undefined ∪ {NULL} |
+| Row 0  | '1,3'           | '1,3'              |
+| Row 1  | 'abc'           | NULL               |
++--------+-----------------+--------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[1,3, abc])                                                                                |
+| Output | NullableColumn { column: Bitmap([0x484201000201000000000000000300000000000000, 0x]), validity: [0b______01] } |
++--------+---------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(parse_json(s) AS ARRAY(INT32))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int32 while evaluating function `to_int32('"a"')` in expr `CAST(CAST(s AS Variant) AS Array(Int32))`
+
+
+
+ast            : TRY_CAST(parse_json(s) AS ARRAY(INT32))
+raw expr       : TRY_CAST(parse_json(s::String) AS Array(Int32))
+checked expr   : TRY_CAST<Variant>(CAST<String>(s AS Variant) AS Array(Int32 NULL) NULL)
+evaluation:
++--------+---------------------+------------------------+
+|        | s                   | Output                 |
++--------+---------------------+------------------------+
+| Type   | String              | Array(Int32 NULL) NULL |
+| Domain | {"1"..="{\"a\":1}"} | Unknown                |
+| Row 0  | '[1,2]'             | [1, 2]                 |
+| Row 1  | '1'                 | []                     |
+| Row 2  | '{"a":1}'           | []                     |
+| Row 3  | '["a"]'             | [NULL]                 |
++--------+---------------------+------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                     |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[[1,2], 1, {"a":1}, ["a"]])                                                                                                                           |
+| Output | NullableColumn { column: ArrayColumn { values: NullableColumn { column: Int32([1, 2, 0]), validity: [0b_____011] }, offsets: [0, 2, 2, 2, 3] }, validity: [0b____1111] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(parse_json(s) AS MAP(STRING, INT32))
+raw expr       : TRY_CAST(parse_json(s::String) AS Map(String, Int32))
+checked expr   : TRY_CAST<Variant>(CAST<String>(s AS Variant) AS Map(String, Int32) NULL)
+evaluation:
++--------+---------------------+-------------------------+
+|        | s                   | Output                  |
++--------+---------------------+-------------------------+
+| Type   | String              | Map(String, Int32) NULL |
+| Domain | {"1"..="{\"a\":1}"} | Unknown                 |
+| Row 0  | '[1,2]'             | {}                      |
+| Row 1  | '1'                 | {}                      |
+| Row 2  | '{"a":1}'           | {'a':1}                 |
+| Row 3  | '["a"]'             | {}                      |
++--------+---------------------+-------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                      |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[[1,2], 1, {"a":1}, ["a"]])                                                                                            |
+| Output | NullableColumn { column: ArrayColumn { values: Tuple([StringColumn[a], Int32([1])]), offsets: [0, 0, 0, 1, 1] }, validity: [0b____1111] } |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+Casts through an intermediate type
+
+A cast without a function of its own converts through an intermediate type, and a row that fails in
+either step is NULL for `TRY_CAST`.
+----------------------------------------------------------------------------------------------------
+
+
+plan           : Date -> Int8: [Date -> Int64: to_int64(Date) :: Int64] then [Int64 -> Int8: to_int8(Int64) :: Int8]
+plan           : Timestamp -> Float32: [Timestamp -> Int64: to_int64(Timestamp) :: Int64] then [Int64 -> Float32: to_float32(Int64) :: Float32]
+plan           : UInt64 -> Date: [UInt64 -> Int64: to_int64(UInt64) :: Int64] then [Int64 -> Date: to_date(Int64) :: Date]
+plan           : UInt8 -> Bitmap: [UInt8 -> UInt64: to_uint64(UInt8) :: UInt64] then [UInt64 -> Bitmap: to_bitmap(UInt64) :: Bitmap]
+plan           : Decimal(10, 2) -> Boolean: [Decimal(10, 2) -> Float64: to_float64(Decimal(10, 2)) :: Float64] then [Float64 -> Boolean: to_boolean(Float64) :: Boolean]
+plan           : Date NULL -> Int64 NULL: to_int64(Date NULL) :: Int64 NULL
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(d AS INT8)
+  | ^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(19724)` in expr `CAST(d AS Int8)`
+
+
+
+ast            : TRY_CAST(d AS INT8)
+raw expr       : TRY_CAST(d::Date AS Int8)
+checked expr   : TRY_CAST<Date>(d AS Int8 NULL)
+evaluation:
++--------+--------------+---------------------+
+|        | d            | Output              |
++--------+--------------+---------------------+
+| Type   | Date         | Int8 NULL           |
+| Domain | {-1..=19724} | {-1..=127} ∪ {NULL} |
+| Row 0  | '1969-12-31' | -1                  |
+| Row 1  | '1970-01-02' | 1                   |
+| Row 2  | '2024-01-02' | NULL                |
++--------+--------------+---------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| d      | Column(Date([-1, 1, 19724]))                                        |
+| Output | NullableColumn { column: Int8([-1, 1, 0]), validity: [0b_____011] } |
++--------+---------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(d AS UINT64)
+raw expr       : TRY_CAST(d::Date AS UInt64)
+checked expr   : TRY_CAST<Date>(d AS UInt64 NULL)
+evaluation:
++--------+--------------+----------------------+
+|        | d            | Output               |
++--------+--------------+----------------------+
+| Type   | Date         | UInt64 NULL          |
+| Domain | {-1..=19724} | {0..=19724} ∪ {NULL} |
+| Row 0  | '1969-12-31' | NULL                 |
+| Row 1  | '1970-01-02' | 1                    |
+| Row 2  | '2024-01-02' | 19724                |
++--------+--------------+----------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| d      | Column(Date([-1, 1, 19724]))                                             |
+| Output | NullableColumn { column: UInt64([0, 1, 19724]), validity: [0b_____110] } |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(u AS DATE)
+  | ^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int64(18446744073709551615)` in expr `CAST(u AS Date)`
+
+
+
+ast            : TRY_CAST(u AS DATE)
+raw expr       : TRY_CAST(u::UInt64 AS Date)
+checked expr   : TRY_CAST<UInt64>(u AS Date NULL)
+evaluation:
++--------+----------------------------+------------------------------+
+|        | u                          | Output                       |
++--------+----------------------------+------------------------------+
+| Type   | UInt64                     | Date NULL                    |
+| Domain | {1..=18446744073709551615} | {-719162..=2932896} ∪ {NULL} |
+| Row 0  | 1                          | '1970-01-02'                 |
+| Row 1  | 18446744073709551615       | NULL                         |
++--------+----------------------------+------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------+
+| Column | Data                                                            |
++--------+-----------------------------------------------------------------+
+| u      | Column(UInt64([1, 18446744073709551615]))                       |
+| Output | NullableColumn { column: Date([1, 0]), validity: [0b______01] } |
++--------+-----------------------------------------------------------------+
+
+
+ast            : TRY_CAST(u AS TIMESTAMP)
+raw expr       : TRY_CAST(u::UInt64 AS Timestamp)
+checked expr   : TRY_CAST<UInt64>(u AS Timestamp NULL)
+evaluation:
++--------+----------------------------+----------------------------------------------------+
+|        | u                          | Output                                             |
++--------+----------------------------+----------------------------------------------------+
+| Type   | UInt64                     | Timestamp NULL                                     |
+| Domain | {1..=18446744073709551615} | {-62135683200000000..=253402300799999999} ∪ {NULL} |
+| Row 0  | 1                          | '1970-01-01 00:00:01.000000'                       |
+| Row 1  | 18446744073709551615       | NULL                                               |
++--------+----------------------------+----------------------------------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| u      | Column(UInt64([1, 18446744073709551615]))                                  |
+| Output | NullableColumn { column: Timestamp([1000000, 0]), validity: [0b______01] } |
++--------+----------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(n AS BITMAP)
+raw expr       : TRY_CAST(n::UInt8 AS Bitmap)
+checked expr   : TRY_CAST<UInt8>(n AS Bitmap NULL)
+evaluation:
++--------+-----------+-------------+
+|        | n         | Output      |
++--------+-----------+-------------+
+| Type   | UInt8     | Bitmap NULL |
+| Domain | {1..=255} | Undefined   |
+| Row 0  | 1         | '1'         |
+| Row 1  | 255       | '255'       |
++--------+-----------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                    |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| n      | Column(UInt8([1, 255]))                                                                                                 |
+| Output | NullableColumn { column: Bitmap([0x48420100010100000000000000, 0x4842010001ff00000000000000]), validity: [0b______11] } |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(n AS TIMESTAMP)
+raw expr       : CAST(n::UInt8 AS Timestamp)
+checked expr   : CAST<UInt8>(n AS Timestamp)
+evaluation:
++--------+-----------+------------------------------+
+|        | n         | Output                       |
++--------+-----------+------------------------------+
+| Type   | UInt8     | Timestamp                    |
+| Domain | {1..=255} | {1000000..=255000000}        |
+| Row 0  | 1         | '1970-01-01 00:00:01.000000' |
+| Row 1  | 255       | '1970-01-01 00:04:15.000000' |
++--------+-----------+------------------------------+
+evaluation (internal):
++--------+---------------------------------+
+| Column | Data                            |
++--------+---------------------------------+
+| n      | Column(UInt8([1, 255]))         |
+| Output | Timestamp([1000000, 255000000]) |
++--------+---------------------------------+
+
+
+ast            : CAST(0.00::DECIMAL(10, 2) AS BOOLEAN)
+raw expr       : CAST(CAST(0.00 AS Decimal(10, 2)) AS Boolean)
+checked expr   : CAST<Decimal(10, 2)>(CAST<Decimal(2, 2)>(0.00_d64(2,2) AS Decimal(10, 2)) AS Boolean)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : TRY_CAST((-1.5)::DECIMAL(10, 2) AS BOOLEAN)
+raw expr       : TRY_CAST(CAST(-1.5 AS Decimal(10, 2)) AS Boolean)
+checked expr   : TRY_CAST<Decimal(10, 2)>(CAST<Decimal(2, 1)>(-1.5_d64(2,1) AS Decimal(10, 2)) AS Boolean NULL)
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {TRUE}
+output         : true
+
+
+----------------------------------------------------------------------------------------------------
+NULL
+
+A NULL converts to NULL. `CAST` to a type that is not nullable fails on a NULL, but only in a row
+that the cast converts.
+----------------------------------------------------------------------------------------------------
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(n AS INT64)
+  | ^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Int64`, during run expr: `CAST(n AS Int64)`
+
+
+
+ast            : TRY_CAST(n AS INT64)
+raw expr       : TRY_CAST(n::Int32 NULL AS Int64)
+checked expr   : TRY_CAST<Int32 NULL>(n AS Int64 NULL)
+evaluation:
++--------+------------------+------------------+
+|        | n                | Output           |
++--------+------------------+------------------+
+| Type   | Int32 NULL       | Int64 NULL       |
+| Domain | {1..=1} ∪ {NULL} | {1..=1} ∪ {NULL} |
+| Row 0  | 1                | 1                |
+| Row 1  | NULL             | NULL             |
++--------+------------------+------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Int32([1, 0]), validity: [0b______01] }) |
+| Output | NullableColumn { column: Int64([1, 0]), validity: [0b______01] }         |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : CAST(n AS INT64 NULL)
+raw expr       : CAST(n::Int32 NULL AS Int64 NULL)
+checked expr   : CAST<Int32 NULL>(n AS Int64 NULL)
+evaluation:
++--------+------------------+------------------+
+|        | n                | Output           |
++--------+------------------+------------------+
+| Type   | Int32 NULL       | Int64 NULL       |
+| Domain | {1..=1} ∪ {NULL} | {1..=1} ∪ {NULL} |
+| Row 0  | 1                | 1                |
+| Row 1  | NULL             | NULL             |
++--------+------------------+------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Int32([1, 0]), validity: [0b______01] }) |
+| Output | NullableColumn { column: Int64([1, 0]), validity: [0b______01] }         |
++--------+--------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS INT32)
+  | ^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Int32`, during run expr: `CAST(NULL AS Int32)`
+
+
+
+ast            : TRY_CAST(NULL AS INT32)
+raw expr       : TRY_CAST(NULL AS Int32)
+checked expr   : TRY_CAST<NULL>(NULL AS Int32 NULL)
+optimized expr : NULL
+output type    : Int32 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(parse_json('null') AS INT32)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Variant` to type `Int32`, result has null values, during run expr: `CAST(CAST('null' AS Variant) AS Int32)`
+
+
+
+ast            : CAST(parse_json('null') AS INT32 NULL)
+raw expr       : CAST(parse_json('null') AS Int32 NULL)
+checked expr   : CAST<Variant>(CAST<String>("null" AS Variant) AS Int32 NULL)
+optimized expr : NULL
+output type    : Int32 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(parse_json('null') AS INT32)
+raw expr       : TRY_CAST(parse_json('null') AS Int32)
+checked expr   : TRY_CAST<Variant>(CAST<String>("null" AS Variant) AS Int32 NULL)
+optimized expr : NULL
+output type    : Int32 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : if(c, CAST(parse_json(s) AS INT32), 0)
+raw expr       : if(c::Boolean, CAST(parse_json(s::String) AS Int32), 0)
+checked expr   : if<T0=Int32><Boolean NULL, T0, T0>(CAST<Boolean>(c AS Boolean NULL), CAST<Variant>(CAST<String>(s AS Variant) AS Int32), CAST<UInt8>(0_u8 AS Int32))
+optimized expr : if<T0=Int32><Boolean NULL, T0, T0>(CAST<Boolean>(c AS Boolean NULL), CAST<Variant>(CAST<String>(s AS Variant) AS Int32), 0_i32)
+evaluation:
++--------+---------------+----------------+---------+
+|        | c             | s              | Output  |
++--------+---------------+----------------+---------+
+| Type   | Boolean       | String         | Int32   |
+| Domain | {FALSE, TRUE} | {"1"..="null"} | Unknown |
+| Row 0  | true          | '1'            | 1       |
+| Row 1  | false         | 'null'         | 0       |
++--------+---------------+----------------+---------+
+evaluation (internal):
++--------+-------------------------------+
+| Column | Data                          |
++--------+-------------------------------+
+| c      | Column(Boolean([0b______01])) |
+| s      | Column(StringColumn[1, null]) |
+| Output | Int32([1, 0])                 |
++--------+-------------------------------+
+
+
+error: 
+  --> SQL:1:10
+  |
+1 | if(c, 0, CAST(parse_json(s) AS INT32))
+  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Variant` to type `Int32`, result has null values, during run expr: `if(CAST(c AS Boolean NULL), CAST(0 AS Int32), CAST(CAST(s AS Variant) AS Int32))`
+
+
+
+----------------------------------------------------------------------------------------------------
+Nested values
+
+A nested value converts by its elements. For `TRY_CAST`, an element that fails is NULL, and the
+other elements and rows are kept.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : TRY_CAST([n, -1, 2] AS ARRAY(UINT8))
+raw expr       : TRY_CAST(array(n::Int64, -1, 2) AS Array(UInt8))
+checked expr   : TRY_CAST<Array(Int64)>(array<T0=Int64><T0, T0, T0>(n, CAST<Int8>(-1_i8 AS Int64), CAST<UInt8>(2_u8 AS Int64)) AS Array(UInt8 NULL) NULL)
+optimized expr : TRY_CAST<Array(Int64)>(array<T0=Int64><T0, T0, T0>(n, -1_i64, 2_i64) AS Array(UInt8 NULL) NULL)
+evaluation:
++--------+------------+------------------------+
+|        | n          | Output                 |
++--------+------------+------------------------+
+| Type   | Int64      | Array(UInt8 NULL) NULL |
+| Domain | {1..=1000} | [{0..=255} ∪ {NULL}]   |
+| Row 0  | 1          | [1, NULL, 2]           |
+| Row 1  | 1000       | [NULL, NULL, 2]        |
++--------+------------+------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                        |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| n      | Column(Int64([1, 1000]))                                                                                                                                                    |
+| Output | NullableColumn { column: ArrayColumn { values: NullableColumn { column: UInt8([1, 0, 2, 0, 0, 2]), validity: [0b__100101] }, offsets: [0, 3, 6] }, validity: [0b______11] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST({'a': n} AS MAP(STRING, INT8))
+raw expr       : TRY_CAST(map(array('a'), array(n::Int64)) AS Map(String, Int8))
+checked expr   : TRY_CAST<Map(String, Int64)>(map<T0=String, T1=Int64><Array(T0), Array(T1)>(array<T0=String><T0>("a"), array<T0=Int64><T0>(n)) AS Map(String, Int8) NULL)
+optimized expr : TRY_CAST<Map(String, Int64)>(map<T0=String, T1=Int64><Array(T0), Array(T1)>(['a'], array<T0=Int64><T0>(n)) AS Map(String, Int8) NULL)
+evaluation:
++--------+------------+------------------------+
+|        | n          | Output                 |
++--------+------------+------------------------+
+| Type   | Int64      | Map(String, Int8) NULL |
+| Domain | {1..=1000} | Unknown                |
+| Row 0  | 1          | {'a':1}                |
+| Row 1  | 1000       | NULL                   |
++--------+------------+------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------+
+| n      | Column(Int64([1, 1000]))                                                                                                                 |
+| Output | NullableColumn { column: ArrayColumn { values: Tuple([StringColumn[a, a], Int8([1, 0])]), offsets: [0, 1, 2] }, validity: [0b______01] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST((s, s) AS TUPLE(INT32, STRING))
+raw expr       : TRY_CAST(tuple(s::String, s::String) AS Tuple(Int32, String))
+checked expr   : TRY_CAST<Tuple(String, String)>(tuple<String, String>(s, s) AS Tuple(Int32 NULL, String NULL) NULL)
+evaluation:
++--------+-------------+----------------------------------------------------+
+|        | s           | Output                                             |
++--------+-------------+----------------------------------------------------+
+| Type   | String      | Tuple(Int32 NULL, String NULL) NULL                |
+| Domain | {"1"..="a"} | ({-2147483648..=2147483647} ∪ {NULL}, {"1"..="a"}) |
+| Row 0  | '1'         | (1, '1')                                           |
+| Row 1  | 'a'         | (NULL, 'a')                                        |
++--------+-------------+----------------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | Column(StringColumn[1, a])                                                                                                                                                                          |
+| Output | NullableColumn { column: Tuple([NullableColumn { column: Int32([1, 0]), validity: [0b______01] }, NullableColumn { column: StringColumn[1, a], validity: [0b______11] }]), validity: [0b______11] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST([] AS ARRAY(INT32))
+raw expr       : TRY_CAST(array() AS Array(Int32))
+checked expr   : TRY_CAST<Array(Nothing)>(array<>() AS Array(Int32 NULL) NULL)
+optimized expr : []
+output type    : Array(Int32 NULL) NULL
+output domain  : []
+output         : []
+
+
+ast            : CAST({} AS MAP(STRING, INT32))
+raw expr       : CAST(map(array(), array()) AS Map(String, Int32))
+checked expr   : CAST<Map(Nothing)>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()) AS Map(String, Int32))
+optimized expr : {}
+output type    : Map(String, Int32)
+output domain  : {}
+output         : {}
+
+
+----------------------------------------------------------------------------------------------------
+Domains
+
+The domain of a cast comes from the rule of each step. A `CAST` whose rows may fail has no domain,
+so that folding does not skip the error; a `TRY_CAST` may be NULL only when a row may fail.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : CAST(s AS DATE)
+raw expr       : CAST(s::String AS Date)
+checked expr   : CAST<String>(s AS Date)
+evaluation:
++--------+----------------------------------------+--------------+
+|        | s                                      | Output       |
++--------+----------------------------------------+--------------+
+| Type   | String                                 | Date         |
+| Domain | {"2022-01-02"..="2022-01-02 01:00:00"} | Unknown      |
+| Row 0  | '2022-01-02'                           | '2022-01-02' |
+| Row 1  | '2022-01-02 01:00:00'                  | '2022-01-02' |
++--------+----------------------------------------+--------------+
+evaluation (internal):
++--------+-------------------------------------------------------+
+| Column | Data                                                  |
++--------+-------------------------------------------------------+
+| s      | Column(StringColumn[2022-01-02, 2022-01-02 01:00:00]) |
+| Output | Date([18994, 18994])                                  |
++--------+-------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(n AS INT8)
+  | ^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(1000)` in expr `CAST(n AS Int8)`
+
+
+
+ast            : TRY_CAST(n AS INT8)
+raw expr       : TRY_CAST(n::Int64 AS Int8)
+checked expr   : TRY_CAST<Int64>(n AS Int8 NULL)
+evaluation:
++--------+------------+--------------------+
+|        | n          | Output             |
++--------+------------+--------------------+
+| Type   | Int64      | Int8 NULL          |
+| Domain | {1..=1000} | {1..=127} ∪ {NULL} |
+| Row 0  | 1          | 1                  |
+| Row 1  | 1000       | NULL               |
++--------+------------+--------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------+
+| Column | Data                                                            |
++--------+-----------------------------------------------------------------+
+| n      | Column(Int64([1, 1000]))                                        |
+| Output | NullableColumn { column: Int8([1, 0]), validity: [0b______01] } |
++--------+-----------------------------------------------------------------+
+
+
+ast            : TRY_CAST(n AS STRING)
+raw expr       : TRY_CAST(n::Int64 AS String)
+checked expr   : TRY_CAST<Int64>(n AS String NULL)
+evaluation:
++--------+------------+-------------+
+|        | n          | Output      |
++--------+------------+-------------+
+| Type   | Int64      | String NULL |
+| Domain | {1..=1000} | {""..}      |
+| Row 0  | 1          | '1'         |
+| Row 1  | 1000       | '1000'      |
++--------+------------+-------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n      | Column(Int64([1, 1000]))                                                 |
+| Output | NullableColumn { column: StringColumn[1, 1000], validity: [0b______11] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : CAST(n AS INT8)
+raw expr       : CAST(n::Int64 AS Int8)
+checked expr   : CAST<Int64>(n AS Int8)
+evaluation:
++--------+-----------+-----------+
+|        | n         | Output    |
++--------+-----------+-----------+
+| Type   | Int64     | Int8      |
+| Domain | {1..=100} | {1..=100} |
+| Row 0  | 1         | 1         |
+| Row 1  | 100       | 100       |
++--------+-----------+-----------+
+evaluation (internal):
++--------+-------------------------+
+| Column | Data                    |
++--------+-------------------------+
+| n      | Column(Int64([1, 100])) |
+| Output | Int8([1, 100])          |
++--------+-------------------------+
+
+
+ast            : TRY_CAST(n AS INT8)
+raw expr       : TRY_CAST(n::Int64 AS Int8)
+checked expr   : TRY_CAST<Int64>(n AS Int8 NULL)
+evaluation:
++--------+-----------+-----------+
+|        | n         | Output    |
++--------+-----------+-----------+
+| Type   | Int64     | Int8 NULL |
+| Domain | {1..=100} | {1..=100} |
+| Row 0  | 1         | 1         |
+| Row 1  | 100       | 100       |
++--------+-----------+-----------+
+evaluation (internal):
++--------+-------------------------------------------------------------------+
+| Column | Data                                                              |
++--------+-------------------------------------------------------------------+
+| n      | Column(Int64([1, 100]))                                           |
+| Output | NullableColumn { column: Int8([1, 100]), validity: [0b______11] } |
++--------+-------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(d AS UINT8)
+raw expr       : TRY_CAST(d::Date AS UInt8)
+checked expr   : TRY_CAST<Date>(d AS UInt8 NULL)
+evaluation:
++--------+--------------+--------------------+
+|        | d            | Output             |
++--------+--------------+--------------------+
+| Type   | Date         | UInt8 NULL         |
+| Domain | {1..=19724}  | {1..=255} ∪ {NULL} |
+| Row 0  | '1970-01-02' | 1                  |
+| Row 1  | '2024-01-02' | NULL               |
++--------+--------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| d      | Column(Date([1, 19724]))                                         |
+| Output | NullableColumn { column: UInt8([1, 0]), validity: [0b______01] } |
++--------+------------------------------------------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+Domain of a single value
+
+A single value besides NULL converts exactly, by running the step that converts it.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : TRY_CAST(s AS DECIMAL(10, 2))
+raw expr       : TRY_CAST(s::String NULL AS Decimal(10, 2))
+checked expr   : TRY_CAST<String NULL>(s AS Decimal(10, 2) NULL)
+evaluation:
++--------+----------------------+------------------------+
+|        | s                    | Output                 |
++--------+----------------------+------------------------+
+| Type   | String NULL          | Decimal(10, 2) NULL    |
+| Domain | {"1"..="1"} ∪ {NULL} | {1.00..=1.00} ∪ {NULL} |
+| Row 0  | '1'                  | 1.00                   |
+| Row 1  | NULL                 | NULL                   |
++--------+----------------------+------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| s      | Column(NullableColumn { column: StringColumn[1, ], validity: [0b______01] }) |
+| Output | NullableColumn { column: Decimal64([1.00, 0.00]), validity: [0b______01] }   |
++--------+------------------------------------------------------------------------------+
+
+
+ast            : CAST(s AS DECIMAL(10, 2) NULL)
+raw expr       : CAST(s::String NULL AS Decimal(10, 2) NULL)
+checked expr   : CAST<String NULL>(s AS Decimal(10, 2) NULL)
+evaluation:
++--------+----------------------+------------------------+
+|        | s                    | Output                 |
++--------+----------------------+------------------------+
+| Type   | String NULL          | Decimal(10, 2) NULL    |
+| Domain | {"1"..="1"} ∪ {NULL} | {1.00..=1.00} ∪ {NULL} |
+| Row 0  | '1'                  | 1.00                   |
+| Row 1  | NULL                 | NULL                   |
++--------+----------------------+------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| s      | Column(NullableColumn { column: StringColumn[1, ], validity: [0b______01] }) |
+| Output | NullableColumn { column: Decimal64([1.00, 0.00]), validity: [0b______01] }   |
++--------+------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(s AS DECIMAL(10, 2))
+raw expr       : TRY_CAST(s::String NULL AS Decimal(10, 2))
+checked expr   : TRY_CAST<String NULL>(s AS Decimal(10, 2) NULL)
+optimized expr : NULL
+evaluation:
++--------+----------------------+---------------------+
+|        | s                    | Output              |
++--------+----------------------+---------------------+
+| Type   | String NULL          | Decimal(10, 2) NULL |
+| Domain | {"a"..="a"} ∪ {NULL} | {NULL}              |
+| Row 0  | 'a'                  | NULL                |
+| Row 1  | NULL                 | NULL                |
++--------+----------------------+---------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| s      | Column(NullableColumn { column: StringColumn[a, ], validity: [0b______01] }) |
+| Output | NullableColumn { column: Decimal64([0.00, 0.00]), validity: [0b______00] }   |
++--------+------------------------------------------------------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+Domain of maps
+
+The entries of a map convert as the elements of an array do.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : CAST(m AS MAP(STRING, INT16))
+raw expr       : CAST(m::Map(String, Int64) AS Map(String, Int16))
+checked expr   : CAST<Map(String, Int64)>(m AS Map(String, Int16))
+evaluation:
++--------+-------------------------------+-------------------------------+
+|        | m                             | Output                        |
++--------+-------------------------------+-------------------------------+
+| Type   | Map(String, Int64)            | Map(String, Int16)            |
+| Domain | {[{"a"..="b"}], [{1..=1000}]} | {[{"a"..="b"}], [{1..=1000}]} |
+| Row 0  | {'a':1}                       | {'a':1}                       |
+| Row 1  | {'b':1000}                    | {'b':1000}                    |
++--------+-------------------------------+-------------------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                              |
++--------+---------------------------------------------------------------------------------------------------+
+| m      | Column(ArrayColumn { values: Tuple([StringColumn[a, b], Int64([1, 1000])]), offsets: [0, 1, 2] }) |
+| Output | ArrayColumn { values: Tuple([StringColumn[a, b], Int16([1, 1000])]), offsets: [0, 1, 2] }         |
++--------+---------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(m AS MAP(STRING, INT8))
+raw expr       : TRY_CAST(m::Map(String, Int64) AS Map(String, Int8))
+checked expr   : TRY_CAST<Map(String, Int64)>(m AS Map(String, Int8) NULL)
+evaluation:
++--------+-------------------------------+---------------------------------------+
+|        | m                             | Output                                |
++--------+-------------------------------+---------------------------------------+
+| Type   | Map(String, Int64)            | Map(String, Int8) NULL                |
+| Domain | {[{"a"..="b"}], [{1..=1000}]} | {[{"a"..="b"}], [{1..=127}]} ∪ {NULL} |
+| Row 0  | {'a':1}                       | {'a':1}                               |
+| Row 1  | {'b':1000}                    | NULL                                  |
++--------+-------------------------------+---------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------+
+| m      | Column(ArrayColumn { values: Tuple([StringColumn[a, b], Int64([1, 1000])]), offsets: [0, 1, 2] })                                        |
+| Output | NullableColumn { column: ArrayColumn { values: Tuple([StringColumn[a, b], Int8([1, 0])]), offsets: [0, 1, 2] }, validity: [0b______01] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+----------------------------------------------------------------------------------------------------
+try_to_x functions
+
+`try_to_x` is an ordinary function that converts as its own overloads do, not a cast.
+----------------------------------------------------------------------------------------------------
+
+
+ast            : try_to_int64(n)
+raw expr       : try_to_int64(n::Int64)
+checked expr   : CAST<Int64>(n AS Int64 NULL)
+evaluation:
++--------+----------------------------+----------------------------+
+|        | n                          | Output                     |
++--------+----------------------------+----------------------------+
+| Type   | Int64                      | Int64 NULL                 |
+| Domain | {-1..=9223372036854775807} | {-1..=9223372036854775807} |
+| Row 0  | -1                         | -1                         |
+| Row 1  | 9223372036854775807        | 9223372036854775807        |
++--------+----------------------------+----------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| n      | Column(Int64([-1, 9223372036854775807]))                                            |
+| Output | NullableColumn { column: Int64([-1, 9223372036854775807]), validity: [0b______11] } |
++--------+-------------------------------------------------------------------------------------+
+
+
+ast            : try_to_uint64(u)
+raw expr       : try_to_uint64(u::UInt64)
+checked expr   : CAST<UInt64>(u AS UInt64 NULL)
+evaluation:
++--------+----------------------------+----------------------------+
+|        | u                          | Output                     |
++--------+----------------------------+----------------------------+
+| Type   | UInt64                     | UInt64 NULL                |
+| Domain | {0..=18446744073709551615} | {0..=18446744073709551615} |
+| Row 0  | 0                          | 0                          |
+| Row 1  | 18446744073709551615       | 18446744073709551615       |
++--------+----------------------------+----------------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------+
+| Column | Data                                                                                 |
++--------+--------------------------------------------------------------------------------------+
+| u      | Column(UInt64([0, 18446744073709551615]))                                            |
+| Output | NullableColumn { column: UInt64([0, 18446744073709551615]), validity: [0b______11] } |
++--------+--------------------------------------------------------------------------------------+
+
+
+ast            : try_to_string(s)
+raw expr       : try_to_string(s::String)
+checked expr   : CAST<String>(s AS String NULL)
+evaluation:
++--------+---------------+---------------+
+|        | s             | Output        |
++--------+---------------+---------------+
+| Type   | String        | String NULL   |
+| Domain | {"1"..="abc"} | {"1"..="abc"} |
+| Row 0  | '1'           | '1'           |
+| Row 1  | 'abc'         | 'abc'         |
++--------+---------------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| s      | Column(StringColumn[1, abc])                                            |
+| Output | NullableColumn { column: StringColumn[1, abc], validity: [0b______11] } |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : try_to_int8(s)
+raw expr       : try_to_int8(s::String)
+checked expr   : try_to_int8<String>(s)
+evaluation:
++--------+---------------+-----------------------+
+|        | s             | Output                |
++--------+---------------+-----------------------+
+| Type   | String        | Int8 NULL             |
+| Domain | {"1"..="abc"} | {-128..=127} ∪ {NULL} |
+| Row 0  | '1'           | 1                     |
+| Row 1  | 'abc'         | NULL                  |
++--------+---------------+-----------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------+
+| Column | Data                                                            |
++--------+-----------------------------------------------------------------+
+| s      | Column(StringColumn[1, abc])                                    |
+| Output | NullableColumn { column: Int8([1, 0]), validity: [0b______01] } |
++--------+-----------------------------------------------------------------+
+
+

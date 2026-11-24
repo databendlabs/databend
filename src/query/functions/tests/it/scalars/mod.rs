@@ -41,6 +41,7 @@ mod binary;
 mod bitmap;
 mod boolean;
 mod cast;
+mod cast_behavior;
 mod comparison;
 mod control;
 mod datetime;
@@ -108,6 +109,39 @@ impl<'a> TestContext<'a> {
             .enumerate()
             .collect()
     }
+}
+
+/// Writes the heading of a golden file: its title and what its cases show.
+pub fn write_file_heading(file: &mut impl Write, title: &str, description: &str) {
+    write_heading(file, '=', title, description);
+}
+
+/// Writes the heading of a group of cases: its title and the rule the cases show.
+pub fn write_section(file: &mut impl Write, title: &str, description: &str) {
+    write_heading(file, '-', title, description);
+}
+
+fn write_heading(file: &mut impl Write, rule: char, title: &str, description: &str) {
+    const WIDTH: usize = 100;
+    let rule = rule.to_string().repeat(WIDTH);
+    writeln!(file, "{rule}").unwrap();
+    writeln!(file, "{title}").unwrap();
+    for paragraph in description.split("\n\n") {
+        writeln!(file).unwrap();
+        let mut line = String::new();
+        for word in paragraph.split_whitespace() {
+            if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > WIDTH {
+                writeln!(file, "{line}").unwrap();
+                line.clear();
+            }
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(word);
+        }
+        writeln!(file, "{line}").unwrap();
+    }
+    writeln!(file, "{rule}\n\n").unwrap();
 }
 
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
