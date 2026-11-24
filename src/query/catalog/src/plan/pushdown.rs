@@ -355,14 +355,40 @@ impl PushDownInfo {
         }
     }
 
-    /// Score column a zero-column scan may read from a pruned block. The reader
-    /// must still check that this particular block contains *all* output rows.
-    pub fn index_top_k_score(&self) -> Option<InternalColumnType> {
-        if self.inverted_index_top_k().is_some() {
-            return Some(InternalColumnType::SearchScore);
+    /// Score column whose index matches may stand in for the scan's output: the
+    /// one index of the scan restricts it to the rows it found, and nothing else
+    /// filters or rewrites them. Each block must still have `rows_only` matches
+    /// with a score per row. Unlike `index_top_k_score`, this does not need the
+    /// index to cut its matches to a Top-K: an FTS search without one (as for
+    /// `ORDER BY score() ASC`) returns every match of the block.
+    pub fn covering_index_score(&self) -> Option<InternalColumnType> {
+        if self.prewhere.is_some()
+            || self.secure_filters.is_some()
+            || self.sample.is_some()
+            || self.change_type.is_some()
+        {
+            return None;
         }
-        self.vector_index_top_k()
-            .map(|_| InternalColumnType::VectorScore)
+        match (&self.inverted_index, &self.vector_index) {
+            (Some(_), None) if self.filter_only_use_index() => {
+                Some(InternalColumnType::SearchScore)
+            }
+            (None, Some(_)) if self.filters.is_none() => Some(InternalColumnType::VectorScore),
+            _ => None,
+        }
+    }
+
+    /// Score column a zero-column scan may read from a pruned block: a covering
+    /// index whose pruning also kept only its Top-K rows. The reader must still
+    /// check that this particular block contains *all* output rows.
+    pub fn index_top_k_score(&self) -> Option<InternalColumnType> {
+        let key = self.covering_index_score()?;
+        let top_k = match key {
+            InternalColumnType::SearchScore => self.inverted_index_top_k(),
+            InternalColumnType::VectorScore => self.vector_index_top_k(),
+            _ => None,
+        };
+        top_k.map(|_| key)
     }
 
     /// The vector counterpart of `inverted_index_top_k`: a nearest-neighbour TopN

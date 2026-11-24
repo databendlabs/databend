@@ -109,10 +109,6 @@ fn covering_input(plan: &FinalTopNPlan) -> Option<CoveringInput<'_>> {
     let push = scan.source.push_downs.as_ref()?;
     if scan.source.parts.is_empty()
         || !matches!(&push.projection, Some(Projection::Columns(cols)) if cols.is_empty())
-        || push.prewhere.is_some()
-        || push.secure_filters.is_some()
-        || push.sample.is_some()
-        || push.change_type.is_some()
         || scan.source.block_meta_options.update_stream_columns
         || scan.source.block_meta_options.reserve_block_index
     {
@@ -127,10 +123,13 @@ fn covering_input(plan: &FinalTopNPlan) -> Option<CoveringInput<'_>> {
             .map(|c| c.column_type())
     };
     let key = internal.get(&order.order_by.as_usize())?.column_type();
+    if push.covering_index_score().as_ref() != Some(key) {
+        return None;
+    }
+    // The plan above the scan must apply nothing the index has not: for FTS, only
+    // the `match()` filter itself.
     match (key, filter) {
-        (InternalColumnType::SearchScore, Some(f))
-            if !f.is_secure && push.filter_only_use_index() && push.vector_index.is_none() =>
-        {
+        (InternalColumnType::SearchScore, Some(f)) if !f.is_secure => {
             let [RemoteExpr::ColumnRef { id, .. }] = f.predicates.as_slice() else {
                 return None;
             };
@@ -139,10 +138,7 @@ fn covering_input(plan: &FinalTopNPlan) -> Option<CoveringInput<'_>> {
                 return None;
             }
         }
-        (InternalColumnType::VectorScore, None)
-            if push.vector_index.is_some()
-                && push.inverted_index.is_none()
-                && push.filters.is_none() => {}
+        (InternalColumnType::VectorScore, None) => {}
         _ => return None,
     }
     let projection = partial

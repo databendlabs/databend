@@ -14,6 +14,7 @@
 
 use databend_common_ast::ast::SampleConfig;
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
@@ -205,4 +206,117 @@ fn test_index_top_k_rejects_scans_the_index_cannot_answer() {
     rejects(|p| p.order_by[0].0 = column("id", DataType::Number(NumberDataType::UInt64)));
     rejects(|p| p.filters = score_top_k().filters);
     rejects(|p| p.inverted_index = score_top_k().inverted_index);
+}
+
+/// The planner replaces the scan and TopN by the index matches under
+/// `covering_index_score`; a lazy reader skips Parquet only under the narrower
+/// `index_top_k_score`, which also needs the index cut to a Top-K. Both rules
+/// share the same exclusions, so the two must differ only by the Top-K shape.
+#[test]
+fn test_covering_index_score_contains_index_top_k() {
+    use InternalColumnType::SearchScore;
+    use InternalColumnType::VectorScore;
+
+    fn with(mut push_down: PushDownInfo, change: impl FnOnce(&mut PushDownInfo)) -> PushDownInfo {
+        change(&mut push_down);
+        push_down
+    }
+    let id = || column("id", DataType::Number(NumberDataType::UInt64));
+
+    for (case, push_down, covering, top_k) in [
+        (
+            "fts desc",
+            score_top_k(),
+            Some(SearchScore),
+            Some(SearchScore),
+        ),
+        // Without a Top-K, FTS pruning keeps every match of the block.
+        (
+            "fts asc",
+            with(score_top_k(), |p| p.order_by[0].1 = true),
+            Some(SearchScore),
+            None,
+        ),
+        (
+            "fts without limit",
+            with(score_top_k(), |p| p.limit = None),
+            Some(SearchScore),
+            None,
+        ),
+        (
+            "fts with a second sort key",
+            with(score_top_k(), |p| p.order_by.push((id(), true, false))),
+            Some(SearchScore),
+            None,
+        ),
+        (
+            "vector asc",
+            vector_top_n(),
+            Some(VectorScore),
+            Some(VectorScore),
+        ),
+        // Every row is scored: blocks are not `rows_only`, so none is covered at run time.
+        (
+            "vector desc",
+            with(vector_top_n(), |p| p.order_by[0].1 = false),
+            Some(VectorScore),
+            None,
+        ),
+        (
+            "vector without limit",
+            with(vector_top_n(), |p| p.limit = None),
+            Some(VectorScore),
+            None,
+        ),
+        (
+            "fts with a residual filter",
+            with(score_top_k(), |p| {
+                p.filters.as_mut().unwrap().filter = column("tenant_id", DataType::Boolean);
+            }),
+            None,
+            None,
+        ),
+        (
+            "vector with a filter",
+            with(vector_top_n(), |p| p.filters = score_top_k().filters),
+            None,
+            None,
+        ),
+        (
+            "both indexes",
+            with(score_top_k(), |p| {
+                p.vector_index = vector_top_n().vector_index
+            }),
+            None,
+            None,
+        ),
+        ("no index", PushDownInfo::default(), None, None),
+    ] {
+        assert_eq!(push_down.covering_index_score(), covering, "{case}");
+        assert_eq!(push_down.index_top_k_score(), top_k, "{case}");
+    }
+
+    let exclusions: [(&str, fn(&mut PushDownInfo)); 4] = [
+        ("prewhere", |p| {
+            p.prewhere = Some(PrewhereInfo {
+                output_columns: Projection::Columns(vec![]),
+                prewhere_columns: Projection::Columns(vec![]),
+                remain_columns: Projection::Columns(vec![]),
+                filter: column(SEARCH_MATCHED_COL_NAME, DataType::Boolean),
+                virtual_column_ids: None,
+            });
+        }),
+        ("secure filters", |p| {
+            p.secure_filters = score_top_k().filters
+        }),
+        ("sample", |p| p.sample = Some(SampleConfig::default())),
+        ("change type", |p| p.change_type = Some(ChangeType::Append)),
+    ];
+    for (case, exclude) in exclusions {
+        for push_down in [score_top_k(), vector_top_n()] {
+            let push_down = with(push_down, exclude);
+            assert_eq!(push_down.covering_index_score(), None, "{case}");
+            assert_eq!(push_down.index_top_k_score(), None, "{case}");
+        }
+    }
 }
