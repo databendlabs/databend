@@ -61,8 +61,8 @@ pub enum CastStep {
     /// may return NULL for some non-NULL values, e.g. a JSON null cast from Variant, which
     /// `value_call` returns a nullable type for; see [`CastPlan::rejects_null`].
     Function {
-        call: CastCall,
-        value_call: CastCall,
+        call: Box<CastCall>,
+        value_call: Box<CastCall>,
     },
     /// Casts through intermediate types, one cast after another.
     Chain(Vec<CastPlan>),
@@ -267,8 +267,8 @@ fn resolve_function_plan(
         return None;
     }
     Some(CastPlan::new(src_type, dest_type, CastStep::Function {
-        call,
-        value_call,
+        call: Box::new(call),
+        value_call: Box::new(value_call),
     }))
 }
 
