@@ -374,16 +374,20 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let write_settings = fuse_table.get_write_settings();
     let location = ("_b/virtual_column_block_meta_direct.parquet".to_string(), 0);
+    let rows = 128;
+    let strings = [r#"{"s":"alpha"}"#, r#"{"s":"beta"}"#, "{}"]
+        .map(|json| OwnedJsonb::from_str(json).unwrap().to_vec());
     let block = DataBlock::new(
         vec![
-            Int32Type::from_data(vec![1, 2]).into(),
-            VariantType::from_opt_data(vec![
-                Some(OwnedJsonb::from_str(r#"{"id":1}"#)?.to_vec()),
-                Some(OwnedJsonb::from_str(r#"{"id":2}"#)?.to_vec()),
-            ])
+            Int32Type::from_data((0..rows as i32).collect::<Vec<_>>()).into(),
+            VariantType::from_opt_data(
+                (0..rows)
+                    .map(|row| Some(strings[row % strings.len()].clone()))
+                    .collect::<Vec<_>>(),
+            )
             .into(),
         ],
-        2,
+        rows,
     );
     let mut builder = VirtualColumnBuilder::try_create(schema.clone(), Default::default())?;
     builder.add_block(&block)?;
@@ -396,7 +400,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let draft_meta = draft_columns
         .virtual_column_metas
         .iter()
-        .find(|meta| meta.name == "id")
+        .find(|meta| meta.name == "s")
         .unwrap();
     let segment_column_id = 7;
     let virtual_block_meta = VirtualBlockMeta {
@@ -409,18 +413,19 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         column_paths: vec![VirtualSegmentColumnPath {
             source_column_id,
             paths: vec![VirtualSegmentPath {
-                path: "id".to_string(),
+                path: "s".to_string(),
                 column_id: segment_column_id,
             }],
         }],
     };
     let query_column_id = schema.next_column_id();
-    let field = build_virtual_column_field(
+    let mut field = build_virtual_column_field(
         source_column_id,
         "v",
         query_column_id,
-        parse_key_paths(b"{id}")?.to_owned(),
+        parse_key_paths(b"{s}")?.to_owned(),
     );
+    field.data_type = Box::new(TableDataType::String.wrap_nullable());
     let push_down = PushDownInfo {
         virtual_column: Some(VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
@@ -455,29 +460,51 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         DataType::from(&draft_meta.column_meta.data_type())
     );
 
-    let reader = VirtualColumnReader::try_create(
-        ctx.clone(),
-        dal,
-        schema,
-        VirtualColumnInfo {
-            source_column_ids: HashSet::from([source_column_id]),
-            ignorable_source_column_ids: HashSet::from([source_column_id]),
-            virtual_column_fields: vec![field],
-        },
-        write_settings.table_compression,
-        CachePolicy::DEFAULT,
-    )?;
     let table_ctx: Arc<dyn TableContext> = ctx;
     let read_settings = ReadSettings::from_ctx(&table_ctx)?;
-    let virtual_data = reader
-        .read_parquet_data_by_merge_io(&read_settings, &Some(&index), block.num_rows())
-        .await
-        .unwrap();
-    let result = reader.deserialize_virtual_columns(block, Some(virtual_data), None)?;
-    assert_variant_column(&result.get_by_offset(2).to_column(), &[
-        Some("1"),
-        Some("2"),
-    ]);
+    for enabled in [false, true] {
+        table_ctx.get_settings().set_setting(
+            "enable_encoded_columns".to_string(),
+            u8::from(enabled).to_string(),
+        )?;
+        let reader = VirtualColumnReader::try_create(
+            table_ctx.clone(),
+            dal.clone(),
+            schema.clone(),
+            VirtualColumnInfo {
+                source_column_ids: HashSet::from([source_column_id]),
+                ignorable_source_column_ids: HashSet::from([source_column_id]),
+                virtual_column_fields: vec![field.clone()],
+            },
+            write_settings.table_compression,
+            CachePolicy::DEFAULT,
+        )?;
+        let virtual_data = reader
+            .read_parquet_data_by_merge_io(&read_settings, &Some(&index), rows)
+            .await
+            .unwrap();
+        let result = reader.deserialize_virtual_columns(
+            block.slice(1..7),
+            Some(virtual_data),
+            Some(RowSelection::from(vec![
+                RowSelector::skip(1),
+                RowSelector::select(6),
+                RowSelector::skip(rows - 7),
+            ])),
+        )?;
+        let entry = result.get_by_offset(2);
+        assert_eq!(entry.is_dict_encoded(), enabled);
+        let column = entry.to_column();
+        assert_eq!(column.data_type(), DataType::String.wrap_nullable());
+        assert_eq!(column.iter().collect::<Vec<_>>(), vec![
+            ScalarRef::String("beta"),
+            ScalarRef::Null,
+            ScalarRef::String("alpha"),
+            ScalarRef::String("beta"),
+            ScalarRef::Null,
+            ScalarRef::String("alpha"),
+        ]);
+    }
     Ok(())
 }
 

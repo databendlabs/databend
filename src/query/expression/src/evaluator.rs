@@ -389,12 +389,23 @@ impl<'a> Evaluator<'a> {
     }
 
     /// `<column> <op> <constant>` over an encoded column, or `<column> <op> <column>` over two
-    /// frame of reference encoded columns, evaluated without decoding (on the deltas / once per
-    /// dictionary value). `None` if the arguments do not have this form.
-    pub fn try_compare_encoded(&self, op: &SelectOp, args: &[Expr]) -> Option<Bitmap> {
-        let encoded = |id: usize| match self.data_block.get_by_offset(id) {
-            BlockEntry::Column(Column::Encoded(encoded)) => Some(encoded),
-            _ => None,
+    /// non-nullable frame of reference encoded columns, evaluated without decoding (on the deltas
+    /// / once per dictionary value). Returns the comparison result and its separate NULL mask.
+    pub fn try_compare_encoded(
+        &self,
+        op: &SelectOp,
+        args: &[Expr],
+    ) -> Option<(Bitmap, Option<&Bitmap>)> {
+        let encoded = |id: usize| {
+            let BlockEntry::Column(column) = self.data_block.get_by_offset(id) else {
+                return None;
+            };
+            match column {
+                Column::Nullable(column) => {
+                    Some((column.column().as_encoded()?, Some(column.validity())))
+                }
+                column => Some((column.as_encoded()?, None)),
+            }
         };
         let (id, scalar, op) = match args {
             [
@@ -410,12 +421,18 @@ impl<'a> Evaluator<'a> {
                 Expr::ColumnRef(ColumnRef { id: lhs, .. }),
                 Expr::ColumnRef(ColumnRef { id: rhs, .. }),
             ] => {
-                let rhs = encoded(*rhs)?.as_for()?;
-                return encoded(*lhs)?.as_for()?.compare_for(op, rhs);
+                let (lhs, None) = encoded(*lhs)? else {
+                    return None;
+                };
+                let (rhs, None) = encoded(*rhs)? else {
+                    return None;
+                };
+                return Some((lhs.as_for()?.compare_for(op, rhs.as_for()?)?, None));
             }
             _ => return None,
         };
-        encoded(id)?.compare_scalar(&op, scalar)
+        let (column, validity) = encoded(id)?;
+        Some((column.compare_scalar(&op, scalar)?, validity))
     }
 
     /// Evaluates a filter's LIKE over a dictionary encoded string column without decoding.
@@ -487,7 +504,7 @@ impl<'a> Evaluator<'a> {
             function,
             generics,
             args,
-            ..
+            return_type,
         } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
         // Suppression is sticky downward: once a boundary function opts in
@@ -501,9 +518,21 @@ impl<'a> Evaluator<'a> {
 
         if args.len() == 2
             && let Some(op) = SelectOp::try_from_func_name(&function.signature.name)
-            && let Some(bitmap) = self.try_compare_encoded(&op, args)
+            && let Some((bitmap, column_validity)) = self.try_compare_encoded(&op, args)
         {
-            return Ok(Value::Column(Column::Boolean(bitmap)));
+            let column = Column::Boolean(bitmap);
+            let column = if return_type.is_nullable() {
+                let validity = match (column_validity, validity) {
+                    (Some(column), Some(input)) => Some(column & &input),
+                    (Some(column), None) => Some(column.clone()),
+                    (None, validity) => validity,
+                };
+                column.wrap_nullable(validity)
+            } else {
+                debug_assert!(column_validity.is_none());
+                column
+            };
+            return Ok(Value::Column(column));
         }
 
         let accepts_encoded_args = function

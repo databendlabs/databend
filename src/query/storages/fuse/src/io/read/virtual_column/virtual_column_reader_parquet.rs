@@ -73,6 +73,7 @@ use super::VirtualColumnReader;
 use crate::BlockReadResult;
 use crate::io::read::block::parquet::ColumnEncoding;
 use crate::io::read::block::parquet::column_chunks_to_record_batch;
+use crate::io::read::block::parquet::dictionary_hint_fields;
 
 pub struct VirtualBlockReadResult {
     pub virtual_block_location: String,
@@ -239,7 +240,7 @@ impl VirtualColumnReader {
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
                 let hints = self.dictionary_ndv_ratio.and_then(|_| {
-                    shared_jsonb_dictionary_hints(virtual_data, &self.virtual_column_info)
+                    virtual_dictionary_hints(virtual_data, &self.virtual_column_info)
                 });
                 column_chunks_to_record_batch(
                     &virtual_data.schema,
@@ -281,7 +282,11 @@ impl VirtualColumnReader {
                             &func_ctx,
                             data_block.num_rows(),
                             self.dictionary_ndv_ratio.filter(|_| {
-                                target_type.remove_nullable_ref() == &DataType::Variant
+                                matches!(
+                                    (plan, target_type.remove_nullable_ref()),
+                                    (VirtualFieldReadPlan::Direct { .. }, DataType::String)
+                                        | (VirtualFieldReadPlan::Shared { .. }, DataType::Variant)
+                                )
                             }),
                         )?
                     }
@@ -335,44 +340,51 @@ impl VirtualColumnReader {
     }
 }
 
-/// Keep the value dictionary only for standalone Shared fields read as Variant.
-fn shared_jsonb_dictionary_hints(
+/// Hint standalone Direct String fields and the value leaf of Shared JSONB Maps.
+fn virtual_dictionary_hints(
     virtual_data: &VirtualBlockReadResult,
     info: &VirtualColumnInfo,
 ) -> Option<Fields> {
-    let shared_maps: HashSet<_> = info
-        .virtual_column_fields
-        .iter()
-        .filter_map(|field| {
-            if field.data_type.remove_nullable() != TableDataType::Variant {
-                return None;
+    let mut direct = HashSet::new();
+    let mut shared_maps = HashSet::new();
+    for field in &info.virtual_column_fields {
+        match (
+            virtual_data.fields.get(&field.query_column_id),
+            field.data_type.remove_nullable(),
+        ) {
+            (Some(VirtualFieldReadPlan::Direct { slot }), TableDataType::String) => {
+                direct.insert(slot.0);
             }
-            let VirtualFieldReadPlan::Shared {
-                key_slot,
-                value_slot,
-                ..
-            } = virtual_data.fields.get(&field.query_column_id)?
-            else {
-                return None;
-            };
-            let value_type = &virtual_data
+            (
+                Some(VirtualFieldReadPlan::Shared {
+                    key_slot,
+                    value_slot,
+                    ..
+                }),
+                TableDataType::Variant,
+            ) if virtual_data
                 .read_slots
-                .get(value_slot.as_usize())?
-                .data_type;
-            (value_type.remove_nullable_ref() == &DataType::Variant).then_some(key_slot.0)
-        })
-        .collect();
+                .get(value_slot.as_usize())
+                .is_some_and(|slot| slot.data_type.remove_nullable_ref() == &DataType::Variant) =>
+            {
+                shared_maps.insert(key_slot.0);
+            }
+            _ => {}
+        }
+    }
+    let hints = dictionary_hint_fields(&virtual_data.schema, direct);
     if shared_maps.is_empty() {
-        return None;
+        return hints;
     }
 
-    let schema = Schema::from(virtual_data.schema.as_ref());
+    let fields =
+        hints.unwrap_or_else(|| Schema::from(virtual_data.schema.as_ref()).fields().clone());
     Some(
         virtual_data
             .schema
             .fields()
             .iter()
-            .zip(schema.fields())
+            .zip(&fields)
             .map(|(field, arrow)| {
                 if shared_maps.contains(&field.column_id())
                     && let ArrowDataType::Map(entries, sorted) = arrow.data_type()
@@ -467,6 +479,7 @@ fn column_from_record_batch(
     record_batch: &RecordBatch,
     orig_schema: &TableSchema,
     name: &str,
+    dictionary_ndv_ratio: Option<u64>,
 ) -> Result<Option<(Column, DataType)>> {
     let Some(arrow_array) = record_batch.column_by_name(name).cloned() else {
         return Ok(None);
@@ -475,7 +488,14 @@ fn column_from_record_batch(
         return Ok(None);
     };
     let orig_type: DataType = orig_field.data_type().into();
-    let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
+    let column = if let Some(ratio) = dictionary_ndv_ratio
+        && orig_type.remove_nullable_ref() == &DataType::String
+        && matches!(arrow_array.data_type(), ArrowDataType::Dictionary(..))
+    {
+        ColumnEncoding::Dictionary.encode(arrow_array, &orig_type, ratio, false)?
+    } else {
+        Column::from_arrow_rs(arrow_array, &orig_type)?
+    };
     Ok(Some((column, orig_type)))
 }
 
@@ -570,14 +590,18 @@ fn eval_read_plan(
     match plan {
         VirtualFieldReadPlan::Missing => Ok((Value::Scalar(Scalar::Null), DataType::Null)),
         VirtualFieldReadPlan::Direct { slot } => {
-            let (column, data_type) =
-                column_from_record_batch(record_batch, orig_schema, &slot.0.to_string())?
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "virtual read slot {} is missing from the sidecar record batch",
-                            slot.0
-                        ))
-                    })?;
+            let (column, data_type) = column_from_record_batch(
+                record_batch,
+                orig_schema,
+                &slot.0.to_string(),
+                dictionary_ndv_ratio,
+            )?
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "virtual read slot {} is missing from the sidecar record batch",
+                    slot.0
+                ))
+            })?;
             Ok((Value::Column(column), data_type))
         }
         VirtualFieldReadPlan::FromParent {
@@ -630,13 +654,15 @@ fn eval_read_plan(
             {
                 return Ok((Value::Column(column), DataType::Variant.wrap_nullable()));
             }
-            let (column, data_type) = column_from_record_batch(record_batch, orig_schema, &name)?
-                .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "virtual shared key slot {} is missing from the sidecar record batch",
-                    key_slot.0
-                ))
-            })?;
+            let (column, data_type) =
+                column_from_record_batch(record_batch, orig_schema, &name, None)?.ok_or_else(
+                    || {
+                        ErrorCode::Internal(format!(
+                            "virtual shared key slot {} is missing from the sidecar record batch",
+                            key_slot.0
+                        ))
+                    },
+                )?;
             materialize_shared_map_value(column, data_type, shared_data_type, *index, num_rows)
         }
         VirtualFieldReadPlan::Coalesce { plans } => materialize_coalesce_read_plan(
@@ -762,7 +788,7 @@ fn materialize_object_read_plan(
     let mut shared_object_groups = Vec::with_capacity(shared_groups.len());
     for ((key_slot, _value_slot), requests) in shared_groups {
         let (column, data_type) =
-            column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string())?
+            column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string(), None)?
                 .ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "virtual shared key slot {} is missing from the sidecar record batch",

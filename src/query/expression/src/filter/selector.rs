@@ -303,7 +303,12 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        if let Some(bitmap) = self.evaluator.try_compare_encoded(select_op, exprs) {
+        if let Some((bitmap, validity)) = self.evaluator.try_compare_encoded(select_op, exprs) {
+            // SQL WHERE does not select NULL rows, even for negated comparisons.
+            let bitmap = match validity {
+                Some(validity) => &bitmap & validity,
+                None => bitmap,
+            };
             let buffers = SelectionBuffers {
                 true_selection,
                 false_selection: false_selection.0,

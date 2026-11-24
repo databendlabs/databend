@@ -29,6 +29,7 @@ use databend_common_expression::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::DecimalColumn;
@@ -187,4 +188,29 @@ fn test_group_by_encoded_columns() {
 #[test]
 fn test_group_by_encoded_codes() {
     check_group_by_encoded_columns(1);
+}
+
+#[test]
+fn test_group_by_nullable_dictionary_codes() {
+    // Each block spans multiple probe batches, and its dictionary uses a different code
+    // for the same string. The two keys within a block share codes but not validity.
+    let n = 5000;
+    let batches = [["alpha", "beta"], ["beta", "alpha"]].map(|values| {
+        let plain = StringType::from_data((0..n).map(|i| values[i % 2]).collect_vec());
+        let encoded = encode(std::slice::from_ref(&plain)).remove(0);
+        let keys = vec![
+            encoded.clone().wrap_nullable(Some(
+                (0..n).map(|i| i < 2048 || i % 3 != 0).collect::<Bitmap>(),
+            )),
+            encoded.wrap_nullable(Some((0..n).map(|i| i % 5 != 0).collect::<Bitmap>())),
+        ];
+        (keys, Int64Type::from_data((0..n as i64).collect_vec()))
+    });
+    let decoded = batches
+        .clone()
+        .map(|(keys, arg)| (keys.into_iter().map(Column::decode_owned).collect(), arg));
+    let expected = aggregate(&decoded);
+    // (NULL, NULL), plus (value, value), (NULL, value), (value, NULL) for each value.
+    assert_eq!(expected.num_rows(), 7);
+    assert_block_value_sort_eq(&aggregate(&batches), &expected);
 }

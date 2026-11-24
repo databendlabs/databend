@@ -941,5 +941,51 @@ unset enable_encoded_columns
 statement ok
 drop table t_shared_virtual
 
+# The first two dictionary values appear in opposite order in the two blocks.
+statement ok
+create table t_encoded_virtual (id int, val json) storage_format = 'parquet' enable_virtual_column = true
+
+statement ok
+insert into t_encoded_virtual select number, parse_json(case number % 4 when 0 then '{"s":"alpha"}' when 1 then '{"s":"beta"}' else '{}' end) from numbers(4096)
+
+statement ok
+insert into t_encoded_virtual select number + 4096, parse_json(case number % 4 when 0 then '{"s":"beta"}' when 1 then '{"s":"alpha"}' else '{}' end) from numbers(4096)
+
+statement ok
+refresh virtual column on t_encoded_virtual
+
+statement ok
+set enable_encoded_columns = 1
+
+query TI
+select val['s']::string as s, count(*) from t_encoded_virtual group by s order by s nulls last
+----
+alpha 2048
+beta 2048
+NULL 4096
+
+query III
+select count(*), min(id), max(id) from t_encoded_virtual where val['s']::string = 'alpha'
+----
+2048 0 8189
+
+query I
+select count(*) from t_encoded_virtual where not (val['s']::string = 'alpha')
+----
+2048
+
+query IB
+select id, val['s']::string = 'alpha' from t_encoded_virtual where id < 3 order by id
+----
+0 1
+1 0
+2 NULL
+
+statement ok
+unset enable_encoded_columns
+
+statement ok
+drop table t_encoded_virtual
+
 statement ok
 DROP DATABASE test_virtual_column

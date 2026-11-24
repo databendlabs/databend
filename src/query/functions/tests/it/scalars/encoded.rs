@@ -23,6 +23,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
@@ -30,6 +31,7 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use databend_common_expression::filter::SelectOp;
 use databend_common_expression::type_check;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -280,6 +282,73 @@ fn test_eval_on_encoded_columns() {
             assert_eq!(count(&encoded_block), count(&plain_block), "{text}");
         }
     }
+}
+
+#[test]
+fn test_nullable_dictionary_comparison() {
+    let (encoded, plain) = dict(&["a", "b"], &[0, 0, 1, 1, 0, 1]);
+    // The same code is used by valid and NULL rows.
+    let validity = Bitmap::from_iter([true, false, true, false, true, true]);
+    let encoded = encoded.wrap_nullable(Some(validity.clone()));
+    let plain = plain.wrap_nullable(Some(validity));
+    let func_ctx = FunctionContext::default();
+    let names = [("s", plain.data_type())];
+    let rows = plain.len();
+
+    for (text, expected) in [
+        ("s = 'a'", &[0, 4][..]),
+        ("'a' = s", &[0, 4][..]),
+        ("not (s = 'a')", &[2, 5][..]),
+        ("s = 'a' or s = 'b'", &[0, 2, 4, 5][..]),
+        ("s != 'missing'", &[0, 2, 4, 5][..]),
+        ("s = 'missing'", &[][..]),
+    ] {
+        let raw = parser::parse_raw_expr(text, &names, &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw, &BUILTIN_FUNCTIONS).unwrap();
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluate = |column: Column| {
+            let entry = BlockEntry::from(column);
+            let is_encoded = entry.is_dict_encoded();
+            let block = DataBlock::new(vec![entry], rows);
+            let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+            if text == "s = 'a'" && is_encoded {
+                let Expr::FunctionCall(call) = expr.as_ref() else {
+                    panic!("expected a comparison");
+                };
+                let (matches, validity) = evaluator
+                    .try_compare_encoded(&SelectOp::Equal, &call.args)
+                    .expect("nullable dictionary comparison");
+                assert!(matches.get_bit(1));
+                assert!(!validity.unwrap().get_bit(1));
+            }
+            let mut filter = FilterExecutor::new(
+                expr.as_ref().clone(),
+                func_ctx.clone(),
+                rows,
+                None,
+                &BUILTIN_FUNCTIONS,
+                false,
+            );
+            let count = filter.select(&block).unwrap();
+            let mut selected = filter.true_selection()[..count].to_vec();
+            selected.sort_unstable();
+            assert_eq!(selected.as_slice(), expected, "{text}");
+            evaluator.run(&expr).unwrap()
+        };
+        let result = evaluate(encoded.clone());
+        let baseline = evaluate(plain.clone());
+        for row in 0..rows {
+            assert_eq!(result.index(row), baseline.index(row), "{text}: row {row}");
+        }
+    }
+
+    eval_dictionary(
+        "s = 'a'",
+        encoded,
+        plain,
+        Some(Bitmap::from_iter([false, true, true, true, true, true])),
+        false,
+    );
 }
 
 /// Compare both physical representations, including partial evaluation and decoded callers.

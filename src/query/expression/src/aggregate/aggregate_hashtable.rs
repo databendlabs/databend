@@ -41,7 +41,9 @@ use crate::Column;
 use crate::ProjectedBlock;
 use crate::aggregate::aggregate_function::AggregateCallRef;
 use crate::aggregate::aggregate_function::AggregateStateSet;
+use crate::types::Bitmap;
 use crate::types::DataType;
+use crate::types::EncodedColumn;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
 
@@ -60,25 +62,30 @@ impl GroupKeyState {
     fn init_codes(&mut self, group_columns: ProjectedBlock, row_count: usize) {
         let mut code_space = 1usize;
         for (index, entry) in group_columns.iter().enumerate() {
-            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
+            let Some((encoded, validity)) = encoded_group_key(entry) else {
                 return;
             };
             let (codes, count) = encoded.codes();
-            // Dictionary projections retain their input keys. Check sharing once per block.
-            if self.code_columns.iter().any(|(column, _)| {
-                matches!(
-                    &group_columns[*column],
-                    BlockEntry::Column(Column::Encoded(other))
-                        if codes.shares_storage(other.codes().0)
-                )
-            }) {
+            // Dictionary projections retain their input keys. Only share a dimension when
+            // neither key has NULLs; one bitmap can mark a different set of rows than another.
+            if validity.is_none()
+                && self.code_columns.iter().any(|(column, _)| {
+                    matches!(
+                        encoded_group_key(&group_columns[*column]),
+                        Some((other, None)) if codes.shares_storage(other.codes().0)
+                    )
+                })
+            {
                 continue;
             }
             let stride = code_space;
-            let Ok(count) = usize::try_from(count) else {
+            let Some(radix) = usize::try_from(count)
+                .ok()
+                .and_then(|count| count.checked_add(usize::from(validity.is_some())))
+            else {
                 return;
             };
-            let Some(next_space) = code_space.checked_mul(count) else {
+            let Some(next_space) = code_space.checked_mul(radix) else {
                 return;
             };
             code_space = next_space;
@@ -93,6 +100,21 @@ impl GroupKeyState {
         self.rank_of_code.resize(code_space, u32::MAX);
         self.code_addresses.resize(code_space, RowPtr::null());
         self.code_places.resize(code_space, StateAddr::null());
+    }
+}
+
+/// Returns the encoded values and a validity bitmap only if it contains NULLs.
+fn encoded_group_key(entry: &BlockEntry) -> Option<(&EncodedColumn, Option<&Bitmap>)> {
+    match entry {
+        BlockEntry::Column(Column::Encoded(encoded)) => Some((encoded, None)),
+        BlockEntry::Column(Column::Nullable(column)) => {
+            let validity = column.validity();
+            Some((
+                column.column().as_encoded()?,
+                (validity.null_count() != 0).then_some(validity),
+            ))
+        }
+        _ => None,
     }
 }
 
@@ -562,9 +584,20 @@ impl AggregateHashTable {
         // Code of a row = mixed radix number of its independent keys' codes.
         let mut row_codes = vec![0u32; row_count];
         for &(column, stride) in &group_state.code_columns {
-            let (codes, _) = group_columns[column].as_column()?.as_encoded()?.codes();
-            for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
-                *row_code += (code as usize * stride) as u32;
+            let (encoded, validity) = encoded_group_key(&group_columns[column])?;
+            let (codes, count) = encoded.codes();
+            if let Some(validity) = validity {
+                for ((row_code, code), valid) in
+                    row_codes.iter_mut().zip(codes.iter()).zip(validity.iter())
+                {
+                    // NULL is a separate code regardless of the inner value at that row.
+                    let code = if valid { code } else { count };
+                    *row_code += (code as usize * stride) as u32;
+                }
+            } else {
+                for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
+                    *row_code += (code as usize * stride) as u32;
+                }
             }
         }
 

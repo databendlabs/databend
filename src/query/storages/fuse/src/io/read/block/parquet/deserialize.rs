@@ -36,7 +36,8 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 
 /// Arrow fields of `original_schema` with the top-level string fields in `dictionary_columns`
-/// typed `Dictionary(UInt32, Utf8)`. Passed as the hint of [`column_chunks_to_record_batch`],
+/// typed `Dictionary(UInt32, Utf8)`, retaining their nullability. Passed as the hint of
+/// [`column_chunks_to_record_batch`],
 /// it makes the Parquet reader preserve the dictionary encoding of these column chunks instead
 /// of expanding it. `None` if there is no such field.
 pub fn dictionary_hint_fields(
@@ -47,7 +48,8 @@ pub fn dictionary_hint_fields(
     for column_id in dictionary_columns {
         // The type check guards against a nested field sharing the column id of its leaf.
         let Some(index) = original_schema.fields().iter().position(|field| {
-            field.column_id() == column_id && *field.data_type() == TableDataType::String
+            field.column_id() == column_id
+                && field.data_type().remove_nullable() == TableDataType::String
         }) else {
             continue;
         };
