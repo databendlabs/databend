@@ -1130,6 +1130,51 @@ impl FuseTable {
         new_table.table_info.meta.schema = schema;
         Arc::new(new_table)
     }
+
+    /// Count the NULL values of a leaf column from the block metadata of every
+    /// row in the current snapshot, independent of access policies.
+    ///
+    /// Returns the NULL count of the blocks that store the column, and the row
+    /// count of the blocks that do not, which read the column default. Returns
+    /// `None` if a block stores the column without statistics, or a segment is
+    /// column-oriented.
+    pub async fn column_null_count_from_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        column_id: ColumnId,
+    ) -> Result<Option<(u64, u64)>> {
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(Some((0, 0)));
+        };
+        if snapshot.segments.iter().any(|(location, _)| {
+            crate::segment_format_from_location(location) == FuseSegmentFormat::Column
+        }) {
+            return Ok(None);
+        }
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
+        let chunk_size = (ctx.get_settings().get_max_threads()? as usize * 4).max(1);
+        let (mut null_count, mut rows_without_column) = (0, 0);
+        for chunk in snapshot.segments.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
+                .await?;
+            for segment in segments {
+                for block in segment?.block_metas()? {
+                    if block.row_count == 0 {
+                        continue;
+                    }
+                    match block.col_stats.get(&column_id) {
+                        Some(stats) => null_count += stats.null_count,
+                        None if block.column_meta(&column_id).is_none() => {
+                            rows_without_column += block.row_count;
+                        }
+                        None => return Ok(None),
+                    }
+                }
+            }
+        }
+        Ok(Some((null_count, rows_without_column)))
+    }
 }
 
 #[async_trait::async_trait]
