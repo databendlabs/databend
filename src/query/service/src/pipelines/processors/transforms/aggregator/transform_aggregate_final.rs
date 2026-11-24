@@ -46,6 +46,7 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::sorts::rank_against_boundary;
+use databend_common_pipeline_transforms::sorts::ranks_against_boundary;
 use parking_lot::RwLock;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -352,6 +353,7 @@ impl TransformFinalAggregate {
         match input {
             FinalInput::Payloads(payloads) => {
                 for payload in payloads {
+                    // Batches that keep no row are skipped without returning.
                     check_interrupt()?;
                     self.handle_aggregate_payload(payload, need_check_spill)?;
                 }
@@ -469,10 +471,13 @@ impl TransformFinalAggregate {
                 check_interrupt()?;
                 let block = match (&top_n, &self.top_n_boundary) {
                     // Only the rows that do not rank after the boundary get their full result.
-                    (Some(_), Some(boundary)) => payload
-                        .merge_selected_result(&mut self.flush_state, |columns| {
+                    (Some(_), Some(boundary)) => {
+                        payload.merge_selected_result(&mut self.flush_state, |columns| {
+                            // Batches that keep no row are skipped without returning.
+                            check_interrupt()?;
                             boundary.select(columns)
-                        })?,
+                        })?
+                    }
                     _ => payload.merge_result(&mut self.flush_state)?,
                 };
                 let Some(block) = block else {
@@ -855,8 +860,12 @@ impl TopNBoundary {
         let mut dropped = false;
         let mut ties = (0..num_rows).collect::<Vec<_>>();
         for (desc, value) in self.order_by.iter().zip(boundary.iter()) {
+            // A column type the sort comparison does not support decides nothing, so it is not
+            // built for the batch.
+            if !ranks_against_boundary(&columns.data_type(desc.offset)) {
+                break;
+            }
             let column = columns.column(desc.offset)?;
-            // A column type the sort comparison does not support decides nothing.
             let Some(ranks) = rank_against_boundary(&column, value, desc) else {
                 break;
             };

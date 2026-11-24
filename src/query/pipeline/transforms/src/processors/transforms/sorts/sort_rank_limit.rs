@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -356,21 +357,37 @@ fn compare_with_boundary<T: AccessType>(
     Some(keep)
 }
 
+/// Whether `rank_against_boundary` ranks the columns of `data_type`.
+pub fn ranks_against_boundary(data_type: &DataType) -> bool {
+    match data_type.remove_nullable() {
+        DataType::Null => true,
+        data_type => with_boundary_type!(data_type, |T| Some(type_name::<T>())).is_some(),
+    }
+}
+
 /// How each row of `column` ranks against `boundary` under `desc`: `Less` when the sort puts the
 /// row before the boundary, `Greater` when after it, `Equal` when they tie. Values are compared
 /// with the `compare` the sort uses for the column type, and nulls are placed by `nulls_first`,
-/// on either side. `None` for the column types that `rows_within_boundary` does not support.
+/// on either side. `None` for the column types that `ranks_against_boundary` rejects.
 pub fn rank_against_boundary(
     column: &Column,
     boundary: &Scalar,
     desc: &SortColumnDescription,
 ) -> Option<Vec<Ordering>> {
-    let (values, validity) = split_validity(column);
     // A null sorts before every value with `nulls_first`, after every value without.
     let null_before_value = match desc.nulls_first {
         true => Ordering::Less,
         false => Ordering::Greater,
     };
+    // A column of the `Null` type has no validity: every row is null.
+    if let Column::Null { len } = column {
+        let rank = match boundary {
+            Scalar::Null => Ordering::Equal,
+            _ => null_before_value,
+        };
+        return Some(vec![rank; *len]);
+    }
+    let (values, validity) = split_validity(column);
     let mut ranks = match boundary {
         Scalar::Null => vec![null_before_value.reverse(); column.len()],
         boundary => with_boundary_type!(values.data_type(), |T| {
@@ -1112,5 +1129,54 @@ mod tests {
         // Every row ranks after the first batch, but only the sort drops them.
         let out = feed(&mut t, tuples((10..10 + BATCH_ROWS as i32).collect()));
         assert_eq!(out[0].num_rows(), LIMIT);
+    }
+
+    #[test]
+    fn rank_against_boundary_places_nulls_as_the_sort() {
+        use Ordering::*;
+        let rank = |column: &Column, boundary: &Scalar, desc: SortColumnDescription| {
+            rank_against_boundary(column, boundary, &desc).unwrap()
+        };
+
+        // A column of the `Null` type ties with its null boundary, whatever the null order.
+        let nulls = Column::Null { len: 3 };
+        assert_eq!(rank(&nulls, &Scalar::Null, desc(0, true, true)), vec![
+            Equal;
+            3
+        ]);
+        assert_eq!(rank(&nulls, &Scalar::Null, desc(0, false, false)), vec![
+            Equal;
+            3
+        ]);
+
+        let column = Int32Type::from_opt_data(vec![Some(1), None, Some(3), Some(5)]);
+        // A null boundary: the values rank after it with nulls first, before it with nulls last.
+        assert_eq!(rank(&column, &Scalar::Null, desc(0, true, true)), vec![
+            Greater, Equal, Greater, Greater
+        ]);
+        assert_eq!(rank(&column, &Scalar::Null, desc(0, false, false)), vec![
+            Less, Equal, Less, Less
+        ]);
+        // A value boundary: the null ranks before it with nulls first, after it with nulls last.
+        assert_eq!(rank(&column, &int(3), desc(0, true, true)), vec![
+            Less, Less, Equal, Greater
+        ]);
+        assert_eq!(rank(&column, &int(3), desc(0, false, false)), vec![
+            Greater, Greater, Equal, Less
+        ]);
+    }
+
+    #[test]
+    fn ranks_against_boundary_matches_rank_against_boundary() {
+        let int32 = DataType::Number(NumberDataType::Int32);
+        assert!(ranks_against_boundary(&DataType::Null));
+        assert!(ranks_against_boundary(&int32));
+        assert!(ranks_against_boundary(&int32.wrap_nullable()));
+        assert!(ranks_against_boundary(&DataType::String.wrap_nullable()));
+
+        let tuple = Column::Tuple(vec![Int32Type::from_data(vec![1, 2])]);
+        assert!(!ranks_against_boundary(&tuple.data_type()));
+        let boundary = Scalar::Tuple(vec![int(1)]);
+        assert!(rank_against_boundary(&tuple, &boundary, &desc(0, true, false)).is_none());
     }
 }

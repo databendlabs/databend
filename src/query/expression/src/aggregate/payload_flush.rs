@@ -389,6 +389,15 @@ impl BatchResultColumns<'_> {
         self.flush_state.row_count
     }
 
+    /// The type of `column(index)`, without building it.
+    pub fn data_type(&self, index: usize) -> DataType {
+        let payload = self.payload;
+        match index.checked_sub(payload.aggrs.len()) {
+            Some(group_index) => payload.group_types[group_index].clone(),
+            None => payload.aggrs[index].signature().return_type.clone(),
+        }
+    }
+
     /// Column `index` of the result in the layout of `Payload::merge_result`: the results of
     /// the aggregates, then the group columns. The results are computed without consuming the
     /// states, which the result of the kept rows consumes later.
