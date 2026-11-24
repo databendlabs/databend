@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::cmp::Ordering::Greater;
 use std::cmp::Ordering::Less;
 use std::intrinsics::assume;
 use std::mem;
 use std::ptr;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_column::binview::ViewProbe;
 use databend_common_column::bitmap::MutableBitmap;
 
 use crate::Column;
@@ -48,7 +50,7 @@ impl TopKSorter {
         with_number_mapped_type!(|NUM_TYPE| match col.data_type() {
             DataType::Number(NumberDataType::NUM_TYPE) =>
                 self.push_column_internal::<NumberType::<NUM_TYPE>>(col, bitmap),
-            DataType::String => self.push_column_internal::<StringType>(col, bitmap),
+            DataType::String => self.push_string_column(col, bitmap),
             DataType::Timestamp => self.push_column_internal::<TimestampType>(col, bitmap),
             DataType::Date => self.push_column_internal::<DateType>(col, bitmap),
             _ => {}
@@ -86,9 +88,8 @@ impl TopKSorter {
                 .push_column_with_selection_internal::<NumberType::<NUM_TYPE>, SELECT_ALL>(
                     col, selection, count
                 ),
-            DataType::String => self.push_column_with_selection_internal::<StringType, SELECT_ALL>(
-                col, selection, count
-            ),
+            DataType::String =>
+                self.push_string_column_with_selection::<SELECT_ALL>(col, selection, count),
             DataType::Timestamp => self
                 .push_column_with_selection_internal::<TimestampType, SELECT_ALL>(
                     col, selection, count
@@ -167,7 +168,7 @@ impl TopKSorter {
         with_number_mapped_type!(|NUM_TYPE| match col.data_type() {
             DataType::Number(NumberDataType::NUM_TYPE) =>
                 self.never_match_any_internal::<NumberType::<NUM_TYPE>>(col),
-            DataType::String => self.never_match_any_internal::<StringType>(col),
+            DataType::String => self.never_match_any_string(col),
             DataType::Timestamp => self.never_match_any_internal::<TimestampType>(col),
             DataType::Date => self.never_match_any_internal::<DateType>(col),
             _ => false,
@@ -187,6 +188,105 @@ impl TopKSorter {
             }
         }
         true
+    }
+
+    /// [`Self::push_column_internal`] for strings: the heap top is compared with the rows by
+    /// its view, which is built once and rebuilt only when a row replaces the top.
+    fn push_string_column(&mut self, col: &Column, bitmap: &mut MutableBitmap) {
+        let col = StringType::try_downcast_column(col).unwrap();
+        let ordering = self.ordering();
+        let mut row = 0;
+        while row < col.len() {
+            if self.data.len() < self.limit {
+                if bitmap.get(row) {
+                    self.push_initial(unsafe { col.index_unchecked(row) });
+                }
+                row += 1;
+                continue;
+            }
+
+            let top = ViewProbe::new(self.string_top().as_bytes());
+            let mut replacement = None;
+            while row < col.len() {
+                if bitmap.get(row) {
+                    if col.compare_probe(row, &top).reverse() != ordering {
+                        replacement = Some(row);
+                        row += 1;
+                        break;
+                    }
+                    bitmap.set(row, false);
+                }
+                row += 1;
+            }
+            if let Some(replacement) = replacement {
+                self.replace_top(unsafe { col.index_unchecked(replacement) });
+            }
+        }
+    }
+
+    /// [`Self::push_column_with_selection_internal`] for strings, see [`Self::push_string_column`].
+    fn push_string_column_with_selection<const SELECT_ALL: bool>(
+        &mut self,
+        col: &Column,
+        selection: &mut [u32],
+        count: usize,
+    ) -> usize {
+        let col = StringType::try_downcast_column(col).unwrap();
+        let ordering = self.ordering();
+        let mut result_count = 0;
+        let mut i = 0;
+        while i < count {
+            if self.data.len() < self.limit {
+                let idx = if SELECT_ALL { i as u32 } else { selection[i] };
+                self.push_initial(unsafe { col.index_unchecked(idx as usize) });
+                selection[result_count] = idx;
+                result_count += 1;
+                i += 1;
+                continue;
+            }
+
+            let top = ViewProbe::new(self.string_top().as_bytes());
+            let mut replacement = None;
+            while i < count {
+                let idx = if SELECT_ALL { i as u32 } else { selection[i] };
+                i += 1;
+                if col.compare_probe(idx as usize, &top).reverse() != ordering {
+                    replacement = Some(idx);
+                    break;
+                }
+            }
+            if let Some(idx) = replacement {
+                self.replace_top(unsafe { col.index_unchecked(idx as usize) });
+                selection[result_count] = idx;
+                result_count += 1;
+            }
+        }
+        result_count
+    }
+
+    /// [`Self::never_match_any_internal`] for strings.
+    fn never_match_any_string(&self, col: &Column) -> bool {
+        let col = StringType::try_downcast_column(col).unwrap();
+        let top = ViewProbe::new(self.string_top().as_bytes());
+        // A row may match unless it ranks after the top: greater for `asc`, less otherwise.
+        let after_top = if self.asc { Greater } else { Less };
+        (0..col.len()).all(|row| col.compare_probe(row, &top) == after_top)
+    }
+
+    fn string_top(&self) -> &str {
+        self.data[0].as_string().unwrap()
+    }
+
+    fn push_initial(&mut self, value: &str) {
+        self.data.push(Scalar::String(value.to_string()));
+        if self.data.len() == self.limit {
+            self.make_heap();
+        }
+    }
+
+    fn replace_top(&mut self, value: &str) {
+        self.data[0] = Scalar::String(value.to_string());
+        self.adjust();
     }
 
     fn make_heap(&mut self) {
