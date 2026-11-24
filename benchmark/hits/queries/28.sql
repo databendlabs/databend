@@ -1,5 +1,5 @@
 SELECT REGEXP_REPLACE(Referer, '^https?://(?:www\.)?([^/]+)/.*$', '$1') AS k,
-    AVG(length(Referer)) AS l,
+    AVG(octet_length(Referer)) AS l,
     COUNT(*) AS c,
     MIN(Referer)
 FROM hits
