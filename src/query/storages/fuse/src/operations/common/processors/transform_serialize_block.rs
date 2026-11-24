@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
@@ -24,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline::core::Event;
@@ -36,6 +38,9 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ColumnGroupBloomMeta;
+use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -49,9 +54,11 @@ use crate::io::BlockWriter;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::block_index::create_block_index_specs;
+use crate::io::block_index::create_column_group_index_specs;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
+use crate::operations::common::RewrittenColumnGroup;
 use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::statistics::ClusterStatsGenerator;
@@ -81,6 +88,8 @@ pub struct TransformSerializeBlock {
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
+    /// Writes each block as a column group file of the block it replaces, for a partial UPDATE.
+    write_column_group: bool,
     pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
     recluster_index_rows: Option<Vec<ReclusterIndexRowRange>>,
@@ -154,6 +163,53 @@ impl TransformSerializeBlock {
             Some(virtual_column_layout),
             table_meta_timestamps,
         )
+    }
+
+    /// Writes each input block, which holds new values of `fields` of
+    /// `table.schema_with_stream()`, as a column group file of the block it replaces.
+    pub fn try_create_for_column_group(
+        ctx: Arc<dyn TableContext>,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        table: &FuseTable,
+        fields: &[FieldIndex],
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<Self> {
+        let mut serializer = Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            ClusterStatsGenerator::default(),
+            MutationKind::Update,
+            false,
+            None,
+            table_meta_timestamps,
+        )?;
+        let schema_with_stream = table.schema_with_stream();
+        let column_ids = fields
+            .iter()
+            .map(|index| schema_with_stream.field(*index).column_id())
+            .collect::<HashSet<_>>();
+        let builder = &mut serializer.block_builder;
+        let mut source_schema = builder.source_schema.as_ref().clone();
+        source_schema
+            .fields
+            .retain(|field| column_ids.contains(&field.column_id()));
+        let source_schema = Arc::new(source_schema);
+        builder.bloom_columns_map = table
+            .bloom_index_cols
+            .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+        builder.ndv_columns_map = table
+            .approx_distinct_cols
+            .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
+        builder.block_index_specs = create_column_group_index_specs(table, source_schema.clone())?;
+        builder.top_n = None;
+        builder.virtual_column_builder = None;
+        builder.json_path_statistics_builder = None;
+        builder.source_schema = source_schema;
+        serializer.write_column_group = true;
+        Ok(serializer)
     }
 
     fn do_create(
@@ -267,6 +323,7 @@ impl TransformSerializeBlock {
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
+            write_column_group: false,
             recluster_index_rows: None,
             recluster_output_row: 0,
             recluster_merged_names: Vec::new(),
@@ -530,7 +587,19 @@ impl Processor for TransformSerializeBlock {
                     self.recluster_merged_names.clear();
                     return Ok(());
                 }
-                let mutation_log_data_block = if let Some(index) = index {
+                let mutation_log_data_block = if self.write_column_group {
+                    let index = index.ok_or_else(|| {
+                        ErrorCode::Internal("a column group file must replace a block")
+                    })?;
+                    Self::mutation_logs(
+                        MutationLogEntry::AppendColumnGroup {
+                            index,
+                            column_group: Box::new(rewritten_column_group(extended_block_meta)),
+                        },
+                        logical_updated_rows,
+                        logical_deleted_rows,
+                    )
+                } else if let Some(index) = index {
                     // we are replacing the block represented by the `index`
                     Self::mutation_logs(
                         MutationLogEntry::ReplacedBlock {
@@ -575,5 +644,26 @@ impl Processor for TransformSerializeBlock {
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+/// The column group file that `written` describes, as a block of only the written columns.
+fn rewritten_column_group(written: ExtendedBlockMeta) -> RewrittenColumnGroup {
+    let block = written.block_meta;
+    RewrittenColumnGroup {
+        group: ColumnGroupFileMeta {
+            location: block.location,
+            file_size: block.file_size,
+            leaf_column_metas: block.col_metas,
+            bloom: block
+                .bloom_filter_index_location
+                .map(|location| ColumnGroupBloomMeta {
+                    location,
+                    file_size: block.bloom_filter_index_size,
+                }),
+            compression: block.compression,
+        },
+        col_stats: block.col_stats,
+        column_hlls: written.column_hlls,
     }
 }

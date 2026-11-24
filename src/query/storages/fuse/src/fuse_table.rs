@@ -144,6 +144,7 @@ use crate::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use crate::FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -481,6 +482,10 @@ impl FuseTable {
 
     pub fn enable_virtual_column(&self) -> bool {
         self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
+    }
+
+    pub fn enable_partial_update(&self) -> bool {
+        self.get_option(FUSE_OPT_KEY_ENABLE_PARTIAL_UPDATE, false)
     }
 
     pub fn virtual_column_layout_policy(&self) -> VirtualColumnLayoutPolicy {

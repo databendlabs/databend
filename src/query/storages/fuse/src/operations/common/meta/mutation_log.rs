@@ -20,10 +20,13 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ColumnGroupFileMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::FormatVersion;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::CompactExtraInfo;
@@ -63,10 +66,25 @@ pub enum MutationLogEntry {
         index: BlockMetaIndex,
         block_meta: Arc<ExtendedBlockMeta>,
     },
+    /// New values of some columns of the block at `index`, in a new column group file.
+    AppendColumnGroup {
+        index: BlockMetaIndex,
+        column_group: Box<RewrittenColumnGroup>,
+    },
     CompactExtras {
         extras: CompactExtraInfo,
     },
     DoNothing,
+}
+
+/// A column group file that a partial UPDATE wrote for one block.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct RewrittenColumnGroup {
+    pub group: ColumnGroupFileMeta,
+    /// Statistics of the columns `group` stores.
+    pub col_stats: StatisticsOfColumns,
+    /// HLL of the columns `group` stores.
+    pub column_hlls: Option<BlockHLLState>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq, Hash)]

@@ -1864,3 +1864,93 @@ fn test_dedup_file_locations() {
         "548052/604310/_i_b_v2/019bdabd02927061af2ed18c2562b79e_v4.parquet"
     );
 }
+
+/// VACUUM keeps every group file of a split block and the Bloom files of those groups. It removes
+/// a group file that no block serves any more, with its Bloom file.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_keeps_column_group_files() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db_name = fixture.default_db_name();
+    let tbl_name = "t_column_groups";
+    for sql in [
+        format!(
+            "create table {db_name}.{tbl_name} (id int not null, a int, b string) \
+             enable_partial_update = true"
+        ),
+        format!("insert into {db_name}.{tbl_name} select number, number, 'b' from numbers(10)"),
+        // The block takes a group file of `a`.
+        format!("update {db_name}.{tbl_name} set a = a + 10 where id < 5"),
+        // A newer group file serves `a`; no block serves the previous one.
+        format!("update {db_name}.{tbl_name} set a = a + 10 where id < 5"),
+        format!("vacuum table {db_name}.{tbl_name}"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let table = ctx
+        .get_default_catalog()?
+        .get_table(&fixture.default_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let segments = SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), table.schema())
+        .read_segments::<Arc<CompactSegmentInfo>>(&snapshot.segments, CachePolicy::READ_ONLY)
+        .await?;
+    let mut data_files = HashSet::new();
+    let mut bloom_files = HashSet::new();
+    for segment in segments {
+        for block in segment?.block_metas()? {
+            assert_eq!(block.column_groups.len(), 2);
+            for group in &block.column_groups {
+                data_files.insert(group.location.0.clone());
+                bloom_files.extend(group.bloom.as_ref().map(|bloom| bloom.location.0.clone()));
+            }
+        }
+    }
+    assert_eq!(bloom_files.len(), 2);
+
+    let file_name = |path: &str| path.rsplit('/').next().unwrap().to_string();
+    let files = table_storage_files(&ctx, fixture.storage_root(), &db_name, tbl_name).await?;
+    let stored = |dir: &str| {
+        files
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .filter(|path| path.contains(dir))
+            .map(|path| file_name(&path))
+            .collect::<HashSet<_>>()
+    };
+    let names = |paths: &HashSet<String>| {
+        paths
+            .iter()
+            .map(|path| file_name(path))
+            .collect::<HashSet<_>>()
+    };
+    assert_eq!(stored("/_b/"), names(&data_files));
+    assert_eq!(stored("/_i_b_v2/"), names(&bloom_files));
+
+    let rows = fixture
+        .execute_query(&format!(
+            "select sum(id), sum(a), count(b) from {db_name}.{tbl_name}"
+        ))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    assert_eq!(
+        databend_common_expression::block_debug::pretty_format_blocks(&rows)?,
+        [
+            "+----------+----------+----------+",
+            "| Column 0 | Column 1 | Column 2 |",
+            "+----------+----------+----------+",
+            "| 45       | 145      | 10       |",
+            "+----------+----------+----------+",
+        ]
+        .join("\n")
+    );
+    Ok(())
+}

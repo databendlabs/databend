@@ -62,6 +62,7 @@ use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::parse_computed_field_index_expr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
@@ -95,6 +96,73 @@ use crate::sessions::TableContext;
 
 // The predicate column symbol should not conflict with update expr column bindings.
 pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;
+
+/// A Direct UPDATE that writes only the columns it changes, into a new column group file of
+/// each block it changes.
+struct PartialUpdate {
+    /// The fields of `schema_with_stream()` the UPDATE writes, sorted: the SET columns and the
+    /// stream columns.
+    fields: Vec<FieldIndex>,
+    /// The columns of `fields`.
+    written_columns: ColumnSet,
+}
+
+impl PartialUpdate {
+    /// `None` if the UPDATE rewrites whole blocks: the table does not set
+    /// `enable_partial_update`, or the UPDATE writes every column or a cluster key column.
+    ///
+    /// A table that sets `enable_partial_update` must not use what a partial UPDATE does not
+    /// maintain: indexes other than Bloom, computed columns, virtual columns, PARTITION BY and
+    /// column-oriented segments. That is up to the user and is not checked.
+    fn try_create(
+        ctx: Arc<dyn TableContext>,
+        table: &dyn Table,
+        bind_context: &BindContext,
+        database: Option<&str>,
+        table_name: &str,
+        update_list: &HashMap<FieldIndex, ScalarExpr>,
+    ) -> Result<Option<Self>> {
+        let Ok(fuse_table) = FuseTable::try_from_table(table) else {
+            return Ok(None);
+        };
+        if !fuse_table.enable_partial_update() || update_list.is_empty() {
+            return Ok(None);
+        }
+        let schema = fuse_table.schema_with_stream();
+        let mut fields = update_list.keys().copied().collect::<BTreeSet<_>>();
+        for stream_column in fuse_table.stream_columns() {
+            fields.insert(schema.index_of(stream_column.column_name())?);
+        }
+        if fields.len() >= fuse_table.all_column_indices().len() {
+            return Ok(None);
+        }
+        if let Some(cluster_keys) = fuse_table.resolve_cluster_keys() {
+            let cluster_keys =
+                parse_cluster_keys(ctx, Arc::new(fuse_table.clone()), cluster_keys)?.into_keys();
+            if cluster_keys
+                .iter()
+                .any(|key| key.column_refs().keys().any(|index| fields.contains(index)))
+            {
+                return Ok(None);
+            }
+        }
+
+        let mut written_columns = ColumnSet::new();
+        for index in &fields {
+            let name = schema.field(*index).name();
+            let Some(binding) = bind_context.columns.iter().find(|binding| {
+                BindContext::match_column_binding(database, Some(table_name), name, binding)
+            }) else {
+                return Ok(None);
+            };
+            written_columns.insert(binding.index);
+        }
+        Ok(Some(PartialUpdate {
+            fields: fields.into_iter().collect(),
+            written_columns,
+        }))
+    }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mutation {
@@ -300,6 +368,42 @@ impl PhysicalPlanBuilder {
             ..
         } = mutation;
 
+        let table = self
+            .ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
+        let (target_database, target_table_name) = match table_name_alias {
+            None => (Some(database_name.as_str()), table_name.clone()),
+            Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
+        };
+        let partial_update = match (strategy, &matched_evaluators[..]) {
+            (MutationStrategy::Direct, [evaluator]) => match &evaluator.update {
+                Some(update_list) => PartialUpdate::try_create(
+                    self.ctx.clone(),
+                    table.as_ref(),
+                    bind_context,
+                    target_database,
+                    &target_table_name,
+                    update_list,
+                )?,
+                None => None,
+            },
+            _ => None,
+        };
+        if let Some(partial_update) = &partial_update {
+            // The mutation source reads only the columns the UPDATE reads or writes.
+            required = partial_update.written_columns.clone();
+            for update_scalar in matched_evaluators[0].update.iter().flat_map(|u| u.values()) {
+                update_scalar.collect_used_columns(&mut required);
+            }
+            for filter_value in direct_filter {
+                filter_value.collect_used_columns(&mut required);
+            }
+        }
+        if let Some(mutation_build_info) = self.mutation_build_info.as_mut() {
+            mutation_build_info.partial_update = partial_update.is_some();
+        }
+
         let mut maybe_udfs = BTreeSet::new();
         for matched_evaluator in matched_evaluators {
             if let Some(condition) = &matched_evaluator.condition {
@@ -339,10 +443,6 @@ impl PhysicalPlanBuilder {
             return Ok(plan);
         }
 
-        let table = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();
 
@@ -374,12 +474,9 @@ impl PhysicalPlanBuilder {
             // MutationStrategy::Direct: If the mutation filter is a simple expression,
             // we use MutationSource to execute the mutation directly.
             let mut field_id_to_schema_index = HashMap::new();
+            let partial_update_fields = partial_update.map(|partial_update| partial_update.fields);
             let (mutation_expr, computed_expr, mutation_kind) =
                 if let Some(update_list) = &matched_evaluators[0].update {
-                    let (database, table_name) = match table_name_alias {
-                        None => (Some(database_name.as_str()), table_name.clone()),
-                        Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
-                    };
                     let mutation_expr = mutation_update_expr(
                         self.ctx.clone(),
                         bind_context,
@@ -387,28 +484,34 @@ impl PhysicalPlanBuilder {
                         table.schema_with_stream().into(),
                         mutation_input_schema.clone(),
                         *predicate_column_index,
-                        database,
-                        &table_name,
+                        target_database,
+                        &target_table_name,
                     )?;
 
                     build_field_id_to_schema_index(
-                        database,
-                        &table_name,
+                        target_database,
+                        &target_table_name,
                         bind_context,
                         table.schema_with_stream(),
                         mutation_input_schema.clone(),
+                        partial_update_fields.as_deref(),
                         &mut field_id_to_schema_index,
                     );
 
-                    let computed_expr = generate_stored_computed_list(
-                        self.ctx.clone(),
-                        bind_context,
-                        Arc::new(table.schema().into()),
-                        mutation_input_schema.clone(),
-                        database,
-                        &table_name,
-                        update_list,
-                    )?;
+                    // A table that takes partial UPDATEs has no computed columns.
+                    let computed_expr = if partial_update_fields.is_some() {
+                        vec![]
+                    } else {
+                        generate_stored_computed_list(
+                            self.ctx.clone(),
+                            bind_context,
+                            Arc::new(table.schema().into()),
+                            mutation_input_schema.clone(),
+                            target_database,
+                            &target_table_name,
+                            update_list,
+                        )?
+                    };
 
                     (
                         Some(mutation_expr),
@@ -431,6 +534,7 @@ impl PhysicalPlanBuilder {
                 has_filter_column: predicate_column_index.is_some(),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
                 udf_col_num,
+                partial_update_fields,
             });
 
             if *distributed {
@@ -1102,10 +1206,13 @@ fn build_field_id_to_schema_index(
     bind_context: &BindContext,
     table_schema_with_stream: Arc<TableSchema>,
     mutation_input_schema: Arc<DataSchema>,
+    only_fields: Option<&[FieldIndex]>,
     field_id_to_schema_index: &mut HashMap<usize, usize>,
 ) {
     for (field_id, field) in table_schema_with_stream.fields().iter().enumerate() {
-        if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
+        if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_)))
+            || only_fields.is_some_and(|fields| !fields.contains(&field_id))
+        {
             continue;
         }
         for column_binding in bind_context.columns.iter() {

@@ -54,7 +54,24 @@ impl StreamContext {
         is_delete: bool,
         update_mutation_with_filter: bool,
     ) -> Result<Self> {
-        let input_schema = schema.remove_virtual_computed_fields();
+        Self::try_create_with_input_schema(
+            func_ctx,
+            &schema.remove_virtual_computed_fields(),
+            table_version,
+            is_delete,
+            update_mutation_with_filter,
+        )
+    }
+
+    /// Like [`Self::try_create`], for an input block whose columns are the fields of
+    /// `input_schema`, which holds the stream columns.
+    pub fn try_create_with_input_schema(
+        func_ctx: FunctionContext,
+        input_schema: &TableSchema,
+        table_version: u64,
+        is_delete: bool,
+        update_mutation_with_filter: bool,
+    ) -> Result<Self> {
         let num_fields = input_schema.fields().len() + update_mutation_with_filter as usize;
 
         let stream_columns = [

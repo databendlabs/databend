@@ -64,17 +64,20 @@ use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendMutationPartSink;
 
 impl FuseTable {
+    /// Reads the blocks to mutate. `col_indices` are the columns the filter reads.
+    /// `read_columns`, sorted, are all the columns to read; `None` reads every column.
     #[async_backtrace::framed]
     pub fn add_mutation_source(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
+        read_columns: Option<Vec<FieldIndex>>,
         pipeline: &mut Pipeline,
         mutation_action: MutationAction,
         partition_receiver: Option<Receiver<Result<PartInfoPtr>>>,
     ) -> Result<()> {
-        let all_column_indices = self.all_column_indices();
+        let all_column_indices = read_columns.unwrap_or_else(|| self.all_column_indices());
         let col_indices =
             if matches!(mutation_action, MutationAction::Deletion) || !col_indices.is_empty() {
                 col_indices

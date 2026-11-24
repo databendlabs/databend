@@ -105,6 +105,7 @@ use crate::interpreters::common::table_option_validation::is_valid_data_page_byt
 use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_partial_update_opt;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
@@ -1108,6 +1109,7 @@ impl CreateTableInterpreter {
         is_valid_data_retention_period(&table_meta.options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&table_meta.options)?;
+        is_valid_fuse_partial_update_opt(&table_meta.options)?;
         // check enable_virtual_column
         is_valid_fuse_virtual_column_opt(&table_meta.options)?;
         is_valid_virtual_column_layout_options(&table_meta.options)?;
