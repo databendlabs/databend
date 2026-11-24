@@ -45,6 +45,7 @@ mod hilbert;
 mod kernel;
 mod meta_scalar;
 
+mod nullable_input;
 mod scalar_hash;
 mod schema;
 mod serde;

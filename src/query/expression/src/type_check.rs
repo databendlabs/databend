@@ -33,8 +33,10 @@ use crate::cast_scalar;
 use crate::expr::*;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
+use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
+use crate::function::NullableInput;
 use crate::types::DataType;
 use crate::types::Decimal;
 use crate::types::Number;
@@ -439,6 +441,111 @@ pub fn check_function<Index: ColumnIndex>(
     };
 
     Err(ErrorCode::SemanticError(msg).set_span(span))
+}
+
+/// Check `call` again for `args`, which may be nullable where its arguments
+/// were not, without searching other overloads. A builtin overload takes them
+/// as its signature allows, and a factory creates its function for them again,
+/// as candidate search would. Otherwise the overloads that its registration
+/// names for nullable arguments take them, see `NullableInput`.
+pub fn check_nullable_arguments<Index: ColumnIndex>(
+    call: &FunctionCall<Index>,
+    args: Vec<Expr<Index>>,
+    fn_registry: &FunctionRegistry,
+) -> Result<Expr<Index>> {
+    let name = call.id.name().into_owned();
+    let params = call.id.params();
+    // `check_function` does not check grouping.
+    if name == "grouping" {
+        return Ok(FunctionCall {
+            span: call.span,
+            id: call.id.clone(),
+            function: call.function.clone(),
+            generics: vec![],
+            args,
+            return_type: call.return_type.clone(),
+        }
+        .into());
+    }
+
+    let args_type = args
+        .iter()
+        .map(|arg| arg.data_type().clone())
+        .collect::<Vec<_>>();
+    let own = match call.id.as_ref() {
+        FunctionID::Builtin { .. } => Some((call.id.as_ref().clone(), call.function.clone())),
+        FunctionID::Factory { id, .. } => {
+            fn_registry.create_factory_function(&name, *id, params, &args_type)
+        }
+    };
+    let variants = match fn_registry.nullable_input(&call.id) {
+        Some(
+            NullableInput::PassthroughVariant { variant }
+            | NullableInput::CombineVariant { variant }
+            | NullableInput::NullAwareVariant { variant },
+        ) => {
+            let id = FunctionID::Builtin {
+                name: name.clone(),
+                id: *variant,
+            };
+            fn_registry
+                .get(&id)
+                .map(|function| (id, function))
+                .into_iter()
+                .collect()
+        }
+        Some(NullableInput::PassthroughFactory { factory }) => fn_registry
+            .create_factory_function(&name, *factory, params, &args_type)
+            .into_iter()
+            .collect(),
+        Some(NullableInput::NullAwareFactories { factories }) => factories
+            .iter()
+            .filter_map(|id| fn_registry.create_factory_function(&name, *id, params, &args_type))
+            .collect(),
+        None => vec![],
+    };
+
+    let auto_cast_rules = fn_registry.get_auto_cast_rules(&name);
+    let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(&name);
+    let mut reason = None;
+    for (id, function) in own.into_iter().chain(variants) {
+        match try_check_function(
+            &args,
+            &function.signature,
+            auto_cast_rules,
+            &dynamic_cast_rules,
+            fn_registry,
+        ) {
+            Ok((args, return_type, generics)) => {
+                return Ok(FunctionCall {
+                    span: call.span,
+                    id: Box::new(id),
+                    function,
+                    generics,
+                    args,
+                    return_type,
+                }
+                .into());
+            }
+            Err(err) => {
+                reason.get_or_insert(err);
+            }
+        }
+    }
+    Err(ErrorCode::SemanticError(format!(
+        "{} does not take {}{}",
+        call.function.signature,
+        format_function_signature_from_arg_types(
+            &name,
+            params,
+            &args_type
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        ),
+        reason.map_or(String::new(), |err| format!(": {}", err.message())),
+    ))
+    .set_span(call.span))
 }
 
 pub fn infer_function_return_type<T>(
