@@ -119,6 +119,17 @@ impl BlockReader {
         )
     }
 
+    /// Whether [`Self::parquet_batches`] can decode `column_chunks` in batches rather than
+    /// whole: cache entries and encodings describe the whole block, not a batch.
+    pub(crate) fn can_parquet_batches(&self, column_chunks: &HashMap<ColumnId, DataItem>) -> bool {
+        !(self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
+            && self.column_encodings.is_empty()
+            && !column_chunks.is_empty()
+            && !column_chunks
+                .values()
+                .any(|item| matches!(item, DataItem::ColumnArray(_)))
+    }
+
     /// Decodes the column chunks of a block in batches of at most `batch_rows` rows.
     ///
     /// Returns `None` when the block must be decoded whole: cache entries and encodings
@@ -127,17 +138,12 @@ impl BlockReader {
         &'a self,
         part: &'a FuseBlockPartInfo,
         column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
+        selection: Option<&RowSelection>,
         batch_rows: usize,
     ) -> databend_common_exception::Result<
         Option<impl Iterator<Item = databend_common_exception::Result<DataBlock>> + 'a>,
     > {
-        if (self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
-            || !self.column_encodings.is_empty()
-            || column_chunks.is_empty()
-            || column_chunks
-                .values()
-                .any(|item| matches!(item, DataItem::ColumnArray(_)))
-        {
+        if !self.can_parquet_batches(column_chunks) {
             return Ok(None);
         }
         let data_files = part.data_files();
@@ -148,7 +154,7 @@ impl BlockReader {
             column_chunks,
             files.default_compression(),
             |column_id| files.compression_of(column_id),
-            None,
+            selection.map(|s| s.selection.clone()),
             self.parquet_hint_fields.as_ref(),
             batch_rows,
         )?;

@@ -53,11 +53,15 @@ use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::operations::BlockScanStats;
 use databend_common_storages_fuse::operations::ReadState;
+use databend_common_storages_fuse::operations::ReadStateBatch;
 use databend_common_storages_fuse::operations::ReadStateOutput;
+use databend_common_storages_fuse::operations::read::selected_row_offsets;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextRuntimeFilter;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_cache::CachePolicy;
+use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::IndexMatches;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 use opendal::Buffer;
@@ -326,21 +330,30 @@ async fn test_deserialize_batches() -> Result<()> {
         .set_setting("max_block_size".to_string(), "1".to_string())?;
     let mut read_state = ReadState::create(ctx.clone(), scan_id, None, block_reader.clone())?;
     let (batches, scan_stats) = read_state
-        .deserialize_batches(&column_chunks, &part)?
+        .deserialize_batches(&column_chunks, &part, true)?
         .expect("a block without scan filters is decoded in batches");
     let whole = read_state
         .deserialize_and_filter(column_chunks.clone(), &part, false)?
         .block;
 
     assert_eq!(scan_stats.rows, num_rows);
+    let batch_blocks: Vec<DataBlock> = batches.iter().map(|b| b.block.clone()).collect();
     assert_eq!(
-        batches.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
+        batch_blocks
+            .iter()
+            .map(DataBlock::num_rows)
+            .collect::<Vec<_>>(),
         vec![8192, 8192, 8192, 5424]
     );
+    let merged_offsets: Vec<u64> = batches
+        .iter()
+        .flat_map(|b| b.offsets.as_ref().unwrap().iter())
+        .collect();
+    assert_eq!(merged_offsets, (0..num_rows as u64).collect::<Vec<_>>());
     let string_column = |block: &DataBlock| {
         StringType::try_downcast_column(&block.get_by_offset(1).to_column()).unwrap()
     };
-    let merged = DataBlock::concat(&batches)?;
+    let merged = DataBlock::concat(&batch_blocks)?;
     let merged_ids: Vec<i64> = Int64Type::try_downcast_column(&merged.get_by_offset(0).to_column())
         .unwrap()
         .iter()
@@ -350,7 +363,7 @@ async fn test_deserialize_batches() -> Result<()> {
     let merged_strings: Vec<String> = string_column(&merged).iter().map(str::to_string).collect();
     assert_eq!(merged_strings, strings);
     let whole_buffers = string_column(&whole).total_buffer_len();
-    for batch in &batches {
+    for batch in &batch_blocks {
         // A batch keeps its own pages and the pages straddling its boundaries.
         assert!(string_column(batch).total_buffer_len() < whole_buffers / 2);
     }
@@ -358,12 +371,350 @@ async fn test_deserialize_batches() -> Result<()> {
     // A block of at most `max_block_size` rows stays one block.
     ctx.get_settings()
         .set_setting("max_block_size".to_string(), num_rows.to_string())?;
-    let read_state = ReadState::create(ctx.clone(), scan_id, None, block_reader)?;
+    let mut read_state = ReadState::create(ctx.clone(), scan_id, None, block_reader)?;
     assert!(
         read_state
-            .deserialize_batches(&column_chunks, &part)?
+            .deserialize_batches(&column_chunks, &part, false)?
             .is_none()
     );
+    Ok(())
+}
+
+// Prewhere (pushdown, non-pushdown, and single-reader), runtime filters, and index row
+// selection decode oversized blocks in batches with independent buffers and exact offsets.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_deserialize_batches_with_filters() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("max_block_size".to_string(), "8192".to_string())?;
+
+    let schema: TableSchemaRef = Arc::new(TableSchema::new(vec![
+        TableField::new("id", TableDataType::Number(NumberDataType::Int64)),
+        TableField::new("flag", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("s", TableDataType::String),
+    ]));
+    // 30_000 rows => 4 batches of 8192, 8192, 8192, 5424.
+    // Clustered flag=1 on rows [0..8192) and [16384..22000) (~46% overall):
+    // batch 0 passes 100%, batch 1 passes 0%, batch 2 passes ~69%, batch 3 passes 0%.
+    let num_rows = 30_000usize;
+    let ids: Vec<i64> = (0..num_rows as i64).collect();
+    let flags: Vec<i32> = (0..num_rows)
+        .map(|i| i32::from(i < 8192 || (16384..22000).contains(&i)))
+        .collect();
+    let strings: Vec<String> = (0..num_rows).map(|i| format!("{i:01000}")).collect();
+    let block = DataBlock::new_from_columns(vec![
+        Int64Type::from_data(ids),
+        Int32Type::from_data(flags.clone()),
+        StringType::from_data(strings),
+    ]);
+
+    let write_settings = WriteSettings::default();
+    let compression: Compression = write_settings.table_compression.into();
+    let (column_metas, buf) = serialize_block(&write_settings, &schema, block)?;
+    let column_chunks = extract_column_chunks(&buf.to_bytes(), &column_metas)?;
+    let part = FuseBlockPartInfo {
+        location: "test_block_filtered".to_string(),
+        bloom_filter_index_location: None,
+        bloom_filter_index_size: 0,
+        create_on: None,
+        nums_rows: num_rows,
+        columns_meta: column_metas,
+        columns_stat: None,
+        compression,
+        sort_min_max: None,
+        block_meta_index: None,
+        column_groups: vec![],
+    };
+
+    let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+    let flag_col: Expr<String> = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "flag".to_string(),
+        data_type: DataType::Number(NumberDataType::Int32),
+        display_name: "flag".to_string(),
+    });
+    let one_lit: Expr<String> = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Number(NumberScalar::Int32(1)),
+        data_type: DataType::Number(NumberDataType::Int32),
+    });
+    let flag_eq_one = check_function(None, "eq", &[], &[flag_col, one_lit], &BUILTIN_FUNCTIONS)?;
+
+    // Project (id, s) while filtering on `flag` (not projected) and also test projecting `flag`.
+    for (output_cols, remain_cols) in [(vec![0, 1, 2], vec![0, 2]), (vec![0, 2], vec![0, 2])] {
+        let prewhere_info = PrewhereInfo {
+            output_columns: Projection::Columns(output_cols.clone()),
+            prewhere_columns: Projection::Columns(vec![1]),
+            remain_columns: Projection::Columns(remain_cols),
+            filter: flag_eq_one.as_remote_expr(),
+            virtual_column_ids: None,
+        };
+        let block_reader = BlockReader::create(
+            ctx.clone(),
+            operator.clone(),
+            schema.clone(),
+            Projection::Columns(output_cols.clone()),
+            CachePolicy::READ_ONLY,
+        )?;
+        let s_col_idx = output_cols.len() - 1;
+        let string_column = |b: &DataBlock| {
+            StringType::try_downcast_column(&b.get_by_offset(s_col_idx).to_column()).unwrap()
+        };
+
+        // Test prewhere modes: pushdown (80), non-pushdown (10), and single-reader (0, which
+        // requires `block_reader` to include the prewhere columns as the planner builds it).
+        let thresholds: &[u64] = if output_cols.contains(&1) {
+            &[80, 10, 0]
+        } else {
+            &[80, 10]
+        };
+        for &threshold in thresholds {
+            ctx.get_settings().set_setting(
+                "prewhere_selectivity_threshold".to_string(),
+                threshold.to_string(),
+            )?;
+            let mut state_batched = ReadState::create(
+                ctx.clone(),
+                2000,
+                Some(&prewhere_info),
+                block_reader.clone(),
+            )?;
+            let (batches, batched_stats) = state_batched
+                .deserialize_batches(&column_chunks, &part, true)?
+                .expect("deterministic prewhere should decode in batches");
+
+            let mut state_whole = ReadState::create(
+                ctx.clone(),
+                2000,
+                Some(&prewhere_info),
+                block_reader.clone(),
+            )?;
+            let ReadStateOutput {
+                block: whole_block,
+                bitmap_selection: whole_bitmap,
+                scan_stats: whole_stats,
+            } = state_whole.deserialize_and_filter(column_chunks.clone(), &part, false)?;
+
+            assert_eq!(batched_stats.rows, whole_stats.rows);
+            assert!(
+                batches.len() >= 2,
+                "expected multiple batches for threshold={threshold}"
+            );
+            let batch_blocks: Vec<DataBlock> = batches.iter().map(|b| b.block.clone()).collect();
+            let merged = DataBlock::concat(&batch_blocks)?;
+            assert_eq!(merged.num_rows(), whole_block.num_rows());
+            assert_eq!(
+                Int64Type::try_downcast_column(&merged.get_by_offset(0).to_column())
+                    .unwrap()
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                Int64Type::try_downcast_column(&whole_block.get_by_offset(0).to_column())
+                    .unwrap()
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(
+                string_column(&merged).iter().collect::<Vec<_>>(),
+                string_column(&whole_block).iter().collect::<Vec<_>>()
+            );
+
+            let expected_offsets: Vec<u64> = selected_row_offsets(whole_bitmap.as_ref().unwrap())
+                .iter()
+                .collect();
+            let actual_offsets: Vec<u64> = batches
+                .iter()
+                .flat_map(|ReadStateBatch { offsets, .. }| offsets.as_ref().unwrap().iter())
+                .collect();
+            assert_eq!(actual_offsets, expected_offsets);
+
+            // Each surviving batch (including batch 0 which passed 100% zero-copy) must hold
+            // only its own pages rather than pinning the whole 30 MiB block.
+            let full_block_bytes = num_rows * 1000;
+            for batch in &batch_blocks {
+                assert!(
+                    string_column(batch).total_buffer_len() < full_block_bytes / 2,
+                    "threshold={threshold}: batch pinned buffers outside its own pages"
+                );
+            }
+            let batched_bufs: usize = batch_blocks
+                .iter()
+                .map(|b| string_column(b).total_buffer_len())
+                .sum();
+            assert!(
+                batched_bufs < full_block_bytes * 2 / 3,
+                "threshold={threshold}: batched_bufs={batched_bufs} should not pin dropped batches (full={full_block_bytes})"
+            );
+        }
+    }
+
+    // Runtime filter + prewhere combined.
+    let kept_ids: Vec<i64> = (0..num_rows as i64)
+        .filter(|&i| (i < 8192 || (16384..22000).contains(&i)) && i % 2 == 0)
+        .collect();
+    let bloom = create_bloom_filter(Int64Type::from_data(kept_ids.clone()));
+    let probe_id = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "id".to_string(),
+        data_type: DataType::Number(NumberDataType::Int64),
+        display_name: "id".to_string(),
+    });
+    let rf_scan_id = 2001;
+    let rf_stats = Arc::new(RuntimeFilterStats::default());
+    let mut rf_map = HashMap::new();
+    rf_map.insert(rf_scan_id, RuntimeFilterInfo {
+        filters: vec![RuntimeFilterEntry {
+            id: 0,
+            probe_expr: probe_id,
+            bloom: Some(RuntimeFilterBloom {
+                filter: Arc::new(bloom),
+            }),
+            inlist: None,
+            inlist_value_count: 0,
+            min_max: None,
+            stats: rf_stats.clone(),
+            build_rows: kept_ids.len(),
+            build_table_rows: None,
+            enabled: true,
+        }],
+    });
+    ctx.set_runtime_filter(rf_map);
+    ctx.get_settings().set_setting(
+        "prewhere_selectivity_threshold".to_string(),
+        "50".to_string(),
+    )?;
+    let prewhere_info = PrewhereInfo {
+        output_columns: Projection::Columns(vec![0, 1, 2]),
+        prewhere_columns: Projection::Columns(vec![1]),
+        remain_columns: Projection::Columns(vec![0, 2]),
+        filter: flag_eq_one.as_remote_expr(),
+        virtual_column_ids: None,
+    };
+    let block_reader = BlockReader::create(
+        ctx.clone(),
+        operator.clone(),
+        schema.clone(),
+        Projection::Columns(vec![0, 1, 2]),
+        CachePolicy::READ_ONLY,
+    )?;
+    let mut state_rf = ReadState::create(
+        ctx.clone(),
+        rf_scan_id,
+        Some(&prewhere_info),
+        block_reader.clone(),
+    )?;
+    let (rf_batches, _) = state_rf
+        .deserialize_batches(&column_chunks, &part, true)?
+        .expect("prewhere + runtime filter should decode in batches");
+    let mut state_rf_whole = ReadState::create(
+        ctx.clone(),
+        rf_scan_id,
+        Some(&prewhere_info),
+        block_reader.clone(),
+    )?;
+    let whole_rf = state_rf_whole.deserialize_and_filter(column_chunks.clone(), &part, false)?;
+    let rf_blocks: Vec<DataBlock> = rf_batches.iter().map(|b| b.block.clone()).collect();
+    let rf_merged = DataBlock::concat(&rf_blocks)?;
+    assert_eq!(rf_merged.num_rows(), whole_rf.block.num_rows());
+    let rf_offsets: Vec<u64> = rf_batches
+        .iter()
+        .flat_map(|b| b.offsets.as_ref().unwrap().iter())
+        .collect();
+    let whole_rf_offsets: Vec<u64> =
+        selected_row_offsets(whole_rf.bitmap_selection.as_ref().unwrap())
+            .iter()
+            .collect();
+    assert_eq!(rf_offsets, whole_rf_offsets);
+
+    // Index row selection (`selected_rows`) without prewhere, both pushdown and non-pushdown.
+    let matched_rows: Vec<u32> = (0..num_rows as u32)
+        .filter(|&i| i < 10_000 || (20_000..25_000).contains(&i))
+        .collect();
+    let indexed_part = FuseBlockPartInfo {
+        location: part.location.clone(),
+        bloom_filter_index_location: None,
+        bloom_filter_index_size: 0,
+        create_on: None,
+        nums_rows: num_rows,
+        columns_meta: part.columns_meta.clone(),
+        columns_stat: None,
+        compression,
+        sort_min_max: None,
+        block_meta_index: Some(BlockMetaIndex {
+            segment_idx: 0,
+            block_idx: 0,
+            range: None,
+            block_id: 0,
+            block_location: "test_block_filtered".to_string(),
+            segment_location: "seg".to_string(),
+            snapshot_location: None,
+            inverted_index_matches: Some(IndexMatches {
+                rows: matched_rows.clone(),
+                scores: None,
+                rows_only: true,
+            }),
+            vector_index_matches: None,
+            virtual_block_meta: None,
+        }),
+        column_groups: vec![],
+    };
+    for threshold in [80u64, 10u64] {
+        ctx.get_settings().set_setting(
+            "prewhere_selectivity_threshold".to_string(),
+            threshold.to_string(),
+        )?;
+        let mut state_idx = ReadState::create(ctx.clone(), 2002, None, block_reader.clone())?;
+        let (idx_batches, _) = state_idx
+            .deserialize_batches(&column_chunks, &indexed_part, true)?
+            .expect("index selected_rows should decode in batches");
+        let actual_offsets: Vec<u64> = idx_batches
+            .iter()
+            .flat_map(|b| b.offsets.as_ref().unwrap().iter())
+            .collect();
+        let expected_offsets: Vec<u64> = matched_rows.iter().map(|&r| r as u64).collect();
+        assert_eq!(actual_offsets, expected_offsets);
+        let idx_blocks: Vec<DataBlock> = idx_batches.iter().map(|b| b.block.clone()).collect();
+        let idx_merged = DataBlock::concat(&idx_blocks)?;
+        let actual_ids: Vec<i64> =
+            Int64Type::try_downcast_column(&idx_merged.get_by_offset(0).to_column())
+                .unwrap()
+                .iter()
+                .copied()
+                .collect();
+        let expected_ids: Vec<i64> = matched_rows.iter().map(|&r| r as i64).collect();
+        assert_eq!(actual_ids, expected_ids);
+    }
+
+    // All rows filtered out returns empty batch list while still accounting for scan bytes.
+    let two_lit: Expr<String> = Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Number(NumberScalar::Int32(2)),
+        data_type: DataType::Number(NumberDataType::Int32),
+    });
+    let flag_col2: Expr<String> = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: "flag".to_string(),
+        data_type: DataType::Number(NumberDataType::Int32),
+        display_name: "flag".to_string(),
+    });
+    let flag_eq_two = check_function(None, "eq", &[], &[flag_col2, two_lit], &BUILTIN_FUNCTIONS)?;
+    let empty_prewhere = PrewhereInfo {
+        output_columns: Projection::Columns(vec![0, 1, 2]),
+        prewhere_columns: Projection::Columns(vec![1]),
+        remain_columns: Projection::Columns(vec![0, 2]),
+        filter: flag_eq_two.as_remote_expr(),
+        virtual_column_ids: None,
+    };
+    let mut state_empty =
+        ReadState::create(ctx.clone(), 2003, Some(&empty_prewhere), block_reader)?;
+    let (empty_batches, empty_stats) = state_empty
+        .deserialize_batches(&column_chunks, &part, true)?
+        .expect("all-filtered-out prewhere should still run batched");
+    assert!(empty_batches.is_empty());
+    assert_eq!(empty_stats.rows, num_rows);
+    assert!(empty_stats.bytes > 0);
     Ok(())
 }
 

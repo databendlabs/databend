@@ -37,6 +37,46 @@ select count(*), count(distinct w.rid) from r_whole w join r_batches b on w.id =
 ----
 10000 10000
 
+# Prewhere in pushdown, non-pushdown, and single-reader modes preserves row IDs across batches.
+statement ok
+set enable_parquet_prewhere = 1;
+
+statement ok
+set prewhere_selectivity_threshold = 80;
+
+query II
+select count(*), count(distinct w.rid)
+from r_whole w
+join (select id, _row_id as rid, s from t where id < 5000 or id >= 9000) b
+  on w.id = b.id and w.rid = b.rid;
+----
+6000 6000
+
+statement ok
+set prewhere_selectivity_threshold = 10;
+
+query II
+select count(*), count(distinct w.rid)
+from r_whole w
+join (select id, _row_id as rid, s from t where id < 5000 or id >= 9000) b
+  on w.id = b.id and w.rid = b.rid;
+----
+6000 6000
+
+statement ok
+set prewhere_selectivity_threshold = 0;
+
+query II
+select count(*), count(distinct w.rid)
+from r_whole w
+join (select id, _row_id as rid, s from t where id < 5000 or id >= 9000) b
+  on w.id = b.id and w.rid = b.rid;
+----
+6000 6000
+
+statement ok
+set prewhere_selectivity_threshold = 50;
+
 query IT
 select id, s from t order by id desc limit 2;
 ----

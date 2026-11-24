@@ -39,11 +39,11 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
 use super::read_state::BlockScanStats;
 use super::read_state::ReadState;
+use super::read_state::ReadStateBatch;
 use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
 use super::util::selected_row_offsets;
@@ -134,17 +134,13 @@ impl DeserializeDataTransform {
 }
 
 impl DeserializeDataTransform {
-    /// Whether the rows of `part` may be output as several blocks: virtual columns are
+    /// Whether the rows of a block may be output as several blocks: virtual columns are
     /// decoded for the whole block, `_origin_block_row_num` numbers the rows of each
-    /// output block from zero, MERGE INTO target builds track whole blocks, and index
-    /// match positions are relative to the whole block.
-    fn can_split_block(&self, part: &FuseBlockPartInfo) -> bool {
+    /// output block from zero, and MERGE INTO target builds track whole blocks.
+    fn can_split_block(&self) -> bool {
         self.virtual_reader.is_none()
             && !self.block_meta_options.update_stream_columns
             && !self.block_meta_options.reserve_block_index
-            && part.block_meta_index().is_none_or(|index| {
-                index.inverted_index_matches.is_none() && index.vector_index_matches.is_none()
-            })
     }
 
     fn record_scan(&self, start: Instant, scan_stats: BlockScanStats) {
@@ -242,25 +238,17 @@ impl Processor for DeserializeDataTransform {
                 )?);
             }
 
-            if self.can_split_block(part)
-                && let Some((blocks, scan_stats)) = self
-                    .read_state
-                    .as_ref()
-                    .unwrap()
-                    .deserialize_batches(&columns_chunks, part)?
+            if self.can_split_block()
+                && let Some((batches, scan_stats)) =
+                    self.read_state.as_mut().unwrap().deserialize_batches(
+                        &columns_chunks,
+                        part,
+                        self.block_meta_options.query_internal_columns,
+                    )?
             {
                 self.record_scan(start, scan_stats);
-                let mut row_offset = 0;
-                for data_block in blocks {
-                    let num_rows = data_block.num_rows();
-                    // Internal columns such as `_row_id` take the row positions in the block.
-                    let offsets = self.block_meta_options.query_internal_columns.then(|| {
-                        let mut offsets = RoaringTreemap::new();
-                        offsets.insert_range(row_offset as u64..(row_offset + num_rows) as u64);
-                        offsets
-                    });
-                    row_offset += num_rows;
-                    let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+                for ReadStateBatch { block, offsets } in batches {
+                    let data_block = block.resort(&self.src_schema, &self.output_schema)?;
                     self.output_data.push_back(add_data_block_meta(
                         data_block,
                         part,
