@@ -29,6 +29,7 @@ use arrow_buffer::ScalarBuffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_storages_common_io::BufferReader;
 use opendal::Buffer;
@@ -264,6 +265,29 @@ pub struct StringLengths {
 }
 
 impl StringLengths {
+    /// The lengths of the rows `selection` selects.
+    pub fn filter(self, selection: &Bitmap) -> StringLengths {
+        let lengths = self
+            .lengths
+            .iter()
+            .zip(selection.iter())
+            .filter_map(|(len, selected)| selected.then_some(*len))
+            .collect();
+        let nulls = self.nulls.map(|nulls| {
+            NullBuffer::from_iter(
+                nulls
+                    .iter()
+                    .zip(selection.iter())
+                    .filter_map(|(valid, selected)| selected.then_some(valid)),
+            )
+        });
+        StringLengths {
+            lengths,
+            nulls,
+            ..self
+        }
+    }
+
     /// The column of the rows `rows`. The views are built for the rows asked for, so that a
     /// column read in batches is built in batches too.
     pub fn column(&self, rows: Range<usize>) -> Result<Column> {
@@ -408,6 +432,12 @@ mod tests {
                     // Or some of the rows.
                     let some = lengths.column(7..values.len() - 3).unwrap();
                     assert_eq!(some, column.slice(7..values.len() - 3));
+                    let selection = Bitmap::from_iter((0..values.len()).map(|i| i % 3 != 1));
+                    let selected = lengths.filter(&selection);
+                    assert_eq!(
+                        selected.column(0..selection.true_count()).unwrap(),
+                        column.filter(&selection)
+                    );
                     let context = format!("{version:?} {compression:?} {dictionary} {limit}");
                     assert_eq!(column.len(), values.len(), "{context}");
                     for (row, value) in values.iter().enumerate() {

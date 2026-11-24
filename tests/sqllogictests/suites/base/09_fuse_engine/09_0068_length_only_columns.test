@@ -691,6 +691,45 @@ select count(*) from t where s = 'k3' or s = ''
 ----
 13524
 
+# Blocks decoded in batches of fewer rows than they have.
+query I
+settings (max_block_size = 997) select count(*) from t where s <> ''
+----
+37333
+
+query II
+settings (max_block_size = 997) select count(*), sum(id) from t where s <> '' and id % 3 = 1
+----
+14667 386670000
+
+query IT
+settings (max_block_size = 997) select id, concat('n=', n) from t where s <> '' and id % 1999 = 0 order by id
+----
+1999 n=
+3998 n=v48
+5997 n=v47
+7996 n=v46
+11994 NULL
+13993 n=
+15992 n=v42
+17991 n=v41
+21989 n=v39
+23988 NULL
+25987 n=
+27986 n=v36
+31984 NULL
+33983 n=abcdefghijklmnop
+37981 n=
+39980 NULL
+43978 n=abcdefghijklmnop
+45977 n=
+49975 n=abcdefghijklmnop
+
+query I
+settings (max_block_size = 997) select count(*) from t where n <> '' or s = ''
+----
+35333
+
 statement ok
 unset enable_condition_cache
 
