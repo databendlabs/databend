@@ -295,6 +295,19 @@ where I: TakeIndex + ?Sized
     }
 }
 
+impl Column {
+    pub fn maybe_gc(self) -> Self {
+        match self {
+            Column::String(c) => Column::String(c.maybe_gc()),
+            Column::Nullable(n) => {
+                let (column, validity) = n.destructure();
+                column.maybe_gc().wrap_nullable(Some(validity))
+            }
+            other => other,
+        }
+    }
+}
+
 impl BlockEntry {
     pub fn take<I>(&self, indices: &I) -> Result<Self>
     where I: TakeIndex + ?Sized {

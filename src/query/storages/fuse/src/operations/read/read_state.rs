@@ -138,6 +138,8 @@ pub struct ReadState {
     pub output_schema: DataSchema,
     pub prewhere_selectivity_threshold: u64,
     pub use_single_prewhere_reader: bool,
+    /// Rows per block of [`Self::deserialize_batches`], the `max_block_size` setting.
+    batch_rows: usize,
 }
 
 impl ReadState {
@@ -246,6 +248,7 @@ impl ReadState {
             output_schema: block_reader.data_schema(),
             prewhere_selectivity_threshold,
             use_single_prewhere_reader,
+            batch_rows: max_block_size,
         })
     }
 
@@ -337,7 +340,7 @@ impl ReadState {
             && self.runtime_filters.is_empty()
             && self.remain_column_ids.is_empty()
             && part.nums_rows > FILTER_BATCH_ROWS
-            && let Some(batches) = self.pre_reader.clone().parquet_filter_batches(
+            && let Some(batches) = self.pre_reader.clone().parquet_batches(
                 part,
                 &pre_columns_chunks,
                 FILTER_BATCH_ROWS,
@@ -470,6 +473,60 @@ impl ReadState {
             bitmap_selection,
             scan_stats,
         })
+    }
+
+    /// Decodes a block that the scan outputs with all its rows into blocks of at most
+    /// `max_block_size` rows, each holding its own buffers.
+    ///
+    /// The Parquet reader decodes strings into views over the decompressed pages, so a
+    /// block decoded at once shares the pages of all its rows. A slice of it that a
+    /// downstream operator keeps, e.g. a `max_block_size` slice passing a filter whole
+    /// into a hash join build, would keep the pages of every row of the block alive.
+    /// Batches only share the pages that straddle their boundaries.
+    ///
+    /// Returns `None` when the scan filters rows (prewhere, runtime filters or index
+    /// matches) or cannot decode the chunks in batches; the block is then decoded whole
+    /// by [`Self::deserialize_and_filter`].
+    pub fn deserialize_batches(
+        &self,
+        columns_chunks: &HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+    ) -> Result<Option<(Vec<DataBlock>, BlockScanStats)>> {
+        if part.nums_rows <= self.batch_rows
+            || self.filters.is_some()
+            || !self.runtime_filters.is_empty()
+            || !self.pre_column_ids.is_empty()
+            || selected_rows(part).is_some()
+        {
+            return Ok(None);
+        }
+
+        let remain_columns_chunks =
+            Self::filter_column_chunks(columns_chunks, &self.remain_column_ids)?;
+        let Some(batches) =
+            self.remain_reader
+                .parquet_batches(part, &remain_columns_chunks, self.batch_rows)?
+        else {
+            return Ok(None);
+        };
+
+        let remain_schema = DataSchema::new(self.remain_reader.data_fields());
+        let mut blocks = Vec::with_capacity(part.nums_rows.div_ceil(self.batch_rows));
+        let mut bytes = 0;
+        for batch in batches {
+            let batch = batch?;
+            // Adjacent batches can reference the same page; count logical decoded bytes.
+            bytes += batch
+                .columns()
+                .iter()
+                .map(|entry| entry.memory_size_with_options(true))
+                .sum::<usize>();
+            blocks.push(batch.resort(&remain_schema, &self.output_schema)?);
+        }
+        Ok(Some((blocks, BlockScanStats {
+            rows: part.nums_rows,
+            bytes,
+        })))
     }
 
     fn filter_column_chunks<'a>(

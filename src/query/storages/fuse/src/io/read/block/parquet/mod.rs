@@ -119,8 +119,11 @@ impl BlockReader {
         )
     }
 
-    /// Cache entries and encodings describe the whole block, not a batch.
-    pub(crate) fn parquet_filter_batches<'a>(
+    /// Decodes the column chunks of a block in batches of at most `batch_rows` rows.
+    ///
+    /// Returns `None` when the block must be decoded whole: cache entries and encodings
+    /// describe the whole block, not a batch.
+    pub(crate) fn parquet_batches<'a>(
         &'a self,
         part: &'a FuseBlockPartInfo,
         column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,

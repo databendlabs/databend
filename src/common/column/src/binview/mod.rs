@@ -360,207 +360,18 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         self.len() == 0
     }
 
-    /// Returns an opaque identity for the shared variadic buffer slice.
-    #[inline]
-    pub fn buffers_ptr(&self) -> usize {
-        Arc::as_ptr(&self.buffers) as *const () as usize
-    }
-
-    /// Garbage collect oversized sliced `views` or shared variadic `buffers`.
-    /// No-op for freshly built columns whose storage already tightly fits.
+    /// Garbage collect
     pub fn gc(self) -> Self {
         if self.buffers.is_empty() {
-            if self.views.is_sliced() {
-                let views: Buffer<View> = self.views.as_slice().to_vec().into();
-                let total_bytes_len = self.total_bytes_len.get().copied();
-                return Self::new_unchecked(views, self.buffers, total_bytes_len, Some(0));
-            }
             return self;
         }
-        if !self.views.is_sliced() && self.total_buffer_len() <= self.total_bytes_len() {
-            return self;
-        }
-
-        #[derive(Clone, Copy)]
-        struct BufSpan {
-            min_off: usize,
-            max_end: usize,
-            live_bytes: usize,
-        }
-
-        #[derive(Clone, Copy)]
-        enum BufAction {
-            Drop,
-            Remap { new_idx: u32, base_off: u32 },
-            Pack,
-        }
-
+        let mut mutable = BinaryViewColumnBuilder::with_capacity(self.len());
         let buffers = self.buffers.as_ref();
-        let views = self.views.as_ref();
-        let mut spans = vec![
-            BufSpan {
-                min_off: usize::MAX,
-                max_end: 0,
-                live_bytes: 0,
-            };
-            buffers.len()
-        ];
 
-        let mut total_bytes_len = 0usize;
-        for &v in views {
-            let len = v.length as usize;
-            total_bytes_len += len;
-            if v.length > View::MAX_INLINE_SIZE {
-                // SAFETY: `v.buffer_idx` is guaranteed in-bounds by `BinaryViewColumnGeneric`.
-                let span = unsafe { spans.get_unchecked_mut(v.buffer_idx as usize) };
-                let off = v.offset as usize;
-                let end = off + len;
-                if off < span.min_off {
-                    span.min_off = off;
-                }
-                if end > span.max_end {
-                    span.max_end = end;
-                }
-                span.live_bytes += len;
-            }
+        for view in self.views.as_ref() {
+            unsafe { mutable.push_view_unchecked(*view, buffers) }
         }
-
-        let mut actions = Vec::with_capacity(buffers.len());
-        let mut new_buffers: Vec<Buffer<u8>> = Vec::with_capacity(buffers.len());
-        let mut new_total_buffer_len = 0usize;
-        let mut sparse_bytes = 0usize;
-        let mut all_identity = !self.views.is_sliced();
-
-        for (old_idx, (buf, span)) in buffers.iter().zip(spans.iter()).enumerate() {
-            if span.live_bytes == 0 {
-                actions.push(BufAction::Drop);
-                all_identity = false;
-                continue;
-            }
-
-            let buf_len = buf.len();
-            let span_len = span.max_end - span.min_off;
-            let effective_live = span.live_bytes.min(span_len);
-
-            // Keep whole buffers zero-copy when not sliced and >= 80% of the buffer is live.
-            if !buf.is_sliced() && effective_live.saturating_mul(5) >= buf_len.saturating_mul(4) {
-                let new_idx = new_buffers.len() as u32;
-                if new_idx as usize != old_idx {
-                    all_identity = false;
-                }
-                new_total_buffer_len += buf_len;
-                new_buffers.push(buf.clone());
-                actions.push(BufAction::Remap {
-                    new_idx,
-                    base_off: 0,
-                });
-            } else if span.live_bytes.saturating_mul(5) >= span_len.saturating_mul(4) {
-                // Bulk-copy a contiguous span with ONE memcpy instead of per-string copies.
-                let new_idx = new_buffers.len() as u32;
-                let copied: Buffer<u8> = buf[span.min_off..span.max_end].to_vec().into();
-                new_total_buffer_len += span_len;
-                new_buffers.push(copied);
-                actions.push(BufAction::Remap {
-                    new_idx,
-                    base_off: span.min_off as u32,
-                });
-                all_identity = false;
-            } else {
-                actions.push(BufAction::Pack);
-                sparse_bytes += span.live_bytes;
-                all_identity = false;
-            }
-        }
-
-        if all_identity {
-            return self;
-        }
-
-        let mut new_views = Vec::with_capacity(views.len());
-        if sparse_bytes == 0 {
-            for &v in views {
-                if v.length <= View::MAX_INLINE_SIZE {
-                    new_views.push(v);
-                } else {
-                    // SAFETY: `v.buffer_idx` is in-bounds and cannot be `Drop`/`Pack` when `sparse_bytes == 0`.
-                    let action = unsafe { *actions.get_unchecked(v.buffer_idx as usize) };
-                    let BufAction::Remap { new_idx, base_off } = action else {
-                        unreachable!()
-                    };
-                    new_views.push(View {
-                        length: v.length,
-                        prefix: v.prefix,
-                        buffer_idx: new_idx,
-                        offset: v.offset - base_off,
-                        _align: [],
-                    });
-                }
-            }
-        } else {
-            const MAX_PACKED_CHUNK: usize = 64 * 1024 * 1024;
-            let mut remaining = sparse_bytes;
-            let mut packed: Vec<u8> = Vec::with_capacity(remaining.min(MAX_PACKED_CHUNK));
-            let mut packed_idx = new_buffers.len() as u32;
-
-            for &v in views {
-                if v.length <= View::MAX_INLINE_SIZE {
-                    new_views.push(v);
-                    continue;
-                }
-                // SAFETY: `v.buffer_idx` is guaranteed in-bounds.
-                match unsafe { *actions.get_unchecked(v.buffer_idx as usize) } {
-                    BufAction::Remap { new_idx, base_off } => {
-                        new_views.push(View {
-                            length: v.length,
-                            prefix: v.prefix,
-                            buffer_idx: new_idx,
-                            offset: v.offset - base_off,
-                            _align: [],
-                        });
-                    }
-                    BufAction::Pack => {
-                        let len = v.length as usize;
-                        if packed.len() + len > packed.capacity()
-                            || packed.len() > u32::MAX as usize - len
-                        {
-                            let cap = remaining.min(MAX_PACKED_CHUNK).max(len);
-                            let flushed = std::mem::replace(&mut packed, Vec::with_capacity(cap));
-                            if !flushed.is_empty() {
-                                new_total_buffer_len += flushed.len();
-                                new_buffers.push(flushed.into());
-                                packed_idx = new_buffers.len() as u32;
-                            }
-                        }
-                        let off = packed.len() as u32;
-                        let src_buf = unsafe { buffers.get_unchecked(v.buffer_idx as usize) };
-                        let src_off = v.offset as usize;
-                        packed.extend_from_slice(unsafe {
-                            src_buf.get_unchecked(src_off..src_off + len)
-                        });
-                        remaining = remaining.saturating_sub(len);
-                        new_views.push(View {
-                            length: v.length,
-                            prefix: v.prefix,
-                            buffer_idx: packed_idx,
-                            offset: off,
-                            _align: [],
-                        });
-                    }
-                    BufAction::Drop => unreachable!(),
-                }
-            }
-            if !packed.is_empty() {
-                new_total_buffer_len += packed.len();
-                new_buffers.push(packed.into());
-            }
-        }
-
-        Self::new_unchecked(
-            new_views.into(),
-            Arc::from(new_buffers),
-            Some(total_bytes_len),
-            Some(new_total_buffer_len),
-        )
+        mutable.freeze()
     }
 
     /// Garbage collect with dict compressed
@@ -626,11 +437,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     pub fn maybe_gc(self) -> Self {
         const GC_MINIMUM_SAVINGS: usize = 16 * 1024; // At least 16 KiB.
 
-        let backing_views_bytes = self.views.backing_len() * 16;
-        let current_buffer_len = self.total_buffer_len();
-        let current_mem_usage = backing_views_bytes + current_buffer_len;
-
-        if current_mem_usage <= GC_MINIMUM_SAVINGS {
+        if self.total_buffer_len() <= GC_MINIMUM_SAVINGS {
             return self;
         }
 
@@ -644,13 +451,10 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         // Subtract the maximum amount of inlined strings to get a lower bound
         // on the number of buffer bytes needed (assuming no dedup).
         let total_bytes_len = self.total_bytes_len();
-        let buffer_req_lower_bound = if current_buffer_len == 0 {
-            0
-        } else {
-            total_bytes_len.saturating_sub(self.len() * 12)
-        };
+        let buffer_req_lower_bound = total_bytes_len.saturating_sub(self.len() * 12);
 
         let lower_bound_mem_usage_post_gc = self.len() * 16 + buffer_req_lower_bound;
+        let current_mem_usage = self.len() * 16 + self.total_buffer_len();
         let savings_upper_bound = current_mem_usage.saturating_sub(lower_bound_mem_usage_post_gc);
 
         if savings_upper_bound >= GC_MINIMUM_SAVINGS

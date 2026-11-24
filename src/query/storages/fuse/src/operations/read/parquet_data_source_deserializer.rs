@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -38,8 +39,10 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
+use super::read_state::BlockScanStats;
 use super::read_state::ReadState;
 use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
@@ -58,7 +61,7 @@ pub struct DeserializeDataTransform {
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    output_data: VecDeque<DataBlock>,
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
@@ -116,7 +119,7 @@ impl DeserializeDataTransform {
             block_reader,
             input,
             output,
-            output_data: None,
+            output_data: VecDeque::new(),
             src_schema,
             output_schema,
             parts: vec![],
@@ -127,6 +130,40 @@ impl DeserializeDataTransform {
             prewhere_info,
             read_state: None,
         })))
+    }
+}
+
+impl DeserializeDataTransform {
+    /// Whether the rows of `part` may be output as several blocks: virtual columns are
+    /// decoded for the whole block, `_origin_block_row_num` numbers the rows of each
+    /// output block from zero, MERGE INTO target builds track whole blocks, and index
+    /// match positions are relative to the whole block.
+    fn can_split_block(&self, part: &FuseBlockPartInfo) -> bool {
+        self.virtual_reader.is_none()
+            && !self.block_meta_options.update_stream_columns
+            && !self.block_meta_options.reserve_block_index
+            && part.block_meta_index().is_none_or(|index| {
+                index.inverted_index_matches.is_none() && index.vector_index_matches.is_none()
+            })
+    }
+
+    fn record_scan(&self, start: Instant, scan_stats: BlockScanStats) {
+        // Perf.
+        {
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
+        // Report the rows and bytes the scan actually processed, not what
+        // survived prewhere / runtime filters: scan progress drives
+        // `system.processes`, `system_history.query_history` and the
+        // `ScanBytes` profile, which measure scan workload rather than
+        // filter output.
+        let progress_values = ProgressValues {
+            rows: scan_stats.rows,
+            bytes: scan_stats.bytes,
+        };
+        self.scan_progress.incr(&progress_values);
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, scan_stats.bytes);
     }
 }
 
@@ -151,7 +188,7 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if let Some(data_block) = self.output_data.pop_front() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -205,6 +242,36 @@ impl Processor for DeserializeDataTransform {
                 )?);
             }
 
+            if self.can_split_block(part)
+                && let Some((blocks, scan_stats)) = self
+                    .read_state
+                    .as_ref()
+                    .unwrap()
+                    .deserialize_batches(&columns_chunks, part)?
+            {
+                self.record_scan(start, scan_stats);
+                let mut row_offset = 0;
+                for data_block in blocks {
+                    let num_rows = data_block.num_rows();
+                    // Internal columns such as `_row_id` take the row positions in the block.
+                    let offsets = self.block_meta_options.query_internal_columns.then(|| {
+                        let mut offsets = RoaringTreemap::new();
+                        offsets.insert_range(row_offset as u64..(row_offset + num_rows) as u64);
+                        offsets
+                    });
+                    row_offset += num_rows;
+                    let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+                    self.output_data.push_back(add_data_block_meta(
+                        data_block,
+                        part,
+                        offsets,
+                        self.base_block_ids.clone(),
+                        &self.block_meta_options,
+                    )?);
+                }
+                return Ok(());
+            }
+
             let ReadStateOutput {
                 block: mut data_block,
                 bitmap_selection,
@@ -245,22 +312,7 @@ impl Processor for DeserializeDataTransform {
                 );
             }
 
-            // Perf.
-            {
-                metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
-            }
-
-            // Report the rows and bytes the scan actually processed, not what
-            // survived prewhere / runtime filters: scan progress drives
-            // `system.processes`, `system_history.query_history` and the
-            // `ScanBytes` profile, which measure scan workload rather than
-            // filter output.
-            let progress_values = ProgressValues {
-                rows: scan_stats.rows,
-                bytes: scan_stats.bytes,
-            };
-            self.scan_progress.incr(&progress_values);
-            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, scan_stats.bytes);
+            self.record_scan(start, scan_stats);
 
             let mut data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
 
@@ -280,7 +332,7 @@ impl Processor for DeserializeDataTransform {
                 &self.block_meta_options,
             )?;
 
-            self.output_data = Some(data_block);
+            self.output_data.push_back(data_block);
         }
 
         Ok(())

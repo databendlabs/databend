@@ -44,6 +44,7 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::io::BlockReader;
@@ -271,6 +272,97 @@ async fn run_prewhere_test_with_threshold(
         assert_eq!(bitmap.null_count(), num_rows - 1); // 4 out of 5 rows filtered out
     }
 
+    Ok(())
+}
+
+// A block the scan outputs whole is decoded in `max_block_size` batches that do not
+// share the pages of the other rows of the block.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_deserialize_batches() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    let schema: TableSchemaRef = Arc::new(TableSchema::new(vec![
+        TableField::new("id", TableDataType::Number(NumberDataType::Int64)),
+        TableField::new("s", TableDataType::String),
+    ]));
+    let num_rows = 10_000;
+    let ids: Vec<i64> = (0..num_rows as i64).collect();
+    // 1000-byte strings: the column spans about ten 1 MiB pages.
+    let strings: Vec<String> = (0..num_rows).map(|i| format!("{i:01000}")).collect();
+    let block = DataBlock::new_from_columns(vec![
+        Int64Type::from_data(ids.clone()),
+        StringType::from_data(strings.clone()),
+    ]);
+    let write_settings = WriteSettings::default();
+    let compression: Compression = write_settings.table_compression.into();
+    let (column_metas, buf) = serialize_block(&write_settings, &schema, block)?;
+    let column_chunks = extract_column_chunks(&buf.to_bytes(), &column_metas)?;
+    let part = FuseBlockPartInfo {
+        location: "test_block".to_string(),
+        bloom_filter_index_location: None,
+        bloom_filter_index_size: 0,
+        create_on: None,
+        nums_rows: num_rows,
+        columns_meta: column_metas,
+        columns_stat: None,
+        compression,
+        sort_min_max: None,
+        block_meta_index: None,
+        column_groups: vec![],
+    };
+    let operator = opendal::Operator::via_iter(opendal::Scheme::Memory, [])?;
+    let block_reader = BlockReader::create(
+        ctx.clone(),
+        operator,
+        schema,
+        Projection::Columns(vec![0, 1]),
+        CachePolicy::READ_ONLY,
+    )?;
+    // No runtime filter is registered for this scan.
+    let scan_id = 1000;
+
+    ctx.get_settings()
+        .set_setting("max_block_size".to_string(), "4096".to_string())?;
+    let mut read_state = ReadState::create(ctx.clone(), scan_id, None, block_reader.clone())?;
+    let (batches, scan_stats) = read_state
+        .deserialize_batches(&column_chunks, &part)?
+        .expect("a block without scan filters is decoded in batches");
+    let whole = read_state
+        .deserialize_and_filter(column_chunks.clone(), &part, false)?
+        .block;
+
+    assert_eq!(scan_stats.rows, num_rows);
+    assert_eq!(
+        batches.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
+        vec![4096, 4096, 1808]
+    );
+    let string_column = |block: &DataBlock| {
+        StringType::try_downcast_column(&block.get_by_offset(1).to_column()).unwrap()
+    };
+    let merged = DataBlock::concat(&batches)?;
+    let merged_ids: Vec<i64> = Int64Type::try_downcast_column(&merged.get_by_offset(0).to_column())
+        .unwrap()
+        .iter()
+        .copied()
+        .collect();
+    assert_eq!(merged_ids, ids);
+    let merged_strings: Vec<String> = string_column(&merged).iter().map(str::to_string).collect();
+    assert_eq!(merged_strings, strings);
+    let whole_buffers = string_column(&whole).total_buffer_len();
+    for batch in &batches {
+        // A batch keeps its own pages and the pages straddling its boundaries.
+        assert!(string_column(batch).total_buffer_len() < whole_buffers / 2);
+    }
+
+    // A block of at most `max_block_size` rows stays one block.
+    ctx.get_settings()
+        .set_setting("max_block_size".to_string(), num_rows.to_string())?;
+    let read_state = ReadState::create(ctx.clone(), scan_id, None, block_reader)?;
+    assert!(
+        read_state
+            .deserialize_batches(&column_chunks, &part)?
+            .is_none()
+    );
     Ok(())
 }
 

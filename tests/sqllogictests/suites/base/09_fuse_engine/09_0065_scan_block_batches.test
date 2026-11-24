@@ -1,0 +1,63 @@
+# The scan decodes a block larger than max_block_size in batches of max_block_size
+# rows. Internal columns and mutations must see the same row positions as when the
+# block is decoded whole.
+
+statement ok
+create or replace database db_scan_block_batches;
+
+statement ok
+use db_scan_block_batches;
+
+statement ok
+create or replace table t (id int, s string) row_per_block = 10000;
+
+statement ok
+insert into t select number, concat('value_', to_string(number), '_padding_padding') from numbers(10000);
+
+query I
+select count(*) from fuse_block('db_scan_block_batches', 't');
+----
+1
+
+# Row IDs of the block decoded whole, then in batches of 1000 rows.
+statement ok
+set max_block_size = 65536;
+
+statement ok
+create or replace table r_whole as select id, _row_id as rid from t;
+
+statement ok
+set max_block_size = 1000;
+
+statement ok
+create or replace table r_batches as select id, _row_id as rid from t;
+
+query II
+select count(*), count(distinct w.rid) from r_whole w join r_batches b on w.id = b.id and w.rid = b.rid;
+----
+10000 10000
+
+query IT
+select id, s from t order by id desc limit 2;
+----
+9999 value_9999_padding_padding
+9998 value_9998_padding_padding
+
+statement ok
+delete from t where id % 3 = 0;
+
+query II
+select count(*), sum(id) from t;
+----
+6666 33326667
+
+statement ok
+update t set s = 'updated' where id % 3 = 1;
+
+query II
+select count(*), sum(id) from t where s = 'updated';
+----
+3333 16661667
+
+statement ok
+drop database db_scan_block_batches;

@@ -229,10 +229,6 @@ impl<T: AccessType> ArrayColumn<T> {
         ArrayColumn { values, offsets }
     }
 
-    pub fn destructure(self) -> (T::Column, Buffer<u64>) {
-        (self.values, self.offsets)
-    }
-
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
     }
