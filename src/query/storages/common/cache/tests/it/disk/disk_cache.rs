@@ -17,12 +17,16 @@ use std::sync::Arc;
 use bytes::Bytes;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::spawn;
+use databend_storages_common_cache::AUTO_HEADROOM_PERCENT;
 use databend_storages_common_cache::CacheFill;
 use databend_storages_common_cache::CacheKind;
 use databend_storages_common_cache::DiskCache;
 use databend_storages_common_cache::DiskCachedStorage;
 use databend_storages_common_cache::DiskKey;
+use databend_storages_common_cache::MAX_AUTO_DISK_CACHE_BYTES;
 use databend_storages_common_cache::Pool;
+use databend_storages_common_cache::auto_max_bytes;
+use databend_storages_common_cache::cached_bytes;
 use databend_storages_common_cache::disk::disk_file::TMP_SUFFIX;
 use databend_storages_common_cache::kinds::bloom;
 use databend_storages_common_cache::kinds::column;
@@ -369,6 +373,77 @@ fn test_split_caps_follows_the_ratios_whatever_their_sum() {
     assert_eq!(caps[2], 0);
     assert_eq!(split_caps(1000, [0, 1, 1]).unwrap(), [0, 500, 500]);
     assert!(split_caps(1000, [0, 0, 0]).is_err());
+}
+
+/// `max_bytes` unset is the room the file system leaves `AUTO_HEADROOM_PERCENT` below the
+/// watermark, the cache's own files counted as room, at most `MAX_AUTO_DISK_CACHE_BYTES`.
+#[test]
+fn test_auto_max_bytes_is_the_room_below_the_watermark() {
+    const GIB: u64 = 1 << 30;
+    assert_eq!(AUTO_HEADROOM_PERCENT, 5);
+    let total = 1000 * GIB;
+    // A disk of its own, empty: 5% below the default watermark of 90%.
+    assert_eq!(auto_max_bytes(total, total, 0, 90), 850 * GIB);
+    // A shared disk, 400 GiB used by other files: what they leave below that.
+    assert_eq!(auto_max_bytes(total, 600 * GIB, 0, 90), 450 * GIB);
+    // A restart finding 300 GiB of its files beside 100 GiB of others sizes the cache as a start
+    // without them would: its files do not shrink it.
+    assert_eq!(
+        auto_max_bytes(total, 600 * GIB, 300 * GIB, 90),
+        auto_max_bytes(total, 900 * GIB, 0, 90)
+    );
+    assert_eq!(auto_max_bytes(total, 600 * GIB, 300 * GIB, 90), 750 * GIB);
+    // Other files at or over the line already leave nothing: the cache is off.
+    assert_eq!(auto_max_bytes(total, 50 * GIB, 0, 90), 0);
+    assert_eq!(auto_max_bytes(total, 150 * GIB, 0, 90), 0);
+    assert_eq!(auto_max_bytes(0, 0, 0, 90), 0);
+    // A watermark of 100 never evicts; the headroom still keeps the cache off the full disk.
+    assert_eq!(auto_max_bytes(total, total, 0, 100), 950 * GIB);
+    assert_eq!(auto_max_bytes(total, 600 * GIB, 0, 100), 550 * GIB);
+    // A watermark under the headroom reserves everything.
+    assert_eq!(auto_max_bytes(total, total, 0, 1), 0);
+    // Large disks are capped, without overflow.
+    assert_eq!(
+        auto_max_bytes(16 << 40, 16 << 40, 0, 90),
+        MAX_AUTO_DISK_CACHE_BYTES
+    );
+    assert_eq!(
+        auto_max_bytes(u64::MAX, u64::MAX, u64::MAX, 90),
+        MAX_AUTO_DISK_CACHE_BYTES
+    );
+}
+
+/// The files of a previous run count by the blocks they take, which deleting them frees, as
+/// `du` reports it: for files much smaller than a block, far more than their lengths.
+#[test]
+fn test_cached_bytes_counts_the_blocks_files_take() {
+    use std::os::unix::fs::MetadataExt;
+    let dir = TempDir::new().unwrap();
+    assert_eq!(cached_bytes(&dir.path().join("missing")), 0);
+    let mut lengths = 0;
+    let mut blocks = 0;
+    for (i, layout) in [
+        "v2/data/memory_cache_column_data/abc",
+        "v1",
+        "v2.reset/meta",
+    ]
+    .iter()
+    .enumerate()
+    {
+        let sub = dir.path().join(layout);
+        std::fs::create_dir_all(&sub).unwrap();
+        for j in 0..1000 {
+            let file = sub.join(format!("{i}_{j}"));
+            std::fs::write(&file, [0u8; 100]).unwrap();
+            lengths += 100;
+            blocks += std::fs::metadata(&file).unwrap().blocks() * 512;
+        }
+    }
+    assert_eq!(cached_bytes(dir.path()), blocks);
+    // Some file systems keep small files inline, in no block.
+    if blocks > 0 {
+        assert!(blocks > lengths, "{blocks} <= {lengths}");
+    }
 }
 
 /// An entry whose file is gone (deleted behind the cache) is a miss and leaves the index.

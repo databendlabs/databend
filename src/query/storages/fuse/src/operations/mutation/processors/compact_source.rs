@@ -90,12 +90,7 @@ impl PrefetchAsyncSource for CompactSource {
                             }
 
                             block_reader
-                                .read_columns_data_by_merge_io(
-                                    &settings,
-                                    &block.location.0,
-                                    &block.col_metas,
-                                    &None,
-                                )
+                                .read_files_by_merge_io(&settings, &block.data_files(), &None)
                                 .await
                         })
                         .await
@@ -165,10 +160,11 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                     .into_iter()
                     .zip(metas)
                     .map(|(data, meta)| {
-                        let mut block = self.block_reader.deserialize_chunks_with_meta(
-                            &meta.as_ref().into(),
+                        let mut block = self.block_reader.deserialize_files(
+                            meta.row_count as usize,
+                            &meta.data_files(),
+                            data.columns_chunks()?,
                             &self.storage_format,
-                            data,
                         )?;
 
                         self.scan_progress.incr(&ProgressValues {

@@ -66,12 +66,12 @@ impl SelectExprBuilder {
         SelectExprBuilder {
             not_function: funcs
                 .iter()
-                .find(|(id, func)| func.signature.return_type.is_boolean())
+                .find(|(_id, func)| func.signature.return_type.is_boolean())
                 .unwrap()
                 .clone(),
             nullable_not_function: funcs
                 .iter()
-                .find(|(id, func)| func.signature.return_type.is_nullable())
+                .find(|(_id, func)| func.signature.return_type.is_nullable())
                 .unwrap()
                 .clone(),
         }
@@ -85,7 +85,7 @@ impl SelectExprBuilder {
     pub fn build_select_expr(&mut self, expr: &Expr, not: bool) -> SelectExprBuildResult {
         match expr {
             Expr::FunctionCall(FunctionCall {
-                id,
+                id: _,
                 function,
                 args,
                 generics,
@@ -210,7 +210,7 @@ impl SelectExprBuilder {
                                         .unwrap_or(like_str.to_string())
                                         .into();
                                     let like_pattern: LikePattern<'static> =
-                                        generate_like_pattern(Cow::Owned(pattern), 0);
+                                        generate_like_pattern(Cow::Owned(pattern));
 
                                     SelectExprBuildResult::new(SelectExpr::Like((
                                         column.clone(),

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod access;
-mod access_log;
+pub(crate) mod access_log;
 pub(crate) mod common;
 mod hook;
 mod interpreter;
@@ -233,6 +233,7 @@ mod interpreter_virtual_column_vacuum;
 pub(crate) mod util;
 
 pub use access::ManagementModeAccess;
+pub(crate) use access::validate_stage_write_access;
 pub use common::InterpreterQueryLog;
 pub use common::QueryFinishHooks;
 pub use hook::HookOperator;
@@ -264,6 +265,7 @@ pub use interpreter_insert::InsertInterpreter;
 pub use interpreter_insert::build_insert_select_physical_plan;
 pub use interpreter_insert_multi_table::InsertMultiTableInterpreter;
 pub use interpreter_kill::KillInterpreter;
+pub use interpreter_kill::KillQueryAccess;
 pub use interpreter_materialized_view_create::CreateMaterializedViewInterpreter;
 pub use interpreter_materialized_view_drop::DropMaterializedViewInterpreter;
 pub use interpreter_materialized_view_refresh::RefreshMaterializedViewInterpreter;

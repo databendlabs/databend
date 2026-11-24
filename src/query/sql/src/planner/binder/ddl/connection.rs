@@ -14,6 +14,7 @@
 
 use databend_common_ast::ast::CreateConnectionStmt;
 use databend_common_ast::ast::UriLocation;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 
 use crate::Binder;
@@ -33,7 +34,12 @@ impl Binder {
             "/".to_string(),
             stmt.storage_params.clone(),
         );
-        parse_storage_params_from_uri(&mut location, "when CREATE CONNECTION").await?;
+        parse_storage_params_from_uri(
+            &mut location,
+            "when CREATE CONNECTION",
+            GlobalConfig::instance().storage.allow_insecure,
+        )
+        .await?;
         Ok(Plan::CreateConnection(Box::new(CreateConnectionPlan {
             create_option: stmt.create_option.clone().into(),
             name: stmt.name.to_string(),

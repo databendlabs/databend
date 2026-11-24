@@ -150,6 +150,7 @@ Join(Right)
 ├── build keys: [e.k (#0)]
 ├── probe keys: [k (#4)]
 ├── other filters: []
+├── runtime filters: [#0: e.k (#0) -> k (#4)]
 ├── Scan
 │   ├── table: default.e (#0)
 │   ├── filters: [gt(e.v (#1), 10)]
@@ -161,7 +162,8 @@ Join(Right)
         ├── table: default.t (#1)
         ├── filters: [gt(t.k (#2), 5000)]
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: CAST(t.k (#2) AS Int64 NULL)]
 
 
 === right_join_keeps_proven_empty_build_side ===
@@ -200,6 +202,7 @@ Join(Right)
 ├── build keys: [e.k (#2)]
 ├── probe keys: [k (#4)]
 ├── other filters: []
+├── runtime filters: [#0: e.k (#2) -> k (#4)]
 ├── Scan
 │   ├── table: default.e (#1)
 │   ├── filters: [gt(e.v (#3), 10)]
@@ -211,7 +214,8 @@ Join(Right)
         ├── table: default.t (#0)
         ├── filters: [gt(t.k (#0), 5000)]
         ├── order by: []
-        └── limit: NONE
+        ├── limit: NONE
+        └── runtime filters: [#0: CAST(t.k (#0) AS Int64 NULL)]
 
 
 === left_join_estimated_zero_tie ===

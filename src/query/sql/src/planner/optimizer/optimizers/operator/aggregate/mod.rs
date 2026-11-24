@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod heavy_hitter_aggregate;
 mod normalize_aggregate;
 mod stats_aggregate;
 
+pub use heavy_hitter_aggregate::HeavyHitterAggregateOptimizer;
 pub use normalize_aggregate::RuleNormalizeAggregateOptimizer;
 pub use stats_aggregate::RuleStatsAggregateOptimizer;

@@ -737,34 +737,19 @@ impl SumBuilder {
                         let decimal_size =
                             DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, size.scale());
                         let return_type = DataType::Decimal(decimal_size);
-                        let should_check_overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
-                            && size.precision() > i64::MAX_PRECISION;
-
-                        if should_check_overflow {
-                            build.create_unary_or_null::<
-                                AggregateDecimalSumState<true, DECIMAL>,
-                                DecimalType<DECIMAL>,
-                                DecimalType<DECIMAL>,
-                            >(
-                                return_type.wrap_nullable(),
-                                AggregateDecimalSumState::<true, DECIMAL>::state_description(
-                                    return_type,
-                                ),
-                                (),
-                            )
-                        } else {
-                            build.create_unary_or_null::<
-                                AggregateDecimalSumState<false, DECIMAL>,
-                                DecimalType<DECIMAL>,
-                                DecimalType<DECIMAL>,
-                            >(
-                                return_type.wrap_nullable(),
-                                AggregateDecimalSumState::<false, DECIMAL>::state_description(
-                                    return_type,
-                                ),
-                                (),
-                            )
-                        }
+                        // Decimal64 has no wider accumulator: it needs the same
+                        // precision checks as the other decimal storage widths.
+                        build.create_unary_or_null::<
+                            AggregateDecimalSumState<true, DECIMAL>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >(
+                            return_type.wrap_nullable(),
+                            AggregateDecimalSumState::<true, DECIMAL>::state_description(
+                                return_type,
+                            ),
+                            (),
+                        )
                     }
                 })
             }
@@ -809,34 +794,17 @@ impl SumBuilder {
                         let decimal_size =
                             DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, size.scale());
                         let return_type = DataType::Decimal(decimal_size);
-                        let should_check_overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
-                            && size.precision() > i64::MAX_PRECISION;
-
-                        if should_check_overflow {
-                            build.create_unary_distinct_or_null::<
-                                AggregateDecimalSumState<true, DECIMAL>,
-                                DecimalType<DECIMAL>,
-                                DecimalType<DECIMAL>,
-                            >(
-                                return_type.wrap_nullable(),
-                                AggregateDecimalSumState::<true, DECIMAL>::state_description(
-                                    return_type,
-                                ),
-                                (),
-                            )
-                        } else {
-                            build.create_unary_distinct_or_null::<
-                                AggregateDecimalSumState<false, DECIMAL>,
-                                DecimalType<DECIMAL>,
-                                DecimalType<DECIMAL>,
-                            >(
-                                return_type.wrap_nullable(),
-                                AggregateDecimalSumState::<false, DECIMAL>::state_description(
-                                    return_type,
-                                ),
-                                (),
-                            )
-                        }
+                        build.create_unary_distinct_or_null::<
+                            AggregateDecimalSumState<true, DECIMAL>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >(
+                            return_type.wrap_nullable(),
+                            AggregateDecimalSumState::<true, DECIMAL>::state_description(
+                                return_type,
+                            ),
+                            (),
+                        )
                     }
                 })
             }

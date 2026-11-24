@@ -40,28 +40,17 @@ impl AccumulatingTransform for TransformExpandGroupingSets {
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         let num_rows = data.num_rows();
-        let num_group_bys = self.group_bys.len();
         let mut output_blocks = Vec::with_capacity(self.grouping_ids.len());
-        let dup_group_by_cols = self
-            .group_bys
-            .iter()
-            .map(|i| data.get_by_offset(*i).clone())
-            .collect::<Vec<_>>();
+        let mut entries = data.columns().to_vec();
 
-        let mut entries = data
-            .columns()
-            .iter()
-            .cloned()
-            .chain(dup_group_by_cols.clone())
-            .collect::<Vec<_>>();
-
-        // all group columns should be nullable
-        for i in 0..num_group_bys {
-            let entry = unsafe {
-                let offset = self.group_bys.get_unchecked(i);
-                entries.get_unchecked_mut(*offset)
-            };
-            match entry {
+        // Keys that some grouping set nulls out must be nullable. Keys present
+        // in every set, such as correlated columns, keep their input type.
+        let nulled_keys = self.grouping_ids.iter().fold(0, |bits, id| bits | id);
+        for (i, &offset) in self.group_bys.iter().enumerate() {
+            if nulled_keys & (1 << i) == 0 {
+                continue;
+            }
+            match &mut entries[offset] {
                 BlockEntry::Const(_, data_type, _) => {
                     *data_type = data_type.wrap_nullable();
                 }
@@ -82,11 +71,8 @@ impl AccumulatingTransform for TransformExpandGroupingSets {
             current_group_entries.push(grouping_id_column);
 
             let bits = !id;
-            for i in 0..num_group_bys {
-                let entry = unsafe {
-                    let offset = self.group_bys.get_unchecked(i);
-                    current_group_entries.get_unchecked_mut(*offset)
-                };
+            for (i, &offset) in self.group_bys.iter().enumerate() {
+                let entry = &mut current_group_entries[offset];
                 // Reset the column to be nullable
                 if bits & (1 << i) == 0 {
                     *entry = BlockEntry::new_const_column(entry.data_type(), Scalar::Null, num_rows)

@@ -31,7 +31,6 @@ use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkt;
-use databend_common_io::geo_to_wkt;
 use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;
@@ -1362,6 +1361,9 @@ impl Display for FunctionProperty {
         let mut properties = Vec::new();
         if self.non_deterministic {
             properties.push("non_deterministic");
+        }
+        if self.depends_on_other_rows {
+            properties.push("depends_on_other_rows");
         }
         if !properties.is_empty() {
             write!(f, "{{{}}}", properties.join(", "))?;

@@ -55,11 +55,9 @@ use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
 use crate::MetadataRef;
-use crate::ScalarExpr;
 use crate::StoredKeyNormalizer;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
@@ -465,45 +463,6 @@ pub fn parse_computed_expr_to_string(
     let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
     ast.drive_mut(&mut normalizer);
     Ok(format!("{:#}", ast))
-}
-
-pub fn parse_lambda_expr(
-    ctx: Arc<dyn TableContext>,
-    lambda_context: &mut BindContext,
-    lambda_columns: &[(String, DataType)],
-    ast: &AExpr,
-    parent_metadata: Option<Arc<RwLock<Metadata>>>,
-) -> Result<Box<(ScalarExpr, DataType)>> {
-    // Use parent metadata if provided (for masking policies on outer columns)
-    // Otherwise create empty metadata (for better performance in community edition)
-    let metadata = parent_metadata.unwrap_or_else(|| Arc::new(RwLock::new(Metadata::default())));
-    lambda_context.expr_context = ExprContext::InLambdaFunction;
-
-    for (lambda_column, lambda_column_type) in lambda_columns.iter() {
-        let column_index = lambda_context.next_column_index();
-        lambda_context.add_column_binding(
-            ColumnBindingBuilder::new(
-                lambda_column.clone(),
-                column_index,
-                Box::new(lambda_column_type.clone()),
-                Visibility::Visible,
-            )
-            .build(),
-        );
-    }
-
-    let settings = ctx.get_settings();
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::try_create(
-        lambda_context,
-        ctx.clone(),
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        false,
-    )?;
-
-    type_checker.resolve(ast)
 }
 
 pub fn parse_cluster_keys(

@@ -37,6 +37,7 @@ use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOp;
 use databend_common_statistics::Datum;
+use databend_common_statistics::NdvEstimate;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::open_golden_file;
@@ -65,22 +66,30 @@ fn table_statistics(rows: u64) -> TableStatistics {
     }
 }
 
+fn int_column(
+    min: i64,
+    max: i64,
+    ndv: f64,
+    null_count: u64,
+    in_memory_size: u64,
+    num_rows: u64,
+) -> BasicColumnStatistics {
+    BasicColumnStatistics::new(
+        Some(Datum::Int(min)),
+        Some(Datum::Int(max)),
+        null_count,
+        in_memory_size,
+        NdvEstimate::exact(ndv),
+        Some(num_rows),
+    )
+    .unwrap()
+}
+
 fn column_statistics() -> HashMap<String, BasicColumnStatistics> {
+    // 100 rows; the 10 NULLs of `k` leave 90 values, all distinct.
     HashMap::from([
-        ("k".to_string(), BasicColumnStatistics {
-            min: Some(Datum::Int(1)),
-            max: Some(Datum::Int(100)),
-            ndv: Some(100),
-            null_count: 10,
-            in_memory_size: 800,
-        }),
-        ("p".to_string(), BasicColumnStatistics {
-            min: Some(Datum::Int(1)),
-            max: Some(Datum::Int(5)),
-            ndv: Some(5),
-            null_count: 0,
-            in_memory_size: 800,
-        }),
+        ("k".to_string(), int_column(1, 100, 90.0, 10, 800, 100)),
+        ("p".to_string(), int_column(1, 5, 5.0, 0, 800, 100)),
     ])
 }
 
@@ -160,20 +169,14 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         "CREATE TABLE temporal(d DATE NOT NULL, ts TIMESTAMP NOT NULL)",
         Some(table_statistics(1000)),
         HashMap::from([
-            ("d".to_string(), BasicColumnStatistics {
-                min: Some(Datum::Int(0)),
-                max: Some(Datum::Int(80_000)),
-                ndv: Some(1000),
-                null_count: 0,
-                in_memory_size: 4000,
-            }),
-            ("ts".to_string(), BasicColumnStatistics {
-                min: Some(Datum::Int(0)),
-                max: Some(Datum::Int(80_000 * 86_400 * 1_000_000)),
-                ndv: Some(1000),
-                null_count: 0,
-                in_memory_size: 8000,
-            }),
+            (
+                "d".to_string(),
+                int_column(0, 80_000, 1000.0, 0, 4000, 1000),
+            ),
+            (
+                "ts".to_string(),
+                int_column(0, 80_000 * 86_400 * 1_000_000, 1000.0, 0, 8000, 1000),
+            ),
         ]),
         HashMap::new(),
     )
@@ -279,6 +282,24 @@ async fn test_sort_and_window_statistics_golden() -> Result<()> {
             description: "WindowGroup derives statistics for every supported output column.",
             sql: "SELECT ROW_NUMBER() OVER (PARTITION BY p ORDER BY k), NTILE(4) OVER (PARTITION BY p ORDER BY k), LAG(k) OVER (PARTITION BY p ORDER BY k) FROM t",
             operator: RelOp::WindowGroup,
+        },
+        StatsCase {
+            name: "rollup_group_key_statistics",
+            description: "A ROLLUP key keeps its input statistics through the nullable grouping symbol.",
+            sql: "SETTINGS (grouping_sets_to_union = 0) SELECT p, count(*) FROM t GROUP BY ROLLUP(p)",
+            operator: RelOp::Aggregate,
+        },
+        StatsCase {
+            name: "cube_group_key_statistics",
+            description: "CUBE keys keep their input statistics through the nullable grouping symbols.",
+            sql: "SETTINGS (grouping_sets_to_union = 0) SELECT k, p, count(*) FROM t GROUP BY CUBE(k, p)",
+            operator: RelOp::Aggregate,
+        },
+        StatsCase {
+            name: "rollup_having_key_is_null_statistics",
+            description: "A predicate over a ROLLUP output must account for the NULLs added by summary rows.",
+            sql: "SETTINGS (grouping_sets_to_union = 0) SELECT p, count(*) FROM t GROUP BY ROLLUP(p) HAVING p IS NULL",
+            operator: RelOp::Filter,
         },
     ];
 

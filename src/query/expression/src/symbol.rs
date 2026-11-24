@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::fmt::Write;
 use std::hash::Hash;
 
 use num_traits::FromPrimitive;
@@ -39,6 +38,10 @@ impl Symbol {
     const MIN_DUMMY_COLUMN: Self = Self::new_dummy_column(DummyColumnType::Other);
 
     pub const DUMMY_COLUMN: Self = Self::new_dummy_column(DummyColumnType::Default);
+
+    /// The first symbol of lambda parameters, far past the symbols of a query,
+    /// which metadata allocates from zero, and below the dummy columns.
+    pub const MIN_LAMBDA_PARAMETER: Self = Self(usize::MAX / 2);
 
     pub const fn new(index: usize) -> Self {
         Self(index)

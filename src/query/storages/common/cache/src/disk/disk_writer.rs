@@ -53,7 +53,8 @@ pub struct WriterOptions {
     /// How long a reader waits for room in the queue before dropping its entry.
     pub queue_wait: Duration,
     pub sync_data: bool,
-    /// Percent of the file system in use above which the writer evicts before it writes.
+    /// Percent of the file system in use, of its blocks or its inodes, above which the writer
+    /// evicts before it writes.
     pub watermark_ratio: u64,
     /// Whether the file system under the root is over `watermark_ratio` percent in use.
     pub over_watermark: fn(&Path, u64) -> bool,
@@ -454,13 +455,22 @@ impl Shared {
     }
 }
 
-/// Over `percent` of the file system in use.
+/// Over `percent` of the file system in use, of its blocks or of its inodes: entries much
+/// smaller than a block run out of inodes first, and a full file system fails to create files
+/// either way, spill files among them. File systems that report no inodes are checked by blocks.
 fn fs_over_watermark(root: &Path, percent: u64) -> bool {
     match rustix::fs::statvfs(root) {
-        Ok(stat) if stat.f_blocks > 0 => {
-            let used = stat.f_blocks.saturating_sub(stat.f_bavail);
-            used as u128 * 100 > stat.f_blocks as u128 * percent as u128
+        Ok(stat) => {
+            over_percent(stat.f_blocks, stat.f_bavail, percent)
+                || over_percent(stat.f_files, stat.f_favail, percent)
         }
-        _ => false,
+        Err(_) => false,
     }
+}
+
+/// Whether more than `percent` of `total` units is in use, `available` of them free. Nothing is
+/// over the watermark of a file system reporting no units.
+pub fn over_percent(total: u64, available: u64, percent: u64) -> bool {
+    let used = total.saturating_sub(available);
+    total > 0 && used as u128 * 100 > total as u128 * percent as u128
 }

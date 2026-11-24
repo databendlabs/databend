@@ -25,6 +25,7 @@ use databend_common_users::UserApiProvider;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -58,6 +59,7 @@ impl Interpreter for DescConnectionInterpreter {
             let mut connection = user_mgr
                 .get_connection(&tenant, self.plan.name.as_str())
                 .await?;
+            self.ctx.record_connection_access(&connection.name);
 
             let names = vec![connection.name.clone()];
             let types = vec![connection.storage_type.clone()];

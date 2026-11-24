@@ -159,6 +159,27 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         policy: CachePolicy,
     ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = self.adjust_io_request(&ctx)?;
+        self.do_read_data_with_parallelism(
+            ctx,
+            plan,
+            pipeline,
+            policy,
+            max_threads,
+            max_io_requests,
+        )
+    }
+
+    pub(crate) fn do_read_data_with_parallelism(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+        policy: CachePolicy,
+        max_threads: usize,
+        max_io_requests: usize,
+    ) -> Result<()> {
         let snapshot_loc = plan.statistics.snapshot.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
@@ -173,7 +194,6 @@ impl FuseTable {
         }
 
         let (block_reader, virtual_reader) = self.build_data_readers(ctx.clone(), plan, policy)?;
-        let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
         let rx = if !enable_prune_pipeline && !lazy_init_segments.is_empty() {
@@ -230,7 +250,6 @@ impl FuseTable {
             self.pruned_result_receiver.lock().take()
         };
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();
         build_fuse_source_pipeline(
             ctx.clone(),

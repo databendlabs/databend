@@ -1,0 +1,170 @@
+statement ok
+drop stage if exists ext_s3_region
+
+statement ok
+create stage ext_s3_region url='s3://testbucket/data/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us-east-1')
+
+query I
+select count(*) from list_stage(location => '@ext_s3_region/parquet/tuple.parquet')
+----
+1
+
+query TTB
+select storage_type, storage_params:region, has_credentials from system.stages where name = 'ext_s3_region'
+----
+s3 "us-east-1" 1
+
+statement ok
+drop stage ext_s3_region
+
+statement ok
+drop stage if exists ext_s3_region_auto
+
+statement ok
+create stage ext_s3_region_auto url='s3://testbucket/data/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='auto')
+
+query I
+select count(*) from list_stage(location => '@ext_s3_region_auto/parquet/tuple.parquet')
+----
+1
+
+statement ok
+drop stage ext_s3_region_auto
+
+statement error invalid s3 region
+create stage ext_s3_region_bad url='s3://testbucket/data/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us east 1')
+
+statement ok
+drop table if exists ext_tbl_region all
+
+statement ok
+create table ext_tbl_region (id int) 's3://testbucket/ext_tbl_region/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us-east-1')
+
+statement ok
+insert into ext_tbl_region values (1), (2)
+
+query I
+select sum(id) from ext_tbl_region
+----
+3
+
+statement ok
+drop table ext_tbl_region all
+
+statement error invalid s3 region
+create table ext_tbl_region_bad (id int) 's3://testbucket/ext_tbl_region_bad/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us-east-1.example.com')
+
+statement ok
+create or replace connection ext_conn storage_type='s3' access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us-east-1'
+
+statement ok
+create or replace stage ext_conn_stage url='s3://testbucket/ext_location/' connection=(connection_name='ext_conn')
+
+statement ok
+remove @ext_conn_stage
+
+statement ok
+create or replace table ext_src (id int, name string)
+
+statement ok
+insert into ext_src values (1, 'a'), (2, 'b')
+
+statement ok
+copy into @ext_conn_stage from ext_src file_format=(type=parquet)
+
+query IT
+select id, name from @ext_conn_stage (file_format => 'parquet') order by id
+----
+1 a
+2 b
+
+statement ok
+create or replace table ext_dst (id int, name string)
+
+statement ok
+copy into ext_dst from @ext_conn_stage file_format=(type=parquet)
+
+query I
+select sum(id) from ext_dst
+----
+3
+
+statement ok
+copy into ext_dst from 's3://testbucket/ext_location/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='auto') file_format=(type=parquet) force=true
+
+query I
+select sum(id) from ext_dst
+----
+6
+
+statement error invalid s3 region
+copy into ext_dst from 's3://testbucket/ext_location/' connection=(access_key_id='minioadmin' secret_access_key='minioadmin' endpoint_url='http://127.0.0.1:9900' region='us-east-1.example.com') file_format=(type=parquet) force=true
+
+statement ok
+drop table if exists ext_tbl_conn all
+
+statement ok
+create table ext_tbl_conn (id int) 's3://testbucket/ext_tbl_conn/' connection=(connection_name='ext_conn')
+
+statement ok
+insert into ext_tbl_conn values (1), (2), (3)
+
+statement ok
+alter table ext_tbl_conn connection=(connection_name='ext_conn')
+
+query I
+select sum(id) from ext_tbl_conn
+----
+6
+
+statement ok
+drop table ext_tbl_conn all
+
+statement ok
+drop table ext_src
+
+statement ok
+drop table ext_dst
+
+statement ok
+drop stage ext_conn_stage
+
+statement ok
+drop connection ext_conn
+
+statement ok
+drop stage if exists ext_gcs
+
+statement ok
+create stage ext_gcs url='gcs://ext-bucket/path/' connection=(credential='eyJ0eXBlIjoic2VydmljZV9hY2NvdW50IiwicHJvamVjdF9pZCI6ImV4dCIsImNsaWVudF9lbWFpbCI6ImV4dEBleHQuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLCJwcml2YXRlX2tleSI6Ii0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVxcbk1JSUVcXG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tXFxuIn0=')
+
+query TTB
+select storage_type, url, has_credentials from system.stages where name = 'ext_gcs'
+----
+gcs gcs://ext-bucket/path/ 1
+
+statement ok
+drop stage ext_gcs
+
+statement error invalid gcs credential
+create stage ext_gcs_user url='gcs://ext-bucket/path/' connection=(credential='eyJ0eXBlIjoiYXV0aG9yaXplZF91c2VyIiwiY2xpZW50X2lkIjoiYyIsImNsaWVudF9zZWNyZXQiOiJzIiwicmVmcmVzaF90b2tlbiI6InIifQ==')
+
+statement ok
+drop stage if exists ext_azblob
+
+statement ok
+create stage ext_azblob url='azblob://ext-container/path/' connection=(endpoint_url='https://extaccount.blob.core.windows.net' account_key='a2V5a2V5a2V5a2V5')
+
+query TTTB
+select storage_type, url, endpoint, has_credentials from system.stages where name = 'ext_azblob'
+----
+azblob azblob://ext-container/path/ https://extaccount.blob.core.windows.net 1
+
+statement ok
+drop stage ext_azblob
+
+statement error account_key
+create stage ext_azblob_nokey url='azblob://ext-container/path/' connection=(endpoint_url='https://extaccount.blob.core.windows.net')
+
+statement error account_name
+create stage ext_azblob_noname url='azblob://ext-container/path/' connection=(endpoint_url='http://127.0.0.1:10000' account_key='a2V5a2V5a2V5a2V5')

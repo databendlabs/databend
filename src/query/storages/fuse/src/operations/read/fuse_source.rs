@@ -157,6 +157,11 @@ pub(crate) fn build_fuse_read_transform_pipeline(
         virtual_reader.clone(),
     )?;
 
+    let outputs_columns = virtual_reader.is_some() || {
+        let mut output_schema = plan.schema().as_ref().clone();
+        output_schema.remove_internal_fields();
+        !output_schema.fields().is_empty()
+    };
     pipeline.add_transform(|input, output| {
         ReadDataTransform::create(
             plan.scan_id,
@@ -165,6 +170,10 @@ pub(crate) fn build_fuse_read_transform_pipeline(
             block_reader.clone(),
             read_block_context.clone(),
             record_partitions,
+            plan.push_downs
+                .as_ref()
+                .and_then(|push_downs| push_downs.prewhere.as_ref()),
+            outputs_columns,
             input,
             output,
         )
@@ -350,6 +359,7 @@ mod tests {
             None,
             None,
             None,
+            vec![],
         )
     }
 
@@ -377,6 +387,7 @@ mod tests {
             None,
             Some(block_meta_index),
             None,
+            vec![],
         )
     }
 

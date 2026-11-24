@@ -12,4 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod adaptive_topk_count;
+mod cross_join;
 mod sort;

@@ -294,17 +294,19 @@ async fn collect_tag_references(
                 .get_stage(&tenant, stage_name)
                 .await?;
             // Check stage visibility
-            let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-            let is_visible = stage_info.is_temporary
-                || visibility_checker.check_stage_visibility(&stage_info.stage_name)
-                || (stage_info.stage_type == StageType::User
-                    && stage_info.stage_name == ctx.get_current_user()?.name);
-            if !is_visible {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege READ is required on stage '{}' for user '{}'",
-                    stage_name,
-                    ctx.get_current_user()?.identity().display(),
-                )));
+            if ctx.should_check_stage_privilege(&stage_info.stage_name)? {
+                let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
+                let is_visible = stage_info.is_temporary
+                    || visibility_checker.check_stage_visibility(&stage_info.stage_name)
+                    || (stage_info.stage_type == StageType::User
+                        && stage_info.stage_name == ctx.get_current_user()?.name);
+                if !is_visible {
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege READ is required on stage '{}' for user '{}'",
+                        stage_name,
+                        ctx.get_current_user()?.identity().display(),
+                    )));
+                }
             }
             (
                 TaggableObject::Stage {
@@ -380,21 +382,25 @@ async fn collect_tag_references(
         }
         "CONNECTION" => {
             let conn_name = object_name.trim();
-            // Check connection visibility
-            let visibility_checker = ctx
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            if !visibility_checker.check_connection_visibility(conn_name) {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege AccessConnection is required on connection '{}' for user '{}'",
-                    conn_name,
-                    ctx.get_current_user()?.identity().display(),
-                )));
+            if ctx
+                .get_settings()
+                .get_enable_experimental_connection_privilege_check()?
+            {
+                let visibility_checker = ctx
+                    .get_visibility_checker(false, Object::Connection)
+                    .await?;
+                if !visibility_checker.check_connection_visibility(conn_name) {
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege AccessConnection is required on connection '{}' for user '{}'",
+                        conn_name,
+                        ctx.get_current_user()?.identity().display(),
+                    )));
+                }
             }
-            // Validate connection exists
-            UserApiProvider::instance()
+            let connection = UserApiProvider::instance()
                 .get_connection(&tenant, conn_name)
                 .await?;
+            ctx.record_connection_access(&connection.name);
             (
                 TaggableObject::Connection {
                     name: conn_name.to_string(),

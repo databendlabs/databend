@@ -222,6 +222,10 @@ impl FooterDirectory {
         }
     }
 
+    pub fn footer(&self) -> &InvertedIndexBundleFooter {
+        &self.inner.footer
+    }
+
     fn inline_file(&self, path: &Path) -> Option<OwnedBytes> {
         if path == Path::new(MANAGED_JSON_PATH) {
             Some(OwnedBytes::new(self.inner.footer.managed_json.clone()))

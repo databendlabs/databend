@@ -27,9 +27,14 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_storage::MetaHLL;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::CachedItem;
+use databend_storages_common_cache::PoolCaps;
+use databend_storages_common_cache::kinds::inverted;
+use databend_storages_common_cache::shared::SharedStore;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::IndexMeta;
+use databend_storages_common_index::InvertedIndexTermInfo;
 use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
@@ -260,4 +265,38 @@ fn test_index_metas() {
             VectorIndexMeta::Legacy(index_meta(columns))
         });
     }
+}
+
+/// A term info is charged what caching it takes in the shared backend: its key and its entry,
+/// more than the info itself.
+#[test]
+fn test_term_info_is_charged_what_its_entry_takes() {
+    let caps = PoolCaps {
+        meta: 0,
+        index: 1 << 30,
+        data: 0,
+    };
+    let manager = CacheManager::new(Arc::new(SharedStore::new(caps, [], 1)), None);
+    let cache = manager.cache::<inverted::TermInfo>();
+    // Keys of 6-byte terms of a few searchers, past the first growths of the pool.
+    let keys = (0..12_000u64)
+        .map(|i| format!("{}:1:{:012x}", i % 64, i))
+        .collect::<Vec<_>>();
+    let (charged, allocated) = measure(|| {
+        keys.iter()
+            .map(|key| {
+                let info = InvertedIndexTermInfo {
+                    info: Some(tantivy::postings::TermInfo::default()),
+                    key_len: key.len(),
+                };
+                CachedItem::mem_bytes(&*cache.put(key, info))
+            })
+            .sum::<usize>()
+    });
+    let ratio = charged as f64 / allocated as f64;
+    assert!(
+        (0.75..=1.25).contains(&ratio),
+        "{} term infos: charged {charged}, allocated {allocated} (ratio {ratio:.2})",
+        keys.len()
+    );
 }

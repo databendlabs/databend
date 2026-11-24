@@ -17,9 +17,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
-use std::ops::BitAnd;
-use std::ops::BitOr;
-use std::ops::Not;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -41,7 +38,6 @@ use serde::Serialize;
 use smallvec::SmallVec;
 
 use self::function_factory::FunctionFactoryHelper;
-use crate::Column;
 use crate::ColumnIndex;
 use crate::Expr;
 use crate::FunctionDomain;
@@ -51,8 +47,6 @@ use crate::function_stat::ScalarFunctionStat;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
-use crate::types::nullable::NullableColumn;
-use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 

@@ -11,6 +11,7 @@ EvalScalar
                 ├── build keys: [orders.o_orderkey (#2)]
                 ├── probe keys: [lineitem.l_orderkey (#5)]
                 ├── other filters: []
+                ├── runtime filters: [#0: orders.o_orderkey (#2) -> lineitem.l_orderkey (#5)]
                 ├── Exchange(Broadcast)
                 │   └── Aggregate(Final)
                 │       ├── group items: [orders.o_orderkey (#2) AS (#2)]
@@ -24,6 +25,7 @@ EvalScalar
                 │                   ├── build keys: [nation.n_nationkey (#7)]
                 │                   ├── probe keys: [customer.c_nationkey (#1)]
                 │                   ├── other filters: []
+                │                   ├── runtime filters: [#1: nation.n_nationkey (#7) -> customer.c_nationkey (#1)]
                 │                   ├── Exchange(Broadcast)
                 │                   │   └── Scan
                 │                   │       ├── table: default.nation (#3)
@@ -34,6 +36,7 @@ EvalScalar
                 │                       ├── build keys: [orders.o_custkey (#3)]
                 │                       ├── probe keys: [customer.c_custkey (#0)]
                 │                       ├── other filters: []
+                │                       ├── runtime filters: [#2: orders.o_custkey (#3) -> customer.c_custkey (#0)]
                 │                       ├── Exchange(Broadcast)
                 │                       │   └── Scan
                 │                       │       ├── table: default.orders (#1)
@@ -44,10 +47,12 @@ EvalScalar
                 │                           ├── table: default.customer (#0)
                 │                           ├── filters: []
                 │                           ├── order by: []
-                │                           └── limit: NONE
+                │                           ├── limit: NONE
+                │                           └── runtime filters: [#1: customer.c_nationkey (#1), #2: customer.c_custkey (#0)]
                 └── Scan
                     ├── table: default.lineitem (#2)
                     ├── filters: [eq(lineitem.l_returnflag (#6), 'R')]
                     ├── order by: []
-                    └── limit: NONE
+                    ├── limit: NONE
+                    └── runtime filters: [#0: lineitem.l_orderkey (#5)]
 

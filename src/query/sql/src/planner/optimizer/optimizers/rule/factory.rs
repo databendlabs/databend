@@ -39,6 +39,7 @@ use crate::optimizer::optimizers::rule::RuleMergeLimit;
 use crate::optimizer::optimizers::rule::RuleNormalizeScalarFilter;
 use crate::optimizer::optimizers::rule::RulePtr;
 use crate::optimizer::optimizers::rule::RulePushDownFilterAggregate;
+use crate::optimizer::optimizers::rule::RulePushDownFilterAsyncFunction;
 use crate::optimizer::optimizers::rule::RulePushDownFilterEvalScalar;
 use crate::optimizer::optimizers::rule::RulePushDownFilterJoin;
 use crate::optimizer::optimizers::rule::RulePushDownFilterProjectSet;
@@ -62,6 +63,7 @@ use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RulePushDownTopNUnionScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
+use crate::optimizer::optimizers::rule::RuleSplitGroupedCountDistinct;
 use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
 pub struct RuleFactory;
@@ -87,6 +89,9 @@ impl RuleFactory {
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
+            RuleID::PushDownFilterAsyncFunction => {
+                Ok(Box::new(RulePushDownFilterAsyncFunction::new()))
+            }
             RuleID::MergeLimit => Ok(Box::new(RuleMergeLimit::new())),
             RuleID::PushDownLimit => Ok(Box::new(RulePushDownLimit::new(metadata))),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
@@ -129,6 +134,9 @@ impl RuleFactory {
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
                 ctx.get_stat_context().clone(),
                 ctx.get_function_context().query_specific_values.clone(),
+            ))),
+            RuleID::SplitGroupedCountDistinct => Ok(Box::new(RuleSplitGroupedCountDistinct::new(
+                ctx.get_stat_context().clone(),
             ))),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new(
                 ctx.get_stat_context().clone(),

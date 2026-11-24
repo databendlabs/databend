@@ -61,7 +61,6 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use tokio::sync::Mutex;
 
 use crate::role::role_api::RoleApi;
 use crate::serde::Quota;
@@ -73,7 +72,7 @@ static TXN_MAX_RETRY_TIMES: u32 = 60;
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
-    ownership_cache: Option<Arc<Mutex<Cache>>>,
+    ownership_cache: Option<Arc<Cache>>,
     upgrade_to_pb: bool,
 }
 
@@ -82,7 +81,7 @@ impl RoleMgr {
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
         upgrade_to_pb: bool,
-        ownership_cache: Option<Arc<Mutex<Cache>>>,
+        ownership_cache: Option<Arc<Cache>>,
     ) -> Self {
         RoleMgr {
             kv_api,
@@ -97,7 +96,7 @@ impl RoleMgr {
         let prefix = TenantOwnershipObjectIdent::key_space_prefix();
         let name = TenantOwnershipObjectIdent::type_name();
 
-        let mut cache = Cache::new(client, prefix, name).await;
+        let cache = Cache::new(client, prefix, name).await;
 
         // The meta-service may not support `WatchRequest::initial_flush` parameter,
         // Peek the cache state to check if the cache is supported.
@@ -151,11 +150,20 @@ impl RoleMgr {
     ///
     /// In form of `__fd_object_owners/<tenant>/`.
     fn ownership_object_prefix(&self) -> String {
+        self.ownership_dummy_ident().tenant_prefix()
+    }
+
+    /// The directory of the ownership keys of the tenant, `__fd_object_owners/<tenant>`, which a
+    /// cache of them lists.
+    fn ownership_object_dir(&self) -> String {
+        self.ownership_dummy_ident().tenant_dir()
+    }
+
+    fn ownership_dummy_ident(&self) -> TenantOwnershipObjectIdent {
         let dummy = OwnershipObject::UDF {
             name: "dummy".to_string(),
         };
-        let grantee = TenantOwnershipObjectIdent::new(self.tenant.clone(), dummy);
-        grantee.tenant_prefix()
+        TenantOwnershipObjectIdent::new(self.tenant.clone(), dummy)
     }
 
     fn role_ident(&self, role: &str) -> RoleIdent {
@@ -234,9 +242,8 @@ impl RoleApi for RoleMgr {
         let object_owner_prefix = self.ownership_object_prefix();
 
         let cached = {
-            if let Some(ownership_cache) = &self.ownership_cache {
-                let mut cache = ownership_cache.lock().await;
-                let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
+            if let Some(cache) = &self.ownership_cache {
+                let kvs = cache.try_list_dir(&self.ownership_object_dir()).await;
 
                 match &kvs {
                     Ok(kvs) => {

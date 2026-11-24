@@ -51,7 +51,7 @@ impl Exchange for WindowPartitionExchange {
         // Scatter the data block to different partitions.
         let indices = hashes
             .iter()
-            .map(|&hash| (hash % self.num_partitions as u64) as u8)
+            .map(|&hash| (hash % self.num_partitions as u64) as u32)
             .collect::<Vec<_>>();
         let scatter_blocks = DataBlock::scatter(&data_block, &indices, self.num_partitions)?;
 
@@ -67,5 +67,42 @@ impl Exchange for WindowPartitionExchange {
             .map(WindowPartitionMeta::create)
             .map(DataBlock::empty_with_meta)
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::BlockMetaInfoDowncast;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
+
+    use super::*;
+
+    #[test]
+    fn test_more_than_256_partitions() -> Result<()> {
+        let exchange = WindowPartitionExchange::create(vec![0], 512);
+        let block =
+            DataBlock::new_from_columns(vec![Int32Type::from_data((0..4096).collect::<Vec<_>>())]);
+
+        let mut outputs = exchange.partition(block, 1)?;
+        assert_eq!(outputs.len(), 1);
+        let meta = outputs
+            .pop()
+            .and_then(|block| block.get_owned_meta())
+            .and_then(WindowPartitionMeta::downcast_from)
+            .unwrap();
+
+        let rows = meta
+            .partitioned_data
+            .iter()
+            .map(|(_, block)| block.num_rows())
+            .sum::<usize>();
+        assert_eq!(rows, 4096);
+        assert!(
+            meta.partitioned_data
+                .iter()
+                .any(|(id, block)| *id >= 256 && !block.is_empty())
+        );
+        Ok(())
     }
 }

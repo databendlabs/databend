@@ -15,8 +15,34 @@
 use chrono::Duration;
 use chrono::Utc;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::generate_snapshots;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_stream_binds_source_database_id() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.execute_command("CREATE DATABASE source_db").await?;
+    fixture
+        .execute_command("CREATE TABLE source_db.t(i INT) CHANGE_TRACKING = true")
+        .await?;
+    fixture
+        .execute_command("CREATE STREAM default.s ON TABLE source_db.t")
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let db = ctx
+        .get_default_catalog()?
+        .get_database(&fixture.default_tenant(), "source_db")
+        .await?;
+    ctx.get_table("default", "default", "s").await?;
+    // The full source table is now in the ordinary table cache, before any direct lookup.
+    assert_eq!(
+        ctx.get_resolved_database_id("default", "source_db"),
+        Some(db.get_db_info().database_id.db_id)
+    );
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_stream_create() -> anyhow::Result<()> {

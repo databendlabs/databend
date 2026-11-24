@@ -59,7 +59,6 @@ use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sequence;
 use crate::plans::Sort;
-use crate::plans::SortItem;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::plans::WindowFuncFrame;
@@ -67,7 +66,6 @@ use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowGroup;
-use crate::plans::WindowPartition;
 
 /// How to treat filter aliases inherited by an operator, see
 /// [`SubqueryDecorrelatorOptimizer::filter_alias_action`].
@@ -118,6 +116,13 @@ impl SubqueryDecorrelatorOptimizer {
             .iter()
             .filter_map(|old| derived_columns.resolve(*old))
             .collect::<ColumnSet>();
+        Self::filter_alias_columns_action(subquery, &aliases)
+    }
+
+    fn filter_alias_columns_action(
+        subquery: &SExpr,
+        aliases: &ColumnSet,
+    ) -> Result<FilterAliasAction> {
         if aliases.is_empty() || subquery.arity() == 0 {
             return Ok(FilterAliasAction::Keep);
         }
@@ -155,7 +160,7 @@ impl SubqueryDecorrelatorOptimizer {
         {
             return Ok(FilterAliasAction::Hide(defined_here));
         }
-        Self::check_scalar_aggregate_alias(subquery, &aliases)?;
+        Self::check_scalar_aggregate_alias(subquery, aliases)?;
         Ok(FilterAliasAction::Materialize)
     }
 
@@ -569,10 +574,27 @@ impl SubqueryDecorrelatorOptimizer {
         need_cross_join: bool,
         derived_columns: &DerivedColumnScope,
     ) -> Result<FlattenPlanResult> {
-        let (join_outer_inner, sub_derived_columns) =
+        let (join_outer_inner, sub_derived_columns, aliases) =
             self.join_outer_inner_table(filter, correlated_columns)?;
         let need_cross_join = need_cross_join || join_outer_inner;
         let child_scope = if join_outer_inner {
+            // An incompatible alias type forces materialization too. It must
+            // not bypass the empty-input aggregate checks normally reached
+            // when an alias is reusable and propagated into the child scope.
+            if !aliases.is_empty() {
+                let mut pending = vec![subquery.unary_child()];
+                while let Some(input) = pending.pop() {
+                    if input.derive_relational_prop()?.outer_columns.is_empty() {
+                        continue;
+                    }
+                    if matches!(
+                        Self::filter_alias_columns_action(input, &aliases)?,
+                        FilterAliasAction::Keep
+                    ) {
+                        pending.extend(input.children());
+                    }
+                }
+            }
             DerivedColumnScope::default()
         } else {
             derived_columns.child_scope_for_filter(sub_derived_columns)
@@ -797,6 +819,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                     spatial_join: None,
+                    runtime_filters: vec![],
                 },
                 left_flatten_plan,
                 right_flatten_plan,
@@ -828,7 +851,7 @@ impl SubqueryDecorrelatorOptimizer {
         )?;
 
         let metadata = self.ctx.metadata_read();
-        let group_items = aggregate
+        let group_items: Vec<ScalarItem> = aggregate
             .group_items
             .iter()
             .map(Item::Scalar)
@@ -858,6 +881,11 @@ impl SubqueryDecorrelatorOptimizer {
                 // For scalar subquery, we'll convert it to single join.
                 // Single join is similar to left outer join, if there isn't matched row in the right side, we'll add NULL value for the right side.
                 // But for count aggregation function, NULL values should be 0.
+                // TODO: this only holds for a scalar aggregate. With a GROUP BY,
+                // even one on outer columns only, an outer row without matches
+                // has no group and the subquery yields NULL, but it becomes 0, e.g.
+                // `(SELECT count(*) FROM x WHERE x.a = t.a GROUP BY t.a)`. Grouping
+                // sets with an empty set do yield a 0 row and need separate care.
                 if aggregate.aggregate_functions.len() == 1
                     && (func_name.eq_ignore_ascii_case("count")
                         || func_name.eq_ignore_ascii_case("count_distinct"))
@@ -870,13 +898,28 @@ impl SubqueryDecorrelatorOptimizer {
                 index: item.index,
             })
         }
+        let mut grouping_sets = aggregate.grouping_sets.clone();
+        if let Some(grouping_sets) = &mut grouping_sets {
+            // Correlated columns partition the subquery per outer row, so they
+            // belong to every grouping set and never receive injected NULLs.
+            let correlated_keys = group_items[aggregate.group_items.len()..]
+                .iter()
+                .map(|item| item.index)
+                .collect::<Vec<_>>();
+            for set in &mut grouping_sets.sets {
+                set.extend(correlated_keys.iter().copied());
+                set.sort();
+                set.dedup();
+            }
+        }
         Ok((
             flatten_plan.build_unary(Aggregate {
+                adaptive_topk_count: None,
                 group_items,
                 aggregate_functions: agg_items,
                 from_distinct: aggregate.from_distinct,
                 rank_limit: aggregate.rank_limit.clone(),
-                grouping_sets: aggregate.grouping_sets.clone(),
+                grouping_sets,
             }),
             derived_columns,
         ))
@@ -901,17 +944,7 @@ impl SubqueryDecorrelatorOptimizer {
             need_cross_join,
             derived_columns,
         )?;
-        // Check if sort contains `count() or distinct count()`.
-        if sort.items.iter().any(|item| {
-            let metadata = self.ctx.metadata_read();
-            let col = metadata.column(item.index);
-            if let ColumnEntry::DerivedColumn(derived_col) = col {
-                // A little tricky here, we'll check if a sort item is a count aggregation function later.
-                derived_col.alias.to_lowercase().starts_with("count")
-            } else {
-                false
-            }
-        }) {
+        if self.sort_contains_count(sort) {
             flatten_info.from_count_func = false;
         }
         let mut sort = sort.clone();
@@ -923,6 +956,18 @@ impl SubqueryDecorrelatorOptimizer {
             }
         })?;
         Ok((flatten_plan.build_unary(sort), derived_columns))
+    }
+
+    fn sort_contains_count(&self, sort: &Sort) -> bool {
+        let metadata = self.ctx.metadata_read();
+        sort.items.iter().any(|item| {
+            if let ColumnEntry::DerivedColumn(derived_col) = metadata.column(item.index) {
+                // Keep the existing alias-based check for count() and count(distinct ...).
+                derived_col.alias.to_lowercase().starts_with("count")
+            } else {
+                false
+            }
+        })
     }
 
     fn flatten_sub_limit(
@@ -946,15 +991,7 @@ impl SubqueryDecorrelatorOptimizer {
                     derived_columns,
                 )?;
 
-                if sort.items.iter().any(|item| {
-                    let metadata = self.ctx.metadata_read();
-                    let col = metadata.column(item.index);
-                    if let ColumnEntry::DerivedColumn(derived_col) = col {
-                        derived_col.alias.to_lowercase().starts_with("count")
-                    } else {
-                        false
-                    }
-                }) {
+                if self.sort_contains_count(sort) {
                     flatten_info.from_count_func = false;
                 }
 
@@ -1010,35 +1047,13 @@ impl SubqueryDecorrelatorOptimizer {
             row_number_type.clone(),
         );
 
-        let sort_settings = self.ctx.get_table_ctx().get_settings();
-        let default_nulls_first = sort_settings.get_nulls_first();
-
-        let mut sort_items = Vec::with_capacity(partition_by.len() + order_by.len());
-        for part in &partition_by {
-            sort_items.push(SortItem {
-                index: part.index,
-                asc: true,
-                nulls_first: default_nulls_first(true),
-            });
-        }
-        for order in &order_by {
-            let asc = order.asc.unwrap_or(true);
-            sort_items.push(SortItem {
-                index: order.order_by_item.index,
-                asc,
-                nulls_first: order
-                    .nulls_first
-                    .unwrap_or_else(|| default_nulls_first(asc)),
-            });
-        }
-
         let window_plan = Window {
             span: None,
             index: row_number_index,
             function: WindowFuncType::RowNumber,
             arguments: vec![],
-            partition_by: partition_by.clone(),
-            order_by: order_by.clone(),
+            partition_by,
+            order_by,
             frame: WindowFuncFrame {
                 units: WindowFuncFrameUnits::Rows,
                 start_bound: WindowFuncFrameBound::Preceding(None),
@@ -1048,24 +1063,10 @@ impl SubqueryDecorrelatorOptimizer {
             top: None,
         };
 
-        let window_child = if sort_items.is_empty() {
-            flatten_plan
-        } else {
-            flatten_plan.build_unary(Sort {
-                items: sort_items,
-                limit: None,
-                after_exchange: None,
-                pre_projection: None,
-                window_partition: if partition_by.is_empty() {
-                    None
-                } else {
-                    Some(WindowPartition {
-                        partition_by: partition_by.clone(),
-                        top: None,
-                        func: WindowFuncType::RowNumber,
-                    })
-                },
-            })
+        let settings = self.ctx.get_table_ctx().get_settings();
+        let window_child = match window_plan.input_sort(settings.get_nulls_first()) {
+            Some(sort) => flatten_plan.build_unary(sort),
+            None => flatten_plan,
         };
 
         let row_number_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -1232,15 +1233,42 @@ impl SubqueryDecorrelatorOptimizer {
         flatten_info: &mut FlattenInfo,
         derived_columns: &DerivedColumnScope,
     ) -> Result<FlattenPlanResult> {
+        // Replace the binder's window sort: decorrelation adds partition keys,
+        // so neither its ordering nor its partition exchange is sufficient.
+        let mut input = subquery.unary_child();
+        let mut skipped_count_sort = false;
+        if let RelOperator::Sort(sort) = input.plan()
+            && sort.limit.is_none()
+            && sort
+                .window_partition
+                .as_ref()
+                .is_none_or(|partition| partition.top.is_none())
+            && (!window.partition_by.is_empty() || !window.order_by.is_empty())
+        {
+            skipped_count_sort = self.sort_contains_count(sort);
+            input = input.unary_child();
+        }
         let (flatten_plan, derived_columns) = self.flatten_plan_with_scope(
             outer,
-            subquery.unary_child(),
+            input,
             correlated_columns,
             flatten_info,
             true,
             derived_columns,
         )?;
+        // Preserve flatten_sub_sort's bookkeeping after the aggregate below has been flattened.
+        if skipped_count_sort {
+            flatten_info.from_count_func = false;
+        }
         let window = self.flatten_window(window, correlated_columns, &derived_columns)?;
+
+        // TransformWindow consumes contiguous, ordered partitions. Even OVER ()
+        // needs a sort now that each outer row defines a separate partition.
+        let settings = self.ctx.get_table_ctx().get_settings();
+        let flatten_plan = match window.input_sort(settings.get_nulls_first()) {
+            Some(sort) => flatten_plan.build_unary(sort),
+            None => flatten_plan,
+        };
 
         Ok((flatten_plan.build_unary(window), derived_columns))
     }
@@ -1519,18 +1547,30 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut aggregate = aggregate.clone();
                 let metadata = self.ctx.get_metadata();
                 let mut metadata = metadata.write();
+                if let Some(grouping_sets) = &mut aggregate.grouping_sets {
+                    // Unlike the other keys, `_grouping_id` is produced by the
+                    // aggregate expansion itself and has no child binding to clone.
+                    let old = grouping_sets.grouping_id_index;
+                    let column = metadata.column(old);
+                    let (name, data_type) = (column.name(), column.data_type());
+                    let new = metadata.add_derived_column(name, data_type);
+                    derived_columns.record(old, new);
+                    grouping_sets.grouping_id_index = new;
+                }
                 for item in &mut aggregate.group_items {
                     *item = self.clone_outer_scalar_item(item, &mut metadata, derived_columns)?;
                 }
                 for func in &mut aggregate.aggregate_functions {
                     *func = self.clone_outer_scalar_item(func, &mut metadata, derived_columns)?;
                 }
-                aggregate.rank_limit = None;
-                if aggregate.grouping_sets.is_some() {
-                    return Err(ErrorCode::Unimplemented(
-                        "join left plan can't contain aggregate with GROUPING SETS to dcorrelated join right plan",
-                    ));
+                if let Some(grouping_sets) = &mut aggregate.grouping_sets {
+                    for set in &mut grouping_sets.sets {
+                        for index in set {
+                            *index = derived_columns.must_resolve(*index)?;
+                        }
+                    }
                 }
+                aggregate.rank_limit = None;
                 aggregate.into()
             }
             _ => {

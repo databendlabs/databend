@@ -20,6 +20,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
 use databend_common_grpc::is_in_process_grpc_address;
 use databend_common_storage::EndpointUrlPolicyRegistry;
+use databend_common_storage::StorageSecurityRegistry;
 
 use crate::InnerConfig;
 
@@ -38,6 +39,7 @@ impl GlobalConfig {
             .cloned()
             .collect();
         EndpointUrlPolicyRegistry::init(endpoint_url_policy)?;
+        StorageSecurityRegistry::init(config.storage.allow_insecure);
         Ok(())
     }
 

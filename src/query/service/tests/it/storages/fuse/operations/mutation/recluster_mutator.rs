@@ -29,6 +29,7 @@ use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -628,48 +629,106 @@ async fn materialize_candidate_window(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_task_selection_v2_opt_in_and_rollback() -> anyhow::Result<()> {
+async fn test_recluster_joint_gain_selection() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_recluster_block_size(1000)?;
-    assert!(
-        !ctx.get_settings()
-            .get_enable_recluster_task_selection_v2()?
-    );
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
     let thresholds = BlockThresholds::default();
     // Identical ranges, original-order sizes 600,600,400,400 and budget 1000:
-    // v1's contiguous packing produces one pair, v2 skip-fill produces two.
-    let blocks = [600, 600, 400, 400]
+    // joint-gain selection finds two pairs in either mode, including after
+    // preparation separates a block with obsolete cluster-key statistics.
+    for prepared in [false, true] {
+        let cluster_key_id = u32::from(prepared);
+        let mut blocks = Vec::new();
+        if prepared {
+            let mut old = make_recluster_block(0, 1, 100, 0, 1000, 100, 50);
+            Arc::make_mut(&mut old).col_stats.insert(
+                0,
+                ColumnStatistics::new(Scalar::from(1i32), Scalar::from(100i32), 0, 100, None),
+            );
+            blocks.push(old);
+        }
+        blocks.extend([600, 600, 400, 400].into_iter().map(|size| {
+            make_recluster_block(
+                cluster_key_id,
+                1,
+                100,
+                i32::from(prepared),
+                1000,
+                size,
+                size / 2,
+            )
+        }));
+        let location = write_recluster_segment(
+            &data_accessor,
+            &location_generator,
+            blocks,
+            thresholds,
+            cluster_key_id,
+        )
+        .await?;
+        for mode in [ReclusterMode::Aggressive, ReclusterMode::Conservative] {
+            let (_, block_count, parts) = materialize_segment_locations_with_mode(
+                ctx.clone(),
+                data_accessor.clone(),
+                vec![location.clone()],
+                thresholds,
+                cluster_key_id,
+                if prepared { 3 } else { 2 },
+                8,
+                mode,
+            )
+            .await?;
+            let case = format!("prepared={prepared}, mode={mode:?}");
+            let expected_counts = if prepared { vec![2, 2, 1] } else { vec![2, 2] };
+            assert_eq!(task_part_counts(&parts), expected_counts, "{case}");
+            assert_eq!(block_count, if prepared { 5 } else { 4 }, "{case}");
+            assert!(
+                parts.tasks[..2]
+                    .iter()
+                    .all(|task| task.kind == ReclusterTaskKind::MergeBlocks),
+                "{case}"
+            );
+            if prepared {
+                assert_eq!(parts.tasks[2].kind, ReclusterTaskKind::SortBlocks, "{case}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_does_not_fall_back_after_non_positive_gain() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(200)?;
+    let operator = ctx.get_application_level_data_operator()?.operator();
+    let locations = TableMetaLocationGenerator::new("_no_gain".to_owned());
+    // A chain of three ranges has avg depth 2. Only one pair fits in a task,
+    // and merging either pair leaves its output overlapping the third block:
+    // avg depth is still 2. Do not fall back to packing a zero-gain pair.
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let blocks = [(1, 10), (5, 15), (14, 20)]
         .into_iter()
-        .map(|size| make_recluster_block(0, 1, 100, 0, 1000, size, size / 2))
+        .map(|(min, max)| make_recluster_block(0, min, max, 0, 1000, 100, 50))
         .collect();
-    let location =
-        write_recluster_segment(&data_accessor, &location_generator, blocks, thresholds, 0).await?;
-    for (enabled, mode, expected_tasks) in [
-        (false, ReclusterMode::Aggressive, 1),
-        (true, ReclusterMode::Aggressive, 2),
-        (true, ReclusterMode::Conservative, 1),
-        (false, ReclusterMode::Aggressive, 1),
-    ] {
-        ctx.get_settings().set_setting(
-            "enable_recluster_task_selection_v2".to_string(),
-            u8::from(enabled).to_string(),
-        )?;
-        let (_, block_count, parts) = materialize_segment_locations_with_mode(
+    let location = write_recluster_segment(&operator, &locations, blocks, thresholds, 0).await?;
+    for mode in [ReclusterMode::Aggressive, ReclusterMode::Conservative] {
+        let (_, count, parts) = materialize_segment_locations_with_mode(
             ctx.clone(),
-            data_accessor.clone(),
+            operator.clone(),
             vec![location.clone()],
             thresholds,
             0,
-            2,
+            1,
             8,
             mode,
         )
         .await?;
-        assert_eq!(task_part_counts(&parts), vec![2; expected_tasks]);
-        assert_eq!(block_count, (2 * expected_tasks) as u64);
+        assert_eq!(count, 0);
+        assert!(parts.is_empty());
     }
     Ok(())
 }
@@ -900,6 +959,10 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
             ReclusterTaskKind::SortBlocks,
             1,
         )]),
+        ("wrong_arity", vec![Some(1)], 1000, 100, 4, vec![(
+            ReclusterTaskKind::SortBlocks,
+            1,
+        )]),
         (
             "mixed_large",
             vec![Some(0), None, Some(1), Some(1)],
@@ -928,6 +991,8 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
             let meta = Arc::make_mut(&mut block);
             if key_id.is_none() {
                 meta.cluster_stats = None;
+            } else if case == "wrong_arity" {
+                meta.cluster_stats = Some(ClusterStatistics::new(1, vec![], vec![], 0));
             }
             meta.col_stats.insert(
                 0,
@@ -981,6 +1046,40 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
                 }
             }
         }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_after_cluster_key_change() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    for mode in [0, 1] {
+        let table = format!("{}.cluster_key_change_{mode}", fixture.default_db_name());
+        for sql in [
+            format!(
+                "CREATE TABLE {table}(a INT, b INT) CLUSTER BY (a) ROW_PER_BLOCK=2 BLOCK_PER_SEGMENT=2 AGGRESSIVE_RECLUSTER={mode}"
+            ),
+            format!("INSERT INTO {table} SELECT number, 31-number FROM numbers(32)"),
+            format!("ALTER TABLE {table} RECLUSTER FINAL"),
+            format!("ALTER TABLE {table} CLUSTER BY (b, a)"),
+            format!("INSERT INTO {table} SELECT number, number FROM numbers(8)"),
+            format!("ALTER TABLE {table} RECLUSTER FINAL"),
+        ] {
+            fixture.execute_command(&sql).await?;
+        }
+        let blocks: Vec<DataBlock> = fixture
+            .execute_query(&format!(
+                "SELECT count()=40 AND sum(a)=524 AND sum(b)=524 FROM {table}"
+            ))
+            .await?
+            .try_collect()
+            .await?;
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(
+            blocks[0].get_by_offset(0).index(0),
+            Some(ScalarRef::Boolean(true))
+        );
     }
     Ok(())
 }
@@ -1061,6 +1160,49 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     fixture
         .execute_command(&format!("alter table {name} recluster final"))
         .await?;
+
+    // A single placement must stay local even in a multi-node cluster. Assign
+    // both nodes to a warehouse for SQL execution, but leave Flight endpoints
+    // unset so an unnecessary Exchange fails.
+    for sql in [
+        format!("TRUNCATE TABLE {name}"),
+        format!("INSERT INTO {name} VALUES (1),(2),(3)"),
+        format!("ALTER TABLE {name} CLUSTER BY(-id)"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let ctx = fixture
+        .new_query_ctx_with_cluster(
+            ClusterDescriptor::new()
+                .with_node_info("node-a", "", "cluster", "warehouse")
+                .with_node_info("node-b", "", "cluster", "warehouse")
+                .with_local_id("node-a"),
+        )
+        .await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let (parts, before) = fuse
+        .do_recluster(
+            ctx.clone(),
+            None,
+            None,
+            ReclusterMode::Conservative,
+            &mut ReclusterFinalCarry::default(),
+            &HashSet::new(),
+        )
+        .await?
+        .expect("the obsolete cluster key requires one sort task");
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
+    assert_eq!(parts.task_batches, Some(vec![vec![0]]));
+    execute_command(ctx, &format!("ALTER TABLE {name} RECLUSTER")).await?;
+    let table = fixture.latest_default_table().await?;
+    let after = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_eq!(after.prev_snapshot_id.unwrap().0, before.snapshot_id);
+    assert_eq!(after.summary.row_count, 3);
     Ok(())
 }
 
@@ -1651,11 +1793,47 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
     // Cover both the vector overlap strategy and the shared small-block shortcut,
     // with current and obsolete cluster-key statistics. Vector inputs must never
     // be split into scalar singleton sort tasks.
-    for (current_key_id, thresholds) in [
-        (cluster_key_id, thresholds),
-        (cluster_key_id + 1, thresholds),
-        (cluster_key_id, BlockThresholds::new(10000, 10000, 10000, 1)),
+    for (current_key_id, thresholds, disjoint) in [
+        (cluster_key_id, thresholds, false),
+        (cluster_key_id + 1, thresholds, false),
+        (
+            cluster_key_id,
+            BlockThresholds::new(10000, 10000, 10000, 1),
+            false,
+        ),
+        (cluster_key_id, thresholds, true),
     ] {
+        let case_segments = if disjoint {
+            // Same scalar range, disjoint vector spheres in ONE segment:
+            // Scalar joint-gain selection must not bypass the vector strategy.
+            let locations = gen_recluster_segments_by_vector_stats(
+                &data_accessor,
+                &location_generator,
+                &[vec![
+                    (1, 1, [0.0, 0.0], 1.0),
+                    (1, 1, [10.0, 0.0], 1.0),
+                    (1, 1, [20.0, 0.0], 1.0),
+                ]],
+                None,
+                true,
+                1000,
+                100,
+                100,
+                thresholds,
+                cluster_key_id,
+                0,
+            )
+            .await?;
+            segment_pruning(
+                &ctx,
+                schema.clone(),
+                data_accessor.clone(),
+                create_segment_location_vector(locations, None),
+            )
+            .await?
+        } else {
+            compact_segments.clone()
+        };
         let vector_cluster_info = VectorClusterInfo {
             key_index: 1,
             column_id: 1,
@@ -1673,26 +1851,39 @@ async fn test_recluster_mutator_vector_mixed_key_overlap_selection() -> anyhow::
             ClusterKeyInfo::new((current_key_id, "(c0)".to_string()), ClusterType::Linear),
             0,
             1,
-            ReclusterMode::Conservative,
+            if disjoint {
+                ReclusterMode::Aggressive
+            } else {
+                ReclusterMode::Conservative
+            },
             Some(vector_cluster_info),
         );
 
-        let segment_windows = mutator.select_segments(&compact_segments, 8)?;
+        let segment_windows = mutator.select_segments(&case_segments, 8)?;
         let vector_window = segment_windows
             .into_iter()
             .find(|window| {
-                window
-                    .iter()
-                    .map(|segment| segment.loc.segment_idx)
-                    .collect::<HashSet<_>>()
-                    == HashSet::from([0, 1])
+                if disjoint {
+                    window.len() == 1
+                } else {
+                    window
+                        .iter()
+                        .map(|segment| segment.loc.segment_idx)
+                        .collect::<HashSet<_>>()
+                        == HashSet::from([0, 1])
+                }
             })
             .unwrap();
         let (block_num, parts) = materialize_candidate_window(&mutator, vector_window, 1).await?;
-        assert_eq!(block_num, 2);
-        assert_eq!(parts.tasks.len(), 1);
-        assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
-        assert_eq!(task_part_counts(&parts), vec![2]);
+        if disjoint {
+            assert_eq!(block_num, 0);
+            assert!(parts.is_empty());
+        } else {
+            assert_eq!(block_num, 2);
+            assert_eq!(parts.tasks.len(), 1);
+            assert_eq!(parts.tasks[0].kind, ReclusterTaskKind::SortBlocks);
+            assert_eq!(task_part_counts(&parts), vec![2]);
+        }
     }
 
     Ok(())
@@ -1903,8 +2094,8 @@ async fn test_builds_multiple_peaks_in_one_window() -> anyhow::Result<()> {
     let cluster_key_id = 0;
     let thresholds = BlockThresholds::new(1000, 100, 100, 1);
 
-    // Peak A is the deepest. Its side expansion may absorb Peak B's remaining
-    // block, but Peak C is independent and should still fill the second slot.
+    // Peak A is the deepest. Select its three blocks and the two at independent
+    // Peak C without expanding into Peak B just to fill the byte budget.
     let segment_locations = gen_recluster_segments_by_ranges(
         &data_accessor,
         &location_generator,
@@ -1959,7 +2150,10 @@ async fn test_builds_multiple_peaks_in_one_window() -> anyhow::Result<()> {
             assert!(selected_locations.insert(fuse_part.location.clone()));
         }
     }
-    assert_eq!(selected_count, 6);
+    assert_eq!(selected_count, 5);
+    let mut counts = task_part_counts(&parts);
+    counts.sort_unstable();
+    assert_eq!(counts, vec![2, 3]);
 
     Ok(())
 }
@@ -2066,10 +2260,8 @@ async fn test_skips_singleton_over_memory() -> anyhow::Result<()> {
     let cluster_key_id = 0;
     let thresholds = BlockThresholds::new(1000, 100, 100, 10);
 
-    // The selected order is [40, 40, 90, 20]. The first two blocks form a
-    // valid task, then 90 + 20 crosses the memory boundary. Since the pending
-    // 90-byte singleton cannot form a normal recluster task, it is dropped and
-    // no over-budget tail task is emitted.
+    // In source order [40, 40, 90, 20], skip-fill combines 40+40+20.
+    // The 90-byte source cannot join that task or form a singleton merge.
     let mut segment_locations = Vec::new();
     for (range, block_size) in [((1, 10), 40), ((2, 9), 40), ((3, 8), 90), ((4, 7), 20)] {
         segment_locations.extend(
@@ -2100,16 +2292,16 @@ async fn test_skips_singleton_over_memory() -> anyhow::Result<()> {
     )
     .await?;
 
-    assert_eq!(block_num, 2);
+    assert_eq!(block_num, 3);
     assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(task_part_counts(&parts), vec![2]);
-    assert_eq!(parts.tasks[0].total_bytes, 80);
+    assert_eq!(task_part_counts(&parts), vec![3]);
+    assert_eq!(parts.tasks[0].total_bytes, 100);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_keeps_full_hotspot_task() -> anyhow::Result<()> {
+async fn test_prefers_hotspot_without_side_expansion() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_recluster_block_size(100)?;
@@ -2174,10 +2366,12 @@ async fn test_keeps_full_hotspot_task() -> anyhow::Result<()> {
     )
     .await?;
 
-    assert_eq!(block_num, 5);
+    // The four central blocks offer more gain per byte than pulling a side
+    // block into the output range just to fill the remaining 20 bytes.
+    assert_eq!(block_num, 4);
     assert_eq!(parts.tasks.len(), 1);
-    assert_eq!(task_part_counts(&parts), vec![5]);
-    assert_eq!(parts.tasks[0].total_bytes, 95);
+    assert_eq!(task_part_counts(&parts), vec![4]);
+    assert_eq!(parts.tasks[0].total_bytes, 80);
 
     Ok(())
 }
@@ -2240,7 +2434,7 @@ async fn test_keeps_hotspot_plateau() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_fills_hotspot_tail_from_sides() -> anyhow::Result<()> {
+async fn test_joint_gain_can_leave_hotspot_tail_for_later() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_recluster_block_size(100)?;
@@ -2305,17 +2499,13 @@ async fn test_fills_hotspot_tail_from_sides() -> anyhow::Result<()> {
     )
     .await?;
 
-    assert_eq!(block_num, 15);
-    assert_eq!(parts.tasks.len(), 3);
-    assert_eq!(task_part_counts(&parts), vec![5, 5, 5]);
-    assert_eq!(
-        parts
-            .tasks
-            .iter()
-            .map(|task| task.total_bytes)
-            .collect::<Vec<_>>(),
-        vec![100, 100, 80]
-    );
+    // Two full runs win on joint gain. Selecting the remaining hotspot block
+    // together with its sides would enlarge the output range without winning
+    // the gain comparison; an available task slot need not be filled.
+    assert_eq!(block_num, 10);
+    assert_eq!(parts.tasks.len(), 2);
+    assert_eq!(task_part_counts(&parts), vec![5, 5]);
+    assert!(parts.tasks.iter().all(|task| task.total_bytes == 100));
 
     Ok(())
 }

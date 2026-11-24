@@ -17,6 +17,7 @@ mod alter_table;
 mod analyze;
 mod clone;
 mod clustering;
+mod column_groups;
 mod commit;
 mod fault_injection;
 mod logical_change_retry;

@@ -76,6 +76,15 @@ impl Rule for RulePushDownFilterProjectSet {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let project_set_expr = s_expr.child(0)?;
         let project_set: ProjectSet = project_set_expr.plan().clone().try_into()?;
+        // A set-returning function evaluates its arguments, such as `running_difference(v)`,
+        // on the input block. A filter moved below it would also remove the rows they read.
+        if project_set
+            .srfs
+            .iter()
+            .any(|item| item.scalar.depends_on_other_rows())
+        {
+            return Ok(());
+        }
         let project_set_child_prop =
             RelExpr::with_s_expr(project_set_expr).derive_relational_prop_child(0)?;
         let mut pushed_down_predicates = vec![];

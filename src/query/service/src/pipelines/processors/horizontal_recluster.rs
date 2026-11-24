@@ -636,11 +636,11 @@ impl HorizontalReclusterSource {
         task: &ReclusterTask,
         stats: &ClusterStatsGenerator,
         lineage: bool,
+        max_groups: usize,
     ) -> Result<()> {
         let merge_factory = ReclusterMergeFactory::prepare(ctx, table, task, stats, lineage)?;
         let settings = merge_factory.merge_config.ctx.get_settings();
         let fixed = settings.get_enable_fixed_rows_sort()?;
-        let max_groups = settings.get_max_threads()? as usize;
         let groups = max_groups.min(merge_factory.input_blocks.len()).max(1);
         let merge_keys = merge_factory.merge_config.keys.clone();
         let output_rows = merge_factory.merge_config.output_batch_rows;
@@ -713,7 +713,7 @@ impl ReclusterMergeFactory {
         let mut input_blocks = Vec::with_capacity(task.parts.len());
         for (ordinal, part) in task.parts.partitions.iter().enumerate() {
             let part = FuseBlockPartInfo::from_part(part)?;
-            let meta = BlockMeta::new(
+            let mut meta = BlockMeta::new(
                 part.nums_rows as _,
                 0,
                 0,
@@ -734,6 +734,14 @@ impl ReclusterMergeFactory {
                 part.compression,
                 part.create_on,
             );
+            if !part.column_groups.is_empty() {
+                meta.col_metas.clear();
+                meta.column_groups = part
+                    .column_groups
+                    .iter()
+                    .map(|group| group.to_file_meta())
+                    .collect();
+            }
             input_blocks.push(ReclusterMergeInputBlock {
                 meta: Arc::new(meta),
                 ordinal: u32::try_from(ordinal)

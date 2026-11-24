@@ -942,6 +942,7 @@ impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
             bucket: self.gcs_bucket,
             root: self.gcs_root,
             credential: self.credential,
+            allow_credential_chain: None,
             network_config: None,
         })
     }
@@ -1178,6 +1179,7 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
             account_name: self.account_name,
             account_key: self.account_key,
             root: self.azblob_root,
+            allow_credential_chain: None,
             network_config: None,
         })
     }
@@ -3172,10 +3174,30 @@ impl Default for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
-    /// The data in meta-service using key `TenantOwnershipObjectIdent`
+    /// Deprecated, kept for backward compatibility: name `ownership` in `meta_service_caches`
+    /// instead. When true, it enables [`MetaServiceCache::Ownership`] as that name does, and the
+    /// node logs a warning at startup.
     #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
     #[serde(default = "bool_false")]
     pub meta_service_ownership_cache: bool,
+
+    /// The meta-service data that this node watches, to read it from a local copy: names of
+    /// [`MetaServiceCache`], such as `["user", "setting"]` in a config file or
+    /// `--cache-meta-service-caches user,setting`. Empty by default.
+    ///
+    /// A watched copy may lag a change by the watch delay, a change made through this node
+    /// included. Only the meta-service leader serves the watches: a copy can miss changes for up
+    /// to 5 s after the leader steps down. A leader cut off from the other meta nodes still leads
+    /// in its own view, and its copies stay stale with no time limit, until the cut heals
+    /// (databend-meta#193). What a stale copy can keep from taking effect is listed with each
+    /// [`MetaServiceCache`].
+    #[clap(
+        long = "cache-meta-service-caches",
+        value_name = "VALUE",
+        value_enum,
+        value_delimiter = ','
+    )]
+    pub meta_service_caches: Vec<MetaServiceCache>,
 
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
@@ -3608,6 +3630,7 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             meta_service_ownership_cache: false,
+            meta_service_caches: vec![],
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
@@ -3662,6 +3685,54 @@ impl Default for CacheConfig {
     }
 }
 
+impl CacheConfig {
+    /// Whether `cache` is listed in `meta_service_caches`, or, for
+    /// [`MetaServiceCache::Ownership`], enabled by the deprecated `meta_service_ownership_cache`.
+    pub fn is_meta_service_cache_enabled(&self, cache: MetaServiceCache) -> bool {
+        self.meta_service_caches.contains(&cache)
+            || (cache == MetaServiceCache::Ownership && self.meta_service_ownership_cache)
+    }
+
+    /// The warning to log at startup when this config sets the deprecated
+    /// `meta_service_ownership_cache`.
+    pub fn deprecated_ownership_cache_warning(&self) -> Option<&'static str> {
+        self.meta_service_ownership_cache.then_some(
+            "`cache.meta_service_ownership_cache` is deprecated but still enables the ownership \
+             cache; add `ownership` to `cache.meta_service_caches` instead",
+        )
+    }
+}
+
+/// A watched copy of meta-service data, enabled by its snake_case name, such as
+/// `cluster_node`, in `cache.meta_service_caches`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+#[value(rename_all = "snake_case")]
+pub enum MetaServiceCache {
+    /// The users of the tenant, read by the HTTP password and key-pair logins, by the MySQL and
+    /// FlightSQL logins, and by the HTTP requests authenticated by a session token. A stale copy
+    /// can keep a `DROP USER`, a password or key change, `DISABLED`, a revoked grant or role, or
+    /// a new network policy of the user from taking effect for these on this node.
+    User,
+    /// The global settings of the tenant, read by every new session. A stale copy can keep a
+    /// change of a global setting, such as the `network_policy` that logins enforce, from taking
+    /// effect for the new sessions on this node.
+    Setting,
+    /// The online nodes of this node's cluster, read by cluster discovery. Only that cluster is
+    /// watched, so it needs a configured `cluster_id`: a system-managed node, whose cluster the
+    /// warehouse management assigns at runtime, reads its cluster from meta-service. A copy that
+    /// lists the cluster without this node is not used, and a stale copy stops listing this node
+    /// within the 60 s heartbeat lift time.
+    ClusterNode,
+    /// The ownership of the objects of every tenant, `__fd_object_owners/`, listed by the
+    /// privilege checks, the visibility of objects, `SHOW GRANTS`, and the transfer of the
+    /// objects of a dropped role to `account_admin`. A stale copy can keep a new owner, such as
+    /// that of an object just created or of a `GRANT OWNERSHIP`, from taking effect for these on
+    /// this node, and can leave an object it does not list owned by a dropped role. The
+    /// deprecated `meta_service_ownership_cache = true` enables it too.
+    Ownership,
+}
+
 #[inline]
 fn bool_true() -> bool {
     true
@@ -3706,13 +3777,13 @@ impl Default for DiskCacheKeyReloadPolicy {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct DiskCacheConfig {
-    /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
-    #[clap(
-        long = "cache-disk-max-bytes",
-        value_name = "VALUE",
-        default_value = "21474836480"
-    )]
-    pub max_bytes: u64,
+    /// Max bytes of cached raw table data; 1024 or less disables it. Unset, it is sized at
+    /// start to the room the file system under `path` leaves 5 percent below `watermark_ratio`
+    /// (85% of it in use by default), the cache's own files counted in, at most 1 TiB; the
+    /// watermark is then held to 95 at most. Nodes sharing one file system each take that room:
+    /// set it for them.
+    #[clap(long = "cache-disk-max-bytes", value_name = "VALUE")]
+    pub max_bytes: Option<u64>,
 
     /// Table disk cache root path
     #[clap(
@@ -3792,9 +3863,9 @@ pub struct DiskCacheConfig {
     )]
     pub queue_wait_ms: u64,
 
-    /// Percent of the file system in use above which the disk cache evicts before it writes:
-    /// other files share the disk, spill files among them. 1 to 100; 100 never evicts for it.
-    /// Read at start only.
+    /// Percent of the file system in use, of its space or its inodes, above which the disk cache
+    /// evicts before it writes: other files share the disk, spill files among them. 1 to 100;
+    /// 100 never evicts for it. Read at start only.
     #[clap(
         long = "cache-disk-watermark-ratio",
         id = "cache_disk_watermark_ratio",
@@ -3816,7 +3887,7 @@ pub struct DiskCacheConfig {
 impl Default for DiskCacheConfig {
     fn default() -> Self {
         Self {
-            max_bytes: 21474836480,
+            max_bytes: None,
             path: "./.databend/_cache".to_owned(),
             sync_data: true,
             meta_max_ratio: 10,

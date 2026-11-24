@@ -59,6 +59,9 @@ pub async fn resolve_share_storage_params(
     let connection_storage = databend_common_sql::binder::parse_storage_params_from_uri(
         &mut location,
         "when resolving data share connection",
+        databend_common_config::GlobalConfig::instance()
+            .storage
+            .allow_insecure,
     )
     .await?;
 

@@ -19,6 +19,7 @@ mod linear_recluster;
 mod recluster_mutator;
 mod recluster_strategy;
 mod recluster_table;
+mod recluster_task_budget;
 mod vector_recluster;
 
 pub(crate) use hilbert_recluster::HilbertReclusterStrategy;
@@ -41,6 +42,7 @@ pub(crate) use recluster_strategy::task_candidate;
 pub use recluster_table::VectorFinalPlan;
 pub use recluster_table::VectorReclusterBlock;
 pub use recluster_table::vector_final_plan;
+pub use recluster_task_budget::ReclusterTaskBudget;
 pub(crate) use vector_recluster::VECTOR_LEVEL_MIXED;
 pub(crate) use vector_recluster::VECTOR_LEVEL_NEW;
 pub(crate) use vector_recluster::VectorReclusterStrategy;

@@ -25,10 +25,11 @@ use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
+use databend_common_expression::BlockConcatStream;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
@@ -46,8 +47,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregateStatesMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
-use crate::pipelines::processors::transforms::aggregator::PartitionedData;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
@@ -61,14 +60,13 @@ const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
 /// `SPILL_BUCKET_BITS` of them.
 const PARTITION_HASH_BITS: u64 = 48;
 
-enum Stage {
-    Input,
-    Channel,
-}
-
-/// An input block: partial aggregate states, or raw rows the partial aggregate forwarded.
+/// An input block.
 enum FinalInput {
-    Meta(AggregateMeta),
+    /// Partial aggregate states of this node.
+    Payloads(Vec<AggregatePayload>),
+    /// Partial aggregate states serialized by another node.
+    Serialized(Vec<SerializedPayload>),
+    /// Raw rows the partial aggregate forwarded.
     Raw(DataBlock),
 }
 
@@ -79,23 +77,30 @@ pub struct FinalAggregateTask {
     tx: Sender<FinalAggregateTask>,
 }
 
+struct PendingOutput {
+    payloads: VecDeque<Payload>,
+    stream: BlockConcatStream,
+}
+
 pub struct TransformFinalAggregate {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     input_data: Option<FinalInput>,
     channel_data: Option<FinalAggregateTask>,
     output_data: VecDeque<DataBlock>,
+    pending_output: Option<PendingOutput>,
     should_finish: bool,
+    /// Held while reading the input: the input finishes by taking it, see `finish`, after which
+    /// the processor reads the tasks of the channel.
     tx: Option<Sender<FinalAggregateTask>>,
     rx: Receiver<FinalAggregateTask>,
     output_finished: WatchNotify,
-    stage: Stage,
     spilled_occurred: bool,
     /// How many times the table was output and reset under memory pressure, see
     /// `AggregatorParams::allow_duplicate_groups`.
     pressure_outputs: usize,
 
-    // Created on the first non-empty input. With bucket shuffle there are many final
+    // Created on the first non-empty input. With the global shuffle there are many final
     // processors and most of them may never receive rows, so an eagerly allocated
     // hash table (and its hash index) per processor is pure overhead.
     hashtable: Option<AggregateHashTable>,
@@ -133,10 +138,11 @@ impl TransformFinalAggregate {
         let spiller = AggregateSpiller::try_create(
             ctx.clone(),
             SPILL_BUCKET_NUM,
-            params.spill_schema(),
-            // Final processors own separate spill buffers, unlike partial aggregation,
-            // so halve the threshold to reduce per-processor memory usage.
-            LocalPartitionStream::new(0, params.max_block_bytes / 2, SPILL_BUCKET_NUM),
+            params.states_schema(),
+            // Every final processor buffers the blocks it spills on its own: halve the block
+            // bytes to bound the buffers of all of them.
+            0,
+            params.max_block_bytes / 2,
         )?;
 
         Ok(Box::new(TransformFinalAggregate {
@@ -145,11 +151,11 @@ impl TransformFinalAggregate {
             input_data: None,
             channel_data: None,
             output_data: VecDeque::new(),
+            pending_output: None,
             should_finish: false,
             tx: Some(tx),
             rx,
             output_finished: WatchNotify::new(),
-            stage: Stage::Input,
             spilled_occurred: false,
             pressure_outputs: 0,
             hashtable: None,
@@ -326,39 +332,25 @@ impl TransformFinalAggregate {
     }
 
     /// Coalesces the output blocks of one hash table to the block size of the aggregate.
-    fn output_stream(&self) -> BlockPartitionStream {
-        BlockPartitionStream::create(self.params.max_block_rows, self.params.max_block_bytes, 1)
+    fn output_stream(&self) -> BlockConcatStream {
+        BlockConcatStream::create(self.params.max_block_rows, self.params.max_block_bytes)
     }
 
-    fn handle_meta(&mut self, meta: AggregateMeta, need_check_spill: bool) -> Result<()> {
-        match meta {
-            AggregateMeta::Serialized(payload) => {
-                self.handle_serialized(payload, need_check_spill)?;
-            }
-            AggregateMeta::AggregatePayload(payload) => {
-                self.handle_aggregate_payload(payload, need_check_spill)?;
-            }
-            AggregateMeta::Spilled(payloads) => {
+    fn handle_input(&mut self, input: FinalInput, need_check_spill: bool) -> Result<()> {
+        match input {
+            FinalInput::Payloads(payloads) => {
                 for payload in payloads {
                     check_interrupt()?;
-                    let restored = self.spiller.restore(payload)?;
-                    self.handle_serialized(restored, need_check_spill)?;
+                    self.handle_aggregate_payload(payload, need_check_spill)?;
                 }
             }
-            AggregateMeta::Partitioned(data) => match data {
-                PartitionedData::Serialized(payloads) => {
-                    for payload in payloads {
-                        check_interrupt()?;
-                        self.handle_serialized(payload, need_check_spill)?;
-                    }
+            FinalInput::Serialized(payloads) => {
+                for payload in payloads {
+                    check_interrupt()?;
+                    self.handle_serialized(payload, need_check_spill)?;
                 }
-                PartitionedData::AggregatePayload(payloads) => {
-                    for payload in payloads {
-                        check_interrupt()?;
-                        self.handle_aggregate_payload(payload, need_check_spill)?;
-                    }
-                }
-            },
+            }
+            FinalInput::Raw(block) => self.handle_raw(block, need_check_spill)?,
         }
         Ok(())
     }
@@ -419,7 +411,7 @@ impl TransformFinalAggregate {
             (0, 0, FinalAggregateFinishMode::Spilled)
         } else {
             let output_stream = self.output_stream();
-            let (output_rows, hash_index_resizes) = self.output_hashtable(Some(output_stream))?;
+            let (output_rows, hash_index_resizes) = self.start_streaming_output(output_stream)?;
             (
                 output_rows,
                 hash_index_resizes,
@@ -441,7 +433,7 @@ impl TransformFinalAggregate {
 
     fn output_hashtable(
         &mut self,
-        mut output_stream: Option<BlockPartitionStream>,
+        mut output_stream: Option<BlockConcatStream>,
     ) -> Result<(usize, usize)> {
         // No hash table means nothing was aggregated, so there is nothing to output.
         let Some(hashtable) = self.hashtable.take() else {
@@ -469,10 +461,9 @@ impl TransformFinalAggregate {
                         top_n_blocks = vec![sort_blocks(&top_n_blocks, order_by, *limit)?];
                     }
                 } else if let Some(output_stream) = output_stream.as_mut() {
-                    let num_rows = block.num_rows();
-                    let ready = output_stream.partition(vec![0; num_rows], block, true);
-                    self.output_data
-                        .extend(ready.into_iter().map(|(_, block)| block));
+                    if let Some(block) = output_stream.push(block) {
+                        self.output_data.push_back(block);
+                    }
                 } else {
                     self.output_data.push_back(block);
                 }
@@ -484,10 +475,54 @@ impl TransformFinalAggregate {
             self.output_data
                 .push_back(sort_blocks(&top_n_blocks, order_by, *limit)?);
         }
-        if let Some(block) = output_stream.and_then(|mut stream| stream.finalize_partition(0)) {
+        if let Some(block) = output_stream.and_then(|mut stream| stream.finish()) {
             self.output_data.push_back(block);
         }
         Ok((output_rows, hash_index_resizes))
+    }
+
+    fn start_streaming_output(&mut self, stream: BlockConcatStream) -> Result<(usize, usize)> {
+        if self.params.top_n.is_some() {
+            return self.output_hashtable(Some(stream));
+        }
+        // No hash table means nothing was aggregated, so there is nothing to output.
+        let Some(hashtable) = self.hashtable.take() else {
+            return Ok((0, 0));
+        };
+        let output_rows = hashtable.payload.len();
+        let hash_index_resizes = hashtable.hash_index_resize_count();
+        self.flush_state.clear();
+        // Consuming the hash table drops its index before result materialization.
+        self.pending_output = Some(PendingOutput {
+            payloads: hashtable.into_payloads().into(),
+            stream,
+        });
+        Ok((output_rows, hash_index_resizes))
+    }
+
+    fn output_next_block(&mut self) -> Result<()> {
+        let Some(pending) = self.pending_output.as_mut() else {
+            return Ok(());
+        };
+        while let Some(payload) = pending.payloads.front() {
+            check_interrupt()?;
+            let Some(block) = payload.merge_result(&mut self.flush_state)? else {
+                // Each payload owns its arena, so dropping it releases its states.
+                pending.payloads.pop_front();
+                self.flush_state.clear();
+                continue;
+            };
+            if let Some(block) = pending.stream.push(block) {
+                self.output_data.push_back(block);
+                return Ok(());
+            }
+        }
+        if let Some(mut pending) = self.pending_output.take()
+            && let Some(block) = pending.stream.finish()
+        {
+            self.output_data.push_back(block);
+        }
+        Ok(())
     }
 
     fn spill_finish(&mut self, spilled_depth: usize, tx: Sender<FinalAggregateTask>) -> Result<()> {
@@ -545,6 +580,7 @@ impl Processor for TransformFinalAggregate {
         if self.output.is_finished() {
             let _ = self.tx.take();
             self.output_data.clear();
+            self.pending_output = None;
             self.input.finish();
             return Ok(Event::Finished);
         }
@@ -557,6 +593,11 @@ impl Processor for TransformFinalAggregate {
         if let Some(data_block) = self.output_data.pop_front() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
+        }
+
+        // Nothing is read until the pending output is all output.
+        if self.pending_output.is_some() {
+            return Ok(Event::Sync);
         }
 
         if self.input_data.is_some() {
@@ -573,10 +614,10 @@ impl Processor for TransformFinalAggregate {
                 None => (data_block.num_rows() != 0).then_some(FinalInput::Raw(data_block)),
                 Some(meta) if AggregateStatesMeta::downcast_ref_from(&meta).is_some() => {
                     let states = AggregateStatesMeta::downcast_from(meta).unwrap();
-                    Some(FinalInput::Meta(states.into_aggregate_meta(data_block)?))
+                    Some(FinalInput::Serialized(states.into_payloads(data_block)?))
                 }
                 Some(meta) => match AggregateMeta::downcast_from(meta) {
-                    Some(meta) => Some(FinalInput::Meta(meta)),
+                    Some(meta) => Some(FinalInput::Payloads(meta.payloads)),
                     None => {
                         return Err(ErrorCode::Internal(
                             "TransformFinalAggregate only accepts aggregate states or raw rows",
@@ -590,10 +631,8 @@ impl Processor for TransformFinalAggregate {
         }
 
         if self.input.is_finished() {
-            if matches!(self.stage, Stage::Input) {
-                // the stage that get meta from input is end now
-                // begin to get meta from channel
-                self.stage = Stage::Channel;
+            if self.tx.is_some() {
+                // Finish the input, then read the tasks of the channel.
                 return Ok(Event::Sync);
             }
 
@@ -609,24 +648,26 @@ impl Processor for TransformFinalAggregate {
     }
 
     fn process(&mut self) -> Result<()> {
+        if self.pending_output.is_some() {
+            return self.output_next_block();
+        }
+
         let input_data = self.input_data.take();
         if let Some(input) = input_data {
             self.ensure_spill_depth(0);
             let need_check_spill = self.max_aggregate_spill_level > 0;
-            match input {
-                FinalInput::Meta(meta) => self.handle_meta(meta, need_check_spill)?,
-                FinalInput::Raw(block) => self.handle_raw(block, need_check_spill)?,
-            }
+            self.handle_input(input, need_check_spill)?;
             return Ok(());
         } else if let Some(mut task) = self.channel_data.take() {
             self.ensure_spill_depth(task.spilled_depth);
             self.statistics.reset();
-            let meta = AggregateMeta::Spilled(mem::take(&mut task.spilled_payload));
             let need_check_spill = task.spilled_depth < self.max_aggregate_spill_level;
-            self.handle_meta(meta, need_check_spill)?;
+            for payload in mem::take(&mut task.spilled_payload) {
+                check_interrupt()?;
+                let restored = self.spiller.restore(payload)?;
+                self.handle_serialized(restored, need_check_spill)?;
+            }
             self.finish(Some(task.task_id), task.spilled_depth, task.tx)?;
-
-            return Ok(());
         } else {
             self.ensure_spill_depth(0);
             let sender = mem::take(&mut self.tx)
@@ -634,7 +675,8 @@ impl Processor for TransformFinalAggregate {
             self.finish(None, 0, sender)?;
         }
 
-        Ok(())
+        // Output the first block of the hash table `finish` took, if any.
+        self.output_next_block()
     }
 
     fn un_reacted(&self, cause: EventCause, _id: usize) -> Result<()> {
@@ -881,6 +923,70 @@ mod tests {
         assert!(!final_aggregate.spilled_occurred);
         assert!(final_aggregate.hashtable.is_none());
         assert_eq!(final_aggregate.pressure_outputs, 2);
+        drop(tx);
+        Ok(())
+    }
+
+    // The groups are output a block at a time: a block is built only once the previous one was
+    // pushed, so the blocks of all the groups are never held at once.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_final_aggregate_outputs_one_block_per_process() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let (tx, rx) = async_channel::unbounded();
+        // Blocks of 1024 rows.
+        let params = create_params()?;
+        let upstream = OutputPort::create();
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let downstream = InputPort::create();
+        // The ports are not yet used by a processor or executor.
+        unsafe {
+            connect(&input, &upstream);
+            connect(&downstream, &output);
+        }
+        input.set_need_data();
+
+        let mut processor = TransformFinalAggregate::try_create(
+            input,
+            output,
+            params,
+            0,
+            ctx,
+            tx.clone(),
+            rx,
+            Arc::new(AtomicU64::new(1)),
+        )?;
+        let groups = 10_000u64;
+        upstream.push_data(Ok(DataBlock::new_from_columns(vec![
+            UInt64Type::from_data((0..groups).collect::<Vec<_>>()),
+        ])));
+        upstream.finish();
+
+        let mut output_rows = 0;
+        let mut output_blocks = 0;
+        loop {
+            downstream.set_need_data();
+            match processor.event()? {
+                Event::Sync => {
+                    processor.process()?;
+                    let final_aggregate = processor
+                        .as_any()
+                        .downcast_mut::<TransformFinalAggregate>()
+                        .unwrap();
+                    assert!(final_aggregate.output_data.len() <= 1);
+                }
+                Event::NeedConsume => {
+                    output_rows += downstream.pull_data().unwrap()?.num_rows();
+                    output_blocks += 1;
+                }
+                // All output: waiting on the task channel.
+                Event::Async => break,
+                event => panic!("unexpected event {event:?}"),
+            }
+        }
+        assert_eq!(output_rows as u64, groups);
+        assert!(output_blocks > 1);
         drop(tx);
         Ok(())
     }

@@ -731,7 +731,7 @@ fn remove_files(root: &Path, rels: &[String]) -> Result<(), (std::io::Error, Has
 
 /// Every file under `root`, recursively, scanning directories in parallel. `complete` is
 /// cleared when a directory or entry could not be read.
-fn scan_files(root: &Path, complete: &AtomicBool) -> Vec<PathBuf> {
+pub(crate) fn scan_files(root: &Path, complete: &AtomicBool) -> Vec<PathBuf> {
     let entries = match fs::read_dir(root) {
         Ok(entries) => entries,
         Err(e) => {

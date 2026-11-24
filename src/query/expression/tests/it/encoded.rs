@@ -486,7 +486,7 @@ fn test_dict_column_like() {
                 r"xxx\_100\%",
                 "中文%",
             ] {
-                let pattern = generate_like_pattern(Cow::Borrowed(text.as_bytes()), 0);
+                let pattern = generate_like_pattern(Cow::Borrowed(text.as_bytes()));
                 for not in [false, true] {
                     let expected = decoded
                         .iter()
@@ -502,7 +502,7 @@ fn test_dict_column_like() {
         }
     }
 
-    let pattern = generate_like_pattern(b"%".as_slice(), 0);
+    let pattern = generate_like_pattern(b"%".as_slice());
     let empty = DictColumn::new(
         NarrowBuffer::U8(Vec::<u8>::new().into()),
         StringType::from_data(Vec::<String>::new()),

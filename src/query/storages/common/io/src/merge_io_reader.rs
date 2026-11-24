@@ -26,6 +26,7 @@ use databend_common_metrics::storage::*;
 use futures::future::try_join_all;
 use opendal::Buffer;
 use opendal::Operator;
+use opendal::Scheme;
 
 use crate::MergeIOReadResult;
 use crate::ReadSettings;
@@ -62,6 +63,7 @@ impl MergeIOReader {
 
         // Read merged range data.
         let start = Instant::now();
+        let is_local_fs = op.info().scheme() == Scheme::Fs.into_static();
         let read_handlers = merged_ranges
             .iter()
             .cloned()
@@ -75,15 +77,18 @@ impl MergeIOReader {
 
                 let op = op.clone();
                 UnlimitedFuture::create(async move {
+                    let reader = op.reader(location).await?;
+                    if is_local_fs {
+                        // Keep the file read chunks without copying the whole range again.
+                        return Ok((idx, reader.read(range).await?));
+                    }
+
                     // Copy the response into one exact-sized buffer instead of keeping its
                     // chunks until the block is decoded. Each chunk pins an HTTP read buffer that
                     // can be several times its size, and the connection task allocates those
                     // buffers charged to no query. This buffer is charged to the reading query.
                     let mut buf = BytesMut::with_capacity((range.end - range.start) as usize);
-                    op.reader(location)
-                        .await?
-                        .read_into(&mut buf, range)
-                        .await?;
+                    reader.read_into(&mut buf, range).await?;
                     Ok::<_, opendal::Error>((idx, Buffer::from(buf.freeze())))
                 })
             });
@@ -131,6 +136,15 @@ impl MergeIOReader {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use bytes::Bytes;
+    use opendal::Capability;
+    use opendal::OperatorBuilder;
+    use opendal::raw::Access;
+    use opendal::raw::AccessorInfo;
+    use opendal::raw::OpRead;
+    use opendal::raw::RpRead;
     use opendal::services::Fs;
 
     use super::*;
@@ -153,14 +167,56 @@ mod tests {
         ]);
     }
 
+    #[derive(Debug)]
+    struct ChunkedHttp;
+
+    impl Access for ChunkedHttp {
+        type Reader = Buffer;
+        type Writer = ();
+        type Lister = ();
+        type Deleter = ();
+
+        fn info(&self) -> Arc<AccessorInfo> {
+            let info = AccessorInfo::default();
+            info.set_scheme(Scheme::Http.into_static())
+                .set_native_capability(Capability {
+                    read: true,
+                    ..Default::default()
+                });
+            info.into()
+        }
+
+        async fn read(&self, _: &str, args: OpRead) -> opendal::Result<(RpRead, Buffer)> {
+            assert_eq!(args.range().offset(), 0);
+            assert_eq!(args.range().size(), Some(6));
+            let parts = vec![Bytes::from_static(b"abc"), Bytes::from_static(b"def")];
+            Ok((RpRead::new(), Buffer::from(parts)))
+        }
+    }
+
     #[tokio::test]
-    async fn test_merge_io_read_returns_one_contiguous_buffer_per_range() {
+    async fn test_merge_io_read_copies_http_chunks_into_one_buffer() {
+        let op = OperatorBuilder::new(ChunkedHttp).finish();
+        let settings = ReadSettings {
+            max_gap_size: 48,
+            max_range_size: 512 * 1024,
+            parquet_fast_read_bytes: u64::MAX,
+        };
+        let result = MergeIOReader::merge_io_read(&settings, op, "block", &[(0, 0..6)])
+            .await
+            .unwrap();
+        let chunk = result.owner_memory.get_chunk(0, "block").unwrap();
+        assert_eq!(chunk.clone().count(), 1);
+        assert_eq!(chunk.to_bytes().as_ref(), b"abcdef");
+    }
+
+    #[tokio::test]
+    async fn test_merge_io_read_keeps_local_fs_chunks() {
         const SIZE: usize = 5 * 1024 * 1024;
         let data: Vec<u8> = (0..SIZE).map(|i| (i % 251) as u8).collect();
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("block"), &data).unwrap();
-        // The fs service yields a range in pieces of at most 2 MiB, like the
-        // chunks of an HTTP response body.
+        // OpenDAL FS returns chunks of at most 2 MiB.
         let op = Operator::new(Fs::default().root(dir.path().to_str().unwrap()))
             .unwrap()
             .finish();
@@ -180,7 +236,9 @@ mod tests {
         for (column_id, range) in raw_ranges {
             let (chunk_idx, offsets) = result.columns_chunk_offsets[&column_id].clone();
             let chunk = result.owner_memory.get_chunk(chunk_idx, "block").unwrap();
-            assert_eq!(chunk.clone().count(), 1);
+            if column_id == 2 {
+                assert!(chunk.clone().count() > 1);
+            }
             assert_eq!(
                 chunk.slice(offsets).to_bytes().as_ref(),
                 &data[range.start as usize..range.end as usize]

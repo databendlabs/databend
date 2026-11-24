@@ -31,6 +31,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_storages_common_cache::CachedColumnArray;
 use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_table_meta::meta::BlockDataFile;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
@@ -40,10 +41,12 @@ mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
+pub use deserialize::column_chunks_to_record_batch_with_codecs;
 pub use deserialize::dictionary_hint_fields;
 pub use encode::ColumnEncoding;
 pub use row_selection::RowSelection;
 
+use self::deserialize::column_chunks_record_reader;
 use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::FuseCaches;
@@ -56,14 +59,7 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
-        self.deserialize_parquet_chunks(
-            part.nums_rows,
-            &part.columns_meta,
-            column_chunks,
-            &part.compression,
-            &part.location,
-            selection,
-        )
+        self.deserialize_parquet_files(part.nums_rows, &part.data_files(), column_chunks, selection)
     }
 
     pub fn deserialize_parquet_chunks(
@@ -75,6 +71,24 @@ impl BlockReader {
         block_path: &str,
         selection: Option<&RowSelection>,
     ) -> databend_common_exception::Result<DataBlock> {
+        let file = BlockDataFile {
+            location: block_path,
+            col_metas: column_metas,
+            compression: *compression,
+        };
+        self.deserialize_parquet_files(num_rows, &[file], column_chunks, selection)
+    }
+
+    /// Deserializes the column chunks a block read from `files`. Each chunk is decompressed
+    /// with the codec of the file that stores its column.
+    pub fn deserialize_parquet_files(
+        &self,
+        num_rows: usize,
+        files: &[BlockDataFile<'_>],
+        column_chunks: HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+    ) -> databend_common_exception::Result<DataBlock> {
+        let files = DataFileLookup::new(files);
         let result_rows = selection.map(|s| s.selected_rows).unwrap_or(num_rows);
         // If projection is empty, return a DataBlock with the appropriate row count but no columns
         if self.projected_schema.fields.is_empty() {
@@ -85,22 +99,84 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
-        let has_selection = selection.is_some();
-        let parquet_selection = selection.map(|s| s.selection.clone());
-        let record_batch = column_chunks_to_record_batch(
+        let record_batch = column_chunks_to_record_batch_with_codecs(
             &self.original_schema,
             num_rows,
             &column_chunks,
-            compression,
-            parquet_selection,
+            files.default_compression(),
+            |column_id| files.compression_of(column_id),
+            selection.map(|s| s.selection.clone()),
             self.parquet_hint_fields.as_ref(),
         )?;
-        let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
+        self.record_batch_to_block(
+            &record_batch,
+            result_rows,
+            &files,
+            &column_chunks,
+            selection,
+            &name_paths,
+        )
+    }
 
+    /// Cache entries and encodings describe the whole block, not a batch.
+    pub(crate) fn parquet_filter_batches<'a>(
+        &'a self,
+        part: &'a FuseBlockPartInfo,
+        column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
+        batch_rows: usize,
+    ) -> databend_common_exception::Result<
+        Option<impl Iterator<Item = databend_common_exception::Result<DataBlock>> + 'a>,
+    > {
+        if (self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
+            || !self.column_encodings.is_empty()
+            || column_chunks.is_empty()
+            || column_chunks
+                .values()
+                .any(|item| matches!(item, DataItem::ColumnArray(_)))
+        {
+            return Ok(None);
+        }
+        let data_files = part.data_files();
+        let files = DataFileLookup::new(&data_files);
+        let reader = column_chunks_record_reader(
+            &self.original_schema,
+            part.nums_rows,
+            column_chunks,
+            files.default_compression(),
+            |column_id| files.compression_of(column_id),
+            None,
+            self.parquet_hint_fields.as_ref(),
+            batch_rows,
+        )?;
+        let name_paths = column_name_paths(&self.projection, &self.original_schema);
+        Ok(Some(reader.map(move |batch| {
+            let batch = batch?;
+            self.record_batch_to_block(
+                &batch,
+                batch.num_rows(),
+                &DataFileLookup::new(&data_files),
+                column_chunks,
+                None,
+                &name_paths,
+            )
+        })))
+    }
+
+    fn record_batch_to_block(
+        &self,
+        record_batch: &RecordBatch,
+        result_rows: usize,
+        files: &DataFileLookup,
+        column_chunks: &HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+        name_paths: &[Vec<String>],
+    ) -> databend_common_exception::Result<DataBlock> {
+        let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let caches = FuseCaches::instance();
-        let array_cache = Some(&caches.column_arrays)
-            .filter(|cache| self.policy.memory.writes() && !has_selection && cache.is_enabled());
+        let array_cache = Some(&caches.column_arrays).filter(|cache| {
+            self.policy.memory.writes() && selection.is_none() && cache.is_enabled()
+        });
 
         for ((i, field), column_node) in self
             .projected_schema
@@ -129,14 +205,15 @@ impl BlockReader {
             let value = match column_chunks.get(&field.column_id) {
                 Some(DataItem::RawData(_)) => {
                     // get the deserialized arrow array, which may be a nested array
-                    let arrow_array = column_by_name(&record_batch, &name_paths[i]);
+                    let arrow_array = column_by_name(record_batch, &name_paths[i]);
                     // Nested columns are neither cached nor encoded.
                     let cache = array_cache.filter(|_| !column_node.is_nested);
                     let cache_key = || {
-                        let meta = column_metas.get(&field.column_id).unwrap();
+                        let file = files.file_of(field.column_id).unwrap();
+                        let meta = file.col_metas.get(&field.column_id).unwrap();
                         let (offset, len) = meta.offset_length();
                         TableDataCacheKey::new(
-                            block_path,
+                            file.location,
                             field.column_id,
                             offset,
                             len,
@@ -196,6 +273,48 @@ impl BlockReader {
             entries.push(BlockEntry::new(value, || (data_type, result_rows)));
         }
         Ok(DataBlock::new(entries, result_rows))
+    }
+}
+
+/// Finds the file of a block that stores a column.
+struct DataFileLookup<'a> {
+    files: &'a [BlockDataFile<'a>],
+    /// Absent when the block has at most one file.
+    file_of_column: Option<HashMap<ColumnId, usize>>,
+}
+
+impl<'a> DataFileLookup<'a> {
+    fn new(files: &'a [BlockDataFile<'a>]) -> Self {
+        let file_of_column = (files.len() > 1).then(|| {
+            files
+                .iter()
+                .enumerate()
+                .flat_map(|(i, file)| file.col_metas.keys().map(move |id| (*id, i)))
+                .collect()
+        });
+        Self {
+            files,
+            file_of_column,
+        }
+    }
+
+    fn file_of(&self, column_id: ColumnId) -> Option<&BlockDataFile<'a>> {
+        match &self.file_of_column {
+            None => self.files.first(),
+            Some(files) => files.get(&column_id).map(|i| &self.files[*i]),
+        }
+    }
+
+    fn compression_of(&self, column_id: ColumnId) -> Compression {
+        self.file_of(column_id)
+            .map_or_else(|| self.default_compression(), |file| file.compression)
+    }
+
+    /// The codec of the columns without a chunk. Nothing is decompressed with it.
+    fn default_compression(&self) -> Compression {
+        self.files
+            .first()
+            .map_or(Compression::None, |file| file.compression)
     }
 }
 

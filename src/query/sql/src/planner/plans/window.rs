@@ -54,6 +54,8 @@ use crate::plans::Operator;
 use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::plans::Sort;
+use crate::plans::SortItem;
 
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
@@ -99,6 +101,14 @@ impl WindowGroup {
         }
 
         Ok(used_columns)
+    }
+
+    /// Whether a scalar item may depend on other input rows, see
+    /// [`EvalScalar::depends_on_other_rows`]. The items are evaluated below the windows.
+    pub fn depends_on_other_rows(&self) -> bool {
+        self.scalar_items
+            .iter()
+            .any(|item| item.scalar.depends_on_other_rows())
     }
 
     fn required_distribution(&self, rel_expr: &RelExpr) -> Result<Distribution> {
@@ -158,6 +168,45 @@ impl Window {
         }
 
         Ok(())
+    }
+
+    /// The sort that arranges the window input into contiguous partitions
+    /// ordered by `order_by`, with a partition exchange when partitioned.
+    /// `None` when the window has neither partition nor order keys.
+    pub fn input_sort(&self, default_nulls_first: impl Fn(bool) -> bool) -> Option<Sort> {
+        let items = self
+            .partition_by
+            .iter()
+            .map(|part| SortItem {
+                index: part.index,
+                asc: true,
+                nulls_first: default_nulls_first(true),
+            })
+            .chain(self.order_by.iter().map(|order| {
+                let asc = order.asc.unwrap_or(true);
+                SortItem {
+                    index: order.order_by_item.index,
+                    asc,
+                    nulls_first: order
+                        .nulls_first
+                        .unwrap_or_else(|| default_nulls_first(asc)),
+                }
+            }))
+            .collect::<Vec<_>>();
+        if items.is_empty() {
+            return None;
+        }
+        Some(Sort {
+            items,
+            limit: None,
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: (!self.partition_by.is_empty()).then(|| WindowPartition {
+                partition_by: self.partition_by.clone(),
+                top: None,
+                func: self.function.clone(),
+            }),
+        })
     }
 
     pub fn arguments_columns(&self) -> Result<ColumnSet> {

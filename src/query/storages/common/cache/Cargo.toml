@@ -42,6 +42,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 divan = { workspace = true }
 rand = { workspace = true }
+tantivy = { workspace = true }
 tempfile = { workspace = true }
 
 [[bench]]

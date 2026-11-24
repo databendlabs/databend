@@ -21,6 +21,7 @@ use databend_common_base::runtime::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -38,6 +39,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
+use databend_common_expression::types::number::NumberColumnBuilder;
 use databend_common_pipeline_transforms::sorts::core::RowConverter;
 use databend_common_pipeline_transforms::sorts::core::VariableRowConverter;
 use databend_common_sql::NameResolutionContext;
@@ -445,69 +447,31 @@ impl ClusteringInformationImpl<'_> {
     ) -> Result<ClusteringInformationResponse> {
         let cluster_type = key.cluster_type();
         let calculation_start = Instant::now();
-        let CollectedMetadata {
-            key_types,
-            endpoint_builders,
-            block_count,
-            constant_block_count,
-        } = metadata;
-        let aggregate = match endpoint_builders {
+        let statistics = match metadata.endpoint_builders {
             Some(builders) => {
                 let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
                 with_request_pool(max_threads, move |_| {
-                    let sorted = sort_endpoints(builders, &key_types)?;
-                    sweep_exact_statistics(&sorted.keys, &sorted.order)
+                    summarize_linear_ranges(builders, &metadata.key_types)
                 })?
             }
-            None => LinearClusteringStatistics {
-                block_count,
-                depth_counts: if block_count == 0 {
-                    BTreeMap::new()
-                } else {
-                    BTreeMap::from([(0, block_count as u64)])
-                },
+            None if total_block_count != 0 => LinearClusterStatistics {
+                block_depth_histogram: BTreeMap::from([("00000".into(), total_block_count)]),
                 ..Default::default()
             },
+            None => LinearClusterStatistics::default(),
         };
-
-        let info = if aggregate.block_count == 0 {
-            LinearClusterStatistics {
-                total_block_count,
-                ..Default::default()
-            }
-        } else {
-            LinearClusterStatistics {
-                total_block_count,
-                constant_block_count,
-                average_overlaps: rounded_average(aggregate.sum_overlap, aggregate.block_count),
-                average_depth: rounded_average(aggregate.sum_depth, aggregate.block_count),
-                max_depth: aggregate
-                    .depth_counts
-                    .last_key_value()
-                    .map_or(0, |(&depth, _)| depth),
-                p95_depth: percentile_depth(&aggregate.depth_counts, aggregate.block_count, 95),
-                p99_depth: percentile_depth(&aggregate.depth_counts, aggregate.block_count, 99),
-                block_depth_histogram: {
-                    let mut histogram = BTreeMap::new();
-                    for (depth, count) in &aggregate.depth_counts {
-                        let depth = *depth as u32;
-                        let bucket = if depth <= 16 || depth.is_power_of_two() {
-                            depth
-                        } else {
-                            depth.next_power_of_two()
-                        };
-                        *histogram.entry(format!("{:05}", bucket)).or_insert(0) += count;
-                    }
-                    histogram
-                },
-            }
+        let info = LinearClusterStatistics {
+            total_block_count,
+            constant_block_count: metadata.constant_block_count,
+            ..statistics
         };
         info!(
-            "clustering_information: finished table={} cluster_type={} blocks={} constant_blocks={} average_overlaps={} average_depth={} max_depth={} p95_depth={} p99_depth={} calculation_elapsed={:?} total_elapsed={:?}",
+            "clustering_information: finished table={} cluster_type={} blocks={} constant_blocks={} invalid_blocks={} average_overlaps={} average_depth={} max_depth={} p95_depth={} p99_depth={} calculation_elapsed={:?} total_elapsed={:?}",
             self.table.table_info.desc,
             cluster_type,
             info.total_block_count,
             info.constant_block_count,
+            info.invalid_block_count.unwrap_or_default(),
             info.average_overlaps,
             info.average_depth,
             info.max_depth,
@@ -670,10 +634,9 @@ fn push_endpoint(builders: &mut [ColumnBuilder], endpoint: &[Scalar]) {
 // `sum_overlap` counts both directions for each overlapping block pair.
 #[derive(Debug, Default)]
 struct LinearClusteringStatistics {
-    pub block_count: usize,
-    pub sum_overlap: u64,
-    pub sum_depth: u64,
-    pub depth_counts: BTreeMap<usize, u64>,
+    sum_overlap: u64,
+    sum_depth: u64,
+    depth_counts: BTreeMap<usize, u64>,
 }
 
 // Parents point to the next position with an equal-or-greater stabbing depth.
@@ -690,44 +653,126 @@ fn find_root(parent: &mut [u32], mut node: usize) -> usize {
     root
 }
 
+fn summarize_linear_ranges(
+    mut builders: Vec<ColumnBuilder>,
+    key_types: &[DataType],
+) -> Result<LinearClusterStatistics> {
+    // Signed zeros are adjacent in encoded order, so collapsing them preserves
+    // single-key bounds. For composite keys it can change the extrema.
+    if let [builder] = builders.as_mut_slice() {
+        let values = match builder {
+            ColumnBuilder::Nullable(nullable) => &mut nullable.builder,
+            _ => builder,
+        };
+        match values {
+            ColumnBuilder::Number(NumberColumnBuilder::Float32(values)) => {
+                for value in values {
+                    if value.into_inner() == 0.0 {
+                        *value = 0.0.into();
+                    }
+                }
+            }
+            ColumnBuilder::Number(NumberColumnBuilder::Float64(values)) => {
+                for value in values {
+                    if value.into_inner() == 0.0 {
+                        *value = 0.0.into();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let sorted = sort_endpoints(builders, key_types)?;
+    let keys = &sorted.keys;
+    let mut order = sorted.order;
+    // Each block's min/max rows share the middle offset.
+    let data = keys.data().as_slice();
+    let invalid: Bitmap = keys
+        .offsets()
+        .as_slice()
+        .array_windows::<3>()
+        .step_by(2)
+        .map(|&[start, mid, end]| {
+            data[start as usize..mid as usize] > data[mid as usize..end as usize]
+        })
+        .collect();
+    let invalid_block_count = invalid.true_count();
+    if invalid_block_count != 0 {
+        order.retain(|id| !invalid.get_bit(*id as usize / 2));
+    }
+
+    // Averages, depth percentiles, and the histogram use only valid ranges.
+    // The response preserves the original total and constant block counts.
+    let aggregate = sweep_exact_statistics(keys, &order)?;
+    let valid_block_count = order.len() / 2;
+    let mut histogram = BTreeMap::new();
+    for (&depth, &count) in &aggregate.depth_counts {
+        let bucket = if depth <= 16 {
+            depth
+        } else {
+            depth.next_power_of_two()
+        };
+        *histogram.entry(format!("{bucket:05}")).or_insert(0) += count;
+    }
+    Ok(LinearClusterStatistics {
+        invalid_block_count: (invalid_block_count != 0).then_some(invalid_block_count),
+        average_overlaps: rounded_average(aggregate.sum_overlap, valid_block_count),
+        average_depth: rounded_average(aggregate.sum_depth, valid_block_count),
+        max_depth: aggregate
+            .depth_counts
+            .last_key_value()
+            .map_or(0, |(&depth, _)| depth),
+        p95_depth: percentile_depth(&aggregate.depth_counts, valid_block_count, 95),
+        p99_depth: percentile_depth(&aggregate.depth_counts, valid_block_count, 99),
+        block_depth_histogram: histogram,
+        ..Default::default()
+    })
+}
+
 /// Exact closed-interval sweep. The monotone stack plus path-compressed union-find answers each
 /// block's `[open, close]` range maximum in amortized near-constant time after endpoint sorting.
-/// A close encountered before its caller-assigned open returns an internal error instead of
-/// indexing the uninitialized opening-position sentinel.
 fn sweep_exact_statistics(
     keys: &BinaryColumn,
     order: &[u32],
 ) -> Result<LinearClusteringStatistics> {
-    let block_count = keys.len() / 2;
-    let mut open_positions = vec![u32::MAX; block_count];
-    let mut parent = Vec::<u32>::with_capacity(keys.len());
-    let mut point_depths = Vec::<u32>::with_capacity(keys.len());
-    let mut monotone_stack = Vec::<u32>::with_capacity(keys.len());
+    if order.is_empty() {
+        return Ok(LinearClusteringStatistics::default());
+    }
+    // Filtering leaves endpoint IDs unchanged, so index by the original block count.
+    let mut open_positions = vec![u32::MAX; keys.len() / 2];
+    let mut parent = Vec::<u32>::with_capacity(order.len());
+    let mut point_depths = Vec::<u32>::with_capacity(order.len());
+    let mut monotone_stack = Vec::<u32>::with_capacity(order.len());
     let mut depth_counts = Vec::<u64>::new();
     let mut active = 0usize;
     let mut overlap_pairs = 0u64;
     let mut sum_depth = 0u64;
-    let mut point_position = 0usize;
     let mut offset = 0usize;
 
     while offset < order.len() {
-        // SAFETY: `order` is the permutation of `0..keys.len()` returned by `sort_endpoints`.
+        let point_position = parent.len() as u32;
+        // SAFETY: `order` contains only IDs from `sort_endpoints`, possibly filtered.
         let key = unsafe { keys.index_unchecked(order[offset] as usize) };
         // Process every equal endpoint as one coordinate. Starts contribute before ends are
         // removed, so blocks touching at this value overlap under closed-interval semantics.
-        let mut end = offset + 1;
-        while end < order.len()
-            // SAFETY: the same sorted-permutation invariant applies to every order entry.
-            && unsafe { keys.index_unchecked(order[end] as usize) } == key
-        {
+        let mut end = offset;
+        let mut starts = 0;
+        loop {
+            let endpoint = order[end];
+            if endpoint & 1 == 0 {
+                open_positions[endpoint as usize / 2] = point_position;
+                starts += 1;
+            }
             end += 1;
+            if end == order.len()
+                // SAFETY: every retained endpoint ID still indexes `keys`.
+                || unsafe { keys.index_unchecked(order[end] as usize) } != key
+            {
+                break;
+            }
         }
 
         let endpoints = &order[offset..end];
-        let starts = endpoints
-            .iter()
-            .filter(|endpoint| **endpoint & 1 == 0)
-            .count();
         let ends = endpoints.len() - starts;
         // Active intervals and starts are subsets of the validated block set, so point depth fits
         // the u32 representation used by the monotone stack and union-find arrays.
@@ -739,24 +784,16 @@ fn sweep_exact_statistics(
             .saturating_add((active as u64).saturating_mul(starts as u64))
             .saturating_add((starts as u64).saturating_mul(starts.saturating_sub(1) as u64) / 2);
 
-        for endpoint in endpoints {
-            if *endpoint & 1 == 0 {
-                // There can be no more distinct coordinates than validated endpoint rows, so the
-                // coordinate position fits the same u32 indexing limit as endpoint IDs.
-                open_positions[*endpoint as usize / 2] = point_position as u32;
-            }
-        }
-
         while monotone_stack
             .last()
             .is_some_and(|position| point_depths[*position as usize] <= point_depth as u32)
         {
             let position = monotone_stack.pop().unwrap() as usize;
-            parent[position] = point_position as u32;
+            parent[position] = point_position;
         }
-        parent.push(point_position as u32);
+        parent.push(point_position);
         point_depths.push(point_depth as u32);
-        monotone_stack.push(point_position as u32);
+        monotone_stack.push(point_position);
 
         for endpoint in endpoints {
             if *endpoint & 1 == 1 {
@@ -777,16 +814,12 @@ fn sweep_exact_statistics(
             }
         }
 
-        // Starts and ends at this coordinate both participated in `point_depth`; remove closes only
-        // after completing their range-maximum queries to preserve closed intervals.
-        active = active + starts - ends;
-        point_position += 1;
+        active = point_depth - ends;
         offset = end;
     }
     debug_assert_eq!(active, 0);
 
     Ok(LinearClusteringStatistics {
-        block_count,
         sum_overlap: overlap_pairs.saturating_mul(2),
         sum_depth,
         depth_counts: depth_counts
@@ -801,6 +834,8 @@ fn sweep_exact_statistics(
 struct LinearClusterStatistics {
     total_block_count: u64,
     constant_block_count: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invalid_block_count: Option<usize>,
     average_overlaps: f64,
     average_depth: f64,
     max_depth: usize,
@@ -850,47 +885,154 @@ fn percentile_depth(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Float64Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::number::NumberScalar;
+    use databend_common_pipeline_transforms::sorts::sort_merge;
 
     use super::*;
+    use crate::statistics::ClusterStatsGenerator;
+    use crate::statistics::ClusterStatsKey;
+    use crate::statistics::ClusterStatsLayout;
+
+    fn linear_stats_generator(key_count: usize) -> ClusterStatsGenerator {
+        ClusterStatsGenerator::new(
+            0,
+            (0..key_count)
+                .map(|offset| ClusterStatsKey {
+                    offset,
+                    source_column_id: None,
+                })
+                .collect(),
+            0,
+            0,
+            Default::default(),
+            vec![],
+            ClusterStatsLayout::Linear,
+            vec![],
+            Default::default(),
+        )
+    }
+
+    fn summarize_linear_blocks(
+        generator: &ClusterStatsGenerator,
+        types: &[DataType],
+        blocks: Vec<DataBlock>,
+    ) -> Result<LinearClusterStatistics> {
+        let mut builders = types
+            .iter()
+            .map(|ty| ColumnBuilder::with_capacity(ty, blocks.len() * 2))
+            .collect::<Vec<_>>();
+        for block in blocks {
+            let stats = generator
+                .gen_stats_for_append(block)?
+                .cluster_stats
+                .unwrap();
+            push_endpoint(&mut builders, stats.min());
+            push_endpoint(&mut builders, stats.max());
+        }
+        summarize_linear_ranges(builders, types)
+    }
 
     fn int(value: i32) -> Scalar {
         Scalar::Number(NumberScalar::Int32(value))
     }
 
-    fn calculate_linear(ranges: &[(i32, i32)], threads: usize) -> LinearClusteringStatistics {
+    fn calculate_linear(ranges: &[(i32, i32)]) -> Result<LinearClusteringStatistics> {
         let ty = DataType::Number(NumberDataType::Int32);
         let mut builder = ColumnBuilder::with_capacity(&ty, ranges.len() * 2);
         for (min, max) in ranges {
             builder.push(int(*min).as_ref());
             builder.push(int(*max).as_ref());
         }
-        with_request_pool(threads, move |_| {
-            let sorted = sort_endpoints(vec![builder], std::slice::from_ref(&ty))?;
-            sweep_exact_statistics(&sorted.keys, &sorted.order)
-        })
-        .unwrap()
+        let sorted = sort_endpoints(vec![builder], &[ty])?;
+        sweep_exact_statistics(&sorted.keys, &sorted.order)
     }
 
     #[test]
     fn test_linear_rejects_invalid_ranges() {
         let ty = DataType::Number(NumberDataType::Int32);
-        assert!(sort_endpoints(Vec::new(), std::slice::from_ref(&ty)).is_err());
+        assert!(sort_endpoints(Vec::new(), &[ty]).is_err());
+        assert!(calculate_linear(&[(2, 1)]).is_err());
+    }
 
-        let mut builder = ColumnBuilder::with_capacity(&ty, 2);
-        builder.push(int(2).as_ref());
-        builder.push(int(1).as_ref());
-        let result = with_request_pool(1, move |_| {
-            let sorted = sort_endpoints(vec![builder], std::slice::from_ref(&ty))?;
-            sweep_exact_statistics(&sorted.keys, &sorted.order)
-        });
-        assert!(result.is_err());
+    #[test]
+    fn test_linear_excludes_reversed_ranges() -> Result<()> {
+        let ty = DataType::Number(NumberDataType::Int32);
+        let mut builder = ColumnBuilder::with_capacity(&ty, 6);
+        for value in [1, 3, 4, 0, 2, 2] {
+            builder.push(int(value).as_ref());
+        }
+        let report = summarize_linear_ranges(vec![builder], &[ty])?;
+        assert_eq!(report.invalid_block_count, Some(1));
+        assert_eq!(report.average_overlaps, 1.0);
+        assert_eq!(
+            report.block_depth_histogram,
+            BTreeMap::from([("00002".into(), 2)])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_linear_signed_zero_matches_append_order() -> Result<()> {
+        let generator = linear_stats_generator(1);
+        let sort_desc = generator.sort_descs();
+        let blocks = [vec![0.0, -0.0], vec![0.0], vec![-0.0]]
+            .into_iter()
+            .map(|rows| {
+                let block = DataBlock::new_from_columns(vec![Float64Type::from_data(rows)]);
+                DataBlock::sort(&block, &sort_desc, None)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let types = [DataType::Number(NumberDataType::Float64)];
+        let report = summarize_linear_blocks(&generator, &types, blocks)?;
+        assert_eq!(report.invalid_block_count, None);
+        assert_eq!(report.average_overlaps, 2.0);
+        assert_eq!(report.average_depth, 3.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_linear_preserves_composite_float_bounds() -> Result<()> {
+        let types = [DataType::Number(NumberDataType::Float64), DataType::String];
+        let schema = DataSchemaRefExt::create(vec![
+            DataField::new("k", types[0].clone()),
+            DataField::new("s", types[1].clone()),
+        ]);
+        let generator = linear_stats_generator(2);
+        let run = |zero: f64, labels: Vec<&str>| {
+            DataBlock::new_from_columns(vec![
+                Float64Type::from_data(vec![zero; labels.len()]),
+                StringType::from_data(labels),
+            ])
+        };
+        let mut merged = sort_merge(
+            schema,
+            4,
+            generator.sort_descs(),
+            vec![run(0.0, vec!["b", "c"]), run(-0.0, vec!["a", "z"])],
+            false,
+            false,
+        )?;
+        let block = merged.next().unwrap()?;
+        assert_eq!(block.num_rows(), 4);
+
+        // (-0.0, 'z') is inside the encoded bounds but would fall outside
+        // if the reader normalized the float endpoints.
+        let report =
+            summarize_linear_blocks(&generator, &types, vec![block, run(-0.0, vec!["z"])])?;
+        assert_eq!(report.invalid_block_count, None);
+        assert_eq!(report.average_overlaps, 1.0);
+        assert_eq!(report.average_depth, 2.0);
+        Ok(())
     }
 
     #[test]
     fn test_linear_boundary_semantics() {
-        let actual = calculate_linear(&[(1, 2), (2, 3), (2, 2), (4, 5)], 4);
+        let actual = calculate_linear(&[(1, 2), (2, 3), (2, 2), (4, 5)]).unwrap();
         assert_eq!(actual.sum_overlap, 6);
         assert_eq!(actual.sum_depth, 10);
         assert_eq!(actual.depth_counts, BTreeMap::from([(1, 1), (3, 3)]));
@@ -908,7 +1050,7 @@ mod tests {
                     (left.min(right), left.max(right))
                 })
                 .collect::<Vec<_>>();
-            let actual = calculate_linear(&ranges, if case % 2 == 0 { 1 } else { 4 });
+            let actual = calculate_linear(&ranges).unwrap();
             let overlap_pairs = (0..block_count)
                 .flat_map(|left| ((left + 1)..block_count).map(move |right| (left, right)))
                 .filter(|(left, right)| {

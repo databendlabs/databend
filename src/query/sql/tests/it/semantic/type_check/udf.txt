@@ -44,7 +44,7 @@ type: String
 description: Lambda UDF definition should resolve against its own parameters even when call-site aliases use the same names.
 sql: scope_probe(delta, [number])
 status: ok
-scalar: scope_probe(array_transform(delta (#3), array(number (#0)), ["y"] -> x (#0) + y (#2)))
+scalar: scope_probe(array_transform(delta (#3), array(number (#0)), ["y"] -> x (#0) + y))
 type: Array(Int64 NULL)
 
 === lambda_udf_definition_registers_parameter_metadata ===

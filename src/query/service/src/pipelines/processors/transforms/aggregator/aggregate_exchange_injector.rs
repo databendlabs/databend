@@ -22,8 +22,6 @@ use databend_common_settings::FlightCompression;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
@@ -86,14 +84,12 @@ impl ExchangeInjector for AggregateInjector {
     fn apply_merge_serializer(
         &self,
         _: &MergeExchangeParams,
-        _compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
+        _: Option<FlightCompression>,
+        _: &mut Pipeline,
     ) -> Result<()> {
-        let params = self.aggregator_params.clone();
-
-        pipeline.add_transform(|input, output| {
-            TransformAggregateSerializer::try_create(input, output, params.clone())
-        })
+        Err(ErrorCode::Internal(
+            "Aggregate shuffles through the global shuffle",
+        ))
     }
 
     fn apply_shuffle_serializer(
@@ -107,14 +103,10 @@ impl ExchangeInjector for AggregateInjector {
         ))
     }
 
-    fn apply_merge_deserializer(
-        &self,
-        params: &MergeExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            TransformAggregateDeserializer::try_create(input, output, &params.schema)
-        })
+    fn apply_merge_deserializer(&self, _: &MergeExchangeParams, _: &mut Pipeline) -> Result<()> {
+        Err(ErrorCode::Internal(
+            "Aggregate shuffles through the global shuffle",
+        ))
     }
 
     fn apply_shuffle_deserializer(

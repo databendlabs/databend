@@ -284,7 +284,7 @@ where
         not_eq,
     );
 
-    Ok(Some(input.boolean_stat(true_count)))
+    Ok(true_count.map(|true_count| input.boolean_stat(true_count)))
 }
 
 fn derive_comparison_stat<T, Op: StatComparisonOp>(
@@ -332,7 +332,7 @@ where
 
     if T::USE_INTEGER_RANGE_COMPARISON {
         let range = IntegerRangeComparison::from_input(input)?;
-        return Ok(Some(range.true_count::<Op>()));
+        return Ok(range.true_count::<Op>());
     }
 
     let Some((cmp_min, cmp_max)) =
@@ -764,7 +764,7 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
         })
     }
 
-    fn true_count<Op: StatComparisonOp>(&self) -> StatEstimate {
+    fn true_count<Op: StatComparisonOp>(&self) -> Option<StatEstimate> {
         use std::cmp::Ordering::*;
 
         let Self::Bounded {
@@ -775,7 +775,7 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
             non_null_cardinality,
         } = self
         else {
-            return StatEstimate::exact(0.0);
+            return Some(StatEstimate::exact(0.0));
         };
 
         let min_value = min.0;
@@ -784,15 +784,25 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
         let cmp_min = literal.total_cmp(min);
         let cmp_max = literal.total_cmp(max);
 
+        // TODO: the range estimates below spread the rows uniformly over the
+        // integer domain and ignore the NDV. A range is expected to overlap
+        // `ndv * width / domain` distinct values, but it either hits none of
+        // them or holds about `rows / ndv` rows per value it hits, so the
+        // smaller the overlap, the less reliable the uniform share and the
+        // more it undercounts the rows when the range does hit a value. Low
+        // confidence should be compensated. Meanwhile the bound cases defer to
+        // the NDV, so with an upper-only NDV `k <= min` takes the default
+        // selectivity while `k <= min + 1` takes the domain share, and the two
+        // disagree.
         if Op::SELECT_LESS {
             if cmp_min == Less || !Op::INCLUDE_EQUAL && cmp_min == Equal {
-                return StatEstimate::exact(0.0);
+                return Some(StatEstimate::exact(0.0));
             }
             if cmp_min == Equal {
                 return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
             }
             if cmp_max == Greater {
-                return StatEstimate::exact(*non_null_cardinality);
+                return Some(StatEstimate::exact(*non_null_cardinality));
             }
             if !Op::INCLUDE_EQUAL && cmp_max == Equal {
                 return estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality);
@@ -802,35 +812,35 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
             } else {
                 numeric_literal - min_value
             };
-            return StatEstimate::exact(
+            return Some(StatEstimate::exact(
                 (selected_values / (max_value - min_value + 1.0)) * *non_null_cardinality,
-            );
+            ));
         }
 
         if Op::INCLUDE_EQUAL {
             if cmp_max == Greater {
-                return StatEstimate::exact(0.0);
+                return Some(StatEstimate::exact(0.0));
             }
             if cmp_min == Less || cmp_min == Equal {
-                return StatEstimate::exact(*non_null_cardinality);
+                return Some(StatEstimate::exact(*non_null_cardinality));
             }
             if cmp_max == Equal {
                 return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
             }
-            return StatEstimate::exact(
+            return Some(StatEstimate::exact(
                 ((max_value - numeric_literal + 1.0) / (max_value - min_value + 1.0))
                     * *non_null_cardinality,
-            );
+            ));
         }
 
         match (cmp_min, cmp_max) {
-            (_, Greater | Equal) => StatEstimate::exact(0.0),
-            (Less, _) => StatEstimate::exact(*non_null_cardinality),
+            (_, Greater | Equal) => Some(StatEstimate::exact(0.0)),
+            (Less, _) => Some(StatEstimate::exact(*non_null_cardinality)),
             (Equal, _) => estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality),
-            _ => StatEstimate::exact(
+            _ => Some(StatEstimate::exact(
                 ((max_value - numeric_literal) / (max_value - min_value + 1.0))
                     * *non_null_cardinality,
-            ),
+            )),
         }
     }
 }
@@ -1132,6 +1142,13 @@ fn vectorize_string_cmp(
 ) -> impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy {
     move |arg1, arg2, ctx| match (arg1, arg2) {
         (Value::Scalar(arg1), Value::Scalar(arg2)) => Value::Scalar(func(arg1.cmp(&arg2))),
+        // Against the empty string only the length matters: `col <> ''` is a common filter.
+        (Value::Column(arg1), Value::Scalar(arg2)) if arg2.is_empty() => {
+            Value::Column(compare_lengths_to_empty(&arg1, func, false))
+        }
+        (Value::Scalar(arg1), Value::Column(arg2)) if arg1.is_empty() => {
+            Value::Column(compare_lengths_to_empty(&arg2, func, true))
+        }
         (Value::Column(arg1), Value::Scalar(arg2)) => {
             let col = Bitmap::collect_bool(ctx.num_rows, |i| {
                 func(StringColumn::compare_str(&arg1, i, &arg2))
@@ -1151,6 +1168,28 @@ fn vectorize_string_cmp(
             Value::Column(col)
         }
     }
+}
+
+/// Compares each string of `column` with the empty string: a non-empty string is greater, so
+/// only the view's length is read. `reversed` compares the empty string with the column instead.
+fn compare_lengths_to_empty(
+    column: &StringColumn,
+    func: impl Fn(Ordering) -> bool,
+    reversed: bool,
+) -> Bitmap {
+    let (empty, non_empty) = if reversed {
+        (func(Ordering::Equal), func(Ordering::Less))
+    } else {
+        (func(Ordering::Equal), func(Ordering::Greater))
+    };
+    let views = column.views().as_slice();
+    Bitmap::collect_bool(views.len(), |i| {
+        if views[i].length == 0 {
+            empty
+        } else {
+            non_empty
+        }
+    })
 }
 
 fn register_date_cmp(registry: &mut FunctionRegistry) {
@@ -1995,7 +2034,7 @@ fn register_like(registry: &mut FunctionRegistry) {
 
 fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomain<BooleanType>> {
     let is_all_percent_pattern = !pattern.is_empty() && pattern.bytes().all(|c| c == b'%');
-    match generate_like_pattern(pattern.as_bytes(), 1) {
+    match generate_like_pattern(pattern.as_bytes()) {
         LikePattern::StartOfPercent(v) if v.is_empty() => {
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
@@ -2105,21 +2144,19 @@ fn vectorize_like(
                     return Value::Scalar(false);
                 }
                 let pattern = convert_escape_pattern(&escape, arg2);
-                let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                let pattern_type = generate_like_pattern(pattern.as_bytes());
                 Value::Scalar(func(arg1.as_bytes(), &pattern_type))
             }
             (Value::Column(arg1), Value::Scalar(arg2)) => {
                 let arg1_iter = StringType::iter_column(&arg1);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
                 let pattern = convert_escape_pattern(&escape, arg2);
-                let pattern_type =
-                    generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                let pattern_type = generate_like_pattern(pattern.as_bytes());
                 if let Some(validity) = active_rows.as_ref() {
                     if let LikePattern::SurroundByPercent(searcher) = pattern_type {
                         for (index, arg1) in arg1_iter.enumerate() {
                             builder.push(
-                                validity.get_bit(index)
-                                    && searcher.search(arg1.as_bytes()).is_some(),
+                                validity.get_bit(index) && searcher.find(arg1.as_bytes()).is_some(),
                             );
                         }
                     } else {
@@ -2131,7 +2168,7 @@ fn vectorize_like(
                     }
                 } else if let LikePattern::SurroundByPercent(searcher) = pattern_type {
                     for arg1 in arg1_iter {
-                        builder.push(searcher.search(arg1.as_bytes()).is_some());
+                        builder.push(searcher.find(arg1.as_bytes()).is_some());
                     }
                 } else {
                     for arg1 in arg1_iter {
@@ -2154,7 +2191,7 @@ fn vectorize_like(
                         continue;
                     }
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
-                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    let pattern_type = generate_like_pattern(pattern.as_bytes());
                     builder.push(func(arg1.as_bytes(), &pattern_type));
                 }
                 Value::Column(builder.into())
@@ -2173,7 +2210,7 @@ fn vectorize_like(
                         continue;
                     }
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
-                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    let pattern_type = generate_like_pattern(pattern.as_bytes());
                     builder.push(func(arg1.as_bytes(), &pattern_type));
                 }
                 Value::Column(builder.into())
@@ -2199,19 +2236,18 @@ fn vectorize_ilike(
             (Value::Scalar(arg1), Value::Scalar(arg2)) => {
                 let arg1 = arg1.to_lowercase();
                 let pattern = convert_escape_pattern(&escape, arg2).to_lowercase();
-                let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                let pattern_type = generate_like_pattern(pattern.as_bytes());
                 Value::Scalar(func(arg1.as_bytes(), &pattern_type))
             }
             (Value::Column(arg1), Value::Scalar(arg2)) => {
                 let arg1_iter = StringType::iter_column(&arg1);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
                 let pattern = convert_escape_pattern(&escape, arg2).to_lowercase();
-                let pattern_type =
-                    generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                let pattern_type = generate_like_pattern(pattern.as_bytes());
                 if let LikePattern::SurroundByPercent(searcher) = pattern_type {
                     for arg1 in arg1_iter {
                         let arg1 = arg1.to_lowercase();
-                        builder.push(searcher.search(arg1.as_bytes()).is_some());
+                        builder.push(searcher.find(arg1.as_bytes()).is_some());
                     }
                 } else {
                     for arg1 in arg1_iter {
@@ -2227,7 +2263,7 @@ fn vectorize_ilike(
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for arg2 in arg2_iter {
                     let pattern = convert_escape_pattern(&escape, arg2.to_string()).to_lowercase();
-                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    let pattern_type = generate_like_pattern(pattern.as_bytes());
                     builder.push(func(arg1.as_bytes(), &pattern_type));
                 }
                 Value::Column(builder.into())
@@ -2239,7 +2275,7 @@ fn vectorize_ilike(
                 for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
                     let arg1 = arg1.to_lowercase();
                     let pattern = convert_escape_pattern(&escape, arg2.to_string()).to_lowercase();
-                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    let pattern_type = generate_like_pattern(pattern.as_bytes());
                     builder.push(func(arg1.as_bytes(), &pattern_type));
                 }
                 Value::Column(builder.into())
@@ -2395,7 +2431,7 @@ fn variant_vectorize_like(
         match (arg1, arg2) {
             (Value::Scalar(arg1), Value::Scalar(arg2)) => {
                 let pattern = convert_escape_pattern(&escape, arg2);
-                let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                let pattern_type = generate_like_pattern(pattern.as_bytes());
                 let requires_traversal =
                     variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
                 Value::Scalar(func(&arg1, &pattern_type, requires_traversal))
@@ -2404,8 +2440,7 @@ fn variant_vectorize_like(
                 let arg1_iter = VariantType::iter_column(&arg1);
 
                 let pattern = convert_escape_pattern(&escape, arg2);
-                let pattern_type =
-                    generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                let pattern_type = generate_like_pattern(pattern.as_bytes());
                 let requires_traversal =
                     variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
@@ -2419,7 +2454,7 @@ fn variant_vectorize_like(
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for arg2 in arg2_iter {
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
-                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    let pattern_type = generate_like_pattern(pattern.as_bytes());
                     let requires_traversal =
                         variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
                     builder.push(func(&arg1, &pattern_type, requires_traversal));
@@ -2432,7 +2467,7 @@ fn variant_vectorize_like(
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
                 for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
                     let pattern = convert_escape_pattern(&escape, arg2.to_string());
-                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    let pattern_type = generate_like_pattern(pattern.as_bytes());
                     let requires_traversal =
                         variant_like_requires_traversal(pattern.as_bytes(), &pattern_type);
                     builder.push(func(arg1, &pattern_type, requires_traversal));

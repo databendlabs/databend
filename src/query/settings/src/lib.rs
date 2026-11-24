@@ -28,3 +28,15 @@ pub use settings_default::SettingScope;
 pub use settings_getter_setter::FlightCompression;
 pub use settings_getter_setter::FlightKeepAliveParams;
 pub use settings_getter_setter::OutofMemoryBehavior;
+
+pub const ENABLE_EXPERIMENTAL_RBAC_CHECK: &str = "enable_experimental_rbac_check";
+pub const ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK: &str =
+    "enable_experimental_connection_privilege_check";
+pub const ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK: &str =
+    "enable_experimental_sequence_privilege_check";
+
+pub fn is_rbac_upgrade_setting(key: &str) -> bool {
+    key.eq_ignore_ascii_case(ENABLE_EXPERIMENTAL_RBAC_CHECK)
+        || key.eq_ignore_ascii_case(ENABLE_EXPERIMENTAL_CONNECTION_PRIVILEGE_CHECK)
+        || key.eq_ignore_ascii_case(ENABLE_EXPERIMENTAL_SEQUENCE_PRIVILEGE_CHECK)
+}

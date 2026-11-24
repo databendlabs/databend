@@ -163,6 +163,7 @@ use log::warn;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tokio::sync::Semaphore;
+use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
@@ -448,6 +449,12 @@ impl QueryContext {
         }
     }
 
+    /// The id of a database this query read a table from, by the catalog and database names it
+    /// was read by; `None` if it did not or the catalog did not report it.
+    pub fn get_resolved_database_id(&self, catalog: &str, database: &str) -> Option<u64> {
+        self.shared.get_resolved_database_id(catalog, database)
+    }
+
     pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
         self.shared.attach_table(catalog, database, name, table)
     }
@@ -477,6 +484,10 @@ impl QueryContext {
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
         DataExchangeManager::instance()
+    }
+
+    pub(crate) fn get_queue_entry_key(&self) -> Uuid {
+        self.shared.queue_entry_key
     }
 
     // Get the current session.

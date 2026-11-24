@@ -102,7 +102,7 @@ impl FlightSqlServiceImpl {
 
         let identity = UserIdentity::new(&user, "%");
         let mut user = user_api
-            .get_user_with_client_ip(&tenant, identity.clone(), client_ip)
+            .get_login_user_with_client_ip(&tenant, identity.clone(), client_ip)
             .await
             .map_err(|e| status!("get_user fail {}", e))?;
 

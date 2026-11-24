@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::SortDesc;
 
@@ -33,9 +34,9 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::SortStrategy;
+use crate::pipelines::processors::transforms::TransformWindowPartitionBatch;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
-use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct WindowPartition {
@@ -121,25 +122,23 @@ impl IPhysicalPlan for WindowPartition {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if let Some(top_n) = &self.top_n
-            && top_n.top < 10000
-        {
-            builder.main_pipeline.exchange(
-                num_processors,
-                WindowPartitionTopNExchange::create(
+        let top_n = self.top_n.as_ref().filter(|top_n| top_n.top < 10000);
+        builder.main_pipeline.add_accumulating_transformer(|| {
+            let transform = TransformWindowPartitionBatch::create(num_partitions);
+            match top_n {
+                Some(top_n) => transform.with_top_n(
                     partition_by.clone(),
                     sort_desc.clone(),
                     top_n.top,
                     top_n.func,
-                    num_partitions as u64,
                 ),
-            )?;
-        } else {
-            builder.main_pipeline.exchange(
-                num_processors,
-                WindowPartitionExchange::create(partition_by.clone(), num_partitions),
-            )?;
-        }
+                None => transform,
+            }
+        });
+        builder.main_pipeline.exchange(
+            num_processors,
+            WindowPartitionExchange::create(partition_by.clone(), num_partitions),
+        )?;
 
         let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
 

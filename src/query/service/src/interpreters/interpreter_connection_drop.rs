@@ -27,6 +27,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextTableAccess;
 
@@ -69,6 +70,7 @@ impl Interpreter for DropConnectionInterpreter {
 
             // 2. Revoke only if this statement dropped it, so a concurrent CREATE keeps its owner
             if dropped {
+                self.ctx.record_connection_access(&plan.name);
                 let role_api = UserApiProvider::instance().role_api(&tenant);
                 let owner_object = OwnershipObject::Connection {
                     name: self.plan.name.clone(),

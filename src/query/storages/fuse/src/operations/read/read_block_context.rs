@@ -71,8 +71,7 @@ impl ReadBlockContext {
             .read_data_by_merge_io(
                 &self.block_read_ctx,
                 &self.read_settings,
-                &fuse_part.location,
-                &fuse_part.columns_meta,
+                &fuse_part.data_files(),
                 &ignore_column_ids,
             )
             .await?;
@@ -80,6 +79,8 @@ impl ReadBlockContext {
         Ok(ParquetDataSource {
             data,
             virtual_data: virtual_source,
+            condition: None,
+            io_skipped: false,
         })
     }
 

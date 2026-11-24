@@ -245,6 +245,10 @@ impl RulePushDownPrewhere {
         if scan.update_stream_columns {
             return Ok(s_expr.clone());
         }
+        // New predicates would filter the input of the scan's predicates.
+        if scan.depends_on_other_rows() {
+            return Ok(s_expr.clone());
+        }
         let metadata = self.metadata.read().clone();
 
         let table = metadata.table(scan.table_index).table();
