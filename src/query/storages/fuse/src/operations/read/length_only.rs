@@ -15,8 +15,8 @@
 //! The string columns a prewhere filter reads only the byte lengths of, so that the scan reads
 //! only the lengths of their values (see `BlockReader::with_length_only_columns`).
 //!
-//! A column qualifies when the filter reads it only through `octet_length(c)`, `c = ''` and
-//! `c <> ''`: the comparisons are `octet_length(c) = 0` and `octet_length(c) > 0`, and are
+//! A column qualifies when the filter reads it only through `octet_length(c)` and comparisons
+//! with `''`: they are `octet_length(c) = 0` or `octet_length(c) > 0` (or constant), and are
 //! evaluated from the lengths of the values in their views (see `compare_empty_string`). They
 //! are left as they are: on a dictionary, `c <> ''` compares its values, while `octet_length(c)
 //! > 0` decodes it.
@@ -63,15 +63,18 @@ fn visit(expr: &Expr<String>, length_only: &mut HashMap<String, bool>) -> bool {
     }
 }
 
-/// The column of `octet_length(c)`, `c = ''` or `c <> ''`, if `call` is one.
+/// The column of `octet_length(c)` or of a comparison of `c` with `''`, if `call` is one: they
+/// depend only on the length of `c` (`c > ''` is `c <> ''`, `c <= ''` is `c = ''`).
 fn length_of(call: &FunctionCall<String>) -> Option<&str> {
     match (call.function.signature.name.as_str(), call.args.as_slice()) {
         ("octet_length", [arg]) => string_column(arg),
-        ("eq" | "noteq", [left, right]) => match (string_column(left), string_column(right)) {
-            (Some(column), None) if is_empty_string(right) => Some(column),
-            (None, Some(column)) if is_empty_string(left) => Some(column),
-            _ => None,
-        },
+        ("eq" | "noteq" | "gt" | "gte" | "lt" | "lte", [left, right]) => {
+            match (string_column(left), string_column(right)) {
+                (Some(column), None) if is_empty_string(right) => Some(column),
+                (None, Some(column)) if is_empty_string(left) => Some(column),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -140,6 +143,12 @@ mod tests {
                 call("octet_length", &[url.clone()]),
                 call("to_uint64", &[id.clone()]),
             ]),
+        ]);
+        assert_eq!(length_only_columns(&filter), names(&["url", "title"]));
+
+        let filter = call("and_filters", &[
+            call("gt", &[url.clone(), string("")]),
+            call("lte", &[string(""), title.clone()]),
         ]);
         assert_eq!(length_only_columns(&filter), names(&["url", "title"]));
 

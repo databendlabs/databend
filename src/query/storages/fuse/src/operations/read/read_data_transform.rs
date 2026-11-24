@@ -27,14 +27,18 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncBlockingTransform;
 use databend_common_pipeline_transforms::processors::AsyncBlockingTransformer;
 use databend_common_sql::IndexType;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::condition_cache;
+use super::condition_cache::CachedCondition;
 use super::condition_cache::ConditionKeys;
 use super::parquet_data_source::ParquetDataSource;
 use super::read_block_context::ReadBlockContext;
@@ -58,6 +62,9 @@ pub struct ReadDataTransform {
     parts: std::vec::IntoIter<PartInfoPtr>,
     /// The key of the prewhere filter in the condition cache, if it is cached.
     condition_keys: Option<ConditionKeys>,
+    /// The prewhere filter on the column statistics of a block, to find the blocks where it
+    /// selects every row.
+    filter_range_index: Option<RangeIndex>,
     /// Whether the scan outputs columns (or virtual columns), besides the internal ones.
     outputs_columns: bool,
 }
@@ -87,6 +94,16 @@ impl ReadDataTransform {
             }
             _ => None,
         };
+        let filter_range_index = prewhere_info
+            .map(|prewhere_info| {
+                RangeIndex::try_create(
+                    func_ctx.clone(),
+                    &prewhere_info.filter.as_expr(&BUILTIN_FUNCTIONS),
+                    table_schema.clone(),
+                    StatisticsOfColumns::default(),
+                )
+            })
+            .transpose()?;
         let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
         Ok(ProcessorPtr::create(AsyncBlockingTransformer::create(
             input,
@@ -103,6 +120,7 @@ impl ReadDataTransform {
                 record_partitions,
                 parts: Vec::new().into_iter(),
                 condition_keys,
+                filter_range_index,
                 outputs_columns,
             },
         )))
@@ -175,11 +193,15 @@ impl AsyncBlockingTransform for ReadDataTransform {
                 continue;
             }
             // A block where the prewhere filter selected no row before is not read, nor one
-            // where it knows the rows when the scan outputs no column.
-            let condition = self
-                .condition_keys
-                .as_ref()
-                .and_then(|keys| condition_cache::lookup_condition(keys, part_info));
+            // where it knows the rows when the scan outputs no column. The statistics of the
+            // block show where it selects every row.
+            let condition = match all_rows_by_statistics(&self.filter_range_index, part_info)? {
+                true => Some(CachedCondition::AllByStatistics),
+                false => self
+                    .condition_keys
+                    .as_ref()
+                    .and_then(|keys| condition_cache::lookup_condition(keys, part_info)),
+            };
             if let Some(condition) = &condition {
                 if condition.selects_nothing() {
                     continue;
@@ -222,4 +244,14 @@ impl AsyncBlockingTransform for ReadDataTransform {
         self.expr_runtime_pruner = None;
         Ok(None)
     }
+}
+
+/// Whether the prewhere filter of `index` is true for every row of the block, on the domains of
+/// its column statistics. A column without statistics in the block (added after it was written)
+/// has the full domain.
+fn all_rows_by_statistics(index: &Option<RangeIndex>, part: &FuseBlockPartInfo) -> Result<bool> {
+    let (Some(index), Some(stats)) = (index, &part.columns_stat) else {
+        return Ok(false);
+    };
+    Ok(index.fold(stats, None, None, |_| false)? == Some(true))
 }

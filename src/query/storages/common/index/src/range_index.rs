@@ -182,6 +182,8 @@ impl RangeIndex {
         ))
     }
 
+    /// Whether a block with these statistics may have a row where the expression is true:
+    /// `false` only when it folds to a constant false.
     pub fn apply<F>(
         &self,
         stats: &StatisticsOfColumns,
@@ -189,6 +191,21 @@ impl RangeIndex {
         virtual_col_stats: Option<&VirtualColumnStatsOfNames>,
         column_is_default: F,
     ) -> Result<bool>
+    where
+        F: Fn(&ColumnId) -> bool,
+    {
+        Ok(self.fold(stats, spatial_stats, virtual_col_stats, column_is_default)? != Some(false))
+    }
+
+    /// The constant the expression folds to on a block with these statistics, if it folds to
+    /// one: `Some(true)` when it is true for every row of the block, `Some(false)` for none.
+    pub fn fold<F>(
+        &self,
+        stats: &StatisticsOfColumns,
+        spatial_stats: Option<&StatisticsOfSpatialColumns>,
+        virtual_col_stats: Option<&VirtualColumnStatsOfNames>,
+        column_is_default: F,
+    ) -> Result<Option<bool>>
     where
         F: Fn(&ColumnId) -> bool,
     {
@@ -280,14 +297,13 @@ impl RangeIndex {
             &BUILTIN_FUNCTIONS,
         );
 
-        // Only return false, which means to skip this block, when the expression is folded to a constant false.
-        Ok(!matches!(
-            new_expr.as_ref(),
+        Ok(match new_expr.as_ref() {
             Expr::Constant(Constant {
-                scalar: Scalar::Boolean(false),
+                scalar: Scalar::Boolean(value),
                 ..
-            })
-        ))
+            }) => Some(*value),
+            _ => None,
+        })
     }
 
     pub fn supported_table_type(data_type: &TableDataType) -> bool {

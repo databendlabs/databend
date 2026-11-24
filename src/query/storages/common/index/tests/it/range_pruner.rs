@@ -141,6 +141,51 @@ fn test_range_index_prunes_nullable_integer_column_eq_numeric_string_literal() {
     assert!(!index.apply(&stats, None, None, |_| false).unwrap());
 }
 
+/// `fold` tells the blocks where a filter is true for every row from those where it is false for
+/// every row, and from the others.
+#[test]
+fn test_range_index_folds_string_comparisons_with_empty_string() {
+    let s = |s: &str| Scalar::String(s.to_string());
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("u", TableDataType::String),
+        TableField::new(
+            "n",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        ),
+    ]));
+    let columns = [
+        ("u", DataType::String),
+        ("n", DataType::String.wrap_nullable()),
+    ];
+    let fold = |filter: &str, u: (&str, &str), null_count: u64| {
+        let mut stats = create_stats(&[("u", s(u.0), s(u.1)), ("n", s(u.0), s(u.1))], &schema);
+        for stat in stats.values_mut() {
+            stat.null_count = null_count;
+        }
+        let expr = parse_expr(filter, &columns);
+        let index =
+            RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+                .unwrap();
+        index.fold(&stats, None, None, |_| false).unwrap()
+    };
+
+    // Without an empty string in the block, `<> ''` and `> ''` hold for every row.
+    for filter in ["u <> ''", "u > ''", "'' <> u", "'' < u", "u >= 'a'"] {
+        assert_eq!(fold(filter, ("a", "z"), 0), Some(true), "{filter}");
+        assert_eq!(fold(filter, ("", "z"), 0), None, "{filter}");
+    }
+    assert_eq!(fold("u = ''", ("a", "z"), 0), Some(false));
+    assert_eq!(fold("u = ''", ("", ""), 0), Some(true));
+    assert_eq!(fold("u <> ''", ("", ""), 0), Some(false));
+    // A null row fails the filter.
+    assert_eq!(fold("n <> ''", ("a", "z"), 0), Some(true));
+    assert_eq!(fold("n <> ''", ("a", "z"), 3), None);
+    // Every conjunct must hold.
+    assert_eq!(fold("u <> '' and u < 'zz'", ("a", "z"), 0), Some(true));
+    assert_eq!(fold("u <> '' and u < 'm'", ("a", "z"), 0), None);
+}
+
 #[test]
 fn test_range_index_prunes_by_virtual_column_statistics() {
     fn n(value: i32) -> Scalar {

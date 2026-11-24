@@ -437,13 +437,16 @@ impl ReadState {
         io_skipped: bool,
     ) -> Result<ReadStateOutput> {
         // The condition cache entry of the block, looked up before it was read: the rows where
-        // the filter can select rows, or exactly the rows it selects. Without an entry of the
+        // the filter can select rows, or exactly the rows it selects; or every row, when the
+        // statistics of the block show the filter true for all. Without an entry of the
         // filter, its result is recorded, and without an entry of its leading conjunct either,
         // that of the conjunct.
-        let condition = condition.filter(|_| self.condition_key.is_some());
+        let condition = condition.filter(|condition| {
+            self.condition_key.is_some() || matches!(condition, CachedCondition::AllByStatistics)
+        });
         let record = self
             .condition_key
-            .filter(|_| !matches!(condition, Some(CachedCondition::Whole(_))));
+            .filter(|_| !condition.is_some_and(CachedCondition::is_whole));
         let record_leading = condition.is_none() && self.leading.is_some();
         let exact = condition.is_some_and(CachedCondition::is_exact);
         let cached_rows = condition
