@@ -533,10 +533,34 @@ select sum(distinct x) filter (where b) from t3
 statement error (?s)1065.*DISTINCT aggregate FILTER is not supported
 select count(distinct x) filter (where b) from t3
 
-statement error (?s)1005.*DISTINCT aggregate ORDER BY is not supported
+statement error (?s)1065.*in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list
 select string_agg(distinct s order by x) from t3
 
-statement error (?s)1005.*DISTINCT aggregate ORDER BY is not supported
+statement error (?s)1065.*in an aggregate with DISTINCT, ORDER BY expressions must appear in argument list
+select listagg(distinct s, '|') within group (order by s, x) from t3
+
+# DISTINCT aggregate ORDER BY may reference the aggregated argument (PostgreSQL semantics).
+query T
+select string_agg(distinct s, '|' order by s desc) from t3;
+----
+xyz|def|abc
+
+query T
+select listagg(distinct s, '|') within group (order by s) from t3;
+----
+abc|def|xyz
+
+query T
+select array_agg(distinct y order by y desc) from t3;
+----
+[2,1]
+
+query T
+select array_agg(distinct y) within group (order by y) from t3;
+----
+[1,2]
+
+statement error (?s)1065.*only aggregate functions allowed in within group syntax
 select count(distinct x order by y) from t3
 
 statement error (?s)1065.*only aggregate functions allowed in within group syntax
