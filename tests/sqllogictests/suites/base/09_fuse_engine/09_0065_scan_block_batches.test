@@ -69,6 +69,18 @@ join (select id, _row_id as rid, s from t where id % 2 = 0) b
 ----
 15000 15000
 
+# A LIMIT stops pulling batches in the middle of the block, which drops the batches
+# not decoded yet.
+query I
+select count(*) from (select id, s from t limit 10);
+----
+10
+
+query I
+select count(*) from (select _row_id, s from t where id % 2 = 0 limit 100);
+----
+100
+
 # Filter-only prewhere column (`id` not projected) under pushdown.
 query II
 select count(*), count(distinct w.rid)

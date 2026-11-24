@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::Progress;
@@ -41,6 +42,7 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
 use super::parquet_data_source::ParquetDataSource;
+use super::read_state::BlockBatches;
 use super::read_state::BlockScanStats;
 use super::read_state::ReadState;
 use super::read_state::ReadStateBatch;
@@ -74,6 +76,17 @@ pub struct DeserializeDataTransform {
 
     prewhere_info: Option<PrewhereInfo>,
     read_state: Option<ReadState>,
+    /// The block whose batches are being output, see [`ReadState::start_batches`].
+    pending: Option<PendingBlock>,
+}
+
+/// A block decoded in batches: the next batch is decoded only once downstream took the
+/// output of the previous one.
+struct PendingBlock {
+    part: PartInfoPtr,
+    batches: BlockBatches,
+    /// Time spent decoding the batches so far.
+    elapsed: Duration,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -129,6 +142,7 @@ impl DeserializeDataTransform {
             block_meta_options: plan.block_meta_options.clone(),
             prewhere_info,
             read_state: None,
+            pending: None,
         })))
     }
 }
@@ -148,10 +162,55 @@ impl DeserializeDataTransform {
                 }))
     }
 
-    fn record_scan(&self, start: Instant, scan_stats: BlockScanStats) {
+    /// Decodes the next batch of the pending block with output rows and queues its output
+    /// blocks; records the scan of the block once it is done.
+    fn process_pending(&mut self) -> Result<()> {
+        let Some(pending) = self.pending.as_mut() else {
+            return Ok(());
+        };
+        let start = Instant::now();
+        let part = FuseBlockPartInfo::from_part(&pending.part)?;
+        let read_state = self.read_state.as_mut().unwrap();
+        let mut done = false;
+        let mut batches = vec![];
+        while batches.is_empty() {
+            match pending.batches.next_batches(read_state, part)? {
+                Some(next) => batches = next,
+                None => {
+                    done = true;
+                    break;
+                }
+            }
+        }
+        pending.elapsed += start.elapsed();
+        for ReadStateBatch { block, offsets } in batches {
+            let data_block = block.resort(&self.src_schema, &self.output_schema)?;
+            self.output_data.push_back(add_data_block_meta(
+                data_block,
+                part,
+                offsets,
+                self.base_block_ids.clone(),
+                &self.block_meta_options,
+            )?);
+        }
+        if done {
+            self.finish_pending();
+        }
+        Ok(())
+    }
+
+    /// Records the scan of the pending block: the whole block when it is done, else the
+    /// batches decoded before downstream stopped pulling.
+    fn finish_pending(&mut self) {
+        if let Some(pending) = self.pending.take() {
+            self.record_scan(pending.elapsed, pending.batches.scan_stats());
+        }
+    }
+
+    fn record_scan(&self, elapsed: Duration, scan_stats: BlockScanStats) {
         // Perf.
         {
-            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+            metrics_inc_remote_io_deserialize_milliseconds(elapsed.as_millis() as u64);
         }
 
         // Report the rows and bytes the scan actually processed, not what
@@ -180,6 +239,7 @@ impl Processor for DeserializeDataTransform {
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
+            self.finish_pending();
             self.input.finish();
             return Ok(Event::Finished);
         }
@@ -194,7 +254,7 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.chunks.is_empty() {
+        if self.pending.is_some() || !self.chunks.is_empty() {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
@@ -227,12 +287,16 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
+        if self.pending.is_some() {
+            return self.process_pending();
+        }
+
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {
             let start = Instant::now();
             let columns_chunks = read_res.data.columns_chunks()?;
-            let part = FuseBlockPartInfo::from_part(&part)?;
+            let fuse_part = FuseBlockPartInfo::from_part(&part)?;
 
             if self.read_state.is_none() {
                 self.read_state = Some(ReadState::create(
@@ -246,27 +310,23 @@ impl Processor for DeserializeDataTransform {
             let no_output_columns =
                 self.output_schema.fields().is_empty() && self.virtual_reader.is_none();
 
-            if self.can_split_block(part)
-                && let Some((batches, scan_stats)) =
-                    self.read_state.as_mut().unwrap().deserialize_batches(
-                        &columns_chunks,
-                        part,
-                        no_output_columns,
-                        self.block_meta_options.query_internal_columns,
-                    )?
+            if self.can_split_block(fuse_part)
+                && let Some(batches) = self.read_state.as_mut().unwrap().start_batches(
+                    &columns_chunks,
+                    fuse_part,
+                    no_output_columns,
+                    self.block_meta_options.query_internal_columns,
+                )?
             {
-                self.record_scan(start, scan_stats);
-                for ReadStateBatch { block, offsets } in batches {
-                    let data_block = block.resort(&self.src_schema, &self.output_schema)?;
-                    self.output_data.push_back(add_data_block_meta(
-                        data_block,
-                        part,
-                        offsets,
-                        self.base_block_ids.clone(),
-                        &self.block_meta_options,
-                    )?);
-                }
-                return Ok(());
+                // The batches own the column chunks they decode from.
+                drop(columns_chunks);
+                drop(read_res);
+                self.pending = Some(PendingBlock {
+                    part: part.clone(),
+                    batches,
+                    elapsed: start.elapsed(),
+                });
+                return self.process_pending();
             }
 
             let ReadStateOutput {
@@ -275,7 +335,7 @@ impl Processor for DeserializeDataTransform {
                 mut scan_stats,
             } = self.read_state.as_mut().unwrap().deserialize_and_filter(
                 columns_chunks,
-                part,
+                fuse_part,
                 no_output_columns,
                 read_res.condition.as_ref(),
                 read_res.io_skipped,
@@ -300,7 +360,7 @@ impl Processor for DeserializeDataTransform {
                     .inspect_err(|error| {
                         log::warn!(
                             "failed to deserialize virtual columns: block_location={}, virtual_block_location={:?}, error={}",
-                            part.location,
+                            fuse_part.location,
                             virtual_block_location,
                             error
                         );
@@ -311,7 +371,7 @@ impl Processor for DeserializeDataTransform {
                 );
             }
 
-            self.record_scan(start, scan_stats);
+            self.record_scan(start.elapsed(), scan_stats);
 
             let mut data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
 
@@ -325,7 +385,7 @@ impl Processor for DeserializeDataTransform {
 
             data_block = add_data_block_meta(
                 data_block,
-                part,
+                fuse_part,
                 offsets,
                 self.base_block_ids.clone(),
                 &self.block_meta_options,

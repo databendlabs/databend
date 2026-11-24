@@ -50,10 +50,11 @@ use super::condition_cache::CachedCondition;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::DataItem;
+use crate::io::ParquetBatches;
 use crate::io::RowSelection;
 use crate::pruning::ExprBloomFilter;
 
-/// Fewest rows per block of [`ReadState::deserialize_batches`]. A Parquet data page holds
+/// Fewest rows per block of [`ReadState::start_batches`]. A Parquet data page holds
 /// about 1 MiB, so smaller batches would share their pages anyway, while each batch costs
 /// a reader call and one more block downstream. With a smaller `max_block_size` (tests go
 /// down to 1), batches keep this size and downstream operators split them as before.
@@ -133,7 +134,7 @@ pub struct ReadStateOutput {
     pub scan_stats: BlockScanStats,
 }
 
-/// One output batch of [`ReadState::deserialize_batches`].
+/// One output batch of [`BlockBatches`].
 pub(crate) struct ReadStateBatch {
     pub(crate) block: DataBlock,
     /// Original block row indices of the rows in `block`, populated when the caller
@@ -159,7 +160,7 @@ pub struct ReadState {
     pub use_single_prewhere_reader: bool,
     /// Static stage and column-mapping plan computed once from the readers and `output_schema`.
     plan: ReadPlan,
-    /// Rows per block of [`Self::deserialize_batches`]: the `max_block_size` setting, at
+    /// Rows per block of [`Self::start_batches`]: the `max_block_size` setting, at
     /// least [`MIN_BATCH_ROWS`].
     batch_rows: usize,
     /// The key of the prewhere filter in the condition cache, if it is cached.
@@ -435,17 +436,15 @@ impl ReadState {
             && self.runtime_filters.is_empty()
             && self.remain_column_ids.is_empty()
             && part.nums_rows > MIN_BATCH_ROWS
-            && let Some(batches) = self.pre_reader.clone().parquet_batches(
-                part,
-                &pre_columns_chunks,
-                None,
-                MIN_BATCH_ROWS,
-            )?
+            && self.pre_reader.can_parquet_batches(&pre_columns_chunks)
         {
+            let mut batches =
+                self.pre_reader
+                    .parquet_batches(part, &pre_columns_chunks, None, MIN_BATCH_ROWS)?;
             let mut bytes = 0;
             let mut bits = MutableBitmap::with_capacity(part.nums_rows);
             let mut leading_bits = MutableBitmap::with_capacity(part.nums_rows);
-            for batch in batches {
+            while let Some(batch) = batches.next_block(part) {
                 let batch = batch?;
                 bytes += block_logical_bytes(&batch);
                 let bitmap = if record_leading {
@@ -644,28 +643,29 @@ impl ReadState {
         })
     }
 
-    /// Decodes an oversized block into batches of at most `max_block_size` rows (at least
-    /// [`MIN_BATCH_ROWS`]), each holding its own Parquet page buffers.
+    /// Starts decoding an oversized block in batches of at most `max_block_size` rows (at
+    /// least [`MIN_BATCH_ROWS`]), each holding its own Parquet page buffers. The batches are
+    /// decoded one at a time by [`BlockBatches::next_batches`], as the caller pulls them.
     ///
     /// Supports unfiltered scans, deterministic prewhere predicates, Bloom runtime filters,
     /// and index row selections (`BlockMetaIndex::selected_rows`). Returns `None` when the
     /// block does not need splitting or must be decoded whole (non-deterministic filter,
     /// count-only scan without runtime filters, condition cache, deserialized column cache, or
     /// encoded columns).
-    pub(crate) fn deserialize_batches(
+    pub(crate) fn start_batches(
         &mut self,
         columns_chunks: &HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
         no_output_columns: bool,
         need_row_offsets: bool,
-    ) -> Result<Option<(Vec<ReadStateBatch>, BlockScanStats)>> {
+    ) -> Result<Option<BlockBatches>> {
         if !self.can_deserialize_batches(part, no_output_columns) {
             return Ok(None);
         }
 
         let index_selection = selected_rows(part);
 
-        let (batches, bytes) = match &self.plan {
+        let (stage, bytes) = match &self.plan {
             ReadPlan::Empty => return Ok(None),
             ReadPlan::RemainOnly { output_indices } => {
                 let remain_chunks =
@@ -673,56 +673,37 @@ impl ReadState {
                 if !self.remain_reader.can_parquet_batches(&remain_chunks) {
                     return Ok(None);
                 }
-                self.decode_remain_stage(
+                let assembler = RemainAssembler::RemainOnly(output_indices.clone());
+                self.remain_stage(
                     part,
                     &remain_chunks,
-                    index_selection.as_ref(),
-                    RemainAssembler::RemainOnly(output_indices.as_deref()),
+                    index_selection,
+                    assembler,
                     need_row_offsets,
                 )?
             }
-            ReadPlan::PreOnly { output_indices } => {
+            ReadPlan::PreOnly { .. } => {
                 let pre_chunks = Self::filter_column_chunks(columns_chunks, &self.pre_column_ids)?;
                 if !self.pre_reader.can_parquet_batches(&pre_chunks) {
                     return Ok(None);
                 }
-                let mut batches = Vec::with_capacity(part.nums_rows.div_ceil(self.batch_rows));
-                let mut filter_eval = FilterEvaluator {
-                    filters: self.filters.as_ref(),
-                    selector: self.prewhere_selector.as_mut(),
-                    runtime_filters: &self.runtime_filters,
-                    func_ctx: &self.func_ctx,
+                let batches =
+                    self.pre_reader
+                        .parquet_batches(part, &pre_chunks, None, self.batch_rows)?;
+                let stage = BatchStage::Pre {
+                    batches,
+                    index_selection,
+                    row_offset: 0,
                 };
-                let bytes = filter_eval.for_each_pre_batch(
-                    &self.pre_reader,
-                    part,
-                    &pre_chunks,
-                    index_selection.as_ref(),
-                    self.batch_rows,
-                    |batch, batch_sel, row_offset| {
-                        let batch_len = batch.num_rows();
-                        let Some(block) = project_and_filter(
-                            batch,
-                            output_indices.as_deref(),
-                            batch_sel.as_ref(),
-                        )?
-                        else {
-                            return Ok(());
-                        };
-                        let offsets = need_row_offsets
-                            .then(|| bitmap_offsets_at(batch_sel.as_ref(), row_offset, batch_len));
-                        batches.push(ReadStateBatch { block, offsets });
-                        Ok(())
-                    },
-                )?;
-                (batches, bytes)
+                (stage, 0)
             }
             ReadPlan::TwoStage {
                 pre_output_indices,
                 merge_sources,
             } => {
-                // Pre-check both readers before Pass 1 so we never mutate runtime filter stats
-                // and then fall back to `deserialize_and_filter`.
+                // Check both readers before Pass 1 so we never mutate runtime filter stats and
+                // then fall back to `deserialize_and_filter`. The check holds for the block even
+                // if the column array cache is enabled meanwhile: batches never fill it.
                 let pre_chunks = Self::filter_column_chunks(columns_chunks, &self.pre_column_ids)?;
                 let remain_chunks =
                     Self::filter_column_chunks(columns_chunks, &self.remain_column_ids)?;
@@ -732,6 +713,9 @@ impl ReadState {
                     return Ok(None);
                 }
 
+                // Pass 1 runs over the whole block: reading the remaining columns with a pushed
+                // down `RowSelection` needs the selection of every row up front. Only the
+                // selection and the surviving rows of the output prewhere columns are kept.
                 let mut whole_bitmap = MutableBitmap::with_capacity(part.nums_rows);
                 let mut any_filtered = false;
                 let mut kept_pre = (!pre_output_indices.is_empty()).then(BlockQueue::default);
@@ -770,24 +754,27 @@ impl ReadState {
                 )?;
 
                 let selection: Option<Bitmap> = any_filtered.then(|| whole_bitmap.into());
-                let (batches, remain_bytes) = self.decode_remain_stage(
+                let assembler = RemainAssembler::Merge {
+                    kept_pre,
+                    sources: merge_sources.clone(),
+                };
+                let (stage, remain_bytes) = self.remain_stage(
                     part,
                     &remain_chunks,
-                    selection.as_ref(),
-                    RemainAssembler::Merge {
-                        kept_pre,
-                        sources: merge_sources,
-                    },
+                    selection,
+                    assembler,
                     need_row_offsets,
                 )?;
-                (batches, pre_bytes + remain_bytes)
+                (stage, pre_bytes + remain_bytes)
             }
         };
 
-        Ok(Some((batches, BlockScanStats {
-            rows: part.nums_rows,
+        Ok(Some(BlockBatches {
+            stage,
+            nums_rows: part.nums_rows,
+            need_row_offsets,
             bytes,
-        })))
+        }))
     }
 
     fn can_deserialize_batches(&self, part: &FuseBlockPartInfo, no_output_columns: bool) -> bool {
@@ -803,67 +790,47 @@ impl ReadState {
                 && (self.filters.is_some() || !self.runtime_filters.is_empty()))
     }
 
-    /// Reads `remain_reader` in batches (pushing down `RowSelection` when selective, or
-    /// filtering each batch in memory), assembles each surviving batch with `assembler`,
-    /// and returns `(batches, scan_bytes)`.
-    fn decode_remain_stage(
+    /// The stage reading `remain_reader` in batches, pushing down `RowSelection` when
+    /// selective or else filtering each batch in memory, with the scan bytes already known.
+    fn remain_stage(
         &self,
         part: &FuseBlockPartInfo,
         remain_chunks: &HashMap<ColumnId, DataItem>,
-        selection: Option<&Bitmap>,
-        mut assembler: RemainAssembler<'_>,
+        selection: Option<Bitmap>,
+        assembler: RemainAssembler,
         need_row_offsets: bool,
-    ) -> Result<(Vec<ReadStateBatch>, usize)> {
-        if selection.is_some_and(|b| b.null_count() == b.len()) {
-            return Ok((vec![], raw_bytes_of_chunks(remain_chunks)));
+    ) -> Result<(BatchStage, usize)> {
+        let raw_bytes = raw_bytes_of_chunks(remain_chunks);
+        if selection
+            .as_ref()
+            .is_some_and(|b| b.null_count() == b.len())
+        {
+            return Ok((BatchStage::Done, raw_bytes));
         }
 
         let row_selection = selection
+            .as_ref()
             .filter(|b| should_push_down_row_selection(b, self.prewhere_selectivity_threshold))
             .map(RowSelection::from);
-        let remain_batches = self
-            .remain_reader
-            .parquet_batches(part, remain_chunks, row_selection.as_ref(), self.batch_rows)?
-            .expect("remain_reader was checked with can_parquet_batches");
-
-        let mut offset_cursor = need_row_offsets.then(|| RowOffsetCursor::new(selection));
-        let mut out = Vec::with_capacity(part.nums_rows.div_ceil(self.batch_rows));
-        let (mut decoded_bytes, mut decoded_rows, mut row_offset) = (0usize, 0usize, 0usize);
-
-        for batch in remain_batches {
-            let batch = batch?;
-            let batch_len = batch.num_rows();
-            decoded_bytes += block_logical_bytes(&batch);
-            decoded_rows += batch_len;
-
-            let surviving = if row_selection.is_some() {
-                (batch_len > 0).then_some(batch)
-            } else {
-                let slice = selection.map(|b| b.clone().sliced(row_offset, batch_len));
-                row_offset += batch_len;
-                filter_surviving(batch, slice.as_ref())?
-            };
-
-            if let Some(remain_batch) = surviving {
-                assembler.assemble(remain_batch, |block| {
-                    let offsets = offset_cursor.as_mut().map(|c| c.take(block.num_rows()));
-                    out.push(ReadStateBatch { block, offsets });
-                });
-            }
-        }
-        assembler.assert_drained();
-
-        let scan_bytes = if row_selection.is_some() {
-            estimate_block_bytes(
-                decoded_bytes,
-                decoded_rows,
-                part.nums_rows,
-                raw_bytes_of_chunks(remain_chunks),
-            )
-        } else {
-            decoded_bytes
+        let batches = self.remain_reader.parquet_batches(
+            part,
+            remain_chunks,
+            row_selection.as_ref(),
+            self.batch_rows,
+        )?;
+        let offset_cursor = need_row_offsets.then(|| RowOffsetCursor::new(selection.clone()));
+        let stage = RemainStage {
+            batches,
+            selection,
+            pushed_down: row_selection.is_some(),
+            assembler,
+            offset_cursor,
+            row_offset: 0,
+            decoded_bytes: 0,
+            decoded_rows: 0,
+            raw_bytes,
         };
-        Ok((out, scan_bytes))
+        Ok((BatchStage::Remain(stage), 0))
     }
 
     fn filter_column_chunks<'a>(
@@ -1003,6 +970,160 @@ fn block_logical_bytes(block: &DataBlock) -> usize {
         .sum()
 }
 
+/// The batches of one block from [`ReadState::start_batches`], decoded as they are pulled:
+/// each pull decompresses and decodes the pages of one more batch, and the pages of the
+/// batches already pulled are released as soon as downstream drops them. The compressed
+/// column chunks stay alive until the last batch. With [`ReadPlan::TwoStage`], the prewhere
+/// pass has already run over the whole block, so its selection and the surviving rows of
+/// the output prewhere columns are held until the remaining columns catch up with them.
+pub(crate) struct BlockBatches {
+    stage: BatchStage,
+    nums_rows: usize,
+    need_row_offsets: bool,
+    /// Scan bytes of the stages that are done.
+    bytes: usize,
+}
+
+enum BatchStage {
+    /// [`ReadPlan::PreOnly`]: filters each batch of the prewhere columns as it is decoded.
+    Pre {
+        batches: ParquetBatches,
+        index_selection: Option<Bitmap>,
+        row_offset: usize,
+    },
+    /// [`ReadPlan::RemainOnly`] and the second pass of [`ReadPlan::TwoStage`].
+    Remain(RemainStage),
+    Done,
+}
+
+struct RemainStage {
+    batches: ParquetBatches,
+    /// The rows of the block surviving the filters, `None` when all do.
+    selection: Option<Bitmap>,
+    /// Whether `selection` was pushed down to the reader, which then decodes only the
+    /// surviving rows.
+    pushed_down: bool,
+    assembler: RemainAssembler,
+    offset_cursor: Option<RowOffsetCursor>,
+    /// First row of the next batch in the block, when `selection` is not pushed down.
+    row_offset: usize,
+    decoded_bytes: usize,
+    decoded_rows: usize,
+    raw_bytes: usize,
+}
+
+impl RemainStage {
+    fn scan_bytes(&self, nums_rows: usize) -> usize {
+        if self.pushed_down {
+            estimate_block_bytes(
+                self.decoded_bytes,
+                self.decoded_rows,
+                nums_rows,
+                self.raw_bytes,
+            )
+        } else {
+            self.decoded_bytes
+        }
+    }
+}
+
+impl BlockBatches {
+    /// Decodes the next batch of the block `part` and returns its output blocks, none when
+    /// the filters drop all its rows; `None` once the block is done.
+    pub(crate) fn next_batches(
+        &mut self,
+        state: &mut ReadState,
+        part: &FuseBlockPartInfo,
+    ) -> Result<Option<Vec<ReadStateBatch>>> {
+        let need_row_offsets = self.need_row_offsets;
+        let mut out = Vec::new();
+        match &mut self.stage {
+            BatchStage::Done => return Ok(None),
+            BatchStage::Pre {
+                batches,
+                index_selection,
+                row_offset,
+            } => {
+                let Some(batch) = batches.next_block(part) else {
+                    self.stage = BatchStage::Done;
+                    return Ok(None);
+                };
+                let batch = batch?;
+                let batch_len = batch.num_rows();
+                self.bytes += block_logical_bytes(&batch);
+                let batch_start = *row_offset;
+                *row_offset += batch_len;
+
+                let ReadPlan::PreOnly { output_indices } = &state.plan else {
+                    unreachable!("prewhere-only batches come from ReadPlan::PreOnly");
+                };
+                let mut filter_eval = FilterEvaluator {
+                    filters: state.filters.as_ref(),
+                    selector: state.prewhere_selector.as_mut(),
+                    runtime_filters: &state.runtime_filters,
+                    func_ctx: &state.func_ctx,
+                };
+                let idx_slice = index_selection
+                    .as_ref()
+                    .map(|rows| rows.clone().sliced(batch_start, batch_len));
+                let batch_sel = filter_eval.eval_selection(&batch, batch_len, idx_slice)?;
+                if let Some(block) =
+                    project_and_filter(batch, output_indices.as_deref(), batch_sel.as_ref())?
+                {
+                    let offsets = need_row_offsets
+                        .then(|| bitmap_offsets_at(batch_sel.as_ref(), batch_start, batch_len));
+                    out.push(ReadStateBatch { block, offsets });
+                }
+            }
+            BatchStage::Remain(stage) => {
+                let Some(batch) = stage.batches.next_block(part) else {
+                    stage.assembler.assert_drained();
+                    self.bytes += stage.scan_bytes(self.nums_rows);
+                    self.stage = BatchStage::Done;
+                    return Ok(None);
+                };
+                let batch = batch?;
+                let batch_len = batch.num_rows();
+                stage.decoded_bytes += block_logical_bytes(&batch);
+                stage.decoded_rows += batch_len;
+
+                let surviving = if stage.pushed_down {
+                    (batch_len > 0).then_some(batch)
+                } else {
+                    let slice = stage
+                        .selection
+                        .as_ref()
+                        .map(|b| b.clone().sliced(stage.row_offset, batch_len));
+                    stage.row_offset += batch_len;
+                    filter_surviving(batch, slice.as_ref())?
+                };
+
+                if let Some(remain_batch) = surviving {
+                    let offset_cursor = &mut stage.offset_cursor;
+                    stage.assembler.assemble(remain_batch, |block| {
+                        let offsets = offset_cursor.as_mut().map(|c| c.take(block.num_rows()));
+                        out.push(ReadStateBatch { block, offsets });
+                    });
+                }
+            }
+        }
+        Ok(Some(out))
+    }
+
+    /// The scan workload of the block, see [`BlockScanStats`]. Once the block is done it
+    /// matches whole-block decoding; before, it covers the batches decoded so far.
+    pub(crate) fn scan_stats(&self) -> BlockScanStats {
+        let pending = match &self.stage {
+            BatchStage::Remain(stage) => stage.scan_bytes(self.nums_rows),
+            BatchStage::Pre { .. } | BatchStage::Done => 0,
+        };
+        BlockScanStats {
+            rows: self.nums_rows,
+            bytes: self.bytes + pending,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum ColumnSource {
     Pre(usize),
@@ -1114,15 +1235,15 @@ fn merge_blocks(
     DataBlock::new(entries, remain.num_rows())
 }
 
-enum RemainAssembler<'a> {
-    RemainOnly(Option<&'a [usize]>),
+enum RemainAssembler {
+    RemainOnly(Option<Vec<usize>>),
     Merge {
         kept_pre: Option<BlockQueue>,
-        sources: &'a [ColumnSource],
+        sources: Vec<ColumnSource>,
     },
 }
 
-impl RemainAssembler<'_> {
+impl RemainAssembler {
     /// Emits the output blocks of one remain batch, in row order.
     ///
     /// With pushed-down `RowSelection`, remain batches hold `batch_rows` selected rows and
@@ -1132,7 +1253,7 @@ impl RemainAssembler<'_> {
     /// more block than the kept blocks it spans.
     fn assemble(&mut self, remain: DataBlock, mut emit: impl FnMut(DataBlock)) {
         match self {
-            Self::RemainOnly(indices) => emit(project_block(remain, *indices)),
+            Self::RemainOnly(indices) => emit(project_block(remain, indices.as_deref())),
             Self::Merge {
                 kept_pre: None,
                 sources,
@@ -1247,19 +1368,17 @@ impl FilterEvaluator<'_> {
 
     fn for_each_pre_batch(
         &mut self,
-        pre_reader: &BlockReader,
+        pre_reader: &Arc<BlockReader>,
         part: &FuseBlockPartInfo,
         pre_chunks: &HashMap<ColumnId, DataItem>,
         index_selection: Option<&Bitmap>,
         batch_rows: usize,
         mut on_batch: impl FnMut(DataBlock, Option<Bitmap>, usize) -> Result<()>,
     ) -> Result<usize> {
-        let pre_batches = pre_reader
-            .parquet_batches(part, pre_chunks, None, batch_rows)?
-            .expect("pre_reader was checked with can_parquet_batches");
+        let mut pre_batches = pre_reader.parquet_batches(part, pre_chunks, None, batch_rows)?;
         let mut scan_bytes = 0usize;
         let mut row_offset = 0usize;
-        for batch in pre_batches {
+        while let Some(batch) = pre_batches.next_block(part) {
             let batch = batch?;
             let batch_len = batch.num_rows();
             scan_bytes += block_logical_bytes(&batch);
@@ -1364,47 +1483,47 @@ fn bitmap_offsets_at(
 }
 
 /// Yields original block row offsets in chunks of `count` surviving rows.
-enum RowOffsetCursor<'a> {
+enum RowOffsetCursor {
     Contiguous(usize),
+    /// The rows `selection` sets, from row `next` on.
     Selected {
-        slices: SlicesIterator<'a>,
-        pending: Option<(usize, usize)>,
+        selection: Bitmap,
+        next: usize,
     },
 }
 
-impl<'a> RowOffsetCursor<'a> {
-    fn new(selection: Option<&'a Bitmap>) -> Self {
+impl RowOffsetCursor {
+    fn new(selection: Option<Bitmap>) -> Self {
         match selection {
             None => Self::Contiguous(0),
-            Some(bitmap) => Self::Selected {
-                slices: SlicesIterator::new(bitmap),
-                pending: None,
-            },
+            Some(selection) => Self::Selected { selection, next: 0 },
         }
     }
 
-    fn take(&mut self, mut remaining: usize) -> RoaringTreemap {
+    fn take(&mut self, count: usize) -> RoaringTreemap {
         let mut offsets = RoaringTreemap::new();
         match self {
             Self::Contiguous(next) => {
-                offsets.insert_range(*next as u64..(*next + remaining) as u64);
-                *next += remaining;
+                offsets.insert_range(*next as u64..(*next + count) as u64);
+                *next += count;
             }
-            Self::Selected { slices, pending } => {
-                while remaining > 0 {
-                    let (start, len) = match pending.take() {
-                        Some(run) => run,
-                        None => slices
-                            .next()
-                            .expect("bitmap selection must cover every decoded row"),
-                    };
+            Self::Selected { selection, next } => {
+                let rest = selection.clone().sliced(*next, selection.len() - *next);
+                let mut remaining = count;
+                for (start, len) in SlicesIterator::new(&rest) {
+                    let start = *next + start;
                     let take = remaining.min(len);
                     offsets.insert_range(start as u64..(start + take) as u64);
                     remaining -= take;
-                    if take < len {
-                        *pending = Some((start + take, len - take));
+                    if remaining == 0 {
+                        *next = start + take;
+                        break;
                     }
                 }
+                assert_eq!(
+                    remaining, 0,
+                    "bitmap selection must cover every decoded row"
+                );
             }
         }
         offsets
@@ -1595,7 +1714,7 @@ mod tests {
         ]
         .into_iter()
         .collect();
-        let mut cursor = RowOffsetCursor::new(Some(&bitmap));
+        let mut cursor = RowOffsetCursor::new(Some(bitmap));
         assert_eq!(cursor.take(2).iter().collect::<Vec<_>>(), vec![0, 1]);
         assert_eq!(cursor.take(3).iter().collect::<Vec<_>>(), vec![2, 5, 6]);
         assert_eq!(cursor.take(1).iter().collect::<Vec<_>>(), vec![9]);
@@ -1629,10 +1748,9 @@ mod tests {
         queue.push(int64_block(vec![0, 1]));
         queue.push(int64_block(vec![2, 3, 4]));
         queue.push(int64_block(vec![5]));
-        let sources = [ColumnSource::Remain(0), ColumnSource::Pre(0)];
         let mut assembler = RemainAssembler::Merge {
             kept_pre: Some(queue),
-            sources: &sources,
+            sources: vec![ColumnSource::Remain(0), ColumnSource::Pre(0)],
         };
 
         let mut out = vec![];
