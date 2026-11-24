@@ -205,34 +205,25 @@ pub fn check_cast<Index: ColumnIndex>(
         ))
         .set_span(span));
     }
-    if expr.data_type() == &wrapped_dest_type
-        || expr.data_type().matches_physical_type(&wrapped_dest_type)
-    {
-        Ok(expr)
-    } else if expr.data_type().wrap_nullable() == wrapped_dest_type {
-        Ok(Expr::Cast(Cast {
-            span,
-            is_try,
-            expr: Box::new(expr),
-            dest_type: wrapped_dest_type,
-        }))
-    } else {
-        if resolve_cast_plan(expr.data_type(), &wrapped_dest_type, fn_registry).is_none() {
-            return Err(ErrorCode::BadArguments(format!(
-                "unable to cast type `{}` to type `{}`",
-                expr.data_type(),
-                dest_type,
-            ))
-            .set_span(span));
-        }
-
-        Ok(Expr::Cast(Cast {
-            span,
-            is_try,
-            expr: Box::new(expr),
-            dest_type: wrapped_dest_type,
-        }))
+    // A cast type checks when it has a plan, and needs no node when its value already has the
+    // layout of the destination.
+    let Some(plan) = resolve_cast_plan(expr.data_type(), &wrapped_dest_type, fn_registry) else {
+        return Err(ErrorCode::BadArguments(format!(
+            "unable to cast type `{}` to type `{}`",
+            expr.data_type(),
+            dest_type,
+        ))
+        .set_span(span));
+    };
+    if matches!(plan.step, CastStep::Identity) {
+        return Ok(expr);
     }
+    Ok(Expr::Cast(Cast {
+        span,
+        is_try,
+        expr: Box::new(expr),
+        dest_type: wrapped_dest_type,
+    }))
 }
 
 /// The destination type of `TRY_CAST` to `ty`: nullable, with nullable array elements and tuple
