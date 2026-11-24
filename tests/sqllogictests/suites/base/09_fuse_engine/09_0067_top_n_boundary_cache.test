@@ -6,7 +6,8 @@ use test_top_n_boundary_cache
 
 # Blocks of 7 rows, so that the runtime TopN filter prunes blocks by the boundary. With
 # `enable_condition_cache`, a TopN records the boundary it reached, and a TopN over the same rows
-# (table snapshot, filters) with the same first sort key and as many top rows starts with it.
+# (table snapshot, filters) with the same first sort key and as many top rows starts with it. The
+# cache is for standalone queries only: in a cluster these check the results without it.
 statement ok
 create or replace table t(k int not null, v int null, s string not null) row_per_block = 7
 
@@ -35,11 +36,6 @@ select k from t order by k desc limit 4
 198
 197
 196
-
-query I
-select hit > 0 from system.caches where name = 'memory_cache_top_n_boundary'
-----
-1
 
 # Other filters select other rows, whose boundaries are recorded apart.
 query I
