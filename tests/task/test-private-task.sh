@@ -635,6 +635,58 @@ check_response_error "$response"
 response=$(query_sql_with_auth "root:" "DROP TASK manual_cancel_task")
 check_response_error "$response"
 
+# A run recorded as executing while no query node holds its lease, as left by a node that stopped
+# during the run, is recorded as failed instead of blocking the next runs.
+
+response=$(query_sql_with_auth "root:" "CREATE TASK abandoned_run_task SCHEDULE = 1 SECOND AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'abandoned_run_task'")
+check_response_error "$response"
+abandoned_run_task_id=$(echo "$response" | jq -r '.data[0][0]')
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${abandoned_run_task_id}, 'abandoned_run_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 920000, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK abandoned_run_task RESUME")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'abandoned_run_task' AND state = 'SUCCEEDED'")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" -ge 1 ]; then
+        break
+    fi
+    sleep 1
+done
+
+response=$(query_sql_with_auth "root:" "ALTER TASK abandoned_run_task SUSPEND")
+check_response_error "$response"
+
+if [ "$actual" -ge 1 ]; then
+    echo "✅ An abandoned executing run does not block the next runs"
+else
+    echo "❌ Expected the task to run after an abandoned executing run"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run WHERE task_name = 'abandoned_run_task' AND run_id = 920000 AND state = 'FAILED' AND completed_at IS NOT NULL AND error_message LIKE 'ABANDONED_EXECUTION:%'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "1" ]; then
+    echo "✅ An abandoned executing run is recorded as failed"
+else
+    echo "❌ Expected the abandoned run to be recorded as failed"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "DROP TASK abandoned_run_task")
+check_response_error "$response"
+
 # Check Task Fan-out
 
 response=$(query_sql_with_auth "root:" "CREATE OR REPLACE TABLE fanout_sink (child string)")
