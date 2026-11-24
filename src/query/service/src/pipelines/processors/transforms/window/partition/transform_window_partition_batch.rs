@@ -501,7 +501,12 @@ mod tests {
     fn test_keys_equal_with_different_hashes() -> Result<()> {
         // The variants `1` and `1.0` compare equal, but their hashes differ,
         // so the window exchange may send them to different windows.
-        let key = |text: &str| jsonb::parse_value(text.as_bytes()).unwrap().to_vec();
+        let key = |text: &str| {
+            jsonb::parse_value(text.as_bytes())
+                .unwrap()
+                .to_vec()
+                .unwrap()
+        };
         let data = DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![10, 20]),
             VariantType::from_data(vec![key("1"), key("1.0")]),
