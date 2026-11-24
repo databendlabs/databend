@@ -48,6 +48,12 @@ use crate::io::DataItem;
 use crate::io::RowSelection;
 use crate::pruning::ExprBloomFilter;
 
+/// Fewest rows per block of [`ReadState::deserialize_batches`]. A Parquet data page holds
+/// about 1 MiB, so smaller batches would share their pages anyway, while each batch costs
+/// a reader call and one more block downstream. With a smaller `max_block_size` (tests go
+/// down to 1), batches keep this size and downstream operators split them as before.
+const MIN_BATCH_ROWS: usize = 8192;
+
 #[derive(Clone)]
 pub struct BloomRuntimeFilterRef {
     pub probe_expr: Expr<FieldIndex>,
@@ -138,7 +144,8 @@ pub struct ReadState {
     pub output_schema: DataSchema,
     pub prewhere_selectivity_threshold: u64,
     pub use_single_prewhere_reader: bool,
-    /// Rows per block of [`Self::deserialize_batches`], the `max_block_size` setting.
+    /// Rows per block of [`Self::deserialize_batches`]: the `max_block_size` setting, at
+    /// least [`MIN_BATCH_ROWS`].
     batch_rows: usize,
 }
 
@@ -248,7 +255,7 @@ impl ReadState {
             output_schema: block_reader.data_schema(),
             prewhere_selectivity_threshold,
             use_single_prewhere_reader,
-            batch_rows: max_block_size,
+            batch_rows: max_block_size.max(MIN_BATCH_ROWS),
         })
     }
 
@@ -476,7 +483,7 @@ impl ReadState {
     }
 
     /// Decodes a block that the scan outputs with all its rows into blocks of at most
-    /// `max_block_size` rows, each holding its own buffers.
+    /// `max_block_size` rows (at least [`MIN_BATCH_ROWS`]), each holding its own buffers.
     ///
     /// The Parquet reader decodes strings into views over the decompressed pages, so a
     /// block decoded at once shares the pages of all its rows. A slice of it that a

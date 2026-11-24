@@ -1,6 +1,6 @@
 # The scan decodes a block larger than max_block_size in batches of max_block_size
-# rows. Internal columns and mutations must see the same row positions as when the
-# block is decoded whole.
+# rows, at least 8192. Internal columns and mutations must see the same row positions
+# as when the block is decoded whole.
 
 statement ok
 create or replace database db_scan_block_batches;
@@ -19,7 +19,7 @@ select count(*) from fuse_block('db_scan_block_batches', 't');
 ----
 1
 
-# Row IDs of the block decoded whole, then in batches of 1000 rows.
+# Row IDs of the block decoded whole, then in batches of 8192 and 1808 rows.
 statement ok
 set max_block_size = 65536;
 

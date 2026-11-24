@@ -275,8 +275,8 @@ async fn run_prewhere_test_with_threshold(
     Ok(())
 }
 
-// A block the scan outputs whole is decoded in `max_block_size` batches that do not
-// share the pages of the other rows of the block.
+// A block the scan outputs whole is decoded in `max_block_size` batches, at least 8192
+// rows each, that do not share the pages of the other rows of the block.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_deserialize_batches() -> Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -285,9 +285,9 @@ async fn test_deserialize_batches() -> Result<()> {
         TableField::new("id", TableDataType::Number(NumberDataType::Int64)),
         TableField::new("s", TableDataType::String),
     ]));
-    let num_rows = 10_000;
+    let num_rows = 30_000;
     let ids: Vec<i64> = (0..num_rows as i64).collect();
-    // 1000-byte strings: the column spans about ten 1 MiB pages.
+    // 1000-byte strings: the column spans about thirty 1 MiB pages.
     let strings: Vec<String> = (0..num_rows).map(|i| format!("{i:01000}")).collect();
     let block = DataBlock::new_from_columns(vec![
         Int64Type::from_data(ids.clone()),
@@ -321,8 +321,9 @@ async fn test_deserialize_batches() -> Result<()> {
     // No runtime filter is registered for this scan.
     let scan_id = 1000;
 
+    // Batches keep 8192 rows when `max_block_size` is smaller.
     ctx.get_settings()
-        .set_setting("max_block_size".to_string(), "4096".to_string())?;
+        .set_setting("max_block_size".to_string(), "1".to_string())?;
     let mut read_state = ReadState::create(ctx.clone(), scan_id, None, block_reader.clone())?;
     let (batches, scan_stats) = read_state
         .deserialize_batches(&column_chunks, &part)?
@@ -334,7 +335,7 @@ async fn test_deserialize_batches() -> Result<()> {
     assert_eq!(scan_stats.rows, num_rows);
     assert_eq!(
         batches.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
-        vec![4096, 4096, 1808]
+        vec![8192, 8192, 8192, 5424]
     );
     let string_column = |block: &DataBlock| {
         StringType::try_downcast_column(&block.get_by_offset(1).to_column()).unwrap()
