@@ -4,6 +4,12 @@ use super::*;
 async fn test_type_check_scalar_function_rules() -> Result<()> {
     let cases = [
         SqlTestCase {
+            name: "conversion_through_implicit_cast_binds_one_cast",
+            description: "`to_int8(date)` checks as `to_int8(CAST(date AS Int64))`; the plan of `CAST(date AS Int8)` converts through Int64, so the two casts bind as one.",
+            setup_sqls: &[],
+            sql: "to_int8(date)",
+        },
+        SqlTestCase {
             name: "decimal_division_error_keeps_checked_argument_types",
             description: "Failed parent folding must not shrink its checked Decimal arguments into integers and select another overload.",
             setup_sqls: &[],

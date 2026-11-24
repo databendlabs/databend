@@ -617,7 +617,7 @@ where A: TypeCheckAdapter
             EExpr::FunctionCall(call) => self.fold_bound_call(span, func_name, params, call, args),
             EExpr::Cast(cast) => {
                 let child = args.pop().expect("a cast call has one argument");
-                Ok(self.fold_bound_cast(cast, child))
+                Ok(self.bind_checked_cast(cast, child))
             }
             expr => {
                 let return_type = expr.into_data_type();

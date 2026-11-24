@@ -70,6 +70,7 @@ use databend_common_expression::IfPruning;
 use databend_common_expression::RangeConstraint;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::cast_plan::casts_through;
 use databend_common_expression::expr;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -726,6 +727,40 @@ where A: TypeCheckAdapter
     }
 
     /// A call that type checking turned into a cast of its only argument.
+    /// Binds `cast`, a cast that a call was rewritten to, over `child`, the argument of the call.
+    /// The checked argument, `cast.expr`, keeps the casts that type checking added to `child`,
+    /// e.g. `to_date(x)` of a UInt8 `x` is `CAST(CAST(x AS Int64) AS Date)`. Two casts are bound
+    /// as one only when the plan of the outer cast runs the inner one first.
+    pub(super) fn bind_checked_cast(
+        &self,
+        cast: expr::Cast<usize>,
+        child: BoundScalar,
+    ) -> BoundScalar {
+        if cast.expr.data_type() == &child.data_type {
+            return self.fold_bound_cast(cast, child);
+        }
+        let EExpr::Cast(inner) = cast.expr.as_ref() else {
+            return self.fold_bound_cast(cast, child);
+        };
+        if !inner.is_try
+            && !cast.is_try
+            && casts_through(
+                inner.expr.data_type(),
+                &inner.dest_type,
+                &cast.dest_type,
+                &BUILTIN_FUNCTIONS,
+            )
+        {
+            let cast = expr::Cast {
+                expr: inner.expr.clone(),
+                ..cast
+            };
+            return self.bind_checked_cast(cast, child);
+        }
+        let inner = self.bind_checked_cast(inner.clone(), child);
+        self.fold_bound_cast(cast, inner)
+    }
+
     pub(super) fn fold_bound_cast(
         &self,
         cast: expr::Cast<usize>,

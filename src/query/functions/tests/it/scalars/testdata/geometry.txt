@@ -787,7 +787,7 @@ evaluation (internal):
 
 ast            : try_to_geometry(NULL)
 raw expr       : try_to_geometry(NULL)
-checked expr   : TRY_CAST<Variant NULL>(CAST<NULL>(NULL AS Variant NULL) AS Geometry NULL)
+checked expr   : try_to_geometry<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Geometry NULL
 output domain  : {NULL}
@@ -796,7 +796,7 @@ output         : NULL
 
 ast            : try_to_geometry('nuLL')
 raw expr       : try_to_geometry('nuLL')
-checked expr   : TRY_CAST<String>("nuLL" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("nuLL")
 optimized expr : NULL
 output type    : Geometry NULL
 output domain  : {NULL}
@@ -805,7 +805,7 @@ output         : NULL
 
 ast            : try_to_geometry('null')
 raw expr       : try_to_geometry('null')
-checked expr   : TRY_CAST<String>("null" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("null")
 optimized expr : NULL
 output type    : Geometry NULL
 output domain  : {NULL}
@@ -814,7 +814,7 @@ output         : NULL
 
 ast            : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
 raw expr       : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
-checked expr   : TRY_CAST<String>("SRID=4326;POINT(1820.12 890.56)" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("SRID=4326;POINT(1820.12 890.56)")
 optimized expr : "SRID=4326;POINT(1820.12 890.56)"
 output type    : Geometry NULL
 output domain  : Undefined
@@ -832,7 +832,7 @@ output         : 'SRID=4326;POINT(1820.12 890.56)'
 
 ast            : try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')
 raw expr       : try_to_geometry('0101000020797f000066666666a9cb17411f85ebc19e325641')
-checked expr   : TRY_CAST<String>("0101000020797f000066666666a9cb17411f85ebc19e325641" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("0101000020797f000066666666a9cb17411f85ebc19e325641")
 optimized expr : "SRID=32633;POINT(389866.35 5819003.03)"
 output type    : Geometry NULL
 output domain  : Undefined
@@ -850,7 +850,7 @@ output         : 'SRID=4326;POINT(389866.35 5819003.03)'
 
 ast            : try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))
 raw expr       : try_to_geometry(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641'))
-checked expr   : TRY_CAST<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641") AS Geometry NULL)
+checked expr   : try_to_geometry<Binary>(from_hex<String>("0101000020797f000066666666a9cb17411f85ebc19e325641"))
 optimized expr : "SRID=32633;POINT(389866.35 5819003.03)"
 output type    : Geometry NULL
 output domain  : Undefined
@@ -868,7 +868,7 @@ output         : 'SRID=4326;POINT(389866.35 5819003.03)'
 
 ast            : try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')
 raw expr       : try_to_geometry('{"coordinates":[[389866,5819003],[390000,5830000]],"type":"LineString"}')
-checked expr   : TRY_CAST<String>("{\"coordinates\":[[389866,5819003],[390000,5830000]],\"type\":\"LineString\"}" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("{\"coordinates\":[[389866,5819003],[390000,5830000]],\"type\":\"LineString\"}")
 optimized expr : "LINESTRING(389866 5819003,390000 5830000)"
 output type    : Geometry NULL
 output domain  : Undefined
@@ -886,7 +886,7 @@ output         : 'SRID=4326;LINESTRING(389866 5819003,390000 5830000)'
 
 ast            : try_to_geometry('POINT(1820.12 890.56)')
 raw expr       : try_to_geometry('POINT(1820.12 890.56)')
-checked expr   : TRY_CAST<String>("POINT(1820.12 890.56)" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("POINT(1820.12 890.56)")
 optimized expr : "POINT(1820.12 890.56)"
 output type    : Geometry NULL
 output domain  : Undefined
@@ -895,7 +895,7 @@ output         : 'POINT(1820.12 890.56)'
 
 ast            : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
 raw expr       : try_to_geometry('SRID=4326;POINT(1820.12 890.56)')
-checked expr   : TRY_CAST<String>("SRID=4326;POINT(1820.12 890.56)" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("SRID=4326;POINT(1820.12 890.56)")
 optimized expr : "SRID=4326;POINT(1820.12 890.56)"
 output type    : Geometry NULL
 output domain  : Undefined
@@ -922,7 +922,7 @@ output         : NULL
 
 ast            : try_to_geometry(unhex('1234'))
 raw expr       : try_to_geometry(unhex('1234'))
-checked expr   : TRY_CAST<Binary>(from_hex<String>("1234") AS Geometry NULL)
+checked expr   : try_to_geometry<Binary>(from_hex<String>("1234"))
 optimized expr : NULL
 output type    : Geometry NULL
 output domain  : {NULL}
@@ -940,7 +940,7 @@ output         : NULL
 
 ast            : try_to_geometry('{"coordinates":[],"type":"LineString"}')
 raw expr       : try_to_geometry('{"coordinates":[],"type":"LineString"}')
-checked expr   : TRY_CAST<String>("{\"coordinates\":[],\"type\":\"LineString\"}" AS Geometry NULL)
+checked expr   : try_to_geometry<String>("{\"coordinates\":[],\"type\":\"LineString\"}")
 optimized expr : "LINESTRING EMPTY"
 output type    : Geometry NULL
 output domain  : Undefined

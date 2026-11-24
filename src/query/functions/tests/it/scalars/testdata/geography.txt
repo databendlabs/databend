@@ -446,7 +446,7 @@ output         : 'SRID=4326;POINT(1 2)'
 
 ast            : try_to_geography('POINT(-122.35 37.55)')
 raw expr       : try_to_geography('POINT(-122.35 37.55)')
-checked expr   : TRY_CAST<String>("POINT(-122.35 37.55)" AS Geography NULL)
+checked expr   : try_to_geography<String>("POINT(-122.35 37.55)")
 optimized expr : "SRID=4326;POINT(-122.35 37.55)"
 output type    : Geography NULL
 output domain  : Undefined
@@ -455,7 +455,7 @@ output         : 'SRID=4326;POINT(-122.35 37.55)'
 
 ast            : try_to_geography('INVALID')
 raw expr       : try_to_geography('INVALID')
-checked expr   : TRY_CAST<String>("INVALID" AS Geography NULL)
+checked expr   : try_to_geography<String>("INVALID")
 optimized expr : NULL
 output type    : Geography NULL
 output domain  : {NULL}
@@ -464,7 +464,7 @@ output         : NULL
 
 ast            : try_to_geography(parse_json('{"type":"Point","coordinates":[1,2]}'))
 raw expr       : try_to_geography(parse_json('{"type":"Point","coordinates":[1,2]}'))
-checked expr   : TRY_CAST<Variant>(CAST<String>("{\"type\":\"Point\",\"coordinates\":[1,2]}" AS Variant) AS Geography NULL)
+checked expr   : try_to_geography<Variant>(CAST<String>("{\"type\":\"Point\",\"coordinates\":[1,2]}" AS Variant))
 optimized expr : "SRID=4326;POINT(1 2)"
 output type    : Geography NULL
 output domain  : Undefined
@@ -473,7 +473,7 @@ output         : 'SRID=4326;POINT(1 2)'
 
 ast            : try_to_geography(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
 raw expr       : try_to_geography(st_aswkb(st_geographyfromewkt('POINT(-122.35 37.55)')))
-checked expr   : TRY_CAST<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)")) AS Geography NULL)
+checked expr   : try_to_geography<Binary>(st_aswkb<Geography>(st_geographyfromwkt<String>("POINT(-122.35 37.55)")))
 optimized expr : "SRID=4326;POINT(-122.35 37.55)"
 output type    : Geography NULL
 output domain  : Undefined

@@ -31,6 +31,8 @@ use crate::FunctionContext;
 use crate::Scalar;
 use crate::auto_cast_rules::decimal_auto_cast;
 use crate::auto_cast_rules::is_auto_try_cast;
+use crate::cast_plan::CastStep;
+use crate::cast_plan::resolve_cast_plan;
 use crate::cast_scalar;
 use crate::expr::*;
 use crate::expression::Expr;
@@ -43,7 +45,6 @@ use crate::types::DataType;
 use crate::types::Decimal;
 use crate::types::Number;
 use crate::types::NumberDataType;
-use crate::types::NumberScalar;
 use crate::types::decimal::DecimalSize;
 use crate::types::i256;
 use crate::visit_expr;
@@ -171,7 +172,7 @@ pub fn check_cast<Index: ColumnIndex>(
     is_try: bool,
     expr: Expr<Index>,
     dest_type: &DataType,
-    _: &FunctionRegistry,
+    fn_registry: &FunctionRegistry,
 ) -> Result<Expr<Index>> {
     let wrapped_dest_type = if is_try {
         wrap_nullable_for_try_cast(span, dest_type)?
@@ -216,7 +217,7 @@ pub fn check_cast<Index: ColumnIndex>(
             dest_type: wrapped_dest_type,
         }))
     } else {
-        if !can_cast_to(expr.data_type(), dest_type) {
+        if resolve_cast_plan(expr.data_type(), &wrapped_dest_type, fn_registry).is_none() {
             return Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{}` to type `{}`",
                 expr.data_type(),
@@ -324,13 +325,22 @@ pub fn check_function<Index: ColumnIndex>(
         return check_function(span, original_fn_name, params, args, fn_registry);
     }
 
-    // to_string('a')
-    if params.is_empty() && name.starts_with("to_") && args.len() == 1 {
-        let type_name = args[0].data_type();
-        match get_simple_cast_function(false, type_name, type_name) {
-            Some(n) if name.eq_ignore_ascii_case(n) => return Ok(args[0].clone()),
-            _ => {}
-        }
+    // `to_x(a)` of a value of type X, e.g. `to_string('a')`, is `CAST(a AS X)`, which keeps the
+    // value. There is no function overload for it.
+    if let [arg] = args
+        && params.is_empty()
+        && fn_registry
+            .get_conversion_function(arg.data_type())
+            .is_some_and(|function_name| name.eq_ignore_ascii_case(function_name))
+    {
+        return check_cast(span, false, arg.clone(), arg.data_type(), fn_registry);
+    }
+    if let [arg] = args
+        && params.is_empty()
+        && is_try_conversion_to_own_type(name, arg.data_type())
+    {
+        let dest_type = arg.data_type().wrap_nullable();
+        return check_cast(span, false, arg.clone(), &dest_type, fn_registry);
     }
 
     let candidates = fn_registry.search_candidates(name, params, args);
@@ -742,6 +752,29 @@ impl Substitution {
 }
 
 #[allow(clippy::type_complexity)]
+/// Whether `try_to_x(a)` keeps `a`, a value of type X, as `X NULL`. The try functions have no
+/// overload for their own type. This static rule only keeps the results of earlier versions,
+/// which ran `try_to_x(a)` as `TRY_CAST(a AS X)`; it does not relate the functions to casts.
+/// It lists the calls that earlier versions accepted, through an implicit argument cast that
+/// they dropped; the other try functions reject a value of their own type.
+fn is_try_conversion_to_own_type(name: &str, data_type: &DataType) -> bool {
+    let own_type_function = match data_type.remove_nullable() {
+        DataType::String => "try_to_string",
+        DataType::Number(NumberDataType::UInt8) => "try_to_uint8",
+        DataType::Number(NumberDataType::UInt16) => "try_to_uint16",
+        DataType::Number(NumberDataType::UInt32) => "try_to_uint32",
+        DataType::Number(NumberDataType::UInt64) => "try_to_uint64",
+        DataType::Number(NumberDataType::Int8) => "try_to_int8",
+        DataType::Number(NumberDataType::Int16) => "try_to_int16",
+        DataType::Number(NumberDataType::Int32) => "try_to_int32",
+        DataType::Number(NumberDataType::Int64) => "try_to_int64",
+        DataType::Number(NumberDataType::Float32) => "try_to_float32",
+        DataType::Date => "try_to_date",
+        _ => return false,
+    };
+    name.eq_ignore_ascii_case(own_type_function)
+}
+
 pub fn try_check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     sig: &FunctionSignature,
@@ -877,44 +910,6 @@ pub fn unify(
             "unable to unify `{}` with `{}`",
             src_ty, dest_ty
         ))),
-    }
-}
-
-fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
-    match (src_ty, dest_ty) {
-        (src_ty, dest_ty) if src_ty == dest_ty => true,
-
-        (DataType::Null, _)
-        | (DataType::EmptyArray, DataType::Array(_))
-        | (DataType::EmptyMap, DataType::Map(_))
-        | (DataType::Variant, DataType::Array(_))
-        | (DataType::Variant, DataType::Map(_))
-        | (DataType::Variant, DataType::Vector(_))
-        | (DataType::String, DataType::Vector(_)) => true,
-
-        (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-            if fields_src_ty.len() == fields_dest_ty.len() =>
-        {
-            true
-        }
-        (DataType::Array(fields_src_ty), DataType::Vector(_))
-            if matches!(
-                fields_src_ty.remove_nullable(),
-                DataType::Number(_) | DataType::Decimal(_)
-            ) =>
-        {
-            true
-        }
-        (DataType::Nullable(deref!(inner_src_ty)), DataType::Nullable(deref!(inner_dest_ty)))
-        | (DataType::Nullable(deref!(inner_src_ty)), inner_dest_ty)
-        | (inner_src_ty, DataType::Nullable(deref!(inner_dest_ty)))
-        | (DataType::Array(deref!(inner_src_ty)), DataType::Array(deref!(inner_dest_ty)))
-        | (DataType::Map(deref!(inner_src_ty)), DataType::Map(deref!(inner_dest_ty))) => {
-            can_cast_to(inner_src_ty, inner_dest_ty)
-        }
-        (DataType::AggregateState(state), dest_ty) => can_cast_to(state.physical_type(), dest_ty),
-
-        (src_ty, dest_ty) => get_simple_cast_function(false, src_ty, dest_ty).is_some(),
     }
 }
 
@@ -1065,158 +1060,38 @@ pub fn common_super_type(
     }
 }
 
-fn get_simple_cast_function(
-    is_try: bool,
-    src_type: &DataType,
-    dest_type: &DataType,
-) -> Option<&'static str> {
-    let src_type = src_type.remove_nullable_ref();
-    let dest_type = dest_type.remove_nullable_ref();
-    let (function_name, try_function_name) = match dest_type {
-        DataType::Boolean => ("to_boolean", "try_to_boolean"),
-        DataType::Binary => ("to_binary", "try_to_binary"),
-        DataType::String => ("to_string", "try_to_string"),
-        DataType::Number(NumberDataType::UInt8) => ("to_uint8", "try_to_uint8"),
-        DataType::Number(NumberDataType::UInt16) => ("to_uint16", "try_to_uint16"),
-        DataType::Number(NumberDataType::UInt32) => ("to_uint32", "try_to_uint32"),
-        DataType::Number(NumberDataType::UInt64) => ("to_uint64", "try_to_uint64"),
-        DataType::Number(NumberDataType::Int8) => ("to_int8", "try_to_int8"),
-        DataType::Number(NumberDataType::Int16) => ("to_int16", "try_to_int16"),
-        DataType::Number(NumberDataType::Int32) => ("to_int32", "try_to_int32"),
-        DataType::Number(NumberDataType::Int64) => ("to_int64", "try_to_int64"),
-        DataType::Number(NumberDataType::Float32) => ("to_float32", "try_to_float32"),
-        DataType::Number(NumberDataType::Float64) => ("to_float64", "try_to_float64"),
-        DataType::Decimal(_) => ("to_decimal", "try_to_decimal"),
-        DataType::Timestamp => ("to_timestamp", "try_to_timestamp"),
-        DataType::TimestampTz => ("to_timestamp_tz", "try_to_timestamp_tz"),
-        DataType::Interval => ("to_interval", "try_to_interval"),
-        DataType::Date => ("to_date", "try_to_date"),
-        // CAST(String AS Variant) parses JSON instead of wrapping the string as a JSON string.
-        DataType::Variant if src_type == &DataType::String => ("parse_json", "try_parse_json"),
-        DataType::Variant => ("to_variant", "try_to_variant"),
-        DataType::Bitmap => ("to_bitmap", "try_to_bitmap"),
-        DataType::Geometry => ("to_geometry", "try_to_geometry"),
-        DataType::Geography => ("to_geography", "try_to_geography"),
-        _ => return None,
-    };
-
-    if is_try {
-        Some(try_function_name)
-    } else {
-        Some(function_name)
-    }
-}
-
-/// Resolve the function call executed by [`Expr::Cast`].
-///
-/// Function dispatch normalizes source and destination nullability, while type checking uses the
-/// complete argument and destination types. This lets nullable casts resolve to the function's own
-/// nullable overload only when that overload has exactly the same return type as the cast.
-/// Returning `None` means the cast is an identity conversion, is implemented by one of the
-/// composite cast paths, or cannot be resolved to an exactly matching function call.
-pub(crate) fn resolve_cast_function(
-    span: Span,
-    is_try: bool,
-    argument_type: &DataType,
-    dest_type: &DataType,
-    fn_registry: &FunctionRegistry,
-) -> Option<FunctionCall> {
-    let function_name = get_simple_cast_function(is_try, argument_type, dest_type)?;
-    check_cast_function(span, argument_type, dest_type, function_name, fn_registry)
-}
-
-/// Type-check a function selected by cast dispatch and return its checked call.
-pub(crate) fn check_cast_function(
-    span: Span,
-    argument_type: &DataType,
-    dest_type: &DataType,
-    function_name: &str,
-    fn_registry: &FunctionRegistry,
-) -> Option<FunctionCall> {
-    if argument_type.remove_nullable_ref() == dest_type.remove_nullable_ref() {
-        return None;
-    }
-
-    let argument = Expr::ColumnRef(ColumnRef {
-        span,
-        id: 0,
-        data_type: argument_type.clone(),
-        display_name: String::new(),
-    });
-
-    // Params are typed as literals are, so that the call is the one written
-    // in SQL, e.g. `to_decimal(10, 2)(x)`.
-    let params = if let DataType::Decimal(ty) = dest_type.remove_nullable_ref() {
-        vec![
-            Scalar::Number(NumberScalar::UInt8(ty.precision())),
-            Scalar::Number(NumberScalar::UInt8(ty.scale())),
-        ]
-    } else {
-        vec![]
-    };
-    let call = check_function(span, function_name, &params, &[argument], fn_registry)
-        .ok()?
-        .into_function_call()
-        .ok()?;
-
-    (call.return_type == *dest_type).then_some(call)
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FunctionCallToCastResult {
-    pub is_try: bool,
-    pub dest_type: DataType,
-}
-
 /// Return a cast only when evaluating it invokes this exact checked function.
 ///
-/// The function name is canonicalized through the registry, and factory params and return type
-/// must match the call selected by the cast resolver. Composite container casts and nullable casts
-/// without an exactly matching nullable function overload are not rewritten.
+/// `to_x(a)` is `CAST(a AS X)` when the plan of the cast is a single step that runs the same
+/// function overload, `function_id`, with the same return type. Composite container casts and
+/// casts through other steps are not rewritten.
 pub fn function_call_to_cast(
-    function_name: &str,
-    params: &[Scalar],
+    function_id: &FunctionID,
     argument_type: &DataType,
     return_type: &DataType,
     fn_registry: &FunctionRegistry,
-) -> Option<FunctionCallToCastResult> {
-    let canonical_function_name = fn_registry
-        .aliases
-        .get(function_name)
-        .map_or(function_name, String::as_str);
-
-    for is_try in [false, true] {
-        if is_try && !return_type.is_nullable() {
-            continue;
-        }
-
-        // Filter unrelated unary functions using Cast's own dispatch before constructing a
-        // synthetic argument and running the complete function resolver.
-        let Some(cast_function_name) = get_simple_cast_function(is_try, argument_type, return_type)
-        else {
-            continue;
-        };
-        if canonical_function_name != cast_function_name {
-            continue;
-        }
-
-        let Some(cast_call) =
-            resolve_cast_function(None, is_try, argument_type, return_type, fn_registry)
-        else {
-            continue;
-        };
-        if canonical_function_name == cast_call.id.name().as_ref()
-            && params == cast_call.id.params()
-            && return_type == &cast_call.return_type
-        {
-            return Some(FunctionCallToCastResult {
-                is_try,
-                dest_type: return_type.clone(),
-            });
-        }
+) -> Option<DataType> {
+    // Filter unrelated unary functions before resolving the plan of the cast.
+    if fn_registry
+        .get_cast_function(argument_type, return_type)?
+        .name
+        != function_id.name()
+    {
+        return None;
     }
 
-    None
+    let plan = resolve_cast_plan(argument_type, return_type, fn_registry)?;
+    let CastStep::Function {
+        call: cast_call,
+        reject_null,
+        ..
+    } = plan.step
+    else {
+        return None;
+    };
+    let same_function =
+        *function_id == cast_call.id && !reject_null && return_type == &cast_call.return_type;
+    same_function.then(|| return_type.clone())
 }
 
 pub fn rewrite_function_to_cast<Index: ColumnIndex>(
@@ -1234,16 +1109,12 @@ struct RewriteCast<'a> {
 }
 
 impl RewriteCast<'_> {
-    fn classify<Index: ColumnIndex>(
-        &self,
-        call: &FunctionCall<Index>,
-    ) -> Option<FunctionCallToCastResult> {
+    fn classify<Index: ColumnIndex>(&self, call: &FunctionCall<Index>) -> Option<DataType> {
         let [argument] = call.args.as_slice() else {
             return None;
         };
         function_call_to_cast(
-            call.id.name().as_ref(),
-            call.id.params(),
+            &call.id,
             argument.data_type(),
             &call.return_type,
             self.fn_registry,
@@ -1253,13 +1124,13 @@ impl RewriteCast<'_> {
     fn make_cast<Index: ColumnIndex>(
         span: Span,
         argument: Expr<Index>,
-        result: FunctionCallToCastResult,
+        dest_type: DataType,
     ) -> Expr<Index> {
         Expr::Cast(Cast {
             span,
-            is_try: result.is_try,
+            is_try: false,
             expr: Box::new(argument),
-            dest_type: result.dest_type,
+            dest_type,
         })
     }
 }
