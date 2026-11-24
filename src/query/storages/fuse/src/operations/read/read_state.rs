@@ -313,18 +313,14 @@ impl ReadState {
             func_ctx: &self.func_ctx,
         };
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
-        const FILTER_BATCH_ROWS: usize = 8192;
         if no_output_columns
             && self.filters_deterministic
             && self.runtime_filters.is_empty()
             && self.remain_column_ids.is_empty()
-            && part.nums_rows > FILTER_BATCH_ROWS
-            && let Some(batches) = self.pre_reader.parquet_batches(
-                part,
-                &pre_columns_chunks,
-                None,
-                FILTER_BATCH_ROWS,
-            )?
+            && part.nums_rows > MIN_BATCH_ROWS
+            && let Some(batches) =
+                self.pre_reader
+                    .parquet_batches(part, &pre_columns_chunks, None, MIN_BATCH_ROWS)?
         {
             let mut bytes = 0;
             let mut bits = MutableBitmap::with_capacity(part.nums_rows);
@@ -445,9 +441,10 @@ impl ReadState {
         &mut self,
         columns_chunks: &HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
+        no_output_columns: bool,
         need_row_offsets: bool,
     ) -> Result<Option<(Vec<ReadStateBatch>, BlockScanStats)>> {
-        if !self.can_deserialize_batches(part) {
+        if !self.can_deserialize_batches(part, no_output_columns) {
             return Ok(None);
         }
 
@@ -489,10 +486,14 @@ impl ReadState {
                     self.batch_rows,
                     |batch, batch_sel, row_offset| {
                         let batch_len = batch.num_rows();
-                        let Some(filtered) = filter_surviving(batch, batch_sel.as_ref())? else {
+                        let Some(block) = project_and_filter(
+                            batch,
+                            output_indices.as_deref(),
+                            batch_sel.as_ref(),
+                        )?
+                        else {
                             return Ok(());
                         };
-                        let block = project_block(filtered, output_indices.as_deref());
                         let offsets = need_row_offsets
                             .then(|| bitmap_offsets_at(batch_sel.as_ref(), row_offset, batch_len));
                         batches.push(ReadStateBatch { block, offsets });
@@ -541,9 +542,13 @@ impl ReadState {
                             None => whole_bitmap.extend_constant(batch_len, true),
                         }
                         if let Some(queue) = kept_pre.as_mut()
-                            && let Some(filtered) = filter_surviving(batch, batch_sel.as_ref())?
+                            && let Some(kept) = project_and_filter(
+                                batch,
+                                Some(pre_output_indices),
+                                batch_sel.as_ref(),
+                            )?
                         {
-                            queue.push(project_block(filtered, Some(pre_output_indices)));
+                            queue.push(kept);
                         }
                         Ok(())
                     },
@@ -570,13 +575,13 @@ impl ReadState {
         })))
     }
 
-    fn can_deserialize_batches(&self, part: &FuseBlockPartInfo) -> bool {
+    fn can_deserialize_batches(&self, part: &FuseBlockPartInfo, no_output_columns: bool) -> bool {
         part.nums_rows > self.batch_rows
             && self
                 .filters
                 .as_ref()
                 .is_none_or(|_| self.filters_deterministic)
-            && !(self.output_schema.fields().is_empty() && self.runtime_filters.is_empty())
+            && !(no_output_columns && self.runtime_filters.is_empty())
             && !(self.pre_column_ids.is_empty()
                 && (self.filters.is_some() || !self.runtime_filters.is_empty()))
     }
@@ -869,7 +874,10 @@ impl RemainAssembler<'_> {
             kept_pre: Some(q), ..
         } = self
         {
-            debug_assert!(q.is_empty());
+            assert!(
+                q.is_empty(),
+                "kept prewhere rows must be fully consumed by remain batches"
+            );
         }
     }
 }
@@ -1034,6 +1042,18 @@ fn eval_runtime_filters(
     );
 
     Ok(result_bitmap)
+}
+
+fn project_and_filter(
+    block: DataBlock,
+    indices: Option<&[usize]>,
+    selection: Option<&Bitmap>,
+) -> Result<Option<DataBlock>> {
+    if block.num_rows() == 0 || selection.is_some_and(|b| b.null_count() == b.len()) {
+        return Ok(None);
+    }
+    let projected = project_block(block, indices);
+    filter_surviving(projected, selection)
 }
 
 fn filter_surviving(block: DataBlock, selection: Option<&Bitmap>) -> Result<Option<DataBlock>> {

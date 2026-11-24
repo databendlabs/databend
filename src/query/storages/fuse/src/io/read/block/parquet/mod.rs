@@ -148,6 +148,11 @@ impl BlockReader {
         }
         let data_files = part.data_files();
         let files = DataFileLookup::new(&data_files);
+        // Cap the reader batch size by the selected/total row count so sparse pushdowns
+        // do not over-allocate output column buffers retained downstream.
+        let reader_batch_rows = selection
+            .map_or(part.nums_rows, |s| s.selected_rows)
+            .min(batch_rows);
         let reader = column_chunks_record_reader(
             &self.original_schema,
             part.nums_rows,
@@ -156,7 +161,7 @@ impl BlockReader {
             |column_id| files.compression_of(column_id),
             selection.map(|s| s.selection.clone()),
             self.parquet_hint_fields.as_ref(),
-            batch_rows,
+            reader_batch_rows,
         )?;
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
         Ok(Some(reader.map(move |batch| {

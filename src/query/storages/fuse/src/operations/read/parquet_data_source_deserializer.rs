@@ -134,13 +134,18 @@ impl DeserializeDataTransform {
 }
 
 impl DeserializeDataTransform {
-    /// Whether the rows of a block may be output as several blocks: virtual columns are
+    /// Whether the rows of `part` may be output as several blocks: virtual columns are
     /// decoded for the whole block, `_origin_block_row_num` numbers the rows of each
-    /// output block from zero, and MERGE INTO target builds track whole blocks.
-    fn can_split_block(&self) -> bool {
+    /// output block from zero, MERGE INTO target builds track whole blocks, and
+    /// `add_data_block_meta` remaps whole-block inverted/vector index scores per output block.
+    fn can_split_block(&self, part: &FuseBlockPartInfo) -> bool {
         self.virtual_reader.is_none()
             && !self.block_meta_options.update_stream_columns
             && !self.block_meta_options.reserve_block_index
+            && !(self.block_meta_options.query_internal_columns
+                && part.block_meta_index().is_some_and(|meta| {
+                    meta.inverted_index_matches.is_some() || meta.vector_index_matches.is_some()
+                }))
     }
 
     fn record_scan(&self, start: Instant, scan_stats: BlockScanStats) {
@@ -238,11 +243,15 @@ impl Processor for DeserializeDataTransform {
                 )?);
             }
 
-            if self.can_split_block()
+            let no_output_columns =
+                self.output_schema.fields().is_empty() && self.virtual_reader.is_none();
+
+            if self.can_split_block(part)
                 && let Some((batches, scan_stats)) =
                     self.read_state.as_mut().unwrap().deserialize_batches(
                         &columns_chunks,
                         part,
+                        no_output_columns,
                         self.block_meta_options.query_internal_columns,
                     )?
             {
@@ -267,7 +276,7 @@ impl Processor for DeserializeDataTransform {
             } = self.read_state.as_mut().unwrap().deserialize_and_filter(
                 columns_chunks,
                 part,
-                self.output_schema.fields().is_empty() && self.virtual_reader.is_none(),
+                no_output_columns,
             )?;
 
             // Virtual columns are read in addition to the columns `ReadState`
