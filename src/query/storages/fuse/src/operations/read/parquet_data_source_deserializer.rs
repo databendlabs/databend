@@ -38,8 +38,10 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use roaring::RoaringTreemap;
 
 use super::parquet_data_source::BlockSource;
+use super::parquet_data_source::ParquetDataSource;
 use super::read_state::ReadState;
 use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
@@ -128,6 +130,120 @@ impl DeserializeDataTransform {
             read_state: None,
         })))
     }
+
+    /// A block whose rows come from the index matches alone. Use the same row-id and
+    /// score mapping as a filtered scan: the index can return rows in score order,
+    /// not block-offset order.
+    fn index_rows_block(
+        &mut self,
+        part: &FuseBlockPartInfo,
+        offsets: RoaringTreemap,
+    ) -> Result<DataBlock> {
+        let rows = offsets.len() as usize;
+        self.scan_progress.incr(&ProgressValues { rows, bytes: 0 });
+        add_data_block_meta(
+            DataBlock::empty_with_rows(rows),
+            part,
+            Some(offsets),
+            self.base_block_ids.clone(),
+            &self.block_meta_options,
+        )
+    }
+
+    fn deserialize_parquet(
+        &mut self,
+        part: &FuseBlockPartInfo,
+        read_res: ParquetDataSource,
+    ) -> Result<DataBlock> {
+        let start = Instant::now();
+        let columns_chunks = read_res.data.columns_chunks()?;
+
+        if self.read_state.is_none() {
+            self.read_state = Some(ReadState::create(
+                self.ctx.clone(),
+                self.scan_id,
+                self.prewhere_info.as_ref(),
+                self.block_reader.clone(),
+            )?);
+        }
+
+        let ReadStateOutput {
+            block: mut data_block,
+            bitmap_selection,
+            mut scan_stats,
+        } = self.read_state.as_mut().unwrap().deserialize_and_filter(
+            columns_chunks,
+            part,
+            self.output_schema.fields().is_empty() && self.virtual_reader.is_none(),
+            read_res.condition.as_ref(),
+            read_res.io_skipped,
+        )?;
+
+        // Virtual columns are read in addition to the columns `ReadState`
+        // accounted for, so add them to the scan statistics.
+        if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+            let bytes_before = data_block.memory_size();
+            let virtual_block_location = read_res
+                .virtual_data
+                .as_ref()
+                .map(|data| data.virtual_block_location.clone());
+            data_block = virtual_reader
+                .deserialize_virtual_columns(
+                    data_block,
+                    read_res.virtual_data,
+                    bitmap_selection
+                        .as_ref()
+                        .map(|bitmap| RowSelection::from(bitmap).selection),
+                )
+                .inspect_err(|error| {
+                    log::warn!(
+                        "failed to deserialize virtual columns: block_location={}, virtual_block_location={:?}, error={}",
+                        part.location,
+                        virtual_block_location,
+                        error
+                    );
+                })?;
+            scan_stats.add_decoded_bytes(
+                data_block.memory_size().saturating_sub(bytes_before),
+                data_block.num_rows(),
+            );
+        }
+
+        // Perf.
+        {
+            metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+        }
+
+        // Report the rows and bytes the scan actually processed, not what
+        // survived prewhere / runtime filters: scan progress drives
+        // `system.processes`, `system_history.query_history` and the
+        // `ScanBytes` profile, which measure scan workload rather than
+        // filter output.
+        let progress_values = ProgressValues {
+            rows: scan_stats.rows,
+            bytes: scan_stats.bytes,
+        };
+        self.scan_progress.incr(&progress_values);
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, scan_stats.bytes);
+
+        let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+
+        // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+        // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
+        let offsets = if self.block_meta_options.query_internal_columns {
+            bitmap_selection.as_ref().map(selected_row_offsets)
+        } else {
+            None
+        };
+
+        add_data_block_meta(
+            data_block,
+            part,
+            offsets,
+            self.base_block_ids.clone(),
+            &self.block_meta_options,
+        )
+    }
 }
 
 #[async_trait::async_trait]
@@ -191,117 +307,14 @@ impl Processor for DeserializeDataTransform {
     fn process(&mut self) -> Result<()> {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
-        if let Some((part, read_res)) = part.zip(chunks) {
-            let part = FuseBlockPartInfo::from_part(&part)?;
-            let read_res = match read_res {
-                BlockSource::Parquet(source) => source,
-                BlockSource::IndexRows(offsets) => {
-                    // Use the same row-id and score mapping as a filtered scan. The
-                    // index can return rows in score order, not block-offset order.
-                    let rows = offsets.len() as usize;
-                    self.scan_progress.incr(&ProgressValues { rows, bytes: 0 });
-                    self.output_data = Some(add_data_block_meta(
-                        DataBlock::empty_with_rows(rows),
-                        part,
-                        Some(offsets),
-                        self.base_block_ids.clone(),
-                        &self.block_meta_options,
-                    )?);
-                    return Ok(());
-                }
-            };
-            let start = Instant::now();
-            let columns_chunks = read_res.data.columns_chunks()?;
-
-            if self.read_state.is_none() {
-                self.read_state = Some(ReadState::create(
-                    self.ctx.clone(),
-                    self.scan_id,
-                    self.prewhere_info.as_ref(),
-                    self.block_reader.clone(),
-                )?);
-            }
-
-            let ReadStateOutput {
-                block: mut data_block,
-                bitmap_selection,
-                mut scan_stats,
-            } = self.read_state.as_mut().unwrap().deserialize_and_filter(
-                columns_chunks,
-                part,
-                self.output_schema.fields().is_empty() && self.virtual_reader.is_none(),
-                read_res.condition.as_ref(),
-                read_res.io_skipped,
-            )?;
-
-            // Virtual columns are read in addition to the columns `ReadState`
-            // accounted for, so add them to the scan statistics.
-            if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                let bytes_before = data_block.memory_size();
-                let virtual_block_location = read_res
-                    .virtual_data
-                    .as_ref()
-                    .map(|data| data.virtual_block_location.clone());
-                data_block = virtual_reader
-                    .deserialize_virtual_columns(
-                        data_block,
-                        read_res.virtual_data,
-                        bitmap_selection
-                            .as_ref()
-                            .map(|bitmap| RowSelection::from(bitmap).selection),
-                    )
-                    .inspect_err(|error| {
-                        log::warn!(
-                            "failed to deserialize virtual columns: block_location={}, virtual_block_location={:?}, error={}",
-                            part.location,
-                            virtual_block_location,
-                            error
-                        );
-                    })?;
-                scan_stats.add_decoded_bytes(
-                    data_block.memory_size().saturating_sub(bytes_before),
-                    data_block.num_rows(),
-                );
-            }
-
-            // Perf.
-            {
-                metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
-            }
-
-            // Report the rows and bytes the scan actually processed, not what
-            // survived prewhere / runtime filters: scan progress drives
-            // `system.processes`, `system_history.query_history` and the
-            // `ScanBytes` profile, which measure scan workload rather than
-            // filter output.
-            let progress_values = ProgressValues {
-                rows: scan_stats.rows,
-                bytes: scan_stats.bytes,
-            };
-            self.scan_progress.incr(&progress_values);
-            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, scan_stats.bytes);
-
-            let mut data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
-
-            // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-            // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-            let offsets = if self.block_meta_options.query_internal_columns {
-                bitmap_selection.as_ref().map(selected_row_offsets)
-            } else {
-                None
-            };
-
-            data_block = add_data_block_meta(
-                data_block,
-                part,
-                offsets,
-                self.base_block_ids.clone(),
-                &self.block_meta_options,
-            )?;
-
-            self.output_data = Some(data_block);
-        }
-
+        let Some((part, source)) = part.zip(chunks) else {
+            return Ok(());
+        };
+        let part = FuseBlockPartInfo::from_part(&part)?;
+        self.output_data = Some(match source {
+            BlockSource::IndexRows(offsets) => self.index_rows_block(part, offsets)?,
+            BlockSource::Parquet(read_res) => self.deserialize_parquet(part, read_res)?,
+        });
         Ok(())
     }
 }

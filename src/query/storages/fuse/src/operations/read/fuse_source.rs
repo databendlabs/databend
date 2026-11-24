@@ -323,18 +323,18 @@ pub fn adjust_threads_and_request(
     mut max_io_requests: usize,
     plan: &DataSourcePlan,
 ) -> (usize, usize) {
-    let blocks = if plan.parts.partitions_type() == PartInfoType::BlockLevel {
-        Some(plan.parts.len().max(1))
-    } else if let DataSourceInfo::TableSource(info) = &plan.source_info
-        && plan
-            .push_downs
-            .as_ref()
-            .and_then(PushDownInfo::index_top_k_score)
-            .is_some()
-    {
-        lazy_index_scan_blocks(info, plan.parts.len())
-    } else {
-        None
+    let blocks = match (plan.parts.partitions_type(), &plan.source_info) {
+        (PartInfoType::BlockLevel, _) => Some(plan.parts.len().max(1)),
+        (_, DataSourceInfo::TableSource(info))
+            if plan
+                .push_downs
+                .as_ref()
+                .and_then(PushDownInfo::index_top_k_score)
+                .is_some() =>
+        {
+            lazy_index_scan_blocks(info, plan.parts.len())
+        }
+        _ => None,
     };
     if let Some(blocks) = blocks {
         max_threads = max_threads.min(blocks);

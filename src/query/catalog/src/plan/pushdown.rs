@@ -358,25 +358,36 @@ impl PushDownInfo {
     /// Score column a zero-column scan may read from a pruned block. The reader
     /// must still check that this particular block contains *all* output rows.
     pub fn index_top_k_score(&self) -> Option<InternalColumnType> {
-        if self.prewhere.is_some()
+        if self.inverted_index_top_k().is_some() {
+            return Some(InternalColumnType::SearchScore);
+        }
+        self.vector_index_top_k()
+            .map(|_| InternalColumnType::VectorScore)
+    }
+
+    /// The vector counterpart of `inverted_index_top_k`: a nearest-neighbour TopN
+    /// ordered by the vector score alone, with nothing else restricting the scan.
+    /// Farthest rows (`DESC`) are not covered: every row is scored, so the pruned
+    /// candidates are not all the rows a block would output.
+    pub fn vector_index_top_k(&self) -> Option<usize> {
+        self.vector_index.as_ref()?;
+        let limit = self.limit.filter(|limit| *limit > 0)?;
+        if self.inverted_index.is_some()
+            || self.filters.is_some()
+            || self.prewhere.is_some()
             || self.secure_filters.is_some()
             || self.sample.is_some()
             || self.change_type.is_some()
         {
             return None;
         }
-        if self.inverted_index_top_k().is_some() {
-            return Some(InternalColumnType::SearchScore);
+
+        match self.order_by.as_slice() {
+            [(RemoteExpr::ColumnRef { id, .. }, true, _)] if id == VECTOR_SCORE_COL_NAME => {
+                Some(limit)
+            }
+            _ => None,
         }
-        (self.vector_index.is_some()
-            && self.inverted_index.is_none()
-            && self.filters.is_none()
-            && self.limit.is_some_and(|limit| limit > 0)
-            && matches!(
-                self.order_by.as_slice(),
-                [(RemoteExpr::ColumnRef { id, .. }, true, _)] if id == VECTOR_SCORE_COL_NAME
-            ))
-        .then_some(InternalColumnType::VectorScore)
     }
 
     pub fn filter_only_use_index(&self) -> bool {

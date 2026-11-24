@@ -98,13 +98,11 @@ fn covering_input(plan: &FinalTopNPlan) -> Option<CoveringInput<'_>> {
     {
         return None;
     }
-    let mut input = &partial.input;
-    if let Some(eval) = EvalScalar::from_physical_plan(input) {
-        if !eval.exprs.is_empty() {
-            return None;
-        }
-        input = &eval.input;
-    }
+    let input = match EvalScalar::from_physical_plan(&partial.input) {
+        Some(eval) if eval.exprs.is_empty() => &eval.input,
+        Some(_) => return None,
+        None => &partial.input,
+    };
     let filter = Filter::from_physical_plan(input);
     let leaf = filter.map_or(input, |f| &f.input);
     let scan = TableScan::from_physical_plan(leaf)?;
