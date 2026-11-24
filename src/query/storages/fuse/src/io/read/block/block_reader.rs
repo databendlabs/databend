@@ -37,6 +37,7 @@ use databend_storages_common_cache::CachePolicy;
 use opendal::Operator;
 
 use crate::BlockReadResult;
+use crate::io::FuseCaches;
 use crate::io::read::block::parquet::ColumnEncoding;
 use crate::io::read::block::parquet::dictionary_hint_fields;
 
@@ -58,6 +59,10 @@ pub struct BlockReader {
     pub(crate) column_encodings: Arc<HashMap<ColumnId, ColumnEncoding>>,
     /// Config `cache.table_data_encoded_dictionary_ndv_ratio`, read once here.
     pub(crate) dictionary_ndv_ratio: u64,
+    /// Whether encoding may build encodings from the data (frame of reference, dictionaries of
+    /// regular columns), see [`ColumnEncoding::encode`]. Only with the column array cache on:
+    /// without it an encoded column is used once, and building it costs more than it saves.
+    pub(crate) build_encodings: bool,
     /// Arrow fields the Parquet columns are read as, if they differ from the original schema,
     /// see [`dictionary_hint_fields`]. Fixed per reader, so computed once here.
     pub(crate) parquet_hint_fields: Option<Fields>,
@@ -174,6 +179,7 @@ impl BlockReader {
                 Some((field.column_id, encoding))
             })
             .collect::<HashMap<_, _>>();
+        let build_encodings = FuseCaches::instance().column_arrays.is_enabled();
         let dictionary_ndv_ratio = if encode_columns {
             GlobalConfig::instance()
                 .cache
@@ -210,6 +216,7 @@ impl BlockReader {
             policy,
             column_encodings: Arc::new(column_encodings),
             dictionary_ndv_ratio,
+            build_encodings,
             parquet_hint_fields,
             original_schema,
         }))

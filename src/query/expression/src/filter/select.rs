@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::SelectionBuffers;
+use crate::Column;
+use crate::Scalar;
 use crate::Selector;
 use crate::Value;
 use crate::filter::SelectOp;
@@ -97,9 +100,14 @@ impl Selector<'_> {
             DataType::TimestampTz => self.select_type_values_cmp::<TimestampTzType>(
                 &op, left, right, validity, buffers, has_false,
             ),
-            DataType::String => self.select_type_values_cmp::<StringType>(
-                &op, left, right, validity, buffers, has_false,
-            ),
+            DataType::String => {
+                if let Some(bitmap) = Self::compare_empty_string(&op, &left, &right, &validity) {
+                    return Ok(self.select_boolean_column_adapt(bitmap, buffers, has_false));
+                }
+                self.select_type_values_cmp::<StringType>(
+                    &op, left, right, validity, buffers, has_false,
+                )
+            }
             DataType::Variant => self.select_type_values_cmp::<VariantType>(
                 &op, left, right, validity, buffers, has_false,
             ),
@@ -112,6 +120,36 @@ impl Selector<'_> {
             _ => self
                 .select_type_values_cmp::<AnyType>(&op, left, right, validity, buffers, has_false),
         }
+    }
+
+    /// `<string column> <op> ''` decided by the view lengths, without reading the values:
+    /// `= ''` and `<= ''` keep empty strings, `<> ''` and `> ''` keep the others.
+    fn compare_empty_string(
+        op: &SelectOp,
+        left: &Value<AnyType>,
+        right: &Value<AnyType>,
+        validity: &Option<Bitmap>,
+    ) -> Option<Bitmap> {
+        let empty = match op {
+            SelectOp::Equal | SelectOp::Lte => true,
+            SelectOp::NotEqual | SelectOp::Gt => false,
+            SelectOp::Gte | SelectOp::Lt => return None,
+        };
+        // `op` is already oriented as `<column> <op> <scalar>`.
+        let ((Value::Column(Column::String(column)), Value::Scalar(Scalar::String(scalar)))
+        | (Value::Scalar(Scalar::String(scalar)), Value::Column(Column::String(column)))) =
+            (left, right)
+        else {
+            return None;
+        };
+        if !scalar.is_empty() {
+            return None;
+        }
+        let bitmap = column.empty_bitmap(empty);
+        Some(match validity {
+            Some(validity) => &bitmap & validity,
+            None => bitmap,
+        })
     }
 
     fn select_values_decimal(

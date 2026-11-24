@@ -191,3 +191,17 @@ fn test_compare() {
     assert_eq!(min, min_expect);
     assert_eq!(max, max_expect);
 }
+
+#[test]
+fn test_empty_bitmap() {
+    let data = ["", "a", "", "a long value past the inline view", "\0"];
+    let array: Utf8ViewColumn = data.into_iter().collect();
+    let empty: Vec<bool> = array.empty_bitmap(true).iter().collect();
+    assert_eq!(empty, [true, false, true, false, false]);
+    let non_empty: Vec<bool> = array.empty_bitmap(false).iter().collect();
+    assert_eq!(non_empty, [false, true, false, true, true]);
+
+    let sliced = array.sliced(1, 3);
+    let empty: Vec<bool> = sliced.empty_bitmap(true).iter().collect();
+    assert_eq!(empty, [false, true, false]);
+}

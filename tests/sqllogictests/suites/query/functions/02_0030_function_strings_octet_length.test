@@ -18,3 +18,39 @@ select octet_length('lllllll')
 ----
 7
 
+
+statement ok
+CREATE OR REPLACE TABLE t_octet_length(s STRING NULL)
+
+statement ok
+INSERT INTO t_octet_length VALUES (''), ('a'), (NULL), ('a value longer than twelve bytes'), ('数据库'), ('')
+
+query TII
+SELECT s, octet_length(s), length(s) FROM t_octet_length ORDER BY s NULLS LAST
+----
+(empty) 0 0
+(empty) 0 0
+a 1 1
+a value longer than twelve bytes 32 32
+数据库 9 3
+NULL NULL NULL
+
+query IIII
+SELECT count_if(s <> ''), count_if(s = ''), count_if('' < s), count_if(s <= '') FROM t_octet_length
+----
+3 2 3 2
+
+query T
+SELECT s FROM t_octet_length WHERE s <> '' ORDER BY s
+----
+a
+a value longer than twelve bytes
+数据库
+
+query I
+SELECT count(*) FROM t_octet_length WHERE s = '' OR s = 'a'
+----
+3
+
+statement ok
+DROP TABLE t_octet_length
