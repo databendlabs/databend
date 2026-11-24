@@ -437,6 +437,108 @@ fn test_agg_hashtable_combine_rows() {
     );
 }
 
+/// The partial table finds the groups of the codes of a dictionary once for the slices of a block,
+/// also when its index restarts and when its payload is taken between the slices.
+#[test]
+fn test_agg_hashtable_partial_dictionary_codes() {
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_expression::BlockGroupKeys;
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    // More values than the partial index holds, so that it restarts.
+    let many = AggregateHashTable::capacity_for_groups(0);
+    let n = many * 2 + 10;
+    let slice = 7_000;
+    let aggrs = vec![
+        resolve_agg("sum", Int64Type::data_type()),
+        resolve_agg("count", Int64Type::data_type()),
+    ];
+    let args: Vec<Vec<BlockEntry>> = vec![
+        vec![Int64Type::from_data((0..n as i64).collect_vec()).into()],
+        vec![Int64Type::from_data((0..n as i64).collect_vec()).into()],
+    ];
+    // An unused value, and two equal values with different codes.
+    for ndv in [100, many] {
+        let mut values = (0..ndv).map(|i| format!("key-{i}")).collect_vec();
+        values.push("key-0".to_string());
+        values.push("unused".to_string());
+        let keys = NarrowBuffer::pack((0..n).map(|i| (i * 7 % (ndv + 1)) as u64), (ndv + 1) as u64);
+        let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+            keys,
+            StringType::from_data(values),
+        ))));
+        for (nullable, take_between) in [(false, false), (true, false), (false, true)] {
+            let column = if nullable {
+                encoded
+                    .clone()
+                    .wrap_nullable(Some(Bitmap::from_iter((0..n).map(|i| i % 5 != 0))))
+            } else {
+                encoded.clone()
+            };
+            let groups: Vec<BlockEntry> = vec![column.clone().into()];
+            let group_types = groups.iter().map(|c| c.data_type()).collect_vec();
+            let mut block_keys = BlockGroupKeys::new((&groups).into(), n);
+            // A nullable dictionary hashes its values once instead.
+            assert_eq!(block_keys.by_codes(), !nullable);
+
+            let mut partial = AggregateHashTable::new(
+                group_types.clone(),
+                aggrs.clone(),
+                HashTableConfig::partial_aggregate(),
+                Arc::new(Bump::new()),
+            );
+            let mut final_table = AggregateHashTable::new(
+                group_types,
+                aggrs.clone(),
+                HashTableConfig::default(),
+                Arc::new(Bump::new()),
+            );
+            let mut state = ProbeState::default();
+            let mut flush_state = PayloadFlushState::default();
+            let mut windows = 0;
+            for start in (0..n).step_by(slice) {
+                let end = (start + slice).min(n);
+                let groups = groups.iter().map(|c| c.slice(start..end)).collect_vec();
+                let args = args
+                    .iter()
+                    .map(|c| c.iter().map(|c| c.slice(start..end)).collect_vec())
+                    .collect_vec();
+                let args: Vec<ProjectedBlock> = args.iter().map(|v| v.into()).collect_vec();
+                windows += partial
+                    .add_groups_partial(
+                        &mut state,
+                        (&groups).into(),
+                        &args,
+                        end - start,
+                        AggregateHashTable::capacity_for_groups(0),
+                        None,
+                        Some(&mut block_keys),
+                    )
+                    .unwrap()
+                    .windows;
+                if take_between {
+                    let payload = partial.take_partial_payload();
+                    final_table
+                        .combine_payloads(&payload, &mut flush_state)
+                        .unwrap();
+                }
+            }
+            assert_eq!(windows > 0, ndv > 100 && !take_between, "{ndv} {nullable}");
+            final_table
+                .combine_payloads(&partial.payload, &mut flush_state)
+                .unwrap();
+            let plain = vec![BlockEntry::from(column.decode_owned())];
+            assert_block_value_sort_eq(
+                &merge_result_block(final_table, aggrs.len()),
+                &aggregate_into_block(&plain, &args, &aggrs, n),
+            );
+        }
+    }
+}
+
 /// Group keys that are dictionary encoded (and arguments that are frame of reference encoded)
 /// must aggregate exactly like their decoded columns.
 #[test]

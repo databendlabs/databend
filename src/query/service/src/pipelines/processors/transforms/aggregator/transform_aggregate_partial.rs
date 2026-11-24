@@ -19,8 +19,8 @@ use databend_common_base::runtime::MemoryMeter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
+use databend_common_expression::BlockGroupKeys;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DictValueHashes;
 use databend_common_expression::EmitReason;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartialAddStats;
@@ -163,7 +163,7 @@ impl TransformPartialAggregate {
     fn aggregate_slice(
         &mut self,
         block: &DataBlock,
-        dict_hashes: Option<&DictValueHashes>,
+        block_keys: &mut BlockGroupKeys,
     ) -> Result<Vec<DataBlock>> {
         let rows_num = block.num_rows();
         let group_columns = ProjectedBlock::project(&self.params.group_columns, block);
@@ -187,7 +187,7 @@ impl TransformPartialAggregate {
                 rows_num,
                 capacity,
                 self.state.sampler(),
-                dict_hashes,
+                Some(block_keys),
             )
         })?;
         self.total += stats;
@@ -270,9 +270,9 @@ impl AccumulatingTransform for TransformPartialAggregate {
         // Aggregate a large block in slices, so that the state can change within it.
         let mut output = vec![];
         let mut start = 0;
-        // Each slice carries the whole dictionary of an encoded group column: hash it once, on
-        // the first aggregated slice, rather than again per slice.
-        let mut dict_hashes = None;
+        // Each slice carries the whole dictionary of an encoded group column: find the groups of
+        // its codes or hash it once, from the first aggregated slice, rather than again per slice.
+        let mut block_keys = None;
         while start < rows_num {
             if matches!(self.state, PartialState::Bypass) {
                 // The rows are forwarded as is: the shuffle routes them by their group keys. The
@@ -291,11 +291,11 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 (0, end) if end == rows_num => block.clone(),
                 _ => block.slice(start..end),
             };
-            let hashes = dict_hashes.get_or_insert_with(|| {
+            let keys = block_keys.get_or_insert_with(|| {
                 let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
-                DictValueHashes::new(group_columns, rows_num)
+                BlockGroupKeys::new(group_columns, rows_num)
             });
-            output.extend(self.aggregate_slice(&slice, hashes.as_ref())?);
+            output.extend(self.aggregate_slice(&slice, keys)?);
             start = end;
         }
         Ok(output)
