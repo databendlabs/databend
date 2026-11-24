@@ -19,11 +19,41 @@ use databend_common_expression::auto_cast_rules::cast_from_variant_rules;
 use databend_common_expression::auto_cast_rules::cast_int_to_uint64_rules;
 use databend_common_expression::auto_cast_rules::general_cast_rules;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 
 use crate::scalars::ALL_COMP_FUNC_NAMES;
 use crate::scalars::ALL_STRING_FUNC_NAMES;
 use crate::scalars::PURE_STRING_FUNC_NAMES;
+
+/// The functions that convert a value to another type. A cast may run one of them, see
+/// `casts.rs`, but their auto cast rules are their own.
+const CONVERSION_FUNCTIONS: &[&str] = &[
+    "to_binary",
+    "to_string",
+    "to_uint8",
+    "to_uint16",
+    "to_uint32",
+    "to_uint64",
+    "to_int8",
+    "to_int16",
+    "to_int32",
+    "to_int64",
+    "to_float32",
+    "to_float64",
+    "to_timestamp",
+    "to_timestamp_tz",
+    "to_interval",
+    "to_date",
+    "to_variant",
+    "to_boolean",
+    "to_decimal",
+    "to_bitmap",
+    "to_geometry",
+    "to_geography",
+    "parse_json",
+];
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(general_cast_rules());
@@ -96,4 +126,21 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
     registry.register_additional_cast_rules("contains", general_cast_rules());
     registry.register_additional_cast_rules("contains", cast_from_variant_rules());
+
+    // A conversion function takes an argument of another type through the general rules only,
+    // not by parsing a string or extracting a Variant.
+    for func_name in CONVERSION_FUNCTIONS {
+        registry.register_additional_cast_rules(func_name, general_cast_rules());
+    }
+    // Of the number functions, only `to_int64` takes a Date or a Timestamp; the others take them
+    // through Int64.
+    for num in ALL_NUMERICS_TYPES {
+        if *num != NumberDataType::Int64 {
+            let func_name = format!("to_{num}").to_lowercase();
+            registry.register_additional_cast_rules(&func_name, [
+                (DataType::Date, DataType::Number(NumberDataType::Int64)),
+                (DataType::Timestamp, DataType::Number(NumberDataType::Int64)),
+            ]);
+        }
+    }
 }

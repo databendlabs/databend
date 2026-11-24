@@ -16,10 +16,10 @@
 //!
 //! A cast step converts a value with the function registered here, and its domain is the domain
 //! of that function. A cast without a function of its own is registered as a chain. Casts that
-//! need the internals of a sub-crate are registered there.
+//! need the internals of a sub-crate are registered there. A cast only runs the function; the
+//! auto cast rules of the function, which check a call of it, are its own, in `cast_rules.rs`.
 
 use databend_common_expression::FunctionRegistry;
-use databend_common_expression::auto_cast_rules::general_cast_rules;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::DataType;
@@ -35,40 +35,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     databend_functions_scalar_decimal::register_decimal_casts(registry);
     databend_functions_scalar_datetime::datetime::register_casts(registry);
     register_cast_chains(registry);
-    register_conversion_auto_cast_rules(registry);
-}
-
-/// A conversion function takes an argument of another type through the general rules only, not by
-/// parsing a string or extracting a Variant. A cast registered as a chain converts through its
-/// intermediate type, and so does the conversion function: `to_int8(date)` checks as
-/// `to_int8(CAST(date AS Int64))`, as `CAST(date AS Int8)` runs.
-fn register_conversion_auto_cast_rules(registry: &mut FunctionRegistry) {
-    let function_names = registry
-        .conversion_functions
-        .values()
-        .cloned()
-        .chain(["parse_json".to_string()])
-        .collect::<Vec<_>>();
-    for function_name in &function_names {
-        registry.register_additional_cast_rules(function_name, general_cast_rules());
-    }
-
-    let chains = registry
-        .cast_chains
-        .iter()
-        .map(|((src, dest), via)| (src.clone(), via.clone(), dest.clone()))
-        .collect::<Vec<_>>();
-    for (src, via, dest) in chains {
-        // A decimal of any size casts to Float64 by `decimal_auto_cast`.
-        if matches!(src, DataType::Decimal(_)) {
-            continue;
-        }
-        let function_name = registry
-            .get_conversion_function(&dest)
-            .unwrap_or_else(|| panic!("no conversion function to {dest}"))
-            .to_string();
-        registry.register_additional_cast_rules(&function_name, [(src, via)]);
-    }
 }
 
 /// `to_x` converts values to X, and a cast to X runs it unless registered with another function.
