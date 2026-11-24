@@ -34,7 +34,6 @@ pub use fuse_source::build_fuse_source_pipeline;
 pub use parquet_data_source_deserializer::DeserializeDataTransform;
 pub use read_state::BlockScanStats;
 pub use read_state::ReadState;
-pub use read_state::ReadStateBatch;
 pub use read_state::ReadStateOutput;
 pub use util::need_reserve_block_info;
 pub use util::selected_row_offsets;

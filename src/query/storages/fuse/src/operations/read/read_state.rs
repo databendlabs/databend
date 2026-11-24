@@ -132,11 +132,11 @@ pub struct ReadStateOutput {
 }
 
 /// One output batch of [`ReadState::deserialize_batches`].
-pub struct ReadStateBatch {
-    pub block: DataBlock,
+pub(crate) struct ReadStateBatch {
+    pub(crate) block: DataBlock,
     /// Original block row indices of the rows in `block`, populated when the caller
     /// requested row offsets for internal columns.
-    pub offsets: Option<RoaringTreemap>,
+    pub(crate) offsets: Option<RoaringTreemap>,
 }
 
 pub struct ReadState {
@@ -441,7 +441,7 @@ impl ReadState {
     /// and index row selections (`BlockMetaIndex::selected_rows`). Returns `None` when the
     /// block does not need splitting or must be decoded whole (non-deterministic filter,
     /// count-only scan without runtime filters, deserialized column cache, or encoded columns).
-    pub fn deserialize_batches(
+    pub(crate) fn deserialize_batches(
         &mut self,
         columns_chunks: &HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,

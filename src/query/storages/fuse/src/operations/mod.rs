@@ -55,7 +55,6 @@ pub use read::BlockPartitionMeta;
 pub use read::BlockScanStats;
 pub use read::DeserializeDataTransform;
 pub use read::ReadState;
-pub use read::ReadStateBatch;
 pub use read::ReadStateOutput;
 pub use read::need_reserve_block_info;
 pub use read::row_fetch_processor;
