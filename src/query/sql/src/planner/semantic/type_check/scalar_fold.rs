@@ -491,20 +491,27 @@ where A: TypeCheckAdapter
         child: &ScalarExpr,
         facts: &ScalarFacts,
     ) -> ArgFacts {
-        let mut arg = self.wrapped_facts(checked, &child.data_type(), facts);
-        if arg.constant.is_none() && arg.deterministic {
-            arg.constant = if facts.column_free && facts.evaluable {
-                // A column-free child is lowered as a whole, so the checked
-                // argument can be evaluated directly.
+        // A column-free child is lowered as a whole, so the checked argument can be evaluated
+        // directly, once. A value that fails to evaluate is left for runtime.
+        let evaluable = facts.column_free && facts.evaluable;
+        if evaluable
+            && facts.deterministic
+            && checked.as_constant().is_none()
+            && let Some(constant) =
                 FoldRules::eval_constant(&self.func_ctx, &BUILTIN_FUNCTIONS, checked)
-            } else if arg.removable {
-                arg.domain.as_ref().and_then(Domain::as_singleton)
-            } else {
-                None
+        {
+            return ArgFacts {
+                domain: Some(constant.as_ref().domain(checked.data_type())),
+                constant: Some(constant),
+                removable: true,
+                deterministic: true,
             };
+        }
+        let mut arg = self.wrapped_facts(checked, &child.data_type(), facts);
+        if arg.constant.is_none() && arg.deterministic && !evaluable && arg.removable {
+            arg.constant = arg.domain.as_ref().and_then(Domain::as_singleton);
             if let Some(constant) = &arg.constant {
                 arg.domain = Some(constant.as_ref().domain(checked.data_type()));
-                arg.removable = true;
             }
         }
         arg
@@ -535,7 +542,6 @@ where A: TypeCheckAdapter
                     FoldRules::cast_domain(
                         &self.func_ctx,
                         &BUILTIN_FUNCTIONS,
-                        cast.span,
                         cast.expr.data_type(),
                         &cast.dest_type,
                         cast.is_try,

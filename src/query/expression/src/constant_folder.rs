@@ -488,68 +488,34 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let (inner_result, inner_domain) = self.fold_once(expr);
                 let inner_changed = inner_result.is_changed();
 
-                let new_domain = if is_try {
-                    inner_domain.and_then(|inner_domain| {
-                        FoldRules::calculate_try_cast(
-                            self.func_ctx,
-                            self.fn_registry,
-                            span,
-                            &src_type,
-                            dest_type,
-                            &inner_domain,
-                        )
-                    })
-                } else {
-                    inner_domain.and_then(|inner_domain| {
-                        FoldRules::calculate_cast(
-                            self.func_ctx,
-                            self.fn_registry,
-                            span,
-                            &src_type,
-                            dest_type,
-                            &inner_domain,
-                        )
-                    })
-                };
-
-                let inner_is_constant = inner_result.as_ref().as_constant().is_some();
-                if inner_is_constant {
-                    if !inner_changed && let Some(cast_expr) = node.borrowed_expr() {
-                        let (cast_expr, folded) =
-                            self.try_fold_constant_expr(Cow::Borrowed(cast_expr));
-                        if folded {
-                            return (FoldResult::Changed(cast_expr.into_owned()), None);
-                        }
+                // A constant converts by running the cast once, which also decides whether it
+                // fails; a cast that fails is left for runtime and has no domain.
+                if inner_result.as_ref().as_constant().is_some() {
+                    let cast_expr = if !inner_changed && let Some(cast_expr) = node.borrowed_expr()
+                    {
+                        Cow::Borrowed(cast_expr)
                     } else {
-                        let cast_expr = node.finish(inner_result.into_expr());
-                        let (cast_expr, folded) =
-                            self.try_fold_constant_expr(Cow::Owned(cast_expr));
-                        if folded {
-                            return (FoldResult::Changed(cast_expr.into_owned()), None);
-                        }
-
-                        if let Some(scalar) = new_domain.as_ref().and_then(Domain::as_singleton) {
-                            let Expr::Cast(cast) = cast_expr.into_owned() else {
-                                unreachable!()
-                            };
-                            return (
-                                FoldResult::Changed(Expr::Constant(Constant {
-                                    span: cast.span,
-                                    scalar,
-                                    data_type: cast.dest_type,
-                                })),
-                                new_domain,
-                            );
-                        }
-
-                        let result = if inner_changed {
-                            FoldResult::Changed(cast_expr.into_owned())
-                        } else {
-                            FoldResult::Unchanged(cast_expr)
-                        };
-                        return (result, new_domain);
-                    }
+                        Cow::Owned(node.finish(inner_result.into_expr()))
+                    };
+                    let (cast_expr, folded) = self.try_fold_constant_expr(cast_expr);
+                    let result = if folded || inner_changed {
+                        FoldResult::Changed(cast_expr.into_owned())
+                    } else {
+                        FoldResult::Unchanged(cast_expr)
+                    };
+                    return (result, None);
                 }
+
+                let new_domain = inner_domain.and_then(|inner_domain| {
+                    FoldRules::cast_domain(
+                        self.func_ctx,
+                        self.fn_registry,
+                        &src_type,
+                        dest_type,
+                        is_try,
+                        &inner_domain,
+                    )
+                });
 
                 if let Some(scalar) = new_domain.as_ref().and_then(Domain::as_singleton) {
                     (

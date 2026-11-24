@@ -19,8 +19,6 @@
 //! with another tree type can apply the same decision to its own nodes. Only
 //! [`FoldRules::eval_constant`] takes an expression, which must be free of columns.
 
-use databend_common_ast::Span;
-
 use super::monotonicity::calculate_monotonicity_domain;
 use super::monotonicity::is_monotonic;
 use crate::ColumnIndex;
@@ -32,17 +30,19 @@ use crate::FunctionRegistry;
 use crate::Scalar;
 use crate::Value;
 use crate::block::DataBlock;
+use crate::cast_plan::CastCall;
+use crate::cast_plan::CastPlan;
+use crate::cast_plan::CastStep;
+use crate::cast_plan::resolve_cast_plan;
 use crate::evaluator::Evaluator;
-use crate::expression::Cast;
 use crate::expression::ColumnRef;
-use crate::expression::Constant;
 use crate::expression::Expr;
 use crate::expression::ExprVisitor;
 use crate::expression::FunctionCall;
 use crate::expression::LambdaFunctionCall;
 use crate::expression::visit_expr;
 use crate::property::Domain;
-use crate::type_check::resolve_cast_function;
+use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
@@ -62,299 +62,252 @@ impl FoldRules {
     pub fn cast_domain(
         func_ctx: &FunctionContext,
         fn_registry: &FunctionRegistry,
-        span: Span,
         src_type: &DataType,
         dest_type: &DataType,
         is_try: bool,
         domain: &Domain,
     ) -> Option<Domain> {
-        if is_try {
-            Self::calculate_try_cast(func_ctx, fn_registry, span, src_type, dest_type, domain)
-        } else {
-            Self::calculate_cast(func_ctx, fn_registry, span, src_type, dest_type, domain)
-        }
+        let plan = resolve_cast_plan(src_type, dest_type, fn_registry)?;
+        let (domain, may_fail) =
+            Self::cast_plan_domain(func_ctx, fn_registry, &plan, is_try, domain)?;
+        // The destination of `TRY_CAST` is nullable, so a failed row is NULL by now.
+        debug_assert!(!may_fail);
+        Some(domain)
     }
 
-    pub(super) fn calculate_cast(
+    /// Domain of the output of a cast plan, and whether a row may fail, which is only possible
+    /// for `TRY_CAST`. A failed row becomes NULL at the nearest nullable destination, as in
+    /// `Evaluator::run_cast_plan`. Returns `None` when the domain is unknown, or when a row of
+    /// `CAST` may fail.
+    fn cast_plan_domain(
         func_ctx: &FunctionContext,
         fn_registry: &FunctionRegistry,
-        span: Span,
-        src_type: &DataType,
-        dest_type: &DataType,
+        plan: &CastPlan,
+        is_try: bool,
         domain: &Domain,
-    ) -> Option<Domain> {
-        if src_type == dest_type {
-            return Some(domain.clone());
-        }
+    ) -> Option<(Domain, bool)> {
+        let dest_type = &plan.dest_type;
+        let nested = |plan: &CastPlan, domain: &Domain| {
+            Self::cast_plan_domain(func_ctx, fn_registry, plan, is_try, domain)
+        };
 
-        if let Some(call) = resolve_cast_function(span, false, src_type, dest_type, fn_registry)
-            && let Some(new_domain) =
-                Self::calculate_simple_cast(func_ctx, fn_registry, call, domain)
-        {
-            return new_domain;
-        }
-
-        match (src_type, dest_type) {
-            (DataType::Null, DataType::Nullable(_)) => Some(domain.clone()),
-            (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => {
-                let domain = domain.as_nullable().unwrap();
-                let value = match &domain.value {
-                    Some(value) => Some(Box::new(Self::calculate_cast(
-                        func_ctx,
-                        fn_registry,
-                        span,
-                        inner_src_ty,
-                        inner_dest_ty,
-                        value,
-                    )?)),
-                    None => None,
+        let (output, may_fail) = match &plan.step {
+            CastStep::Identity => (domain.clone(), false),
+            CastStep::Null if dest_type.is_nullable_or_null() => (domain.clone(), false),
+            CastStep::Null => return None,
+            CastStep::Function {
+                call,
+                reject_null,
+                returns_null,
+            } => {
+                let src_type = &plan.src_type;
+                // A function step with a nullable source keeps its NULLs.
+                let (input, input_has_null) = match domain {
+                    Domain::Nullable(NullableDomain { has_null, value })
+                        if src_type.is_nullable() =>
+                    {
+                        (value.as_deref(), *has_null)
+                    }
+                    domain => (Some(domain), false),
                 };
-                Some(Domain::Nullable(NullableDomain {
-                    has_null: domain.has_null,
-                    value,
-                }))
-            }
-            (_, DataType::Nullable(inner_dest_ty)) => Some(Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(Self::calculate_cast(
-                    func_ctx,
-                    fn_registry,
-                    span,
-                    src_type,
-                    inner_dest_ty,
-                    domain,
-                )?)),
-            })),
-
-            (DataType::EmptyArray, DataType::Array(_)) => Some(domain.clone()),
-            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => {
-                let inner_domain = match domain.as_array().unwrap() {
-                    Some(inner_domain) => Some(Box::new(Self::calculate_cast(
-                        func_ctx,
-                        fn_registry,
-                        span,
-                        inner_src_ty,
-                        inner_dest_ty,
-                        inner_domain,
-                    )?)),
-                    None => None,
-                };
-                Some(Domain::Array(inner_domain))
-            }
-
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-                if fields_src_ty.len() == fields_dest_ty.len() =>
-            {
-                Some(Domain::Tuple(
-                    domain
-                        .as_tuple()
-                        .unwrap()
-                        .iter()
-                        .zip(fields_src_ty)
-                        .zip(fields_dest_ty)
-                        .map(|((field_domain, src_ty), dest_ty)| {
-                            Self::calculate_cast(
+                let (value, has_null, may_fail) = match input {
+                    Some(input) => {
+                        let (output, may_fail) = match input.as_singleton() {
+                            Some(value) => Self::cast_value_domain(
                                 func_ctx,
                                 fn_registry,
-                                span,
-                                src_ty,
-                                dest_ty,
-                                field_domain,
-                            )
-                        })
-                        .collect::<Option<Vec<_>>>()?,
-                ))
-            }
-
-            _ => None,
-        }
-    }
-
-    pub(super) fn calculate_try_cast(
-        func_ctx: &FunctionContext,
-        fn_registry: &FunctionRegistry,
-        span: Span,
-        src_type: &DataType,
-        dest_type: &DataType,
-        domain: &Domain,
-    ) -> Option<Domain> {
-        if src_type == dest_type {
-            return Some(domain.clone());
-        }
-
-        // The dest_type of `TRY_CAST` must be `Nullable`, which is guaranteed by the type checker.
-        let inner_dest_type = &**dest_type.as_nullable().unwrap();
-
-        if let Some(call) = resolve_cast_function(span, true, src_type, dest_type, fn_registry)
-            && let Some(new_domain) =
-                Self::calculate_simple_cast(func_ctx, fn_registry, call, domain)
-        {
-            return new_domain;
-        }
-
-        match (src_type, inner_dest_type) {
-            (DataType::Null, _) => Some(domain.clone()),
-            (DataType::Nullable(inner_src_ty), _) => {
-                let nullable_domain = domain.as_nullable().unwrap();
-                match &nullable_domain.value {
-                    Some(value) => {
-                        let new_domain = Self::calculate_try_cast(
-                            func_ctx,
-                            fn_registry,
-                            span,
-                            inner_src_ty,
-                            dest_type,
-                            value,
-                        )?
-                        .into_nullable()
-                        .unwrap();
-                        Some(Domain::Nullable(NullableDomain {
-                            has_null: nullable_domain.has_null || new_domain.has_null,
-                            value: new_domain.value,
-                        }))
+                                call,
+                                &dest_type.remove_nullable(),
+                                value,
+                            ),
+                            None => Self::cast_function_domain(
+                                func_ctx,
+                                call,
+                                src_type.is_nullable(),
+                                *returns_null,
+                                input,
+                            )?,
+                        };
+                        (output.value, input_has_null || output.has_null, may_fail)
                     }
-                    None => Some(domain.clone()),
+                    None => (None, true, false),
+                };
+                // A row that fails is an error for `CAST`.
+                if may_fail && !is_try {
+                    return None;
+                }
+                if dest_type.is_nullable() {
+                    let output = Domain::Nullable(NullableDomain { has_null, value });
+                    (output, may_fail)
+                } else {
+                    debug_assert!(*reject_null || !has_null);
+                    // A NULL is an error for `CAST`.
+                    if has_null && !is_try {
+                        return None;
+                    }
+                    (*value?, may_fail || has_null)
                 }
             }
-            (src_ty, inner_dest_ty) if src_ty == inner_dest_ty => {
-                Some(Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(domain.clone())),
-                }))
+            CastStep::Chain(steps) => {
+                let mut output = domain.clone();
+                let mut may_fail = false;
+                for step in steps {
+                    let (step_output, step_may_fail) = nested(step, &output)?;
+                    output = step_output;
+                    may_fail |= step_may_fail;
+                }
+                (output, may_fail)
             }
-
-            (DataType::EmptyArray, DataType::Array(_)) => Some(Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(domain.clone())),
-            })),
-            (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => {
-                let inner_domain = match domain.as_array().unwrap() {
-                    Some(inner_domain) => Some(Box::new(Self::calculate_try_cast(
-                        func_ctx,
-                        fn_registry,
-                        span,
-                        inner_src_ty,
-                        inner_dest_ty,
-                        inner_domain,
-                    )?)),
-                    None => None,
-                };
-                Some(Domain::Nullable(NullableDomain {
-                    has_null: false,
-                    value: Some(Box::new(Domain::Array(inner_domain))),
-                }))
+            CastStep::Nullable(inner) => {
+                let domain = domain.as_nullable()?;
+                match &domain.value {
+                    Some(value) => {
+                        let (value, may_fail) = nested(inner, value)?;
+                        let output = Domain::Nullable(NullableDomain {
+                            has_null: domain.has_null,
+                            value: Some(Box::new(value)),
+                        });
+                        (output, may_fail)
+                    }
+                    None => (Domain::Nullable(domain.clone()), false),
+                }
             }
-
-            (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
-                if fields_src_ty.len() == fields_dest_ty.len() =>
-            {
-                let fields_domain = domain.as_tuple().unwrap();
-                let new_fields_domain = fields_domain
+            CastStep::FromNullable(inner) => {
+                let domain = domain.as_nullable()?;
+                // A NULL is an error for `CAST`.
+                if domain.has_null && !is_try {
+                    return None;
+                }
+                let (output, may_fail) = nested(inner, domain.value.as_ref()?)?;
+                (output, may_fail || domain.has_null)
+            }
+            CastStep::ToNullable(inner) => {
+                let (value, may_fail) = nested(inner, domain)?;
+                let output = Domain::Nullable(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(value)),
+                });
+                (output, may_fail)
+            }
+            CastStep::EmptyArray => (domain.clone(), false),
+            CastStep::Array(inner) => match domain.as_array()? {
+                Some(values) => {
+                    let (values, may_fail) = nested(inner, values)?;
+                    (Domain::Array(Some(Box::new(values))), may_fail)
+                }
+                None => (Domain::Array(None), false),
+            },
+            CastStep::Tuple(fields) => {
+                let mut may_fail = false;
+                let fields = domain
+                    .as_tuple()?
                     .iter()
-                    .zip(fields_src_ty)
-                    .zip(fields_dest_ty)
-                    .map(|((domain, src_ty), dest_ty)| {
-                        Self::calculate_try_cast(
-                            func_ctx,
-                            fn_registry,
-                            span,
-                            src_ty,
-                            dest_ty,
-                            domain,
-                        )
+                    .zip(fields)
+                    .map(|(domain, field)| {
+                        let (output, field_may_fail) = nested(field, domain)?;
+                        may_fail |= field_may_fail;
+                        Some(output)
                     })
-                    .collect::<Option<_>>()?;
-                Some(Domain::Tuple(new_fields_domain))
+                    .collect::<Option<Vec<_>>>()?;
+                (Domain::Tuple(fields), may_fail)
             }
+            CastStep::EmptyMap => (domain.clone(), false),
+            // The entries of a map convert as the elements of an array do.
+            CastStep::Map(inner) => match domain.as_map()? {
+                Some(entries) => {
+                    let (entries, may_fail) = nested(inner, entries)?;
+                    (Domain::Map(Some(Box::new(entries))), may_fail)
+                }
+                None => (Domain::Map(None), false),
+            },
+            CastStep::VariantToArray(_) | CastStep::VariantToMap(_) | CastStep::ToVector => {
+                return None;
+            }
+        };
 
-            _ => None,
+        if !may_fail {
+            return Some((output, false));
         }
+        if dest_type.is_nullable_or_null() {
+            let value = match output {
+                Domain::Nullable(output) => output.value,
+                output => Some(Box::new(output)),
+            };
+            return Some((
+                Domain::Nullable(NullableDomain {
+                    has_null: true,
+                    value,
+                }),
+                false,
+            ));
+        }
+        // A failed row is an error for `CAST`, so the domain is unknown.
+        is_try.then_some((output, true))
     }
 
-    /// Domain of a call built by `resolve_cast_function`, which reads the
-    /// cast input as column 0, directly or through an implicit cast. The
-    /// result follows the domain rules of both; when the argument has a
-    /// single value, the call is evaluated on it.
-    fn calculate_simple_cast(
+    /// The output of `call`, the function of a cast step, for non-NULL input in `input`: the
+    /// values and whether one is NULL, and whether a row may fail. A function that does not
+    /// return NULL for a non-NULL value, as `returns_null` tells, has no NULL output then, even
+    /// when the domain of its nullable overload does not say so.
+    fn cast_function_domain(
+        func_ctx: &FunctionContext,
+        call: &CastCall,
+        src_is_nullable: bool,
+        returns_null: bool,
+        input: &Domain,
+    ) -> Option<(NullableDomain<AnyType>, bool)> {
+        let FunctionEval::Scalar { calc_domain, .. } = &call.function.eval else {
+            return None;
+        };
+        let input = if src_is_nullable {
+            Domain::Nullable(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(input.clone())),
+            })
+        } else {
+            input.clone()
+        };
+        let return_type = &call.return_type;
+        let (domain, may_fail) = match calc_domain.domain_eval(func_ctx, &[input]) {
+            FunctionDomain::MayThrow => (Domain::full(return_type), true),
+            FunctionDomain::MayThrowDomain(domain) => (domain, true),
+            FunctionDomain::Full => (Domain::full(return_type), false),
+            FunctionDomain::Domain(domain) => (domain, false),
+        };
+        let output = match domain {
+            Domain::Nullable(domain) if return_type.is_nullable() => NullableDomain {
+                has_null: returns_null && domain.has_null,
+                value: domain.value,
+            },
+            domain => NullableDomain {
+                has_null: false,
+                value: Some(Box::new(domain)),
+            },
+        };
+        Some((output, may_fail))
+    }
+
+    /// The exact output of `call`, the function of a cast step to `dest_type`, for one non-NULL
+    /// value, by running it: the value, a NULL, or a failure.
+    fn cast_value_domain(
         func_ctx: &FunctionContext,
         fn_registry: &FunctionRegistry,
-        call: FunctionCall,
-        domain: &Domain,
-    ) -> Option<Option<Domain>> {
-        let [arg] = call.args.as_slice() else {
-            return Some(None);
+        call: &CastCall,
+        dest_type: &DataType,
+        value: Scalar,
+    ) -> (NullableDomain<AnyType>, bool) {
+        let block = DataBlock::empty_with_rows(1);
+        let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
+        let (value, may_fail) = match evaluator.run_cast_call(call, value) {
+            Some(Scalar::Null) => (None, false),
+            Some(value) => (Some(value.as_ref().domain(dest_type)), false),
+            None => (None, true),
         };
-        let (arg_domain, arg_value) = match arg {
-            Expr::ColumnRef(_) => (Some(domain.clone()), domain.as_singleton()),
-            Expr::Cast(cast) if matches!(cast.expr.as_ref(), Expr::ColumnRef(_)) => {
-                let (src_type, dest_type) = (cast.expr.data_type(), &cast.dest_type);
-                let arg_domain = if cast.is_try {
-                    Self::calculate_try_cast(
-                        func_ctx,
-                        fn_registry,
-                        cast.span,
-                        src_type,
-                        dest_type,
-                        domain,
-                    )
-                } else {
-                    Self::calculate_cast(
-                        func_ctx,
-                        fn_registry,
-                        cast.span,
-                        src_type,
-                        dest_type,
-                        domain,
-                    )
-                };
-                let input_value = domain.as_singleton().and_then(|value| {
-                    let cast = Expr::Cast(Cast {
-                        expr: Box::new(Self::constant_of(&cast.expr, value)),
-                        ..cast.clone()
-                    });
-                    Self::eval_constant(func_ctx, fn_registry, &cast)
-                });
-                let arg_value = input_value.or_else(|| arg_domain.as_ref()?.as_singleton());
-                (arg_domain, arg_value)
-            }
-            _ => return Some(None),
+        let output = NullableDomain {
+            has_null: !may_fail && value.is_none(),
+            value: value.map(Box::new),
         };
-
-        let return_type = &call.return_type;
-        let output_domain = arg_domain.and_then(|arg_domain| {
-            Self::function_domain(
-                func_ctx,
-                fn_registry,
-                &call.function,
-                &call.generics,
-                return_type,
-                Some(arg.data_type()),
-                &[arg_domain],
-            )
-        });
-        if let Some(value) = output_domain.as_ref().and_then(Domain::as_singleton) {
-            return Some(Some(value.as_ref().domain(return_type)));
-        }
-        let evaluated = arg_value.and_then(|value| {
-            let call = Expr::FunctionCall(FunctionCall {
-                args: vec![Self::constant_of(arg, value)],
-                ..call.clone()
-            });
-            Self::eval_constant(func_ctx, fn_registry, &call)
-        });
-        match evaluated {
-            Some(value) => Some(Some(value.as_ref().domain(return_type))),
-            None => Some(output_domain),
-        }
-    }
-
-    /// `value` in place of `expr`, with its type.
-    fn constant_of<Index: ColumnIndex>(expr: &Expr<Index>, value: Scalar) -> Expr<Index> {
-        Expr::Constant(Constant {
-            span: expr.span(),
-            scalar: value,
-            data_type: expr.data_type().clone(),
-        })
+        (output, may_fail)
     }
 
     /// Evaluates an expression without column references. Returns `None` when it
@@ -413,17 +366,18 @@ impl FoldRules {
         );
         match (res, monotonic) {
             // `is_monotonic` only holds for exactly one argument.
-            (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
-                calculate_monotonicity_domain(
-                    func_ctx,
-                    return_type,
-                    first_arg_type?,
-                    arg_domains.first()?,
-                    generics,
-                    eval.as_ref(),
-                )
-            }
-            (FunctionDomain::MayThrow, _) => None,
+            (
+                FunctionDomain::MayThrow | FunctionDomain::MayThrowDomain(_) | FunctionDomain::Full,
+                true,
+            ) => calculate_monotonicity_domain(
+                func_ctx,
+                return_type,
+                first_arg_type?,
+                arg_domains.first()?,
+                generics,
+                eval.as_ref(),
+            ),
+            (FunctionDomain::MayThrow | FunctionDomain::MayThrowDomain(_), _) => None,
             (FunctionDomain::Full, _) => Some(Domain::full(return_type)),
             (FunctionDomain::Domain(domain), _) => Some(domain),
         }
