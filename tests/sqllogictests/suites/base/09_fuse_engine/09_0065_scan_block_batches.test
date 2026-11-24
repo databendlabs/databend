@@ -59,6 +59,16 @@ join (select id, _row_id as rid, s from t where id < 8192 or (id >= 16384 and id
 ----
 13808 13808
 
+# Every prewhere batch keeps half of its rows, so each remain batch of 8192 selected
+# rows spans two kept prewhere blocks and is sliced at their boundary.
+query II
+select count(*), count(distinct w.rid)
+from r_whole w
+join (select id, _row_id as rid, s from t where id % 2 = 0) b
+  on w.id = b.id and w.rid = b.rid and w.s = b.s;
+----
+15000 15000
+
 # Filter-only prewhere column (`id` not projected) under pushdown.
 query II
 select count(*), count(distinct w.rid)

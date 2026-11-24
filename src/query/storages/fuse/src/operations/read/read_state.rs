@@ -628,10 +628,10 @@ impl ReadState {
             };
 
             if let Some(remain_batch) = surviving {
-                let n = remain_batch.num_rows();
-                let block = assembler.assemble(remain_batch)?;
-                let offsets = offset_cursor.as_mut().map(|c| c.take(n));
-                out.push(ReadStateBatch { block, offsets });
+                assembler.assemble(remain_batch, |block| {
+                    let offsets = offset_cursor.as_mut().map(|c| c.take(block.num_rows()));
+                    out.push(ReadStateBatch { block, offsets });
+                });
             }
         }
         assembler.assert_drained();
@@ -856,15 +856,37 @@ enum RemainAssembler<'a> {
 }
 
 impl RemainAssembler<'_> {
-    fn assemble(&mut self, remain: DataBlock) -> Result<DataBlock> {
+    /// Emits the output blocks of one remain batch, in row order.
+    ///
+    /// With pushed-down `RowSelection`, remain batches hold `batch_rows` selected rows and
+    /// do not line up with the kept prewhere blocks, which hold the rows surviving each
+    /// prewhere batch. The remain batch is then sliced at the kept block boundaries instead
+    /// of concatenating kept blocks, so neither side is copied: a batch yields at most one
+    /// more block than the kept blocks it spans.
+    fn assemble(&mut self, remain: DataBlock, mut emit: impl FnMut(DataBlock)) {
         match self {
-            Self::RemainOnly(indices) => Ok(project_block(remain, *indices)),
-            Self::Merge { kept_pre, sources } => {
-                let pre = kept_pre
-                    .as_mut()
-                    .map(|q| q.take(remain.num_rows()))
-                    .transpose()?;
-                Ok(merge_blocks(pre.as_ref(), &remain, sources))
+            Self::RemainOnly(indices) => emit(project_block(remain, *indices)),
+            Self::Merge {
+                kept_pre: None,
+                sources,
+            } => emit(merge_blocks(None, &remain, sources)),
+            Self::Merge {
+                kept_pre: Some(queue),
+                sources,
+            } => {
+                let rows = remain.num_rows();
+                let mut start = 0;
+                while start < rows {
+                    let pre = queue.pop_front(rows - start);
+                    let len = pre.num_rows();
+                    let remain_rows = if len == rows {
+                        remain.clone()
+                    } else {
+                        remain.slice(start..start + len)
+                    };
+                    emit(merge_blocks(Some(&pre), &remain_rows, sources));
+                    start += len;
+                }
             }
         }
     }
@@ -1136,8 +1158,8 @@ impl<'a> RowOffsetCursor<'a> {
     }
 }
 
-/// FIFO queue of filtered prewhere batches that yields exact row counts to match
-/// `remain_reader` batches (zero-copy pop when sizes match, slice/concat otherwise).
+/// FIFO queue of filtered prewhere batches, consumed in row order by the remain batches
+/// without copying.
 #[derive(Default)]
 struct BlockQueue {
     blocks: VecDeque<DataBlock>,
@@ -1153,33 +1175,25 @@ impl BlockQueue {
         self.blocks.is_empty()
     }
 
-    fn take(&mut self, mut count: usize) -> Result<DataBlock> {
-        let mut parts = Vec::new();
-        while count > 0 {
-            let front = self
-                .blocks
-                .front()
-                .expect("prewhere blocks must match remaining rows");
-            let avail = front.num_rows() - self.offset;
-            let take = count.min(avail);
-            let piece = if take == front.num_rows() {
-                self.blocks.pop_front().unwrap()
-            } else {
-                let slice = front.slice(self.offset..self.offset + take);
-                self.offset += take;
-                if self.offset == front.num_rows() {
-                    self.blocks.pop_front();
-                    self.offset = 0;
-                }
-                slice
-            };
-            count -= take;
-            if count == 0 && parts.is_empty() {
-                return Ok(piece);
-            }
-            parts.push(piece);
+    /// Removes the next at most `max_rows` rows, all from the front block: the whole
+    /// block when it fits, else a zero-copy slice of it.
+    fn pop_front(&mut self, max_rows: usize) -> DataBlock {
+        let front = self
+            .blocks
+            .front()
+            .expect("prewhere blocks must match remaining rows");
+        let end = front.num_rows().min(self.offset + max_rows);
+        if self.offset == 0 && end == front.num_rows() {
+            return self.blocks.pop_front().unwrap();
         }
-        DataBlock::concat(&parts)
+        let piece = front.slice(self.offset..end);
+        if end == front.num_rows() {
+            self.blocks.pop_front();
+            self.offset = 0;
+        } else {
+            self.offset = end;
+        }
+        piece
     }
 }
 
@@ -1325,32 +1339,85 @@ mod tests {
 
     #[test]
     fn test_block_queue() {
-        use databend_common_expression::FromData;
-        use databend_common_expression::types::AccessType;
-        use databend_common_expression::types::Int64Type;
+        let mut queue = BlockQueue::default();
+        let first = int64_block(vec![0, 1, 2, 3]);
+        let first_ptr = int64_values_ptr(&first);
+        queue.push(first);
+        queue.push(int64_block(vec![4, 5]));
+        queue.push(int64_block(vec![6, 7, 8]));
 
-        let make = |vals: Vec<i64>| DataBlock::new_from_columns(vec![Int64Type::from_data(vals)]);
-        let values_of = |block: &DataBlock| -> Vec<i64> {
-            Int64Type::try_downcast_column(&block.get_by_offset(0).to_column())
-                .unwrap()
-                .iter()
-                .copied()
-                .collect()
+        // A whole front block is returned as is.
+        let popped = queue.pop_front(4);
+        assert_eq!(int64_values(&popped), vec![0, 1, 2, 3]);
+        assert_eq!(int64_values_ptr(&popped), first_ptr);
+        // Rows never come from two blocks.
+        assert_eq!(int64_values(&queue.pop_front(3)), vec![4, 5]);
+        assert_eq!(int64_values(&queue.pop_front(1)), vec![6]);
+        assert_eq!(int64_values(&queue.pop_front(5)), vec![7, 8]);
+        assert!(queue.is_empty());
+    }
+
+    // Remain batches that do not line up with the kept prewhere blocks are sliced at the
+    // kept block boundaries.
+    #[test]
+    fn test_remain_assembler_slices_at_kept_blocks() {
+        let mut queue = BlockQueue::default();
+        queue.push(int64_block(vec![0, 1]));
+        queue.push(int64_block(vec![2, 3, 4]));
+        queue.push(int64_block(vec![5]));
+        let sources = [ColumnSource::Remain(0), ColumnSource::Pre(0)];
+        let mut assembler = RemainAssembler::Merge {
+            kept_pre: Some(queue),
+            sources: &sources,
         };
 
-        let mut queue = BlockQueue::default();
-        queue.push(make(vec![0, 1, 2, 3]));
-        queue.push(make(vec![4, 5]));
-        queue.push(make(vec![6, 7, 8]));
-        assert_eq!(values_of(&queue.take(4).unwrap()), vec![0, 1, 2, 3]);
-        assert_eq!(values_of(&queue.take(3).unwrap()), vec![4, 5, 6]);
-        assert_eq!(values_of(&queue.take(2).unwrap()), vec![7, 8]);
-        assert!(queue.is_empty());
+        let mut out = vec![];
+        let remain = int64_block(vec![10, 11, 12, 13]);
+        let remain_ptr = int64_values_ptr(&remain);
+        assembler.assemble(remain, |block| out.push(block));
+        assembler.assemble(int64_block(vec![14, 15]), |block| out.push(block));
+        assembler.assert_drained();
 
-        let mut queue = BlockQueue::default();
-        queue.push(make(vec![10, 11, 12, 13, 14]));
-        assert_eq!(values_of(&queue.take(2).unwrap()), vec![10, 11]);
-        assert_eq!(values_of(&queue.take(3).unwrap()), vec![12, 13, 14]);
-        assert!(queue.is_empty());
+        let columns = |block: &DataBlock| {
+            (0..block.num_columns())
+                .map(|i| int64_column_values(block, i))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(out.iter().map(columns).collect::<Vec<_>>(), vec![
+            vec![vec![10, 11], vec![0, 1]],
+            vec![vec![12, 13], vec![2, 3]],
+            vec![vec![14], vec![4]],
+            vec![vec![15], vec![5]],
+        ]);
+        // The remain batch is sliced, not copied.
+        assert_eq!(int64_values_ptr(&out[0]), remain_ptr);
+    }
+
+    fn int64_block(values: Vec<i64>) -> DataBlock {
+        use databend_common_expression::FromData;
+        use databend_common_expression::types::Int64Type;
+        DataBlock::new_from_columns(vec![Int64Type::from_data(values)])
+    }
+
+    fn int64_column_values(block: &DataBlock, index: usize) -> Vec<i64> {
+        use databend_common_expression::types::AccessType;
+        use databend_common_expression::types::Int64Type;
+        Int64Type::try_downcast_column(&block.get_by_offset(index).to_column())
+            .unwrap()
+            .iter()
+            .copied()
+            .collect()
+    }
+
+    fn int64_values(block: &DataBlock) -> Vec<i64> {
+        int64_column_values(block, 0)
+    }
+
+    fn int64_values_ptr(block: &DataBlock) -> *const i64 {
+        use databend_common_expression::types::AccessType;
+        use databend_common_expression::types::Int64Type;
+        Int64Type::try_downcast_column(&block.get_by_offset(0).to_column())
+            .unwrap()
+            .as_ptr()
     }
 }
