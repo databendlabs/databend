@@ -16,6 +16,48 @@ use databend_common_expression::block_debug::assert_blocks_eq;
 use databend_query::servers::MySQLFederated;
 
 #[test]
+fn test_mysql_connector_j_session_variables() {
+    let federated = MySQLFederated::create();
+    let query = concat!(
+        "/* mysql-connector-j-9.7.0 (Revision: 0aade1f13bcc98faf7dda5c02e782481eb291f62) */",
+        "SELECT @@session.auto_increment_increment AS auto_increment_increment, ",
+        "@@character_set_client AS character_set_client, ",
+        "@@max_allowed_packet AS max_allowed_packet",
+    );
+    let (schema, block) = federated
+        .check(query)
+        .expect("Connector/J session variable probe should use the federated response");
+
+    let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+    assert_eq!(names, [
+        "auto_increment_increment",
+        "character_set_client",
+        "max_allowed_packet",
+    ]);
+    assert_blocks_eq(
+        vec![
+            "+----------+----------+-------------+",
+            "| Column 0 | Column 1 | Column 2    |",
+            "+----------+----------+-------------+",
+            "| '0'      | '0'      | '134217728' |",
+            "+----------+----------+-------------+",
+        ],
+        &[block],
+    );
+}
+
+#[test]
+fn test_mysql_connector_comments_do_not_intercept_regular_queries() {
+    let federated = MySQLFederated::create();
+    for query in [
+        "/* mysql-connector-j-9.7.0 */SELECT 1",
+        "/* mysql-connector-java-8.0.17 */SELECT 1",
+    ] {
+        assert!(federated.check(query).is_none(), "{query}");
+    }
+}
+
+#[test]
 fn test_mysql_federated() -> anyhow::Result<()> {
     let federated = MySQLFederated::create();
 

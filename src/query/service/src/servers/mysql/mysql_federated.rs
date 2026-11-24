@@ -203,7 +203,9 @@ impl MySQLFederated {
                         MySQLFederated::select_variable_data_block,
                     ),
                     (
-                        Regex::new("(?i)^(/\\* mysql-connector-java(.*))").unwrap(),
+                        // Connector/J can use either driver name in its session variable probe.
+                        Regex::new(r"(?i)^/\* mysql-connector-(?:java|j)-[^*]*\*/\s*SELECT\s+@@")
+                            .unwrap(),
                         MySQLFederated::select_variable_data_block,
                     ),
                 ]
