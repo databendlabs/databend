@@ -213,6 +213,8 @@ impl Processor for DeserializeDataTransform {
                 columns_chunks,
                 part,
                 self.output_schema.fields().is_empty() && self.virtual_reader.is_none(),
+                read_res.condition.as_ref(),
+                read_res.io_skipped,
             )?;
 
             // Virtual columns are read in addition to the columns `ReadState`

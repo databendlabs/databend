@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -33,6 +34,9 @@ use databend_common_pipeline_transforms::processors::AsyncBlockingTransform;
 use databend_common_pipeline_transforms::processors::AsyncBlockingTransformer;
 use databend_common_sql::IndexType;
 
+use super::condition_cache;
+use super::condition_cache::ConditionKeys;
+use super::parquet_data_source::ParquetDataSource;
 use super::read_block_context::ReadBlockContext;
 use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -52,6 +56,10 @@ pub struct ReadDataTransform {
     expr_runtime_pruner: Option<ExprRuntimePruner>,
     record_partitions: bool,
     parts: std::vec::IntoIter<PartInfoPtr>,
+    /// The key of the prewhere filter in the condition cache, if it is cached.
+    condition_keys: Option<ConditionKeys>,
+    /// Whether the scan outputs columns (or virtual columns), besides the internal ones.
+    outputs_columns: bool,
 }
 
 impl ReadDataTransform {
@@ -63,10 +71,22 @@ impl ReadDataTransform {
         block_reader: Arc<BlockReader>,
         read_block_context: Arc<ReadBlockContext>,
         record_partitions: bool,
+        prewhere_info: Option<&PrewhereInfo>,
+        outputs_columns: bool,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
+        let condition_keys = match prewhere_info {
+            Some(prewhere_info) if ctx.get_settings().get_enable_condition_cache()? => {
+                condition_cache::condition_keys(
+                    prewhere_info,
+                    &block_reader.original_schema,
+                    &func_ctx,
+                )
+            }
+            _ => None,
+        };
         let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
         Ok(ProcessorPtr::create(AsyncBlockingTransformer::create(
             input,
@@ -82,6 +102,8 @@ impl ReadDataTransform {
                 expr_runtime_pruner: None,
                 record_partitions,
                 parts: Vec::new().into_iter(),
+                condition_keys,
+                outputs_columns,
             },
         )))
     }
@@ -152,8 +174,26 @@ impl AsyncBlockingTransform for ReadDataTransform {
             {
                 continue;
             }
+            // A block where the prewhere filter selected no row before is not read, nor one
+            // where it knows the rows when the scan outputs no column.
+            let condition = self
+                .condition_keys
+                .as_ref()
+                .and_then(|keys| condition_cache::lookup_condition(keys, part_info));
+            if let Some(condition) = &condition {
+                if condition.selects_nothing() {
+                    continue;
+                }
+                if !self.outputs_columns && condition.is_exact() {
+                    return Ok(Some(DataBlock::empty_with_meta(
+                        DataSourceWithMeta::create(vec![part], vec![ParquetDataSource::skipped(
+                            condition.clone(),
+                        )]),
+                    )));
+                }
+            }
 
-            let source = if self.runtime_scan_filters.is_empty() {
+            let mut source = if self.runtime_scan_filters.is_empty() {
                 self.read_block_context.read_data(part.clone()).await?
             } else {
                 let read = self.read_block_context.read_data(part.clone());
@@ -173,6 +213,7 @@ impl AsyncBlockingTransform for ReadDataTransform {
                 }
             };
 
+            source.condition = condition;
             return Ok(Some(DataBlock::empty_with_meta(
                 DataSourceWithMeta::create(vec![part], vec![source]),
             )));

@@ -1676,6 +1676,13 @@ impl DefaultSettings {
                     scope: SettingScope::Session,
                     range: None,
                 }),
+                ("enable_condition_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable to cache the granules of a block where a prewhere filter selects rows",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_prune_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable to cache the pruning result",
