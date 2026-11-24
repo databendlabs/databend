@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use arrow_array::Array;
 use arrow_array::ArrayRef;
@@ -35,6 +36,7 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::BlockDataFile;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 mod adapter;
 mod deserialize;
 mod dict_chunk;
@@ -167,54 +169,69 @@ impl BlockReader {
             num_rows,
             selection,
             &name_paths,
+            true,
         )
     }
 
-    /// Cache entries and encodings describe the whole block, not a batch.
-    pub(crate) fn parquet_filter_batches<'a>(
-        &'a self,
-        part: &'a FuseBlockPartInfo,
-        column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-        batch_rows: usize,
-    ) -> databend_common_exception::Result<
-        Option<impl Iterator<Item = databend_common_exception::Result<DataBlock>> + 'a>,
-    > {
-        if (self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
-            || !self.column_encodings.is_empty()
-            || column_chunks.is_empty()
-            || column_chunks
+    /// Whether [`Self::parquet_batches`] can decode `column_chunks` in batches rather than
+    /// whole: cache entries and encodings describe the whole block, not a batch.
+    ///
+    /// Callers check it once per block, as the column array cache may be enabled by another
+    /// session at any time.
+    pub(crate) fn can_parquet_batches(&self, column_chunks: &HashMap<ColumnId, DataItem>) -> bool {
+        !(self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
+            && self.column_encodings.is_empty()
+            && !column_chunks.is_empty()
+            && !column_chunks
                 .values()
                 .any(|item| matches!(item, DataItem::ColumnArray(_)))
-        {
-            return Ok(None);
-        }
+    }
+
+    /// Decodes the column chunks of a block in batches of at most `batch_rows` rows.
+    ///
+    /// The returned decoder owns the column chunks, so batches can be pulled after the read
+    /// result is gone: each pull decompresses only the pages of that batch. The batches
+    /// never fill the column array cache, whose entries hold whole columns.
+    ///
+    /// The caller must have checked [`Self::can_parquet_batches`] on `column_chunks`.
+    pub(crate) fn parquet_batches(
+        self: &Arc<Self>,
+        part: &FuseBlockPartInfo,
+        column_chunks: &HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+        batch_rows: usize,
+    ) -> databend_common_exception::Result<ParquetBatches> {
+        debug_assert!(self.column_encodings.is_empty());
         let data_files = part.data_files();
         let files = DataFileLookup::new(&data_files);
+        // Cap the reader batch size by the selected/total row count so sparse pushdowns
+        // do not over-allocate output column buffers retained downstream.
+        let reader_batch_rows = selection
+            .map_or(part.nums_rows, |s| s.selected_rows)
+            .min(batch_rows);
         let reader = column_chunks_record_reader(
             &self.original_schema,
             part.nums_rows,
             column_chunks,
             files.default_compression(),
             |column_id| files.compression_of(column_id),
-            None,
+            selection.map(|s| s.selection.clone()),
             self.parquet_hint_fields.as_ref(),
-            batch_rows,
+            reader_batch_rows,
         )?;
-        let name_paths = column_name_paths(&self.projection, &self.original_schema);
-        Ok(Some(reader.map(move |batch| {
-            let batch = batch?;
-            // Without encodings no chunk is read as a dictionary chunk.
-            self.record_batch_to_block(
-                &batch,
-                batch.num_rows(),
-                &DataFileLookup::new(&data_files),
-                column_chunks,
-                &HashSet::new(),
-                batch.num_rows(),
-                None,
-                &name_paths,
-            )
-        })))
+        let column_chunks = column_chunks
+            .iter()
+            .map(|(column_id, item)| match item {
+                DataItem::RawData(buffer) => (*column_id, DataItem::RawData(buffer.clone())),
+                DataItem::ColumnArray(_) => unreachable!("checked by can_parquet_batches"),
+            })
+            .collect();
+        Ok(ParquetBatches {
+            block_reader: self.clone(),
+            column_chunks,
+            name_paths: column_name_paths(&self.projection, &self.original_schema),
+            reader,
+        })
     }
 
     /// `dictionary_chunks` are decoded from `column_chunks` instead of `record_batch`; they hold
@@ -230,11 +247,13 @@ impl BlockReader {
         num_rows: usize,
         selection: Option<&RowSelection>,
         name_paths: &[Vec<String>],
+        whole_block: bool,
     ) -> databend_common_exception::Result<DataBlock> {
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let caches = FuseCaches::instance();
+        // Only the columns of a whole block, all rows, are cached.
         let array_cache = Some(&caches.column_arrays).filter(|cache| {
-            self.policy.memory.writes() && selection.is_none() && cache.is_enabled()
+            whole_block && self.policy.memory.writes() && selection.is_none() && cache.is_enabled()
         });
 
         for ((i, field), column_node) in self
@@ -364,6 +383,41 @@ impl BlockReader {
             entries.push(BlockEntry::new(value, || (data_type, result_rows)));
         }
         Ok(DataBlock::new(entries, result_rows))
+    }
+}
+
+/// Batch decoder of one block from [`BlockReader::parquet_batches`].
+pub(crate) struct ParquetBatches {
+    block_reader: Arc<BlockReader>,
+    /// The chunks the reader decodes: they tell present columns from defaulted ones.
+    column_chunks: HashMap<ColumnId, DataItem<'static>>,
+    name_paths: Vec<Vec<String>>,
+    reader: ParquetRecordBatchReader,
+}
+
+impl ParquetBatches {
+    /// Decodes the next batch of the block `part`, the block the decoder was built for.
+    pub(crate) fn next_block(
+        &mut self,
+        part: &FuseBlockPartInfo,
+    ) -> Option<databend_common_exception::Result<DataBlock>> {
+        let batch = match self.reader.next()? {
+            Ok(batch) => batch,
+            Err(err) => return Some(Err(err.into())),
+        };
+        let data_files = part.data_files();
+        Some(self.block_reader.record_batch_to_block(
+            &batch,
+            batch.num_rows(),
+            &DataFileLookup::new(&data_files),
+            &self.column_chunks,
+            // Without encodings no chunk is read as a dictionary chunk.
+            &HashSet::new(),
+            batch.num_rows(),
+            None,
+            &self.name_paths,
+            false,
+        ))
     }
 }
 
