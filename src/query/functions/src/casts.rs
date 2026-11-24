@@ -25,6 +25,8 @@ use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 
+use crate::CONVERSION_FUNCTIONS;
+
 pub fn register(registry: &mut FunctionRegistry) {
     register_conversion_functions(registry);
     register_number_casts(registry);
@@ -37,29 +39,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_cast_chains(registry);
 }
 
-/// `to_x` converts values to X, and a cast to X runs it unless registered with another function.
-/// `parse_json` is not one: it reparses a Variant.
+/// A cast to X runs `to_x`, see [`CONVERSION_FUNCTIONS`], unless registered with another
+/// function. `parse_json` is not one: it reparses a Variant.
 fn register_conversion_functions(registry: &mut FunctionRegistry) {
-    for (data_type, function_name) in [
-        (DataType::Boolean, "to_boolean"),
-        (DataType::String, "to_string"),
-        (DataType::Binary, "to_binary"),
-        (DataType::Decimal(Default::default()), "to_decimal"),
-        (DataType::Date, "to_date"),
-        (DataType::Timestamp, "to_timestamp"),
-        (DataType::TimestampTz, "to_timestamp_tz"),
-        (DataType::Interval, "to_interval"),
-        (DataType::Variant, "to_variant"),
-        (DataType::Bitmap, "to_bitmap"),
-        (DataType::Geometry, "to_geometry"),
-        (DataType::Geography, "to_geography"),
-    ] {
-        registry.register_conversion_function(data_type, function_name);
+    for (function_name, data_type) in CONVERSION_FUNCTIONS {
+        registry.register_conversion_function(data_type.clone(), function_name);
     }
-    for num in ALL_NUMERICS_TYPES {
-        let function_name = format!("to_{}", num.to_string().to_lowercase());
-        registry.register_conversion_function(DataType::Number(*num), &function_name);
-    }
+    registry.register_conversion_function(DataType::Decimal(Default::default()), "to_decimal");
 }
 
 fn register_cast(registry: &mut FunctionRegistry, src: DataType, dest: DataType) {

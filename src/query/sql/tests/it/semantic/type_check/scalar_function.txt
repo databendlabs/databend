@@ -116,3 +116,44 @@ sql: if(true, CAST(number AS BIGINT), 0)
 status: ok
 scalar: CAST(number (#0) AS Int64 NULL)
 type: Int64 NULL
+
+=== conversion_to_own_type_keeps_value ===
+description: `to_x(a)` of a value of type X has no overload; the binder keeps `a`, nullable or not.
+sql: to_int64(number)
+status: ok
+scalar: number (#0)
+type: Int64 NULL
+
+=== conversion_alias_to_own_type_keeps_value ===
+description: An alias of a conversion function, here of `to_string`, keeps a value of its own type too.
+sql: to_varchar(assume_not_null(text))
+status: ok
+scalar: assume_not_null(text (#1))
+type: String
+
+=== try_conversion_to_own_type_is_nullable ===
+description: For compatibility, `try_to_x(a)` of a value of type X keeps `a` as `X NULL`.
+sql: try_to_int64(assume_not_null(number))
+status: ok
+scalar: CAST(assume_not_null(number (#0)) AS Int64 NULL)
+type: Int64 NULL
+
+=== try_conversion_to_own_nullable_type_keeps_value ===
+description: `try_to_x(a)` of a value of type `X NULL` keeps `a`.
+sql: try_to_string(text)
+status: ok
+scalar: text (#1)
+type: String NULL
+
+=== try_conversion_to_own_type_rejected ===
+description: The try functions that earlier versions rejected for their own type still reject it.
+sql: try_to_boolean(flag)
+status: error
+code: 1065
+message: no function matches signature `try_to_boolean(Boolean NULL)`, you might need to add explicit type casts.
+
+candidate functions:
+  try_to_boolean(Variant) :: Boolean NULL       : unable to unify `Boolean NULL` with `Variant`
+  try_to_boolean(Variant NULL) :: Boolean NULL  : unable to unify `Boolean` with `Variant`
+  try_to_boolean(String) :: Boolean NULL        : unable to unify `Boolean NULL` with `String`
+... and 21 more

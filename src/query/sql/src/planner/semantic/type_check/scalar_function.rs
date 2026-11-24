@@ -31,9 +31,11 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::CONVERSION_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_functions::TRY_CONVERSIONS_TO_OWN_TYPE;
 use simsearch::SimSearch;
 use unicase::Ascii;
 
@@ -584,35 +586,60 @@ where A: TypeCheckAdapter
             }
         }
 
-        let placeholders = args
-            .iter()
-            .enumerate()
-            .map(|(index, arg)| Self::placeholder(index, &arg.scalar, &arg.facts))
-            .collect::<Vec<_>>();
-        let identity = match placeholders.as_slice() {
-            [placeholder] => Some(type_check::check(placeholder, &BUILTIN_FUNCTIONS)?),
+        // `to_x(a)` of a value of type X keeps the value, and so do the try functions that take a
+        // value of their own type, as `X NULL`. They have no overload for it.
+        let own_type = match args.as_slice() {
+            [argument] if params.is_empty() => {
+                let name = BUILTIN_FUNCTIONS
+                    .aliases
+                    .get(func_name)
+                    .map_or(func_name, String::as_str);
+                let takes = |functions: &[(&str, DataType)]| {
+                    functions.iter().any(|(function, data_type)| {
+                        name.eq_ignore_ascii_case(function)
+                            && argument.data_type.remove_nullable() == *data_type
+                    })
+                };
+                if takes(CONVERSION_FUNCTIONS) {
+                    Some(argument.data_type.clone())
+                } else if takes(TRY_CONVERSIONS_TO_OWN_TYPE) {
+                    Some(argument.data_type.wrap_nullable())
+                } else {
+                    None
+                }
+            }
             _ => None,
         };
-        let raw_expr = RawExpr::FunctionCall {
-            span,
-            name: func_name.to_string(),
-            params: params.clone(),
-            args: placeholders,
-        };
-        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        if let Some(identity) = identity
-            && expr == identity
+        if let Some(dest_type) = &own_type
+            && dest_type == &args[0].data_type
         {
             let argument = args.pop().unwrap();
             if !argument.facts.deterministic {
                 self.adapter.set_result_cache_uncacheable();
             }
-            return Ok(BoundScalar {
-                data_type: expr.data_type().clone(),
-                ..argument
-            });
+            return Ok(argument);
         }
 
+        let mut placeholders = args
+            .iter()
+            .enumerate()
+            .map(|(index, arg)| Self::placeholder(index, &arg.scalar, &arg.facts))
+            .collect::<Vec<_>>();
+        let raw_expr = match own_type {
+            Some(dest_type) => RawExpr::Cast {
+                span,
+                is_try: false,
+                expr: Box::new(placeholders.pop().unwrap()),
+                dest_type,
+            },
+            None => RawExpr::FunctionCall {
+                span,
+                name: func_name.to_string(),
+                params: params.clone(),
+                args: placeholders,
+            },
+        };
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         match type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS) {
             EExpr::FunctionCall(call) => self.fold_bound_call(span, func_name, params, call, args),
             EExpr::Cast(cast) => {

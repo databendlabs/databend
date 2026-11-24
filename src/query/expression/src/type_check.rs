@@ -45,7 +45,6 @@ use crate::function::NullableInput;
 use crate::types::DataType;
 use crate::types::Decimal;
 use crate::types::Number;
-use crate::types::NumberDataType;
 use crate::types::decimal::DecimalSize;
 use crate::types::i256;
 use crate::visit_expr;
@@ -322,24 +321,6 @@ pub fn check_function<Index: ColumnIndex>(
 ) -> Result<Expr<Index>> {
     if let Some(original_fn_name) = fn_registry.aliases.get(name) {
         return check_function(span, original_fn_name, params, args, fn_registry);
-    }
-
-    // `to_x(a)` of a value of type X, e.g. `to_string('a')`, is `CAST(a AS X)`, which keeps the
-    // value. There is no function overload for it.
-    if let [arg] = args
-        && params.is_empty()
-        && fn_registry
-            .get_conversion_function(arg.data_type())
-            .is_some_and(|function_name| name.eq_ignore_ascii_case(function_name))
-    {
-        return check_cast(span, false, arg.clone(), arg.data_type(), fn_registry);
-    }
-    if let [arg] = args
-        && params.is_empty()
-        && is_try_conversion_to_own_type(name, arg.data_type())
-    {
-        let dest_type = arg.data_type().wrap_nullable();
-        return check_cast(span, false, arg.clone(), &dest_type, fn_registry);
     }
 
     let candidates = fn_registry.search_candidates(name, params, args);
@@ -751,29 +732,6 @@ impl Substitution {
 }
 
 #[allow(clippy::type_complexity)]
-/// Whether `try_to_x(a)` keeps `a`, a value of type X, as `X NULL`. The try functions have no
-/// overload for their own type. This static rule only keeps the results of earlier versions,
-/// which ran `try_to_x(a)` as `TRY_CAST(a AS X)`; it does not relate the functions to casts.
-/// It lists the calls that earlier versions accepted, through an implicit argument cast that
-/// they dropped; the other try functions reject a value of their own type.
-fn is_try_conversion_to_own_type(name: &str, data_type: &DataType) -> bool {
-    let own_type_function = match data_type.remove_nullable() {
-        DataType::String => "try_to_string",
-        DataType::Number(NumberDataType::UInt8) => "try_to_uint8",
-        DataType::Number(NumberDataType::UInt16) => "try_to_uint16",
-        DataType::Number(NumberDataType::UInt32) => "try_to_uint32",
-        DataType::Number(NumberDataType::UInt64) => "try_to_uint64",
-        DataType::Number(NumberDataType::Int8) => "try_to_int8",
-        DataType::Number(NumberDataType::Int16) => "try_to_int16",
-        DataType::Number(NumberDataType::Int32) => "try_to_int32",
-        DataType::Number(NumberDataType::Int64) => "try_to_int64",
-        DataType::Number(NumberDataType::Float32) => "try_to_float32",
-        DataType::Date => "try_to_date",
-        _ => return false,
-    };
-    name.eq_ignore_ascii_case(own_type_function)
-}
-
 pub fn try_check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     sig: &FunctionSignature,

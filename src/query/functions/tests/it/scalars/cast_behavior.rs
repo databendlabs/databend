@@ -303,14 +303,11 @@ fn test_try_to_functions(file: &mut impl Write) {
     write_section(
         file,
         "try_to_x functions",
-        "`try_to_x` is an ordinary function that converts as its own overloads do, not a cast.",
+        "`try_to_x` is an ordinary function that converts as its own overloads do, not a cast. \
+         The SQL binder keeps a value of the own type of some of them, see the type check tests \
+         of the SQL planner.",
     );
-    let int64 = &[("n", Int64Type::from_data(vec![-1, i64::MAX]))];
-    run_ast(file, "try_to_int64(n)", int64);
-    let uint64 = &[("u", UInt64Type::from_data(vec![0, u64::MAX]))];
-    run_ast(file, "try_to_uint64(u)", uint64);
     let strings = &[("s", StringType::from_data(vec!["1", "abc"]))];
-    run_ast(file, "try_to_string(s)", strings);
     run_ast(file, "try_to_int8(s)", strings);
 }
 

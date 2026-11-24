@@ -105,6 +105,36 @@ async fn test_type_check_scalar_function_rules() -> Result<()> {
             setup_sqls: &[],
             sql: "if(true, CAST(number AS BIGINT), 0)",
         },
+        SqlTestCase {
+            name: "conversion_to_own_type_keeps_value",
+            description: "`to_x(a)` of a value of type X has no overload; the binder keeps `a`, nullable or not.",
+            setup_sqls: &[],
+            sql: "to_int64(number)",
+        },
+        SqlTestCase {
+            name: "conversion_alias_to_own_type_keeps_value",
+            description: "An alias of a conversion function, here of `to_string`, keeps a value of its own type too.",
+            setup_sqls: &[],
+            sql: "to_varchar(assume_not_null(text))",
+        },
+        SqlTestCase {
+            name: "try_conversion_to_own_type_is_nullable",
+            description: "For compatibility, `try_to_x(a)` of a value of type X keeps `a` as `X NULL`.",
+            setup_sqls: &[],
+            sql: "try_to_int64(assume_not_null(number))",
+        },
+        SqlTestCase {
+            name: "try_conversion_to_own_nullable_type_keeps_value",
+            description: "`try_to_x(a)` of a value of type `X NULL` keeps `a`.",
+            setup_sqls: &[],
+            sql: "try_to_string(text)",
+        },
+        SqlTestCase {
+            name: "try_conversion_to_own_type_rejected",
+            description: "The try functions that earlier versions rejected for their own type still reject it.",
+            setup_sqls: &[],
+            sql: "try_to_boolean(flag)",
+        },
     ];
 
     run_type_check_cases("scalar_function.txt", &cases).await
