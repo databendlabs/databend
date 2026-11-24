@@ -24,10 +24,13 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::Value;
+use databend_common_expression::expr::ColumnRef;
 use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use itertools::Itertools;
@@ -121,6 +124,92 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
     })
 }
 
+/// Asserts that every call of `expr`, checked again with its arguments made
+/// nullable, all of them and each one alone, gets the overload and the type
+/// that candidate search selects for them, see
+/// `type_check::check_nullable_arguments`.
+fn assert_nullable_arguments(expr: &Expr) {
+    let columns = |types: &[DataType]| {
+        types
+            .iter()
+            .enumerate()
+            .map(|(id, data_type)| {
+                Expr::from(ColumnRef {
+                    span: None,
+                    id,
+                    data_type: data_type.clone(),
+                    display_name: format!("#{id}"),
+                })
+            })
+            .collect::<Vec<_>>()
+    };
+    match expr {
+        Expr::FunctionCall(call) => {
+            for arg in &call.args {
+                assert_nullable_arguments(arg);
+            }
+            let types = call
+                .args
+                .iter()
+                .map(|arg| arg.data_type().clone())
+                .collect::<Vec<_>>();
+            let widened = std::iter::once(None)
+                .chain(
+                    (0..types.len())
+                        .filter(|i| !types[*i].is_nullable_or_null())
+                        .map(Some),
+                )
+                .filter(|only| only.is_none() || types.len() > 1);
+            for only in widened {
+                let nullable = types
+                    .iter()
+                    .enumerate()
+                    .map(|(i, data_type)| match only {
+                        Some(only) if only != i => data_type.clone(),
+                        _ => data_type.wrap_nullable(),
+                    })
+                    .collect::<Vec<_>>();
+                if nullable == types {
+                    continue;
+                }
+                let name = call.id.name();
+                let params = call.id.params();
+                let search = type_check::check_function(
+                    None,
+                    &name,
+                    params,
+                    &columns(&nullable),
+                    &BUILTIN_FUNCTIONS,
+                );
+                let checked = type_check::check_nullable_arguments(
+                    call,
+                    columns(&nullable),
+                    &BUILTIN_FUNCTIONS,
+                );
+                match (&search, &checked) {
+                    (Ok(search), Ok(checked)) => assert_eq!(
+                        search, checked,
+                        "{} with nullable arguments {nullable:?}",
+                        call.function.signature
+                    ),
+                    (Err(_), Err(_)) => {}
+                    _ => panic!(
+                        "{} with nullable arguments {nullable:?}: candidate search gives {search:?}, check_nullable_arguments {checked:?}",
+                        call.function.signature
+                    ),
+                }
+            }
+        }
+        Expr::Cast(cast) => assert_nullable_arguments(&cast.expr),
+        Expr::LambdaFunctionCall(call) => {
+            for arg in &call.args {
+                assert_nullable_arguments(arg);
+            }
+        }
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
+    }
+}
+
 pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ctx: TestContext) {
     let text = text.as_ref();
 
@@ -135,6 +224,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         );
 
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        assert_nullable_arguments(&expr);
         let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
 
         let input_domains = ctx.input_domains();

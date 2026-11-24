@@ -92,167 +92,178 @@ pub fn register(registry: &mut FunctionRegistry) {
     }));
     registry.register_function_factory("concat", nullable_concat);
 
-    let concat_ws = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() < 2 {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "concat_ws".to_string(),
-                args_type: vec![DataType::String; args_type.len()],
-                return_type: DataType::String,
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: domain_evaluator(|_, args_domain| {
-                    let domain = args_domain[1].as_string().unwrap();
-                    FunctionDomain::Domain(Domain::String(StringDomain {
-                        min: domain.min.clone(),
-                        max: None,
-                    }))
-                }),
-                eval: scalar_evaluator(|args, _| {
-                    let len = args.iter().find_map(|arg| match arg {
-                        Value::Column(col) => Some(col.len()),
-                        _ => None,
-                    });
-                    let args = args
-                        .iter()
-                        .map(|arg| arg.try_downcast::<StringType>().unwrap())
-                        .collect::<Vec<_>>();
+    // The first factory takes non-nullable strings only.
+    registry.register_nullable_variants(
+        |registry| {
+            let concat_ws = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+                if args_type.len() < 2 {
+                    return None;
+                }
+                Some(Arc::new(Function {
+                    signature: FunctionSignature {
+                        name: "concat_ws".to_string(),
+                        args_type: vec![DataType::String; args_type.len()],
+                        return_type: DataType::String,
+                    },
+                    eval: FunctionEval::Scalar {
+                        calc_domain: domain_evaluator(|_, args_domain| {
+                            let domain = args_domain[1].as_string().unwrap();
+                            FunctionDomain::Domain(Domain::String(StringDomain {
+                                min: domain.min.clone(),
+                                max: None,
+                            }))
+                        }),
+                        eval: scalar_evaluator(|args, _| {
+                            let len = args.iter().find_map(|arg| match arg {
+                                Value::Column(col) => Some(col.len()),
+                                _ => None,
+                            });
+                            let args = args
+                                .iter()
+                                .map(|arg| arg.try_downcast::<StringType>().unwrap())
+                                .collect::<Vec<_>>();
 
-                    let size = len.unwrap_or(1);
-                    let mut builder = StringColumnBuilder::with_capacity(size);
+                            let size = len.unwrap_or(1);
+                            let mut builder = StringColumnBuilder::with_capacity(size);
 
-                    match &args[0] {
-                        Value::Scalar(sep) => {
-                            for idx in 0..size {
-                                for (arg_index, arg) in args.iter().skip(1).enumerate() {
-                                    if arg_index != 0 {
-                                        builder.put_str(sep);
-                                    }
-                                    builder.put_str(unsafe { arg.index_unchecked(idx) });
-                                }
-                                builder.commit_row();
-                            }
-                        }
-                        Value::Column(c) => {
-                            for idx in 0..size {
-                                for (arg_index, arg) in args.iter().skip(1).enumerate() {
-                                    if arg_index != 0 {
-                                        builder.put_str(unsafe { c.index_unchecked(idx) });
-                                    }
-                                    builder.put_str(unsafe { arg.index_unchecked(idx) });
-                                }
-                                builder.commit_row();
-                            }
-                        }
-                    }
-
-                    match len {
-                        Some(_) => Value::Column(Column::String(builder.build())),
-                        _ => Value::Scalar(Scalar::String(builder.build_scalar())),
-                    }
-                }),
-                derive_stat: None,
-            },
-        }))
-    }));
-    registry.register_function_factory("concat_ws", concat_ws);
-
-    // nullable concat ws
-    let concat_ws = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() < 2 {
-            return None;
-        }
-        Some(Arc::new(Function {
-            signature: FunctionSignature {
-                name: "concat_ws".to_string(),
-                args_type: vec![DataType::Nullable(Box::new(DataType::String)); args_type.len()],
-                return_type: DataType::Nullable(Box::new(DataType::String)),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(FunctionDomain::Full),
-                eval: scalar_evaluator(|args, _| {
-                    type T = NullableType<StringType>;
-                    let len = args.iter().find_map(|arg| match arg {
-                        Value::Column(col) => Some(col.len()),
-                        _ => None,
-                    });
-
-                    let size = len.unwrap_or(1);
-                    let new_args = args
-                        .iter()
-                        .map(|arg| arg.try_downcast::<T>().unwrap())
-                        .collect::<Vec<_>>();
-
-                    let mut nullable_builder = T::create_builder(size, &[]);
-                    match &new_args[0] {
-                        Value::Scalar(None) => {
-                            return Value::Scalar(T::upcast_scalar(None));
-                        }
-                        Value::Scalar(Some(v)) => {
-                            let builder = &mut nullable_builder.builder;
-                            nullable_builder.validity.extend_constant(size, true);
-
-                            for idx in 0..size {
-                                for (i, s) in new_args
-                                    .iter()
-                                    .skip(1)
-                                    .filter_map(|arg| unsafe { arg.index_unchecked(idx) })
-                                    .enumerate()
-                                {
-                                    if i != 0 {
-                                        builder.put_str(v);
-                                    }
-                                    builder.put_str(s);
-                                }
-                                builder.commit_row();
-                            }
-                        }
-                        Value::Column(_) => {
-                            let builder = &mut nullable_builder.builder;
-                            let validity = &mut nullable_builder.validity;
-
-                            for idx in 0..size {
-                                unsafe {
-                                    match new_args[0].index_unchecked(idx) {
-                                        Some(sep) => {
-                                            for (i, s) in new_args
-                                                .iter()
-                                                .skip(1)
-                                                .filter_map(|arg| arg.index_unchecked(idx))
-                                                .enumerate()
-                                            {
-                                                if i != 0 {
-                                                    builder.put_str(sep);
-                                                }
-                                                builder.put_str(s);
+                            match &args[0] {
+                                Value::Scalar(sep) => {
+                                    for idx in 0..size {
+                                        for (arg_index, arg) in args.iter().skip(1).enumerate() {
+                                            if arg_index != 0 {
+                                                builder.put_str(sep);
                                             }
-                                            builder.commit_row();
-                                            validity.push(true);
+                                            builder.put_str(unsafe { arg.index_unchecked(idx) });
                                         }
-                                        None => {
-                                            builder.commit_row();
-                                            validity.push(false);
+                                        builder.commit_row();
+                                    }
+                                }
+                                Value::Column(c) => {
+                                    for idx in 0..size {
+                                        for (arg_index, arg) in args.iter().skip(1).enumerate() {
+                                            if arg_index != 0 {
+                                                builder.put_str(unsafe { c.index_unchecked(idx) });
+                                            }
+                                            builder.put_str(unsafe { arg.index_unchecked(idx) });
+                                        }
+                                        builder.commit_row();
+                                    }
+                                }
+                            }
+
+                            match len {
+                                Some(_) => Value::Column(Column::String(builder.build())),
+                                _ => Value::Scalar(Scalar::String(builder.build_scalar())),
+                            }
+                        }),
+                        derive_stat: None,
+                    },
+                }))
+            }));
+            registry.register_function_factory("concat_ws", concat_ws);
+        },
+        |registry| {
+            // nullable concat ws
+            let concat_ws = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+                if args_type.len() < 2 {
+                    return None;
+                }
+                Some(Arc::new(Function {
+                    signature: FunctionSignature {
+                        name: "concat_ws".to_string(),
+                        args_type: vec![
+                            DataType::Nullable(Box::new(DataType::String));
+                            args_type.len()
+                        ],
+                        return_type: DataType::Nullable(Box::new(DataType::String)),
+                    },
+                    eval: FunctionEval::Scalar {
+                        calc_domain: Box::new(FunctionDomain::Full),
+                        eval: scalar_evaluator(|args, _| {
+                            type T = NullableType<StringType>;
+                            let len = args.iter().find_map(|arg| match arg {
+                                Value::Column(col) => Some(col.len()),
+                                _ => None,
+                            });
+
+                            let size = len.unwrap_or(1);
+                            let new_args = args
+                                .iter()
+                                .map(|arg| arg.try_downcast::<T>().unwrap())
+                                .collect::<Vec<_>>();
+
+                            let mut nullable_builder = T::create_builder(size, &[]);
+                            match &new_args[0] {
+                                Value::Scalar(None) => {
+                                    return Value::Scalar(T::upcast_scalar(None));
+                                }
+                                Value::Scalar(Some(v)) => {
+                                    let builder = &mut nullable_builder.builder;
+                                    nullable_builder.validity.extend_constant(size, true);
+
+                                    for idx in 0..size {
+                                        for (i, s) in new_args
+                                            .iter()
+                                            .skip(1)
+                                            .filter_map(|arg| unsafe { arg.index_unchecked(idx) })
+                                            .enumerate()
+                                        {
+                                            if i != 0 {
+                                                builder.put_str(v);
+                                            }
+                                            builder.put_str(s);
+                                        }
+                                        builder.commit_row();
+                                    }
+                                }
+                                Value::Column(_) => {
+                                    let builder = &mut nullable_builder.builder;
+                                    let validity = &mut nullable_builder.validity;
+
+                                    for idx in 0..size {
+                                        unsafe {
+                                            match new_args[0].index_unchecked(idx) {
+                                                Some(sep) => {
+                                                    for (i, s) in new_args
+                                                        .iter()
+                                                        .skip(1)
+                                                        .filter_map(|arg| arg.index_unchecked(idx))
+                                                        .enumerate()
+                                                    {
+                                                        if i != 0 {
+                                                            builder.put_str(sep);
+                                                        }
+                                                        builder.put_str(s);
+                                                    }
+                                                    builder.commit_row();
+                                                    validity.push(true);
+                                                }
+                                                None => {
+                                                    builder.commit_row();
+                                                    validity.push(false);
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
-                    match len {
-                        Some(_) => {
-                            let col = T::upcast_column(nullable_builder.build());
-                            Value::Column(col)
-                        }
-                        _ => Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar())),
-                    }
-                }),
-                derive_stat: None,
-            },
-        }))
-    }));
-    registry.register_function_factory("concat_ws", concat_ws);
+                            match len {
+                                Some(_) => {
+                                    let col = T::upcast_column(nullable_builder.build());
+                                    Value::Column(col)
+                                }
+                                _ => {
+                                    Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar()))
+                                }
+                            }
+                        }),
+                        derive_stat: None,
+                    },
+                }))
+            }));
+            registry.register_function_factory("concat_ws", concat_ws);
+        },
+    );
 
     // Notes: https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
     let regexp_instr = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
