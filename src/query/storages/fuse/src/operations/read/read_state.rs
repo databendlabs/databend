@@ -44,6 +44,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::condition_cache;
 use super::condition_cache::CachedCondition;
+use super::length_only;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::DataItem;
@@ -207,6 +208,39 @@ impl ReadState {
             block_reader.clone()
         } else {
             block_reader.change_projection(preread_projection)?
+        };
+        // The string columns the prewhere filter reads only the lengths of, and that nothing else
+        // reads (the scan outputs the columns of `output_columns`): their values are not read,
+        // see `length_only`.
+        let length_only_names = prewhere_info
+            .map(|prewhere_info| {
+                let filter = prewhere_info.filter.as_expr(&BUILTIN_FUNCTIONS);
+                let output = prewhere_info.output_columns.project_schema(original_schema);
+                length_only::length_only_columns(&filter)
+                    .into_iter()
+                    .filter(|name| {
+                        // A column of the table, not a field of a tuple.
+                        original_schema
+                            .fields()
+                            .iter()
+                            .any(|field| field.name() == name)
+                            && output.field_with_name(name).is_err()
+                            && !runtime_filter_column_names.contains(&name)
+                    })
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
+        let length_only_ids = prewhere_reader
+            .schema()
+            .fields()
+            .iter()
+            .filter(|field| length_only_names.contains(field.name()))
+            .map(|field| field.column_id())
+            .collect::<HashSet<_>>();
+        let prewhere_reader = if length_only_ids.is_empty() {
+            prewhere_reader
+        } else {
+            prewhere_reader.with_length_only_columns(length_only_ids)
         };
         let remain_reader = block_reader.change_projection(remain_projection)?;
         let pre_column_ids = prewhere_reader.schema().to_leaf_column_id_set();

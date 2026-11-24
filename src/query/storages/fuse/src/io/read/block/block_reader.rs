@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use arrow_schema::Field;
@@ -66,6 +67,10 @@ pub struct BlockReader {
     /// Arrow fields the Parquet columns are read as, if they differ from the original schema,
     /// see [`dictionary_hint_fields`]. Fixed per reader, so computed once here.
     pub(crate) parquet_hint_fields: Option<Fields>,
+    /// The projected `String` columns of which only the byte lengths of the values are read:
+    /// their columns hold strings of NUL bytes of those lengths. See
+    /// [`BlockReader::with_length_only_columns`].
+    pub(crate) length_only_columns: Arc<HashSet<ColumnId>>,
 
     pub original_schema: TableSchemaRef,
 }
@@ -218,8 +223,33 @@ impl BlockReader {
             dictionary_ndv_ratio,
             build_encodings,
             parquet_hint_fields,
+            length_only_columns: Default::default(),
             original_schema,
         }))
+    }
+
+    /// This reader, reading only the byte lengths of the values of `columns`, projected
+    /// `String` or `Nullable(String)` columns, when their chunks are not cached as columns: their
+    /// columns hold strings of NUL bytes of the lengths of the values. Only for columns whose
+    /// values are read by nothing but functions of their lengths, such as `octet_length`.
+    pub fn with_length_only_columns(&self, columns: HashSet<ColumnId>) -> Arc<BlockReader> {
+        Arc::new(BlockReader {
+            ctx: self.ctx.clone(),
+            operator: self.operator.clone(),
+            projection: self.projection.clone(),
+            projected_schema: self.projected_schema.clone(),
+            project_indices: self.project_indices.clone(),
+            project_column_nodes: self.project_column_nodes.clone(),
+            default_vals: self.default_vals.clone(),
+            all_field_default_vals: self.all_field_default_vals.clone(),
+            policy: self.policy,
+            column_encodings: self.column_encodings.clone(),
+            dictionary_ndv_ratio: self.dictionary_ndv_ratio,
+            build_encodings: self.build_encodings,
+            parquet_hint_fields: self.parquet_hint_fields.clone(),
+            length_only_columns: Arc::new(columns),
+            original_schema: self.original_schema.clone(),
+        })
     }
 
     pub fn create(

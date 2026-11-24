@@ -243,7 +243,7 @@ impl Keys {
     }
 }
 
-trait Key: Copy + Default {
+pub(super) trait Key: Copy + Default {
     /// Truncates a decoded key; keys beyond the width are rejected by [`Keys::finish`], as
     /// the dictionary has fewer values than the width can index.
     fn narrow(value: u32) -> Self;
@@ -270,7 +270,7 @@ macro_rules! impl_key {
 impl_key!(u8, u16, u32);
 
 /// Appends `num_values` values of the RLE / bit-packed hybrid encoding `runs` to `out`.
-fn decode_hybrid<K: Key>(
+pub(super) fn decode_hybrid<K: Key>(
     mut runs: &[u8],
     bit_width: u8,
     num_values: usize,

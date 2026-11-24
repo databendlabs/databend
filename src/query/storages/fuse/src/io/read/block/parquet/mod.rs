@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use arrow_array::Array;
 use arrow_array::ArrayRef;
@@ -22,6 +23,7 @@ use arrow_array::StructArray;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FilterVisitor;
@@ -39,6 +41,7 @@ mod adapter;
 mod deserialize;
 mod dict_chunk;
 mod encode;
+mod length_chunk;
 mod page_header;
 mod row_selection;
 
@@ -48,6 +51,8 @@ pub use deserialize::column_chunks_to_record_batch_with_codecs;
 pub use deserialize::dictionary_hint_fields;
 use dict_chunk::read_string_dictionary_chunk;
 pub use encode::ColumnEncoding;
+use length_chunk::StringLengths;
+use length_chunk::read_string_lengths_chunk;
 use page_header::dictionary_len;
 use parquet::basic::Compression as ParquetCompression;
 pub use row_selection::RowSelection;
@@ -86,6 +91,50 @@ impl BlockReader {
             })
             .map(|field| field.column_id)
             .collect()
+    }
+
+    /// The columns of `length_only_columns` read from their chunks, see `length_chunk`, but
+    /// those of `dictionary_chunks`, as cheap to read and cheaper to filter. A chunk with other
+    /// encodings than those it reads is left to the arrow reader.
+    fn length_columns(
+        &self,
+        num_rows: usize,
+        files: &DataFileLookup,
+        column_chunks: &HashMap<ColumnId, DataItem>,
+        dictionary_chunks: &HashSet<ColumnId>,
+    ) -> databend_common_exception::Result<HashMap<ColumnId, StringLengths>> {
+        let mut columns = HashMap::new();
+        if self.length_only_columns.is_empty() {
+            return Ok(columns);
+        }
+        for (field, column_node) in self
+            .projected_schema
+            .fields
+            .iter()
+            .zip(self.project_column_nodes.iter())
+        {
+            if !self.length_only_columns.contains(&field.column_id)
+                || column_node.is_nested
+                || dictionary_chunks.contains(&field.column_id)
+            {
+                continue;
+            }
+            let Some(DataItem::RawData(chunk)) = column_chunks.get(&field.column_id) else {
+                continue;
+            };
+            let nullable = match field.data_type() {
+                TableDataType::String => false,
+                TableDataType::Nullable(inner) if **inner == TableDataType::String => true,
+                _ => continue,
+            };
+            let compression = ParquetCompression::from(files.compression_of(field.column_id));
+            if let Some(column) =
+                read_string_lengths_chunk(chunk.clone(), compression, num_rows, nullable)?
+            {
+                columns.insert(field.column_id, column);
+            }
+        }
+        Ok(columns)
     }
 
     pub fn deserialize_part(
@@ -134,16 +183,25 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
-        // Dictionary encoded chunks of the string columns kept as dictionaries are read
-        // without the arrow reader, see `dict_chunk`.
+        // The chunks of the columns of which only the lengths are read, and the dictionary
+        // encoded chunks of the string columns kept as dictionaries, are read without the arrow
+        // reader, see `length_chunk` and `dict_chunk`.
         let dictionary_chunks = self.dictionary_chunks(num_rows, &column_chunks);
+        let length_columns = self
+            .length_columns(num_rows, &files, &column_chunks, &dictionary_chunks)?
+            .into_iter()
+            .map(|(column_id, lengths)| Ok((column_id, lengths.column(0..num_rows)?)))
+            .collect::<databend_common_exception::Result<HashMap<_, _>>>()?;
         let arrow_chunks;
-        let arrow_chunks = if dictionary_chunks.is_empty() {
+        let arrow_chunks = if dictionary_chunks.is_empty() && length_columns.is_empty() {
             &column_chunks
         } else {
             arrow_chunks = column_chunks
                 .iter()
-                .filter(|(column_id, _)| !dictionary_chunks.contains(column_id))
+                .filter(|(column_id, _)| {
+                    !dictionary_chunks.contains(column_id)
+                        && !length_columns.contains_key(column_id)
+                })
                 .map(|(column_id, item)| (*column_id, item.clone()))
                 .collect::<HashMap<_, _>>();
             &arrow_chunks
@@ -164,6 +222,7 @@ impl BlockReader {
             &files,
             &column_chunks,
             &dictionary_chunks,
+            &length_columns,
             num_rows,
             selection,
             &name_paths,
@@ -188,37 +247,76 @@ impl BlockReader {
         {
             return Ok(None);
         }
+        let num_rows = part.nums_rows;
         let data_files = part.data_files();
         let files = DataFileLookup::new(&data_files);
-        let reader = column_chunks_record_reader(
-            &self.original_schema,
-            part.nums_rows,
-            column_chunks,
-            files.default_compression(),
-            |column_id| files.compression_of(column_id),
-            None,
-            self.parquet_hint_fields.as_ref(),
-            batch_rows,
-        )?;
+        // The columns of which only the lengths are read are read whole, and sliced as the
+        // batches of the others.
+        let length_columns =
+            self.length_columns(num_rows, &files, column_chunks, &HashSet::new())?;
+        let arrow_chunks = column_chunks
+            .iter()
+            .filter(|(column_id, _)| !length_columns.contains_key(column_id))
+            .map(|(column_id, item)| (*column_id, item.clone()))
+            .collect::<HashMap<_, _>>();
+        let mut reader = if arrow_chunks.is_empty() {
+            None
+        } else {
+            Some(column_chunks_record_reader(
+                &self.original_schema,
+                num_rows,
+                &arrow_chunks,
+                files.default_compression(),
+                |column_id| files.compression_of(column_id),
+                None,
+                self.parquet_hint_fields.as_ref(),
+                batch_rows,
+            )?)
+        };
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
-        Ok(Some(reader.map(move |batch| {
-            let batch = batch?;
+        let mut start = 0;
+        Ok(Some(std::iter::from_fn(move || {
+            let batch = match reader.as_mut() {
+                Some(reader) => match reader.next()? {
+                    Ok(batch) => batch,
+                    Err(err) => return Some(Err(err.into())),
+                },
+                // Every chunk is read for its lengths.
+                None if start < num_rows => {
+                    RecordBatch::new_empty(Arc::new(arrow_schema::Schema::empty()))
+                }
+                None => return None,
+            };
+            let rows = match reader {
+                Some(_) => batch.num_rows(),
+                None => batch_rows.min(num_rows - start),
+            };
+            let lengths = match length_columns
+                .iter()
+                .map(|(column_id, lengths)| Ok((*column_id, lengths.column(start..start + rows)?)))
+                .collect::<databend_common_exception::Result<HashMap<_, _>>>()
+            {
+                Ok(lengths) => lengths,
+                Err(err) => return Some(Err(err)),
+            };
+            start += rows;
             // Without encodings no chunk is read as a dictionary chunk.
-            self.record_batch_to_block(
+            Some(self.record_batch_to_block(
                 &batch,
-                batch.num_rows(),
+                rows,
                 &DataFileLookup::new(&data_files),
                 column_chunks,
                 &HashSet::new(),
-                batch.num_rows(),
+                &lengths,
+                rows,
                 None,
                 &name_paths,
-            )
+            ))
         })))
     }
 
-    /// `dictionary_chunks` are decoded from `column_chunks` instead of `record_batch`; they hold
-    /// `num_rows` rows before `selection`.
+    /// `dictionary_chunks` are decoded from `column_chunks` instead of `record_batch`, and
+    /// `length_columns` were; they hold `num_rows` rows before `selection`.
     #[allow(clippy::too_many_arguments)]
     fn record_batch_to_block(
         &self,
@@ -227,6 +325,7 @@ impl BlockReader {
         files: &DataFileLookup,
         column_chunks: &HashMap<ColumnId, DataItem>,
         dictionary_chunks: &HashSet<ColumnId>,
+        length_columns: &HashMap<ColumnId, Column>,
         num_rows: usize,
         selection: Option<&RowSelection>,
         name_paths: &[Vec<String>],
@@ -262,6 +361,16 @@ impl BlockReader {
             //  Yes, it is too obscure, we need to polish it later.
 
             let value = match column_chunks.get(&field.column_id) {
+                // Never cached: the values are not read.
+                Some(DataItem::RawData(_)) if length_columns.contains_key(&field.column_id) => {
+                    let mut value = Value::Column(length_columns[&field.column_id].clone());
+                    if let Some(selection) = selection {
+                        let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
+                        filter_visitor.visit_value(value)?;
+                        value = filter_visitor.take_result().unwrap();
+                    }
+                    value
+                }
                 Some(DataItem::RawData(chunk)) if dictionary_chunks.contains(&field.column_id) => {
                     let compression =
                         ParquetCompression::from(files.compression_of(field.column_id));
