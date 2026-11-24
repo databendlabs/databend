@@ -32,6 +32,7 @@ use crate::Scalar;
 use crate::auto_cast_rules::decimal_auto_cast;
 use crate::auto_cast_rules::is_auto_try_cast;
 use crate::cast_plan::CastStep;
+use crate::cast_plan::RegisteredCast;
 use crate::cast_plan::resolve_cast_plan;
 use crate::cast_scalar;
 use crate::expr::*;
@@ -1070,11 +1071,11 @@ pub fn function_call_to_cast(
     fn_registry: &FunctionRegistry,
 ) -> Option<DataType> {
     // Filter unrelated unary functions before resolving the plan of the cast.
-    if fn_registry
-        .get_cast_function(argument_type, return_type)?
-        .name
-        != function_id.name()
-    {
+    let Some(RegisteredCast::Function(function)) = fn_registry.get_cast(argument_type, return_type)
+    else {
+        return None;
+    };
+    if function.name != function_id.name() {
         return None;
     }
 

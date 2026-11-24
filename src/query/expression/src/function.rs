@@ -42,7 +42,7 @@ use crate::ColumnIndex;
 use crate::Expr;
 use crate::FunctionDomain;
 use crate::Scalar;
-use crate::cast_plan::CastFunction;
+use crate::cast_plan::RegisteredCast;
 use crate::cast_plan::resolve_registered_cast;
 use crate::function_stat::DeriveStat;
 use crate::function_stat::ScalarFunctionStat;
@@ -282,15 +282,12 @@ pub struct FunctionRegistry {
     default_cast_rules: Vec<(DataType, DataType)>,
     /// Cast rules for specific functions, which will override the default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
-    /// Casts that convert through an intermediate type, keyed by the non-nullable source and
-    /// destination types with decimal sizes erased: `(src, dest) -> via` casts `src` to `via`,
-    /// then `via` to `dest`.
-    pub cast_chains: HashMap<(DataType, DataType), DataType>,
-    /// The functions of cast steps, keyed by the source type, or `None`
-    /// for any source, and the destination type, both non-nullable, with decimal sizes erased.
-    pub cast_functions: HashMap<(Option<DataType>, DataType), CastFunction>,
+    /// The registered casts, keyed by the source type, or `None` for any source, and the
+    /// destination type, both non-nullable, with decimal sizes erased. A cast runs a function,
+    /// or converts through an intermediate type.
+    casts: HashMap<(Option<DataType>, DataType), RegisteredCast>,
     /// The function that converts values to a type, keyed by the type with decimal sizes erased.
-    pub conversion_functions: HashMap<DataType, String>,
+    conversion_functions: HashMap<DataType, String>,
     pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
     pub derive_stat: HashMap<String, DeriveStat>,
@@ -783,21 +780,32 @@ impl FunctionRegistry {
         function_name: &str,
     ) {
         let function = resolve_registered_cast(self, src.as_ref(), &dest, function_name);
+        self.insert_cast(src, dest, RegisteredCast::Function(function));
+    }
+
+    /// Registers that a cast from `src` to `dest` converts to `via` first.
+    pub fn register_cast_chain(&mut self, src: DataType, via: DataType, dest: DataType) {
+        debug_assert!(!src.is_nullable_or_null() && !via.is_nullable_or_null());
+        debug_assert!(!dest.is_nullable_or_null());
+        self.insert_cast(Some(src), dest, RegisteredCast::Chain { via });
+    }
+
+    fn insert_cast(&mut self, src: Option<DataType>, dest: DataType, cast: RegisteredCast) {
         let key = (src.as_ref().map(cast_key), cast_key(&dest));
-        let previous = self.cast_functions.insert(key, function);
+        let previous = self.casts.insert(key, cast);
         assert!(
             previous.is_none(),
             "cast from {src:?} to {dest} registered twice"
         );
     }
 
-    /// The function of a cast step from `src` to `dest`.
-    pub fn get_cast_function(&self, src: &DataType, dest: &DataType) -> Option<&CastFunction> {
+    /// The cast registered from `src` to `dest`, or from any source to `dest`.
+    pub fn get_cast(&self, src: &DataType, dest: &DataType) -> Option<&RegisteredCast> {
         let dest = cast_key(&dest.remove_nullable());
         let src = cast_key(&src.remove_nullable());
-        self.cast_functions
+        self.casts
             .get(&(Some(src), dest.clone()))
-            .or_else(|| self.cast_functions.get(&(None, dest)))
+            .or_else(|| self.casts.get(&(None, dest)))
     }
 
     /// Registers `function_name` as the function that converts values to `dest`: `to_x(a)` of a
@@ -817,16 +825,6 @@ impl FunctionRegistry {
         self.conversion_functions
             .get(&cast_key(&dest.remove_nullable()))
             .map(String::as_str)
-    }
-
-    /// Registers that a cast from `src` to `dest` converts to `via` first.
-    pub fn register_cast_chain(&mut self, src: DataType, via: DataType, dest: DataType) {
-        debug_assert!(!src.is_nullable_or_null() && !via.is_nullable_or_null());
-        debug_assert!(!dest.is_nullable_or_null());
-        let previous = self
-            .cast_chains
-            .insert((cast_key(&src), cast_key(&dest)), via);
-        debug_assert!(previous.is_none(), "cast chain registered twice");
     }
 
     pub fn get_derive_stat(&self, func_name: &str) -> Option<&DeriveStat> {

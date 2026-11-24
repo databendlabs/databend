@@ -35,7 +35,6 @@ use crate::NullableInput;
 use crate::Scalar;
 use crate::function::Function;
 use crate::function::FunctionID;
-use crate::function::cast_key;
 use crate::type_check::Substitution;
 use crate::types::DataType;
 use crate::types::NumberScalar;
@@ -109,6 +108,15 @@ pub enum CastOverload {
     Factory(usize),
 }
 
+/// How a registered cast converts a value of its source type to its destination type.
+#[derive(Clone, Debug)]
+pub enum RegisteredCast {
+    /// Runs a function.
+    Function(CastFunction),
+    /// Converts to `via` first, then from `via` to the destination.
+    Chain { via: DataType },
+}
+
 /// The function that a cast step runs.
 #[derive(Clone, Debug)]
 pub struct CastFunction {
@@ -157,13 +165,24 @@ pub fn resolve_cast_plan(
     if src_type == &DataType::Null {
         return plan(CastStep::Null);
     }
-    if let Some(via_type) = resolve_cast_chain(src_type, dest_type, fn_registry) {
-        let first = resolve_cast_plan(src_type, &via_type, fn_registry)?;
-        let second = resolve_cast_plan(&via_type, dest_type, fn_registry)?;
-        return plan(CastStep::Chain(vec![first, second]));
-    }
-    if let Some(plan) = resolve_function_plan(src_type, dest_type, fn_registry) {
-        return Some(plan);
+    match fn_registry.get_cast(src_type, dest_type) {
+        Some(RegisteredCast::Chain { via }) => {
+            // The intermediate type keeps the nullability of the source.
+            let via = if src_type.is_nullable() {
+                via.wrap_nullable()
+            } else {
+                via.clone()
+            };
+            let first = resolve_cast_plan(src_type, &via, fn_registry)?;
+            let second = resolve_cast_plan(&via, dest_type, fn_registry)?;
+            return plan(CastStep::Chain(vec![first, second]));
+        }
+        Some(RegisteredCast::Function(function)) => {
+            if let Some(plan) = resolve_function_plan(src_type, dest_type, function, fn_registry) {
+                return Some(plan);
+            }
+        }
+        None => {}
     }
 
     match (src_type, dest_type) {
@@ -233,17 +252,17 @@ pub fn casts_through(
     })
 }
 
-/// A step that runs the function registered for the cast from `src_type` to `dest_type`.
+/// A step that runs `function`, registered for the cast from `src_type` to `dest_type`.
 fn resolve_function_plan(
     src_type: &DataType,
     dest_type: &DataType,
+    function: &CastFunction,
     fn_registry: &FunctionRegistry,
 ) -> Option<CastPlan> {
-    // NULL has no value to convert, and the same type needs no conversion.
-    if src_type == &DataType::Null || src_type.remove_nullable() == dest_type.remove_nullable() {
+    // The same type needs no conversion.
+    if src_type.remove_nullable() == dest_type.remove_nullable() {
         return None;
     }
-    let function = fn_registry.get_cast_function(src_type, dest_type)?;
     let value_type = src_type.remove_nullable();
     let value_call = cast_function_call(
         &function.name,
@@ -311,24 +330,6 @@ fn cast_function_call(
         function,
         generics,
         return_type,
-    })
-}
-
-/// The intermediate type of a cast registered as a chain, with the nullability of the source.
-fn resolve_cast_chain(
-    src_type: &DataType,
-    dest_type: &DataType,
-    fn_registry: &FunctionRegistry,
-) -> Option<DataType> {
-    let key = (
-        cast_key(&src_type.remove_nullable()),
-        cast_key(&dest_type.remove_nullable()),
-    );
-    let via_type = fn_registry.cast_chains.get(&key)?;
-    Some(if src_type.is_nullable() {
-        via_type.wrap_nullable()
-    } else {
-        via_type.clone()
     })
 }
 
