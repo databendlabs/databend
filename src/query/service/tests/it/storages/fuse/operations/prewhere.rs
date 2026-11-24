@@ -201,7 +201,7 @@ async fn run_prewhere_test_with_threshold(
         block: data_block,
         bitmap_selection,
         scan_stats,
-    } = read_state.deserialize_and_filter(column_chunks.clone(), &part, false)?;
+    } = read_state.deserialize_and_filter(column_chunks.clone(), &part, false, None, false)?;
 
     // Scan statistics describe the whole block that was read and decoded,
     // not the single row left after prewhere and runtime filters. All five

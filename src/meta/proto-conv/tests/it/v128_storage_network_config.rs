@@ -79,6 +79,7 @@ fn test_decode_v128_storage_network_config() -> anyhow::Result<()> {
         bucket: "my_bucket".to_string(),
         root: "/data/files".to_string(),
         credential: "my_credential".to_string(),
+        allow_credential_chain: None,
         network_config: Some(StorageNetworkParams {
             retry_timeout: 1,
             retry_io_timeout: 2,

@@ -1,0 +1,259 @@
+statement ok
+create or replace database test_condition_cache
+
+statement ok
+use test_condition_cache
+
+# Blocks of 20000 rows, three granules each. `s` matches:
+# - 'none' in no row,
+# - 'few' in 3 rows of a block (kept exactly),
+# - 'many' in rows of the first granule of each block (kept as granules),
+# - `s <> 'many'` in every row of the first blocks.
+statement ok
+create or replace table t(id int, k int, s string) row_per_block = 20000
+
+statement ok
+insert into t select number, number % 20000, case when number % 20000 in (5, 9000, 19999) then 'few' else 'x' end from numbers(60000)
+
+statement ok
+insert into t select number + 60000, number % 20000, case when number % 20000 < 2000 then 'many' else 'y' end from numbers(40000)
+
+statement ok
+set enable_condition_cache = 1
+
+# Each query runs twice: it fills the cache, then reads it.
+query I
+select count(*) from t where s = 'none'
+----
+0
+
+query I
+select count(*) from t where s = 'none'
+----
+0
+
+query I
+select count(*) from t where s = 'few'
+----
+9
+
+query I
+select count(*) from t where s = 'few'
+----
+9
+
+query IIT
+select id, k, s from t where s = 'few' order by id
+----
+5 5 few
+9000 9000 few
+19999 19999 few
+20005 5 few
+29000 9000 few
+39999 19999 few
+40005 5 few
+49000 9000 few
+59999 19999 few
+
+query IIT
+select id, k, s from t where s = 'few' order by id
+----
+5 5 few
+9000 9000 few
+19999 19999 few
+20005 5 few
+29000 9000 few
+39999 19999 few
+40005 5 few
+49000 9000 few
+59999 19999 few
+
+query II
+select count(*), sum(id) from t where s = 'many'
+----
+4000 283998000
+
+query II
+select count(*), sum(id) from t where s = 'many'
+----
+4000 283998000
+
+query I
+select count(*) from t where s = 'many'
+----
+4000
+
+query I
+select count(*) from t where s = 'many'
+----
+4000
+
+query I
+select count(*) from t where s <> 'many'
+----
+96000
+
+query I
+select count(*) from t where s <> 'many'
+----
+96000
+
+query II
+select count(*), sum(k) from t where s <> 'many'
+----
+96000 995952000
+
+query II
+select count(*), sum(k) from t where s <> 'many'
+----
+96000 995952000
+
+# The filter on an output column and another conjunct.
+query II
+select count(*), max(id) from t where s = 'few' and k > 100
+----
+6 59999
+
+query II
+select count(*), max(id) from t where s = 'few' and k > 100
+----
+6 59999
+
+# Internal columns of the rows of a block that is not read.
+query I
+select count(distinct _block_name) from t where s = 'few'
+----
+3
+
+query I
+select count(distinct _block_name) from t where s = 'few'
+----
+3
+
+# A filter of several conjuncts records its first one too, evaluating the others on the rows
+# it selects only.
+query I
+select count(*) from t where k > 0 and 100 / k > 1
+----
+495
+
+query I
+select count(*) from t where k > 0 and 100 / k > 1
+----
+495
+
+query I
+select count(*) from t where k < 3000 and s = 'y'
+----
+2000
+
+# The entry of the first conjunct serves a filter of it alone,
+query I
+select count(*) from t where k < 3000
+----
+15000
+
+# and a filter that starts with it.
+query I
+select count(*) from t where k < 3000 and s = 'many'
+----
+4000
+
+query I
+select count(*) from t where k < 3000 and s = 'many'
+----
+4000
+
+# With an early prewhere stage: `k` is filtered on first, the other columns are decoded for
+# the rows it selects.
+query IT
+select id, s from t where k = 9000 and s <> 'zzz' order by id
+----
+9000 few
+29000 few
+49000 few
+69000 y
+89000 y
+
+query IT
+select id, s from t where k = 9000 and s <> 'zzz' order by id
+----
+9000 few
+29000 few
+49000 few
+69000 y
+89000 y
+
+# An early column that is also output; the early stage records its conjunct,
+query II
+select k, id from t where k = 9001 and id > 30000 order by id
+----
+9001 49001
+9001 69001
+9001 89001
+
+query II
+select k, id from t where k = 9001 and id > 30000 order by id
+----
+9001 49001
+9001 69001
+9001 89001
+
+# which serves the conjunct alone and the filters that start with it.
+query I
+select count(*) from t where k = 9001
+----
+5
+
+query I
+select id from t where k = 9001 and s = 'y' order by id
+----
+69001
+89001
+
+query I
+select id from t where k = 9001 and s = 'y' order by id
+----
+69001
+89001
+
+# New blocks: an entry is by block.
+statement ok
+insert into t values (100000, 0, 'few')
+
+query I
+select count(*) from t where s = 'few'
+----
+10
+
+# The blocks written before a column was added read its default. A new default applies to the
+# rows written after the change only.
+statement ok
+alter table t add column d int default 1
+
+query I
+select count(*) from t where d = 1
+----
+100001
+
+statement ok
+alter table t modify column d int default 2
+
+statement ok
+insert into t(id, k, s) values (100001, 1, 'z')
+
+query I
+select count(*) from t where d = 1
+----
+100001
+
+query I
+select count(*) from t where d = 2
+----
+1
+
+statement ok
+unset enable_condition_cache
+
+statement ok
+drop database test_condition_cache

@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableDeduplicationLabelIdent;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::StructKey;
 
 use crate::meta_service_error;
 use crate::sessions::TableContext;
@@ -39,9 +41,11 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
                     .lock()
                     .contains_deduplicated_label(&deduplicate_label)
             } else {
+                let ident =
+                    TableDeduplicationLabelIdent::new_generic(ctx.get_tenant(), deduplicate_label);
                 UserApiProvider::instance()
                     .get_meta_store_client()
-                    .get_kv(&deduplicate_label)
+                    .get_kv(&ident.to_string_key())
                     .await
                     .map_err(meta_service_error)?
                     .is_some()

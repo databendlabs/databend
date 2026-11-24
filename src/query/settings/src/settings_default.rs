@@ -924,9 +924,9 @@ impl DefaultSettings {
                 }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
-                    desc: "Sql duplicate label for deduplication.",
+                    desc: "Retry token for SQL writes that support deduplication.",
                     mode: SettingMode::Write,
-                    scope: SettingScope::Both,
+                    scope: SettingScope::Session,
                     range: None,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
@@ -1121,13 +1121,6 @@ impl DefaultSettings {
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Deprecated; retained for compatibility and has no effect.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_recluster_task_selection_v2", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1682,6 +1675,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Session,
                     range: None,
+                }),
+                ("enable_condition_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable to cache the granules of a block where a prewhere filter selects rows",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_prune_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

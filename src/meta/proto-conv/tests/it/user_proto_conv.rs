@@ -247,6 +247,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::principal::StageInfo {
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
                 credential: "my_credential".to_string(),
+                allow_credential_chain: None,
                 network_config: None,
             }),
         },

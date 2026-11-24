@@ -59,6 +59,7 @@ fn test_decode_v178_storage_config_azblob() -> anyhow::Result<()> {
             account_name: "account".to_string(),
             account_key: "key".to_string(),
             root: "/data".to_string(),
+            allow_credential_chain: None,
             network_config: network_config(),
         })
     };

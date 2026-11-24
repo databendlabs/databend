@@ -88,6 +88,7 @@ pub fn cases() -> Vec<Box<dyn KindCase>> {
         case::<parquet::Meta>(),
         case::<iceberg::Table>(),
         case::<table::PruneResult>(),
+        case::<table::Condition>(),
         case::<bloom::Filter>(),
         case::<zone_map::Chunk>(),
         case::<vector::Index>(),

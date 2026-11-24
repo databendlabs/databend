@@ -13,12 +13,18 @@
 // limitations under the License.
 
 use databend_common_catalog::session_type::SessionType;
+use databend_common_meta_app::schema::TableDeduplicationLabelIdent;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::StructKey;
 use databend_query::sessions::SessionManager;
 use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::OSSSetup;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
+use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> anyhow::Result<()> {
@@ -111,5 +117,58 @@ async fn test_failed_temp_ctas_cleans_staged_table() -> anyhow::Result<()> {
     assert!(tables.is_empty());
     assert!(temp_tbl_mgr.lock().is_empty());
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_temp_table_deduplication_is_transaction_local() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom_and_session_type(
+        OSSSetup {
+            config: ConfigBuilder::create().config(),
+        },
+        SessionType::MySQL,
+    )
+    .await?;
+    fixture.create_default_database().await?;
+    let table = format!("{}.temp_writes", fixture.default_db_name());
+    fixture
+        .execute_command(&format!("CREATE TEMP TABLE {table}(id INT)"))
+        .await?;
+
+    let meta = UserApiProvider::instance().get_meta_store_client();
+    let tenant = fixture.default_tenant();
+    let insert = |label, id| {
+        format!("INSERT /*+ SET_VAR(deduplicate_label='{label}') */ INTO {table} VALUES ({id})")
+    };
+
+    fixture.execute_command(&insert("autocommit", 1)).await?;
+    let key = TableDeduplicationLabelIdent::new(&tenant, "autocommit").to_string_key();
+    assert!(meta.get_kv(&key).await?.is_none());
+
+    fixture.execute_command("BEGIN").await?;
+    let statement = insert("transaction", 2);
+    fixture.execute_command(&statement).await?;
+    fixture.execute_command(&statement).await?;
+    fixture.execute_command("COMMIT").await?;
+    let key = TableDeduplicationLabelIdent::new(&tenant, "transaction").to_string_key();
+    assert!(meta.get_kv(&key).await?.is_none());
+
+    let blocks = fixture
+        .execute_query(&format!("SELECT id FROM {table} ORDER BY id"))
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    let ids = blocks
+        .iter()
+        .flat_map(|block| {
+            let ids = block.get_by_offset(0);
+            (0..block.num_rows()).map(move |row| ids.index(row).unwrap().to_string())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["1", "2"]);
+
+    fixture
+        .execute_command(&format!("DROP TABLE {table}"))
+        .await?;
     Ok(())
 }

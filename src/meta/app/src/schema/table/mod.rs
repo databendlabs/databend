@@ -891,6 +891,16 @@ impl UpdateMultiTableMetaReq {
             && self.deduplicated_labels.is_empty()
             && self.update_temp_tables.is_empty()
     }
+
+    /// Deduplication labels and temporary table updates are not persistent work.
+    pub fn has_persistent_updates(&self) -> bool {
+        !self.update_table_metas.is_empty()
+            || !self.update_stream_metas.is_empty()
+            || self
+                .copied_files
+                .iter()
+                .any(|(_, req)| !req.file_info.is_empty())
+    }
 }
 
 /// The result of updating multiple table meta

@@ -1068,6 +1068,20 @@ SELECT * FROM jq('.[]', array_construct())
 statement error
 SELECT * FROM jq('invalid_expression', object_construct('k', 'v'))
 
+statement error
+SELECT * FROM jq('env', parse_json('1'))
+
+statement error
+SELECT * FROM jq('halt', parse_json('1'))
+
+statement error
+SELECT * FROM jq('"err" | halt_error(1)', parse_json('1'))
+
+query ?
+SELECT * FROM jq('.', parse_json('1'))
+----
+1
+
 # Test with complex transformations
 query ?
 SELECT * FROM jq('{min: min, max: max, sum: add, length: length}', array_construct(1, 2, 3, 4, 5))

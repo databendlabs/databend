@@ -150,7 +150,8 @@ pub async fn should_reset(
         payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
 
         let (new_storage_params, _) = payload
-            .tracking(parse_uri_location(&mut uri_location))
+            // History storage comes from server config.
+            .tracking(parse_uri_location(&mut uri_location, true))
             .await?;
 
         // External1 -> External2
@@ -194,6 +195,20 @@ fn storage_params_equal(lhs: &StorageParams, rhs: &StorageParams) -> bool {
             let mut right = right.clone();
             left.disable_credential_loader = false;
             right.disable_credential_loader = false;
+            left.allow_credential_chain = None;
+            right.allow_credential_chain = None;
+            left == right
+        }
+        (StorageParams::Gcs(left), StorageParams::Gcs(right)) => {
+            let mut left = left.clone();
+            let mut right = right.clone();
+            left.allow_credential_chain = None;
+            right.allow_credential_chain = None;
+            left == right
+        }
+        (StorageParams::Azblob(left), StorageParams::Azblob(right)) => {
+            let mut left = left.clone();
+            let mut right = right.clone();
             left.allow_credential_chain = None;
             right.allow_credential_chain = None;
             left == right
