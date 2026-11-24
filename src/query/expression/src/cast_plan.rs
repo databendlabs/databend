@@ -56,13 +56,13 @@ pub enum CastStep {
     Identity,
     /// `NULL` to any type: NULL for a nullable destination, an error otherwise.
     Null,
-    /// A cast function converts the value. With `returns_null`, the function returns NULL for
-    /// some non-NULL values, e.g. a JSON null cast from Variant. With `reject_null`, the
-    /// function returns the nullable destination type, and a NULL is an error.
+    /// A cast function converts the value: `call` runs it on the value of the source, and
+    /// `value_call` on a non-NULL value, the same call for a non-nullable source. The function
+    /// may return NULL for some non-NULL values, e.g. a JSON null cast from Variant, which
+    /// `value_call` returns a nullable type for; see [`CastPlan::rejects_null`].
     Function {
         call: CastCall,
-        reject_null: bool,
-        returns_null: bool,
+        value_call: CastCall,
     },
     /// Casts through intermediate types, one cast after another.
     Chain(Vec<CastPlan>),
@@ -118,8 +118,6 @@ pub struct CastFunction {
     pub overload: CastOverload,
     /// The overload for a nullable argument, which passes the NULLs through.
     pub nullable_overload: Option<CastOverload>,
-    /// Whether the function returns NULL for some non-NULL values, e.g. a JSON null.
-    pub returns_null: bool,
 }
 
 impl CastPlan {
@@ -128,6 +126,17 @@ impl CastPlan {
             src_type: src_type.clone(),
             dest_type: dest_type.clone(),
             step,
+        }
+    }
+
+    /// Whether the step runs a function that returns NULL for some non-NULL values, to a
+    /// destination that is not nullable, so that a NULL is an error.
+    pub fn rejects_null(&self) -> bool {
+        match &self.step {
+            CastStep::Function { value_call, .. } => {
+                value_call.return_type.is_nullable() && !self.dest_type.is_nullable()
+            }
+            _ => false,
         }
     }
 }
@@ -234,23 +243,31 @@ fn resolve_function_plan(
         return None;
     }
     let function = fn_registry.get_cast_function(src_type, dest_type)?;
-    let overload = if src_type.is_nullable() {
-        function.nullable_overload?
+    let value_type = src_type.remove_nullable();
+    let value_call = cast_function_call(
+        &function.name,
+        function.overload,
+        &value_type,
+        dest_type,
+        fn_registry,
+    )?;
+    let call = if src_type.is_nullable() {
+        let overload = function.nullable_overload?;
+        cast_function_call(&function.name, overload, src_type, dest_type, fn_registry)?
     } else {
-        function.overload
+        value_call.clone()
     };
-    let call = cast_function_call(&function.name, overload, src_type, dest_type, fn_registry)?;
-    let reject_null = if call.return_type == *dest_type {
-        false
-    } else if function.returns_null && call.return_type == dest_type.wrap_nullable() {
-        true
-    } else {
+    // The function returns the destination, or its nullable form when it returns NULL for some
+    // non-NULL values.
+    let returns_null = value_call.return_type.is_nullable();
+    if call.return_type != *dest_type
+        && !(returns_null && call.return_type == dest_type.wrap_nullable())
+    {
         return None;
-    };
+    }
     Some(CastPlan::new(src_type, dest_type, CastStep::Function {
         call,
-        reject_null,
-        returns_null: function.returns_null,
+        value_call,
     }))
 }
 
@@ -367,7 +384,6 @@ pub(crate) fn resolve_registered_cast(
             name: function_name.to_string(),
             overload: *overload,
             nullable_overload: Some(*overload),
-            returns_null: false,
         };
     };
 
@@ -395,7 +411,6 @@ pub(crate) fn resolve_registered_cast(
         name: function_name.to_string(),
         overload: *overload,
         nullable_overload,
-        returns_null: return_type.is_nullable(),
     }
 }
 
@@ -438,11 +453,9 @@ impl fmt::Display for CastPlan {
         match &self.step {
             CastStep::Identity => write!(f, "identity"),
             CastStep::Null => write!(f, "null"),
-            CastStep::Function {
-                call, reject_null, ..
-            } => {
+            CastStep::Function { call, .. } => {
                 write!(f, "{}", call.function.signature)?;
-                if *reject_null {
+                if self.rejects_null() {
                     write!(f, " rejecting NULL")?;
                 }
                 Ok(())

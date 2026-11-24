@@ -95,11 +95,7 @@ impl FoldRules {
             CastStep::Identity => (domain.clone(), false),
             CastStep::Null if dest_type.is_nullable_or_null() => (domain.clone(), false),
             CastStep::Null => return None,
-            CastStep::Function {
-                call,
-                reject_null,
-                returns_null,
-            } => {
+            CastStep::Function { value_call, .. } => {
                 let src_type = &plan.src_type;
                 // A function step with a nullable source keeps its NULLs.
                 let (input, input_has_null) = match domain {
@@ -116,17 +112,11 @@ impl FoldRules {
                             Some(value) => Self::cast_value_domain(
                                 func_ctx,
                                 fn_registry,
-                                call,
+                                value_call,
                                 &dest_type.remove_nullable(),
                                 value,
                             ),
-                            None => Self::cast_function_domain(
-                                func_ctx,
-                                call,
-                                src_type.is_nullable(),
-                                *returns_null,
-                                input,
-                            )?,
+                            None => Self::cast_function_domain(func_ctx, value_call, input)?,
                         };
                         (output.value, input_has_null || output.has_null, may_fail)
                     }
@@ -140,7 +130,7 @@ impl FoldRules {
                     let output = Domain::Nullable(NullableDomain { has_null, value });
                     (output, may_fail)
                 } else {
-                    debug_assert!(*reject_null || !has_null);
+                    debug_assert!(plan.rejects_null() || !has_null);
                     // A NULL is an error for `CAST`.
                     if has_null && !is_try {
                         return None;
@@ -248,40 +238,25 @@ impl FoldRules {
         is_try.then_some((output, true))
     }
 
-    /// The output of `call`, the function of a cast step, for non-NULL input in `input`: the
-    /// values and whether one is NULL, and whether a row may fail. A function that does not
-    /// return NULL for a non-NULL value, as `returns_null` tells, has no NULL output then, even
-    /// when the domain of its nullable overload does not say so.
+    /// The output of `call`, the function of a cast step on a non-NULL value, for input in
+    /// `input`: the values and whether one is NULL, and whether a row may fail.
     fn cast_function_domain(
         func_ctx: &FunctionContext,
         call: &CastCall,
-        src_is_nullable: bool,
-        returns_null: bool,
         input: &Domain,
     ) -> Option<(NullableDomain<AnyType>, bool)> {
         let FunctionEval::Scalar { calc_domain, .. } = &call.function.eval else {
             return None;
         };
-        let input = if src_is_nullable {
-            Domain::Nullable(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(input.clone())),
-            })
-        } else {
-            input.clone()
-        };
-        let return_type = &call.return_type;
-        let (domain, may_fail) = match calc_domain.domain_eval(func_ctx, &[input]) {
-            FunctionDomain::MayThrow => (Domain::full(return_type), true),
-            FunctionDomain::MayThrowDomain(domain) => (domain, true),
-            FunctionDomain::Full => (Domain::full(return_type), false),
-            FunctionDomain::Domain(domain) => (domain, false),
-        };
+        let (domain, may_fail) =
+            match calc_domain.domain_eval(func_ctx, std::slice::from_ref(input)) {
+                FunctionDomain::MayThrow => (Domain::full(&call.return_type), true),
+                FunctionDomain::MayThrowDomain(domain) => (domain, true),
+                FunctionDomain::Full => (Domain::full(&call.return_type), false),
+                FunctionDomain::Domain(domain) => (domain, false),
+            };
         let output = match domain {
-            Domain::Nullable(domain) if return_type.is_nullable() => NullableDomain {
-                has_null: returns_null && domain.has_null,
-                value: domain.value,
-            },
+            Domain::Nullable(domain) => domain,
             domain => NullableDomain {
                 has_null: false,
                 value: Some(Box::new(domain)),

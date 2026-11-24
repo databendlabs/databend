@@ -1080,15 +1080,14 @@ pub fn function_call_to_cast(
 
     let plan = resolve_cast_plan(argument_type, return_type, fn_registry)?;
     let CastStep::Function {
-        call: cast_call,
-        reject_null,
-        ..
-    } = plan.step
+        call: cast_call, ..
+    } = &plan.step
     else {
         return None;
     };
-    let same_function =
-        *function_id == cast_call.id && !reject_null && return_type == &cast_call.return_type;
+    let same_function = *function_id == cast_call.id
+        && !plan.rejects_null()
+        && return_type == &cast_call.return_type;
     same_function.then(|| return_type.clone())
 }
 

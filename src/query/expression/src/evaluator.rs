@@ -876,13 +876,11 @@ impl<'a> Evaluator<'a> {
                 (value, Some(Bitmap::new_constant(false, len)))
             }
             CastStep::Null => (Self::cast_null(span, dest_type, value, validity)?, None),
-            CastStep::Function {
-                call, reject_null, ..
-            } => self.run_cast_function(
+            CastStep::Function { call, .. } => self.run_cast_function(
                 span,
                 plan,
                 call,
-                *reject_null,
+                plan.rejects_null(),
                 value,
                 validity,
                 is_try,
