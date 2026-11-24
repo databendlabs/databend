@@ -221,9 +221,12 @@ impl Processor for DeserializeDataTransform {
                     .virtual_data
                     .as_ref()
                     .map(|data| data.virtual_block_location.clone());
+                // `src_schema` describes the block `ReadState` returned, which leaves out the
+                // columns only its early stage reads, followed by the virtual columns.
                 data_block = virtual_reader
                     .deserialize_virtual_columns(
                         data_block,
+                        &self.src_schema,
                         read_res.virtual_data,
                         bitmap_selection
                             .as_ref()
