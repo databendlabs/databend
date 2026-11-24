@@ -1526,7 +1526,7 @@ fn start_pre_stage(
 
 struct PreStage {
     batches: ParquetBatches,
-    /// Rows surviving the early stage (already ANDed with index selection), `None` when there
+    /// Rows surviving the early stage (already intersected with index selection), `None` when there
     /// is no early stage.
     early_selection: Option<Bitmap>,
     /// Whether `early_selection` was pushed down to `batches`.
