@@ -33,7 +33,10 @@ pub use iterator::BinaryViewColumnIter;
 use private::Sealed;
 pub use view::CheckUTF8;
 pub use view::View;
+pub use view::ViewProbe;
 use view::validate_utf8_only;
+use view::views_cmp;
+use view::views_eq;
 
 use crate::binary::BinaryColumn;
 use crate::binary::BinaryColumnBuilder;
@@ -522,27 +525,64 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         }
     }
 
+    #[inline]
     pub fn compare(col_i: &Self, i: usize, col_j: &Self, j: usize) -> std::cmp::Ordering {
-        let view_i = unsafe { col_i.views().as_slice().get_unchecked(i) };
-        let view_j = unsafe { col_j.views().as_slice().get_unchecked(j) };
+        debug_assert!(i < col_i.len() && j < col_j.len());
+        unsafe {
+            let view_i = col_i.views.get_unchecked(i);
+            let view_j = col_j.views.get_unchecked(j);
+            views_cmp(
+                view_i,
+                view_j,
+                || view_i.get_slice_unchecked(&col_i.buffers),
+                || view_j.get_slice_unchecked(&col_j.buffers),
+            )
+        }
+    }
 
-        if view_i.prefix == view_j.prefix {
-            unsafe {
-                let value_i = col_i
-                    .views
-                    .get_unchecked(i)
-                    .get_slice_unchecked(&col_i.buffers);
-                let value_j = col_j
-                    .views
-                    .get_unchecked(j)
-                    .get_slice_unchecked(&col_j.buffers);
-                value_i.cmp(value_j)
-            }
-        } else {
-            view_i
-                .prefix
-                .to_le_bytes()
-                .cmp(&view_j.prefix.to_le_bytes())
+    /// Whether the `i`-th value of `col_i` equals the `j`-th value of `col_j`.
+    #[inline]
+    pub fn equal(col_i: &Self, i: usize, col_j: &Self, j: usize) -> bool {
+        debug_assert!(i < col_i.len() && j < col_j.len());
+        unsafe {
+            let view_i = col_i.views.get_unchecked(i);
+            let view_j = col_j.views.get_unchecked(j);
+            views_eq(
+                view_i,
+                view_j,
+                || view_i.get_slice_unchecked(&col_i.buffers),
+                || view_j.get_slice_unchecked(&col_j.buffers),
+            )
+        }
+    }
+
+    /// Compares the `i`-th value with `probe`.
+    #[inline]
+    pub fn compare_probe(&self, i: usize, probe: &ViewProbe) -> std::cmp::Ordering {
+        debug_assert!(i < self.len());
+        unsafe {
+            let view = self.views.get_unchecked(i);
+            views_cmp(
+                view,
+                probe.view(),
+                || view.get_slice_unchecked(&self.buffers),
+                || probe.bytes(),
+            )
+        }
+    }
+
+    /// Whether the `i`-th value equals `probe`.
+    #[inline]
+    pub fn equal_probe(&self, i: usize, probe: &ViewProbe) -> bool {
+        debug_assert!(i < self.len());
+        unsafe {
+            let view = self.views.get_unchecked(i);
+            views_eq(
+                view,
+                probe.view(),
+                || view.get_slice_unchecked(&self.buffers),
+                || probe.bytes(),
+            )
         }
     }
 }
@@ -599,15 +639,7 @@ impl Utf8ViewColumn {
     }
 
     pub fn compare_str(&self, i: usize, value: &str) -> std::cmp::Ordering {
-        let view = unsafe { self.views().as_slice().get_unchecked(i) };
-        let prefix = load_prefix(value.as_bytes());
-
-        if view.prefix == prefix {
-            let value_i = unsafe { self.value_unchecked(i) };
-            value_i.cmp(value)
-        } else {
-            view.prefix.to_le_bytes().as_slice().cmp(value.as_bytes())
-        }
+        self.compare_probe(i, &ViewProbe::new(value.as_bytes()))
     }
 }
 
@@ -698,13 +730,4 @@ impl From<ArrayData> for Utf8ViewColumn {
 
         unsafe { Utf8ViewColumn::new_unchecked_unknown_md(views.into(), buffers, None) }
     }
-}
-
-// Loads (up to) the first 4 bytes of s as little-endian, padded with zeros.
-#[inline]
-fn load_prefix(s: &[u8]) -> u32 {
-    let start = &s[..s.len().min(4)];
-    let mut tmp = [0u8; 4];
-    tmp[..start.len()].copy_from_slice(start);
-    u32::from_le_bytes(tmp)
 }

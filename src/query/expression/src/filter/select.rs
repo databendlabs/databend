@@ -39,7 +39,6 @@ use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::EmptyArrayType;
 use crate::types::NumberType;
-use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
 use crate::types::number::*;
@@ -104,9 +103,7 @@ impl Selector<'_> {
                 if let Some(bitmap) = Self::compare_empty_string(&op, &left, &right, &validity) {
                     return Ok(self.select_boolean_column_adapt(bitmap, buffers, has_false));
                 }
-                self.select_type_values_cmp::<StringType>(
-                    &op, left, right, validity, buffers, has_false,
-                )
+                self.select_string_values(&op, left, right, validity, buffers, has_false)
             }
             DataType::Variant => self.select_type_values_cmp::<VariantType>(
                 &op, left, right, validity, buffers, has_false,
