@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -27,6 +28,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
@@ -45,8 +47,10 @@ use databend_common_sql::plans::RelOp;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Visitor;
+use databend_common_storages_fuse::operations::read::length_only::length_only_columns_of;
 use itertools::Itertools;
 
+use crate::physical_plans::TableScan;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::EvalScalarFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -298,6 +302,7 @@ impl PhysicalPlanBuilder {
                 projections.insert(index + input_column_nums);
             }
         }
+        let input = scan_length_only_columns(input, &exprs, &projections);
         Ok(PhysicalPlan::new(EvalScalar {
             input,
             exprs,
@@ -453,4 +458,94 @@ impl<'a> Visitor<'a> for FlattenColumnsVisitor {
         }
         Ok(())
     }
+}
+
+/// `input` with the `String` columns of a fuse scan that `exprs` read only the byte lengths of
+/// (`octet_length`, comparisons with `''`), that the expressions do not pass on (`projections`)
+/// and that the scan reads for nothing else, read as their lengths: see
+/// `PushDownInfo::length_only_columns`. Nothing above reads them, as they are not output.
+fn scan_length_only_columns(
+    input: PhysicalPlan,
+    exprs: &[(RemoteExpr, Symbol)],
+    projections: &BTreeSet<usize>,
+) -> PhysicalPlan {
+    let Some(scan) = input.as_any().downcast_ref::<TableScan>() else {
+        return input;
+    };
+    let DataSourceInfo::TableSource(table_info) = &scan.source.source_info else {
+        return input;
+    };
+    let Some(push_downs) = scan.source.push_downs.as_ref() else {
+        return input;
+    };
+    if table_info.engine() != "FUSE" {
+        return input;
+    }
+    let Ok(schema) = scan.output_schema() else {
+        return input;
+    };
+    let exprs = exprs
+        .iter()
+        .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
+        .collect::<Vec<_>>();
+    let candidates = length_only_columns_of(&exprs);
+    if candidates.is_empty() {
+        return input;
+    }
+    // The filters the scan evaluates, and its pushed down order, read its columns too.
+    let mut scan_exprs = Vec::new();
+    for filters in [&push_downs.filters, &push_downs.secure_filters]
+        .into_iter()
+        .flatten()
+    {
+        scan_exprs.push(filters.filter.as_expr(&BUILTIN_FUNCTIONS));
+        scan_exprs.push(filters.inverted_filter.as_expr(&BUILTIN_FUNCTIONS));
+    }
+    if let Some(prewhere) = &push_downs.prewhere {
+        scan_exprs.push(prewhere.filter.as_expr(&BUILTIN_FUNCTIONS));
+    }
+    scan_exprs.extend(
+        push_downs
+            .order_by
+            .iter()
+            .map(|(expr, _, _)| expr.as_expr(&BUILTIN_FUNCTIONS)),
+    );
+    let scan_reads = scan_exprs
+        .iter()
+        .flat_map(|expr| expr.column_refs().into_keys())
+        .collect::<HashSet<_>>();
+    let scan_length_only = length_only_columns_of(&scan_exprs);
+    let table_schema = scan.source.source_info.schema();
+    let mut columns = candidates
+        .into_iter()
+        .filter(|offset| !projections.contains(offset))
+        .filter_map(|offset| {
+            let symbol = schema.field(offset).name();
+            let (column, _) = scan
+                .name_mapping
+                .iter()
+                .find(|(_, output)| *output == symbol)?;
+            let field = table_schema.field_with_name(column).ok()?;
+            (field.data_type().remove_nullable() == TableDataType::String
+                && (!scan_reads.contains(column) || scan_length_only.contains(column)))
+            .then(|| column.clone())
+        })
+        .collect::<Vec<_>>();
+    if columns.is_empty() {
+        return input;
+    }
+    columns.sort();
+    let mut source = scan.source.clone();
+    if let Some(push_downs) = source.push_downs.as_mut() {
+        push_downs.length_only_columns = columns;
+    }
+    PhysicalPlan::new(TableScan {
+        meta: scan.meta.clone(),
+        scan_id: scan.scan_id,
+        name_mapping: scan.name_mapping.clone(),
+        source,
+        internal_column: scan.internal_column.clone(),
+        table_index: scan.table_index,
+        stat_info: scan.stat_info.clone(),
+    })
 }

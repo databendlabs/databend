@@ -228,6 +228,11 @@ impl BlockReader {
         }))
     }
 
+    /// The columns of which this reader reads only the byte lengths of the values.
+    pub fn length_only_columns(&self) -> &HashSet<ColumnId> {
+        &self.length_only_columns
+    }
+
     /// This reader, reading only the byte lengths of the values of `columns`, projected
     /// `String` or `Nullable(String)` columns, when their chunks are not cached as columns: their
     /// columns hold strings of NUL bytes of the lengths of the values. Only for columns whose
@@ -275,15 +280,20 @@ impl BlockReader {
         )
     }
 
+    /// A reader of `projection`, which reads only the lengths of the columns this reader does.
     pub fn change_projection(&self, projection: Projection) -> Result<Arc<BlockReader>> {
-        Self::build_reader(
+        let reader = Self::build_reader(
             self.ctx.clone(),
             self.operator.clone(),
             self.original_schema.clone(),
             self.all_field_default_vals.clone(),
             projection,
             self.policy,
-        )
+        )?;
+        Ok(match self.length_only_columns.is_empty() {
+            true => reader,
+            false => reader.with_length_only_columns(self.length_only_columns.as_ref().clone()),
+        })
     }
 
     // Build non duplicate leaf_indices to avoid repeated read column from parquet

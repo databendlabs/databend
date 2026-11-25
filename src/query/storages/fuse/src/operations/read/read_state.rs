@@ -369,6 +369,28 @@ impl ReadState {
             }
         }
         let runtime_filter_column_names: Vec<_> = runtime_filter_column_names.iter().collect();
+        // Runtime filters read the values of their columns, which the plan above the scan may
+        // read only the lengths of.
+        let block_reader = match block_reader.length_only_columns().is_empty() {
+            true => block_reader,
+            false => {
+                let runtime_filter_ids = runtime_filter_column_names
+                    .iter()
+                    .filter_map(|name| original_schema.field_with_name(name).ok())
+                    .map(|field| field.column_id())
+                    .collect::<HashSet<_>>();
+                let columns = block_reader
+                    .length_only_columns()
+                    .difference(&runtime_filter_ids)
+                    .copied()
+                    .collect::<HashSet<_>>();
+                match columns.len() == block_reader.length_only_columns().len() {
+                    true => block_reader,
+                    false => block_reader.with_length_only_columns(columns),
+                }
+            }
+        };
+        let original_schema = block_reader.original_schema.as_ref();
 
         let mut preread_projection =
             Projection::from_column_names(original_schema, &runtime_filter_column_names)?;
@@ -424,6 +446,7 @@ impl ReadState {
                     .collect::<HashSet<_>>()
             })
             .unwrap_or_default();
+        // Besides those the plan above the scan reads only the lengths of.
         let length_only = |reader: Arc<BlockReader>| {
             let ids = reader
                 .schema()
@@ -431,10 +454,14 @@ impl ReadState {
                 .iter()
                 .filter(|field| length_only_names.contains(field.name()))
                 .map(|field| field.column_id())
+                .filter(|id| !reader.length_only_columns().contains(id))
                 .collect::<HashSet<_>>();
             match ids.is_empty() {
                 true => reader,
-                false => reader.with_length_only_columns(ids),
+                false => {
+                    let ids = ids.union(reader.length_only_columns()).copied().collect();
+                    reader.with_length_only_columns(ids)
+                }
             }
         };
         let prewhere_reader = length_only(prewhere_reader);

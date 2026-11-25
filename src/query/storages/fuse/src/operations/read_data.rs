@@ -24,6 +24,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
 use databend_storages_common_cache::CachePolicy;
@@ -57,14 +58,33 @@ impl FuseTable {
         plan: &DataSourcePlan,
         policy: CachePolicy,
     ) -> Result<Arc<BlockReader>> {
-        self.create_block_reader(
+        let block_reader = self.create_block_reader(
             ctx,
             PushDownInfo::projection_of_push_downs(
                 &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
             policy,
-        )
+        )?;
+        // The columns the plan above the scan reads only the lengths of.
+        let length_only = plan
+            .push_downs
+            .as_ref()
+            .map_or(&[][..], |push_downs| &push_downs.length_only_columns);
+        if length_only.is_empty() {
+            return Ok(block_reader);
+        }
+        let columns = block_reader
+            .schema()
+            .fields()
+            .iter()
+            .filter(|field| {
+                length_only.contains(field.name())
+                    && field.data_type().remove_nullable() == TableDataType::String
+            })
+            .map(|field| field.column_id())
+            .collect();
+        Ok(block_reader.with_length_only_columns(columns))
     }
 
     pub(crate) fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {

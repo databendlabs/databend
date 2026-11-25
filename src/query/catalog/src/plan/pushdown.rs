@@ -227,6 +227,11 @@ pub struct PushDownInfo {
     /// Optional secure filters from Row Access Policy, kept separate for display redaction.
     #[serde(default)]
     pub secure_filters: Option<Filters>,
+    /// The `String` columns of which the scan reads only the byte lengths of the values: what
+    /// reads them above the scan reads nothing but their lengths (`octet_length`, comparisons
+    /// with `''`). The scan outputs them as strings of NUL bytes of those lengths.
+    #[serde(default)]
+    pub length_only_columns: Vec<String>,
 }
 
 impl PushDownInfo {

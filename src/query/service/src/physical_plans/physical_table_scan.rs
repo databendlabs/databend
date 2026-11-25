@@ -909,6 +909,8 @@ impl PhysicalPlanBuilder {
             sample: scan.sample.clone(),
             read_partitions_pruning_mode: Default::default(),
             secure_filters,
+            // Set by the plan above the scan, see `EvalScalar`.
+            length_only_columns: vec![],
         })
     }
 

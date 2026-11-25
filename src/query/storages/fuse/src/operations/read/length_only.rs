@@ -25,26 +25,32 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_expression::Cast;
+use databend_common_expression::ColumnIndex;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionCall;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 
 /// The `String` and `Nullable(String)` columns `filter` reads only the byte lengths of.
-pub fn length_only_columns(filter: &Expr<String>) -> HashSet<String> {
+pub fn length_only_columns<I: ColumnIndex>(filter: &Expr<I>) -> HashSet<I> {
+    length_only_columns_of(std::slice::from_ref(filter))
+}
+
+/// The `String` and `Nullable(String)` columns that `exprs` read only the byte lengths of.
+pub fn length_only_columns_of<I: ColumnIndex>(exprs: &[Expr<I>]) -> HashSet<I> {
     let mut length_only = HashMap::new();
-    if !visit(filter, &mut length_only) {
+    if !exprs.iter().all(|expr| visit(expr, &mut length_only)) {
         return HashSet::new();
     }
     length_only
         .into_iter()
-        .filter_map(|(name, length_only)| length_only.then_some(name))
+        .filter_map(|(column, length_only)| length_only.then_some(column))
         .collect()
 }
 
 /// Records in `length_only` whether each column `expr` reads is read only for its lengths.
 /// `false` if `expr` has a lambda, whose body is not looked into.
-fn visit(expr: &Expr<String>, length_only: &mut HashMap<String, bool>) -> bool {
+fn visit<I: ColumnIndex>(expr: &Expr<I>, length_only: &mut HashMap<I, bool>) -> bool {
     match expr {
         Expr::Constant(_) => true,
         Expr::ColumnRef(column) => {
@@ -54,7 +60,7 @@ fn visit(expr: &Expr<String>, length_only: &mut HashMap<String, bool>) -> bool {
         Expr::Cast(Cast { expr, .. }) => visit(expr, length_only),
         Expr::FunctionCall(call) => {
             if let Some(column) = length_of(call) {
-                length_only.entry(column.to_string()).or_insert(true);
+                length_only.entry(column.clone()).or_insert(true);
                 return true;
             }
             call.args.iter().all(|arg| visit(arg, length_only))
@@ -64,8 +70,9 @@ fn visit(expr: &Expr<String>, length_only: &mut HashMap<String, bool>) -> bool {
 }
 
 /// The column of `octet_length(c)` or of a comparison of `c` with `''`, if `call` is one: they
-/// depend only on the length of `c` (`c > ''` is `c <> ''`, `c <= ''` is `c = ''`).
-fn length_of(call: &FunctionCall<String>) -> Option<&str> {
+/// depend only on the length of `c` (`c > ''` is `c <> ''`, `c <= ''` is `c = ''`). Not
+/// `length(c)`, which counts the characters.
+fn length_of<I: ColumnIndex>(call: &FunctionCall<I>) -> Option<&I> {
     match (call.function.signature.name.as_str(), call.args.as_slice()) {
         ("octet_length", [arg]) => string_column(arg),
         ("eq" | "noteq" | "gt" | "gte" | "lt" | "lte", [left, right]) => {
@@ -79,7 +86,7 @@ fn length_of(call: &FunctionCall<String>) -> Option<&str> {
     }
 }
 
-fn string_column(expr: &Expr<String>) -> Option<&str> {
+fn string_column<I: ColumnIndex>(expr: &Expr<I>) -> Option<&I> {
     match expr {
         Expr::ColumnRef(column) if column.data_type.remove_nullable() == DataType::String => {
             Some(&column.id)
@@ -88,7 +95,7 @@ fn string_column(expr: &Expr<String>) -> Option<&str> {
     }
 }
 
-fn is_empty_string(expr: &Expr<String>) -> bool {
+fn is_empty_string<I: ColumnIndex>(expr: &Expr<I>) -> bool {
     match expr {
         Expr::Constant(constant) => matches!(&constant.scalar, Scalar::String(s) if s.is_empty()),
         Expr::Cast(Cast { expr, .. }) => is_empty_string(expr),

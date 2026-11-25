@@ -16,7 +16,7 @@ mod block_format;
 mod condition_cache;
 mod fuse_rows_fetcher;
 pub mod fuse_source;
-mod length_only;
+pub mod length_only;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_rows_fetcher;

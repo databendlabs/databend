@@ -730,6 +730,174 @@ settings (max_block_size = 997) select count(*) from t where n <> '' or s = ''
 ----
 35333
 
+# Columns the plan above the scan reads only through `octet_length` and comparisons with ''
+# (not `length`, which counts characters) are read as their lengths, also when the scan
+# outputs them.
+
+query II
+select sum(octet_length(s)), count(*) from t
+----
+351989 50000
+
+query II
+settings (enable_encoded_columns = 1) select sum(octet_length(s)), count(*) from t
+----
+351989 50000
+
+query II
+select sum(octet_length(n)), count(octet_length(n)) from t
+----
+216000 40000
+
+query II
+settings (enable_encoded_columns = 1) select sum(octet_length(n)), count(octet_length(n)) from t
+----
+216000 40000
+
+query III
+select id % 3 as k, sum(octet_length(s)), max(octet_length(n)) from t group by k order by k
+----
+0 108443 16
+1 111774 16
+2 131772 16
+
+query III
+settings (enable_encoded_columns = 1) select id % 3 as k, sum(octet_length(s)), max(octet_length(n)) from t group by k order by k
+----
+0 108443 16
+1 111774 16
+2 131772 16
+
+query I
+select sum(octet_length(s)) from t where s <> ''
+----
+351989
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s)) from t where s <> ''
+----
+351989
+
+query I
+select sum(octet_length(s)) from t where id % 7 = 2
+----
+50312
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s)) from t where id % 7 = 2
+----
+50312
+
+query II
+select sum(octet_length(s)), sum(length(s)) from t
+----
+351989 315989
+
+query II
+settings (enable_encoded_columns = 1) select sum(octet_length(s)), sum(length(s)) from t
+----
+351989 315989
+
+query II
+select octet_length(s) as l, count(*) from t where id < 30 group by l order by l
+----
+0 6
+2 6
+4 1
+9 1
+11 6
+14 1
+19 1
+21 2
+22 4
+24 1
+29 1
+
+query II
+settings (enable_encoded_columns = 1) select octet_length(s) as l, count(*) from t where id < 30 group by l order by l
+----
+0 6
+2 6
+4 1
+9 1
+11 6
+14 1
+19 1
+21 2
+22 4
+24 1
+29 1
+
+query IIT
+select id, octet_length(s), octet_length(n) from t where id % 4999 = 0 order by id
+----
+0 0 NULL
+4999 19 0
+9998 12 3
+14997 25 3
+19996 2 3
+24995 0 3
+29994 24 NULL
+34993 2 0
+39992 2 NULL
+44991 0 16
+49990 2 16
+
+query IIT
+settings (enable_encoded_columns = 1) select id, octet_length(s), octet_length(n) from t where id % 4999 = 0 order by id
+----
+0 0 NULL
+4999 19 0
+9998 12 3
+14997 25 3
+19996 2 3
+24995 0 3
+29994 24 NULL
+34993 2 0
+39992 2 NULL
+44991 0 16
+49990 2 16
+
+query I
+select sum(octet_length(s)) from t where s like '%example%'
+----
+147778
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s)) from t where s like '%example%'
+----
+147778
+
+query IT
+select max(octet_length(s)), max(s) from t
+----
+29 数据库-9
+
+query IT
+settings (enable_encoded_columns = 1) select max(octet_length(s)), max(s) from t
+----
+29 数据库-9
+
+query I
+select sum(octet_length(s) + octet_length(n)) from t where n = ''
+----
+63386
+
+query I
+settings (enable_encoded_columns = 1) select sum(octet_length(s) + octet_length(n)) from t where n = ''
+----
+63386
+
+query I
+select sum(if(s = '', 1, octet_length(s))) from t
+----
+364656
+
+query I
+settings (enable_encoded_columns = 1) select sum(if(s = '', 1, octet_length(s))) from t
+----
+364656
+
 statement ok
 unset enable_condition_cache
 
