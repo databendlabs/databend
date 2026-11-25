@@ -32,6 +32,8 @@ use databend_common_config::UserConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_storages_basic::gen_result_cache_meta_key;
+use databend_common_storages_basic::gen_result_cache_prefix;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::CustomClaims;
@@ -2201,6 +2203,77 @@ async fn test_txn_timeout() -> anyhow::Result<()> {
         .last()
         .1;
     assert!(response.error.is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_result_scan_cache_key_from_session() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let tenant = fixture.default_tenant();
+    let tenant = tenant.tenant_name();
+
+    async fn run(sql: &str, session: serde_json::Value) -> Result<TestHttpQueryFetchReply> {
+        let json = serde_json::json!({
+            "sql": sql,
+            "session": session,
+            "pagination": {"wait_time_secs": 5}
+        });
+        TestHttpQueryRequest::new(json).fetch_total().await
+    }
+
+    let settings = serde_json::json!({"settings": {
+        "enable_query_result_cache": "1",
+        "query_result_cache_min_execute_secs": "0"
+    }});
+    for sql in [
+        "create table t_result_scan(a int)",
+        "insert into t_result_scan values (1), (2)",
+    ] {
+        let reply = run(sql, settings.clone()).await?;
+        assert!(reply.error().is_none(), "{sql}: {:?}", reply.error());
+    }
+
+    let reply = run("select a from t_result_scan order by a", settings).await?;
+    assert!(reply.error().is_none(), "{:?}", reply.error());
+    let session = reply.last().1.session.unwrap();
+    let cache_key = session
+        .internal
+        .clone()
+        .unwrap()
+        .last_query_result_cache_key;
+    assert!(
+        cache_key.starts_with(&gen_result_cache_prefix(tenant)),
+        "{cache_key}"
+    );
+
+    let result_scan = "select a from result_scan(last_query_id()) order by a";
+
+    // The key returned by the server is accepted.
+    let reply = run(result_scan, serde_json::to_value(&session)?).await?;
+    assert!(reply.error().is_none(), "{:?}", reply.error());
+    let expected = vec![vec![Some("1".to_string())], vec![Some("2".to_string())]];
+    assert_eq!(reply.data(), expected);
+
+    // A key that is not a result cache key of the current tenant is ignored.
+    let digest = cache_key.rsplit('/').next().unwrap();
+    for key in [
+        format!("__fd_database/{tenant}/default"),
+        gen_result_cache_meta_key("other_tenant", digest),
+        format!("{cache_key}/x"),
+    ] {
+        let mut session = session.clone();
+        let internal = session.internal.as_mut().unwrap();
+        internal.last_query_result_cache_key = key.clone();
+        let reply = run(result_scan, serde_json::to_value(&session)?).await?;
+        let error = reply.error();
+        assert!(
+            error
+                .as_ref()
+                .is_some_and(|e| e.message.contains("No cache key found in current session")),
+            "key={key}, error={error:?}"
+        );
+    }
+
     Ok(())
 }
 
