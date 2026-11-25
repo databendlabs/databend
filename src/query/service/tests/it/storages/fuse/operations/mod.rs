@@ -29,6 +29,7 @@ mod mutation;
 mod navigate;
 mod optimize;
 mod prewhere;
+mod pruning_differential;
 mod purge_drop;
 mod read_plan;
 mod replace_into;
