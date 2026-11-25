@@ -3,3 +3,13 @@ ctx       : [("a", Number(Int32), Number(Int32(SimpleDomain { min: -2, max: 3 })
 expr      : eq<String, String>(CAST<Int32>(a AS String), "2")
 rewrited  : eq<Int32, Int32>(a, 2_i32)
 
+text      : a::string = '02'
+ctx       : [("a", Number(Int32), Number(Int32(SimpleDomain { min: -2, max: 3 })))]
+expr      : eq<String, String>(CAST<Int32>(a AS String), "02")
+rewrited  : Unchange
+
+text      : a = 2.4
+ctx       : [("a", Number(Int32), Number(Int32(SimpleDomain { min: -2, max: 3 })))]
+expr      : eq<Decimal(10, 0), Decimal(2, 1)>(CAST<Int32>(a AS Decimal(10, 0)), 2.4_d64(2,1))
+rewrited  : Unchange
+

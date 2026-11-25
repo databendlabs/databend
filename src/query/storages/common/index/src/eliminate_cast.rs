@@ -181,11 +181,18 @@ impl RewriteVisitor<'_> {
         let Some(scalar) = cast_const(self.func_ctx, src_type.to_owned(), constant.clone()) else {
             return Ok(None);
         };
+        let original = constant;
         let constant = Constant {
             span: None,
             scalar,
             data_type: src_type.clone(),
         };
+        // The conversion may change the constant: it rounds `2.4` to `2` and reads `'02'` as
+        // `2`. No value casts to such a constant, so the comparison with the converted one
+        // would only be implied by this one: true on rows where this one is false.
+        if !self.cast_equals(dest_type, &constant, &original) {
+            return Ok(None);
+        }
 
         match expr.as_cast() {
             Some(cast) => self.try_rewrite(span, cast, constant),
@@ -212,6 +219,29 @@ impl RewriteVisitor<'_> {
                 ))
             }
         }
+    }
+
+    /// Whether `CAST(value AS dest_type) = constant` holds.
+    fn cast_equals(&self, dest_type: &DataType, value: &Constant, constant: &Constant) -> bool {
+        let cast = Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(value.clone().into()),
+            dest_type: dest_type.clone(),
+        };
+        let Ok(eq) = check_function::<String>(
+            None,
+            "eq",
+            &[],
+            &[cast.into(), constant.clone().into()],
+            self.fn_registry,
+        ) else {
+            return false;
+        };
+        matches!(
+            FoldRules::eval_constant(self.func_ctx, self.fn_registry, &eq),
+            Some(Scalar::Boolean(true))
+        )
     }
 
     fn try_rewrite_integer_column_string_constant(
