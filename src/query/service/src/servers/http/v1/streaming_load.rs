@@ -178,9 +178,6 @@ pub async fn streaming_load_handler(
                     *t = TxnState::Fail
                 }
             }
-            if ctx.secondary_roles_rejected() {
-                s.reset_rejected_secondary_roles();
-            }
         }
         let v = encode_json_header(&s);
         resp.headers_mut()

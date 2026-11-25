@@ -562,7 +562,6 @@ impl<E> HTTPSessionEndpoint<E> {
             fixed_coordinator_node: is_worksheet,
             client_caps,
             version,
-            secondary_roles_rejected: Default::default(),
         })
     }
 }

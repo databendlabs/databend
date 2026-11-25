@@ -819,14 +819,14 @@ pub(crate) async fn query_handler(
                 let err = err.display_with_sql(&sql);
                 log_start_query_error(&err, &sql);
                 ctx.set_fail();
-                Ok(req.fail_to_start_sql(ctx, err).into_response())
+                Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
                 if let Err(err) = query.start_query(sql.clone(), req.params.take()).await {
                     let err = err.display_with_sql(&sql);
                     log_start_query_error(&err, &sql);
                     ctx.set_fail();
-                    return Ok(req.fail_to_start_sql(ctx, err).into_response());
+                    return Ok(req.fail_to_start_sql(err).into_response());
                 }
 
                 let query = Arc::new(query);

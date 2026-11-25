@@ -177,9 +177,7 @@ impl Session {
         if let Some(role) = self.get_current_role() {
             session.set_current_role_checked(&role.name).await?;
         }
-        session
-            .set_secondary_roles_checked(self.get_secondary_roles())
-            .await?;
+        session.set_secondary_roles_unchecked(self.get_secondary_roles());
         session
             .set_current_warehouse(self.get_current_warehouse().await)
             .await?;
@@ -373,6 +371,13 @@ impl Session {
     #[async_backtrace::framed]
     pub async fn set_secondary_roles_checked(&self, role_names: Option<Vec<String>>) -> Result<()> {
         self.privilege_mgr().set_secondary_roles(role_names).await
+    }
+
+    /// Stores the secondary roles without checking them, for restoring a session's state.
+    /// This grants nothing by itself: privilege checks only use the listed roles that are
+    /// still available to the session, see `get_all_effective_roles`.
+    pub fn set_secondary_roles_unchecked(&self, role_names: Option<Vec<String>>) {
+        self.session_ctx.set_secondary_roles(role_names);
     }
 
     pub fn get_current_role(&self) -> Option<RoleInfo> {

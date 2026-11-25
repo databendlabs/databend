@@ -872,6 +872,8 @@ async fn test_select_grants_respect_auth_role_and_secondary_roles() -> anyhow::R
     assert_eq!(error.code(), ErrorCode::INVALID_ROLE);
     assert_eq!(restricted_session.get_secondary_roles(), Some(vec![]));
 
+    // A restored list (HTTP session state) is kept, but grants nothing beyond the AUTH ROLE.
+    restricted_session.set_secondary_roles_unchecked(Some(vec!["reader".into()]));
     let error = check_access(
         restricted_session.create_query_context(&BUILD_INFO).await?,
         "SELECT * FROM select_access.t",

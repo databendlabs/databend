@@ -101,6 +101,13 @@ pub trait SessionPrivilegeManager {
     async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()>;
 }
 
+/// `roles` must be sorted by name, as `get_all_available_roles` returns them.
+fn contains_role(roles: &[RoleInfo], name: &str) -> bool {
+    roles
+        .binary_search_by(|role| role.name.as_str().cmp(name))
+        .is_ok()
+}
+
 pub struct SessionPrivilegeManagerImpl<'a> {
     session_ctx: &'a SessionContext,
 }
@@ -179,21 +186,18 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
 
     /// `None` (the default, `SET SECONDARY ROLES ALL`) enables all available roles.
     /// `Some([])` (`NONE`) enables only the current role and its inherited roles.
-    /// A non-empty list may only name roles available to the session.
+    /// A non-empty list may only name roles available to the session when it is set; roles
+    /// revoked later stay in the list but no longer take effect, see `get_all_effective_roles`.
     #[async_backtrace::framed]
     async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()> {
-        // The only check for explicit lists: both SET SECONDARY ROLES and HTTP session
-        // restoration end up here.
         if let Some(role_names) = &secondary_roles
             && !role_names.is_empty()
         {
             let available_roles = self.get_all_available_roles().await?;
-            // `get_all_available_roles` returns the roles sorted by name.
-            if let Some(role) = role_names.iter().find(|name| {
-                available_roles
-                    .binary_search_by(|role| role.name.as_str().cmp(name.as_str()))
-                    .is_err()
-            }) {
+            if let Some(role) = role_names
+                .iter()
+                .find(|name| !contains_role(&available_roles, name))
+            {
                 return Err(ErrorCode::InvalidRole(format!(
                     "Invalid secondary role {role} for current session"
                 )));
@@ -242,7 +246,16 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         // if the secondary_roles is set to be non-empty, return both current_role and the secondary_roles
         // and their related roles.
         let secondary_roles = secondary_roles.unwrap_or_default();
-        role_names.extend(secondary_roles);
+        if !secondary_roles.is_empty() {
+            // The list may come from the client (HTTP session state) or predate a revoke, so
+            // only the roles still available to the session take effect.
+            let available_roles = self.get_all_available_roles().await?;
+            role_names.extend(
+                secondary_roles
+                    .into_iter()
+                    .filter(|name| contains_role(&available_roles, name)),
+            );
+        }
 
         // find their related roles as the final effective roles
         let role_cache = RoleCacheManager::instance();
