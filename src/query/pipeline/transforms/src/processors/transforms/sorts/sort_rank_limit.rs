@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 
 use databend_common_catalog::runtime_filter_info::RuntimeTopNBoundary;
+use databend_common_column::binview::ViewProbe;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
@@ -37,7 +38,7 @@ use databend_common_expression::types::Decimal256Type;
 use databend_common_expression::types::DecimalDataKind;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
+use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
 
@@ -265,7 +266,7 @@ impl AccumulatingTransform for TransformRankLimitSort {
 
 /// Evaluates `$body` with `$T` set to the value type whose `compare` the sort uses for the
 /// column type `$data_type`, or evaluates to `None` for the types the boundary does not
-/// support.
+/// support. Strings are compared by their views before reaching this macro.
 macro_rules! with_boundary_type {
     ($data_type:expr, |$T:ident| $body:expr) => {
         match $data_type {
@@ -275,10 +276,6 @@ macro_rules! with_boundary_type {
             }
             DataType::Binary => {
                 type $T = BinaryType;
-                $body
-            }
-            DataType::String => {
-                type $T = StringType;
                 $body
             }
             DataType::Date => {
@@ -326,9 +323,12 @@ fn rows_within_boundary(
 ) -> Option<Bitmap> {
     let column = entry.to_column();
     let (column, validity) = split_validity(&column);
-    let mut keep = with_boundary_type!(column.data_type(), |T| {
-        compare_with_boundary::<T>(column, boundary, desc)
-    })?;
+    let mut keep = match column {
+        Column::String(column) => compare_strings_with_boundary(column, boundary, desc),
+        column => with_boundary_type!(column.data_type(), |T| {
+            compare_with_boundary::<T>(column, boundary, desc)
+        }),
+    }?;
     if let Some(validity) = validity {
         for (row, valid) in validity.iter().enumerate() {
             if !valid {
@@ -347,13 +347,31 @@ fn compare_with_boundary<T: AccessType>(
     let column = T::try_downcast_column(column).ok()?;
     let boundary = T::try_downcast_scalar(&boundary.as_ref()).ok()?;
     let keep = T::iter_column(&column)
-        .map(|value| match T::compare(value, boundary.clone()) {
-            Ordering::Less => desc.asc,
-            Ordering::Greater => !desc.asc,
-            Ordering::Equal => true,
-        })
+        .map(|value| within_boundary(T::compare(value, boundary.clone()), desc))
         .collect();
     Some(keep)
+}
+
+/// [`compare_with_boundary`] for strings, comparing each row with the boundary by its view.
+fn compare_strings_with_boundary(
+    column: &StringColumn,
+    boundary: &Scalar,
+    desc: &SortColumnDescription,
+) -> Option<MutableBitmap> {
+    let boundary = ViewProbe::new(boundary.as_string()?.as_bytes());
+    let keep = (0..column.len())
+        .map(|row| within_boundary(column.compare_probe(row, &boundary), desc))
+        .collect();
+    Some(keep)
+}
+
+/// Whether a row ordered `ordering` against the boundary can still rank within the limit.
+fn within_boundary(ordering: Ordering, desc: &SortColumnDescription) -> bool {
+    match ordering {
+        Ordering::Less => desc.asc,
+        Ordering::Greater => !desc.asc,
+        Ordering::Equal => true,
+    }
 }
 
 /// Whether the sorted `block` holds at least `n` distinct keys under `sort_desc`. A row
@@ -370,9 +388,17 @@ fn has_distinct_keys(block: &DataBlock, sort_desc: &[SortColumnDescription], n: 
         let column = block.get_by_offset(desc.offset).to_column();
         let (column, validity) = split_validity(&column);
         // `None` for a column type the boundary does not support, which marks nothing.
-        let _ = with_boundary_type!(column.data_type(), |T| {
-            mark_changes::<T>(column, validity, &mut changes)
-        });
+        let _ = match column {
+            Column::String(column) => {
+                mark_changes_by(column.len(), validity, &mut changes, |previous, row| {
+                    StringColumn::equal(column, previous, column, row)
+                });
+                Some(())
+            }
+            column => with_boundary_type!(column.data_type(), |T| {
+                mark_changes::<T>(column, validity, &mut changes)
+            }),
+        };
     }
     let changes = Bitmap::from(changes);
     1 + changes.len() - changes.null_count() >= n
@@ -385,24 +411,39 @@ fn mark_changes<T: AccessType>(
     changes: &mut MutableBitmap,
 ) -> Option<()> {
     let column = T::try_downcast_column(column).ok()?;
-    let mut previous: Option<Option<T::ScalarRef<'_>>> = None;
-    for (row, value) in T::iter_column(&column).enumerate() {
-        let value = validity
-            .is_none_or(|validity| validity.get_bit(row))
-            .then_some(value);
-        let changed = match (&previous, &value) {
-            (None, _) | (Some(None), None) => false,
-            (Some(Some(previous)), Some(value)) => {
-                T::compare(previous.clone(), value.clone()) != Ordering::Equal
-            }
+    mark_changes_by(
+        T::column_len(&column),
+        validity,
+        changes,
+        |previous, row| unsafe {
+            T::compare(
+                T::index_column_unchecked(&column, previous),
+                T::index_column_unchecked(&column, row),
+            ) == Ordering::Equal
+        },
+    );
+    Some(())
+}
+
+/// Marks the rows whose value differs from the row before, where `equal(previous, row)` tells
+/// whether two valid rows hold the same value. Nulls equal each other.
+fn mark_changes_by(
+    len: usize,
+    validity: Option<&Bitmap>,
+    changes: &mut MutableBitmap,
+    equal: impl Fn(usize, usize) -> bool,
+) {
+    let valid = |row: usize| validity.is_none_or(|validity| validity.get_bit(row));
+    for row in 1..len {
+        let changed = match (valid(row - 1), valid(row)) {
+            (true, true) => !equal(row - 1, row),
+            (false, false) => false,
             _ => true,
         };
         if changed {
             changes.set(row, true);
         }
-        previous = Some(value);
     }
-    Some(())
 }
 
 /// The values of a key column and, when it is nullable, its validity.
@@ -887,15 +928,22 @@ mod tests {
             Some(1.5),
             Some(-1.5),
         ]));
+        // Strings around the 12-byte inline limit and long ones sharing a prefix.
         assert_boundary_matches_sort(StringType::from_opt_data(vec![
             Some(""),
             Some("a"),
+            Some("a\0"),
             Some("b"),
             Some("ba"),
             Some("B"),
             None,
             Some("\u{e9}"),
             None,
+            Some("abcdefghijkl"),
+            Some("abcdefghijklm"),
+            Some("https://www.example.com/a"),
+            Some("https://www.example.com/ab"),
+            Some("https://www.example.com/b"),
         ]));
         assert_boundary_matches_sort(BooleanType::from_opt_data(vec![
             Some(true),

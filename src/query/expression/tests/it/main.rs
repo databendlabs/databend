@@ -50,6 +50,7 @@ mod schema;
 mod serde;
 mod sort;
 mod stream_partition;
+mod topk;
 mod types;
 
 mod like_pattern_escape;
