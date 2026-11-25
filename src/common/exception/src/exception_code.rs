@@ -255,7 +255,7 @@ build_exceptions! {
     MemoryExceedsLimit(2411),
 }
 
-// Table Structure and Operation Errors [1102-1103, 1106-1111, 1113-1118, 1121-1122, 1130-1133]
+// Table Structure and Operation Errors [1102-1103, 1106-1111, 1113-1118, 1121-1122, 1130-1135]
 build_exceptions! {
     /// Index out of bounds
     IndexOutOfBounds(1102),
@@ -295,6 +295,8 @@ build_exceptions! {
     ConstraintError(1133),
     /// Unknown row policy
     UnknownMaskPolicy(1134),
+    /// Multiple source rows matched the same target row in a mutation
+    MultipleSourceRowsMatched(1135),
 }
 
 // Sequence Errors [1124-1126, 3101-3102]
@@ -696,16 +698,27 @@ build_exceptions! {
     UnknownWorkloadQuotas(3144),
 }
 
-// Transaction and Processing Errors [4001-4004, 4012]
+// Table Write and Commit Conflicts [4001, 4022]; 4023-4049 reserved for this group.
 build_exceptions! {
     /// Unresolvable conflict
     UnresolvableConflict(4001),
-    /// Current transaction is aborted
-    CurrentTransactionIsAborted(4002),
-    /// Transaction timeout
-    TransactionTimeout(4003),
+    /// A write cannot be published safely past the snapshot timestamp boundary
+    SnapshotTimestampConflict(4022),
+}
+
+// Table Maintenance Errors [4012]
+build_exceptions! {
     /// No need to compact
     NoNeedToCompact(4012),
+}
+
+// SQL Transaction State Errors [4050-4051]
+// Do not reuse the retired transaction error codes 4002 and 4003.
+build_exceptions! {
+    /// Current transaction is aborted
+    CurrentTransactionIsAborted(4050),
+    /// The state needed to resume an explicit transaction was not found
+    TransactionNotFound(4051),
 }
 
 // Service Status Errors [5002]

@@ -338,7 +338,7 @@ async fn try_rebuild_req(
                     // commit;
 
                     if txn_begin_timestamp < latest_snapshot_timestamp {
-                        return Err(ErrorCode::UnresolvableConflict(format!(
+                        return Err(ErrorCode::SnapshotTimestampConflict(format!(
                             "Unresolvable conflict detected for table {} while resolving conflicts: txn started with logical timestamp {}, which is less than the latest table timestamp {}. Transaction must be aborted.",
                             tid, txn_begin_timestamp, latest_snapshot_timestamp
                         )));

@@ -84,7 +84,7 @@ fn take_mutation_offsets(
     // Validate the entire batch before transferring ownership to block tasks.
     for (updates, deletes) in offsets.values() {
         if !updates.is_disjoint(deletes) {
-            return Err(ErrorCode::UnresolvableConflict(
+            return Err(ErrorCode::MultipleSourceRowsMatched(
                 "multi rows from source match one and the same row in the target_table multi times",
             ));
         }
@@ -407,7 +407,7 @@ impl MatchedAggregator {
                         .0
                         .insert(offset as usize)
                     {
-                        return Err(ErrorCode::UnresolvableConflict(
+                        return Err(ErrorCode::MultipleSourceRowsMatched(
                             "multi rows from source match one and the same row in the target_table multi times",
                         ));
                     }
@@ -650,7 +650,7 @@ mod tests {
         ]);
         let original = offsets.clone();
         let error = take_mutation_offsets(&mut offsets).unwrap_err();
-        assert_eq!(error.code(), ErrorCode::UNRESOLVABLE_CONFLICT);
+        assert_eq!(error.code(), ErrorCode::MULTIPLE_SOURCE_ROWS_MATCHED);
         assert_eq!(offsets, original);
     }
 

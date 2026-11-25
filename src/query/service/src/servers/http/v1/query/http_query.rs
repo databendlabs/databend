@@ -717,9 +717,8 @@ fn try_set_txn(
                 );
             } else {
                 // the returned TxnState should be Fail
-                return Err(ErrorCode::TransactionTimeout(format!(
-                    "Transaction timeout: last_query_id {} not found on this server",
-                    last_query_id
+                return Err(ErrorCode::TransactionNotFound(format!(
+                    "Cannot resume transaction: no stored state for last_query_id {last_query_id}"
                 )));
             }
         }

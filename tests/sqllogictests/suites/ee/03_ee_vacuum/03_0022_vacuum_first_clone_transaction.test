@@ -85,7 +85,7 @@ connection writer
 statement ok
 INSERT INTO first_clone_transaction.guard_source VALUES (4)
 
-statement error .*4001.*txn started with logical timestamp.*
+statement error .*4022.*txn started with logical timestamp.*
 COMMIT
 
 query I
@@ -138,9 +138,9 @@ SELECT count(*) FROM fuse_snapshot('first_clone_transaction', 'vacuum_source')
 1
 
 # GC can make the pending snapshot unreadable before the timestamp guard runs.
-# Either the guard (4001) or unavailable-history read (3001/2013) must abort;
+# Either the guard (4022) or unavailable-history read (3001/2013) must abort;
 # COMMIT must never publish references to its reclaimed objects.
-statement error .*(4001|3001|2013).*
+statement error .*(4022|3001|2013).*
 COMMIT
 
 query I

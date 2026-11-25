@@ -32,13 +32,21 @@ INSERT INTO new_products (product_id, category_code, new_price, new_stock) VALUE
 statement ok
 set error_on_nondeterministic_update = 1;
 
-statement error (?s)4001.*multi rows from source match one and the same row in the target_table multi times
+statement error (?s)1135.*multi rows from source match one and the same row in the target_table multi times
 UPDATE old_products o
 SET o.price = n.new_price,
     o.stock = n.new_stock
 FROM new_products n
 WHERE o.product_id = n.product_id
 AND o.category_code = n.category_code;
+
+query ITRI
+select * from old_products order by product_id;
+----
+1 ELEC 299.99 50
+2 ELEC 399.99 30
+3 FURN 199.99 20
+4 FURN 89.99 100
 
 statement ok
 set error_on_nondeterministic_update = 0;
