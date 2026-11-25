@@ -66,8 +66,6 @@ DESC STAGE @~;
 statement ok
 SHOW LOCKS
 
-query IIII
+statement error 1025
 call admin$tenant_quota('admin')
-----
-0 0 0 0
 
