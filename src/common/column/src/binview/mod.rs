@@ -525,6 +525,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         }
     }
 
+    #[inline]
     pub fn compare(col_i: &Self, i: usize, col_j: &Self, j: usize) -> std::cmp::Ordering {
         debug_assert!(i < col_i.len() && j < col_j.len());
         unsafe {
@@ -540,6 +541,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     /// Whether the `i`-th value of `col_i` equals the `j`-th value of `col_j`.
+    #[inline]
     pub fn equal(col_i: &Self, i: usize, col_j: &Self, j: usize) -> bool {
         debug_assert!(i < col_i.len() && j < col_j.len());
         unsafe {
@@ -555,6 +557,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     /// Compares the `i`-th value with `probe`.
+    #[inline]
     pub fn compare_probe(&self, i: usize, probe: &ViewProbe) -> std::cmp::Ordering {
         debug_assert!(i < self.len());
         unsafe {
@@ -569,6 +572,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     /// Whether the `i`-th value equals `probe`.
+    #[inline]
     pub fn equal_probe(&self, i: usize, probe: &ViewProbe) -> bool {
         debug_assert!(i < self.len());
         unsafe {

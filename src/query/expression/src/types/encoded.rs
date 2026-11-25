@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::iter::TrustedLen;
 use std::ops::Range;
 
+use databend_common_column::binview::ViewProbe;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
@@ -30,6 +31,7 @@ use super::DecimalDataType;
 use super::DecimalScalar;
 use super::NumberColumn;
 use super::NumberDataType;
+use super::StringColumn;
 use super::ValueType;
 use super::i256;
 use super::number::Number;
@@ -297,34 +299,142 @@ impl DictColumn {
             .to_column()
     }
 
-    pub fn compare_scalar(&self, op: &SelectOp, scalar: &Scalar) -> Option<Bitmap> {
+    /// `<column> <op> <scalar>`, evaluated once per dictionary value and mapped to the rows by
+    /// key. String values are compared by their views.
+    ///
+    /// With `rows`, e.g. the rows a previous predicate of a conjunction kept, the result is
+    /// only correct at `rows`, and only the values they reference are compared, see
+    /// [`Self::like`].
+    pub fn compare_scalar(
+        &self,
+        op: &SelectOp,
+        scalar: &Scalar,
+        rows: Option<&[u32]>,
+    ) -> Option<Bitmap> {
         let scalar = scalar.as_ref();
         if scalar.infer_data_type() != self.values.data_type() {
             return None;
         }
-        // One result per dictionary value; rows look them up by key.
-        let (mut has_true, mut has_false) = (false, false);
-        let matches = self
-            .values
-            .iter()
-            .map(|value| {
-                let m = op_matches(op, value.cmp(&scalar));
-                has_true |= m;
-                has_false |= !m;
-                m
-            })
-            .collect::<Vec<bool>>();
+        Some(match (&self.values, scalar) {
+            (Column::String(values), ScalarRef::String(scalar)) => {
+                let probe = ViewProbe::new(scalar.as_bytes());
+                self.match_values(rows, |key| match op {
+                    SelectOp::Equal => values.equal_probe(key, &probe),
+                    SelectOp::NotEqual => !values.equal_probe(key, &probe),
+                    op => op_matches(op, values.compare_probe(key, &probe)),
+                })
+            }
+            (values, scalar) => self.match_values(rows, |key| {
+                // SAFETY: keys index the dictionary values.
+                op_matches(op, unsafe { values.index_unchecked(key) }.cmp(&scalar))
+            }),
+        })
+    }
+
+    /// Maps `value_matches` of each dictionary key to the rows. Without `rows`, it is evaluated
+    /// once per dictionary value up front; with `rows`, only for the values those rows
+    /// reference, and the result is only correct at `rows`.
+    fn match_values(&self, rows: Option<&[u32]>, value_matches: impl Fn(usize) -> bool) -> Bitmap {
         let len = self.len();
-        if !(has_true && has_false) {
-            return Some(Bitmap::new_constant(has_true, len));
+        match rows {
+            None => {
+                let (mut has_true, mut has_false) = (false, false);
+                let matches = (0..self.values.len())
+                    .map(|key| {
+                        let m = value_matches(key);
+                        has_true |= m;
+                        has_false |= !m;
+                        m
+                    })
+                    .collect::<Vec<bool>>();
+                if !(has_true && has_false) {
+                    return Bitmap::new_constant(has_true, len);
+                }
+                with_narrow_buffer!(&self.keys, |b| {
+                    let keys = b.as_slice();
+                    // SAFETY: `i < keys.len()`, and keys are in bounds of the values.
+                    Bitmap::collect_bool(len, |i| unsafe {
+                        *matches.get_unchecked(*keys.get_unchecked(i) as usize)
+                    })
+                })
+            }
+            Some(rows) => {
+                // Cache by dictionary key: 0 not compared yet, 1 false, 2 true.
+                let mut cache = vec![0u8; self.values.len()];
+                let mut bitmap = MutableBitmap::from_len_zeroed(len);
+                with_narrow_buffer!(&self.keys, |keys| {
+                    for &row in rows {
+                        let key = keys[row as usize] as usize;
+                        if cache[key] == 0 {
+                            cache[key] = 1 + value_matches(key) as u8;
+                        }
+                        if cache[key] == 2 {
+                            bitmap.set(row as usize, true);
+                        }
+                    }
+                });
+                bitmap.into()
+            }
         }
-        Some(with_narrow_buffer!(&self.keys, |b| {
-            let keys = b.as_slice();
-            // SAFETY: `i < keys.len()`, and keys are in bounds of the values.
-            Bitmap::collect_bool(len, |i| unsafe {
-                *matches.get_unchecked(*keys.get_unchecked(i) as usize)
-            })
-        }))
+    }
+
+    /// `<lhs> <op> <rhs>` over two string columns of which at least one is dictionary encoded,
+    /// comparing the value of each row by its view without decoding. With `rows`, the result is
+    /// only correct at `rows`. `None` for other columns.
+    pub fn compare_string_columns(
+        op: &SelectOp,
+        lhs: &Column,
+        rhs: &Column,
+        rows: Option<&[u32]>,
+    ) -> Option<Bitmap> {
+        // The values of a string column and, if it is dictionary encoded, the keys of its rows.
+        fn strings(column: &Column) -> Option<(&StringColumn, Option<&NarrowBuffer>)> {
+            match column {
+                Column::String(values) => Some((values, None)),
+                Column::Encoded(encoded) => match encoded.as_dict()? {
+                    DictColumn {
+                        keys,
+                        values: Column::String(values),
+                    } => Some((values, Some(keys))),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+        let (lhs_values, lhs_keys) = strings(lhs)?;
+        let (rhs_values, rhs_keys) = strings(rhs)?;
+        let len = lhs.len();
+        if len != rhs.len() {
+            return None;
+        }
+        // SAFETY (all arms): `row < len`, the length of the keys.
+        Some(match (lhs_keys, rhs_keys) {
+            (Some(lhs_keys), None) => with_narrow_buffer!(lhs_keys, |keys| {
+                let keys = keys.as_slice();
+                compare_string_rows(op, len, rows, lhs_values, rhs_values, |row| {
+                    (unsafe { *keys.get_unchecked(row) } as usize, row)
+                })
+            }),
+            (None, Some(rhs_keys)) => with_narrow_buffer!(rhs_keys, |keys| {
+                let keys = keys.as_slice();
+                compare_string_rows(op, len, rows, lhs_values, rhs_values, |row| {
+                    (row, unsafe { *keys.get_unchecked(row) } as usize)
+                })
+            }),
+            (Some(lhs_keys), Some(rhs_keys)) => with_narrow_buffer!(lhs_keys, |lhs_keys| {
+                let lhs_keys = lhs_keys.as_slice();
+                with_narrow_buffer!(rhs_keys, |rhs_keys| {
+                    let rhs_keys = rhs_keys.as_slice();
+                    compare_string_rows(op, len, rows, lhs_values, rhs_values, |row| unsafe {
+                        (
+                            *lhs_keys.get_unchecked(row) as usize,
+                            *rhs_keys.get_unchecked(row) as usize,
+                        )
+                    })
+                })
+            }),
+            (None, None) => return None,
+        })
     }
 
     /// Matches a string pattern once per dictionary value, then maps the results to rows.
@@ -426,6 +536,50 @@ impl DictColumn {
         let max_key = values.len() as u64 - 1;
         let keys = NarrowBuffer::pack(keys.into_iter().map(|key| key as u64), max_key);
         Some(DictColumn::new(keys, values))
+    }
+}
+
+/// `lhs[l] <op> rhs[r]` for each row, where `index(row)` is `(l, r)`. With `rows`, only those
+/// rows are compared and the result is only correct at `rows`.
+fn compare_string_rows(
+    op: &SelectOp,
+    len: usize,
+    rows: Option<&[u32]>,
+    lhs: &StringColumn,
+    rhs: &StringColumn,
+    index: impl Fn(usize) -> (usize, usize),
+) -> Bitmap {
+    let equal = |row| {
+        let (l, r) = index(row);
+        StringColumn::equal(lhs, l, rhs, r)
+    };
+    let compare = |row| {
+        let (l, r) = index(row);
+        StringColumn::compare(lhs, l, rhs, r)
+    };
+    match op {
+        SelectOp::Equal => collect_rows(len, rows, equal),
+        SelectOp::NotEqual => collect_rows(len, rows, |row| !equal(row)),
+        SelectOp::Gt => collect_rows(len, rows, |row| compare(row).is_gt()),
+        SelectOp::Gte => collect_rows(len, rows, |row| compare(row).is_ge()),
+        SelectOp::Lt => collect_rows(len, rows, |row| compare(row).is_lt()),
+        SelectOp::Lte => collect_rows(len, rows, |row| compare(row).is_le()),
+    }
+}
+
+/// The bitmap of `predicate` over `len` rows, or only at `rows` with the other bits unset.
+fn collect_rows(len: usize, rows: Option<&[u32]>, predicate: impl Fn(usize) -> bool) -> Bitmap {
+    match rows {
+        None => Bitmap::collect_bool(len, predicate),
+        Some(rows) => {
+            let mut bitmap = MutableBitmap::from_len_zeroed(len);
+            for &row in rows {
+                if predicate(row as usize) {
+                    bitmap.set(row as usize, true);
+                }
+            }
+            bitmap.into()
+        }
     }
 }
 
@@ -1068,10 +1222,17 @@ impl EncodedColumn {
 
     /// Evaluates `value(i) <op> scalar` for every row without decoding. `None` if `scalar`
     /// cannot be compared with the encoded values directly.
-    pub fn compare_scalar(&self, op: &SelectOp, scalar: &Scalar) -> Option<Bitmap> {
+    /// `<column> <op> <scalar>` without decoding. With `rows`, the result may only be correct
+    /// at `rows`, see [`DictColumn::compare_scalar`].
+    pub fn compare_scalar(
+        &self,
+        op: &SelectOp,
+        scalar: &Scalar,
+        rows: Option<&[u32]>,
+    ) -> Option<Bitmap> {
         match self {
             EncodedColumn::For(c) => Some(c.compare_raw(op, c.raw_scalar(scalar)?)),
-            EncodedColumn::Dict(c) => c.compare_scalar(op, scalar),
+            EncodedColumn::Dict(c) => c.compare_scalar(op, scalar, rows),
         }
     }
 

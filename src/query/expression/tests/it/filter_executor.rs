@@ -20,9 +20,13 @@ use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionCall;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::SelectOp;
+use databend_common_expression::Value;
 use databend_common_expression::filter::FilterExecutor;
 use databend_common_expression::filter::SelectExpr;
 use databend_common_expression::filter::SelectExprBuilder;
@@ -369,4 +373,216 @@ fn test_selector_take_runs() {
         }
     }
     assert!(unordered_selections > 0);
+}
+
+/// String comparisons in `WHERE` compare the views of the rows. Every operator, with a constant
+/// on either side, between two columns, over a nullable column and under AND/OR (which select
+/// from the true or the false rows only), must keep the rows that `str` ordering keeps.
+#[test]
+fn test_select_string_comparisons() {
+    const VALUES: [&str; 18] = [
+        "",
+        "\0",
+        "a",
+        "a\0",
+        "ab",
+        "abcd",
+        "abcd\0",
+        "abce",
+        "abcdefghijkl",
+        "abcdefghijkm",
+        "abcdefghijklm",
+        "abcdXfghijklmn",
+        "abcdYfghijklmn",
+        "\u{e9}",
+        "zzzz",
+        "https://www.example.com/a",
+        "https://www.example.com/b",
+        "https://www.example.com/ab",
+    ];
+    // Constants of the SQL text, which cannot hold `\0`.
+    const CONSTANTS: [&str; 8] = [
+        "",
+        "a",
+        "abcd",
+        "abcdefghijkl",
+        "abcdefghijklm",
+        "abcdYfghijklmn",
+        "\u{e9}",
+        "https://www.example.com/a",
+    ];
+
+    let pairs = VALUES
+        .iter()
+        .flat_map(|s| VALUES.iter().map(move |t| (*s, *t)))
+        .collect::<Vec<_>>();
+    let num_rows = pairs.len();
+    let s = pairs.iter().map(|(s, _)| *s).collect::<Vec<_>>();
+    let t = pairs.iter().map(|(_, t)| *t).collect::<Vec<_>>();
+    let n = (0..num_rows)
+        .map(|row| (row % 5 != 0).then_some(s[row]))
+        .collect::<Vec<_>>();
+    let block = DataBlock::new_from_columns(vec![
+        Int32Type::from_data((0..num_rows as i32).collect()),
+        StringType::from_data(s.clone()),
+        StringType::from_data(t.clone()),
+        StringType::from_opt_data(n.clone()),
+    ]);
+    // The same rows with `s` and `n` dictionary encoded, then also `t`: comparisons with a
+    // constant or a column then go through the dictionary instead of decoding it.
+    let dict = |column: Column| {
+        let (column, validity) = match column {
+            Column::Nullable(column) => (column.column().clone(), Some(column.validity().clone())),
+            column => (column, None),
+        };
+        let encoded = DictColumn::try_encode(&column, 1 << 16).unwrap();
+        let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(encoded)));
+        match validity {
+            Some(validity) => encoded.wrap_nullable(Some(validity)),
+            None => encoded,
+        }
+    };
+    let encode = |block: &DataBlock, offsets: &[usize]| {
+        let columns = (0..block.num_columns())
+            .map(|offset| {
+                let column = block.get_by_offset(offset).to_column();
+                if offsets.contains(&offset) {
+                    dict(column)
+                } else {
+                    column
+                }
+            })
+            .collect();
+        DataBlock::new_from_columns(columns)
+    };
+    let blocks = [
+        block.clone(),
+        encode(&block, &[1, 3]),
+        encode(&block, &[1, 2, 3]),
+    ];
+    let columns = [
+        ("k", DataType::Number(NumberDataType::Int32)),
+        ("s", DataType::String),
+        ("t", DataType::String),
+        ("n", DataType::Nullable(Box::new(DataType::String))),
+    ];
+
+    type Cmp = fn(&str, &str) -> bool;
+    let ops: [(&str, Cmp); 6] = [
+        ("=", |a, b| a == b),
+        ("<>", |a, b| a != b),
+        ("<", |a, b| a < b),
+        ("<=", |a, b| a <= b),
+        (">", |a, b| a > b),
+        (">=", |a, b| a >= b),
+    ];
+    // The closures outlive this scope in `cases`.
+    let (s, t, n): (&'static [&str], &'static [&str], &'static [Option<&str>]) = (
+        Vec::leak(s.clone()),
+        Vec::leak(t.clone()),
+        Vec::leak(n.clone()),
+    );
+    // An expression and whether it keeps a row.
+    type Case = (String, Box<dyn Fn(usize) -> bool>);
+    let mut cases: Vec<Case> = vec![];
+    for (op, cmp) in ops {
+        cases.push((
+            format!("s {op} t"),
+            Box::new(move |row| cmp(s[row], t[row])),
+        ));
+        cases.push((
+            format!("n {op} t"),
+            Box::new(move |row| n[row].is_some_and(|n| cmp(n, t[row]))),
+        ));
+        // `k % 3 = 0` selects some rows first, so the comparison sees only the false rows
+        // under OR, and `k % 2 = 0` only the true rows under AND.
+        cases.push((
+            format!("k % 3 = 0 OR s {op} t"),
+            Box::new(move |row| row % 3 == 0 || cmp(s[row], t[row])),
+        ));
+        cases.push((
+            format!("k % 3 = 0 OR n {op} t"),
+            Box::new(move |row| row % 3 == 0 || n[row].is_some_and(|n| cmp(n, t[row]))),
+        ));
+        for c in CONSTANTS {
+            cases.push((format!("s {op} '{c}'"), Box::new(move |row| cmp(s[row], c))));
+            cases.push((format!("'{c}' {op} s"), Box::new(move |row| cmp(c, s[row]))));
+            cases.push((
+                format!("n {op} '{c}'"),
+                Box::new(move |row| n[row].is_some_and(|n| cmp(n, c))),
+            ));
+            cases.push((
+                format!("k % 2 = 0 AND s {op} '{c}'"),
+                Box::new(move |row| row % 2 == 0 && cmp(s[row], c)),
+            ));
+        }
+    }
+
+    let func_ctx = FunctionContext::default();
+    // Constants are folded as the planner folds them, e.g. a cast of a constant to nullable.
+    let fold = |text: &str| {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+            .into_owned()
+    };
+    for (text, expected) in cases {
+        let expr = fold(&text);
+        let expected = (0..num_rows)
+            .filter(|row| expected(*row))
+            .map(|row| row as i32)
+            .collect::<Vec<_>>();
+        for (i, block) in blocks.iter().enumerate() {
+            let mut executor = FilterExecutor::new(
+                expr.clone(),
+                func_ctx.clone(),
+                num_rows,
+                None,
+                &BUILTIN_FUNCTIONS,
+                true,
+            );
+            let actual = executor.filter(block.clone()).unwrap();
+            assert_eq!(
+                actual.get_by_offset(0).value(),
+                Value::Column(Int32Type::from_data(expected.clone())),
+                "{text}, block {i}"
+            );
+        }
+    }
+
+    // The encoded blocks reach the dictionary comparison rather than decoding.
+    for text in [
+        "s = 'abcd'",
+        "'abcd' < s",
+        "n >= 'abcd'",
+        "s = t",
+        "s < t",
+        "n > t",
+    ] {
+        let expr = fold(text);
+        let Expr::FunctionCall(FunctionCall { function, args, .. }) = &expr else {
+            unreachable!("{text}")
+        };
+        let op = SelectOp::try_from_func_name(&function.signature.name).unwrap();
+        for block in &blocks[1..] {
+            let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
+            assert!(
+                evaluator
+                    .try_select_compare_encoded(&op, args, None)
+                    .is_some(),
+                "{text}"
+            );
+        }
+        let evaluator = Evaluator::new(&blocks[0], &func_ctx, &BUILTIN_FUNCTIONS);
+        assert!(
+            evaluator
+                .try_select_compare_encoded(&op, args, None)
+                .is_none(),
+            "{text}"
+        );
+    }
 }

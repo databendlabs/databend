@@ -221,7 +221,9 @@ pub(crate) fn views_cmp<'a, 'b>(
     if lhs.prefix != rhs.prefix {
         return lhs.prefix_order_key().cmp(&rhs.prefix_order_key());
     }
-    if lhs.is_inline() && rhs.is_inline() {
+    // `rhs` first: for a constant probe it is the same on every row, so the branch is
+    // predictable.
+    if rhs.is_inline() && lhs.is_inline() {
         // The same holds for the zero padded bytes after the prefix. Values that are still equal
         // differ at most by trailing zero bytes, so the shorter one is less.
         return lhs
