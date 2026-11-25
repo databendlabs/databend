@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Ordering as CmpOrdering;
 use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
@@ -22,9 +23,12 @@ use std::sync::atomic::Ordering;
 use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_base::base::WatchNotify;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
+use databend_common_expression::BatchResultColumns;
 use databend_common_expression::BlockConcatStream;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -32,6 +36,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
@@ -40,6 +45,9 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::sorts::rank_against_boundary;
+use databend_common_pipeline_transforms::sorts::ranks_against_boundary;
+use parking_lot::RwLock;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
@@ -114,6 +122,9 @@ pub struct TransformFinalAggregate {
     settings: MemorySettings,
     max_aggregate_spill_level: usize,
     next_task_id: Arc<AtomicU64>,
+    /// Set with `AggregatorParams::top_n`: the boundary of the top N that the final aggregates
+    /// of this node share.
+    top_n_boundary: Option<Arc<TopNBoundary>>,
 }
 
 impl TransformFinalAggregate {
@@ -126,6 +137,7 @@ impl TransformFinalAggregate {
         tx: Sender<FinalAggregateTask>,
         rx: Receiver<FinalAggregateTask>,
         next_task_id: Arc<AtomicU64>,
+        top_n_boundary: Option<Arc<TopNBoundary>>,
     ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
         let available_partition_depths = (PARTITION_HASH_BITS / SPILL_BUCKET_BITS) as usize;
@@ -169,6 +181,7 @@ impl TransformFinalAggregate {
             settings: MemorySettings::from_aggregate_settings(&ctx)?,
             max_aggregate_spill_level,
             next_task_id,
+            top_n_boundary,
         }))
     }
 }
@@ -340,6 +353,7 @@ impl TransformFinalAggregate {
         match input {
             FinalInput::Payloads(payloads) => {
                 for payload in payloads {
+                    // Batches that keep no row are skipped without returning.
                     check_interrupt()?;
                     self.handle_aggregate_payload(payload, need_check_spill)?;
                 }
@@ -445,21 +459,33 @@ impl TransformFinalAggregate {
 
         // With a top N above, only the first rows of each table are needed: the groups of
         // different tables are distinct.
-        let mut top_n_blocks = Vec::new();
+        let mut top_n = self
+            .params
+            .top_n
+            .as_ref()
+            .map(|(order_by, limit)| TopNCandidates::new(order_by, *limit));
         // Consuming the hash table drops its index before result materialization. Each
         // payload owns its arena, so finishing one partition also releases its states.
         for payload in hashtable.into_payloads() {
             loop {
                 check_interrupt()?;
-                let Some(block) = payload.merge_result(&mut self.flush_state)? else {
+                let block = match (&top_n, &self.top_n_boundary) {
+                    // Only the rows that do not rank after the boundary get their full result.
+                    (Some(_), Some(boundary)) => {
+                        payload.merge_selected_result(&mut self.flush_state, |columns| {
+                            // Batches that keep no row are skipped without returning.
+                            check_interrupt()?;
+                            boundary.select(columns)
+                        })?
+                    }
+                    _ => payload.merge_result(&mut self.flush_state)?,
+                };
+                let Some(block) = block else {
                     self.flush_state.clear();
                     break;
                 };
-                if let Some((order_by, limit)) = &self.params.top_n {
-                    top_n_blocks.push(block);
-                    if top_n_blocks.len() >= TOP_N_PRUNE_BLOCKS {
-                        top_n_blocks = vec![sort_blocks(&top_n_blocks, order_by, *limit)?];
-                    }
+                if let Some(top_n) = top_n.as_mut() {
+                    top_n.push(block, self.top_n_boundary.as_deref())?;
                 } else if let Some(output_stream) = output_stream.as_mut() {
                     if let Some(block) = output_stream.push(block) {
                         self.output_data.push_back(block);
@@ -469,11 +495,12 @@ impl TransformFinalAggregate {
                 }
             }
         }
-        if let Some((order_by, limit)) = &self.params.top_n
-            && !top_n_blocks.is_empty()
+        if let Some(block) = top_n
+            .map(|top_n| top_n.finish(self.top_n_boundary.as_deref()))
+            .transpose()?
+            .flatten()
         {
-            self.output_data
-                .push_back(sort_blocks(&top_n_blocks, order_by, *limit)?);
+            self.output_data.push_back(block);
         }
         if let Some(block) = output_stream.and_then(|mut stream| stream.finish()) {
             self.output_data.push_back(block);
@@ -705,8 +732,159 @@ impl Processor for TransformFinalAggregate {
     }
 }
 
-/// The blocks of a top N are reduced to its first rows once there are this many.
-const TOP_N_PRUNE_BLOCKS: usize = 32;
+/// The candidate rows of a top N beyond its limit at which they are sorted down to the limit.
+const TOP_N_PRUNE_ROWS: usize = 8192;
+
+/// The candidate rows of a top N over the groups of one final table.
+struct TopNCandidates<'a> {
+    order_by: &'a [SortColumnDescription],
+    limit: usize,
+    blocks: Vec<DataBlock>,
+    rows: usize,
+}
+
+impl<'a> TopNCandidates<'a> {
+    fn new(order_by: &'a [SortColumnDescription], limit: usize) -> Self {
+        Self {
+            order_by,
+            limit,
+            blocks: vec![],
+            rows: 0,
+        }
+    }
+
+    fn push(&mut self, block: DataBlock, boundary: Option<&TopNBoundary>) -> Result<()> {
+        self.rows += block.num_rows();
+        self.blocks.push(block);
+        if self.rows >= self.limit + TOP_N_PRUNE_ROWS {
+            let sorted = self.sort(boundary)?;
+            self.rows = sorted.num_rows();
+            self.blocks = vec![sorted];
+        }
+        Ok(())
+    }
+
+    fn finish(self, boundary: Option<&TopNBoundary>) -> Result<Option<DataBlock>> {
+        match self.blocks.is_empty() {
+            true => Ok(None),
+            false => self.sort(boundary).map(Some),
+        }
+    }
+
+    /// Sorts the candidates down to `limit` rows, and when there were that many, publishes
+    /// the last of them to `boundary`.
+    fn sort(&self, boundary: Option<&TopNBoundary>) -> Result<DataBlock> {
+        let sorted = sort_blocks(&self.blocks, self.order_by, self.limit)?;
+        if let Some(boundary) = boundary
+            && self.limit > 0
+            && sorted.num_rows() == self.limit
+        {
+            let row = self
+                .order_by
+                .iter()
+                .map(|desc| {
+                    let entry = sorted.get_by_offset(desc.offset);
+                    entry.index(self.limit - 1).unwrap().to_owned()
+                })
+                .collect();
+            boundary.update(row);
+        }
+        Ok(sorted)
+    }
+}
+
+/// The boundary of a top N that the final aggregates of a node share: the last row of the
+/// `limit` candidates of one of their tables, by all the columns of `AggregatorParams::top_n`.
+///
+/// The groups of a table are complete when it is output, so their results are exact, and the
+/// groups of different tables are distinct. A table then holds `limit` groups that rank no later
+/// than the boundary, so a row that ranks after it is in the top N of no table and can be dropped
+/// before its result is built. The order ends with every group column, so the boundary is one
+/// group and the row of another group never ties with it. Every published row bounds the top N
+/// on its own, so a row replaces the boundary when it ranks before it, which only drops more.
+pub struct TopNBoundary {
+    order_by: Vec<SortColumnDescription>,
+    row: RwLock<Option<Arc<Vec<Scalar>>>>,
+}
+
+impl TopNBoundary {
+    pub fn new(order_by: Vec<SortColumnDescription>) -> Self {
+        Self {
+            order_by,
+            row: RwLock::new(None),
+        }
+    }
+
+    fn update(&self, row: Vec<Scalar>) {
+        let mut current = self.row.write();
+        if current
+            .as_ref()
+            .is_none_or(|current| self.ranks_before(&row, current))
+        {
+            *current = Some(Arc::new(row));
+        }
+    }
+
+    /// Whether `row` ranks before `other`, by the order of the scalars. It only decides which of
+    /// two valid boundaries to keep.
+    fn ranks_before(&self, row: &[Scalar], other: &[Scalar]) -> bool {
+        for ((a, b), desc) in row.iter().zip(other).zip(&self.order_by) {
+            let order = match (a, b) {
+                (Scalar::Null, Scalar::Null) => CmpOrdering::Equal,
+                (Scalar::Null, _) if desc.nulls_first => CmpOrdering::Less,
+                (Scalar::Null, _) => CmpOrdering::Greater,
+                (_, Scalar::Null) if desc.nulls_first => CmpOrdering::Greater,
+                (_, Scalar::Null) => CmpOrdering::Less,
+                (a, b) => match a.partial_cmp(b) {
+                    Some(order) if desc.asc => order,
+                    Some(order) => order.reverse(),
+                    None => return false,
+                },
+            };
+            if order != CmpOrdering::Equal {
+                return order == CmpOrdering::Less;
+            }
+        }
+        false
+    }
+
+    /// The rows of a batch that do not rank after the boundary, or `None` to keep them all.
+    /// The columns are compared in order, each one only while some row ties with the
+    /// boundary on the columns before it.
+    fn select(&self, columns: &BatchResultColumns) -> Result<Option<Bitmap>> {
+        let Some(boundary) = self.row.read().clone() else {
+            return Ok(None);
+        };
+        let num_rows = columns.num_rows();
+        let mut keep = MutableBitmap::from_len_set(num_rows);
+        let mut dropped = false;
+        let mut ties = (0..num_rows).collect::<Vec<_>>();
+        for (desc, value) in self.order_by.iter().zip(boundary.iter()) {
+            // A column type the sort comparison does not support decides nothing, so it is not
+            // built for the batch.
+            if !ranks_against_boundary(&columns.data_type(desc.offset)) {
+                break;
+            }
+            let column = columns.column(desc.offset)?;
+            let Some(ranks) = rank_against_boundary(&column, value, desc) else {
+                break;
+            };
+            ties.retain(|&row| match ranks[row] {
+                CmpOrdering::Less => false,
+                CmpOrdering::Equal => true,
+                CmpOrdering::Greater => {
+                    keep.set(row, false);
+                    dropped = true;
+                    false
+                }
+            });
+            if ties.is_empty() {
+                break;
+            }
+        }
+        Ok(dropped.then(|| keep.into()))
+    }
+}
 
 /// The first `limit` rows of `blocks` ordered by `order_by`.
 fn sort_blocks(
@@ -771,6 +949,7 @@ mod tests {
             tx.clone(),
             rx,
             Arc::new(AtomicU64::new(1)),
+            None,
         )?;
         assert!(matches!(processor.event()?, Event::Sync));
         processor.process()?;
@@ -837,6 +1016,7 @@ mod tests {
             tx.clone(),
             rx,
             Arc::new(AtomicU64::new(1)),
+            None,
         )?;
         let has_hashtable = |processor: &mut Box<dyn Processor>| {
             processor
@@ -895,6 +1075,7 @@ mod tests {
             tx.clone(),
             rx,
             Arc::new(AtomicU64::new(1)),
+            None,
         )?;
         let keys = || DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![1u64, 2])]);
 
@@ -956,6 +1137,7 @@ mod tests {
             tx.clone(),
             rx,
             Arc::new(AtomicU64::new(1)),
+            None,
         )?;
         let groups = 10_000u64;
         upstream.push_data(Ok(DataBlock::new_from_columns(vec![

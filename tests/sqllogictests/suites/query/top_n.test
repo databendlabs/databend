@@ -661,3 +661,80 @@ drop table t_top_n_union_r;
 
 statement ok
 unset enable_top_n;
+
+# The final aggregate outputs only the top N of each table when ordered by an aggregate: rows
+# that rank after a boundary shared by the final aggregates get no result built. Keys 7, 11,
+# 13, 17 and 19 have 60, 50, 40, 30 and 15 rows, the other 19995 keys 10 rows each.
+statement ok
+create or replace table t_final_top_n (k int not null, s string not null, v int null);
+
+statement ok
+insert into t_final_top_n select number % 20000, to_string(number % 20000), if(number % 20000 = 3, null, number % 7) from numbers(200000);
+
+statement ok
+insert into t_final_top_n select k, to_string(k), 1 from (select 7 as k from numbers(50) union all select 11 from numbers(40) union all select 13 from numbers(30) union all select 17 from numbers(20) union all select 19 from numbers(5)) t;
+
+query II
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select k, count(*) as c from t_final_top_n group by k order by c desc limit 5
+----
+7 60
+11 50
+13 40
+17 30
+19 15
+
+query II
+settings (enable_aggregate_final_top_n = 1, max_threads = 8) select k, count(*) as c from t_final_top_n group by k order by c desc limit 1
+----
+7 60
+
+query II
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select k, count(*) as c from t_final_top_n group by k order by c desc limit 2 offset 3
+----
+17 30
+19 15
+
+# The limit cuts through the keys that tie at 10 rows.
+query IIII
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select count(*), min(c), max(c), sum(c) from (select k, count(*) as c from t_final_top_n group by k order by c desc limit 8) t
+----
+8 10 60 225
+
+query II
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select k, count(*) as c from t_final_top_n group by k order by c desc, k limit 7
+----
+7 60
+11 50
+13 40
+17 30
+19 15
+0 10
+1 10
+
+query III
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select count(*), min(c), max(c) from (select k, count(*) as c from t_final_top_n group by k order by c asc limit 3) t
+----
+3 10 10
+
+query TII
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select s, count(*) as c, sum(v) from t_final_top_n group by s order by c desc limit 3
+----
+7 60 74
+11 50 76
+13 40 58
+
+# A nullable aggregate: key 3 sums only NULLs.
+query II
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select k, sum(v) as sv from t_final_top_n group by k order by sv desc nulls first limit 2
+----
+3 NULL
+11 76
+
+query II
+settings (enable_aggregate_final_top_n = 1, max_threads = 4) select k, sum(v) as sv from t_final_top_n group by k order by sv asc nulls last, k limit 2
+----
+0 24
+14 24
+
+statement ok
+drop table t_final_top_n;
