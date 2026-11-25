@@ -40,7 +40,9 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use roaring::RoaringTreemap;
 
+use super::parquet_data_source::BlockSource;
 use super::parquet_data_source::ParquetDataSource;
 use super::read_state::BlockBatches;
 use super::read_state::BlockScanStats;
@@ -67,7 +69,7 @@ pub struct DeserializeDataTransform {
     src_schema: DataSchema,
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
-    chunks: Vec<ParquetDataSource>,
+    chunks: Vec<BlockSource>,
 
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
@@ -144,6 +146,136 @@ impl DeserializeDataTransform {
 }
 
 impl DeserializeDataTransform {
+    /// A block whose rows come from the index matches alone. Use the same row-id and
+    /// score mapping as a filtered scan: the index can return rows in score order,
+    /// not block-offset order.
+    fn process_index_rows(&mut self, part: &PartInfoPtr, offsets: RoaringTreemap) -> Result<()> {
+        let part = FuseBlockPartInfo::from_part(part)?;
+        let rows = offsets.len() as usize;
+        self.record_scan_progress(BlockScanStats { rows, bytes: 0 });
+        self.output_data.push_back(add_data_block_meta(
+            DataBlock::empty_with_rows(rows),
+            part,
+            Some(offsets),
+            self.base_block_ids.clone(),
+            &self.block_meta_options,
+        )?);
+        Ok(())
+    }
+
+    fn deserialize_parquet(
+        &mut self,
+        part_info: PartInfoPtr,
+        read_res: ParquetDataSource,
+    ) -> Result<()> {
+        let start = Instant::now();
+        let columns_chunks = read_res.data.columns_chunks()?;
+        let part = FuseBlockPartInfo::from_part(&part_info)?;
+
+        if self.read_state.is_none() {
+            let read_state = ReadState::create(
+                self.ctx.clone(),
+                self.scan_id,
+                self.prewhere_info.as_ref(),
+                self.block_reader.clone(),
+            )?;
+            // The read state leaves out the columns only its early stage reads.
+            self.src_schema = with_virtual_fields(
+                read_state.output_schema.clone(),
+                self.virtual_reader.as_ref().as_ref(),
+            );
+            self.read_state = Some(read_state);
+        }
+
+        let no_output_columns =
+            self.output_schema.fields().is_empty() && self.virtual_reader.is_none();
+        if self.can_split_block(part)
+            && let Some(batches) = self.read_state.as_mut().unwrap().start_batches(
+                &columns_chunks,
+                part,
+                no_output_columns,
+                self.block_meta_options.query_internal_columns,
+            )?
+        {
+            // The batches own the column chunks they decode from.
+            drop(columns_chunks);
+            drop(read_res);
+            self.pending = Some(PendingBlock {
+                part: part_info,
+                batches,
+                reported: BlockScanStats::default(),
+                elapsed: start.elapsed(),
+            });
+            return self.process_pending();
+        }
+
+        let ReadStateOutput {
+            block: mut data_block,
+            bitmap_selection,
+            mut scan_stats,
+        } = self.read_state.as_mut().unwrap().deserialize_and_filter(
+            columns_chunks,
+            part,
+            no_output_columns,
+            read_res.condition.as_ref(),
+            read_res.io_skipped,
+        )?;
+
+        // Virtual columns are read in addition to the columns `ReadState`
+        // accounted for, so add them to the scan statistics.
+        if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+            let bytes_before = data_block.memory_size();
+            let virtual_block_location = read_res
+                .virtual_data
+                .as_ref()
+                .map(|data| data.virtual_block_location.clone());
+            // `src_schema` describes the block `ReadState` returned, which leaves out the
+            // columns only its early stage reads, followed by the virtual columns.
+            data_block = virtual_reader
+                .deserialize_virtual_columns(
+                    data_block,
+                    &self.src_schema,
+                    read_res.virtual_data,
+                    bitmap_selection
+                        .as_ref()
+                        .map(|bitmap| RowSelection::from(bitmap).selection),
+                )
+                .inspect_err(|error| {
+                    log::warn!(
+                        "failed to deserialize virtual columns: block_location={}, virtual_block_location={:?}, error={}",
+                        part.location,
+                        virtual_block_location,
+                        error
+                    );
+                })?;
+            scan_stats.add_decoded_bytes(
+                data_block.memory_size().saturating_sub(bytes_before),
+                data_block.num_rows(),
+            );
+        }
+
+        self.record_scan(start.elapsed(), scan_stats);
+
+        let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
+
+        // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+        // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
+        let offsets = if self.block_meta_options.query_internal_columns {
+            bitmap_selection.as_ref().map(selected_row_offsets)
+        } else {
+            None
+        };
+
+        self.output_data.push_back(add_data_block_meta(
+            data_block,
+            part,
+            offsets,
+            self.base_block_ids.clone(),
+            &self.block_meta_options,
+        )?);
+        Ok(())
+    }
+
     /// Whether the rows of `part` may be output as several blocks: virtual columns are
     /// decoded for the whole block, `_origin_block_row_num` numbers the rows of each
     /// output block from zero, MERGE INTO target builds track whole blocks, and
@@ -272,7 +404,7 @@ impl Processor for DeserializeDataTransform {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(source_meta) = data_block.take_meta() {
                 if let Some(source_meta) =
-                    DataSourceWithMeta::<ParquetDataSource>::downcast_from(source_meta)
+                    DataSourceWithMeta::<BlockSource>::downcast_from(source_meta)
                 {
                     self.parts = source_meta.meta;
                     self.chunks = source_meta.data;
@@ -299,118 +431,13 @@ impl Processor for DeserializeDataTransform {
 
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
-        if let Some((part, read_res)) = part.zip(chunks) {
-            let start = Instant::now();
-            let columns_chunks = read_res.data.columns_chunks()?;
-            let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-
-            if self.read_state.is_none() {
-                let read_state = ReadState::create(
-                    self.ctx.clone(),
-                    self.scan_id,
-                    self.prewhere_info.as_ref(),
-                    self.block_reader.clone(),
-                )?;
-                // The read state leaves out the columns only its early stage reads.
-                self.src_schema = with_virtual_fields(
-                    read_state.output_schema.clone(),
-                    self.virtual_reader.as_ref().as_ref(),
-                );
-                self.read_state = Some(read_state);
-            }
-
-            let no_output_columns =
-                self.output_schema.fields().is_empty() && self.virtual_reader.is_none();
-
-            if self.can_split_block(fuse_part)
-                && let Some(batches) = self.read_state.as_mut().unwrap().start_batches(
-                    &columns_chunks,
-                    fuse_part,
-                    no_output_columns,
-                    self.block_meta_options.query_internal_columns,
-                )?
-            {
-                // The batches own the column chunks they decode from.
-                drop(columns_chunks);
-                drop(read_res);
-                self.pending = Some(PendingBlock {
-                    part: part.clone(),
-                    batches,
-                    reported: BlockScanStats::default(),
-                    elapsed: start.elapsed(),
-                });
-                return self.process_pending();
-            }
-
-            let ReadStateOutput {
-                block: mut data_block,
-                bitmap_selection,
-                mut scan_stats,
-            } = self.read_state.as_mut().unwrap().deserialize_and_filter(
-                columns_chunks,
-                fuse_part,
-                no_output_columns,
-                read_res.condition.as_ref(),
-                read_res.io_skipped,
-            )?;
-
-            // Virtual columns are read in addition to the columns `ReadState`
-            // accounted for, so add them to the scan statistics.
-            if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                let bytes_before = data_block.memory_size();
-                let virtual_block_location = read_res
-                    .virtual_data
-                    .as_ref()
-                    .map(|data| data.virtual_block_location.clone());
-                // `src_schema` describes the block `ReadState` returned, which leaves out the
-                // columns only its early stage reads, followed by the virtual columns.
-                data_block = virtual_reader
-                    .deserialize_virtual_columns(
-                        data_block,
-                        &self.src_schema,
-                        read_res.virtual_data,
-                        bitmap_selection
-                            .as_ref()
-                            .map(|bitmap| RowSelection::from(bitmap).selection),
-                    )
-                    .inspect_err(|error| {
-                        log::warn!(
-                            "failed to deserialize virtual columns: block_location={}, virtual_block_location={:?}, error={}",
-                            fuse_part.location,
-                            virtual_block_location,
-                            error
-                        );
-                    })?;
-                scan_stats.add_decoded_bytes(
-                    data_block.memory_size().saturating_sub(bytes_before),
-                    data_block.num_rows(),
-                );
-            }
-
-            self.record_scan(start.elapsed(), scan_stats);
-
-            let mut data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
-
-            // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-            // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-            let offsets = if self.block_meta_options.query_internal_columns {
-                bitmap_selection.as_ref().map(selected_row_offsets)
-            } else {
-                None
-            };
-
-            data_block = add_data_block_meta(
-                data_block,
-                fuse_part,
-                offsets,
-                self.base_block_ids.clone(),
-                &self.block_meta_options,
-            )?;
-
-            self.output_data.push_back(data_block);
+        let Some((part, source)) = part.zip(chunks) else {
+            return Ok(());
+        };
+        match source {
+            BlockSource::IndexRows(offsets) => self.process_index_rows(&part, offsets),
+            BlockSource::Parquet(read_res) => self.deserialize_parquet(part, read_res),
         }
-
-        Ok(())
     }
 }
 
