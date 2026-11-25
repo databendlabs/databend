@@ -268,6 +268,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         virtual_column_info,
         write_settings.table_compression,
         CachePolicy::DEFAULT,
+        0,
     )?;
 
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
@@ -471,6 +472,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         },
         write_settings.table_compression,
         CachePolicy::DEFAULT,
+        0,
     )?;
     let table_ctx: Arc<dyn TableContext> = ctx;
     let read_settings = ReadSettings::from_ctx(&table_ctx)?;
