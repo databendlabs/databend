@@ -24,22 +24,20 @@ use crate::framework::golden::write_case_header;
 const T_TABLE: &str = "CREATE TABLE t(k INT, v INT, w INT)";
 const D_TABLE: &str = "CREATE TABLE d(k INT NOT NULL)";
 
+/// Filters above a Window or WindowGroup: which predicates move below it
+/// (RulePushDownFilterWindow) and when QUALIFY becomes a per-partition top-n
+/// (RulePushDownFilterWindowTopN).
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_push_down_filter_window() -> Result<()> {
     let mut file = open_golden_file("optimizer", "push_down_filter_window.txt")?;
 
     let cases = [
+        // Partition keys and partition expressions.
         SqlTestCase {
             name: "direct_partition_key",
             description: "A predicate on the partition key removes whole partitions.",
             setup_sqls: &[T_TABLE],
             sql: "SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM t) q WHERE q.k = 1",
-        },
-        SqlTestCase {
-            name: "partition_expression",
-            description: "A predicate on the partition expression has one value per partition.",
-            setup_sqls: &[T_TABLE],
-            sql: "SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k % 2 = 1",
         },
         SqlTestCase {
             name: "partition_expression_through_column_alias",
@@ -48,23 +46,24 @@ async fn test_push_down_filter_window() -> Result<()> {
             sql: "SELECT * FROM (SELECT k AS kk, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.kk % 2 = 1",
         },
         SqlTestCase {
-            name: "partition_expression_dependency",
-            description: "Rows with different k share a k % 2 partition, so a predicate on k stays above the window.",
-            setup_sqls: &[T_TABLE],
-            sql: "SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k = 3",
-        },
-        SqlTestCase {
-            name: "partition_expression_with_other_column",
-            description: "Combined with a non-partition column, the partition expression no longer has one value per partition.",
-            setup_sqls: &[T_TABLE],
-            sql: "SELECT * FROM (SELECT k, v, w, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k % 2 + q.w = 1",
-        },
-        SqlTestCase {
             name: "partition_expression_and_dependency_conjuncts",
-            description: "Each conjunct is checked separately: only the one on the partition expression moves.",
+            description: "k % 2 = 1 has one value per partition and moves. Rows with different k share a k % 2 partition, so k = 3 stays above the window.",
             setup_sqls: &[T_TABLE],
             sql: "SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k % 2 = 1 AND q.k = 3",
         },
+        SqlTestCase {
+            name: "nested_partition_expression_and_other_column",
+            description: "A function of the partition expression moves. Combined with a non-partition column, it no longer has one value per partition and stays.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT * FROM (SELECT k, v, w, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE (q.k % 2) * 2 = 2 AND q.k % 2 + q.w = 1",
+        },
+        SqlTestCase {
+            name: "partition_column_alias_below_sort",
+            description: "The alias reuses the partition column, which an EvalScalar below the window sort computes, so the filter moves.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT * FROM (SELECT k % 2 AS p, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.p = 1",
+        },
+        // Existing restrictions on order and argument columns.
         SqlTestCase {
             name: "partition_expression_also_order_key",
             description: "The existing restriction on order columns still applies when the partition expression reads one.",
@@ -77,11 +76,30 @@ async fn test_push_down_filter_window() -> Result<()> {
             setup_sqls: &[T_TABLE],
             sql: "SELECT * FROM (SELECT k, v, sum(k) OVER (PARTITION BY k % 2 ORDER BY v) AS s FROM t) q WHERE q.k % 2 = 1",
         },
+        // QUALIFY top-n.
         SqlTestCase {
-            name: "partition_key_below_top_n",
-            description: "A filter on the partition key reaches the scan below the per-partition top-n of QUALIFY.",
+            name: "single_ranking_window_pushes_top",
+            description: "A lone ranking window filtered by QUALIFY should get the top-n.",
             setup_sqls: &[T_TABLE],
-            sql: "SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM t QUALIFY rn = 1) q WHERE q.k = 1",
+            sql: "SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1",
+        },
+        SqlTestCase {
+            name: "aggregate_after_top_window_blocks_top",
+            description: "An aggregate window evaluated after the top-n window in the same group needs every row, so the top-n must not be pushed.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT k, count(*) OVER (PARTITION BY k) AS c, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1",
+        },
+        SqlTestCase {
+            name: "aggregate_before_top_window_pushes_top",
+            description: "An aggregate window evaluated before the top-n window has already seen every row, so the top-n can be pushed.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT k, sum(w) OVER (PARTITION BY k ORDER BY v, w) AS s, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1",
+        },
+        SqlTestCase {
+            name: "ranking_different_order_blocks_top",
+            description: "A ranking window with a different order needs rows outside the top-n, so the top-n must not be pushed.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r, rank() OVER (PARTITION BY k ORDER BY w) AS rk FROM t QUALIFY r = 1",
         },
         SqlTestCase {
             name: "partition_expression_below_top_n",
@@ -101,12 +119,7 @@ async fn test_push_down_filter_window() -> Result<()> {
             setup_sqls: &[T_TABLE, D_TABLE],
             sql: "SELECT q.v FROM (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS rn FROM t QUALIFY rn = 1) q JOIN d ON q.k = d.k",
         },
-        SqlTestCase {
-            name: "window_group_shared_partition_expression",
-            description: "The predicate has one value per partition of every window in the group, and moves as written below the group.",
-            setup_sqls: &[T_TABLE],
-            sql: "SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn, rank() OVER (PARTITION BY k % 2 ORDER BY v) AS rk FROM t) q WHERE q.k % 2 = 1",
-        },
+        // Several windows.
         SqlTestCase {
             name: "window_group_shared_partition_key_and_expression",
             description: "Both windows partition by k and k % 2, so predicates on either have one value per partition of the group.",
@@ -114,10 +127,10 @@ async fn test_push_down_filter_window() -> Result<()> {
             sql: "SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k, k % 2 ORDER BY v) AS rn, rank() OVER (PARTITION BY k, k % 2 ORDER BY v) AS rk FROM t) q WHERE q.k = 1 AND q.k % 2 = 1",
         },
         SqlTestCase {
-            name: "window_group_stateful_scalar",
-            description: "The group evaluates running_difference over its input rows, so even a predicate on the shared partition expression stays above it.",
+            name: "window_group_partition_column_alias",
+            description: "The alias reuses the partition column, which the WindowGroup computes itself. The filter cannot read it below the group and stays above, although k % 2 = 1 could move.",
             setup_sqls: &[T_TABLE],
-            sql: "SELECT * FROM (SELECT k, sum(running_difference(v)) OVER (PARTITION BY k % 2) AS s, count(*) OVER (PARTITION BY k % 2) AS n FROM t) q WHERE q.k % 2 = 1",
+            sql: "SELECT * FROM (SELECT k % 2 AS p, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn, rank() OVER (PARTITION BY k % 2 ORDER BY v) AS rk FROM t) q WHERE q.p = 1",
         },
         SqlTestCase {
             name: "stacked_windows_different_partition_expressions",
