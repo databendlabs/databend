@@ -111,6 +111,7 @@ use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::common::table_option_validation::is_valid_s3_storage_class;
+use crate::interpreters::common::table_option_validation::is_valid_string_dictionary_page_size;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -1113,6 +1114,7 @@ impl CreateTableInterpreter {
         is_valid_virtual_column_layout_options(&table_meta.options)?;
         is_valid_data_page_rows(&table_meta.options)?;
         is_valid_data_page_bytes(&table_meta.options)?;
+        is_valid_string_dictionary_page_size(&table_meta.options)?;
         is_valid_analyze_histogram_algorithm(&table_meta.options)?;
         is_valid_analyze_histogram_kll_relative_error(&table_meta.options)?;
         is_valid_analyze_frequency_columns(&table_meta.options, table_meta.schema.clone())?;

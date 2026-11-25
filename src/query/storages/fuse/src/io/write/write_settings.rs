@@ -33,6 +33,7 @@ pub struct WriteSettings {
     pub enable_parquet_dictionary: bool,
     pub data_page_rows: Option<usize>,
     pub data_page_bytes: Option<usize>,
+    pub string_dictionary_page_size: Option<usize>,
     pub col_stats_truncate_lens: BTreeMap<ColumnId, usize>,
 }
 
@@ -46,6 +47,7 @@ impl Default for WriteSettings {
             enable_parquet_dictionary: false,
             data_page_rows: None,
             data_page_bytes: None,
+            string_dictionary_page_size: None,
             col_stats_truncate_lens: BTreeMap::new(),
         }
     }

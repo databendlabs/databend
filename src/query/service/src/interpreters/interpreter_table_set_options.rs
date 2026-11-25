@@ -87,6 +87,7 @@ use crate::interpreters::common::table_option_validation::is_valid_option_of_typ
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::common::table_option_validation::is_valid_s3_storage_class;
+use crate::interpreters::common::table_option_validation::is_valid_string_dictionary_page_size;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::interpreters::hook::analyze_hook::execute_analyze;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
@@ -133,6 +134,7 @@ impl Interpreter for SetOptionsInterpreter {
             is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
             is_valid_data_page_rows(&self.plan.set_options)?;
             is_valid_data_page_bytes(&self.plan.set_options)?;
+            is_valid_string_dictionary_page_size(&self.plan.set_options)?;
             is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
             is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
             is_valid_analyze_top_n_size(&self.plan.set_options)?;

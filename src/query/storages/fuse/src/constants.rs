@@ -41,6 +41,15 @@ pub const FUSE_OPT_KEY_ATTACH_COLUMN_IDS: &str = "attach_column_ids";
 pub const FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY: &str = "enable_parquet_dictionary";
 pub const FUSE_OPT_KEY_DATA_PAGE_ROWS: &str = "data_page_rows";
 pub const FUSE_OPT_KEY_DATA_PAGE_BYTES: &str = "data_page_bytes";
+/// Size limit of the dictionary page of a `String` column, beyond which the writer falls back to
+/// `DELTA_LENGTH_BYTE_ARRAY` pages for the rest of the column chunk. Such a page keeps the lengths
+/// of its values first, so that a scan that reads only the lengths of the values, as one for
+/// `WHERE c = ''` or `WHERE octet_length(c) > 0` does, decompresses only the start of a page.
+///
+/// A dictionary encodes a value once, so a column of a few thousand distinct values is smaller
+/// with one; the option is for columns where that is not worth the price of reading them whole.
+/// Unset keeps the limit of the other columns.
+pub const FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE: &str = "string_dictionary_page_size";
 /// Deprecated: kept only so old tables can unset this legacy option.
 pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
 

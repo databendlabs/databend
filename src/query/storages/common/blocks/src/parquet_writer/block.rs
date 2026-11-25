@@ -491,6 +491,7 @@ mod tests {
                 &schema,
                 None,
                 None,
+                None,
             )),
         );
         writer.write_block(block).unwrap();

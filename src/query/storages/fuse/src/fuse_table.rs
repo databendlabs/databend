@@ -147,6 +147,7 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use crate::FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE;
 use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
 use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FuseSegmentFormat;
@@ -410,6 +411,12 @@ impl FuseTable {
             .get(FUSE_OPT_KEY_DATA_PAGE_BYTES)
             .and_then(|v| v.parse::<usize>().ok());
 
+        let string_dictionary_page_size = self
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE)
+            .and_then(|v| v.parse::<usize>().ok());
+
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
@@ -418,6 +425,7 @@ impl FuseTable {
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
             data_page_rows,
             data_page_bytes,
+            string_dictionary_page_size,
             col_stats_truncate_lens: self
                 .table_info
                 .meta

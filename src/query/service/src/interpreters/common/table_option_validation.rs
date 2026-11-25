@@ -46,6 +46,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use databend_common_storages_fuse::MAX_RECLUSTER_DEPTH;
@@ -141,6 +142,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
@@ -178,6 +180,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
         r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
         r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+        r.insert(FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE);
         r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
         r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
         r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
@@ -243,6 +246,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
+    r.insert(FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM);
     r.insert(OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR);
     r.insert(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS);
@@ -566,6 +570,27 @@ pub fn is_valid_data_page_bytes(
         if v > PARQUET_PAGE_SIZE_HARD_LIMIT {
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "{FUSE_OPT_KEY_DATA_PAGE_BYTES} {v} exceeds parquet hard limit ({PARQUET_PAGE_SIZE_HARD_LIMIT})"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// The size limit of the dictionary page of a `String` column: a positive number of bytes. It
+/// decides when the writer falls back to the encoding whose pages a length-only read decompresses
+/// from their start.
+pub fn is_valid_string_dictionary_page_size(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(val) = options.get(FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE) {
+        let v = val.parse::<usize>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE} must be a positive integer, got: {val}"
+            ))
+        })?;
+        if v == 0 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE} must be >= 1"
             )));
         }
     }

@@ -4271,6 +4271,7 @@ dependencies = [
  "tokio",
  "typetag",
  "uuid",
+ "zstd",
 ]
 
 [[package]]

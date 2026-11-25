@@ -94,6 +94,7 @@ impl UninitializedArrowWriter {
             self.table_schema.as_ref(),
             write_settings.data_page_rows,
             write_settings.data_page_bytes,
+            write_settings.string_dictionary_page_size,
         ));
         Ok(BlockParquetWriter::new(
             self.arrow_schema.clone(),
