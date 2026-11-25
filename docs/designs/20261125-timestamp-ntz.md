@@ -472,9 +472,13 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
   plan. That is the intended failure mode — an error, not a misread.
 - **Aliases:** parse-time only and never persisted, so they cannot create a
   schema difference.
-- **Gate:** optional `enable_timestamp_ntz` setting, default off while the type
-  matures, so earlier phases can land without user exposure. The mapping
-  parameter and the implicit conversions are behind the same gate until P2.
+- **Gate:** `enable_timestamp_ntz` setting, default off while the type
+  matures, so earlier phases can land without user exposure. P1 checks it
+  where SQL names the type: casts, column definitions in `CREATE` / `ALTER`,
+  and `to_timestamp_ntz` calls. Persisted expressions and existing columns
+  do not check it, so a table created with the setting on stays readable
+  after it is turned off. The mapping parameter and the implicit conversions
+  go behind the same gate in P2.
 - **Migration advice:** a Snowflake workload should run with
   `SET timestamp_type_mapping = 'NTZ'` for the session or user that executes
   its DDL, and should be told that changing the setting afterwards does not
@@ -488,10 +492,23 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
   `as_timestamp_family()` helpers before the new type lands. The audit showed
   that such a helper would have no correct caller, so it was not added. What
   P0 became is described in "P0 audit" below.
-- **P1 — store and fetch.** AST, parser, typed literal, `DataType` /
-  `TableDataType`, proto version bump, Arrow extension key, display and parse,
-  DDL, insert/select round trip. At this point `TIMESTAMP_NTZ` supports only
-  `to_string`, comparison, and `ORDER BY`.
+- **P1 — store and fetch (#21221).** AST, parser, typed literal, `DataType` /
+  `TableDataType`, proto version bump (field 55, version 194), Arrow extension
+  key, display and parse, DDL, and the `enable_timestamp_ntz` gate. As
+  implemented, `TIMESTAMP_NTZ` supports:
+  - `CAST` / `TRY_CAST` from `STRING`, `to_timestamp_ntz` /
+    `try_to_timestamp_ntz`, and the reverse cast and `to_string` to `STRING`;
+  - insert, select, `UPDATE`, `DELETE`, CTAS, and column defaults;
+  - comparison with another `TIMESTAMP_NTZ` or a string literal, `ORDER BY`,
+    `GROUP BY`, `DISTINCT`, joins, and `min` / `max` / `count(distinct)`;
+  - the enabled rows of the "P0 audit" table, including min/max block pruning;
+  - `COPY` unload and load in Parquet (the type survives the round trip) and
+    CSV, and cast to `VARIANT` as text.
+
+  Not yet: anything that converts to or from `TIMESTAMP` / `TIMESTAMP_TZ` /
+  `DATE` or a number, interval arithmetic, date functions, and the precision
+  argument (`TIMESTAMP_NTZ(6)` does not parse yet). These fail at bind or
+  parse time with an error, never with a silently converted value.
 - **P2 — Snowflake-shaped behaviour.** The conversion model (implicit
   precedence, both explicit spellings, the numeric-effect table),
   `timestamp_type_mapping`, the `DATETIME` mapping, the v1 function set, and
