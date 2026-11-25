@@ -1,0 +1,173 @@
+# run-with-settings: optimizer_skip_list=SimplifyOuterJoinOptimizer
+
+statement ok
+create table simplify_outer_join_l(k int not null);
+
+statement ok
+create table simplify_outer_join_r(k int not null, v int not null);
+
+statement ok
+create table simplify_outer_join_keys(k int);
+
+statement ok
+insert into simplify_outer_join_l values (1), (2), (3);
+
+statement ok
+insert into simplify_outer_join_r values (2, 20), (2, 21), (4, 40);
+
+statement ok
+insert into simplify_outer_join_keys values (null), (2);
+
+# Ordinary equality rejects the lower join's NULL-extended rows but keeps
+# both matches for key 2.
+query III rowsort
+select l.k, r.k, r.v
+from simplify_outer_join_l l
+left join simplify_outer_join_r r on l.k = r.k
+join simplify_outer_join_keys d on r.k = d.k;
+----
+2 2 20
+2 2 21
+
+# An upper LEFT JOIN preserves the NULL-extended rows of its left input.
+query III rowsort
+select l.k, r.v, d.k
+from simplify_outer_join_l l
+left join simplify_outer_join_r r on l.k = r.k
+left join simplify_outer_join_keys d on r.k = d.k;
+----
+1 NULL NULL
+2 20 2
+2 21 2
+3 NULL NULL
+
+# NULL-safe equality admits the lower join's NULL-extended rows.
+query II rowsort
+select l.k, r.v
+from simplify_outer_join_l l
+left join simplify_outer_join_r r on l.k = r.k
+join simplify_outer_join_keys d on r.k is not distinct from d.k;
+----
+1 NULL
+2 20
+2 21
+3 NULL
+
+# A NULL-extended row occupies the only TopN slot. Removing it too early
+# would let a matching row into that slot and produce a result.
+query I
+select q.v
+from (
+    select r.k, r.v
+    from simplify_outer_join_l l
+    left join simplify_outer_join_r r on l.k = r.k
+    order by l.k, r.v limit 1
+) q
+join simplify_outer_join_keys d on q.k = d.k;
+----
+
+# Rejecting NULL on the left of a FULL JOIN retains the left-unmatched rows.
+query II rowsort
+select q.lk, q.rk
+from (
+    select l.k as lk, r.k as rk
+    from simplify_outer_join_l l
+    full join simplify_outer_join_r r on l.k = r.k
+) q
+where q.lk is not null;
+----
+1 NULL
+2 2
+2 2
+3 NULL
+
+# Dropping the NULL partition leaves row numbers in the k=2 partition intact.
+query II rowsort
+select q.v, q.rn
+from (
+    select r.k, r.v, row_number() over (partition by r.k order by r.v) as rn
+    from simplify_outer_join_l l
+    left join simplify_outer_join_r r on l.k = r.k
+) q
+join simplify_outer_join_keys d on q.k = d.k;
+----
+20 1
+21 2
+
+# COALESCE puts the NULL-extended rows in the same partition as k=2. The
+# unmatched l.k=1 still precedes both surviving rows in that partition.
+query II rowsort
+select q.v, q.rn
+from (
+    select r.k, r.v,
+           row_number() over (partition by coalesce(r.k, 2) order by l.k, r.v) as rn
+    from simplify_outer_join_l l
+    left join simplify_outer_join_r r on l.k = r.k
+) q
+join simplify_outer_join_keys d on q.k = d.k;
+----
+20 2
+21 3
+
+# A join runtime filter on k must not drop k=4 from the k % 2 partition:
+# it ranks ahead of both k=2 rows even though it will not match the join.
+query II rowsort
+settings (disable_join_reorder = 1)
+select q.v, q.rn
+from (
+    select r.k, r.v, row_number() over (partition by r.k % 2 order by r.v desc) as rn
+    from simplify_outer_join_r r
+) q
+join simplify_outer_join_keys d on q.k = d.k;
+----
+20 3
+21 2
+
+# The shared direct partition key may discard a whole WindowGroup partition.
+query III rowsort
+select q.v, q.rn, q.rk
+from (
+    select r.k, r.v, row_number() over (partition by r.k order by r.v) as rn,
+           rank() over (partition by r.k order by l.k) as rk
+    from simplify_outer_join_l l
+    left join simplify_outer_join_r r on l.k = r.k
+) q
+join simplify_outer_join_keys d on q.k = d.k;
+----
+20 1 1
+21 2 1
+
+# A requirement on the group key discards the NULL group, not a row in k=2.
+query II
+select q.k, q.n
+from (
+    select r.k, count(*) as n
+    from simplify_outer_join_l l
+    left join simplify_outer_join_r r on l.k = r.k
+    group by r.k
+) q
+join simplify_outer_join_keys d on q.k = d.k;
+----
+2 2
+
+# A requirement on the MAX output does not allow removing NULL inputs in the
+# surviving global group: COUNT(*) counts both unmatched rows as well.
+query II
+select q.k, q.n
+from (
+    select max(r.k) as k, count(*) as n
+    from simplify_outer_join_l l
+    left join simplify_outer_join_r r on l.k = r.k
+) q
+join simplify_outer_join_keys d on q.k = d.k;
+----
+2 4
+
+statement ok
+drop table simplify_outer_join_l;
+
+statement ok
+drop table simplify_outer_join_r;
+
+statement ok
+drop table simplify_outer_join_keys;

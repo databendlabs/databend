@@ -89,6 +89,41 @@ impl WindowFilterPushDown {
     }
 }
 
+/// Columns usable below a Window or WindowGroup to discard entire partitions.
+/// The columns must exist in the child and belong to every window's partition
+/// key. This is a column check, not proof that arbitrary scalars can be moved.
+pub(super) fn window_filter_columns(expr: &SExpr) -> Result<Option<ColumnSet>> {
+    let Some(windows) = partition_windows(expr.plan()) else {
+        return Ok(None);
+    };
+    let Some((first, rest)) = windows.split_first() else {
+        return Ok(None);
+    };
+    let mut allowed = first.partition_key_columns();
+    for window in rest {
+        let columns = window.partition_key_columns();
+        allowed.retain(|column| columns.contains(column));
+    }
+    // Retain the existing push-down restrictions for order and argument columns.
+    for window in windows {
+        let order = window.order_by_columns()?;
+        let arguments = window.function.used_columns();
+        allowed.retain(|c| !order.contains(c) && !arguments.contains(c));
+    }
+    let child = expr.unary_child().derive_relational_prop()?;
+    allowed.retain(|column| child.output_columns.contains(column));
+    if let RelOperator::WindowGroup(group) = expr.plan() {
+        // A scalar evaluated by the group is not an unchanged child column.
+        for item in &group.scalar_items {
+            if !matches!(&item.scalar, ScalarExpr::BoundColumnRef(c) if c.column.index == item.index)
+            {
+                allowed.remove(&item.index);
+            }
+        }
+    }
+    Ok(Some(allowed))
+}
+
 /// Windows whose partitions a filter below the operator could discard. A
 /// WindowGroup scalar that reads other rows would see fewer rows.
 fn partition_windows(plan: &RelOperator) -> Option<&[Window]> {

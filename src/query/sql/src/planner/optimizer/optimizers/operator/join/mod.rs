@@ -13,7 +13,9 @@
 // limitations under the License.
 
 mod finalize_spatial_join;
+mod simplify_outer_join;
 mod single_to_inner;
 
 pub use finalize_spatial_join::FinalizeSpatialJoinOptimizer;
+pub use simplify_outer_join::SimplifyOuterJoinOptimizer;
 pub use single_to_inner::SingleToInnerOptimizer;

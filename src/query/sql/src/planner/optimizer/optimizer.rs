@@ -39,6 +39,7 @@ use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuntimeFilterOptimizer;
+use crate::optimizer::optimizers::operator::SimplifyOuterJoinOptimizer;
 use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
@@ -324,6 +325,8 @@ pub(super) async fn query_logical_pipeline(
         .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
         // Normalize aggregate, it should be executed before physical lowering.
         .add(RuleNormalizeAggregateOptimizer::new())
+        // Use ON conditions before pull-up turns inner joins into filters over cross joins.
+        .add(SimplifyOuterJoinOptimizer)
         // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
         // Common subexpression elimination optimization
@@ -438,6 +441,7 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
         // Collect statistics for each leaf node in SExpr.
         .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
+        .add(SimplifyOuterJoinOptimizer)
         // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
         // Run default rewrite rules

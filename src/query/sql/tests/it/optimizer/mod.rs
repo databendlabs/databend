@@ -53,6 +53,7 @@ mod runtime_filter;
 mod selectivity;
 mod selectivity_smoke;
 mod shuffle_keys;
+mod simplify_outer_join;
 mod split_grouped_count_distinct;
 mod stat_derivation;
 mod statistics_trace;

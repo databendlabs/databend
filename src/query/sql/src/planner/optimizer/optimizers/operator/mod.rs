@@ -36,6 +36,7 @@ pub use filter::JoinProperty;
 pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use filter::PullUpFilterOptimizer;
 pub use join::FinalizeSpatialJoinOptimizer;
+pub use join::SimplifyOuterJoinOptimizer;
 pub use join::SingleToInnerOptimizer;
 pub use runtime_filter::RuntimeFilterOptimizer;
 

@@ -161,8 +161,8 @@ JOIN rf_dim d ON f.k = d.k",
         },
         RuntimeFilterCase {
             name: "null_supplying_side_of_left_join",
-            description: "A NULL-rejecting key passes into the null-supplying side of a lower LEFT JOIN.",
-            sql: "SELECT m.j FROM rf_mid m LEFT JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON f.k = d.k",
+            description: "The computed probe key leaves the lower join outer in the early pass, but still rejects NULL-extended rows, so the runtime filter reaches the scan.",
+            sql: "SELECT m.j FROM rf_mid m LEFT JOIN rf_fact f ON m.j = f.v JOIN rf_dim d ON (f.k & 255) = d.k",
         },
         RuntimeFilterCase {
             name: "null_accepting_key_stays_above_left_join",
