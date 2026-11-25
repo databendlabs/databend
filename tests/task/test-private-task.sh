@@ -687,6 +687,85 @@ fi
 response=$(query_sql_with_auth "root:" "DROP TASK abandoned_run_task")
 check_response_error "$response"
 
+# The latest run of a task decides whether its AFTER successors run. Of the runs that ended in the
+# same second, the one created last, with the greatest run_id, is the latest. same_second_other has
+# two failed runs and a succeeded one created after them, which all ended in the same second; the
+# succeeded run is inserted between the failed ones, so that it is neither the first nor the last
+# row in insertion order. same_second_parent has an abandoned run, recorded as failed when the
+# parent runs again, usually in the same second as that run ends.
+
+response=$(query_sql_with_auth "root:" "CREATE OR REPLACE TABLE same_second_sink (c int)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK same_second_parent AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK same_second_other AS SELECT 1")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "CREATE TASK same_second_child AFTER 'same_second_parent', 'same_second_other' AS INSERT INTO same_second_sink VALUES (1)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK same_second_child RESUME")
+check_response_error "$response"
+
+actual_after_count=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_after WHERE next_task = 'same_second_child'")
+    check_response_error "$response"
+    actual_after_count=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual_after_count" = "2" ]; then
+        break
+    fi
+    sleep 1
+done
+if [ "$actual_after_count" != "2" ]; then
+    echo "❌ Expected the AFTER bindings of same_second_child to be ready"
+    echo "Actual  : $actual_after_count"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'same_second_other'")
+check_response_error "$response"
+same_second_other_id=$(echo "$response" | jq -r '.data[0][0]')
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${same_second_other_id}, 'same_second_other', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930000, 0, 'FAILED', 1006, 'failed', 0, to_timestamp(1700000000), to_timestamp(1700000000), NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL), (${same_second_other_id}, 'same_second_other', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930002, 0, 'SUCCEEDED', 0, NULL, 0, to_timestamp(1700000000), to_timestamp(1700000000), NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL), (${same_second_other_id}, 'same_second_other', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930001, 0, 'FAILED', 1006, 'failed', 0, to_timestamp(1700000000), to_timestamp(1700000000), NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "SELECT id FROM system.tasks WHERE name = 'same_second_parent'")
+check_response_error "$response"
+same_second_parent_id=$(echo "$response" | jq -r '.data[0][0]')
+
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) VALUES (${same_second_parent_id}, 'same_second_parent', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 930010, 0, 'EXECUTING', 0, NULL, 0, now(), NULL, NULL, NULL, 'SUSPENDED', now(), now(), parse_json('{}'), NULL, NULL)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "EXECUTE TASK same_second_parent")
+check_response_error "$response"
+
+actual=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM same_second_sink")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" -ge 1 ]; then
+        break
+    fi
+    sleep 1
+done
+
+if [ "$actual" -ge 1 ]; then
+    echo "✅ Of the runs that ended in the same second, the one created last decides the AFTER successors"
+else
+    echo "❌ Expected same_second_child to run after same_second_parent recovered from its abandoned run"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+for task in same_second_child same_second_parent same_second_other; do
+    response=$(query_sql_with_auth "root:" "DROP TASK ${task}")
+    check_response_error "$response"
+done
+
 # Check Task Fan-out
 
 response=$(query_sql_with_auth "root:" "CREATE OR REPLACE TABLE fanout_sink (child string)")

@@ -1056,6 +1056,10 @@ impl TaskService {
     ) -> impl Stream<Item = Result<String>> + '_ {
         stream! {
             let task_name = Self::sql_string_literal(task_name);
+            // The latest run of each task. `completed_at` has whole-second precision, and two runs
+            // of a task often end in the same second: a failed attempt and its retry, or an
+            // abandoned run, recorded as failed, and the run that starts right after it. Of such
+            // runs, the one created last, with the greatest `run_id`, is the latest.
             let check = format!("
             WITH latest_task_run AS (
     SELECT
@@ -1067,7 +1071,7 @@ impl TaskService {
             task_name,
             state,
             completed_at,
-            ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC) AS rn
+            ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC, run_id DESC) AS rn
         FROM system_task.task_run
         WHERE NOT (state = 'SKIPPED' AND COALESCE(error_message, '') LIKE 'OVERLAPPING_EXECUTION:%')
     ) ranked
