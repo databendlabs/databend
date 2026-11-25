@@ -61,6 +61,16 @@ impl Sort {
         used_columns
     }
 
+    /// Only an unbounded sort keeps every input row: a LIMIT or a window
+    /// partition top-n removes rows.
+    pub fn preserves_rows(&self) -> bool {
+        self.limit.is_none()
+            && self
+                .window_partition
+                .as_ref()
+                .is_none_or(|partition| partition.top.is_none())
+    }
+
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) {
         for item in &mut self.items {
             if item.index == old {

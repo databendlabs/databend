@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
@@ -77,18 +74,15 @@ impl Rule for RulePushDownFilterAggregate {
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        let aggregate_expr = s_expr.child(0)?;
+        let aggregate_expr = s_expr.unary_child();
         let aggregate: Aggregate = aggregate_expr.plan().clone().try_into()?;
-        let aggregate_child_prop =
-            RelExpr::with_s_expr(aggregate_expr).derive_relational_prop_child(0)?;
-        let aggregate_group_columns = aggregate.group_columns()?;
+        let aggregate_child_prop = aggregate_expr.unary_child().derive_relational_prop()?;
+        let allowed = aggregate.child_group_columns(&aggregate_child_prop.output_columns);
         let mut pushed_down_predicates = vec![];
         let mut remaining_predicates = vec![];
         for predicate in filter.predicates.into_iter() {
             let predicate_used_columns = predicate.used_columns();
-            if predicate_used_columns.is_subset(&aggregate_child_prop.output_columns)
-                && predicate_used_columns.is_subset(&aggregate_group_columns)
-            {
+            if predicate_used_columns.is_subset(&allowed) {
                 pushed_down_predicates.push(predicate.clone());
                 // If all used columns in predicate are in group columns
                 // we can push down the predicate, otherwise we need to keep the predicate
@@ -114,32 +108,18 @@ impl Rule for RulePushDownFilterAggregate {
             }
         }
         if !pushed_down_predicates.is_empty() {
-            let pushed_down_filter = Filter {
-                predicates: pushed_down_predicates,
-            };
-
+            let aggregate = aggregate_expr
+                .unary_child_arc()
+                .ref_build_unary(Filter {
+                    predicates: pushed_down_predicates,
+                })
+                .build_unary(aggregate);
             let mut result = if remaining_predicates.is_empty() {
-                SExpr::create_unary(
-                    Arc::new(aggregate.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(pushed_down_filter.into()),
-                        Arc::new(aggregate_expr.child(0)?.clone()),
-                    )),
-                )
+                aggregate
             } else {
-                let remaining_filter = Filter {
+                aggregate.build_unary(Filter {
                     predicates: remaining_predicates,
-                };
-                SExpr::create_unary(
-                    Arc::new(remaining_filter.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(aggregate.into()),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(pushed_down_filter.into()),
-                            Arc::new(aggregate_expr.child(0)?.clone()),
-                        )),
-                    )),
-                )
+                })
             };
             result.set_applied_rule(&self.id);
             state.add_result(result);
