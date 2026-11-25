@@ -1095,6 +1095,7 @@ mod topk_string {
     /// `short`: inlined strings (<= 12 bytes) sharing a 4-byte prefix.
     /// `url`: long strings of varying length sharing a long prefix, like a URL column.
     /// `distinct`: long strings whose first 4 bytes mostly differ.
+    /// `tied`: long strings all equal to the heap boundary.
     fn value(shape: &str, row: usize) -> String {
         // Scatter the rows so the column is not already in order.
         let key = (row as u32).wrapping_mul(2_654_435_761) as usize % ROWS;
@@ -1102,6 +1103,7 @@ mod topk_string {
             "short" => format!("id_{key}"),
             "url" => format!("https://www.example.com/{}{key}", "p/".repeat(key % 16)),
             "distinct" => format!("{:08x}_with_a_long_suffix", key * 65_521),
+            "tied" => "https://www.example.com/duplicate".to_string(),
             _ => unreachable!(),
         }
     }
@@ -1116,7 +1118,7 @@ mod topk_string {
 
     /// Pushes a column into a sorter whose heap is already full, as for every block after the
     /// first of an `ORDER BY s LIMIT 100` scan.
-    #[divan::bench(args = ["short", "url", "distinct"])]
+    #[divan::bench(args = ["short", "url", "distinct", "tied"])]
     fn push_column(bencher: divan::Bencher, shape: &str) {
         let mut sorter = TopKSorter::new(LIMIT, true);
         let mut bitmap = MutableBitmap::from_len_set(ROWS);

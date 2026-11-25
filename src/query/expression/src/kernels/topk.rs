@@ -128,19 +128,22 @@ impl TopKSorter {
 
     #[inline]
     fn push_value<T: ArgType>(&mut self, value: T::ScalarRef<'_>) -> bool {
-        let order = self.ordering();
+        let ordering = self.ordering();
         unsafe {
             assume(self.data.len() == self.limit);
         }
-        let data = self.data[0].as_ref();
-        let data = T::try_downcast_scalar(&data).unwrap();
+        let top = self.data[0].as_ref();
+        let top = T::try_downcast_scalar(&top).unwrap();
 
-        if T::compare(data, value.clone()) != order {
-            self.data[0] = T::upcast_scalar(T::to_owned_scalar(value));
-            self.adjust();
-            true
-        } else {
-            false
+        match T::compare(value.clone(), top) {
+            cmp if cmp == ordering => {
+                self.data[0] = T::upcast_scalar(T::to_owned_scalar(value));
+                self.adjust();
+                true
+            }
+            // Keep boundary ties without replacing the heap top.
+            Ordering::Equal => true,
+            _ => false,
         }
     }
 
@@ -191,7 +194,8 @@ impl TopKSorter {
     }
 
     /// [`Self::push_column_internal`] for strings: the heap top is compared with the rows by
-    /// its view, which is built once and rebuilt only when a row replaces the top.
+    /// its view, which is rebuilt only for a strictly better row. Ties stay selected without
+    /// changing the heap.
     fn push_string_column(&mut self, col: &Column, bitmap: &mut MutableBitmap) {
         let col = StringType::try_downcast_column(col).unwrap();
         let ordering = self.ordering();
@@ -209,12 +213,15 @@ impl TopKSorter {
             let mut replacement = None;
             while row < col.len() {
                 if bitmap.get(row) {
-                    if col.compare_probe(row, &top).reverse() != ordering {
-                        replacement = Some(row);
-                        row += 1;
-                        break;
+                    match col.compare_probe(row, &top) {
+                        cmp if cmp == ordering => {
+                            replacement = Some(row);
+                            row += 1;
+                            break;
+                        }
+                        Ordering::Equal => {}
+                        _ => bitmap.set(row, false),
                     }
-                    bitmap.set(row, false);
                 }
                 row += 1;
             }
@@ -250,15 +257,20 @@ impl TopKSorter {
             while i < count {
                 let idx = if SELECT_ALL { i as u32 } else { selection[i] };
                 i += 1;
-                if col.compare_probe(idx as usize, &top).reverse() != ordering {
+                let improved = match col.compare_probe(idx as usize, &top) {
+                    cmp if cmp == ordering => true,
+                    Ordering::Equal => false,
+                    _ => continue,
+                };
+                selection[result_count] = idx;
+                result_count += 1;
+                if improved {
                     replacement = Some(idx);
                     break;
                 }
             }
             if let Some(idx) = replacement {
                 self.replace_top(unsafe { col.index_unchecked(idx as usize) });
-                selection[result_count] = idx;
-                result_count += 1;
             }
         }
         result_count

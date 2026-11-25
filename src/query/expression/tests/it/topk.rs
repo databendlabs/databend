@@ -16,13 +16,14 @@ use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_expression::TopKSorter;
+use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
-/// The top `limit` values seen so far, kept the way `TopKSorter` keeps them: a value is taken if
-/// it does not rank after the worst value kept, and then replaces it.
+/// Reference model: keep the best `limit` values seen so far and accept ties with the worst
+/// retained value.
 struct Model {
     values: Vec<String>,
     limit: usize,
@@ -78,6 +79,42 @@ fn random_strings(rng: &mut StdRng, max_len: usize) -> Vec<String> {
                 .collect()
         })
         .collect()
+}
+
+#[test]
+fn test_topk_keeps_boundary_ties() {
+    let strings = [
+        "shared_long_prefix_a",
+        "shared_long_prefix_b",
+        "shared_long_prefix_c",
+    ];
+    for asc in [true, false] {
+        let (better, worse) = if asc { (0, 2) } else { (2, 0) };
+        // Rows 1 and 3 tie the initial boundary. Row 4 improves it and row 6 ties it again.
+        let rows = [1, 1, worse, 1, better, 1, better];
+        let columns = [
+            Int32Type::from_data(rows.map(|row| row as i32).to_vec()),
+            StringType::from_data(rows.map(|row| strings[row]).to_vec()),
+        ];
+        for column in &columns {
+            let mut sorter = TopKSorter::new(1, asc);
+            let mut bitmap = MutableBitmap::from_iter([true, false, true, true, true, true, true]);
+            sorter.push_column(column, &mut bitmap);
+            assert_eq!(bitmap.iter().collect::<Vec<_>>(), [
+                true, false, false, true, true, false, true
+            ]);
+
+            let mut sorter = TopKSorter::new(1, asc);
+            let mut selection = [0; 7];
+            let count = sorter.push_column_with_selection::<true>(column, &mut selection, 7);
+            assert_eq!(&selection[..count], &[0, 1, 3, 4, 6]);
+
+            let mut sorter = TopKSorter::new(1, asc);
+            let mut selection = [0, 2, 3, 4, 5, 6];
+            let count = sorter.push_column_with_selection::<false>(column, &mut selection, 6);
+            assert_eq!(&selection[..count], &[0, 3, 4, 6]);
+        }
+    }
 }
 
 #[test]
