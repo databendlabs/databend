@@ -345,19 +345,20 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
     }
     match data_type {
         DataType::Nullable(deref!(inner_ty)) => {
-            if stats.len() == 1 && (stats[0].min.is_null() || stats[0].max.is_null()) {
+            // Only leaf columns have statistics. Those of the leaves of a nested column tell
+            // nothing about its own nulls: an array without elements, or whose elements are all
+            // null, is not a null array.
+            let nested = matches!(
+                inner_ty,
+                DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_)
+            );
+            if !nested && (stats[0].min.is_null() || stats[0].max.is_null()) {
                 return Domain::Nullable(NullableDomain {
                     has_null: true,
                     value: None,
                 });
             }
-            let has_null = if stats.len() == 1 && !matches!(inner_ty, &DataType::Array(_)) {
-                stats[0].null_count > 0
-            } else {
-                // Only leaf columns have statistics,
-                // nested columns are treated as having nullable values
-                true
-            };
+            let has_null = nested || stats[0].null_count > 0;
             let domain = statistics_to_domain(stats, inner_ty);
             Domain::Nullable(NullableDomain {
                 has_null,
@@ -392,6 +393,11 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
             let stat = stats[0];
             let min = stat.min();
             let max = stat.max();
+            // A leaf without a non-null value: under a nullable type this is handled above, so
+            // it is the elements of arrays or maps that are all empty.
+            if min.is_null() || max.is_null() {
+                return Domain::full(data_type);
+            }
 
             with_number_mapped_type!(|NUM_TYPE| match data_type {
                 DataType::Number(NumberDataType::NUM_TYPE) => {
