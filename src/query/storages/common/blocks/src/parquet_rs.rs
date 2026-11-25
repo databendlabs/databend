@@ -40,11 +40,15 @@ use crate::parquet_writer::SerializedParquet;
 const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.5;
 
 /// Size limit of a dictionary page, beyond which the writer falls back to the encoding of the
-/// column for the rest of the column chunk. It is the default of other parquet writers
-/// (parquet-mr, Arrow C++, arrow-rs): past it a dictionary of a high-cardinality column is no
-/// smaller than its values, and the pages of such a column are cheaper to read for their
-/// lengths alone when they are not dictionary encoded (see `length_chunk`).
-const DICTIONARY_PAGE_SIZE_LIMIT: usize = 1024 * 1024;
+/// column for the rest of the column chunk. It is far above the 1 MiB other parquet writers use,
+/// because a block is a few hundred thousand rows and a dictionary that holds all the values of a
+/// block is much smaller than their bytes: on the `URL` and `Title` columns of the ClickBench
+/// `hits` table, keeping it saves a tenth of the size of the column, and reads of those columns
+/// are cheaper for it, lengths only or not. Lowering it to 1 MiB costs 7.6% more bytes there and
+/// gives nothing back, since the pages it falls back to are the larger ones; a table that wants
+/// the length-first pages for its strings asks for them with
+/// `FUSE_OPT_KEY_STRING_DICTIONARY_PAGE_SIZE`.
+const DICTIONARY_PAGE_SIZE_LIMIT: usize = 16 * 1024 * 1024;
 
 /// The encoding of the pages of a `String` column that a dictionary does not hold: the lengths
 /// of the values come first, those of a page encoded with `DELTA_BINARY_PACKED`, then the bytes
