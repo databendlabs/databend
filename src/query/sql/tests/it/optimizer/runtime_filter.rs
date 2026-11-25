@@ -131,6 +131,18 @@ JOIN rf_dim d ON f.s = d.k",
 JOIN rf_dim d ON f.k = d.k",
         },
         RuntimeFilterCase {
+            name: "window_computed_partition_dependency_is_not_pushed",
+            description: "A runtime filter on k could remove only part of a partition defined by k % 2.",
+            sql: "SELECT f.rn FROM (SELECT k, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM rf_fact) f
+JOIN rf_dim d ON f.k = d.k",
+        },
+        RuntimeFilterCase {
+            name: "window_partition_expression_key",
+            description: "A probe key equal to the partition expression has one value per partition, so the runtime filter passes the window.",
+            sql: "SELECT f.rn FROM (SELECT k, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM rf_fact) f
+JOIN rf_dim d ON f.k % 2 = d.k",
+        },
+        RuntimeFilterCase {
             name: "window_without_partition_is_not_pushed",
             description: "Removing rows below a window without that partition key changes the window results, so the filter is removed.",
             sql: "SELECT f.rn FROM (SELECT k, row_number() OVER (ORDER BY v) AS rn FROM rf_fact) f

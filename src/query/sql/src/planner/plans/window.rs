@@ -218,15 +218,19 @@ impl Window {
         Ok(col_set)
     }
 
-    // `Window.partition_by_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
-    // like `Aggregate.group_columns` only consider `group_items` field.
-    pub fn partition_by_columns(&self) -> Result<ColumnSet> {
-        let mut col_set = ColumnSet::new();
-        for part in self.partition_by.iter() {
-            col_set.insert(part.index);
-            part.scalar.collect_used_columns(&mut col_set);
+    /// Columns whose value is the partition key: each partition item, and the
+    /// column it reads when the item is a plain column. A column that a
+    /// computed partition expression reads is not one: rows with different
+    /// `k` share a `k % 2` partition.
+    pub fn partition_key_columns(&self) -> ColumnSet {
+        let mut columns = ColumnSet::new();
+        for item in &self.partition_by {
+            columns.insert(item.index);
+            if let ScalarExpr::BoundColumnRef(column) = &item.scalar {
+                columns.insert(column.column.index);
+            }
         }
-        Ok(col_set)
+        columns
     }
 
     pub fn order_by_columns(&self) -> Result<ColumnSet> {

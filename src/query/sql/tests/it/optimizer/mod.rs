@@ -45,6 +45,7 @@ mod planning_context;
 mod proven_empty;
 mod push_down_filter_project_set;
 mod push_down_filter_row_dependent;
+mod push_down_filter_window;
 mod push_down_filter_window_top_n;
 mod push_down_rank_limit_aggregate;
 mod push_down_top_n_union_scan;

@@ -19,6 +19,7 @@ pub mod distributed;
 mod eliminate_self_join;
 mod hyper_dp;
 pub mod operator;
+mod partition_filter;
 pub mod recursive;
 pub mod rule;
 pub use cascades::CascadesOptimizer;

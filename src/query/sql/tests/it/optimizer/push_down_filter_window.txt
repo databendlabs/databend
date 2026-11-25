@@ -1,0 +1,392 @@
+=== direct_partition_key ===
+description: A predicate on the partition key removes whole partitions.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM t) q WHERE q.k = 1
+optimized_plan:
+Window
+├── aggregate function: row_number
+├── partition items: [t.k (#0) AS (#0)]
+├── order by items: [t.v (#1) AS (#1)]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: NONE
+    ├── window function: RowNumber
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [eq(t.k (#0), 1)]
+        ├── order by: [t.k (#0) ASC, t.v (#1) ASC]
+        └── limit: NONE
+
+
+=== partition_expression ===
+description: A predicate on the partition expression has one value per partition.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k % 2 = 1
+optimized_plan:
+Window
+├── aggregate function: row_number
+├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+├── order by items: [t.v (#1) AS (#1)]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Sort
+    ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: NONE
+    ├── window function: RowNumber
+    └── EvalScalar
+        ├── scalars: [t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: [eq(modulo(t.k (#0), 2), 1)]
+            ├── order by: [row_number_part_0 (#3) ASC, t.v (#1) ASC]
+            └── limit: NONE
+
+
+=== partition_expression_through_column_alias ===
+description: The outer query reads k through an alias; the partition expression still matches by column.
+sql: SELECT * FROM (SELECT k AS kk, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.kk % 2 = 1
+optimized_plan:
+Window
+├── aggregate function: row_number
+├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+├── order by items: [t.v (#1) AS (#1)]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Sort
+    ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: NONE
+    ├── window function: RowNumber
+    └── EvalScalar
+        ├── scalars: [t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: [eq(modulo(t.k (#0), 2), 1)]
+            ├── order by: [row_number_part_0 (#3) ASC, t.v (#1) ASC]
+            └── limit: NONE
+
+
+=== partition_expression_dependency ===
+description: Rows with different k share a k % 2 partition, so a predicate on k stays above the window.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k = 3
+optimized_plan:
+Filter
+├── filters: [eq(t.k (#0), 3)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [row_number_part_0 (#3) ASC, t.v (#1) ASC]
+                └── limit: NONE
+
+
+=== partition_expression_with_other_column ===
+description: Combined with a non-partition column, the partition expression no longer has one value per partition.
+sql: SELECT * FROM (SELECT k, v, w, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k % 2 + q.w = 1
+optimized_plan:
+Filter
+├── filters: [eq(plus(modulo(t.k (#0), 2), t.w (#2)), 1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [row_number_part_0 (#3) ASC, t.v (#1) ASC]
+                └── limit: NONE
+
+
+=== partition_expression_and_dependency_conjuncts ===
+description: Each conjunct is checked separately: only the one on the partition expression moves.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t) q WHERE q.k % 2 = 1 AND q.k = 3
+optimized_plan:
+Filter
+├── filters: [eq(t.k (#0), 3)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [eq(modulo(t.k (#0), 2), 1)]
+                ├── order by: [row_number_part_0 (#3) ASC, t.v (#1) ASC]
+                └── limit: NONE
+
+
+=== partition_expression_also_order_key ===
+description: The existing restriction on order columns still applies when the partition expression reads one.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY k) AS rn FROM t) q WHERE q.k % 2 = 1
+optimized_plan:
+Filter
+├── filters: [eq(modulo(t.k (#0), 2), 1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+    ├── order by items: [t.k (#0) AS (#0)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.k (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), modulo(t.k (#0), 2) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [row_number_part_0 (#3) ASC, t.k (#0) ASC]
+                └── limit: NONE
+
+
+=== partition_expression_also_argument ===
+description: The existing restriction on window function arguments still applies when the partition expression reads one.
+sql: SELECT * FROM (SELECT k, v, sum(k) OVER (PARTITION BY k % 2 ORDER BY v) AS s FROM t) q WHERE q.k % 2 = 1
+optimized_plan:
+Filter
+├── filters: [eq(modulo(t.k (#0), 2), 1)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(28..71), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(32..33), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "k", column_name_lower: None, index: 0, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(Int64)), sort_descs: [], display_name: "sum(k) OVER (PARTITION BY k % 2 ORDER BY v)" })
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [sum_part_0 (#3) ASC, t.v (#1) ASC]
+                └── limit: NONE
+
+
+=== partition_key_below_top_n ===
+description: A filter on the partition key reaches the scan below the per-partition top-n of QUALIFY.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM t QUALIFY rn = 1) q WHERE q.k = 1
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v) (#3), 1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [t.k (#0) AS (#0)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: 1
+        ├── window function: RowNumber
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: [eq(t.k (#0), 1)]
+            ├── order by: [t.k (#0) ASC, t.v (#1) ASC]
+            └── limit: NONE
+
+
+=== partition_expression_below_top_n ===
+description: A filter on the partition expression reaches the scan below the per-partition top-n of QUALIFY.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t QUALIFY rn = 1) q WHERE q.k % 2 = 1
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4), 1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: 1
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: [eq(modulo(t.k (#0), 2), 1)]
+                ├── order by: [row_number_part_0 (#3) ASC, t.v (#1) ASC]
+                └── limit: NONE
+
+
+=== partition_expression_dependency_above_top_n ===
+description: A filter on k could change which row is first in a k % 2 partition, so it stays above the window and its top-n.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn FROM t QUALIFY rn = 1) q WHERE q.k = 3
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k % 2 ORDER BY v) (#4), 1), eq(t.k (#0), 3)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: 1
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [t.v (#1) AS (#1), modulo(t.k (#0), 2) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [row_number_part_0 (#3) ASC, t.v (#1) ASC]
+                └── limit: NONE
+
+
+=== runtime_filter_below_top_n ===
+description: Runtime filters are planned after QUALIFY sets the per-partition top-n. A runtime filter on the partition key removes whole partitions, so it passes the top-n sort.
+sql: SELECT q.v FROM (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS rn FROM t QUALIFY rn = 1) q JOIN d ON q.k = d.k
+optimized_plan:
+EvalScalar
+├── scalars: [t.v (#1) AS (#1), row_number() OVER (PARTITION BY k ORDER BY v DESC) (#3) AS (#5), t.k (#0) AS (#6), d.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [d.k (#4)]
+    ├── probe keys: [t.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: d.k (#4) -> t.k (#0)]
+    ├── Scan
+    │   ├── table: default.d (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Filter
+        ├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#3), 1)]
+        └── Window
+            ├── aggregate function: row_number
+            ├── partition items: [t.k (#0) AS (#0)]
+            ├── order by items: [t.v (#1) AS (#1) DESC]
+            ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            └── Sort
+                ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) DESC NULLS LAST]
+                ├── limit: [NONE]
+                ├── window top: 1
+                ├── window function: RowNumber
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: [t.k (#0) ASC, t.v (#1) DESC]
+                    ├── limit: NONE
+                    └── runtime filters: [#0: t.k (#0)]
+
+
+=== window_group_shared_partition_expression ===
+description: The predicate has one value per partition of every window in the group, and moves as written below the group.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn, rank() OVER (PARTITION BY k % 2 ORDER BY v) AS rk FROM t) q WHERE q.k % 2 = 1
+optimized_plan:
+WindowGroup
+├── Window
+│   ├── aggregate function: row_number
+│   ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+│   ├── order by items: [t.v (#1) AS (#1)]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+├── Window
+│   ├── aggregate function: rank
+│   ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+│   ├── order by items: [t.v (#1) AS (#1)]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: [eq(modulo(t.k (#0), 2), 1)]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== window_group_shared_partition_key_and_expression ===
+description: Both windows partition by k and k % 2, so predicates on either have one value per partition of the group.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k, k % 2 ORDER BY v) AS rn, rank() OVER (PARTITION BY k, k % 2 ORDER BY v) AS rk FROM t) q WHERE q.k = 1 AND q.k % 2 = 1
+optimized_plan:
+WindowGroup
+├── Window
+│   ├── aggregate function: row_number
+│   ├── partition items: [t.k (#0) AS (#0), modulo(t.k (#0), 2) AS (#3)]
+│   ├── order by items: [t.v (#1) AS (#1)]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+├── Window
+│   ├── aggregate function: rank
+│   ├── partition items: [t.k (#0) AS (#0), modulo(t.k (#0), 2) AS (#3)]
+│   ├── order by items: [t.v (#1) AS (#1)]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: [eq(t.k (#0), 1), eq(modulo(1, 2), 1)]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== window_group_stateful_scalar ===
+description: The group evaluates running_difference over its input rows, so even a predicate on the shared partition expression stays above it.
+sql: SELECT * FROM (SELECT k, sum(running_difference(v)) OVER (PARTITION BY k % 2) AS s, count(*) OVER (PARTITION BY k % 2) AS n FROM t) q WHERE q.k % 2 = 1
+optimized_plan:
+Filter
+├── filters: [eq(modulo(t.k (#0), 2), 1)]
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: sum
+    │   ├── partition items: [modulo(t.k (#0), 2) AS (#4)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    ├── Window
+    │   ├── aggregate function: count
+    │   ├── partition items: [modulo(t.k (#0), 2) AS (#4)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== stacked_windows_different_partition_expressions ===
+description: A predicate on the lower window's partition expression can split the partitions of the upper window, so it stays above both.
+sql: SELECT * FROM (SELECT k, v, row_number() OVER (PARTITION BY k % 2 ORDER BY v) AS rn, row_number() OVER (PARTITION BY k % 3 ORDER BY v) AS rn3 FROM t) q WHERE q.k % 2 = 1
+optimized_plan:
+Filter
+├── filters: [eq(modulo(t.k (#0), 2), 1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(t.k (#0), 3) AS (#5)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: [modulo(t.k (#0), 2) AS (#3)]
+        ├── order by items: [t.v (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
