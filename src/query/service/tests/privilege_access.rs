@@ -18,6 +18,7 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use databend_common_ast::ast::SetType;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,6 +43,10 @@ use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextAuthorization;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sql::Planner;
+use databend_query::sql::plans::Plan;
+use databend_query::sql::plans::RewriteKind;
+use databend_query::sql::plans::SetPlan;
+use databend_query::sql::plans::SetScalarsOrQuery;
 use databend_query::test_kits::TestFixture;
 use fastrace::Span;
 use fastrace::collector::SpanContext;
@@ -63,6 +68,200 @@ async fn user_context(
 async fn check_access(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
     let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
     InterpreterFactory::get(ctx, &plan).await.map(|_| ())
+}
+
+async fn assert_plan_denied(ctx: Arc<QueryContext>, plan: &Plan) {
+    let err = InterpreterFactory::get(ctx, plan)
+        .await
+        .err()
+        .expect("expected permission denial before execution");
+    assert_eq!(err.code(), ErrorCode::PERMISSION_DENIED, "{err}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_set_checks_query_source_privileges() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (db_id, table_id) = setup_table(&fixture).await?;
+    let object = GrantObject::TableById("default".into(), db_id, table_id);
+
+    for (has_select, has_super) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut user = UserInfo::new_no_auth("set_reader", "%");
+        if has_select {
+            user.grants
+                .grant_privileges(&object, UserPrivilegeType::Select.into());
+        }
+        if has_super {
+            user.grants
+                .grant_privileges(&GrantObject::Global, UserPrivilegeType::Super.into());
+        }
+        let ctx = user_context(&fixture, user, None).await?;
+        let (query, _) = Planner::new(ctx.clone())
+            .plan_sql("SELECT a FROM select_access.t")
+            .await?;
+        // Exercise the SET authorization boundary without running the embedded query.
+        for (set_type, name) in [
+            (SetType::Variable, "value"),
+            (SetType::SettingsSession, "max_threads"),
+            (SetType::SettingsGlobal, "max_threads"),
+        ] {
+            let global = matches!(set_type, SetType::SettingsGlobal);
+            let plan = Plan::Set(Box::new(SetPlan {
+                set_type,
+                idents: vec![name.into()],
+                values: SetScalarsOrQuery::Query(Box::new(query.clone())),
+            }));
+            if has_select && (!global || has_super) {
+                InterpreterFactory::get(ctx.clone(), &plan).await?;
+            } else {
+                assert_plan_denied(ctx.clone(), &plan).await;
+            }
+        }
+        check_access(ctx, "SET VARIABLE value = 1").await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_show_checks_user_references() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (db_id, table_id) = setup_table(&fixture).await?;
+    let object = GrantObject::TableById("default".into(), db_id, table_id);
+    fixture
+        .execute_command("CREATE TABLE select_access.show_target(a INT)")
+        .await?;
+    let show_target = GrantObject::Table(
+        "default".into(),
+        "select_access".into(),
+        "show_target".into(),
+    );
+    for (sql, needs_target_grant) in [
+        ("SHOW DATABASES", false),
+        ("SHOW ENGINES", false),
+        ("SHOW TABLE_FUNCTIONS", false),
+        ("SHOW TABLES FROM select_access", true),
+        ("SHOW COLUMNS FROM select_access.show_target", true),
+    ] {
+        for has_select in [false, true] {
+            let mut user = UserInfo::new_no_auth("show_reader", "%");
+            if needs_target_grant {
+                user.grants
+                    .grant_privileges(&show_target, UserPrivilegeType::Select.into());
+            }
+            if has_select {
+                user.grants
+                    .grant_privileges(&object, UserPrivilegeType::Select.into());
+            }
+            let ctx = user_context(&fixture, user, None).await?;
+            let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
+            InterpreterFactory::get(ctx.clone(), &plan).await?;
+            let Plan::Query { metadata, .. } = &plan else {
+                panic!("expected a rewritten query for {sql}");
+            };
+            // Register a user reference in the authorization metadata without changing
+            // the executable query. Permissions must apply to both kinds of SHOW plans.
+            let table = ctx.get_table("default", "select_access", "t").await?;
+            metadata.write().add_table(
+                "default".into(),
+                "select_access".into(),
+                table,
+                None,
+                false,
+                false,
+                None,
+            );
+            if has_select {
+                InterpreterFactory::get(ctx.clone(), &plan).await?;
+            } else {
+                assert_plan_denied(ctx.clone(), &plan).await;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_show_checks_additional_reference_to_generated_system_table() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = user_context(&fixture, UserInfo::new_no_auth("show_only", "%"), None).await?;
+    let (plan, _) = Planner::new(ctx.clone()).plan_sql("SHOW ENGINES").await?;
+    InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let Plan::Query { metadata, .. } = &plan else {
+        panic!("expected a rewritten SHOW query");
+    };
+    {
+        let mut metadata = metadata.write();
+        let generated = metadata
+            .tables()
+            .iter()
+            .find(|table| table.is_show_system_table())
+            .expect("the generated FROM must be exempt");
+        let table = generated.table();
+        metadata.add_table(
+            "default".into(),
+            "system".into(),
+            table,
+            None,
+            false,
+            false,
+            None,
+        );
+    }
+    assert_plan_denied(ctx, &plan).await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_show_checks_udf_privileges() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE FUNCTION show_test_predicate AS (p) -> (p > 0)")
+        .await?;
+    // Fixture DDL may run with PUBLIC as the current role; the readers must not own the UDF.
+    UserApiProvider::instance()
+        .grant_ownership_to_role(
+            &fixture.default_tenant(),
+            &OwnershipObject::UDF {
+                name: "show_test_predicate".into(),
+            },
+            BUILTIN_ROLE_ACCOUNT_ADMIN,
+        )
+        .await?;
+    for has_usage in [false, true] {
+        let mut user = UserInfo::new_no_auth("show_udf_reader", "%");
+        if has_usage {
+            user.grants.grant_privileges(
+                &GrantObject::UDF("show_test_predicate".into()),
+                UserPrivilegeType::Usage.into(),
+            );
+        }
+        let ctx = user_context(&fixture, user, None).await?;
+        // Project the boolean UDF call so it stays in the plan inspected by the access checker.
+        let (mut plan, _) = Planner::new(ctx.clone())
+            .plan_sql("SELECT show_test_predicate(number) FROM numbers(2)")
+            .await?;
+        let Plan::Query {
+            rewrite_kind,
+            s_expr,
+            ..
+        } = &mut plan
+        else {
+            panic!("expected a query plan");
+        };
+        assert!(
+            s_expr
+                .get_udfs()?
+                .iter()
+                .any(|name| *name == "show_test_predicate")
+        );
+        // Test authorization of a SHOW plan containing a UDF, not the UDF's execution.
+        *rewrite_kind = Some(RewriteKind::ShowDatabases);
+        if has_usage {
+            InterpreterFactory::get(ctx, &plan).await?;
+        } else {
+            assert_plan_denied(ctx, &plan).await;
+        }
+    }
+    Ok(())
 }
 
 /// Spans of every test in this target. The reporter is process-wide, so it is installed once;

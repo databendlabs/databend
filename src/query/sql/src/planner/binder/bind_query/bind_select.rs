@@ -41,6 +41,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::visit::VisitControl;
 use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -69,6 +70,7 @@ use crate::planner::binder::select::SelectList;
 use crate::planner::binder::select_clauses::SelectAggregates;
 use crate::planner::binder::sort::OrderItems;
 use crate::planner::binder::window::WindowInputColumns;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut as _;
 
@@ -385,6 +387,8 @@ impl Binder {
         limit: Option<usize>,
     ) -> Result<(SExpr, BindContext)> {
         self.debug_assert_definition_scope(bind_context);
+        // Only this SELECT's FROM can receive the exemption, not a nested SELECT.
+        let show_system_table = self.show_system_table.take();
         // whether allow rewrite virtual column and pushdown
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
 
@@ -395,6 +399,20 @@ impl Binder {
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
         let (s_expr, from_context) = self.bind_select_from(bind_context, stmt)?;
+        if let Some(expected_name) = show_system_table
+            && matches!(stmt.from.as_slice(), [TableReference::Table { .. }])
+            && let RelOperator::Scan(scan) = s_expr.plan()
+        {
+            let mut metadata = self.metadata.write();
+            let table = metadata.table(scan.table_index);
+            if table.catalog() == CATALOG_DEFAULT
+                && table.database() == "system"
+                && table.name() == expected_name
+                && !table.table().is_temp()
+            {
+                metadata.mark_show_system_table(scan.table_index);
+            }
+        }
         // The clauses after FROM are lowered once, and bound from these nodes.
         let clauses = self.lower_select_clauses(&from_context, SelectClauses {
             select_list: &stmt.select_list,

@@ -22,5 +22,11 @@ SHOW ENGINES WHERE "Engine"='MEMORY' LIMIT 1
 ----
 MEMORY MEMORY Storage Engine
 
+# A legal, object-free subquery remains supported in a SHOW filter.
+query TT
+SHOW ENGINES WHERE "Engine" = (SELECT 'MEMORY') LIMIT 1
+----
+MEMORY MEMORY Storage Engine
+
 statement error
 SHOW ENGINES WHERE name_engine='MEMORY' LIMIT 1
