@@ -37,9 +37,9 @@ use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::LegacyMVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::MVDefinitionIdent;
-use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::SourceTableMV;
@@ -888,10 +888,11 @@ async fn remove_data_for_dropped_table(
     // reference it. Concurrent relationship deletions are idempotent.
     txn.if_then
         .extend(source_mvs.into_iter().map(|(ident, _)| txn_del(&ident)));
-    txn.if_then.push(txn_del(&MVSourceBindingVersionIdent::new(
-        tenant,
-        table_id.table_id,
-    )));
+    txn.if_then
+        .push(txn_del(&LegacyMVSourceBindingVersionIdent::new(
+            tenant,
+            table_id.table_id,
+        )));
 
     if let Some(group_id) = parse_clone_group_id(&seq_meta.data.options).ok().flatten() {
         txn.if_then.push(txn_del(&TableCloneByGroupIdent::new(

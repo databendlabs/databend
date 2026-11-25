@@ -244,27 +244,6 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
-    async fn get_active_mv_definition(
-        &self,
-        _tenant: &Tenant,
-        _source_table_id: u64,
-        _mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>> {
-        Err(ErrorCode::Unimplemented(
-            "Immutable catalog does not support active materialized-view definitions",
-        ))
-    }
-
-    async fn get_mv_current_source_generation(
-        &self,
-        _tenant: &Tenant,
-        _source_table_id: u64,
-    ) -> Result<Option<u64>> {
-        Err(ErrorCode::Unimplemented(
-            "Immutable catalog does not support materialized-view source generations",
-        ))
-    }
-
     async fn mget_table_names_by_ids(
         &self,
         _tenant: &Tenant,

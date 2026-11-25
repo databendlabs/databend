@@ -75,7 +75,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::LvtUpdate;
 use databend_common_meta_app::schema::MVDefinition;
-use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MVInfo;
 use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
@@ -237,33 +237,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         mv_table_id: u64,
     ) -> Result<Option<SeqV<MVDefinition>>>;
 
-    /// Get an MV definition if its source binding is active.
-    async fn get_active_mv_definition(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-        mv_table_id: u64,
-    ) -> Result<Option<SeqV<MVDefinition>>>;
-
-    /// Get a source table's current materialized-view binding generation.
-    ///
-    /// `None` means the generation record is not initialized and represents generation 0.
-    async fn get_mv_current_source_generation(
-        &self,
-        tenant: &Tenant,
-        source_table_id: u64,
-    ) -> Result<Option<u64>>;
-
-    /// Get a consistent snapshot of active MV bindings for a source table.
-    async fn get_mv_source_binding_snapshot(
+    /// Get the valid MVs of a source table, for query rewrite.
+    async fn list_valid_mvs_by_source_table_id(
         &self,
         _tenant: &Tenant,
         _source_table_id: u64,
-    ) -> Result<MVSourceBindingSnapshot> {
-        Ok(MVSourceBindingSnapshot {
-            generation: 0,
-            materialized_views: vec![],
-        })
+    ) -> Result<Vec<MVInfo>> {
+        Ok(vec![])
     }
 
     /// List materialized views for management and system-table consumers.

@@ -30,7 +30,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::is_cacheable_function;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
-use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MVInfo;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_settings::ChangeValue;
@@ -126,7 +126,7 @@ impl Planner {
         }))
     }
 
-    /// The materialized-view bindings of each source table, once per table. `None` if one cannot
+    /// The valid materialized views of each source table, once per table. `None` if one cannot
     /// be read; the statement is then not cached. Read only once the statement is known to be
     /// cacheable, as keying a plan that is not cached would read them for nothing.
     async fn read_mv_source_bindings(&self, sources: &[(String, u64)]) -> Option<MVSourceBindings> {
@@ -136,15 +136,15 @@ impl Planner {
             if bindings.contains_key(source) {
                 continue;
             }
-            let snapshot = self
+            let materialized_views = self
                 .ctx
                 .get_catalog(catalog)
                 .await
                 .ok()?
-                .get_mv_source_binding_snapshot(&tenant, *source_table_id)
+                .list_valid_mvs_by_source_table_id(&tenant, *source_table_id)
                 .await
                 .ok()?;
-            bindings.insert(source.clone(), Arc::new(snapshot));
+            bindings.insert(source.clone(), Arc::new(materialized_views));
         }
         Some(bindings)
     }
@@ -309,18 +309,12 @@ impl PlanCacheContext {
     }
 }
 
-/// What of the materialized views of a source table a cached plan depends on: a plan rewritten
-/// to read one is stale once it changes.
-fn mv_fingerprint(source_table_id: u64, snapshot: &MVSourceBindingSnapshot) -> String {
-    let mut fingerprint = format!(
-        "source:{}:binding_generation:{}",
-        source_table_id, snapshot.generation
-    );
-    for mv in snapshot
-        .materialized_views
-        .iter()
-        .sorted_by_key(|mv| mv.mv_id)
-    {
+/// What of the valid materialized views of a source table a cached plan depends on: a plan
+/// rewritten to read one is stale once it changes. Marking an MV invalid after source DDL drops
+/// it from the list, a refresh advances its table sequence.
+fn mv_fingerprint(source_table_id: u64, materialized_views: &[MVInfo]) -> String {
+    let mut fingerprint = format!("source:{}", source_table_id);
+    for mv in materialized_views.iter().sorted_by_key(|mv| mv.mv_id) {
         let mv_options = &mv.table_meta.data.options;
         fingerprint.push_str(&format!(
             ":mv:{}:definition:{}:table_seq:{}:snapshot:{:?}:checkpoint_seq:{:?}:checkpoint_snapshot:{:?}",
@@ -483,7 +477,6 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_meta_app::schema::MVDefinition;
     use databend_common_meta_app::schema::MVInfo;
-    use databend_common_meta_app::schema::MVSourceBindingSnapshot;
     use databend_common_meta_app::schema::TableMeta;
     use databend_meta_client::types::SeqV;
     use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -508,30 +501,23 @@ mod tests {
         }
     }
 
-    fn snapshot(generation: u64, materialized_views: Vec<MVInfo>) -> MVSourceBindingSnapshot {
-        MVSourceBindingSnapshot {
-            generation,
-            materialized_views,
-        }
-    }
-
     #[test]
     fn test_mv_fingerprint_ignores_listing_order() {
-        let listed = snapshot(3, vec![mv(7, 1, "s7"), mv(5, 1, "s5")]);
-        let sorted = snapshot(3, vec![mv(5, 1, "s5"), mv(7, 1, "s7")]);
+        let listed = [mv(7, 1, "s7"), mv(5, 1, "s5")];
+        let sorted = [mv(5, 1, "s5"), mv(7, 1, "s7")];
         assert_eq!(mv_fingerprint(10, &listed), mv_fingerprint(10, &sorted));
     }
 
     #[test]
     fn test_mv_fingerprint_changes_with_bindings() {
-        let base = mv_fingerprint(10, &snapshot(3, vec![mv(5, 1, "s5")]));
-        // Another source table, a new binding generation, a refreshed MV, an MV added.
+        let base = mv_fingerprint(10, &[mv(5, 1, "s5")]);
+        // Another source table, a refreshed MV, an MV added, an MV marked invalid.
         for changed in [
-            mv_fingerprint(11, &snapshot(3, vec![mv(5, 1, "s5")])),
-            mv_fingerprint(10, &snapshot(4, vec![mv(5, 1, "s5")])),
-            mv_fingerprint(10, &snapshot(3, vec![mv(5, 2, "s5")])),
-            mv_fingerprint(10, &snapshot(3, vec![mv(5, 1, "s5b")])),
-            mv_fingerprint(10, &snapshot(3, vec![mv(5, 1, "s5"), mv(6, 1, "s6")])),
+            mv_fingerprint(11, &[mv(5, 1, "s5")]),
+            mv_fingerprint(10, &[mv(5, 2, "s5")]),
+            mv_fingerprint(10, &[mv(5, 1, "s5b")]),
+            mv_fingerprint(10, &[mv(5, 1, "s5"), mv(6, 1, "s6")]),
+            mv_fingerprint(10, &[]),
         ] {
             assert_ne!(base, changed);
         }

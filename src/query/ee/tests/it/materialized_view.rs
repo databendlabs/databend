@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_exception::ErrorCode;
+use databend_common_meta_api::TableApi;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::schema::OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_meta_client::types::MatchSeq;
 use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_table_meta::table::MATERIALIZED_VIEW_SOURCE_SCHEMA_CHANGED_REASON;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_materialized_view_revoke_all_legacy_grants() -> anyhow::Result<()> {
@@ -115,5 +122,88 @@ async fn test_materialized_view_rejects_source_moved_across_databases() -> anyho
         error.code(),
         "{error}"
     );
+    Ok(())
+}
+
+/// Clear the invalid reason of MV `mv_id`, as if the write after source DDL was lost.
+async fn clear_mv_invalid_reason(mv_id: u64) -> anyhow::Result<()> {
+    UserApiProvider::instance()
+        .get_meta_store_client()
+        .upsert_table_option(UpsertTableOptionReq {
+            table_id: mv_id,
+            seq: MatchSeq::Any,
+            options: HashMap::from([(OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON.to_string(), None)]),
+        })
+        .await?;
+    Ok(())
+}
+
+async fn mv_invalid_reason(fixture: &TestFixture, mv_id: u64) -> anyhow::Result<Option<String>> {
+    let ctx = fixture.new_query_ctx().await?;
+    let table_meta = ctx
+        .get_default_catalog()?
+        .get_table_meta_by_id(mv_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("materialized view {mv_id} must exist"))?;
+    Ok(table_meta
+        .data
+        .materialized_view_invalid_reason()
+        .map(str::to_string))
+}
+
+/// A column change whose invalid reason was lost: REFRESH records it while the definition still
+/// binds; once it no longer binds, reads and REFRESH fail without recording it.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_materialized_view_lost_invalid_reason() -> anyhow::Result<()> {
+    let meta = LocalMetaService::new_testing::<DatabendRuntime>("mv-lost-reason").await?;
+    let mut setup = EESetup::new();
+    setup.config_mut().meta.endpoints = meta.get_cached_endpoints().await?;
+    let fixture = TestFixture::setup_with_custom(setup).await?;
+    for sql in [
+        "CREATE DATABASE mv_reason",
+        // Empty, so a type change does not rewrite the data, which CHANGE_TRACKING rejects.
+        "CREATE TABLE mv_reason.source(a INT, b INT) CHANGE_TRACKING = true",
+        "CREATE MATERIALIZED VIEW mv_reason.mv AS SELECT a, b FROM mv_reason.source WHERE a > 0",
+        "REFRESH MATERIALIZED VIEW mv_reason.mv",
+    ] {
+        fixture.execute_command(sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let mv_id = ctx
+        .get_default_catalog()?
+        .get_table(&ctx.get_tenant(), "mv_reason", "mv")
+        .await?
+        .get_id();
+    let select = "SELECT * FROM mv_reason.mv";
+    let refresh = "REFRESH MATERIALIZED VIEW mv_reason.mv";
+
+    fixture
+        .execute_command("ALTER TABLE mv_reason.source MODIFY COLUMN b BIGINT")
+        .await?;
+    clear_mv_invalid_reason(mv_id).await?;
+    let error = fixture.execute_command(refresh).await.unwrap_err();
+    assert_eq!(
+        ErrorCode::INVALID_MATERIALIZED_VIEW,
+        error.code(),
+        "{error}"
+    );
+    assert_eq!(
+        mv_invalid_reason(&fixture, mv_id).await?.as_deref(),
+        Some(MATERIALIZED_VIEW_SOURCE_SCHEMA_CHANGED_REASON)
+    );
+
+    fixture
+        .execute_command("ALTER TABLE mv_reason.source RENAME COLUMN b TO b2")
+        .await?;
+    clear_mv_invalid_reason(mv_id).await?;
+    for sql in [select, refresh] {
+        let error = fixture.execute_command(sql).await.unwrap_err();
+        assert_eq!(
+            ErrorCode::INVALID_MATERIALIZED_VIEW,
+            error.code(),
+            "{error}"
+        );
+    }
+    assert_eq!(mv_invalid_reason(&fixture, mv_id).await?, None);
     Ok(())
 }

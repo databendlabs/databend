@@ -39,7 +39,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageFileFormatType;
-use databend_common_meta_app::schema::MVSourceBindingSnapshot;
+use databend_common_meta_app::schema::MVInfo;
 use databend_storages_common_table_meta::table::is_stream_name;
 
 use super::Any;
@@ -79,8 +79,8 @@ use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
 
-/// The materialized-view bindings of source tables, by catalog name and source table id.
-pub(crate) type MVSourceBindings = HashMap<(String, u64), Arc<MVSourceBindingSnapshot>>;
+/// The valid materialized views of source tables, by catalog name and source table id.
+pub(crate) type MVSourceBindings = HashMap<(String, u64), Arc<Vec<MVInfo>>>;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///

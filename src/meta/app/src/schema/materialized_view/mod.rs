@@ -14,6 +14,7 @@
 
 use std::collections::BTreeSet;
 
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_meta_client::types::SeqV;
 
@@ -27,9 +28,8 @@ mod source_table_mv_ident;
 
 pub use mv_definition_ident::MVDefinitionIdent;
 pub use mv_definition_ident::MVDefinitionResource;
-pub use mv_source_binding_version_ident::MVSourceBindingVersion;
-pub use mv_source_binding_version_ident::MVSourceBindingVersionIdent;
-pub use mv_source_binding_version_ident::MVSourceBindingVersionResource;
+pub use mv_source_binding_version_ident::LegacyMVSourceBindingVersionIdent;
+pub use mv_source_binding_version_ident::LegacyMVSourceBindingVersionResource;
 pub use source_table_mv_ident::MVSourceBinding;
 pub use source_table_mv_ident::SourceTableMV;
 pub use source_table_mv_ident::SourceTableMVIdent;
@@ -41,6 +41,10 @@ pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_s
 /// Internal table option containing the source table sequence captured when the MV was created
 /// or last refreshed.
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
+/// Internal table option holding why the MV is invalid; absent while it is valid. Never cleared.
+pub const OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON: &str = "materialized_view_invalid_reason";
+/// Internal table option holding the source columns the MV reads, as JSON.
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS: &str = "materialized_view_source_columns";
 /// Hidden physical column used to match source DELETE/UPDATE rows during refresh.
 pub const MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN: &str = "_mv_source_row_id";
 
@@ -48,22 +52,43 @@ pub fn is_materialized_view_engine(engine: &str) -> bool {
     engine == MATERIALIZED_VIEW_ENGINE
 }
 
-pub fn invalidates_mv_source_bindings(old_meta: &TableMeta, new_meta: &TableMeta) -> bool {
-    if old_meta.schema == new_meta.schema {
-        return false;
+/// A source column the MV reads, as recorded at CREATE.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct MVSourceColumn {
+    pub id: u32,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub data_type: String,
+}
+
+impl MVSourceColumn {
+    pub fn from_field(field: &TableField) -> Self {
+        MVSourceColumn {
+            id: field.column_id,
+            name: field.name.clone(),
+            data_type: field.data_type.sql_name_explicit_null(),
+        }
     }
 
-    // Match each old column by ID, then compare the complete TableField. A missing or changed
-    // old field invalidates the binding; fields that exist only in the new schema (ADD COLUMN)
-    // are intentionally ignored.
-    old_meta.schema.fields().iter().any(|old_field| {
-        new_meta
-            .schema
-            .fields()
-            .iter()
-            .find(|new_field| new_field.column_id == old_field.column_id)
-            != Some(old_field)
-    })
+    /// All columns of `schema`, for an MV of an older version.
+    pub fn from_schema(schema: &TableSchema) -> Vec<Self> {
+        schema.fields().iter().map(Self::from_field).collect()
+    }
+
+    pub fn encode(columns: &[Self]) -> String {
+        serde_json::to_string(columns).expect("serializing MV source columns cannot fail")
+    }
+
+    /// Whether a recorded column is missing or changed in `schema`.
+    pub fn changed(recorded: &[Self], schema: &TableSchema) -> bool {
+        recorded.iter().any(|column| {
+            schema
+                .fields()
+                .iter()
+                .find(|field| field.column_id == column.id)
+                .is_none_or(|field| &Self::from_field(field) != column)
+        })
+    }
 }
 
 impl TableMeta {
@@ -85,6 +110,30 @@ impl TableMeta {
         })
     }
 
+    /// `None` for an MV of an older version.
+    pub fn materialized_view_source_columns(
+        &self,
+    ) -> Result<Option<Vec<MVSourceColumn>>, AppError> {
+        let Some(columns) = self.options.get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS) else {
+            return Ok(None);
+        };
+        serde_json::from_str(columns).map(Some).map_err(|error| {
+            AppError::InvalidMaterializedView(InvalidMaterializedView::new(format!(
+                "invalid table option {OPT_KEY_MATERIALIZED_VIEW_SOURCE_COLUMNS}: {error}"
+            )))
+        })
+    }
+
+    /// `false` when the MV records no source columns.
+    pub fn is_materialized_view_source_schema_changed(
+        &self,
+        schema: &TableSchema,
+    ) -> Result<bool, AppError> {
+        Ok(self
+            .materialized_view_source_columns()?
+            .is_some_and(|recorded| MVSourceColumn::changed(&recorded, schema)))
+    }
+
     /// Return the source table sequence recorded by a materialized view.
     pub fn materialized_view_source_table_seq(&self) -> Result<u64, AppError> {
         let source_table_seq = self
@@ -101,6 +150,17 @@ impl TableMeta {
                 "invalid table option {OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ}: '{source_table_seq}'"
             )))
         })
+    }
+
+    /// Why the MV is invalid; `None` while it is valid.
+    pub fn materialized_view_invalid_reason(&self) -> Option<&str> {
+        self.options
+            .get(OPT_KEY_MATERIALIZED_VIEW_INVALID_REASON)
+            .map(String::as_str)
+    }
+
+    pub fn is_valid_materialized_view(&self) -> bool {
+        self.materialized_view_invalid_reason().is_none()
     }
 }
 
@@ -120,33 +180,11 @@ pub struct MVDefinition {
 
 /// Materialized-view metadata supplied only while creating a table.
 ///
-/// `definition` is persisted as [`MVDefinition`].
-/// `expected_source_generation` binds that definition to the source metadata
-/// observed while binding. `create_table` compares it with the current semantic
-/// generation, then uses the freshly read version-key KV sequence as its
-/// transaction condition. It is not persisted in the MV `TableMeta`.
-/// A source `TableMeta` sequence is intentionally not carried here because
-/// ordinary source-table writes advance it without invalidating the bound
-/// schema. `create_table` reads the current source `TableMeta` itself to reject
-/// a missing or dropped source.
+/// `definition` is persisted as [`MVDefinition`]. `create_table` reads the
+/// current source `TableMeta` itself to reject a missing or dropped source.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateMaterializedViewMeta {
     pub definition: MVDefinition,
-    /// Semantic source binding generation observed while binding.
-    ///
-    /// A missing version key is generation 0. MV-invalidating source DDL
-    /// increments the stored generation, rejecting a CREATE bound before that
-    /// DDL. The version key's KV sequence is intentionally kept inside the
-    /// Meta API as a transaction CAS token.
-    pub expected_source_generation: u64,
-}
-
-/// A point-in-time view of one materialized-view definition and its source generation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MVDefinitionSnapshot {
-    pub definition: Option<SeqV<MVDefinition>>,
-    pub bound_source_generation: Option<u64>,
-    pub current_source_generation: Option<u64>,
 }
 
 /// Complete metadata needed to use one materialized view.
@@ -183,8 +221,6 @@ pub struct ListedMVSource {
     /// Whether the source's current database is dropped. `is_active` is false in that case too;
     /// this flag only tells management paths which of the two was dropped.
     pub database_dropped: bool,
-    pub bound_source_generation: Option<u64>,
-    pub current_source_generation: Option<u64>,
 }
 
 /// Complete metadata needed by management and system-table listing paths.
@@ -195,15 +231,6 @@ pub struct ListedMaterializedView {
     pub database_name: String,
     pub name: String,
     pub source: ListedMVSource,
-}
-
-/// A consistent view of the active MV bindings for one source table.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MVSourceBindingSnapshot {
-    /// Binding generation at which `materialized_views` was collected.
-    pub generation: u64,
-    /// Empty when the generation changed while MV metadata was being collected.
-    pub materialized_views: Vec<MVInfo>,
 }
 
 #[cfg(test)]

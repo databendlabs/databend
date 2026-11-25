@@ -15,10 +15,8 @@
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBinding;
-use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_common_protos::pb::MvDefinition as PbMVDefinition;
 use databend_common_protos::pb::MvSourceBinding as PbMVSourceBinding;
-use databend_common_protos::pb::MvSourceBindingVersion as PbMVSourceBindingVersion;
 
 use crate::FromToProto;
 use crate::Incompatible;
@@ -68,41 +66,13 @@ impl FromToProto for MVSourceBinding {
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        Ok(Self {
-            bound_source_generation: p.bound_source_generation,
-        })
+        Ok(Self {})
     }
 
     fn to_pb(&self) -> Self::PB {
         PbMVSourceBinding {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            bound_source_generation: self.bound_source_generation,
-        }
-    }
-}
-
-impl FromToProto for MVSourceBindingVersion {
-    type PB = PbMVSourceBindingVersion;
-
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        Ok(Self {
-            current_source_generation: p.current_source_generation,
-        })
-    }
-
-    fn to_pb(&self) -> Self::PB {
-        PbMVSourceBindingVersion {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            current_source_generation: self.current_source_generation,
         }
     }
 }

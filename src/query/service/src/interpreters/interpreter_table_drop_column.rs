@@ -32,9 +32,11 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::MVSourceChange;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::common::ttl_referenced_columns;
+use crate::interpreters::common::update_materialized_view_validity;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -198,6 +200,8 @@ impl Interpreter for DropTableColumnInterpreter {
                 &new_schema,
             )?;
 
+            let need_update_mv_validity = !table.is_temp() && !catalog.is_external();
+            let mv_source_schema = new_table_meta.schema.clone();
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
@@ -210,6 +214,17 @@ impl Interpreter for DropTableColumnInterpreter {
                 },
             )
             .await?;
+            if need_update_mv_validity {
+                update_materialized_view_validity(
+                    &self.ctx,
+                    table.get_id(),
+                    MVSourceChange::SchemaChanged {
+                        previous_schema: &table.schema(),
+                        schema: &mv_source_schema,
+                    },
+                )
+                .await;
+            }
 
             Ok(PipelineBuildResult::create())
         })

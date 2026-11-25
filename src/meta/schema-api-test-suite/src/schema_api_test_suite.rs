@@ -130,7 +130,6 @@ use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::MVDefinition;
-use databend_common_meta_app::schema::MVSourceBindingVersionIdent;
 use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::MaterializedViewListFilter;
 use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
@@ -2379,14 +2378,7 @@ impl SchemaApiTestSuite {
                 ("begin_version".to_string(), Some(seq.to_string())),
             ]),
         };
-        let source_generation_ident = MVSourceBindingVersionIdent::new(&tenant, source_table_id);
-        assert!(mt.get_pb(&source_generation_ident).await?.is_none());
-        let initial_source_binding_generation = 0;
-        let new_mv_req = |name,
-                          create_option,
-                          source_table_id: u64,
-                          source_binding_generation: u64,
-                          definition: &MVDefinition| {
+        let new_mv_req = |name, create_option, source_table_id: u64, definition: &MVDefinition| {
             let mut table_meta = TableMeta {
                 schema: util.schema(),
                 engine: MATERIALIZED_VIEW_ENGINE.to_string(),
@@ -2407,7 +2399,6 @@ impl SchemaApiTestSuite {
                 clone: None,
                 materialized_view: Some(CreateMaterializedViewMeta {
                     definition: definition.clone(),
-                    expected_source_generation: source_binding_generation,
                 }),
                 table_properties: None,
                 table_partition: None,
@@ -2436,7 +2427,6 @@ impl SchemaApiTestSuite {
                     "mv_missing_source",
                     CreateOption::Create,
                     missing_source_id,
-                    0,
                     &invalid_definition,
                 );
                 req.source_table_option = source_table_option;
@@ -2455,7 +2445,6 @@ impl SchemaApiTestSuite {
                 "mv_hidden",
                 CreateOption::Create,
                 source_table_id,
-                initial_source_binding_generation,
                 &definition,
             );
             hidden_req.as_dropped = true;
@@ -2471,13 +2460,7 @@ impl SchemaApiTestSuite {
 
         // Creating an MV publishes its definition and binding together with the source update.
         let created = {
-            let mut req = new_mv_req(
-                mv_name,
-                CreateOption::Create,
-                source_table_id,
-                initial_source_binding_generation,
-                &definition,
-            );
+            let mut req = new_mv_req(mv_name, CreateOption::Create, source_table_id, &definition);
             req.source_table_option = Some(enable_change_tracking(
                 source_table_id,
                 source_before_create.ident.seq,
@@ -2500,18 +2483,12 @@ impl SchemaApiTestSuite {
                     .data,
                 definition
             );
-            let binding = mt
-                .get_pb(&source_mv_ident(source_table_id, created.table_id))
-                .await?
-                .expect("MV source binding must exist");
-            let current_generation = mt
-                .get_pb(&source_generation_ident)
-                .await?
-                .expect("the first MV must initialize its source binding version")
-                .data
-                .current_source_generation;
-            assert_eq!(current_generation, initial_source_binding_generation);
-            assert_eq!(binding.data.bound_source_generation, current_generation);
+            assert!(
+                mt.get_pb(&source_mv_ident(source_table_id, created.table_id))
+                    .await?
+                    .is_some(),
+                "MV source binding must exist"
+            );
             let mvs = mt
                 .list_mvs_by_source_table_id(&tenant, source_table_id)
                 .await?;
@@ -2545,8 +2522,7 @@ impl SchemaApiTestSuite {
                 Some(source_table_name.as_str())
             );
             assert!(listed_mv.source.is_active);
-            assert_eq!(listed_mv.source.bound_source_generation, Some(0));
-            assert_eq!(listed_mv.source.current_source_generation, Some(0));
+            assert!(listed_mv.mv.table_meta.data.is_valid_materialized_view());
 
             let renamed_db_name = format!("{db_name}_renamed");
             mt.rename_database(RenameDatabaseReq {
@@ -2622,12 +2598,6 @@ impl SchemaApiTestSuite {
             let source_table = mt
                 .get_table(GetTableReq::new(&tenant, &db_name, &source_table_name))
                 .await?;
-            let generation_before = mt
-                .get_pb(&source_generation_ident)
-                .await?
-                .expect("source binding version must exist")
-                .data
-                .current_source_generation;
             let mut new_source_meta = source_table.meta.clone();
             let mut new_schema = new_source_meta.schema.as_ref().clone();
             new_schema.add_column(
@@ -2670,122 +2640,16 @@ impl SchemaApiTestSuite {
                     .map(String::as_str),
                 Some("snapshot-v1")
             );
-            assert_eq!(
-                mt.get_pb(&source_generation_ident)
-                    .await?
-                    .expect("source binding version must exist")
-                    .data
-                    .current_source_generation,
-                generation_before
-            );
         }
 
-        // Renaming a source column advances the generation and invalidates the old binding.
-        let current_source_generation = {
-            let source_table = mt
-                .get_table(GetTableReq::new(&tenant, &db_name, &source_table_name))
-                .await?;
-            let generation_before = mt
-                .get_pb(&source_generation_ident)
-                .await?
-                .expect("source binding version must exist")
-                .data
-                .current_source_generation;
-            let mut new_source_meta = source_table.meta.clone();
-            let mut new_schema = new_source_meta.schema.as_ref().clone();
-            let renamed_index = new_schema.index_of("number")?;
-            new_schema.rename_field(renamed_index, "renamed_number");
-            new_source_meta.schema = Arc::new(new_schema);
-            let result = mt
-                .update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
-                    update_table_metas: vec![(
-                        UpdateTableMetaReq {
-                            table_id: source_table_id,
-                            seq: MatchSeq::Exact(source_table.ident.seq),
-                            new_table_meta: new_source_meta,
-                            base_snapshot_location: None,
-                            lvt_check: None,
-                        },
-                        source_table.as_ref().clone(),
-                    )],
-                    ..Default::default()
-                })
-                .await?;
-            assert!(result.is_ok());
-
-            let updated_source = mt
-                .get_table(GetTableReq::new(&tenant, &db_name, &source_table_name))
-                .await?;
-            assert!(updated_source.meta.schema.has_field("renamed_number"));
-            assert!(!updated_source.meta.schema.has_field("number"));
-
-            let generation_after = mt
-                .get_pb(&source_generation_ident)
-                .await?
-                .expect("source binding version must exist")
-                .data
-                .current_source_generation;
-            assert_eq!(generation_after, generation_before + 1);
-            let definition_snapshot = mt
-                .get_mv_definition_snapshot(&tenant, source_table_id, mv_id)
-                .await?;
-            assert!(definition_snapshot.definition.is_some());
-            assert_eq!(
-                definition_snapshot.bound_source_generation,
-                Some(initial_source_binding_generation)
-            );
-            assert_eq!(
-                definition_snapshot.current_source_generation,
-                Some(generation_after)
-            );
-            generation_after
-        };
-
-        // CREATE rejects a generation observed before the source DDL.
-        {
-            let err = mt
-                .create_table(new_mv_req(
-                    "mv_stale_source_binding",
-                    CreateOption::Create,
-                    source_table_id,
-                    initial_source_binding_generation,
-                    &definition,
-                ))
-                .await
-                .unwrap_err();
-            assert!(matches!(
-                err,
-                KVAppError::AppError(AppError::InvalidMaterializedView(_))
-            ));
-        }
-
-        // CREATE accepts the current generation and source snapshots filter out the stale MV.
         let current_mv = mt
             .create_table(new_mv_req(
                 "mv_current_source_binding",
                 CreateOption::Create,
                 source_table_id,
-                current_source_generation,
                 &definition,
             ))
             .await?;
-        let active_snapshot = mt
-            .get_mv_source_binding_snapshot(&tenant, source_table_id)
-            .await?;
-        assert_eq!(active_snapshot.generation, current_source_generation);
-        let [active_mv] = active_snapshot.materialized_views.as_slice() else {
-            panic!("only the MV bound to the current generation must be active");
-        };
-        assert_eq!(active_mv.mv_id, current_mv.table_id);
-        assert_eq!(
-            mt.list_mvs_by_source_table_id(&tenant, source_table_id)
-                .await?
-                .iter()
-                .map(|mv| mv.mv_id)
-                .collect::<BTreeSet<_>>(),
-            BTreeSet::from([mv_id, current_mv.table_id]),
-            "the unfiltered list must retain the stale dependency"
-        );
 
         // Dropping an MV removes its definition and source relationship.
         let current_relationship_ident = source_mv_ident(source_table_id, current_mv.table_id);
@@ -2814,7 +2678,6 @@ impl SchemaApiTestSuite {
                     mv_name,
                     CreateOption::CreateOrReplace,
                     replacement_source_table_id,
-                    0,
                     &replacement_definition,
                 ))
                 .await?;
@@ -2837,12 +2700,10 @@ impl SchemaApiTestSuite {
             replacement
         };
 
-        // Source DROP preserves relationships and generations until source GC.
+        // Source DROP preserves the relationship until source GC.
         {
             let relationship_ident =
                 source_mv_ident(replacement_source_table_id, replacement.table_id);
-            let binding_generation_ident =
-                MVSourceBindingVersionIdent::new(&tenant, replacement_source_table_id);
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
                 tenant: tenant.clone(),
@@ -2855,7 +2716,6 @@ impl SchemaApiTestSuite {
             })
             .await?;
             assert!(mt.get_pb(&relationship_ident).await?.is_some());
-            assert!(mt.get_pb(&binding_generation_ident).await?.is_some());
 
             let dropped = mt
                 .list_materialized_views(&tenant, &MaterializedViewListFilter {
@@ -2884,7 +2744,6 @@ impl SchemaApiTestSuite {
                 "mv_dropped_source",
                 CreateOption::Create,
                 replacement_source_table_id,
-                0,
                 &replacement_definition,
             );
             req.source_table_option = Some(enable_change_tracking(
@@ -2898,6 +2757,15 @@ impl SchemaApiTestSuite {
             ));
             assert_eq!(mt.get_pb(&source_ident).await?.unwrap(), source_before);
 
+            // Source GC also deletes the binding generation written by older versions.
+            let legacy_version_key = format!(
+                "__fd_materialized_view_source_binding_version/{}/{}",
+                tenant.tenant_name(),
+                replacement_source_table_id
+            );
+            mt.upsert_kv(UpsertKV::update(&legacy_version_key, b"legacy"))
+                .await?;
+
             mt.gc_drop_tables(GcDroppedTableReq {
                 tenant: tenant.clone(),
                 catalog: "default".to_string(),
@@ -2909,7 +2777,7 @@ impl SchemaApiTestSuite {
             })
             .await?;
             assert!(mt.get_pb(&relationship_ident).await?.is_none());
-            assert!(mt.get_pb(&binding_generation_ident).await?.is_none());
+            assert!(mt.get_kv(&legacy_version_key).await?.is_none());
 
             let orphan = mt
                 .list_materialized_views(&tenant, &MaterializedViewListFilter {
@@ -2925,8 +2793,6 @@ impl SchemaApiTestSuite {
             assert!(orphan.source.database_name.is_none());
             assert!(orphan.source.table_name.is_none());
             assert!(!orphan.source.is_active);
-            assert!(orphan.source.bound_source_generation.is_none());
-            assert!(orphan.source.current_source_generation.is_none());
         }
 
         Ok(())
@@ -4230,8 +4096,6 @@ impl SchemaApiTestSuite {
                 let table = util.get_table().await.unwrap();
 
                 let table_id = table.ident.table_id;
-                let generation_ident = MVSourceBindingVersionIdent::new(&tenant, table_id);
-                let generation_before = mt.get_pb(&generation_ident).await?;
                 let mut new_table_meta = table.meta.clone();
                 let mut new_schema = new_table_meta.schema.as_ref().clone();
                 new_schema.rename_field(0, "stale_rename");
@@ -4254,7 +4118,6 @@ impl SchemaApiTestSuite {
                 let err = res.unwrap_err();
                 assert!(!err.is_empty());
                 assert_eq!(util.get_table().await?.meta, table.meta);
-                assert_eq!(mt.get_pb(&generation_ident).await?, generation_before);
             }
 
             info!("--- update table meta: simulate kv txn retried after commit");
