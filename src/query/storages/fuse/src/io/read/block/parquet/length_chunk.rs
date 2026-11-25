@@ -622,7 +622,10 @@ fn delta_lengths(payload: &mut Payload, start: usize, num: usize) -> Result<(Vec
     if total != num {
         return Err(error("length count mismatch"));
     }
-    if block_size == 0 || mini_blocks == 0 || block_size % 128 != 0 || block_size % mini_blocks != 0
+    if block_size == 0
+        || mini_blocks == 0
+        || !block_size.is_multiple_of(128)
+        || !block_size.is_multiple_of(mini_blocks)
     {
         return Err(error("invalid delta block"));
     }
