@@ -98,6 +98,19 @@ impl FullTypeCheckAdapter {
         let handle = (self.dependencies.async_runtime_handle)()?;
         block_on_with_handle(&handle, future)
     }
+
+    /// Records that a value depends on the roles enabled for the session. Granting or revoking
+    /// a role changes them without changing the statement or the tables it reads, so neither
+    /// the plan nor the result of the query is cached. Policy bodies are bound inside the plan,
+    /// so a cached plan or result would apply the roles of an earlier query or another user.
+    fn record_role_dependent_value(&self) -> Result<()> {
+        self.ctx
+            .get_function_context()?
+            .query_specific_values
+            .record();
+        self.set_result_cache_uncacheable();
+        Ok(())
+    }
 }
 
 impl FullTypeCheckAdapterDependencies {
@@ -361,20 +374,30 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
     fn resolve_authorization_function(&self, function: AuthFunction) -> Result<Scalar> {
         let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
         match function {
-            AuthFunction::CurrentUser => Ok(Scalar::String(
-                authorization
-                    .get_current_user()?
-                    .identity()
-                    .display()
-                    .to_string(),
-            )),
-            AuthFunction::CurrentRole => Ok(Scalar::String(
-                authorization
-                    .get_current_role()
-                    .map(|role| role.name)
-                    .unwrap_or_default(),
-            )),
+            // The result cache key holds neither the user nor the role, so a cached result would
+            // be served to other users or roles. The secure plan cache key holds both, so the
+            // plan stays cacheable.
+            AuthFunction::CurrentUser => {
+                self.set_result_cache_uncacheable();
+                Ok(Scalar::String(
+                    authorization
+                        .get_current_user()?
+                        .identity()
+                        .display()
+                        .to_string(),
+                ))
+            }
+            AuthFunction::CurrentRole => {
+                self.set_result_cache_uncacheable();
+                Ok(Scalar::String(
+                    authorization
+                        .get_current_role()
+                        .map(|role| role.name)
+                        .unwrap_or_default(),
+                ))
+            }
             AuthFunction::CurrentSecondaryRoles => {
+                self.record_role_dependent_value()?;
                 let mut roles = self
                     .block_on(authorization.get_all_effective_roles())?
                     .into_iter()
@@ -390,6 +413,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                 Ok(Scalar::String(to_string(&value)?))
             }
             AuthFunction::CurrentAvailableRoles => {
+                self.record_role_dependent_value()?;
                 let mut roles = self
                     .block_on(authorization.get_all_available_roles())?
                     .into_iter()
@@ -412,6 +436,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
     }
 
     fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
+        self.record_role_dependent_value()?;
         let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
         Ok(self
             .block_on(authorization.get_all_effective_roles())?

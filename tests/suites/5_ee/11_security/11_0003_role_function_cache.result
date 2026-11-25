@@ -1,0 +1,32 @@
+#### setup
+#### planner cache: user a holds the admin role
+1
+2
+plain
+#### planner cache: the revoked role no longer applies to the same statements
+1
+p***
+#### result cache: user a caches results with the admin role
+1
+2
+plain
+["public","rc_admin_role","rc_reader_role"]	1
+{"roles":"public,rc_admin_role,rc_reader_role","value":"ALL"}	1
+#### result cache: user b does not read the results of user a
+1
+p***
+["public","rc_reader_role"]	1
+{"roles":"public,rc_reader_role","value":"ALL"}	1
+#### result cache: user a caches results that depend on its user and role
+plain
+plain
+1
+'rc_user_a'@'%'	2
+#### result cache: user a with another role does not read them
+p***
+#### result cache: user b does not read them
+p***
+p***
+2
+'rc_user_b'@'%'	2
+#### cleanup
