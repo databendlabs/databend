@@ -136,6 +136,24 @@ impl ScheduledTask {
     }
 }
 
+/// The runs of a task recorded as executing in `system_task.task_run`, and whether a query node
+/// executes them, as read by [`TaskService::executing_task_runs`].
+///
+/// A query node holds the execution lease of a task while it executes a run of the task, see
+/// [`TaskService::execution_lease_prefix`]. A run stays recorded as executing if its query node
+/// stops during the run, or fails to record the run's end, such as while meta-service has no
+/// leader. The node's hold on the lease then expires, or is released when the run ends, and the
+/// run is abandoned.
+enum ExecutingTaskRuns {
+    /// No run of the task is recorded as executing.
+    None,
+    /// A query node holds the execution lease of the task: a run of the task is executing.
+    Live,
+    /// Runs are recorded as executing, but no query node holds the execution lease of the task:
+    /// these runs are abandoned.
+    Abandoned { run_ids: Vec<u64> },
+}
+
 /// Currently, query uses the watch in meta to imitate channel to obtain tasks. When task messages are sent to channels, they are stored in meta using TaskMessage::key.
 /// TaskMessage::key is divided into only 4 types of keys that will overwrite each other to avoid repeated storage and repeated processing.
 /// Whenever a new key is inserted for overwriting, each query will receive the corresponding key change and process it, thus realizing the channel
@@ -507,9 +525,19 @@ impl TaskService {
                     return Ok(());
                 };
 
-                if task_service.has_executing_task_run(&task_name).await? {
-                    task_service.record_overlapping_skip(&task).await?;
-                    return Ok(());
+                match task_service.executing_task_runs(&task_name).await? {
+                    ExecutingTaskRuns::None => {}
+                    ExecutingTaskRuns::Live => {
+                        task_service.record_overlapping_skip(&task).await?;
+                        return Ok(());
+                    }
+                    // Abandoned runs would stay recorded as executing: record them as failed
+                    // before this run is recorded, under the execute lock.
+                    ExecutingTaskRuns::Abandoned { run_ids } => {
+                        task_service
+                            .fail_abandoned_task_runs(&task_name, &run_ids)
+                            .await?;
+                    }
                 }
 
                 // Held from before the run is recorded as executing until after the run ends, so
@@ -889,13 +917,16 @@ impl TaskService {
         Ok(())
     }
 
-    /// Whether a run of the task is executing.
-    ///
-    /// A query node holds the execution lease of the task while it executes a run of the task,
-    /// see [`Self::execution_lease_prefix`]. Runs recorded as executing while no query node holds
-    /// the lease are abandoned, by query nodes that stopped or failed to record a run's end:
-    /// record them as failed, so that they do not block the next runs.
+    /// Whether a run of `task_name` is executing on a query node. A run that its query node
+    /// abandoned does not count, see `ExecutingTaskRuns`. It changes nothing.
     pub async fn has_executing_task_run(&self, task_name: &str) -> Result<bool> {
+        let runs = self.executing_task_runs(task_name).await?;
+        Ok(matches!(runs, ExecutingTaskRuns::Live))
+    }
+
+    /// Read the runs of `task_name` recorded as executing, then whether a query node holds the
+    /// execution lease of the task. It changes nothing.
+    async fn executing_task_runs(&self, task_name: &str) -> Result<ExecutingTaskRuns> {
         let name = Self::sql_string_literal(task_name);
         let blocks = self
             .execute_sql(
@@ -909,19 +940,18 @@ impl TaskService {
             )
             .await?;
 
-        let run_ids = blocks
+        let run_ids: Vec<u64> = blocks
             .iter()
             .flat_map(|block| {
                 let column = block.get_by_offset(0);
                 (0..block.num_rows()).filter_map(move |row| {
-                    column
-                        .index(row)
-                        .and_then(|scalar| scalar.as_number().and_then(|n| n.as_u_int64()).cloned())
+                    let run_id = column.index(row)?;
+                    run_id.as_number()?.as_u_int64().copied()
                 })
             })
-            .join(", ");
+            .collect();
         if run_ids.is_empty() {
-            return Ok(false);
+            return Ok(ExecutingTaskRuns::None);
         }
 
         // The runs are read before the lease. A run acquires its hold on the lease before it is
@@ -930,13 +960,27 @@ impl TaskService {
         // abandoned.
         let lease_prefix = self.execution_lease_prefix(task_name);
         if self.meta_handle.is_shared_lease_held(&lease_prefix).await? {
-            return Ok(true);
+            return Ok(ExecutingTaskRuns::Live);
         }
 
+        Ok(ExecutingTaskRuns::Abandoned { run_ids })
+    }
+
+    /// Record the runs `run_ids` of `task_name`, read as abandoned by
+    /// [`Self::executing_task_runs`], as failed, with an error message that starts with
+    /// [`ABANDONED_EXECUTION`]. A run that has recorded its end since it was read keeps that end.
+    async fn fail_abandoned_task_runs(&self, task_name: &str, run_ids: &[u64]) -> Result<()> {
+        if run_ids.is_empty() {
+            return Ok(());
+        }
+
+        let run_ids = run_ids.iter().join(", ");
         warn!(
             "task {}: no query node holds the execution lease of the runs recorded as executing: {}; record them as failed",
             task_name, run_ids
         );
+
+        let name = Self::sql_string_literal(task_name);
         let error_message = Self::sql_string_literal(&format!(
             "{ABANDONED_EXECUTION}: the query node running it stopped, or failed to record its end"
         ));
@@ -955,7 +999,7 @@ impl TaskService {
             ),
         )
         .await?;
-        Ok(false)
+        Ok(())
     }
 
     /// The prefix of the execution lease of `task_name`: a shared lease that a query node holds
