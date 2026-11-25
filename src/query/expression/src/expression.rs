@@ -1020,25 +1020,12 @@ impl<Index: ColumnIndex> Expr<Index> {
         match self {
             Expr::ColumnRef(_) | Expr::Constant(_) => true,
             Expr::Cast(cast) => {
-                // A cast to a nullable type, such as an argument passed to the nullable
-                // overload of a function, casts the values with the non-nullable function.
-                let source = cast.expr.data_type().remove_nullable();
-                let dest = cast.dest_type.remove_nullable();
-                let function_dest = if cast.is_try {
-                    dest.wrap_nullable()
-                } else {
-                    dest.clone()
-                };
-                (source == dest
-                    || resolve_cast_function(
-                        cast.span,
-                        cast.is_try,
-                        &source,
-                        &function_dest,
-                        registry,
-                    )
-                    .is_some_and(|call| !registry.is_context_dependent(&call.id)))
-                    && cast.expr.is_context_independent(registry)
+                cast_is_context_independent(
+                    cast.is_try,
+                    cast.expr.data_type(),
+                    &cast.dest_type,
+                    registry,
+                ) && cast.expr.is_context_independent(registry)
             }
             Expr::FunctionCall(call) => {
                 registry
@@ -1243,6 +1230,36 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
 pub enum RemoteDefaultExpr {
     RemoteExpr(RemoteExpr),
     Sequence(String),
+}
+
+/// Whether the functions that evaluate a cast do not read [`crate::FunctionContext`].
+/// Follows the cast dispatch of the evaluator, and is false for casts it does not cover.
+fn cast_is_context_independent(
+    is_try: bool,
+    source: &DataType,
+    dest: &DataType,
+    registry: &FunctionRegistry,
+) -> bool {
+    if source == dest || source.matches_physical_type(dest) {
+        return true;
+    }
+    let independent = |dest: &DataType| {
+        resolve_cast_function(None, is_try, source, dest, registry)
+            .map(|call| !registry.is_context_dependent(&call.id))
+    };
+    // A variant is cast with the function that returns a nullable value.
+    if let Some(independent) = independent(dest).or_else(|| independent(&dest.wrap_nullable())) {
+        return independent;
+    }
+    match (source, dest) {
+        (DataType::Nullable(source), dest) => {
+            cast_is_context_independent(is_try, source, dest.remove_nullable_ref(), registry)
+        }
+        (source, DataType::Nullable(dest)) => {
+            cast_is_context_independent(is_try, source, dest, registry)
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]

@@ -1346,6 +1346,25 @@ ALTER TABLE session_key_alter PARTITION BY (to_yyyymmdd(ts))
 statement ok
 ALTER TABLE session_key_alter PARTITION BY (to_yyyymmdd(ts, 'UTC'))
 
+# A timestamp in a variant is parsed in the session time zone.
+statement error depends on session settings
+CREATE TABLE session_key(v VARIANT) PARTITION BY (to_timestamp(v:ts))
+
+# Reading a variant path does not depend on the session.
+statement ok
+CREATE TABLE variant_key(v VARIANT) PARTITION BY (v:region::STRING) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO variant_key SELECT parse_json('{"region": "eu"}')
+
+statement ok
+INSERT INTO variant_key SELECT parse_json('{"region": "us"}')
+
+query T
+EXPLAIN SELECT v FROM variant_key WHERE v:region::STRING = 'us'
+----
+<slt:ignore>range pruning: 2 to 1<slt:ignore>
+
 # Calendar functions of a DATE do not read the session.
 statement ok
 CREATE TABLE date_month(id INT, d DATE) PARTITION BY (to_yyyymm(d), date_trunc(month, d)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000

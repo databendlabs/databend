@@ -55,7 +55,8 @@ pub use string::ALL_STRING_FUNC_NAMES;
 pub use string::PURE_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_context_dependent(variant::register);
+    // Only the variant functions that read the session are context dependent.
+    variant::register(registry);
     databend_functions_scalar_decimal::register_decimal_minus(registry);
     arithmetic::register(registry);
     // register basic arithmetic operation (+ - * / %)

@@ -129,6 +129,8 @@ where A: TypeCheckAdapter
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         self.adapter.check_core_expr_context(arena)?;
         // Other nodes may fold values without the checks on scalar calls and casts.
+        // A map access becomes `get`-style calls or a virtual column, which do not
+        // read the session.
         if self.require_context_independent
             && (arena.reads_session_context
                 || !arena.nodes.iter().all(|node| {
@@ -139,6 +141,7 @@ where A: TypeCheckAdapter
                             | CoreExpr::Call { .. }
                             | CoreExpr::ScalarFunction { .. }
                             | CoreExpr::Cast { .. }
+                            | CoreExpr::MapAccess { .. }
                     )
                 }))
         {

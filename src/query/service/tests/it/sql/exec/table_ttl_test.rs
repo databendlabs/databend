@@ -250,14 +250,15 @@ async fn test_ttl_rejects_non_column_definitions() -> Result<()> {
 async fn test_table_keys_preserve_json_keys() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     // Stored keys preserve JSON path keys through normalization and display.
-    for (table_name, clause) in [
-        ("json_cluster", "CLUSTER BY"),
-        ("json_partition", "PARTITION BY"),
+    // A partition key must not depend on the session, so it does not parse a timestamp.
+    for (table_name, clause, function) in [
+        ("json_cluster", "CLUSTER BY", "to_timestamp"),
+        ("json_partition", "PARTITION BY", "to_string"),
     ] {
         fixture
             .execute_command(&format!(
                 "CREATE TABLE default.{table_name} (payload VARIANT) \
-                 {clause} (to_timestamp(PAYLOAD:ExpiresAt))"
+                 {clause} ({function}(PAYLOAD:ExpiresAt))"
             ))
             .await?;
         let blocks = fixture
