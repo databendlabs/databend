@@ -29,7 +29,7 @@ use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::serialized_reader::SerializedPageReader;
-use parquet::schema::types::SchemaDescriptor;
+use parquet::schema::types::SchemaDescPtr;
 
 use super::page_header::all_pages_dictionary_encoded;
 
@@ -37,14 +37,14 @@ pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,
     column_chunks: HashMap<usize, Buffer>,
     column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
-    schema_descriptor: &'a SchemaDescriptor,
+    schema_descriptor: &'a SchemaDescPtr,
     compression: Compression,
 }
 
 impl<'a> RowGroupImplBuilder<'a> {
     pub fn new(
         num_rows: usize,
-        schema_descriptor: &'a SchemaDescriptor,
+        schema_descriptor: &'a SchemaDescPtr,
         compression: Compression,
     ) -> Self {
         Self {
@@ -90,7 +90,7 @@ impl<'a> RowGroupImplBuilder<'a> {
     }
 
     pub fn build(self) -> RowGroupImpl {
-        let schema_descriptor = Arc::new(self.schema_descriptor.clone());
+        let schema_descriptor = self.schema_descriptor.clone();
         let column_metadata = (0..schema_descriptor.num_columns())
             .map(|dfs_id| {
                 self.column_chunk_metadatas
@@ -185,12 +185,13 @@ mod tests {
     use parquet::basic::Compression;
     use parquet::basic::Repetition;
     use parquet::basic::Type as PhysicalType;
+    use parquet::schema::types::SchemaDescPtr;
     use parquet::schema::types::SchemaDescriptor;
     use parquet::schema::types::Type;
 
     use super::RowGroupImplBuilder;
 
-    fn test_schema() -> SchemaDescriptor {
+    fn test_schema() -> SchemaDescPtr {
         let fields = vec![
             Arc::new(
                 Type::primitive_type_builder("c0", PhysicalType::INT32)
@@ -215,7 +216,7 @@ mod tests {
             .with_fields(fields)
             .build()
             .unwrap();
-        SchemaDescriptor::new(Arc::new(schema))
+        Arc::new(SchemaDescriptor::new(Arc::new(schema)))
     }
 
     #[test]
