@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::iter;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::AddColumnOption as AstAddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
@@ -261,6 +262,19 @@ impl PartitionKeyTimezonePinner<'_> {
                 }
                 return;
             }
+            // Keep a NOT NULL cast so that a NULL still fails it; pin only its argument.
+            AstExpr::Cast {
+                span,
+                expr: arg,
+                target_type: TypeName::NotNull(target_type),
+                ..
+            } if matches!(**target_type, TypeName::Date) => {
+                if self.is_timestamp(arg) {
+                    let ts = take_ast_expr(arg);
+                    **arg = self.pinned_call(*span, "to_date", ts);
+                }
+                return;
+            }
             AstExpr::Cast {
                 span,
                 expr: arg,
@@ -276,19 +290,20 @@ impl PartitionKeyTimezonePinner<'_> {
         if !self.is_timestamp(arg) {
             return;
         }
-        // Move the argument into the new call; `expr` is overwritten right after.
-        let arg = std::mem::replace(&mut **arg, AstExpr::Literal {
-            span: None,
-            value: Literal::Null,
-        });
-        *expr = AstExpr::FunctionCall {
+        // `expr` is overwritten right after its argument is moved out.
+        let arg = take_ast_expr(arg);
+        *expr = self.pinned_call(span, func_name, arg);
+    }
+
+    fn pinned_call(&self, span: Span, func_name: &str, arg: AstExpr) -> AstExpr {
+        AstExpr::FunctionCall {
             span,
             func: FunctionCall {
                 name: Identifier::from_name(span, func_name),
                 args: vec![arg, self.timezone_literal()],
                 ..Default::default()
             },
-        };
+        }
     }
 
     fn is_timestamp(&mut self, expr: &AstExpr) -> bool {
@@ -309,6 +324,14 @@ fn has_timezone_overload(name: &str) -> bool {
     let name = name.to_lowercase();
     let name = BUILTIN_FUNCTIONS.aliases.get(&name).unwrap_or(&name);
     TIMEZONE_ARGUMENT_FUNCTIONS.contains(&name.as_str())
+}
+
+/// Move `expr` out, leaving a NULL literal in its place.
+fn take_ast_expr(expr: &mut AstExpr) -> AstExpr {
+    std::mem::replace(expr, AstExpr::Literal {
+        span: None,
+        value: Literal::Null,
+    })
 }
 
 fn is_date_type(type_name: &TypeName) -> bool {

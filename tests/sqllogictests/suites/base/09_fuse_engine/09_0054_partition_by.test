@@ -1377,6 +1377,15 @@ SHOW CREATE TABLE pinned_cast
 ----
 pinned_cast <slt:ignore>% 2, to_date(ts, 'UTC'))<slt:ignore>
 
+# A NOT NULL cast is kept, so a NULL timestamp still fails it.
+statement ok
+CREATE TABLE pinned_not_null(ts TIMESTAMP NULL) PARTITION BY (CAST(ts AS DATE NOT NULL))
+
+query TT
+SHOW CREATE TABLE pinned_not_null
+----
+pinned_not_null <slt:ignore>PARTITION BY (CAST(to_date(ts, 'UTC') AS DATE NOT NULL))<slt:ignore>
+
 statement ok
 CREATE TABLE pinned_alter(id INT, ts TIMESTAMP)
 
