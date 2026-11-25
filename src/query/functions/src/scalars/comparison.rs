@@ -695,6 +695,14 @@ impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, 
             1.0 - equality
         } else {
             let range_selectivity = (const_value - lower_bound) / bucket_range;
+            // The bounds and the constant are ordered with NaN last and may be infinite: the
+            // constant then has no position between the bounds, and half of the bucket is
+            // taken to be below it.
+            let range_selectivity = if range_selectivity.is_nan() {
+                0.5
+            } else {
+                range_selectivity
+            };
             debug_assert!(
                 (0.0..=1.0).contains(&range_selectivity),
                 "invalid numeric bucket range selectivity: {range_selectivity:?}"
