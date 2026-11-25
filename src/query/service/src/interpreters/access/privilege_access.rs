@@ -58,6 +58,7 @@ use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
+use databend_common_sql::plans::SetScalarsOrQuery;
 use databend_common_sql::plans::ShareGrantObject;
 use databend_common_sql::plans::TagSetObject;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -2042,16 +2043,7 @@ impl AccessChecker for PrivilegeAccess {
                 ..
             } => {
                 match rewrite_kind {
-                    Some(RewriteKind::ShowDatabases)
-                    | Some(RewriteKind::ShowDropDatabases)
-                    | Some(RewriteKind::ShowEngines)
-                    | Some(RewriteKind::ShowFunctions)
-                    | Some(RewriteKind::ShowUserFunctions)
-                    | Some(RewriteKind::ShowDictionaries(_))
-                    | Some(RewriteKind::ShowMaterializedViews)
-                    | Some(RewriteKind::ShowTableFunctions) => {
-                        return Ok(());
-                    }
+                    // Check the SHOW target here, then check every user-supplied reference below.
                     Some(RewriteKind::ShowTables(catalog, database)) => {
                         let clg = self.ctx.get_catalog(catalog).await?;
                         let (show_db_id, table_id) = match self.convert_to_id(&tenant, &clg, database, None, false).await? {
@@ -2059,13 +2051,11 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
 
-                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set, false).await? {
-                            return Ok(());
+                        if !has_priv(&tenant, database, None, show_db_id, table_id, grant_set, false).await? {
+                            let (roles_name, ownerships) =
+                                self.get_role_names_and_ownerships(&tenant).await?;
+                            check_db_tb_ownership_access(&identity, catalog, database, show_db_id, &ownerships, &roles_name)?;
                         }
-
-                        let (roles_name, ownerships) =
-                            self.get_role_names_and_ownerships(&tenant).await?;
-                        check_db_tb_ownership_access(&identity, catalog, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
                         let ctl = self.ctx.get_catalog(&ctl_name).await?;
@@ -2073,36 +2063,30 @@ impl AccessChecker for PrivilegeAccess {
                             ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
                             ObjectId::Database(db_id) => { (db_id, None) }
                         };
-                        if has_priv(&tenant, database, None, show_db_id, table_id, grant_set, true).await? {
-                            return Ok(());
+                        if !has_priv(&tenant, database, None, show_db_id, table_id, grant_set, true).await? {
+                            let (roles_name, ownerships) =
+                                self.get_role_names_and_ownerships(&tenant).await?;
+                            check_db_tb_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                         }
-                        let (roles_name, ownerships) =
-                            self.get_role_names_and_ownerships(&tenant).await?;
-                        check_db_tb_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
-                        if self.ctx.is_temp_table(catalog_name, database, table) {
-                            return Ok(());
-                        }
                         let session = self.ctx.get_current_session();
-                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone()), false, false).await? ||
-                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false, false).await? {
-                            return Ok(());
+                        if !self.ctx.is_temp_table(catalog_name, database, table)
+                            && !self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone()), false, false).await?
+                            && !self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false, false).await?
+                        {
+                            let catalog = self.ctx.get_catalog(catalog_name).await?;
+                            let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, Some(table), false).await? {
+                                ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
+                                ObjectId::Database(db_id) => { (db_id, None) }
+                            };
+                            if !has_priv(&tenant, database, Some(table), db_id, table_id, grant_set, false).await? {
+                                return Err(ErrorCode::PermissionDenied(format!(
+                                    "Permission denied: User {} does not have the required privileges for table '{}.{}'",
+                                    identity, database, table
+                                )));
+                            }
                         }
-                        let catalog = self.ctx.get_catalog(catalog_name).await?;
-                        let (db_id, table_id) = match self.convert_to_id(&tenant, &catalog, database, Some(table), false).await? {
-                            ObjectId::Table(db_id, table_id) => { (db_id, Some(table_id)) }
-                            ObjectId::Database(db_id) => { (db_id, None) }
-                        };
-                        let has_priv = has_priv(&tenant, database, Some(table), db_id, table_id, grant_set, false).await?;
-                        return if has_priv {
-                            Ok(())
-                        } else {
-                            Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: User {} does not have the required privileges for table '{}.{}'",
-                                identity, database, table
-                            )))
-                        };
                     }
                     Some(RewriteKind::ShowTags) => {
                         self.validate_access(
@@ -2112,7 +2096,6 @@ impl AccessChecker for PrivilegeAccess {
                             false,
                         )
                         .await?;
-                        return Ok(());
                     }
                     Some(RewriteKind::ShowSequences) => {
                         // will check privilege in show_sequences_table
@@ -2152,7 +2135,7 @@ impl AccessChecker for PrivilegeAccess {
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
                     }
-                    if table.is_source_of_view() || table.table().is_temp() {
+                    if table.is_show_system_table() || table.is_source_of_view() || table.table().is_temp() {
                         continue;
                     }
 
@@ -2891,6 +2874,9 @@ impl AccessChecker for PrivilegeAccess {
                     let current_role_only = plan.idents.iter().any(|setting| is_rbac_upgrade_setting(setting));
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, current_role_only, false)
                         .await?;
+                }
+                if let SetScalarsOrQuery::Query(query) = &plan.values {
+                    self.check(ctx, query).await?;
                 }
             }
             Plan::Unset(plan) => {

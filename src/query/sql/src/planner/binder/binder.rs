@@ -118,6 +118,9 @@ pub struct Binder {
     pub enable_materialized_view_rewrite: bool,
 
     pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
+
+    /// The generated FROM table for the next SHOW SELECT, consumed before binding its clauses.
+    pub(super) show_system_table: Option<&'static str>,
 }
 
 impl Binder {
@@ -151,6 +154,7 @@ impl Binder {
             enable_result_cache,
             enable_materialized_view_rewrite,
             subquery_executor: None,
+            show_system_table: None,
         }
     }
 
@@ -994,7 +998,17 @@ impl Binder {
     ) -> Result<Plan> {
         let tokens = tokenize_sql(query)?;
         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-        let mut plan = self.bind_statement(bind_context, &stmt).await?;
+        // Other SHOW sources already follow ordinary system-table access rules.
+        let show_system_table = match rewrite_kind_r {
+            RewriteKind::ShowEngines => Some("engines"),
+            RewriteKind::ShowTableFunctions => Some("table_functions"),
+            RewriteKind::ShowTags => Some("tags"),
+            _ => None,
+        };
+        let previous = mem::replace(&mut self.show_system_table, show_system_table);
+        let result = self.bind_statement(bind_context, &stmt).await;
+        self.show_system_table = previous;
+        let mut plan = result?;
 
         if let Plan::Query { rewrite_kind, .. } = &mut plan {
             *rewrite_kind = Some(rewrite_kind_r)

@@ -2,7 +2,7 @@ statement ok
 CREATE ROLE IF NOT EXISTS test
 
 query T
-select name from system.roles;
+select name from system.roles order by name;
 ----
 account_admin
 public
@@ -64,25 +64,26 @@ grant role a to a;
 statement ok
 set enable_expand_roles=1;
 
+# Object IDs are strings; sort them numerically and break ties by grant text.
 query T
-select grants from show_grants('role', 'b') order by object_id;
+select grants from show_grants('role', 'b') order by cast(object_id as uint64) nulls last, grants;
 ----
 GRANT OWNERSHIP ON 'default'.'default'.'t1' TO ROLE `b`
 GRANT SELECT ON *.* TO ROLE `b`
 
 query T
-select grants from show_grants('role', 'a') order by object_id;
+select grants from show_grants('role', 'a') order by cast(object_id as uint64) nulls last, grants;
 ----
-GRANT SELECT ON 'default'.'default'.'t' TO ROLE `a`
 GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `a`
+GRANT SELECT ON 'default'.'default'.'t' TO ROLE `a`
 GRANT OWNERSHIP ON 'default'.'default'.'t1' TO ROLE `a`
 GRANT SELECT,INSERT ON *.* TO ROLE `a`
 
 query T
-select grants from show_grants('user', 'a') order by object_id;
+select grants from show_grants('user', 'a') order by cast(object_id as uint64) nulls last, grants;
 ----
-GRANT SELECT ON 'default'.'default'.'t' TO 'a'@'%'
 GRANT OWNERSHIP ON 'default'.'default'.'t' TO 'a'@'%'
+GRANT SELECT ON 'default'.'default'.'t' TO 'a'@'%'
 GRANT OWNERSHIP ON 'default'.'default'.'t1' TO 'a'@'%'
 GRANT SELECT,INSERT ON *.* TO 'a'@'%'
 
@@ -90,23 +91,23 @@ statement ok
 set enable_expand_roles=0;
 
 query T
-select grants from show_grants('role', 'b') order by object_id;
+select grants from show_grants('role', 'b') order by cast(object_id as uint64) nulls last, grants;
 ----
 GRANT OWNERSHIP ON 'default'.'default'.'t1' TO ROLE `b`
 GRANT ROLE public to ROLE `b`
 GRANT SELECT ON *.* TO ROLE `b`
 
 query T
-select grants from show_grants('role', 'a') order by object_id;
+select grants from show_grants('role', 'a') order by cast(object_id as uint64) nulls last, grants;
 ----
-GRANT SELECT ON 'default'.'default'.'t' TO ROLE `a`
 GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `a`
+GRANT SELECT ON 'default'.'default'.'t' TO ROLE `a`
+GRANT INSERT ON *.* TO ROLE `a`
 GRANT ROLE b to ROLE `a`
 GRANT ROLE public to ROLE `a`
-GRANT INSERT ON *.* TO ROLE `a`
 
 query T
-select grants from show_grants('user', 'a') order by object_id;
+select grants from show_grants('user', 'a') order by cast(object_id as uint64) nulls last, grants;
 ----
 GRANT ROLE a to 'a'@'%'
 GRANT ROLE b to 'a'@'%'
