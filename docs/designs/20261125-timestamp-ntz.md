@@ -183,8 +183,9 @@ conversion" rule:
   types on its own.
 - **I3 — Physical identity.** The encoding of `TIMESTAMP_NTZ` is byte-for-byte
   identical to `TIMESTAMP`. Compression, dictionary encoding, row encoding,
-  `min`/`max` statistics, cluster keys, and aggregate state encodings are
-  reused unchanged.
+  `min`/`max` statistics, cluster keys, and aggregate state encodings can be
+  reused unchanged. Each one is still enabled for `TIMESTAMP_NTZ` site by site;
+  see "P0 audit" for which ones P1 enables.
 - **I4 — Native signatures for supported functions.** Every function that
   claims `TIMESTAMP_NTZ` support in the v1 matrix has a real
   `TIMESTAMP_NTZ` signature. It must not fall back to implicit conversion into
@@ -481,12 +482,12 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
 
 ### Phases
 
-- **P0 — shrink the future cost (no new type, can land first).** Fold the
-  `matches!(x, DataType::Timestamp | DataType::TimestampTz)` patterns that
-  silently exclude new members into `DataType::is_timestamp_family()` /
-  `as_timestamp_family()` helpers. There are 289 `DataType::Timestamp` sites in
-  the tree; exhaustive `match` arms are caught by the compiler, `matches!`
-  predicates are not. This work is worth doing whether or not the rest ships.
+- **P0 — audit the type matches (done inside P1, #21221).** The first plan was
+  a standalone refactor that folds `matches!(x, DataType::Timestamp |
+  DataType::TimestampTz)` predicates into `DataType::is_timestamp_family()` /
+  `as_timestamp_family()` helpers before the new type lands. The audit showed
+  that such a helper would have no correct caller, so it was not added. What
+  P0 became is described in "P0 audit" below.
 - **P1 — store and fetch.** AST, parser, typed literal, `DataType` /
   `TableDataType`, proto version bump, Arrow extension key, display and parse,
   DDL, insert/select round trip. At this point `TIMESTAMP_NTZ` supports only
@@ -501,6 +502,52 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
   that pays back the bug described in Motivation §1.
 - **P4 — documentation.** Semantics table, the conversion matrix, and a "which
   timestamp type should I use" guide.
+
+### P0 audit
+
+The audit looked at every place that names `DataType::Timestamp` (289 on
+`main`) and sorted them by how a missing `TimestampNtz` arm would show up.
+
+**Exhaustive `match`es** are enforced by the compiler. They make up most of
+the work: P1 touches 79 non-test files, almost all of them for these arms.
+
+**`matches!` predicates.** There are 16 on `main` that name `Timestamp`. None
+of them asks "is this a timestamp". Each one is a capability list: which types
+support top-k pushdown, dictionary encoding, cluster keys, bloom and xor8
+filters, selectivity estimation, statistics-based aggregates, or variant cast
+pushdown. `TimestampTz` is left out of 12 of the 16. A
+`is_timestamp_family()` helper would have granted or withheld each capability
+for the whole family at once, which is wrong for `TimestampTz` today and would
+be decided blindly for `TimestampNtz`. Each site needs its own decision, so no
+helper was added.
+
+**`_ =>` arms in matches that list `Timestamp` explicitly** are the real
+silent risk, because a new type falls into the catch-all without a compiler
+error. They were checked by hand. Most catch-alls degrade to slower or more
+conservative behaviour. One gave wrong results: the hash of a constant
+group-by key in `aggregate/group_hash.rs` fell through to the generic
+`ScalarRef` hash, which differs from the hash of the same value in a column,
+so a constant and a column holding the same wall clock landed in different
+groups. `test_group_hash_entries_const_equals_column` caught it once
+`TimestampNtz` was added to its sample block, which is the argument for adding
+every new type to the shared all-types test fixtures first.
+
+Decisions from the audit, as implemented in P1:
+
+| Site | P1 |
+|---|---|
+| `min`/`max` statistics, range-index pruning, NDV estimation | enabled |
+| row-format sort keys (fixed and variable), top-n limit push-down for aggregates | enabled |
+| group-by and join hashing, exact-equality shuffle keys, join statistics | enabled |
+| replace-into conflict hash, partition-by boundaries | enabled |
+| cluster keys | rejected |
+| bloom and xor8 filters | not built; min/max pruning still applies |
+| top-k pushdown, dictionary encoding, fixed-width group-by keys | fallback path |
+| statistics-based `min`/`max`/`count` rewrite, selectivity estimation | not used; full domain assumed |
+| variant cast pushdown, window `RANGE` frames ordered by `TIMESTAMP_NTZ` | not supported |
+
+The rows below "enabled" are follow-ups, each a separate decision. They were
+read from the code; only the enabled rows are covered by tests in P1.
 
 ## Testing
 
@@ -538,8 +585,9 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
    changes the logical annotation of new files written for existing tables, and
    it changes what external engines see. Suggested as a separate proposal.
 3. **Cost expectation.** Adding `TimestampTz` touched 84 files and about 2.2k
-   lines and kept producing boundary fixes for months afterwards. `TimestampNtz`
-   should be cheaper per site because the physical type is reused and there is
-   no offset field, but P0 is what makes that estimate hold. Implicit
-   conversions are the part that can leak into planning, so the tests in item 6
-   are not optional.
+   lines and kept producing boundary fixes for months afterwards. P1 for
+   `TimestampNtz` touched 79 non-test files with +924/−12 lines, cheaper per
+   site because the physical type is reused and there is no offset field. The
+   follow-ups in the "P0 audit" table and the implicit conversions of P2 are
+   still ahead, and P2 is the part that can leak into planning, so the tests in
+   item 6 are not optional.
