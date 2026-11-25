@@ -169,7 +169,7 @@ impl TableSnapshot {
 
         if segment_block_timestamp < snapshot_timestamp_adjusted {
             let mut err_msg = format!(
-                "Unresolvable conflict: Transaction conflicts with commit at {:?}. Can only merge with commits before {:?}.",
+                "Snapshot timestamp conflict: adjusted snapshot timestamp {:?} exceeds the segment/block timestamp {:?}.",
                 snapshot_timestamp_adjusted, segment_block_timestamp
             );
 
@@ -606,6 +606,7 @@ mod tests {
         // The previous snapshot advances the effective boundary by one millisecond.
         let error = make_snapshot(Some(previous.clone()), timestamp).unwrap_err();
         assert_eq!(error.code(), ErrorCode::SNAPSHOT_TIMESTAMP_CONFLICT);
+        assert!(error.message().starts_with("Snapshot timestamp conflict:"));
         let boundary = timestamp + TimeDelta::milliseconds(1);
         let snapshot = make_snapshot(Some(previous), boundary).unwrap();
         assert_eq!(snapshot.timestamp, Some(boundary));

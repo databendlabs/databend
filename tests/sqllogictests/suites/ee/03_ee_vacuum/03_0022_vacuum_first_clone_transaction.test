@@ -85,7 +85,7 @@ connection writer
 statement ok
 INSERT INTO first_clone_transaction.guard_source VALUES (4)
 
-statement error .*4022.*txn started with logical timestamp.*
+statement error .*4022.*Snapshot timestamp conflict.*txn started with logical timestamp.*
 COMMIT
 
 query I
