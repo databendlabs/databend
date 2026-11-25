@@ -99,6 +99,9 @@ pub type TaskMessageStream = BoxStream<'static, Result<(String, SeqV<TaskMessage
 const OVERLAPPING_EXECUTION: &str = "OVERLAPPING_EXECUTION";
 const WHEN_CONDITION_EVALUATION_ERROR: &str = "WHEN_CONDITION_EVALUATION_ERROR";
 const WHEN_CONDITION_FALSE: &str = "WHEN_CONDITION_FALSE";
+
+/// The start of the error message of a run recorded as failed because it was abandoned: it was
+/// recorded as executing while no query node held the execution lease of its task.
 const ABANDONED_EXECUTION: &str = "ABANDONED_EXECUTION";
 
 /// The delays before watching the task messages again: from the min, doubled up to the max.
@@ -108,9 +111,12 @@ const WATCH_AGAIN_MAX_DELAY: Duration = Duration::from_secs(30);
 /// The delay before a schedule that failed starts again.
 const SCHEDULE_RESTART_DELAY: Duration = Duration::from_secs(1);
 
-/// How long the lease of an executing run lasts after its query node stops extending it: longer
-/// than a meta-service leader election, so that the run is not taken as abandoned during one.
-const RUN_LEASE_TTL: Duration = Duration::from_secs(30);
+/// How long a query node's hold on the execution lease of a task outlives its last extension,
+/// which comes every 2 s while the node is up. Longer than a meta-service leader election, so
+/// that a live run is not taken as abandoned during one. A run whose query node cannot reach
+/// meta-service for longer is taken as abandoned while it executes, and the next run can overlap
+/// it.
+const EXECUTION_LEASE_TTL: Duration = Duration::from_secs(30);
 
 /// A schedule that this node runs for a task.
 struct ScheduledTask {
@@ -505,11 +511,15 @@ impl TaskService {
                     task_service.record_overlapping_skip(&task).await?;
                     return Ok(());
                 }
-                // Taken before the run is recorded as executing, and held until the run records
-                // its end: a run recorded as executing without a lease is taken as abandoned.
-                let run_lease = task_service
+
+                // Held from before the run is recorded as executing until after the run ends, so
+                // that any query node that reads the run as executing also reads the lease as held.
+                let execution_lease = task_service
                     .meta_handle
-                    .acquire_lease(&task_service.run_lease_key(&task_name), RUN_LEASE_TTL)
+                    .acquire_shared_lease(
+                        &task_service.execution_lease_prefix(&task_name),
+                        EXECUTION_LEASE_TTL,
+                    )
                     .await?;
                 let mut task_run = Self::new_task_run(&task);
                 task_service.update_or_create_task_run(&task_run).await?;
@@ -595,7 +605,9 @@ impl TaskService {
                     if let Err(err) = fn_work().await {
                         error!("execute failed due to {}", err);
                     }
-                    drop(run_lease);
+                    // The run has ended. If its end could not be recorded, the run stays recorded
+                    // as executing, and is taken as abandoned once this hold is released.
+                    drop(execution_lease);
                 });
             }
             TaskMessage::DeleteTask(task_name, _, task_id) => {
@@ -879,10 +891,10 @@ impl TaskService {
 
     /// Whether a run of the task is executing.
     ///
-    /// The node that executes a run holds its lease, taken before the run is recorded as
-    /// executing. A run recorded as executing while no lease is held is abandoned, by a query node
-    /// that stopped or failed to record the run's end: record it as failed, so that it does not
-    /// block the next runs.
+    /// A query node holds the execution lease of the task while it executes a run of the task,
+    /// see [`Self::execution_lease_prefix`]. Runs recorded as executing while no query node holds
+    /// the lease are abandoned, by query nodes that stopped or failed to record a run's end:
+    /// record them as failed, so that they do not block the next runs.
     pub async fn has_executing_task_run(&self, task_name: &str) -> Result<bool> {
         let name = Self::sql_string_literal(task_name);
         let blocks = self
@@ -897,7 +909,6 @@ impl TaskService {
             )
             .await?;
 
-        // Read before the lease: a run takes its lease before it is recorded.
         let run_ids = blocks
             .iter()
             .flat_map(|block| {
@@ -912,16 +923,18 @@ impl TaskService {
         if run_ids.is_empty() {
             return Ok(false);
         }
-        if self
-            .meta_handle
-            .is_leased(&self.run_lease_key(task_name))
-            .await?
-        {
+
+        // The runs are read before the lease. A run acquires its hold on the lease before it is
+        // recorded as executing, so a live run read above still holds the lease here. In the
+        // other order, a run that starts in between would be read without its hold, and taken as
+        // abandoned.
+        let lease_prefix = self.execution_lease_prefix(task_name);
+        if self.meta_handle.is_shared_lease_held(&lease_prefix).await? {
             return Ok(true);
         }
 
         warn!(
-            "task {} has executing runs that no query node holds the lease of: {}; record them as failed",
+            "task {}: no query node holds the execution lease of the runs recorded as executing: {}; record them as failed",
             task_name, run_ids
         );
         let error_message = Self::sql_string_literal(&format!(
@@ -945,9 +958,15 @@ impl TaskService {
         Ok(false)
     }
 
-    /// The key of the lease held by the node that executes a run of the task.
-    fn run_lease_key(&self, task_name: &str) -> String {
-        format!("{}/task_run_lease/{}", self.tenant.tenant_name(), task_name)
+    /// The prefix of the execution lease of `task_name`: a shared lease that a query node holds
+    /// while it executes a run of the task, from before the run is recorded as executing until
+    /// after the run ends.
+    fn execution_lease_prefix(&self, task_name: &str) -> String {
+        format!(
+            "{}/task_execution_lease/{}",
+            self.tenant.tenant_name(),
+            task_name
+        )
     }
 
     pub async fn update_or_create_task_run(&self, task_run: &TaskRun) -> Result<()> {

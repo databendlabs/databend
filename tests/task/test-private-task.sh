@@ -635,8 +635,8 @@ check_response_error "$response"
 response=$(query_sql_with_auth "root:" "DROP TASK manual_cancel_task")
 check_response_error "$response"
 
-# A run recorded as executing while no query node holds its lease, as left by a node that stopped
-# during the run, is recorded as failed instead of blocking the next runs.
+# A run recorded as executing while no query node holds the execution lease of its task, as a node
+# that stops during the run leaves it, is recorded as failed, and does not block the next runs.
 
 response=$(query_sql_with_auth "root:" "CREATE TASK abandoned_run_task SCHEDULE = 1 SECOND AS SELECT 1")
 check_response_error "$response"
