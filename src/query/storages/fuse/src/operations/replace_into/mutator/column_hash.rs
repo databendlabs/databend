@@ -75,7 +75,7 @@ pub fn row_hash_of_columns(
                 NumberScalar::Float32(v) => sip.write_u32(v.canonicalize().to_bits()),
                 NumberScalar::Float64(v) => sip.write_u64(v.canonicalize().to_bits()),
             },
-            ScalarRef::Timestamp(v) => sip.write_i64(v),
+            ScalarRef::Timestamp(v) | ScalarRef::TimestampNtz(v) => sip.write_i64(v),
             ScalarRef::String(v) => write_bytes_with_len(&mut sip, v.as_bytes()),
             ScalarRef::Bitmap(v) => write_bytes_with_len(&mut sip, v),
             ScalarRef::Decimal(v) => match v {

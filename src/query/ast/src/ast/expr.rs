@@ -1240,6 +1240,7 @@ pub enum TypeName {
     Date,
     Timestamp,
     TimestampTz,
+    TimestampNtz,
     Binary,
     String,
     Array(Box<TypeName>),
@@ -1397,6 +1398,9 @@ impl Display for TypeName {
             }
             TypeName::TimestampTz => {
                 write!(f, "TIMESTAMP WITH TIME ZONE")?;
+            }
+            TypeName::TimestampNtz => {
+                write!(f, "TIMESTAMP_NTZ")?;
             }
         }
         Ok(())

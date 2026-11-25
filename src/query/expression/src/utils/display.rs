@@ -78,6 +78,7 @@ use crate::types::opaque::OpaqueColumn;
 use crate::types::opaque::OpaqueScalarRef;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
+use crate::types::timestamp_ntz::timestamp_ntz_to_string;
 use crate::types::vector::VectorDataType;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
@@ -146,6 +147,7 @@ impl Debug for ScalarRef<'_> {
             ScalarRef::String(s) => write!(f, "{s:?}"),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::TimestampTz(t) => write!(f, "{t:?}"),
+            ScalarRef::TimestampNtz(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Interval(i) => {
                 let interval = interval_to_string(i);
@@ -261,6 +263,7 @@ impl Debug for Column {
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => f.debug_tuple("Timestamp").field(col).finish(),
             Column::TimestampTz(col) => f.debug_tuple("TimestampTz").field(col).finish(),
+            Column::TimestampNtz(col) => f.debug_tuple("TimestampNtz").field(col).finish(),
             Column::Date(col) => f.debug_tuple("Date").field(col).finish(),
             Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
@@ -298,6 +301,7 @@ impl Display for ScalarRef<'_> {
                 write!(f, "'{}'", timestamp_to_string(*t, &Tz::UTC))
             }
             ScalarRef::TimestampTz(t) => write!(f, "'{}'", t),
+            ScalarRef::TimestampNtz(t) => write!(f, "'{}'", timestamp_ntz_to_string(*t)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64)),
             ScalarRef::Interval(interval) => write!(f, "'{}'", interval_to_string(interval)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -471,6 +475,7 @@ pub fn scalar_ref_to_string(value: &ScalarRef) -> String {
     match value {
         ScalarRef::String(s) => s.to_string(),
         ScalarRef::Timestamp(t) => format!("{}", timestamp_to_string(*t, &Tz::UTC)),
+        ScalarRef::TimestampNtz(t) => format!("{}", timestamp_ntz_to_string(*t)),
         ScalarRef::Date(d) => format!("{}", date_to_string(*d as i64)),
         ScalarRef::Interval(interval) => format!("{}", interval_to_string(interval)),
         ScalarRef::Bitmap(bits) => {
@@ -775,6 +780,7 @@ impl Display for DataType {
             }
             DataType::StageLocation => write!(f, "StageLocation"),
             DataType::TimestampTz => write!(f, "TimestampTz"),
+            DataType::TimestampNtz => write!(f, "Timestamp_Ntz"),
         }
     }
 }
@@ -790,6 +796,7 @@ impl Display for TableDataType {
             TableDataType::Decimal(decimal) => write!(f, "{decimal}"),
             TableDataType::Timestamp => write!(f, "Timestamp"),
             TableDataType::TimestampTz => write!(f, "TimestampTz"),
+            TableDataType::TimestampNtz => write!(f, "Timestamp_Ntz"),
             TableDataType::Date => write!(f, "Date"),
             TableDataType::Null => write!(f, "NULL"),
             TableDataType::Nullable(inner) => write!(f, "{inner} NULL"),
@@ -1465,6 +1472,7 @@ impl Display for Domain {
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
             Domain::TimestampTz(domain) => write!(f, "{domain}"),
+            Domain::TimestampNtz(domain) => write!(f, "{domain}"),
             Domain::Date(domain) => write!(f, "{domain}"),
             Domain::Interval(domain) => write!(f, "{:?}", domain),
             Domain::Nullable(domain) => write!(f, "{domain}"),

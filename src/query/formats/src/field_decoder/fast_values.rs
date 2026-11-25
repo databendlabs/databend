@@ -66,6 +66,7 @@ use crate::FieldDecoder;
 use crate::InputCommonSettings;
 use crate::field_decoder::common::read_int_from_decimal_text;
 use crate::field_decoder::common::read_timestamp;
+use crate::field_decoder::common::read_timestamp_ntz;
 use crate::field_decoder::common::read_timestamp_tz;
 
 #[derive(Clone)]
@@ -139,6 +140,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
             ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, reader, positions),
+            ColumnBuilder::TimestampNtz(c) => self.read_timestamp_ntz(c, reader, positions),
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
@@ -328,6 +330,17 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         read_timestamp_tz(column, &buf, &self.common_settings)
+    }
+
+    fn read_timestamp_ntz<R: AsRef<[u8]>>(
+        &self,
+        column: &mut Vec<i64>,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        read_timestamp_ntz(column, &buf)
     }
 
     fn read_array<R: AsRef<[u8]>>(

@@ -36,6 +36,7 @@ use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_OPAQUE;
+use super::ARROW_EXT_TYPE_TIMESTAMP_NTZ;
 use super::ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
@@ -207,6 +208,14 @@ impl From<&TableField> for Field {
                     ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE.to_string(),
                 );
                 ArrowDataType::Decimal128(38, 0)
+            }
+            TableDataType::TimestampNtz => {
+                // Same Arrow type as TIMESTAMP; the key keeps the two apart on read.
+                metadata.insert(
+                    EXTENSION_KEY.to_string(),
+                    ARROW_EXT_TYPE_TIMESTAMP_NTZ.to_string(),
+                );
+                ArrowDataType::Timestamp(TimeUnit::Microsecond, None)
             }
             TableDataType::Date => ArrowDataType::Date32,
             TableDataType::Nullable(ty) => {
@@ -451,6 +460,7 @@ impl From<&Column> for ArrayData {
             Column::String(col) => col.clone().into(),
             Column::Timestamp(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::TimestampTz(col) => buffer_to_array_data((col.clone(), arrow_type)),
+            Column::TimestampNtz(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Interval(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Array(col) => {

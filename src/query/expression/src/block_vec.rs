@@ -44,6 +44,7 @@ use crate::types::nullable::NullableColumnBuilder;
 use crate::types::simple_type::SimpleType;
 use crate::types::simple_type::SimpleValueType;
 use crate::types::timestamp::CoreTimestamp;
+use crate::types::timestamp_ntz::CoreTimestampNtz;
 use crate::types::timestamp_tz::CoreTimestampTz;
 use crate::types::*;
 use crate::with_number_mapped_type;
@@ -498,6 +499,9 @@ impl DataBlockVec {
             DataType::Geography => TypeHandler::binary::<GeographyType>(),
             DataType::Timestamp => TypeHandler::primitive::<TimestampType, CoreTimestamp>(),
             DataType::TimestampTz => TypeHandler::primitive::<TimestampTzType, CoreTimestampTz>(),
+            DataType::TimestampNtz => {
+                TypeHandler::primitive::<TimestampNtzType, CoreTimestampNtz>()
+            }
             DataType::Date => TypeHandler::primitive::<DateType, CoreDate>(),
             DataType::Interval => TypeHandler::primitive::<IntervalType, CoreInterval>(),
             DataType::Number(number) => {
@@ -547,6 +551,9 @@ impl DataBlockVec {
             }
             DataType::TimestampTz => {
                 TypeHandler::nullable_primitive::<TimestampTzType, CoreTimestampTz>()
+            }
+            DataType::TimestampNtz => {
+                TypeHandler::nullable_primitive::<TimestampNtzType, CoreTimestampNtz>()
             }
             DataType::Date => TypeHandler::nullable_primitive::<DateType, CoreDate>(),
             DataType::Interval => TypeHandler::nullable_primitive::<IntervalType, CoreInterval>(),

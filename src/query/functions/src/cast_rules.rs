@@ -150,6 +150,7 @@ pub const GENERAL_CAST_RULES: AutoCastRules = &[
     (DataType::String, DataType::Binary),
     (DataType::String, DataType::Timestamp),
     (DataType::String, DataType::TimestampTz),
+    (DataType::String, DataType::TimestampNtz),
     (DataType::String, DataType::Date),
     (DataType::String, DataType::Interval),
     (DataType::String, DataType::Boolean),

@@ -236,6 +236,13 @@ impl ValueVisitor for FilterVisitor<'_> {
         Ok(())
     }
 
+    fn visit_timestamp_ntz(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        self.result = Some(Value::Column(TimestampNtzType::upcast_column(
+            self.filter_primitive_types(buffer),
+        )));
+        Ok(())
+    }
+
     fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
         self.result = Some(Value::Column(DateType::upcast_column(
             self.filter_primitive_types(buffer),

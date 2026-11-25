@@ -49,6 +49,7 @@ use super::rewrite_function;
 use super::rewrite_function::rewrite_function_name;
 use super::scalar_fold::BoundScalar;
 use super::scalar_fold::ScalarFacts;
+use crate::planner::semantic::check_timestamp_ntz_enabled;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -310,6 +311,8 @@ where A: TypeCheckAdapter
             }
         }
 
+        check_timestamp_ntz_enabled(target_type, self.adapter.enable_timestamp_ntz()?)
+            .map_err(|e| e.set_span(span))?;
         let raw_expr = RawExpr::Cast {
             span,
             is_try,
@@ -455,6 +458,14 @@ where A: TypeCheckAdapter
         mut params: Vec<Scalar>,
         mut args: Vec<BoundScalar>,
     ) -> Result<BoundScalar> {
+        if matches!(func_name, "to_timestamp_ntz" | "try_to_timestamp_ntz") {
+            check_timestamp_ntz_enabled(
+                &TypeName::TimestampNtz,
+                self.adapter.enable_timestamp_ntz()?,
+            )
+            .map_err(|e| e.set_span(span))?;
+        }
+
         // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
         if (func_name == "substr" || func_name == "substring")
             && self

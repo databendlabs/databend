@@ -19,6 +19,7 @@ use itertools::Itertools;
 
 use crate::Column;
 use crate::types::geometry::GeometryType;
+use crate::types::timestamp_ntz::TimestampNtzType;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::*;
 
@@ -64,6 +65,7 @@ impl_from_data! { StringType }
 impl_from_data! { DateType }
 impl_from_data! { TimestampType }
 impl_from_data! { TimestampTzType }
+impl_from_data! { TimestampNtzType }
 impl_from_data! { VariantType }
 impl_from_data! { BitmapType }
 impl_from_data! { GeometryType }

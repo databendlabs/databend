@@ -39,6 +39,7 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringColumn;
+use databend_common_expression::types::TimestampNtzType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::binary::BinaryColumn;
@@ -126,6 +127,7 @@ impl RowConverter<VariableRows> for VariableRowConverter {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::TimestampTz
+            | DataType::TimestampNtz
             | DataType::Interval
             | DataType::Date
             | DataType::Binary
@@ -326,6 +328,11 @@ impl LengthCalculatorVisitor<'_> {
                     *length += timestamp_tz::ENCODED_LEN
                 }
             }
+            DataType::TimestampNtz => {
+                for length in self.lengths.iter_mut() {
+                    *length += i64::ENCODED_LEN
+                }
+            }
             DataType::Date => {
                 for length in self.lengths.iter_mut() {
                     *length += i32::ENCODED_LEN
@@ -440,6 +447,11 @@ impl ValueVisitor for LengthCalculatorVisitor<'_> {
     }
 
     fn visit_timestamp(&mut self, _buffer: Buffer<i64>) -> Result<()> {
+        self.lengths.iter_mut().for_each(|x| *x += i64::ENCODED_LEN);
+        Ok(())
+    }
+
+    fn visit_timestamp_ntz(&mut self, _buffer: Buffer<i64>) -> Result<()> {
         self.lengths.iter_mut().for_each(|x| *x += i64::ENCODED_LEN);
         Ok(())
     }
@@ -573,6 +585,21 @@ impl EncodeVisitor<'_> {
                     *scalar.as_timestamp_tz().unwrap()
                 };
                 fixed_encode_const::<TimestampTzType>(
+                    &mut self.out.data,
+                    &mut self.out.offsets,
+                    is_null,
+                    scalar_value,
+                    self.field.asc,
+                    self.field.nulls_first,
+                );
+            }
+            DataType::TimestampNtz => {
+                let scalar_value = if is_null {
+                    0i64
+                } else {
+                    *scalar.as_timestamp_ntz().unwrap()
+                };
+                fixed_encode_const::<TimestampNtzType>(
                     &mut self.out.data,
                     &mut self.out.offsets,
                     is_null,
@@ -725,6 +752,18 @@ impl ValueVisitor for EncodeVisitor<'_> {
     }
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        fixed_encode(
+            &mut self.out.data,
+            &mut self.out.offsets,
+            buffer,
+            self.validity,
+            self.field.asc,
+            self.field.nulls_first,
+        );
+        Ok(())
+    }
+
+    fn visit_timestamp_ntz(&mut self, buffer: Buffer<i64>) -> Result<()> {
         fixed_encode(
             &mut self.out.data,
             &mut self.out.offsets,

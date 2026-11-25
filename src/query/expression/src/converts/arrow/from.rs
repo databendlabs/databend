@@ -36,6 +36,7 @@ use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_OPAQUE;
+use super::ARROW_EXT_TYPE_TIMESTAMP_NTZ;
 use super::ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
@@ -108,6 +109,7 @@ impl TryFrom<&Field> for TableField {
                 }
             },
             ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE => TableDataType::TimestampTz,
+            ARROW_EXT_TYPE_TIMESTAMP_NTZ => TableDataType::TimestampNtz,
             ARROW_EXT_TYPE_OPAQUE => {
                 let ArrowDataType::FixedSizeList(_, size) = arrow_f.data_type() else {
                     unreachable!()
@@ -349,6 +351,14 @@ impl Column {
                 let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Decimal128(38, 0))?;
                 let buffer: Buffer<timestamp_tz> = array.to_data().buffers()[0].clone().into();
                 Column::TimestampTz(buffer)
+            }
+            DataType::TimestampNtz => {
+                let array = arrow_cast::cast(
+                    array.as_ref(),
+                    &ArrowDataType::Timestamp(arrow_schema::TimeUnit::Microsecond, None),
+                )?;
+                let buffer: Buffer<i64> = array.to_data().buffers()[0].clone().into();
+                Column::TimestampNtz(buffer)
             }
             DataType::Date => {
                 let array = arrow_cast::cast(array.as_ref(), &ArrowDataType::Date32)?;

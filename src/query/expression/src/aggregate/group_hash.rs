@@ -234,7 +234,7 @@ fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(scalar: &Scalar, value
                 }
             })
         }
-        Scalar::Timestamp(value) => value.agg_hash(),
+        Scalar::Timestamp(value) | Scalar::TimestampNtz(value) => value.agg_hash(),
         Scalar::Date(value) => value.agg_hash(),
         Scalar::Boolean(value) => value.agg_hash(),
         Scalar::String(value) => value.as_bytes().agg_hash(),
@@ -339,6 +339,11 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
         self.combine_group_hash_type_column::<TimestampType>(&buffer);
+        Ok(())
+    }
+
+    fn visit_timestamp_ntz(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        self.combine_group_hash_type_column::<TimestampNtzType>(&buffer);
         Ok(())
     }
 
@@ -494,7 +499,7 @@ where I: Index
                 DecimalScalar::Decimal128(v, _) => v.agg_hash(),
                 DecimalScalar::Decimal256(v, _) => v.agg_hash(),
             },
-            Scalar::Timestamp(v) => v.agg_hash(),
+            Scalar::Timestamp(v) | Scalar::TimestampNtz(v) => v.agg_hash(),
             Scalar::Date(v) => v.agg_hash(),
             Scalar::Boolean(v) => v.agg_hash(),
             Scalar::Binary(v) => v.agg_hash(),
@@ -529,6 +534,10 @@ where I: Index
     }
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        self.visit_number(buffer)
+    }
+
+    fn visit_timestamp_ntz(&mut self, buffer: Buffer<i64>) -> Result<()> {
         self.visit_number(buffer)
     }
 
@@ -922,6 +931,7 @@ mod tests {
                 )
             },
             (DataType::Timestamp, Scalar::Timestamp(123_456_789)),
+            (DataType::TimestampNtz, Scalar::TimestampNtz(123_456_789)),
             (
                 DataType::TimestampTz,
                 Scalar::TimestampTz(timestamp_tz::new(123_456, 3_600)),

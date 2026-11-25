@@ -31,6 +31,7 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampNtzType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt16Type;
@@ -69,6 +70,7 @@ pub enum ColumnNDVEstimator {
     Date(ColumnNDVEstimatorImpl<DateType>),
     Timestamp(ColumnNDVEstimatorImpl<TimestampType>),
     TimestampTz(ColumnNDVEstimatorImpl<TimestampTzType>),
+    TimestampNtz(ColumnNDVEstimatorImpl<TimestampNtzType>),
     Decimal64(ColumnNDVEstimatorImpl<Decimal64Type>),
     Decimal128(ColumnNDVEstimatorImpl<Decimal128Type>),
     Decimal256(ColumnNDVEstimatorImpl<Decimal256Type>),
@@ -106,6 +108,11 @@ pub fn create_column_ndv_estimator(data_type: &DataType) -> ColumnNDVEstimator {
         DataType::TimestampTz => {
             ColumnNDVEstimator::TimestampTz(ColumnNDVEstimatorImpl::<TimestampTzType>::new(
                 DataType::TimestampTz,
+            ))
+        }
+        DataType::TimestampNtz => {
+            ColumnNDVEstimator::TimestampNtz(ColumnNDVEstimatorImpl::<TimestampNtzType>::new(
+                DataType::TimestampNtz,
             ))
         }
         DataType::Decimal(size) => {

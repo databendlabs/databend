@@ -993,6 +993,7 @@ fn get_simple_cast_function(
         DataType::Decimal(_) => ("to_decimal", "try_to_decimal"),
         DataType::Timestamp => ("to_timestamp", "try_to_timestamp"),
         DataType::TimestampTz => ("to_timestamp_tz", "try_to_timestamp_tz"),
+        DataType::TimestampNtz => ("to_timestamp_ntz", "try_to_timestamp_ntz"),
         DataType::Interval => ("to_interval", "try_to_interval"),
         DataType::Date => ("to_date", "try_to_date"),
         // CAST(String AS Variant) parses JSON instead of wrapping the string as a JSON string.

@@ -45,6 +45,7 @@ use super::map::KvPair;
 use super::number::NumberScalar;
 use super::scalar_type_error;
 use super::timestamp::timestamp_to_string;
+use super::timestamp_ntz::timestamp_ntz_to_string;
 use crate::ColumnBuilder;
 use crate::TableDataType;
 use crate::property::Domain;
@@ -288,6 +289,10 @@ pub fn cast_scalar_to_variant(
             value: ts_tz.timestamp(),
             offset: ts_tz.seconds_offset(),
         }),
+        // JSONB timestamps are instants, so a wall clock is stored as its text.
+        ScalarRef::TimestampNtz(ts) => {
+            jsonb::Value::String(timestamp_ntz_to_string(ts).to_string().into())
+        }
         ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date { value: d }),
         ScalarRef::Interval(i) => {
             let interval = jsonb::Interval {

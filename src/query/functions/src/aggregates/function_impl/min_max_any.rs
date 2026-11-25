@@ -573,6 +573,7 @@ fn need_manual_drop_state(data_type: &DataType) -> bool {
         | DataType::Decimal(_)
         | DataType::Timestamp
         | DataType::TimestampTz
+        | DataType::TimestampNtz
         | DataType::Date
         | DataType::Interval
         | DataType::Opaque(_)

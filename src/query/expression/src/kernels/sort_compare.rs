@@ -300,6 +300,10 @@ impl ValueVisitor for SortCompare {
         self.visit_number(buffer)
     }
 
+    fn visit_timestamp_ntz(&mut self, buffer: Buffer<i64>) -> Result<()> {
+        self.visit_number(buffer)
+    }
+
     fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
         self.visit_number(buffer)
     }

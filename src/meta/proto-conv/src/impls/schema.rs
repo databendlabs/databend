@@ -599,6 +599,7 @@ impl FromToProto for ex::TableDataType {
                     }
                     Dt24::StageLocationT(_) => ex::TableDataType::StageLocation,
                     Dt24::TimestampTzT(_) => ex::TableDataType::TimestampTz,
+                    Dt24::TimestampNtzT(_) => ex::TableDataType::TimestampNtz,
                     Dt24::AggregateStateT(state) => {
                         reader_check_msg(state.ver, state.min_reader_ver)?;
                         let argument_types = state
@@ -694,6 +695,7 @@ impl FromToProto for ex::TableDataType {
             }
             TableDataType::StageLocation => new_pb_dt24(Dt24::StageLocationT(pb::Empty {})),
             TableDataType::TimestampTz => new_pb_dt24(Dt24::TimestampTzT(pb::Empty {})),
+            TableDataType::TimestampNtz => new_pb_dt24(Dt24::TimestampNtzT(pb::Empty {})),
             TableDataType::AggregateState {
                 function_name,
                 params,

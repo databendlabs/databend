@@ -58,7 +58,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Int64 NULL` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Int64` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Int64 NULL` with `String`
-... and 77 more
+... and 79 more
 
 === dictionary_lookup_precedes_key_binding ===
 description: The async traversal resolves the dictionary before visiting its key expression.

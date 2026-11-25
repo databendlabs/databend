@@ -406,7 +406,8 @@ impl AvroSchemaBuilder {
             | TableDataType::Geometry
             | TableDataType::Geography
             | TableDataType::Opaque(_)
-            | TableDataType::TimestampTz => {
+            | TableDataType::TimestampTz
+            | TableDataType::TimestampNtz => {
                 // Keep Avro unload aligned with Avro load: these logical/internal
                 // Databend types are not supported by the Avro reader yet.
                 return Err(ErrorCode::InvalidArgument(format!(

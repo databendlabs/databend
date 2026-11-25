@@ -326,6 +326,7 @@ fn is_value_dependent_string_target(ty: &DataType) -> bool {
         | DataType::Date
         | DataType::Timestamp
         | DataType::TimestampTz
+        | DataType::TimestampNtz
         | DataType::Interval => true,
         _ => false,
     }

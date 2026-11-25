@@ -37,6 +37,7 @@ use crate::types::IntervalType;
 use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::StringType;
+use crate::types::TimestampNtzType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VectorColumn;
@@ -194,6 +195,15 @@ impl Column {
                     capacity,
                 );
                 Column::TimestampTz(buffer)
+            }
+            Column::TimestampNtz(_) => {
+                let buffer = Self::concat_primitive_types(
+                    columns
+                        .into_iter()
+                        .map(|col| TimestampNtzType::try_downcast_column(&col).unwrap()),
+                    capacity,
+                );
+                Column::TimestampNtz(buffer)
             }
             Column::Opaque(first) => {
                 let size = first.size();

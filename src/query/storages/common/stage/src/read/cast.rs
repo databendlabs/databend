@@ -159,5 +159,9 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
         // [specificity]
         (String | Variant, TimestampTz) => true,
         (_, TimestampTz) => false,
+
+        // [specificity] wall-clock text; loading an instant needs an explicit timezone.
+        (String, TimestampNtz) => true,
+        (_, TimestampNtz) => false,
     }
 }

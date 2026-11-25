@@ -32,6 +32,7 @@ use crate::Scalar;
 use crate::TakeIndex;
 use crate::Value;
 use crate::kernels::take::BIT_MASK;
+use crate::types::TimestampNtzType;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
 use crate::types::bitmap::BitmapType;
@@ -277,6 +278,12 @@ impl Column {
             Column::TimestampTz(_) => {
                 let builder = TimestampTzType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<TimestampTzType>(
+                    &columns, &data_type, builder, indices,
+                )
+            }
+            Column::TimestampNtz(_) => {
+                let builder = TimestampNtzType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<TimestampNtzType>(
                     &columns, &data_type, builder, indices,
                 )
             }
@@ -529,6 +536,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::TimestampTz(columns)
             }
+            Column::TimestampNtz(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| TimestampNtzType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::TimestampNtz(columns)
+            }
             Column::Interval(_) => {
                 let columns = columns
                     .iter()
@@ -706,6 +720,10 @@ impl Column {
             ColumnVec::TimestampTz(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
                 Column::TimestampTz(builder.into())
+            }
+            ColumnVec::TimestampNtz(columns) => {
+                let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);
+                Column::TimestampNtz(builder.into())
             }
             ColumnVec::Date(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns.as_slice(), indices);

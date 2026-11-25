@@ -185,3 +185,4 @@ mod v190_external_access;
 mod v191_masking_where_unmasked_value;
 mod v192_script_external_access;
 mod v193_csv_quote_non_numeric;
+mod v194_type_timestamp_ntz;

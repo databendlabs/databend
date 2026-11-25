@@ -104,6 +104,9 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_context_dependent(register_timestamp_to_timestamp_tz);
     registry.register_context_dependent(register_timestamp_tz_to_timestamp);
 
+    // cast(xx AS timestamp_ntz), cast(timestamp_ntz AS string)
+    crate::timestamp_ntz::register(registry);
+
     // cast(xx AS date)
     // to_date(xx)
     registry.register_context_dependent(register_string_to_date);

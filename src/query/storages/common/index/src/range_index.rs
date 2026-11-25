@@ -35,6 +35,7 @@ use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::TimestampNtzType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::decimal::Decimal256Type;
@@ -407,6 +408,10 @@ pub fn statistics_to_domain(mut stats: Vec<&ColumnStatistics>, data_type: &DataT
                 DataType::Timestamp => TimestampType::upcast_domain(SimpleDomain {
                     min: TimestampType::try_downcast_scalar(&min.as_ref()).unwrap(),
                     max: TimestampType::try_downcast_scalar(&max.as_ref()).unwrap(),
+                }),
+                DataType::TimestampNtz => TimestampNtzType::upcast_domain(SimpleDomain {
+                    min: TimestampNtzType::try_downcast_scalar(&min.as_ref()).unwrap(),
+                    max: TimestampNtzType::try_downcast_scalar(&max.as_ref()).unwrap(),
                 }),
                 DataType::Date => DateType::upcast_domain(SimpleDomain {
                     min: DateType::try_downcast_scalar(&min.as_ref()).unwrap(),

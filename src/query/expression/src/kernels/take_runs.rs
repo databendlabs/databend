@@ -79,6 +79,7 @@ impl RunGain {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::TimestampTz
+            | DataType::TimestampNtz
             | DataType::Date
             | DataType::Interval
             | DataType::Opaque(_) => RunGain::Fixed,

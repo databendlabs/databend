@@ -39,6 +39,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         | DataType::Decimal(_)
         | DataType::Timestamp
         | DataType::TimestampTz
+        | DataType::TimestampNtz
         | DataType::Date
         | DataType::Bitmap
         | DataType::Geometry
@@ -83,6 +84,7 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         | ScalarRef::Decimal(_)
         | ScalarRef::Timestamp(_)
         | ScalarRef::TimestampTz(_)
+        | ScalarRef::TimestampNtz(_)
         | ScalarRef::Date(_)
         | ScalarRef::Interval(_)
         | ScalarRef::Boolean(_)

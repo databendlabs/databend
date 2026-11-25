@@ -35,6 +35,7 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampNtzType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt16Type;
@@ -68,6 +69,7 @@ pub enum ColumnStatisticsBuilder {
     Date(CommonBuilder<DateType>),
     Timestamp(CommonBuilder<TimestampType>),
     TimestampTz(CommonBuilder<TimestampTzType>),
+    TimestampNtz(CommonBuilder<TimestampNtzType>),
     Decimal64(DecimalBuilder<Decimal64Type>),
     Decimal128(DecimalBuilder<Decimal128Type>),
     Decimal256(DecimalBuilder<Decimal256Type>),
@@ -133,6 +135,11 @@ pub fn create_column_stats_builder(
         DataType::TimestampTz => ColumnStatisticsBuilder::TimestampTz(CommonBuilder::<
             TimestampTzType,
         >::create(inner_type)),
+        DataType::TimestampNtz => {
+            ColumnStatisticsBuilder::TimestampNtz(CommonBuilder::<TimestampNtzType>::create(
+                inner_type,
+            ))
+        }
         DataType::Decimal(size) => {
             if size.can_carried_by_64() {
                 ColumnStatisticsBuilder::Decimal64(DecimalBuilder::<Decimal64Type>::create(

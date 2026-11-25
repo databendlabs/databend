@@ -86,6 +86,7 @@ fn mark_column_boundaries_inner(column: &Column, changed: &mut [bool]) {
         Column::String(column) => mark_iter_boundaries(column.iter(), changed),
         Column::Timestamp(column) => mark_iter_boundaries(column.iter(), changed),
         Column::TimestampTz(column) => mark_iter_boundaries(column.iter(), changed),
+        Column::TimestampNtz(column) => mark_iter_boundaries(column.iter(), changed),
         Column::Date(column) => mark_iter_boundaries(column.iter(), changed),
         Column::Nullable(column) => mark_nullable_boundaries(column, changed),
         _ => mark_iter_boundaries(column.iter(), changed),

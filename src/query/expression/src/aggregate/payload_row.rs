@@ -47,6 +47,7 @@ use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
 use crate::types::StringType;
+use crate::types::TimestampNtzType;
 use crate::types::TimestampType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
@@ -71,6 +72,7 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
         }
         DataType::Timestamp => 8,
         DataType::TimestampTz => 16,
+        DataType::TimestampNtz => 8,
         DataType::Date => 4,
         DataType::Interval => 16,
         // use address instead
@@ -111,6 +113,10 @@ macro_rules! with_encoded_fixed_size_type {
             }
             DataType::Timestamp => {
                 type $T = TimestampType;
+                $body
+            }
+            DataType::TimestampNtz => {
+                type $T = TimestampNtzType;
                 $body
             }
             _ => $other,
@@ -261,6 +267,13 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                 }
             }
         }
+        Column::TimestampNtz(buffer) => {
+            for row in select_vector {
+                unsafe {
+                    address[*row].write(offset, &buffer[*row]);
+                }
+            }
+        }
         Column::Date(buffer) => {
             for row in select_vector {
                 unsafe {
@@ -354,6 +367,11 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
                 }
             }
             Scalar::Timestamp(value) => {
+                for row in select_vector {
+                    address[*row].write(offset, value);
+                }
+            }
+            Scalar::TimestampNtz(value) => {
                 for row in select_vector {
                     address[*row].write(offset, value);
                 }
@@ -539,6 +557,9 @@ impl<'s> CompareState<'s> {
             Column::Timestamp(buffer) => {
                 self.match_column_type::<TimestampType>(buffer, col_offset, validity, counts)
             }
+            Column::TimestampNtz(buffer) => {
+                self.match_column_type::<TimestampNtzType>(buffer, col_offset, validity, counts)
+            }
             Column::Date(buffer) => {
                 self.match_column_type::<DateType>(buffer, col_offset, validity, counts)
             }
@@ -632,6 +653,9 @@ impl<'s> CompareState<'s> {
             }
             Scalar::Timestamp(value) => {
                 self.match_scalar_type::<TimestampType>(value, col_offset, counts)
+            }
+            Scalar::TimestampNtz(value) => {
+                self.match_scalar_type::<TimestampNtzType>(value, col_offset, counts)
             }
             Scalar::Date(value) => self.match_scalar_type::<DateType>(value, col_offset, counts),
             Scalar::Interval(value) => {
@@ -839,6 +863,7 @@ pub(super) fn visit_row_type<V: RowTypeVisitor>(data_type: &DataType, visitor: V
             DecimalDataKind::Decimal256 => visitor.visit_decimal::<i256>(*size),
         },
         DataType::Timestamp => visitor.visit_fixed::<TimestampType>(),
+        DataType::TimestampNtz => visitor.visit_fixed::<TimestampNtzType>(),
         DataType::Date => visitor.visit_fixed::<DateType>(),
         DataType::Interval => visitor.visit_fixed::<IntervalType>(),
         DataType::Binary

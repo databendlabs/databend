@@ -1360,6 +1360,8 @@ pub enum TokenKind {
     TIME,
     #[token("TIMESTAMP", ignore(ascii_case))]
     TIMESTAMP,
+    #[token("TIMESTAMP_NTZ", ignore(ascii_case))]
+    TIMESTAMP_NTZ,
     #[token("TIMESTAMP_TZ", ignore(ascii_case))]
     TIMESTAMP_TZ,
     #[token("TIMEZONE_HOUR", ignore(ascii_case))]
