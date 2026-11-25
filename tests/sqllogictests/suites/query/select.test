@@ -82,6 +82,13 @@ select * from (values(1, 'one'), (2, 'two'), (3, 'three')) as t(a, b)
 2 two
 3 three
 
+# VALUES casts each cell to the common decimal scale.
+query R rowsort
+select x from (values(0.1), (0.15)) as t(x)
+----
+0.10
+0.15
+
 query IT
 select col0, col1 from (values(1, 'one'), (null, 'two'), (3, null))
 ----
