@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::SignalStream;
@@ -29,10 +30,13 @@ use futures::StreamExt;
 use futures::stream::Abortable;
 use log::error;
 use log::info;
+use log::warn;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::clusters::ClusterDiscovery;
 use crate::sessions::SessionManager;
+use crate::table_maintenance::MaintenanceShutdown;
+use crate::table_maintenance::TableMaintenanceService;
 
 pub type ListeningStream = Abortable<TcpListenerStream>;
 
@@ -71,6 +75,25 @@ impl ShutdownHandle {
 
     #[async_backtrace::framed]
     pub async fn shutdown(&mut self, mut signal: SignalStream, timeout: Option<Duration>) {
+        let mut timeout = timeout;
+        if let Some(maintenance) = TableMaintenanceService::try_instance() {
+            let started = Instant::now();
+            let grace = timeout
+                .unwrap_or(Duration::from_secs(3))
+                .min(Duration::from_secs(3));
+            // Drain while Flight/exchange and catalog dependencies are still available.
+            // Local and incoming remote admission close together; foreground is untouched.
+            if maintenance
+                .shutdown(tokio::time::Instant::now() + grace)
+                .await
+                == MaintenanceShutdown::TimedOut
+            {
+                warn!(
+                    "Maintenance shutdown exceeded remaining grace; execution may still be draining"
+                );
+            }
+            timeout = timeout.map(|limit| limit.saturating_sub(started.elapsed()));
+        }
         self.shutdown_services(true).await;
         let config = GlobalConfig::instance();
         ClusterDiscovery::instance()

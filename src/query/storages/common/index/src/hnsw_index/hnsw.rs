@@ -277,6 +277,18 @@ impl HNSWIndex {
         column: Column,
         distance_type: DistanceType,
     ) -> Result<(Vec<TableField>, Vec<BlockEntry>)> {
+        Self::build_with_parallelism(m, ef_construct, column_id, column, distance_type, true)
+    }
+
+    /// With parallelism disabled, build on the caller's thread and resource tracker.
+    pub fn build_with_parallelism(
+        m: usize,
+        ef_construct: usize,
+        column_id: ColumnId,
+        column: Column,
+        distance_type: DistanceType,
+        parallel: bool,
+    ) -> Result<(Vec<TableField>, Vec<BlockEntry>)> {
         let m0 = m * 2;
         let entry_points_num = 2;
         let use_heuristic = true;
@@ -347,7 +359,7 @@ impl HNSWIndex {
         for vector_id in first_few_ids {
             insert_point(vector_id)?;
         }
-        if builds_in_parallel(ids.len()) {
+        if parallel && builds_in_parallel(ids.len()) {
             hnsw_build_pool().install(|| {
                 ids.into_par_iter()
                     .with_max_len(HNSW_BUILD_MAX_PAR_LEN)
@@ -555,7 +567,8 @@ mod tests {
             .collect();
         let values: Vec<F32> = vectors.iter().flatten().map(|&v| F32::from(v)).collect();
         let column = Column::Vector(VectorColumn::Float32((values.into(), 4)));
-        let (_, entries) = HNSWIndex::build(4, 8, 0, column, DistanceType::L2)?;
+        let (_, entries) =
+            HNSWIndex::build_with_parallelism(4, 8, 0, column, DistanceType::L2, false)?;
         // Each component is a single-row binary column.
         let columns: Vec<_> = entries.iter().map(|entry| entry.to_column()).collect();
         let components: Vec<_> = columns

@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -34,7 +33,6 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::BlockHLL;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
@@ -79,6 +77,33 @@ pub struct TxnTableDelta {
     pub statistics_row_count: u64,
 }
 
+/// A successful write of at least one logical row version. Unknown byte counts
+/// contribute zero to this lower bound, but still request an idle check.
+#[derive(Debug, Clone, Copy)]
+pub struct ReclusterWriteHint {
+    pub known_bytes: u64,
+    pub cluster_key_id: u32,
+    /// Provisional while buffered in a transaction; replaced after successful COMMIT.
+    pub committed_at: std::time::Instant,
+}
+
+impl ReclusterWriteHint {
+    pub fn merge(&mut self, next: Self) {
+        if self.cluster_key_id != next.cluster_key_id {
+            *self = next;
+        } else {
+            self.known_bytes = self.known_bytes.saturating_add(next.known_bytes);
+        }
+    }
+}
+
+/// Which post-write hooks a statement requests, independently of the table's routing mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TableHookScope {
+    Full,
+    ReclusterOnly,
+}
+
 /// Inputs for an automatic table hook, never an execution context or a held lock.
 /// Repeated writes to the same table are merged until a successful COMMIT takes them.
 #[derive(Debug, Clone)]
@@ -88,8 +113,9 @@ pub struct TxnTableHook {
     pub table: String,
     pub table_id: u64,
     pub compaction_num_block_hint: u64,
-    pub written_segments: HashSet<Location>,
     pub enable_auto_analyze: bool,
+    pub scope: TableHookScope,
+    pub recluster_write: Option<ReclusterWriteHint>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -593,17 +619,29 @@ impl TxnManager {
             hook.compaction_num_block_hint = hook
                 .compaction_num_block_hint
                 .max(previous.compaction_num_block_hint);
-            hook.written_segments.extend(previous.written_segments);
             hook.enable_auto_analyze |= previous.enable_auto_analyze;
+            if previous.scope == TableHookScope::Full {
+                hook.scope = TableHookScope::Full;
+            }
+            if let Some(mut write) = previous.recluster_write {
+                if let Some(next) = hook.recluster_write {
+                    write.merge(next);
+                }
+                hook.recluster_write = Some(write);
+            }
         }
         self.txn_buffer.table_hooks.insert(key, hook);
     }
 
-    /// COMMIT switches to AutoCommit before this transfer, but must not clear the buffer first.
-    pub fn take_table_hooks(&mut self) -> Vec<TxnTableHook> {
-        std::mem::take(&mut self.txn_buffer.table_hooks)
-            .into_values()
-            .collect()
+    /// Transfer ownership without allocating while the transaction manager is locked.
+    /// COMMIT switches to AutoCommit before this transfer, then clears the buffer.
+    pub fn take_table_hooks(
+        &mut self,
+    ) -> (String, impl ExactSizeIterator<Item = TxnTableHook> + use<>) {
+        (
+            std::mem::take(&mut self.txn_id),
+            std::mem::take(&mut self.txn_buffer.table_hooks).into_values(),
+        )
     }
 
     pub fn get_table_txn_begin_timestamp(&self, table_id: u64) -> Option<DateTime<Utc>> {

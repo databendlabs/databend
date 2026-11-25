@@ -23,7 +23,6 @@ use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::operations::common::ConflictResolveContext;
-use crate::operations::common::SnapshotChanges;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
@@ -34,20 +33,25 @@ pub struct CommitMeta {
     pub logical_deleted_rows: u64,
     pub hll: BlockHLL,
     pub top_n: BlockTopN,
+    /// Locally measured uncompressed bytes of new logical row versions, excluding
+    /// rewritten survivors. `None` means unknown, including after Flight transport.
+    /// Keep this out of the wire format until distributed accounting is supported.
+    #[serde(skip)]
+    pub logical_written_bytes: Option<u64>,
 }
 
 impl CommitMeta {
+    /// No segment changes to resolve. This can still commit a truncate snapshot.
     pub fn empty(table_id: u64) -> Self {
-        CommitMeta {
-            conflict_resolve_context: ConflictResolveContext::ModifiedSegmentExistsInLatest(
-                SnapshotChanges::default(),
-            ),
+        Self {
+            conflict_resolve_context: ConflictResolveContext::None,
             new_segment_locs: vec![],
             table_id,
             logical_updated_rows: 0,
             logical_deleted_rows: 0,
             hll: HashMap::new(),
             top_n: HashMap::new(),
+            logical_written_bytes: None,
         }
     }
 
@@ -57,6 +61,7 @@ impl CommitMeta {
         table_id: u64,
         logical_updated_rows: u64,
         logical_deleted_rows: u64,
+        logical_written_bytes: Option<u64>,
         hll: BlockHLL,
         top_n: BlockTopN,
     ) -> Self {
@@ -68,6 +73,7 @@ impl CommitMeta {
             logical_deleted_rows,
             hll,
             top_n,
+            logical_written_bytes,
         }
     }
 }

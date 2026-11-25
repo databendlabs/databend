@@ -895,6 +895,7 @@ mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
+    use databend_common_pipeline::sources::BlocksSource;
     use databend_common_pipeline_transforms::AccumulatingTransform;
     use databend_common_pipeline_transforms::BlockCompactMeta;
     use databend_common_pipeline_transforms::BlockMetaTransform;
@@ -908,13 +909,23 @@ mod tests {
     use databend_common_storages_fuse::io::WriteSettings;
     use databend_common_storages_fuse::io::serialize_block;
     use databend_common_storages_fuse::operations::MutationLogEntry;
+    use databend_common_storages_fuse::operations::MutationLogs;
+    use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
+    use databend_common_storages_fuse::operations::ReclusterIndexOutput;
+    use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
     use databend_storages_common_index::MergeSourceDirectory;
     use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
     use databend_storages_common_table_meta::meta::SegmentInfo;
+    use futures::TryStreamExt;
 
     use super::*;
+    use crate::pipelines::PipelineBuildResult;
+    use crate::pipelines::executor::ExecutorSettings;
+    use crate::pipelines::executor::PipelinePullingExecutor;
     use crate::test_kits::TestFixture;
+    use crate::test_kits::execute_command;
+    use crate::test_kits::execute_query;
 
     async fn check_external_merge<R: Rows + 'static>(
         force_initial: bool,
@@ -1107,9 +1118,6 @@ mod tests {
                 "merge work must honour cancellation"
             );
         } else {
-            use crate::pipelines::PipelineBuildResult;
-            use crate::pipelines::executor::ExecutorSettings;
-            use crate::pipelines::executor::PipelinePullingExecutor;
             let keys = merge_factory.merge_config.keys.clone();
             let group_factories = merge_factory.into_groups(groups)?;
             assert_eq!(
@@ -1228,10 +1236,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_horizontal_merge_sql_setting_and_defaults() -> anyhow::Result<()> {
-        use futures::TryStreamExt;
-
-        use crate::test_kits::execute_command;
-        use crate::test_kits::execute_query;
         let fixture = TestFixture::setup().await?;
         fixture.create_default_database().await?;
         for (sql, enabled, force) in [
@@ -1385,11 +1389,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_horizontal_merge_read_failure_keeps_snapshot() -> anyhow::Result<()> {
-        use futures::TryStreamExt;
-
-        use crate::test_kits::execute_command;
-        use crate::test_kits::execute_query;
-
         let fixture = TestFixture::setup().await?;
         for sql in [
             "create table default.multiway_failure(k int, payload string) cluster by(k) row_per_block=100",
@@ -1456,11 +1455,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_recluster_inverted_index_merge_search_and_failure() -> anyhow::Result<()> {
-        use futures::TryStreamExt;
-
-        use crate::test_kits::execute_command;
-        use crate::test_kits::execute_query;
-
         let fixture = TestFixture::setup().await?;
         for sql in [
             "create table default.index_merge(k int, content string, inverted index text_idx(content)) cluster by(k) row_per_block=100 block_per_segment=2",
@@ -1505,13 +1499,8 @@ mod tests {
                 .map(|(_, block)| block.inverted_index_metas.clone().unwrap_or_default())
                 .collect(),
         };
-        use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
         assert!(ReclusterIndexMergeInputs::try_create(fuse, &task)?.is_some());
         // Interleaved source rows, with output serialization completing in reverse order.
-        use databend_common_storages_fuse::operations::MutationLogs;
-        use databend_common_storages_fuse::operations::ReclusterIndexOutput;
-        use databend_common_storages_fuse::operations::ReclusterIndexRowRange;
-        use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
         let inputs = ReclusterIndexMergeInputs::try_create(fuse, &task)?.unwrap();
         let mut collector =
             TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), inputs);
@@ -1738,10 +1727,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "recluster performance probe"]
     async fn benchmark_horizontal_merge_wide_rows() -> anyhow::Result<()> {
-        use futures::TryStreamExt;
-
-        use crate::test_kits::execute_command;
-        use crate::test_kits::execute_query;
         let fixture = TestFixture::setup().await?;
         let mut reference_result = None;
         let rows_per_source = env::var("RECLUSTER_BENCH_ROWS")
@@ -1804,12 +1789,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_second_stage_merges_heads_without_local_memory_threshold() -> anyhow::Result<()> {
-        use databend_common_pipeline::sources::BlocksSource;
-
-        use crate::pipelines::PipelineBuildResult;
-        use crate::pipelines::executor::ExecutorSettings;
-        use crate::pipelines::executor::PipelinePullingExecutor;
-
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
         let mut pipeline = Pipeline::create();

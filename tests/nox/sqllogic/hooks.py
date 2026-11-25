@@ -157,6 +157,8 @@ def prepare_tpch(connection: DatabendConnection) -> None:
     data_dir = generate_duckdb_data("tpch", 1)
     connection.execute("DROP STAGE IF EXISTS s1")
     connection.execute(f"CREATE STAGE s1 URL='fs://{data_dir}/'")
+    # Keep the layout stable across test handlers and backup/restore.
+    connection.execute("SET enable_compact_after_write = 0")
     for table in TPCH_TABLES:
         print(table)
         connection.execute(

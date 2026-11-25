@@ -112,6 +112,14 @@ pub async fn collect_refresh_plan(
     let check_policy = ctx.cache_policy();
     let mut readers = BTreeMap::new();
     let mut blocks = VecDeque::new();
+    let automatic = ctx.is_automatic_maintenance();
+    let concurrency = if automatic {
+        REFRESH_CHECK_CONCURRENCY
+            .min(ctx.get_settings().get_max_storage_io_requests()? as usize)
+            .max(1)
+    } else {
+        REFRESH_CHECK_CONCURRENCY
+    };
     // Locate targets only once. No other segment metadata or block data is read.
     for (segment_idx, location) in snapshot.segments.iter().enumerate() {
         if targets
@@ -146,17 +154,37 @@ pub async fn collect_refresh_plan(
                         check_policy,
                     )
                     .await?;
-                    let missing = try_join_all(specs.iter().map(|spec| async {
-                        Ok::<_, ErrorCode>(
-                            needs_refresh(operator, &meta, &spec.index, &spec.schema, &existing)
+                    // Background blocks already share the grant's IO slots. Do not
+                    // multiply those slots by the number of indexes per block.
+                    let missing = if automatic {
+                        let mut missing = HashSet::new();
+                        for spec in specs {
+                            if needs_refresh(operator, &meta, &spec.index, &spec.schema, &existing)
+                                .await?
+                            {
+                                missing.insert(spec.index.name.clone());
+                            }
+                        }
+                        missing
+                    } else {
+                        try_join_all(specs.iter().map(|spec| async {
+                            Ok::<_, ErrorCode>(
+                                needs_refresh(
+                                    operator,
+                                    &meta,
+                                    &spec.index,
+                                    &spec.schema,
+                                    &existing,
+                                )
                                 .await?
                                 .then(|| spec.index.name.clone()),
-                        )
-                    }))
-                    .await?
-                    .into_iter()
-                    .flatten()
-                    .collect::<HashSet<_>>();
+                            )
+                        }))
+                        .await?
+                        .into_iter()
+                        .flatten()
+                        .collect::<HashSet<_>>()
+                    };
                     Ok::<_, ErrorCode>((
                         block_idx,
                         meta,
@@ -173,7 +201,7 @@ pub async fn collect_refresh_plan(
                     ))
                 }
             })
-            .buffered(REFRESH_CHECK_CONCURRENCY)
+            .buffered(concurrency)
             .try_collect::<Vec<_>>()
             .await?;
         for (block_idx, meta, missing, existing, hlls, top_n) in checks {

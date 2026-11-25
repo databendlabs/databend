@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::MemoryMeter;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
@@ -44,8 +45,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
+use databend_common_storages_fuse::operations::ReclusterScan;
 use databend_common_storages_fuse::operations::VectorFinalPlan;
-use databend_common_storages_fuse::operations::VectorReclusterBlock;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
 use databend_common_storages_fuse::operations::vector_final_plan;
 use databend_common_storages_fuse::segment_zone_map::RefreshOutcome;
@@ -84,25 +85,42 @@ use crate::sessions::TableContextTableManagement;
 use crate::sessions::TableContextTelemetry;
 
 const MAX_SEGMENT_CLAIM_RETRIES: usize = 3;
-/// Committed FINAL rounds between two segment zone map refreshes; the rounds
-/// after the last refresh are covered once the statement ends.
+/// Committed rounds between two segment zone map refreshes; the rounds after the
+/// last refresh are covered once the job finishes.
 const ZONE_MAP_REFRESH_ROUNDS: usize = 10;
 
-#[derive(Debug, PartialEq, Eq)]
-enum ReclusterRoundOutcome {
+/// Result of one recluster round, the unit a recluster job advances by.
+#[derive(Debug)]
+pub(crate) enum ReclusterRoundOutcome {
     Committed,
+    ScanProgress,
     NoParts,
     ClaimRetriesExhausted,
+    /// The round lost a retryable race with a concurrent change. The job keeps its
+    /// progress, so a later round continues from the same position.
+    Conflict(ErrorCode),
 }
 
 impl ReclusterRoundOutcome {
     fn stop_reason(&self) -> Option<&'static str> {
         match self {
-            Self::Committed => None,
+            Self::Committed | Self::ScanProgress | Self::Conflict(_) => None,
             Self::NoParts => Some("no_recluster_parts"),
             Self::ClaimRetriesExhausted => Some("claim_retries_exhausted"),
         }
     }
+}
+
+/// Errors a round hits when it races a concurrent change. Retrying replans on the
+/// latest snapshot.
+fn is_retryable_conflict(e: &ErrorCode) -> bool {
+    matches!(
+        e.code(),
+        ErrorCode::LEASE_EXPIRED
+            | ErrorCode::TABLE_ALREADY_LOCKED
+            | ErrorCode::TABLE_VERSION_MISMATCHED
+            | ErrorCode::UNRESOLVABLE_CONFLICT
+    )
 }
 
 pub struct ReclusterTableInterpreter {
@@ -146,44 +164,16 @@ impl Interpreter for ReclusterTableInterpreter {
             let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
 
             let mut rounds = 0;
-            let mut push_downs = None;
-            // FINAL carry is scoped to this fixed-scan statement loop.
-            // A new FINAL statement starts from the table head again.
-            let mut linear_final_carry = ReclusterFinalCarry::default();
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
-            // Vector FINAL: what it does is decided from the blocks when it starts (see
-            // `vector_final_plan`); the full pass starts at once. This scans every block
-            // meta, so it is skipped when FINAL rewrites part of the table at most:
-            // `LIMIT 0` does no work, and a `WHERE` selection only rewrites the selected
-            // segments, which the scan would not tell apart. These recluster the level-0
-            // blocks by rounds, as a recluster without FINAL does.
-            let vector_plan =
-                if is_final && self.plan.limit != Some(0) && self.plan.selection.is_none() {
-                    match self.vector_recluster_blocks().await {
-                        Ok(Some(blocks)) => {
-                            let plan = vector_final_plan(&blocks);
-                            if plan == VectorFinalPlan::FullPass {
-                                let blocks: HashSet<String> =
-                                    blocks.into_iter().map(|block| block.location).collect();
-                                info!(
-                                    event = "recluster.vector_full_pass",
-                                    blocks = blocks.len();
-                                    "Recluster starts the vector full pass"
-                                );
-                                linear_final_carry.start_vector_full_pass(blocks);
-                            }
-                            plan
-                        }
-                        Ok(None) => VectorFinalPlan::Rounds,
-                        Err(e) => return Err(e.with_context("failed to execute")),
-                    }
-                } else {
-                    VectorFinalPlan::Rounds
-                };
-            let mut committed_rounds = 0;
-            let mut zone_map_rounds = 0;
+            // One statement drives one job; a new FINAL statement starts from the table
+            // head again.
+            let mut job = ReclusterJob::new(self.plan.clone(), self.allow_segment_claims);
+            let vector_plan = job
+                .prepare_final(&ctx)
+                .await
+                .map_err(|e| e.with_context("failed to execute"))?;
             let (result, stop_reason) = loop {
                 if let Err(err) = ctx.check_aborting() {
                     error!(
@@ -200,54 +190,34 @@ impl Interpreter for ReclusterTableInterpreter {
                 }
 
                 rounds += 1;
-                let res = self
-                    .execute_recluster(&mut push_downs, &mut linear_final_carry)
-                    .await;
-
-                match res {
+                match job.run_round(&ctx).await {
+                    Ok(ReclusterRoundOutcome::Conflict(e)) if is_final => {
+                        // Keep FINAL carry across retryable conflicts. FINAL is
+                        // a bounded fixed scan and does not restart from table
+                        // head to chase concurrent snapshot drift.
+                        warn!(
+                            event = "recluster.retry",
+                            reason = "retryable_conflict",
+                            round = rounds,
+                            code = e.code(),
+                            error :? = e;
+                            "Recluster round failed with retryable conflict"
+                        );
+                    }
+                    Ok(ReclusterRoundOutcome::Conflict(e)) | Err(e) => {
+                        error!(
+                            event = "recluster.failed",
+                            round = rounds,
+                            code = e.code(),
+                            error :? = e;
+                            "Recluster round failed"
+                        );
+                        break (Err(e), "error");
+                    }
                     Ok(outcome) => {
                         // The full pass ends when only blocks it wrote remain.
                         if let Some(reason) = outcome.stop_reason() {
                             break (Ok(()), reason);
-                        }
-                        committed_rounds += 1;
-                        // A FINAL recluster may run for a long time, so the segment
-                        // zone map is refreshed along the way, not only at the end.
-                        if committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
-                            self.refresh_segment_zone_map().await;
-                            zone_map_rounds = committed_rounds;
-                        }
-                    }
-                    Err(e) => {
-                        if is_final
-                            && matches!(
-                                e.code(),
-                                ErrorCode::LEASE_EXPIRED
-                                    | ErrorCode::TABLE_ALREADY_LOCKED
-                                    | ErrorCode::TABLE_VERSION_MISMATCHED
-                                    | ErrorCode::UNRESOLVABLE_CONFLICT
-                            )
-                        {
-                            // Keep FINAL carry across retryable conflicts. FINAL is
-                            // a bounded fixed scan and does not restart from table
-                            // head to chase concurrent snapshot drift.
-                            warn!(
-                                event = "recluster.retry",
-                                reason = "retryable_conflict",
-                                round = rounds,
-                                code = e.code(),
-                                error :? = e;
-                                "Recluster round failed with retryable conflict"
-                            );
-                        } else {
-                            error!(
-                                event = "recluster.failed",
-                                round = rounds,
-                                code = e.code(),
-                                error :? = e;
-                                "Recluster round failed"
-                            );
-                            break (Err(e), "error");
                         }
                     }
                 }
@@ -255,7 +225,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
                 ctx.set_status_info(&format!(
                     "[FUSE-RECLUSTER] Executed rounds={} committed_rounds={} elapsed={:?}",
-                    rounds, committed_rounds, elapsed_time,
+                    rounds, job.committed_rounds, elapsed_time,
                 ));
 
                 if !is_final {
@@ -280,19 +250,14 @@ impl Interpreter for ReclusterTableInterpreter {
                 table = self.plan.table.as_str(),
                 is_final,
                 rounds,
-                committed_rounds,
+                committed_rounds = job.committed_rounds,
                 stop_reason,
                 success = result.is_ok(),
                 elapsed :? = SystemTime::now().duration_since(start).unwrap_or_default();
                 "Recluster finished"
             );
 
-            if committed_rounds > zone_map_rounds {
-                self.refresh_segment_zone_map().await;
-            }
-            if committed_rounds > 0 {
-                self.vacuum_table_history().await;
-            }
+            job.finish(&ctx).await;
 
             result?;
             Ok(PipelineBuildResult::create())
@@ -300,42 +265,171 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 }
 
-impl ReclusterTableInterpreter {
-    async fn vector_recluster_blocks(&self) -> Result<Option<Vec<VectorReclusterBlock>>> {
+/// Progress of one recluster job across its rounds. The job holds no query context;
+/// each round runs on the context it is given.
+pub(crate) struct ReclusterJob {
+    plan: ReclusterPlan,
+    allow_segment_claims: bool,
+    push_downs: Option<PushDownInfo>,
+    carry: ReclusterFinalCarry,
+    committed_rounds: usize,
+    zone_map_rounds: usize,
+    background_cluster_key_id: Option<u32>,
+    retained_full_pass_bytes: u64,
+}
+
+impl ReclusterJob {
+    pub(crate) fn background(plan: ReclusterPlan, cluster_key_id: u32) -> Self {
+        let mut job = Self::new(plan, true);
+        job.background_cluster_key_id = Some(cluster_key_id);
+        job
+    }
+
+    pub(crate) fn set_target_name(&mut self, database: String, table: String) {
+        self.plan.database = database;
+        self.plan.table = table;
+    }
+
+    fn new(plan: ReclusterPlan, allow_segment_claims: bool) -> Self {
+        Self {
+            plan,
+            allow_segment_claims,
+            push_downs: None,
+            carry: ReclusterFinalCarry::default(),
+            committed_rounds: 0,
+            zone_map_rounds: 0,
+            background_cluster_key_id: None,
+            retained_full_pass_bytes: 0,
+        }
+    }
+
+    pub(crate) fn retained_full_pass_bytes(&self) -> u64 {
+        self.retained_full_pass_bytes
+    }
+
+    /// Decide the vector FINAL scope once, before the first round of the job.
+    pub(crate) async fn prepare_final(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+    ) -> Result<VectorFinalPlan> {
         let ReclusterPlan {
             catalog,
             database,
             table,
             ..
         } = &self.plan;
-        self.ctx.evict_table_from_cache(catalog, database, table)?;
-        let tbl = self.ctx.get_table(catalog, database, table).await?;
+        // LIMIT 0 does no work. A WHERE selection keeps the level-0 round strategy,
+        // since the initial scan cannot distinguish its selected segments.
+        if !self.plan.is_final || self.plan.limit == Some(0) || self.plan.selection.is_some() {
+            return Ok(VectorFinalPlan::Rounds);
+        }
+        if self.background_cluster_key_id.is_none() {
+            // The hook has already refreshed and validated its target in this context.
+            ctx.evict_table_from_cache(catalog, database, table)?;
+        }
+        let tbl = ctx.get_table(catalog, database, table).await?;
+        check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
         let Ok(fuse_table) = FuseTable::try_from_table(tbl.as_ref()) else {
-            return Ok(None);
+            return Ok(VectorFinalPlan::Rounds);
         };
-        fuse_table.vector_recluster_blocks(self.ctx.clone()).await
+        let Some(blocks) = fuse_table.vector_recluster_blocks(ctx.clone()).await? else {
+            return Ok(VectorFinalPlan::Rounds);
+        };
+        let plan = vector_final_plan(&blocks);
+        if plan == VectorFinalPlan::FullPass {
+            let init = || {
+                let blocks: HashSet<_> = blocks.into_iter().map(|block| block.location).collect();
+                let count = blocks.len();
+                self.carry.start_vector_full_pass(blocks);
+                count
+            };
+            let blocks = if self.background_cluster_key_id.is_some() {
+                // The set is immutable across units. Measure its own allocation, a
+                // lower bound that excludes path strings moved in from the scan.
+                let mut meter = MemoryMeter::default();
+                let count = meter.track(init);
+                self.retained_full_pass_bytes = meter.bytes() as u64;
+                count
+            } else {
+                init()
+            };
+            info!(event = "recluster.vector_full_pass", blocks; "Recluster starts the vector full pass");
+        }
+        Ok(plan)
+    }
+
+    pub(crate) fn reset_candidates(&mut self) {
+        self.carry.reset_candidates();
+    }
+
+    /// Run one round: plan on the latest snapshot, rewrite, and commit. A retryable
+    /// conflict is reported as [`ReclusterRoundOutcome::Conflict`] and keeps the
+    /// job's progress.
+    pub(crate) async fn run_round(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+    ) -> Result<ReclusterRoundOutcome> {
+        let mut push_downs = self.push_downs.take();
+        let mut carry = std::mem::take(&mut self.carry);
+        let background = self.background_cluster_key_id.is_some();
+        let result = self
+            .execute_recluster(ctx, &mut push_downs, &mut carry)
+            .await;
+        if background {
+            // The next hook unit gets a fresh grant. Release candidate metadata and
+            // decode workers even on error, but keep the vector FINAL block locations.
+            carry.release_round_resources();
+        }
+        self.push_downs = push_downs;
+        self.carry = carry;
+
+        match result {
+            Ok(ReclusterRoundOutcome::Committed) => {
+                self.committed_rounds += 1;
+                // A job may run for a long time, so the segment zone map is
+                // refreshed along the way, not only at the end.
+                if self.committed_rounds % ZONE_MAP_REFRESH_ROUNDS == 0 {
+                    self.refresh_segment_zone_map(ctx).await;
+                    self.zone_map_rounds = self.committed_rounds;
+                }
+                Ok(ReclusterRoundOutcome::Committed)
+            }
+            Err(e) if is_retryable_conflict(&e) => Ok(ReclusterRoundOutcome::Conflict(e)),
+            other => other,
+        }
+    }
+
+    /// Cover the rounds committed since the last zone map refresh, then vacuum the
+    /// table history once for the whole job.
+    pub(crate) async fn finish(&self, ctx: &Arc<QueryContext>) {
+        if self.committed_rounds > self.zone_map_rounds {
+            self.refresh_segment_zone_map(ctx).await;
+        }
+        if self.committed_rounds > 0 {
+            self.vacuum_table_history(ctx).await;
+        }
     }
 
     /// Refresh the segment zone map on the snapshot the last round committed,
     /// subject to its start decision. Recluster is the only writer that builds
     /// it; every other commit carries the pointer along. Failures never fail
     /// the recluster.
-    async fn refresh_segment_zone_map(&self) {
+    async fn refresh_segment_zone_map(&self, ctx: &Arc<QueryContext>) {
         let result = async {
-            let settings = self.ctx.get_settings();
+            let settings = ctx.get_settings();
             if !settings.get_enable_segment_zone_map()? {
                 return Ok(RefreshOutcome::Skipped);
             }
             // The round's on-finished hook evicted the table from the cache, so this
             // is the snapshot the round committed.
-            self.ctx.clear_table_meta_timestamps_cache();
-            let table = self
-                .ctx
+            ctx.clear_table_meta_timestamps_cache();
+            let table = ctx
                 .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
                 .await?;
+            check_expected_table_id(table.get_id(), self.plan.expected_table_id)?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
             let threshold = settings.get_segment_zone_map_full_segment_threshold()?;
-            let ctx = self.ctx.clone();
+            let ctx = ctx.clone();
             fuse_table.refresh_segment_zone_map(ctx, threshold).await
         }
         .await;
@@ -345,7 +439,7 @@ impl ReclusterTableInterpreter {
                 info!("recluster: segment zone map refresh finished: {outcome:?}");
                 // The refresh committed a snapshot; the next round must not plan on
                 // the cached table and pay a version-mismatch retry at commit.
-                let evicted = self.ctx.evict_table_from_cache(
+                let evicted = ctx.evict_table_from_cache(
                     &self.plan.catalog,
                     &self.plan.database,
                     &self.plan.table,
@@ -358,9 +452,9 @@ impl ReclusterTableInterpreter {
         }
     }
 
-    async fn vacuum_table_history(&self) {
+    async fn vacuum_table_history(&self, ctx: &Arc<QueryContext>) {
         if LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)
+            .check_enterprise_enabled(ctx.get_license_key(), Vacuum)
             .is_err()
         {
             return;
@@ -369,15 +463,10 @@ impl ReclusterTableInterpreter {
         let result = async {
             // Bypass the query-level cache. Automatic maintenance must verify the original
             // table ID again; user RECLUSTER statements keep their name-bound semantics.
-            let table = self
-                .ctx
+            let table = ctx
                 .get_catalog(&self.plan.catalog)
                 .await?
-                .get_table(
-                    &self.ctx.get_tenant(),
-                    &self.plan.database,
-                    &self.plan.table,
-                )
+                .get_table(&ctx.get_tenant(), &self.plan.database, &self.plan.table)
                 .await?;
             check_expected_table_id(table.get_id(), self.plan.expected_table_id)?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -385,9 +474,9 @@ impl ReclusterTableInterpreter {
             if fuse_table.is_transient() {
                 return Ok::<_, ErrorCode>(());
             }
-            if is_auto_vacuum_enabled(self.ctx.as_ref(), fuse_table)? {
+            if is_auto_vacuum_enabled(ctx.as_ref(), fuse_table)? {
                 fuse_table
-                    .vacuum_table(self.ctx.clone(), &get_vacuum_handler(), true)
+                    .vacuum_table(ctx.clone(), &get_vacuum_handler(), true)
                     .await;
             }
             Ok::<_, ErrorCode>(())
@@ -401,12 +490,13 @@ impl ReclusterTableInterpreter {
 
     async fn execute_recluster(
         &self,
+        ctx: &Arc<QueryContext>,
         push_downs: &mut Option<PushDownInfo>,
         linear_final_carry: &mut ReclusterFinalCarry,
     ) -> Result<ReclusterRoundOutcome> {
-        self.ctx.clear_table_meta_timestamps_cache();
+        ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
-        let settings = self.ctx.get_settings();
+        let settings = ctx.get_settings();
 
         let ReclusterPlan {
             catalog,
@@ -422,16 +512,27 @@ impl ReclusterTableInterpreter {
         // Concurrent planning must evict this cache so the claim set is matched against the
         // latest snapshot.
         if use_segment_claims {
-            self.ctx.evict_table_from_cache(catalog, database, table)?;
+            ctx.evict_table_from_cache(catalog, database, table)?;
         }
-        let mut tbl = self.ctx.get_table(catalog, database, table).await?;
+        let mut tbl = ctx.get_table(catalog, database, table).await?;
         check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
         // Temporary tables are session-local, and their IDs are intentionally unsupported by
         // the segment-claim and lock catalog APIs.
         let claim_manager =
             (use_segment_claims && !tbl.is_temp()).then(CoordinationManager::instance);
+        let background = self.background_cluster_key_id.is_some();
         let mut claim_retries = 0;
         let (parts, snapshot, claim_guard) = loop {
+            // A fresh lookup (including after a claim race) can see a different key
+            // than the one used to start this hook job's vector full pass.
+            if self
+                .background_cluster_key_id
+                .is_some_and(|cluster_key_id| {
+                    tbl.get_table_info().meta.cluster_key_id() != Some(cluster_key_id)
+                })
+            {
+                return Ok(ReclusterRoundOutcome::NoParts);
+            }
             check_maintenance_target(tbl.as_ref(), &self.plan.target)?;
             if tbl.cluster_key_meta().is_none() {
                 return Err(ErrorCode::UnclusteredTable(format!(
@@ -439,17 +540,18 @@ impl ReclusterTableInterpreter {
                     database, table,
                 )));
             }
-            self.build_push_downs(push_downs, &tbl)?;
+            self.build_push_downs(ctx, push_downs, &tbl)?;
 
             let claimed_segments = if let Some(claim_manager) = &claim_manager {
                 claim_manager
-                    .claimed_segments(self.ctx.as_ref(), tbl.get_id())
+                    .claimed_segments(ctx.as_ref(), tbl.get_id())
                     .await?
             } else {
                 HashSet::new()
             };
             let candidate = self
                 .build_linear_candidate(
+                    ctx,
                     tbl.as_ref(),
                     push_downs,
                     *limit,
@@ -458,6 +560,15 @@ impl ReclusterTableInterpreter {
                 )
                 .await?;
             let Some((parts, snapshot, segments)) = candidate else {
+                if background && linear_final_carry.scan_incomplete() {
+                    return Ok(ReclusterRoundOutcome::ScanProgress);
+                }
+                if background && linear_final_carry.skipped_claimed_ranges() {
+                    // A manual FINAL may delegate claimed ranges; an automatic job
+                    // must revisit them after claim owners fail or finish.
+                    linear_final_carry.reset_candidates();
+                    return Ok(ReclusterRoundOutcome::ClaimRetriesExhausted);
+                }
                 return Ok(ReclusterRoundOutcome::NoParts);
             };
             let Some(claim_manager) = &claim_manager else {
@@ -465,7 +576,7 @@ impl ReclusterTableInterpreter {
             };
 
             let claim = claim_manager
-                .try_segment_claim(self.ctx.clone(), tbl.get_id(), segments)
+                .try_segment_claim(ctx.clone(), tbl.get_id(), segments)
                 .await?;
             if claim.is_some() {
                 break (parts, snapshot, claim);
@@ -484,29 +595,31 @@ impl ReclusterTableInterpreter {
             claim_retries += 1;
 
             // Let concurrent losers spread out before selecting another candidate set.
-            linear_final_carry.reset();
+            if background {
+                linear_final_carry.reset_candidates();
+            } else {
+                linear_final_carry.reset();
+            }
             let delay_ms = rand::thread_rng().gen_range(5..=20);
             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
 
-            self.ctx.evict_table_from_cache(catalog, database, table)?;
-            tbl = self.ctx.get_table(catalog, database, table).await?;
+            ctx.evict_table_from_cache(catalog, database, table)?;
+            tbl = ctx.get_table(catalog, database, table).await?;
             check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
         };
         let mut physical_plan =
-            self.build_linear_plan(tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
+            self.build_linear_plan(ctx, tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
         physical_plan.adjust_plan_id(&mut 0);
         let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+            build_query_pipeline_without_render_result_set(ctx, &physical_plan).await?;
         build_res.main_pipeline.add_lock_guard(claim_guard);
         {
-            let ctx = self.ctx.clone();
+            let ctx = ctx.clone();
             let catalog = self.plan.catalog.clone();
             let database = self.plan.database.clone();
             let table = self.plan.table.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
-                    // Retain parent-write refresh hints and published output
-                    // locations; index refresh filters out no-longer-live sources.
                     ctx.evict_table_from_cache(&catalog, &database, &table)?;
 
                     ctx.unload_spill_meta();
@@ -537,14 +650,14 @@ impl ReclusterTableInterpreter {
         let max_threads = settings.get_max_threads()? as usize;
         build_res.set_max_threads(max_threads);
 
-        let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
+        let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
 
         let mut pipelines = build_res.sources_pipelines;
         pipelines.push(build_res.main_pipeline);
 
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        self.ctx.set_executor(complete_executor.get_inner())?;
+        ctx.set_executor(complete_executor.get_inner())?;
         let execution_result = complete_executor.execute().await;
 
         // Make sure the executor and any pipeline-held claim start releasing before an error is
@@ -555,11 +668,17 @@ impl ReclusterTableInterpreter {
         drop(complete_executor);
 
         execution_result?;
+        if background {
+            // Replacement segments may be inserted before the current scan position.
+            // Revisit the latest head without maintaining an output-location lineage.
+            linear_final_carry.reset_candidates();
+        }
         Ok(ReclusterRoundOutcome::Committed)
     }
 
     async fn build_linear_candidate(
         &self,
+        ctx: &Arc<QueryContext>,
         tbl: &dyn Table,
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
@@ -567,9 +686,8 @@ impl ReclusterTableInterpreter {
         claimed_segments: &HashSet<String>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>, Vec<String>)>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
-        // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
-        // those tables on the conservative strategy until CREATE/ALTER CLUSTER BY
-        // materializes the option with value 1.
+        // Preserve manual and legacy-table strategy selection. Background FINAL jobs
+        // use the same table option without changing its meaning for other callers.
         let mode = if self.plan.is_final
             && fuse_table.get_option(FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER, 0u32) != 0
         {
@@ -577,11 +695,16 @@ impl ReclusterTableInterpreter {
         } else {
             ReclusterMode::Conservative
         };
+        let scan = if self.background_cluster_key_id.is_some() {
+            ReclusterScan::YieldAfterRange(limit)
+        } else {
+            ReclusterScan::Statement(limit)
+        };
         let Some((parts, snapshot)) = fuse_table
             .do_recluster(
-                self.ctx.clone(),
+                ctx.clone(),
                 push_downs.clone(),
-                limit,
+                scan,
                 mode,
                 linear_final_carry,
                 claimed_segments,
@@ -614,14 +737,13 @@ impl ReclusterTableInterpreter {
 
     fn build_linear_plan(
         &self,
+        ctx: &Arc<QueryContext>,
         tbl: &dyn Table,
         parts: ReclusterParts,
         snapshot: Arc<TableSnapshot>,
         acquire_commit_lock: bool,
     ) -> Result<PhysicalPlan> {
-        let table_meta_timestamps = self
-            .ctx
-            .get_table_meta_timestamps(tbl, Some(snapshot.clone()))?;
+        let table_meta_timestamps = ctx.get_table_meta_timestamps(tbl, Some(snapshot.clone()))?;
         let table_info = tbl.get_table_info().clone();
         let ReclusterParts {
             tasks,
@@ -635,7 +757,7 @@ impl ReclusterTableInterpreter {
         // Distributed placement preserves whole batches; unbatched strategies
         // route one task per node.
         let placements = task_batches.as_ref().map_or(tasks.len(), Vec::len);
-        let is_distributed = !self.ctx.get_cluster().is_empty() && placements > 1;
+        let is_distributed = !ctx.get_cluster().is_empty() && placements > 1;
         let mut input = PhysicalPlan::new(Recluster {
             tasks,
             task_batches,
@@ -678,17 +800,18 @@ impl ReclusterTableInterpreter {
 
     fn build_push_downs(
         &self,
+        ctx: &Arc<QueryContext>,
         push_downs: &mut Option<PushDownInfo>,
         tbl: &Arc<dyn Table>,
     ) -> Result<()> {
         if push_downs.is_none() {
             if let Some(expr) = &self.plan.selection {
-                let settings = self.ctx.get_settings();
+                let settings = ctx.get_settings();
                 let (mut bind_context, metadata) = bind_table(tbl.clone())?;
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let mut type_checker = TypeChecker::try_create(
                     &mut bind_context,
-                    self.ctx.clone(),
+                    ctx.clone(),
                     &name_resolution_ctx,
                     metadata,
                     &[],

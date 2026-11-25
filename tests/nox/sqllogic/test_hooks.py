@@ -138,9 +138,12 @@ class SqlLogicHooksTest(unittest.TestCase):
         generate.assert_called_once_with("tpch", 1)
         self.assertEqual(len(connection.scripts), 1)
         self.assertIn("CREATE TABLE IF NOT EXISTS nation", connection.scripts[0])
-        self.assertEqual(
-            len([sql for sql in connection.statements if sql.startswith("COPY INTO")]),
-            len(hooks.TPCH_TABLES),
+        copies = [
+            i for i, sql in enumerate(connection.statements) if sql.startswith("COPY INTO")
+        ]
+        self.assertEqual(len(copies), len(hooks.TPCH_TABLES))
+        self.assertLess(
+            connection.statements.index("SET enable_compact_after_write = 0"), copies[0]
         )
         self.assertEqual(
             len([sql for sql in connection.statements if sql.startswith("ANALYZE TABLE")]),

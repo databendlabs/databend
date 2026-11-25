@@ -139,6 +139,10 @@ impl TransformMergeCommitMeta {
             logical_deleted_rows: l.logical_deleted_rows + r.logical_deleted_rows,
             hll: merge_column_hll(l.hll, r.hll),
             top_n,
+            logical_written_bytes: l
+                .logical_written_bytes
+                .zip(r.logical_written_bytes)
+                .and_then(|(l, r)| l.checked_add(r)),
         })
     }
 }

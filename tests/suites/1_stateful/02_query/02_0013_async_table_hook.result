@@ -1,3 +1,2 @@
-async table hook config: ok
-async table hook dispatched: ok
-async table hook compact completed: ok
+async refresh: only committed increments; manual refresh backfills history: ok
+async recluster: zero Compact hint retained until warehouse idle; indexes preserved: ok

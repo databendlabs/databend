@@ -24,9 +24,35 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::table::Table;
 
+/// A successful write's published snapshot. The pre-commit table sequence orders
+/// notifications for the same table even when write-finished callbacks run out of order.
+#[derive(Debug)]
+pub struct RefreshAnchor {
+    pub snapshot_location: String,
+    pub base_table_seq: u64,
+}
+
 #[async_trait::async_trait]
 pub trait TableContextTableManagement: Send + Sync {
     fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
+
+    /// Only called for a successful logical data write, not a commit attempt.
+    fn record_recluster_write(
+        &self,
+        _table_id: u64,
+        _cluster_key_id: u32,
+        _logical_written_bytes: Option<u64>,
+    ) {
+    }
+
+    /// Offer the snapshot from a successful autocommit to a registered Refresh hook.
+    fn record_refresh_anchor(
+        &self,
+        _table_id: u64,
+        _base_table_seq: u64,
+        _snapshot_location: &str,
+    ) {
+    }
 
     fn get_table_meta_timestamps(
         &self,

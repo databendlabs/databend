@@ -120,6 +120,12 @@ impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         {
+            // Maintenance has independent contexts and may outlive the last foreground
+            // context. Quiesce it before removing the thread-scoped global services.
+            if let Some(service) = crate::table_maintenance::TableMaintenanceService::try_instance()
+            {
+                futures::executor::block_on(service.shutdown_for_test());
+            }
             log::set_max_level(log::LevelFilter::Off);
             databend_common_base::runtime::drop_guard(move || {
                 // Its workers outlive the test otherwise, and would look up the
@@ -159,6 +165,19 @@ impl Setup for OSSSetup {
 }
 
 impl TestFixture {
+    /// Prevent background maintenance units from racing the test.
+    pub async fn setup_with_stopped_maintenance() -> Result<Self> {
+        let fixture = Self::setup().await?;
+        fixture.stop_maintenance_scheduler().await;
+        Ok(fixture)
+    }
+
+    pub async fn stop_maintenance_scheduler(&self) {
+        crate::table_maintenance::TableMaintenanceService::instance()
+            .stop_scheduler_for_test()
+            .await;
+    }
+
     /// Create a new TestFixture with default config.
     pub async fn setup() -> Result<TestFixture> {
         let config = ConfigBuilder::create().config();

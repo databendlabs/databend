@@ -12,23 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::take_alloc_error_panic;
+use databend_common_catalog::table_context::RefreshAnchor;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
+use databend_common_metrics::table_maintenance::record_rejected;
 use databend_common_storage::init_stage_operator;
 use databend_common_storages_fuse::commit_with_backoff;
 use databend_common_storages_fuse::operations::vacuum_tables_from_info;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_meta_client::types::MatchSeq;
 use databend_storages_common_io::Files;
+use databend_storages_common_session::TableHookScope;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::TxnTableHook;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use futures::FutureExt;
 use log::error;
 use log::info;
 use log::warn;
@@ -88,20 +100,113 @@ impl Drop for ClearTxnManagerGuard {
 #[must_use]
 pub struct PostCommitHooks {
     ctx: Arc<QueryContext>,
-    table_hooks: Vec<TxnTableHook>,
+    table_hooks: Vec<(TxnTableHook, Option<RefreshAnchor>)>,
     txn_id: String,
 }
 
 impl PostCommitHooks {
+    fn prepare(
+        ctx: Arc<QueryContext>,
+        txn_id: String,
+        table_hooks: impl ExactSizeIterator<Item = TxnTableHook>,
+        req: &UpdateMultiTableMetaReq,
+        committed_at: Instant,
+    ) -> Option<Self> {
+        if table_hooks.len() == 0 {
+            return None;
+        }
+        // Prepare only after the transaction manager has been cleared, and only
+        // from the final request that succeeded (OCC may have rebuilt it).
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "recover without allocating an ErrorCode"
+        )]
+        let prepared = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let mut snapshots = None;
+            table_hooks
+                .map(|mut hook| {
+                    if let Some(write) = &mut hook.recluster_write {
+                        write.committed_at = committed_at;
+                    }
+                    let refresh = if hook.scope == TableHookScope::Full {
+                        snapshots
+                            .get_or_insert_with(|| {
+                                req.update_table_metas
+                                    .iter()
+                                    .filter_map(|(update, _)| {
+                                        let MatchSeq::Exact(seq) = update.seq else {
+                                            return None;
+                                        };
+                                        let location = update
+                                            .new_table_meta
+                                            .options
+                                            .get(OPT_KEY_SNAPSHOT_LOCATION)?;
+                                        Some((update.table_id, (seq, location)))
+                                    })
+                                    .collect::<HashMap<_, _>>()
+                            })
+                            .get(&hook.table_id)
+                            .map(|&(seq, location)| RefreshAnchor {
+                                snapshot_location: location.clone(),
+                                base_table_seq: seq,
+                            })
+                    } else {
+                        None
+                    };
+                    (hook, refresh)
+                })
+                .collect()
+        }));
+        match prepared {
+            Ok(table_hooks) => Some(Self {
+                ctx,
+                table_hooks,
+                txn_id,
+            }),
+            Err(error) => {
+                Self::report_panic(error, &txn_id);
+                None
+            }
+        }
+    }
+
     pub async fn execute(self) {
         // Maintenance builds and executes SQL pipelines. Keep its large future off the
         // caller's stack, including internal transactions nested in materialized-view refresh.
-        Box::pin(execute_deferred_table_hooks(
-            self.ctx,
-            self.table_hooks,
-            &self.txn_id,
-        ))
+        let txn_id = &self.txn_id;
+        // This outer boundary must not allocate: CatchUnwindFuture::create boxes
+        // its input before polling it. Protect the large future's Box allocation too.
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the outer boundary must also protect CatchUnwindFuture's allocation"
+        )]
+        let result = AssertUnwindSafe(async {
+            Box::pin(execute_deferred_table_hooks(
+                self.ctx,
+                self.table_hooks,
+                txn_id,
+            ))
+            .await;
+        })
+        .catch_unwind()
         .await;
+        if let Err(error) = result {
+            Self::report_panic(error, txn_id);
+        }
+    }
+
+    fn report_panic(error: Box<dyn Any + Send>, txn_id: &str) {
+        let _guard = LimitMemGuard::enter_unlimited();
+        // These allocation-free boundaries return the original panic payload instead
+        // of converting it to an allocating ErrorCode while still over the limit.
+        take_alloc_error_panic();
+        let message = error
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| error.downcast_ref::<&str>().copied())
+            .unwrap_or("unknown panic");
+        record_rejected("post_commit_panic");
+        warn!(txn_id, error = message; "Discard best-effort post-commit maintenance after panic");
     }
 }
 
@@ -121,7 +226,7 @@ pub async fn commit_transaction(ctx: Arc<QueryContext>) -> Result<Option<PostCom
     let is_active = ctx.txn_mgr().lock().is_active();
     if is_active {
         ctx.txn_mgr().lock().set_auto_commit();
-        let (tenant, req) = {
+        let (tenant, mut req) = {
             let txn_mgr = ctx.txn_mgr();
             let txn_mgr = txn_mgr.lock();
             (
@@ -129,20 +234,21 @@ pub async fn commit_transaction(ctx: Arc<QueryContext>) -> Result<Option<PostCom
                 txn_mgr.req(),
             )
         };
-        commit_with_backoff(ctx.clone(), &tenant, req).await?;
-        let (need_purge_files, tables_need_purge, table_hooks, txn_id) = {
+        commit_with_backoff(ctx.clone(), &tenant, &mut req).await?;
+        let committed_at = Instant::now();
+        let (need_purge_files, tables_need_purge, (txn_id, table_hooks)) = {
             let txn_mgr = ctx.txn_mgr();
             let mut txn_mgr = txn_mgr.lock();
             (
                 txn_mgr.need_purge_files(),
                 txn_mgr.table_need_purge(),
                 txn_mgr.take_table_hooks(),
-                txn_mgr.txn_id().to_string(),
             )
         };
-        // set_auto_commit only changed the state. Clear the actual buffer before any
-        // post-commit work, and finish the guard before handing tasks to another context.
+        // set_auto_commit only changed the state. Clear the buffer before post-commit work.
         drop(guard);
+        let hooks = PostCommitHooks::prepare(ctx.clone(), txn_id, table_hooks, &req, committed_at);
+        drop(req);
         for (stage_info, files) in need_purge_files {
             try_purge_files(ctx.clone(), &stage_info, &files).await;
         }
@@ -170,11 +276,7 @@ pub async fn commit_transaction(ctx: Arc<QueryContext>) -> Result<Option<PostCom
                 warn!("EE feature is not enabled, vacuum after transaction commit is skipped");
             }
         }
-        return Ok(Some(PostCommitHooks {
-            ctx,
-            table_hooks,
-            txn_id,
-        }));
+        return Ok(hooks);
     }
     Ok(None)
 }
@@ -203,5 +305,61 @@ async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, fil
     {
         metrics_inc_copy_purge_files_counter(files.len() as u32);
         metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_storages_fuse::FuseTable;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_recluster_handoff_honors_write_setting_without_compact_hint() -> Result<()> {
+        let fixture = TestFixture::setup_with_stopped_maintenance().await?;
+        let settings = fixture.default_session().get_settings();
+        fixture
+            .execute_command(
+                "CREATE TABLE hook_txn(id BIGINT NOT NULL) CLUSTER BY (id) \
+                 AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD = 0",
+            )
+            .await?;
+
+        for (write_setting, commit_setting) in [("1", "0"), ("0", "1")] {
+            settings.set_setting("enable_compact_after_write".into(), write_setting.into())?;
+            fixture.execute_command("BEGIN").await?;
+            fixture
+                .execute_command("INSERT INTO hook_txn VALUES (3), (4)")
+                .await?;
+            fixture
+                .execute_command("INSERT INTO hook_txn VALUES (5), (6)")
+                .await?;
+
+            // COMMIT must not override the settings of the writes in the transaction.
+            settings.set_setting("enable_compact_after_write".into(), commit_setting.into())?;
+            let before_commit = Instant::now();
+            let ctx = fixture.new_query_ctx().await?;
+            let hooks = commit_transaction(ctx.clone()).await?.unwrap();
+            assert!(!ctx.txn_mgr().lock().is_active());
+            assert_eq!(hooks.table_hooks.len(), 1);
+            let (hook, refresh) = &hooks.table_hooks[0];
+            assert_eq!(hook.compaction_num_block_hint, 0);
+            let table = ctx.get_table("default", "default", "hook_txn").await?;
+            let fuse = FuseTable::try_from_table(table.as_ref())?;
+            let refresh = refresh.as_ref().expect("a committed Refresh anchor");
+            assert_eq!(
+                fuse.snapshot_loc().as_deref(),
+                Some(refresh.snapshot_location.as_str())
+            );
+            if write_setting == "1" {
+                let write = hook.recluster_write.expect("a committed Recluster hint");
+                assert_eq!(write.known_bytes, 4 * size_of::<i64>() as u64);
+                assert!(write.committed_at >= before_commit);
+            } else {
+                assert!(hook.recluster_write.is_none());
+            }
+        }
+        Ok(())
     }
 }

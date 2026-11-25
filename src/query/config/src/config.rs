@@ -2048,13 +2048,15 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_queries_executor: bool,
 
-    /// Controls how table hooks after write are executed. Supported values: sync, async.
-    #[clap(long, value_name = "VALUE", default_value = "sync")]
-    pub table_hook_mode: String,
-
-    /// Max number of async table hook jobs running concurrently.
-    #[clap(long, value_name = "VALUE", default_value = "2")]
+    /// Maximum concurrent automatic maintenance units per node. Zero derives the ceiling
+    /// from effective CPU capacity (one unit per four cores, rounded up).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
     pub table_hook_async_max_concurrency: usize,
+
+    /// Optional absolute hard limit for per-node maintenance memory and commitments.
+    /// Zero leaves only the node limit and admission controls in effect.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub table_maintenance_max_memory_usage: u64,
 }
 
 impl Default for QueryConfig {
@@ -2076,16 +2078,12 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     fn try_into(mut self) -> Result<InnerQueryConfig> {
         let upgrade_to_pb = self.enable_meta_data_upgrade_json_to_pb_from_v307;
 
-        self.table_hook_mode = self.table_hook_mode.to_lowercase();
-        if !matches!(self.table_hook_mode.as_str(), "sync" | "async") {
-            return Err(ErrorCode::InvalidConfig(format!(
-                "table_hook_mode must be sync or async, got {}",
-                self.table_hook_mode
-            )));
-        }
-        if self.table_hook_async_max_concurrency == 0 {
+        let maintenance_memory = self.table_maintenance_max_memory_usage;
+        if maintenance_memory != 0
+            && !(256 * 1024 * 1024..=i64::MAX as u64).contains(&maintenance_memory)
+        {
             return Err(ErrorCode::InvalidConfig(
-                "table_hook_async_max_concurrency must be greater than 0",
+                "table_maintenance_max_memory_usage must be zero (disabled) or between 256 MiB and i64::MAX bytes",
             ));
         }
         if self.warehouse_id.is_empty() {

@@ -137,6 +137,7 @@ impl CaptureLogSettings {
     }
 }
 
+#[derive(Default)]
 pub struct TrackingPayload {
     pub query_id: Option<String>,
     pub warehouse_id: Option<String>,
@@ -436,22 +437,7 @@ impl ThreadTracker {
     pub(crate) fn empty() -> Self {
         Self {
             out_of_limit_desc: None,
-            payload: Arc::new(TrackingPayload {
-                profile: None,
-                metrics: None,
-                mem_stat: None,
-                query_id: None,
-                warehouse_id: None,
-                io_stats: None,
-                capture_log_settings: None,
-                time_series_profile: None,
-                local_time_series_profile: None,
-                workload_group_resource: None,
-                processor_interrupt: None,
-                perf_enabled: false,
-                perf_query_token: 0,
-                process_rows: AtomicUsize::new(0),
-            }),
+            payload: Arc::new(TrackingPayload::default()),
         }
     }
 

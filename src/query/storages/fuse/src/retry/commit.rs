@@ -44,10 +44,12 @@ use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
 
+/// Rebuilds `req` in place on conflict. Only on success does it describe the
+/// metadata that was committed.
 pub async fn commit_with_backoff(
     ctx: Arc<dyn TableContext>,
     tenant: &Tenant,
-    mut req: UpdateMultiTableMetaReq,
+    req: &mut UpdateMultiTableMetaReq,
 ) -> Result<()> {
     let catalog = ctx.get_default_catalog()?;
     let mut backoff = set_backoff(None, None, None);
@@ -58,7 +60,7 @@ pub async fn commit_with_backoff(
     // and remains constant across all retries.
     // Also cache the original snapshots for statistics merging.
     let (table_segments_diffs, table_original_snapshots) =
-        compute_table_segments_diffs(ctx.clone(), &req).await?;
+        compute_table_segments_diffs(ctx.clone(), req).await?;
     // Snapshot counters may lack epochs or restart. Retry the same complete
     // transaction delta, recorded only after each write was successfully buffered.
     let table_deltas = ctx.txn_mgr().lock().take_table_deltas();
@@ -70,7 +72,7 @@ pub async fn commit_with_backoff(
         let Err(update_failed_tbls) = ret else {
             // Retries can replace the buffered snapshots with merged snapshots.
             // Publish only the locations in the request that actually committed.
-            write_snapshot_hints(ctx.as_ref(), &req).await;
+            write_snapshot_hints(ctx.as_ref(), req).await;
             return Ok(());
         };
         let Some(duration) = backoff.next_backoff() else {
@@ -84,7 +86,7 @@ pub async fn commit_with_backoff(
         retries += 1;
         try_rebuild_req(
             ctx.clone(),
-            &mut req,
+            req,
             update_failed_tbls,
             &table_segments_diffs,
             &table_original_snapshots,

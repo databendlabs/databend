@@ -26,7 +26,6 @@ pub use databend_common_component::FragmentId;
 pub use databend_common_component::MutationState;
 pub use databend_common_component::ReadBlockThresholdsState;
 pub use databend_common_component::ResultCacheState;
-pub use databend_common_component::SegmentLocationsState;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
@@ -73,6 +72,7 @@ pub use table::TableContextCopy;
 pub use table::TableContextStage;
 pub use table::TableContextTableFactory;
 pub use table_access::TableContextTableAccess;
+pub use table_management::RefreshAnchor;
 pub use table_management::TableContextTableManagement;
 
 pub mod prelude {
@@ -82,7 +82,6 @@ pub mod prelude {
     pub use super::MutationState;
     pub use super::ReadBlockThresholdsState;
     pub use super::ResultCacheState;
-    pub use super::SegmentLocationsState;
     pub use super::TableContext;
     pub use super::TableContextAuthorization;
     pub use super::TableContextCachePolicy;
@@ -212,7 +211,18 @@ pub trait TableContext:
 
     fn result_cache_state(&self) -> &ResultCacheState;
 
-    fn written_segment_locations(&self) -> &SegmentLocationsState;
+    /// Node-admitted automatic maintenance, including its remote fragments. This does
+    /// not include synchronous write hooks or explicit user maintenance statements.
+    fn is_automatic_maintenance(&self) -> bool {
+        false
+    }
+
+    /// Defer cooperative automatic-maintenance cancellation across metadata publication.
+    /// Foreground statements keep their existing cancellation semantics. The service may
+    /// still force cancellation after its bounded shutdown/cleanup grace expires.
+    fn begin_maintenance_publication(&self) -> Result<Option<Box<dyn Send>>> {
+        Ok(None)
+    }
 
     /// The internal history stage must not bypass authorization in compatibility mode.
     fn should_check_stage_privilege(&self, stage_name: &str) -> Result<bool> {

@@ -48,12 +48,12 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
+use databend_common_catalog::table_context::RefreshAnchor;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -68,6 +68,7 @@ use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_session::ReclusterWriteHint;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -87,6 +88,49 @@ use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::runtime_filter_state::RuntimeFilterState;
 use crate::spillers;
 use crate::storages::Table;
+use crate::table_maintenance::ForegroundRequest;
+use crate::table_maintenance::MaintenanceReservation;
+use crate::table_maintenance::TableMaintenanceService;
+
+struct MaintenanceRunState {
+    reservation: Arc<MaintenanceReservation>,
+    publication: Mutex<MaintenancePublication>,
+}
+
+#[derive(Default)]
+struct MaintenancePublication {
+    active: usize,
+    cancellation: Option<ErrorCode>,
+    forced: bool,
+}
+
+struct MaintenancePublicationGuard {
+    shared: Arc<QueryContextShared>,
+    armed: bool,
+}
+
+impl Drop for MaintenancePublicationGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let cancellation = {
+            let state = self.shared.maintenance.read();
+            let mut publication = state
+                .as_ref()
+                .expect("active maintenance")
+                .publication
+                .lock();
+            publication.active -= 1;
+            (publication.active == 0)
+                .then(|| publication.cancellation.clone())
+                .flatten()
+        };
+        if let Some(cause) = cancellation {
+            self.shared.kill(cause);
+        }
+    }
+}
 
 pub struct MemoryUpdater {
     pub memory_usage: AtomicUsize,
@@ -160,12 +204,15 @@ pub struct QueryContextShared {
     pub(super) finish_time: RwLock<Option<SystemTime>>,
     pub(super) copy_state: CopyState,
     pub(super) mutation_state: MutationState,
-    // Commit sinks in local fragments and the outer refresh hook must see the same hints.
-    pub(super) written_segment_locs: SegmentLocationsState,
+    pub(super) recluster_writes: Mutex<HashMap<u64, ReclusterWriteHint>>,
+    // A slot exists only when the statement registered a post-write Refresh hook.
+    pub(super) refresh_anchors: Mutex<HashMap<u64, Option<RefreshAnchor>>>,
+    _foreground_request: Option<ForegroundRequest>,
     pub(super) result_cache_state: ResultCacheState,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
     pub(super) enable_auto_analyze: Arc<AtomicBool>,
+    maintenance: RwLock<Option<Box<MaintenanceRunState>>>,
     // Status info.
     pub(super) status: Arc<RwLock<String>>,
 
@@ -251,6 +298,7 @@ impl QueryContextShared {
         let created_time = SystemTime::now();
         let query_created_time = query_created_time.unwrap_or(created_time);
         let queue_entry_key = Uuid::new_v4();
+        let foreground_request = TableMaintenanceService::track_foreground(&session.get_type());
         Ok(Arc::new(QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
@@ -290,11 +338,14 @@ impl QueryContextShared {
             finish_time: Default::default(),
             copy_state: Default::default(),
             mutation_state: Default::default(),
-            written_segment_locs: Default::default(),
+            recluster_writes: Default::default(),
+            refresh_anchors: Default::default(),
+            _foreground_request: foreground_request,
             result_cache_state: Default::default(),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
             enable_auto_analyze: Arc::new(AtomicBool::new(false)),
+            maintenance: RwLock::new(None),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             join_spill_progress: Arc::new(Progress::create()),
@@ -370,7 +421,88 @@ impl QueryContextShared {
         warnings
     }
 
+    pub(super) fn is_automatic_maintenance(&self) -> bool {
+        self.maintenance.read().is_some()
+    }
+
+    pub(super) fn set_maintenance_reservation(
+        self: &Arc<Self>,
+        reservation: Arc<MaintenanceReservation>,
+    ) -> Result<()> {
+        let state = Box::new(MaintenanceRunState {
+            reservation,
+            publication: Mutex::default(),
+        });
+        let mut maintenance = self.maintenance.write();
+        assert!(
+            maintenance.is_none(),
+            "maintenance is registered once per query"
+        );
+        // Shutdown cannot observe a registered context before its state is installed:
+        // kill() takes this lock, and resources.close() calls kill() without its lock.
+        state.reservation.register(Arc::downgrade(self))?;
+        *maintenance = Some(state);
+        Ok(())
+    }
+
+    pub(super) fn begin_maintenance_publication(self: &Arc<Self>) -> Result<Option<Box<dyn Send>>> {
+        let maintenance = self.maintenance.read();
+        let Some(state) = maintenance.as_ref() else {
+            return Ok(None);
+        };
+        // Allocate before registering the critical section: allocation failure must
+        // not leave an active count with no guard to release it.
+        let mut guard = Box::new(MaintenancePublicationGuard {
+            shared: self.clone(),
+            armed: false,
+        });
+        let mut publication = state.publication.lock();
+        if let Some(cause) = &publication.cancellation {
+            return Err(cause.clone());
+        }
+        self.check_aborting()
+            .map_err(|cause| cause.with_context("before maintenance publication"))?;
+        publication.active += 1;
+        guard.armed = true;
+        Ok(Some(guard))
+    }
+
+    pub(crate) fn force_maintenance_cancellation(&self, cause: ErrorCode) {
+        let publishing = self.maintenance.read().as_ref().is_some_and(|state| {
+            let mut publication = state.publication.lock();
+            publication.forced = true;
+            publication
+                .cancellation
+                .get_or_insert_with(|| cause.clone());
+            publication.active != 0
+        });
+        if publishing {
+            log::warn!(query_id = self.init_query_id.read().as_str();
+                "Maintenance publication exceeded cancellation grace; commit outcome may be unknown");
+        }
+        self.kill(cause);
+    }
+
     pub fn kill<C>(&self, cause: ErrorCode<C>) {
+        if let Some(state) = self.maintenance.read().as_ref() {
+            let mut publication = state.publication.lock();
+            let cancellation = cause
+                .clone()
+                .with_context("automatic maintenance cancellation");
+            if cause.code() == ErrorCode::ABORTED_QUERY {
+                publication.cancellation.get_or_insert(cancellation);
+            } else {
+                publication.cancellation = Some(cancellation);
+            }
+            // Lease loss, OOM and other execution failures must not be hidden by a
+            // publication guard. Only cooperative query cancellation is deferred.
+            if cause.code() == ErrorCode::ABORTED_QUERY
+                && publication.active != 0
+                && !publication.forced
+            {
+                return;
+            }
+        }
         #[cfg(feature = "python-udf")]
         if let Some(workers) = self.python_udf_workers.lock().as_ref() {
             workers.finish();

@@ -27,7 +27,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
@@ -187,6 +186,20 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
 
+        // Measure before apply_mutation merges the appended statistics with rewritten
+        // survivors. For MERGE and REPLACE, after-images go through the append port;
+        // the replacement port preserves rows that were not logically written.
+        let logical_written_bytes = match self.write_segment_ctx.kind {
+            MutationKind::Insert | MutationKind::MergeInto | MutationKind::Replace => {
+                Some(self.appended_statistics.uncompressed_byte_size)
+            }
+            MutationKind::Update if !self.appended_segments.is_empty() => {
+                // Join-based UPDATE appends the new row versions, like MERGE.
+                Some(self.appended_statistics.uncompressed_byte_size)
+            }
+            MutationKind::Delete => Some(0),
+            _ => None,
+        };
         let conflict_resolve_context = match self.write_segment_ctx.kind {
             MutationKind::Insert => ConflictResolveContext::AppendOnly((
                 SnapshotMerged {
@@ -230,13 +243,13 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
             self.table_id,
             self.logical_updated_rows,
             self.logical_deleted_rows,
+            logical_written_bytes,
             std::mem::take(&mut self.hll),
             std::mem::take(&mut self.top_n),
         );
         debug!("mutations {:?}", meta);
-        let block_meta: BlockMetaInfoPtr = Box::new(meta);
 
-        Ok(Some(DataBlock::empty_with_meta(block_meta)))
+        Ok(Some(meta.into()))
     }
 }
 
