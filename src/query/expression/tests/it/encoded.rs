@@ -540,16 +540,26 @@ fn test_dict_column_compare() {
     let Column::Encoded(encoded) = &column else {
         unreachable!()
     };
+    // With `rows`, only the bits of those rows are set.
+    let rows = [1u32, 2, 6];
     for constant in ["", "A", "B", "N", "R", "Z", "ZZ"] {
         let scalar = Scalar::String(constant.to_string());
         for op in &ops {
             let expected =
                 Bitmap::from_iter(strings.iter().map(|v| matches(op, (*v).cmp(constant))));
             assert_eq!(
-                encoded.compare_scalar(op, &scalar),
-                Some(expected),
+                encoded.compare_scalar(op, &scalar, None),
+                Some(expected.clone()),
                 "{op:?} {constant}"
             );
+            let selected = encoded.compare_scalar(op, &scalar, Some(&rows)).unwrap();
+            for row in rows {
+                assert_eq!(
+                    selected.get_bit(row as usize),
+                    expected.get_bit(row as usize),
+                    "{op:?} {constant} row {row}"
+                );
+            }
         }
     }
 
@@ -563,7 +573,7 @@ fn test_dict_column_compare() {
         for op in &ops {
             let expected = Bitmap::from_iter(ints.iter().map(|v| matches(op, v.cmp(&constant))));
             assert_eq!(
-                encoded.compare_scalar(op, &scalar),
+                encoded.compare_scalar(op, &scalar, None),
                 Some(expected),
                 "{op:?} {constant}"
             );
@@ -572,11 +582,87 @@ fn test_dict_column_compare() {
 
     // Constants of another type are not compared on the dictionary.
     assert_eq!(
-        encoded.compare_scalar(&SelectOp::Equal, &Scalar::Null),
+        encoded.compare_scalar(&SelectOp::Equal, &Scalar::Null, None),
         None
     );
     assert_eq!(
-        encoded.compare_scalar(&SelectOp::Equal, &Scalar::Number(5i32.into())),
+        encoded.compare_scalar(&SelectOp::Equal, &Scalar::Number(5i32.into()), None),
+        None
+    );
+}
+
+/// A string column compared with another one, of which at least one is dictionary encoded,
+/// compares the value of each row without decoding.
+#[test]
+fn test_dict_column_compare_string_columns() {
+    let ops = [
+        SelectOp::Equal,
+        SelectOp::NotEqual,
+        SelectOp::Gt,
+        SelectOp::Gte,
+        SelectOp::Lt,
+        SelectOp::Lte,
+    ];
+    let matches = |op: &SelectOp, ordering: std::cmp::Ordering| match op {
+        SelectOp::Equal => ordering.is_eq(),
+        SelectOp::NotEqual => ordering.is_ne(),
+        SelectOp::Gt => ordering.is_gt(),
+        SelectOp::Gte => ordering.is_ge(),
+        SelectOp::Lt => ordering.is_lt(),
+        SelectOp::Lte => ordering.is_le(),
+    };
+    // Inlined and long values, some sharing a prefix.
+    let values = [
+        "",
+        "a",
+        "abcd",
+        "abcdefghijklm",
+        "abcdXfghijklmn",
+        "https://www.example.com/a",
+    ];
+    let lhs = (0..36).map(|i| values[i % 6]).collect::<Vec<_>>();
+    let rhs = (0..36).map(|i| values[i / 6]).collect::<Vec<_>>();
+    let lhs_plain = StringType::from_data(lhs.clone());
+    let rhs_plain = StringType::from_data(rhs.clone());
+    let (lhs_dict, rhs_dict) = (build_dict(&lhs_plain), build_dict(&rhs_plain));
+    let rows = [0u32, 7, 13, 20, 35];
+    for (l, r) in [
+        (&lhs_dict, &rhs_plain),
+        (&lhs_plain, &rhs_dict),
+        (&lhs_dict, &rhs_dict),
+    ] {
+        for op in &ops {
+            let expected =
+                Bitmap::from_iter(lhs.iter().zip(&rhs).map(|(l, r)| matches(op, l.cmp(r))));
+            assert_eq!(
+                DictColumn::compare_string_columns(op, l, r, None),
+                Some(expected.clone()),
+                "{op:?}"
+            );
+            let selected = DictColumn::compare_string_columns(op, l, r, Some(&rows)).unwrap();
+            for row in rows {
+                assert_eq!(
+                    selected.get_bit(row as usize),
+                    expected.get_bit(row as usize),
+                    "{op:?} row {row}"
+                );
+            }
+        }
+    }
+
+    // Two plain columns, other types and other lengths are left to the regular comparison.
+    let eq = SelectOp::Equal;
+    assert_eq!(
+        DictColumn::compare_string_columns(&eq, &lhs_plain, &rhs_plain, None),
+        None
+    );
+    let ints = build_dict(&Int64Type::from_data((0..36).collect::<Vec<i64>>()));
+    assert_eq!(
+        DictColumn::compare_string_columns(&eq, &ints, &rhs_plain, None),
+        None
+    );
+    assert_eq!(
+        DictColumn::compare_string_columns(&eq, &lhs_dict, &rhs_plain.slice(0..10), None),
         None
     );
 }

@@ -324,6 +324,8 @@ impl<'a> WindowRewriter<'a> {
             WindowFuncType::Aggregate(agg) => {
                 // resolve aggregate function args in window function.
                 let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(agg.args.len());
+                let mut rewritten_args: Vec<(ScalarExpr, BoundColumnRef)> =
+                    Vec::with_capacity(agg.args.len());
                 for (i, arg) in agg.args.iter().enumerate() {
                     let mut arg = arg.clone();
                     self.rewrite_aggregate_expr(&mut arg)?;
@@ -333,6 +335,7 @@ impl<'a> WindowRewriter<'a> {
                         index: replaced_arg.column.index,
                         scalar,
                     });
+                    rewritten_args.push((arg, replaced_arg.clone()));
                     replaced_args.push(replaced_arg.into());
                 }
                 // resolve aggregate function sort describe in window function.
@@ -342,11 +345,21 @@ impl<'a> WindowRewriter<'a> {
                     let mut expr = desc.expr.clone();
                     self.rewrite_aggregate_expr(&mut expr)?;
 
-                    let name = format!("{window_func_name}_sort_desc_{i}");
-                    let (replaced_expr, scalar) = self.replace_expr(&name, &expr)?;
-
-                    let index = replaced_expr.column.index;
-                    window_args.push(ScalarItem { index, scalar });
+                    // A sort key equal to an argument must share its symbol so
+                    // the aggregate sees it as `Argument`, which DISTINCT needs.
+                    let replaced_expr = if let Some((_, replaced_arg)) =
+                        rewritten_args.iter().find(|(arg, _)| *arg == expr)
+                    {
+                        replaced_arg.clone()
+                    } else {
+                        let name = format!("{window_func_name}_sort_desc_{i}");
+                        let (replaced_expr, scalar) = self.replace_expr(&name, &expr)?;
+                        window_args.push(ScalarItem {
+                            index: replaced_expr.column.index,
+                            scalar,
+                        });
+                        replaced_expr
+                    };
                     replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
                         expr: replaced_expr.into(),
                         nulls_first: desc.nulls_first,

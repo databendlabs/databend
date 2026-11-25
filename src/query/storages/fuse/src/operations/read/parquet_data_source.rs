@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::BlockMetaInfo;
+use roaring::RoaringTreemap;
 
 use super::condition_cache::CachedCondition;
 use crate::io::BlockReadResult;
@@ -40,5 +41,11 @@ impl ParquetDataSource {
     }
 }
 
+pub enum BlockSource {
+    Parquet(ParquetDataSource),
+    /// Original row offsets. Scores stay in the partition's index metadata.
+    IndexRows(RoaringTreemap),
+}
+
 #[typetag::serde(name = "fuse_data_source")]
-impl BlockMetaInfo for DataSourceWithMeta<ParquetDataSource> {}
+impl BlockMetaInfo for DataSourceWithMeta<BlockSource> {}
