@@ -296,7 +296,8 @@ fn test_covering_index_score_contains_index_top_k() {
         assert_eq!(push_down.index_top_k_score(), top_k, "{case}");
     }
 
-    let exclusions: [(&str, fn(&mut PushDownInfo)); 4] = [
+    type ApplyExclusion = fn(&mut PushDownInfo);
+    let exclusions: [(&str, ApplyExclusion); 4] = [
         ("prewhere", |p| {
             p.prewhere = Some(PrewhereInfo {
                 output_columns: Projection::Columns(vec![]),
