@@ -132,5 +132,70 @@ select count(*) from t where s <> '' and id % 2 = 0
 statement ok
 unset enable_condition_cache
 
+# Every row of the block has a = 2 and d = '2020-01-01'. A constant that no value of the column
+# casts to converts to that value ('02' and 2.4 to 2, the timestamp to its date): the comparison
+# is false on every row all the same, and its negation true.
+statement ok
+create or replace table c(a int, d date, s string)
+
+statement ok
+insert into c select 2, '2020-01-01', 'x' from numbers(1000)
+
+query I
+select count(*) from c where a = 2.4
+----
+0
+
+query I
+select count(*) from c where a::string = '02'
+----
+0
+
+query I
+select count(*) from c where d = '2020-01-01 12:00:00'::timestamp
+----
+0
+
+query IT
+select count(*), max(s) from c where a = 2.4
+----
+0 NULL
+
+query I
+select count(*) from c where not (a::string = '02')
+----
+1000
+
+query I
+select count(*) from c where not (a = 2.4)
+----
+1000
+
+query IT
+select count(*), max(s) from c where not (d = '2020-01-01 12:00:00'::timestamp)
+----
+1000 x
+
+# Constants the conversion keeps.
+query I
+select count(*) from c where a = 2.0
+----
+1000
+
+query I
+select count(*) from c where a::string = '2'
+----
+1000
+
+query I
+select count(*) from c where d = '2020-01-01 00:00:00'::timestamp
+----
+1000
+
+query I
+select count(*) from c where not (a::string = '2')
+----
+0
+
 statement ok
 drop database test_filter_true_by_statistics

@@ -48,6 +48,18 @@ fn test_eliminate_cast() {
         Int32Type::data_type(),
         Domain::from_min_max(n(-2), n(3), &Int32Type::data_type()),
     )]);
+    // `'02'` and `2.4` convert to 2, but no integer casts to them: the comparison is not
+    // rewritten.
+    run_text(file, "a::string = '02'", &[(
+        "a",
+        Int32Type::data_type(),
+        Domain::from_min_max(n(-2), n(3), &Int32Type::data_type()),
+    )]);
+    run_text(file, "a = 2.4", &[(
+        "a",
+        Int32Type::data_type(),
+        Domain::from_min_max(n(-2), n(3), &Int32Type::data_type()),
+    )]);
 }
 
 fn run_text(file: &mut impl Write, text: &str, ctx: &[(&str, DataType, Domain)]) {
