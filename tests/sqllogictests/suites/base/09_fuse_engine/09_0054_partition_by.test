@@ -153,7 +153,7 @@ SELECT p, v FROM range_partitioned WHERE p = 3 OR p = -5
 
 # A timestamp range on the source column is projected through its day expression.
 statement ok
-CREATE TABLE timestamp_partitioned(order_time TIMESTAMP, label STRING) PARTITION BY (to_start_of_day(order_time, 'UTC')) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+CREATE TABLE timestamp_partitioned(order_time TIMESTAMP, label STRING) PARTITION BY (date_trunc(day, order_time)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
 statement ok
 INSERT INTO timestamp_partitioned VALUES ('2026-07-07 12:00:00', 'previous'), ('2026-07-08 00:00:00', 'start'), ('2026-07-08 23:59:59', 'end'), ('2026-07-09 00:00:00', 'next')
@@ -643,7 +643,7 @@ statement ok
 SET max_block_size=10000
 
 statement ok
-CREATE TABLE segment_finish_race(event_time TIMESTAMP, id BIGINT) PARTITION BY (to_start_of_day(event_time, 'UTC')) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000
+CREATE TABLE segment_finish_race(event_time TIMESTAMP, id BIGINT) PARTITION BY (date_trunc(day, event_time)) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000
 
 statement ok
 INSERT INTO segment_finish_race SELECT to_timestamp(1767225600000000 + (number DIV 25000) * 86400000000 + number % 25000), number FROM numbers(200000)
@@ -1318,17 +1318,76 @@ FROM (
 ----
 0
 
-# Partition values are compared across sessions, so a key must not depend on
-# session settings such as the time zone.
-statement error depends on session settings
-CREATE TABLE session_key(ts TIMESTAMP) PARTITION BY (to_date(ts))
+# Partition values are compared across sessions. Time functions of a TIMESTAMP
+# are pinned to the time zone of the session that defines the key.
+statement ok
+SET timezone = 'Asia/Shanghai'
 
-statement error depends on session settings
-CREATE TABLE session_key(ts TIMESTAMP) PARTITION BY (CAST(ts AS DATE))
+statement ok
+CREATE TABLE pinned_key(id INT, ts TIMESTAMP) PARTITION BY (to_date(ts), CAST(ts AS DATE), date_trunc(day, ts), to_yyyymm(ts)) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
-statement error depends on session settings
-CREATE TABLE session_key(ts TIMESTAMP) PARTITION BY (date_trunc(day, ts))
+query TT
+SHOW CREATE TABLE pinned_key
+----
+pinned_key <slt:ignore>PARTITION BY (to_date(ts, 'Asia/Shanghai'), to_date(ts, 'Asia/Shanghai'), to_start_of_day(ts, 'Asia/Shanghai'), to_yyyymm(ts, 'Asia/Shanghai'))<slt:ignore>
 
+# 2024-02-01 04:00 and 2024-02-01 18:00 in Shanghai.
+statement ok
+SETTINGS (timezone = 'UTC') INSERT INTO pinned_key VALUES (1, '2024-01-31 20:00:00'), (3, '2024-02-01 10:00:00')
+
+# 2024-01-31 18:00 in Shanghai.
+statement ok
+SETTINGS (timezone = 'UTC') INSERT INTO pinned_key VALUES (2, '2024-01-31 10:00:00')
+
+statement ok
+SET timezone = 'UTC'
+
+query I
+SELECT id FROM pinned_key WHERE to_date(ts, 'Asia/Shanghai') = '2024-02-01' ORDER BY id
+----
+1
+3
+
+query T
+EXPLAIN SELECT id FROM pinned_key WHERE to_date(ts, 'Asia/Shanghai') = '2024-01-31'
+----
+<slt:ignore>range pruning: 2 to 1<slt:ignore>
+
+# A query in the session time zone is not pruned by partition values, and stays correct.
+query I
+SELECT id FROM pinned_key WHERE to_date(ts) = '2024-01-31' ORDER BY id
+----
+1
+2
+
+statement ok
+DELETE FROM pinned_key WHERE to_date(ts) = '2024-01-31'
+
+query I
+SELECT id FROM pinned_key
+----
+3
+
+# Casting a timestamp to a number does not read the session.
+statement ok
+CREATE TABLE pinned_cast(ts TIMESTAMP) PARTITION BY (CAST(ts AS INT64) % 2, CAST(ts AS DATE NULL))
+
+query TT
+SHOW CREATE TABLE pinned_cast
+----
+pinned_cast <slt:ignore>% 2, to_date(ts, 'UTC'))<slt:ignore>
+
+statement ok
+CREATE TABLE pinned_alter(id INT, ts TIMESTAMP)
+
+statement ok
+ALTER TABLE pinned_alter PARTITION BY (to_yyyymmdd(ts))
+
+# The same key with the pinned time zone is the same definition.
+statement ok
+ALTER TABLE pinned_alter PARTITION BY (to_yyyymmdd(ts, 'UTC'))
+
+# Keys that cannot be pinned are rejected.
 # The string is cast to a timestamp in the session time zone while binding.
 statement error depends on session settings
 CREATE TABLE session_key(ts TIMESTAMP) PARTITION BY (if(ts >= '2024-02-01', 1, 0))
@@ -1337,14 +1396,8 @@ CREATE TABLE session_key(ts TIMESTAMP) PARTITION BY (if(ts >= '2024-02-01', 1, 0
 statement error depends on session settings
 CREATE TABLE session_key(d DATE) PARTITION BY (date_trunc(week, d))
 
-statement ok
-CREATE TABLE session_key_alter(id INT, ts TIMESTAMP)
-
 statement error depends on session settings
-ALTER TABLE session_key_alter PARTITION BY (to_yyyymmdd(ts))
-
-statement ok
-ALTER TABLE session_key_alter PARTITION BY (to_yyyymmdd(ts, 'UTC'))
+CREATE TABLE session_key(ts TIMESTAMP) PARTITION BY (date_trunc(week, ts))
 
 # A timestamp in a variant is parsed in the session time zone.
 statement error depends on session settings
@@ -1361,9 +1414,9 @@ statement ok
 INSERT INTO variant_key SELECT parse_json('{"region": "us"}')
 
 query T
-EXPLAIN SELECT v FROM variant_key WHERE v:region::STRING = 'us'
+SELECT v FROM variant_key WHERE v:region::STRING = 'us'
 ----
-<slt:ignore>range pruning: 2 to 1<slt:ignore>
+{"region":"us"}
 
 # Calendar functions of a DATE do not read the session.
 statement ok

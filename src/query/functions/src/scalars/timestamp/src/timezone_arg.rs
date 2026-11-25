@@ -29,11 +29,69 @@ use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 
+/// Functions registered with a `(timestamp, time_zone)` overload by
+/// [`register_timestamp_with_timezone`], by canonical name.
+pub const TIMEZONE_ARGUMENT_FUNCTIONS: &[&str] = &[
+    "to_date",
+    // date_extract
+    "to_yyyymm",
+    "to_yyyymmdd",
+    "to_yyyymmddhh",
+    "to_yyyymmddhhmmss",
+    "to_year",
+    "to_iso_year",
+    "to_quarter",
+    "to_month",
+    "to_day_of_year",
+    "to_day_of_month",
+    "to_day_of_week",
+    "dayofweek",
+    "yearweek",
+    "millennium",
+    "to_week_of_year",
+    "to_hour",
+    "to_minute",
+    "to_second",
+    // date_round
+    "to_start_of_second",
+    "to_start_of_minute",
+    "to_start_of_five_minutes",
+    "to_start_of_ten_minutes",
+    "to_start_of_fifteen_minutes",
+    "to_start_of_hour",
+    "to_start_of_day",
+    "time_slot",
+    "to_monday",
+    "to_start_of_month",
+    "to_start_of_quarter",
+    "to_start_of_year",
+    "to_start_of_iso_year",
+    "to_last_of_week",
+    "to_last_of_month",
+    "to_last_of_quarter",
+    "to_last_of_year",
+    "to_previous_monday",
+    "to_previous_tuesday",
+    "to_previous_wednesday",
+    "to_previous_thursday",
+    "to_previous_friday",
+    "to_previous_saturday",
+    "to_previous_sunday",
+    "to_next_monday",
+    "to_next_tuesday",
+    "to_next_wednesday",
+    "to_next_thursday",
+    "to_next_friday",
+    "to_next_saturday",
+    "to_next_sunday",
+];
+
 /// Register `name(Timestamp, String)`, which evaluates `eval` in the time zone named by
 /// the second argument.
 ///
 /// `calc_domain` is used only when that argument is a valid constant. Callers register it
-/// outside `register_context_dependent`, since it does not read the session.
+/// outside `register_context_dependent`, since it does not read the session, and list
+/// `name` in [`TIMEZONE_ARGUMENT_FUNCTIONS`].
 pub(crate) fn register_timestamp_with_timezone<O, D, E>(
     registry: &mut FunctionRegistry,
     name: &str,

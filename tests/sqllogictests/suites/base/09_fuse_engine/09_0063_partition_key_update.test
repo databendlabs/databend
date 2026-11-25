@@ -24,7 +24,7 @@ USE db_09_0063
 # Hash write distribution regroups rows by partition before the split; without
 # it, interleaved partition values would produce one block per row.
 statement ok
-CREATE TABLE moved(id BIGINT, ts TIMESTAMP, grp INT, v STRING) PARTITION BY (to_start_of_month(ts, 'UTC')) CLUSTER BY (grp, id) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000 WRITE_DISTRIBUTION_MODE='hash'
+CREATE TABLE moved(id BIGINT, ts TIMESTAMP, grp INT, v STRING) PARTITION BY (DATE_TRUNC(month, ts)) CLUSTER BY (grp, id) ROW_PER_BLOCK=10000 BLOCK_PER_SEGMENT=1000 WRITE_DISTRIBUTION_MODE='hash'
 
 statement ok
 INSERT INTO moved SELECT number, DATE_ADD(SECOND, (number * 7919) % 2592000, CASE number % 3 WHEN 0 THEN TIMESTAMP '2026-08-01' WHEN 1 THEN TIMESTAMP '2026-09-01' ELSE TIMESTAMP '2026-10-01' END), (number % 50)::INT, 'v' || number::STRING FROM numbers(60000)
@@ -113,7 +113,7 @@ statement ok
 INSERT INTO altered SELECT number, DATE_ADD(SECOND, (number * 7919) % 5184000, TIMESTAMP '2026-09-01'), (number % 50)::INT FROM numbers(60000)
 
 statement ok
-ALTER TABLE altered PARTITION BY (to_start_of_day(ts, 'UTC'))
+ALTER TABLE altered PARTITION BY (DATE_TRUNC(day, ts))
 
 # Reads over the pre-existing blocks are correct, only unpruned.
 query II
@@ -152,7 +152,7 @@ SELECT count(*), count_if(ts >= '2026-10-05' AND ts < '2026-10-06') FROM altered
 # Changing an active partition key is rejected; DROP PARTITION KEY is allowed
 # and afterwards the mixed blocks can be mutated again.
 statement error PARTITION BY is already defined
-ALTER TABLE altered PARTITION BY (to_start_of_month(ts, 'UTC'))
+ALTER TABLE altered PARTITION BY (DATE_TRUNC(month, ts))
 
 statement ok
 ALTER TABLE altered DROP PARTITION KEY

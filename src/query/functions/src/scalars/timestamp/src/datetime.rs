@@ -118,7 +118,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // cast([date | timestamp] AS [uint8 | int8 | ...])
     // to_[uint8 | int8 | ...]([date | timestamp])
-    registry.register_context_dependent(crate::date_extract::register_cast);
+    crate::date_extract::register_cast(registry);
 
     // [add | subtract]_[years | months | days | hours | minutes | seconds]([date | timestamp], number)
     // date_[add | sub]([year | quarter | month | week | day | hour | minute | second], [date | timestamp], number)
