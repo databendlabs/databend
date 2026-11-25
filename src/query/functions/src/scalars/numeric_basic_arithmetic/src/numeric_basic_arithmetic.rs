@@ -145,8 +145,22 @@ fn number_is_nan<N: Number>(value: N) -> bool {
     }
 }
 
-fn domain_or_full<N: Number>(min: N, max: N) -> FunctionDomain<NumberType<N>> {
-    if number_is_nan(min) || number_is_nan(max) {
+fn number_is_finite<N: Number>(value: N) -> bool {
+    match N::upcast_scalar(value) {
+        NumberScalar::Float32(value) => value.is_finite(),
+        NumberScalar::Float64(value) => value.is_finite(),
+        _ => true,
+    }
+}
+
+/// The domain `[min, max]` of the sum, difference or product of two numbers, computed from
+/// `bounds`, the bounds of their domains.
+///
+/// With a bound that is not finite the result is not within the results of the bounds:
+/// `inf - inf` and `0 * inf` are NaN, the greatest float, and a domain whose max is NaN (NaN
+/// sorts last) holds any float. The domain is then full.
+fn domain_or_full<N: Number>(bounds: [N; 4], min: N, max: N) -> FunctionDomain<NumberType<N>> {
+    if number_is_nan(min) || number_is_nan(max) || !bounds.into_iter().all(number_is_finite) {
         FunctionDomain::Full
     } else {
         FunctionDomain::Domain(SimpleDomain { min, max })
@@ -271,7 +285,7 @@ where
                 let rm: AddMulResult<L, R> = num_traits::cast::cast(rhs.max)?;
                 let rn: AddMulResult<L, R> = num_traits::cast::cast(rhs.min)?;
 
-                domain_or_full(ln.checked_add(rn)?, lm.checked_add(rm)?)
+                domain_or_full([ln, lm, rn, rm], ln.checked_add(rn)?, lm.checked_add(rm)?)
             }
             .unwrap_or(FunctionDomain::Full)
         })
@@ -362,7 +376,11 @@ where
                 let rm: MinusResult<L, R> = num_traits::cast::cast(rhs.max)?;
                 let rn: MinusResult<L, R> = num_traits::cast::cast(rhs.min)?;
 
-                Some(domain_or_full(ln.checked_sub(rm)?, lm.checked_sub(rn)?))
+                Some(domain_or_full(
+                    [ln, lm, rn, rm],
+                    ln.checked_sub(rm)?,
+                    lm.checked_sub(rn)?,
+                ))
             })()
             .unwrap_or(FunctionDomain::Full)
         },
@@ -394,6 +412,7 @@ where
                 let n = ln.checked_mul(rn)?;
 
                 Some(domain_or_full(
+                    [ln, lm, rn, rm],
                     x.min(y).min(m).min(n),
                     x.max(y).max(m).max(n),
                 ))
