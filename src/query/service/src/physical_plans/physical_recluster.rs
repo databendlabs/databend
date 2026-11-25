@@ -978,7 +978,6 @@ mod tests {
                     merge_meta: false,
                 },
                 update_stream_meta: vec![],
-                deduplicated_label: None,
                 table_meta_timestamps,
                 recluster_info: Some(ReclusterInfoSideCar {
                     removed_segment_indexes: (0..snapshot.segments.len()).collect(),

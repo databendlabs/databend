@@ -21,7 +21,6 @@ use std::sync::Arc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_AUTH_METHOD;
 use databend_common_base::headers::HEADER_CLIENT_CAPABILITIES;
-use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_CONTEXT;
 use databend_common_base::headers::HEADER_QUERY_ID;
@@ -522,11 +521,6 @@ impl<E> HTTPSessionEndpoint<E> {
 
         let session = session_manager.register_session(session)?;
 
-        let deduplicate_label = req
-            .headers()
-            .get(HEADER_DEDUPLICATE_LABEL)
-            .map(|id| id.to_str().unwrap().to_string());
-
         let expected_node_id = req
             .headers()
             .get(HEADER_NODE_ID)
@@ -548,7 +542,6 @@ impl<E> HTTPSessionEndpoint<E> {
             node_id,
             credential,
             expected_node_id,
-            deduplicate_label,
             user_agent,
             trace_parent,
             opentelemetry_baggage,

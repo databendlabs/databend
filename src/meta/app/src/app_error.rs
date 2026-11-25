@@ -948,9 +948,6 @@ pub enum AppError {
     #[error(transparent)]
     CommitTableMetaError(#[from] CommitTableMetaError),
 
-    #[error("Deduplication labels require a persistent metadata update")]
-    DeduplicationLabelWithoutMetaUpdate,
-
     #[error(transparent)]
     SharedTableSecurityPolicy(#[from] SharedTableSecurityPolicy),
 
@@ -1485,9 +1482,6 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
             AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
-            AppError::DeduplicationLabelWithoutMetaUpdate => {
-                ErrorCode::InvalidArgument(app_err.to_string())
-            }
             AppError::SharedTableSecurityPolicy(err) => ErrorCode::AlterTableError(err.message()),
             AppError::InvalidMaterializedView(err) => {
                 ErrorCode::InvalidMaterializedView(err.message())

@@ -1,0 +1,105 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+# A no-op DML still advances the stream offset without changing the target.
+# Separate source INSERTs make max_batch_size = 1 deterministic.
+
+statement ok
+create or replace database test_stream_noop_offset;
+
+statement ok
+use test_stream_noop_offset;
+
+statement ok
+create table target(a int, b string);
+
+statement ok
+insert into target values(0, 'init');
+
+statement ok
+create table src_insert(a int, b string);
+
+statement ok
+create stream s_insert on table src_insert;
+
+statement ok
+insert into src_insert values(1, 'x');
+
+statement ok
+insert into src_insert values(2, 'y');
+
+# Autocommit INSERT consumes one batch without writing a new snapshot.
+statement ok
+insert into target select a, b from s_insert with (max_batch_size = 1) where b = 'none';
+
+query IT
+select a, b from s_insert order by a;
+----
+2 y
+
+query I
+select count(*) from fuse_snapshot('test_stream_noop_offset', 'target');
+----
+1
+
+query IT
+select a, b from target;
+----
+0 init
+
+# Explicit transaction MERGE persists the offset at COMMIT.
+statement ok
+create table src_merge(a int, b string);
+
+statement ok
+create stream s_merge on table src_merge;
+
+statement ok
+insert into src_merge values(3, 'z');
+
+statement ok
+insert into src_merge values(4, 'w');
+
+statement ok
+begin;
+
+statement ok
+merge into target using (select a, b from s_merge with (max_batch_size = 1) where b = 'none') as t on target.a = t.a when matched then update * when not matched then insert *;
+
+statement ok
+commit;
+
+query IT
+select a, b from s_merge order by a;
+----
+4 w
+
+query I
+select count(*) from fuse_snapshot('test_stream_noop_offset', 'target');
+----
+1
+
+query IT
+select a, b from target;
+----
+0 init
+
+statement ok
+drop stream s_insert;
+
+statement ok
+drop stream s_merge;
+
+statement ok
+drop database test_stream_noop_offset;

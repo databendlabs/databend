@@ -663,7 +663,6 @@ impl ReclusterTableInterpreter {
                 merge_meta: false,
             },
             update_stream_meta: vec![],
-            deduplicated_label: None,
             table_meta_timestamps,
             recluster_info: Some(ReclusterInfoSideCar {
                 merged_blocks: remained_blocks,
