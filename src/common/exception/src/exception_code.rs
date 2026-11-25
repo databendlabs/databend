@@ -698,7 +698,10 @@ build_exceptions! {
     UnknownWorkloadQuotas(3144),
 }
 
-// Table Write and Commit Conflicts [4001, 4022]; 4023-4049 reserved for this group.
+// Table Write and Commit Conflicts [4001, 4022]
+// Start new allocations at 4022 to leave the legacy gap intact. Do not reuse
+// 4004 (InvalidSessionState), 4011 (NoNeedToRecluster), 4013 (UnsupportedClusterType),
+// or 4021 (RefreshTableInfoFailure). Reserve 4023-4049 for this group.
 build_exceptions! {
     /// Unresolvable conflict
     UnresolvableConflict(4001),
