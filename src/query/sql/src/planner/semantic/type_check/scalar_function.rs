@@ -418,15 +418,19 @@ where A: TypeCheckAdapter
         let mut new_arguments = func.arguments.clone();
         new_arguments[constant_arg_index] = wrap_new_arg;
 
-        let new_func = ScalarExpr::FunctionCall(FunctionCall {
+        let mut new_func = FunctionCall {
             span: func.span,
             func_name: func.func_name.clone(),
             params: func.params.clone(),
             arguments: new_arguments,
-            return_type: Box::new(data_type.clone()),
-        });
+            return_type: Box::new(data_type),
+        };
+        // The comparison of two variants is null only where one of them is, unlike that of a
+        // variant with a string, which casts the variant with `TRY_CAST`.
+        new_func.refresh_return_type()?;
+        let data_type = new_func.return_type.as_ref().clone();
 
-        Ok(Box::new((new_func, data_type)))
+        Ok(Box::new((new_func.into(), data_type)))
     }
 
     pub fn resolve_scalar_function_call(

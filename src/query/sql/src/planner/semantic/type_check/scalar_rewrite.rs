@@ -67,24 +67,21 @@ impl<'a> CoreExprArena<'a> {
         let right_null = self.lower_is_null_expr(span, right, false)?;
         let both_null = self.call(span, "and", smallvec![left_null, right_null]);
 
-        let left_null = self.lower_is_null_expr(span, left, false)?;
-        let right_null = self.lower_is_null_expr(span, right, false)?;
-        let either_null = self.call(span, "or", smallvec![left_null, right_null]);
-
-        let op = if not { "eq" } else { "noteq" };
+        // The comparison is null when one of the values is, and can be when neither is: a
+        // variant is compared with a number by a `TRY_CAST`. The values are distinct in both
+        // cases, as one of them is not null.
         let left = self.lower_ast_expr(left)?;
         let right = self.lower_ast_expr(right)?;
-        let compare = self.call(span, op, smallvec![left, right]);
+        let equal = self.call(span, "eq", smallvec![left, right]);
+        let equal = self.call(span, "is_true", smallvec![equal]);
+        let compare = if not {
+            equal
+        } else {
+            self.call(span, "not", smallvec![equal])
+        };
 
         let both_null_result = self.literal(span, Literal::Boolean(not));
-        let either_null_result = self.literal(span, Literal::Boolean(!not));
-        let result = self.call(span, "if", smallvec![
-            both_null,
-            both_null_result,
-            either_null,
-            either_null_result,
-            compare,
-        ]);
+        let result = self.call(span, "if", smallvec![both_null, both_null_result, compare]);
         Ok(self.call(span, "assume_not_null", smallvec![result]))
     }
 
