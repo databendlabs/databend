@@ -55,7 +55,6 @@ use parking_lot::RwLock;
 
 use super::BillingUsageDailyTable;
 use super::LicenseInfoTable;
-use super::TenantQuotaTable;
 use super::others::UdfEchoTable;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseInvertedIndexTable;
@@ -347,11 +346,6 @@ impl TableFunctionFactory {
         creators.insert(
             "license_info".to_string(),
             (next_id(), Arc::new(LicenseInfoTable::create)),
-        );
-
-        creators.insert(
-            "tenant_quota".to_string(),
-            (next_id(), Arc::new(TenantQuotaTable::create)),
         );
 
         creators.insert(

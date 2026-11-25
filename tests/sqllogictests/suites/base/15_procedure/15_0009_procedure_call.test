@@ -77,7 +77,7 @@ BEGIN
 END;
 $$;
 
-query IIII
-call admin$tenant_quota('a''b')
-----
-0 0 0 0
+## The quote in the argument must survive the rewrite: the table is unknown (1025),
+## not a syntax error.
+statement error 1025
+call system$fuse_snapshot('default', 'a''b')

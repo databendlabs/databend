@@ -13,9 +13,7 @@
 // limitations under the License.
 
 mod license_info;
-mod tenant_quota;
 mod udf;
 
 pub use license_info::LicenseInfoTable;
-pub use tenant_quota::TenantQuotaTable;
 pub use udf::UdfEchoTable;
