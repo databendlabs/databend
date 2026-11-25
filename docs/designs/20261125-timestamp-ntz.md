@@ -32,9 +32,11 @@ and aligns the naming, aliasing, and conversion rules with Snowflake:
    `TIMESTAMP` and `DATETIME` names to one of the three concrete types, as
    Snowflake's parameter of the same name does. Databend default: `LTZ`, so
    nothing changes for existing users.
-4. Implicit conversion among the three timestamp types, using the session
-   timezone, plus the two explicit forms Snowflake users expect:
-   `CAST(x AS TIMESTAMP_NTZ)` and `to_timestamp_ntz(x, '<tz>')`.
+4. Implicit conversion among the three timestamp types, plus the two explicit
+   forms Snowflake users expect: `CAST(x AS TIMESTAMP_NTZ)` and
+   `to_timestamp_ntz(x, '<tz>')`. The session timezone is the bridge between
+   wall clock and instant; a `TIMESTAMP_TZ` operand instead converts with the
+   offset it already carries.
 
 ## Motivation
 
@@ -110,8 +112,9 @@ that.
 - Reworking the `TIMESTAMP_TZ` encoding (`Decimal128(38, 0)` plus
   `ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE`). It is odd but it works and it is
   already in the wild.
-- Nanosecond precision, calendars other than proleptic Gregorian, or storing a
-  timezone name (rather than an offset) in `TIMESTAMP_TZ`.
+- Moving to nanosecond precision (Databend stays at microseconds), calendars
+  other than proleptic Gregorian, or storing a timezone name (rather than an
+  offset) in `TIMESTAMP_TZ`.
 
 ## Snowflake compatibility
 
@@ -139,8 +142,13 @@ Two properties already match and must stay matched:
 
 Deliberate divergences, to be documented rather than fixed:
 
-- Precision is fixed at microseconds. `TIMESTAMP(9)` parses and silently
-  truncates instead of storing nanoseconds. Snowflake defaults to 9.
+- **Precision stays at microseconds.** Databend does not move to nanoseconds.
+  Snowflake's default is 9 digits; ours is 6, permanently. The DDL policy is
+  that `TIMESTAMP(p)` / `DATETIME(p)` / `TIMESTAMP_NTZ(p)` with `p <= 6` parse
+  and the argument is ignored, while `p` in 7..=9 is rejected with an explicit
+  error rather than accepted and silently truncated. Failing once at
+  `CREATE TABLE` is visible; truncating every subsequent insert is not. This is
+  a one-line policy if we later prefer Snowflake's tolerance.
 - `TIMESTAMP_NTZ` rejects `%z` / `%Z` in formatting. Snowflake prints `Z` when
   the output format contains a timezone field. Printing an offset for a value
   that has none is exactly the confusion this type exists to remove.
@@ -269,14 +277,25 @@ table column type.
 
 ### Explicit conversions
 
-Both forms are supported, and they are the same operation:
+Both forms are supported. They differ only in where the timezone comes from:
 
 | Form | Timezone |
 |---|---|
-| `CAST(x AS TIMESTAMP_NTZ)`, `x::TIMESTAMP_NTZ` | session `TIMEZONE` |
-| `to_timestamp_ntz(x, '<tz>')`, `try_to_timestamp_ntz(...)` | the given `<tz>` |
-| `CAST(x AS TIMESTAMP)`, `x::TIMESTAMP` | session `TIMEZONE`, then subject to `timestamp_type_mapping` |
+| `CAST(x AS TIMESTAMP_NTZ)`, `x::TIMESTAMP_NTZ` | implied: session `TIMEZONE` for an `LTZ` operand, the value's own stored offset for a `TZ` operand, none at all for a string operand |
+| `to_timestamp_ntz(x, '<tz>')`, `try_to_timestamp_ntz(...)` | the given `<tz>`, overriding any stored offset |
+| `CAST(x AS TIMESTAMP)`, `x::TIMESTAMP` | the same implied timezone, then the result is subject to `timestamp_type_mapping` |
 | `to_timestamp_ltz(x, '<tz>')`, `to_timestamp_tz(x, '<tz>')` | the given `<tz>` |
+
+So `CAST` never asks the caller for a timezone, and the two-argument form always
+overrides. This keeps Snowflake's ergonomics (`x::TIMESTAMP_NTZ` just works)
+while still letting a caller be explicit when the session timezone is not the
+right answer:
+
+```sql
+SET timezone = 'Asia/Shanghai';
+SELECT '2024-01-01 12:00:00 -0800'::TIMESTAMP_TZ::TIMESTAMP_NTZ;              -- 2024-01-01 12:00:00
+SELECT to_timestamp_ntz('2024-01-01 12:00:00 -0800'::TIMESTAMP_TZ, 'UTC');   -- 2024-01-01 20:00:00
+```
 
 `to_timestamp_ntz` also keeps the one- and two-argument string forms
 (`to_timestamp_ntz(<string>)`, `to_timestamp_ntz(<string>, <format>)`),
@@ -291,14 +310,22 @@ mirroring `to_timestamp`.
 | `LTZ` → `NTZ` | `render(instant, session_tz)` | — |
 | `LTZ` → `TZ` | unchanged | set from the session offset |
 | `TZ` → `LTZ` | unchanged | dropped |
-| `TZ` → `NTZ` | `render(instant, session_tz)` | — |
+| `TZ` → `NTZ` | `instant + stored offset` | dropped |
 
-Only the `TZ` → `NTZ` row is uncertain: using the stored offset instead of the
-session timezone is also defensible, since the value already carries an offset.
-Snowflake's documented model ("the offset is not a time zone") points at the
-session timezone, and this proposal adopts that, but it is listed as an open
-question to be settled by a compatibility test against a real Snowflake
-account before P2 merges.
+The `TZ` → `NTZ` row uses the value's **own stored offset**, not the session
+timezone. A `TIMESTAMP_TZ` value already carries the offset it was created
+with, so its civil representation is defined without asking the session
+anything; converting through the session timezone would invent a wall clock the
+value never had. The property this buys, and that the tests assert:
+
+```sql
+'2024-01-01 12:00:00 -0800'::TIMESTAMP_TZ::TIMESTAMP_NTZ  ==>  2024-01-01 12:00:00
+```
+
+under any session timezone. Note that the reverse direction is not symmetric —
+`TIMESTAMP_NTZ → TIMESTAMP_TZ` has no offset to recover and therefore uses the
+session timezone — which is exactly the information loss that makes this an
+explicit cast rather than an implicit one.
 
 ### Where the session timezone enters
 
@@ -315,9 +342,11 @@ be audited, and each one gets a test:
   bound prunes valid rows silently.
 - **Plan cache.** A plan whose folded literals depend on `timestamp_type_mapping`
   or on `timezone` must not be reused under different settings.
-- **`INSERT` / `UPDATE` / CTAS.** The stored value depends on the timezone of
-  the statement that wrote it. This is inherent to Snowflake's model; the
-  documentation must say so.
+- **`INSERT` / `UPDATE` / CTAS.** A stored value depends on the timezone of the
+  statement that produced it whenever the source is an `LTZ` value being
+  written into an `NTZ` column. Sources that are already `NTZ` or `TIMESTAMP_TZ`
+  are session-independent, which is a reason to prefer keeping instants in
+  `TIMESTAMP_TZ` when the original offset matters.
 - **Prepared statements.** The resolved type of a bare `TIMESTAMP` in a
   prepared statement is fixed at prepare time; changing
   `timestamp_type_mapping` afterwards does not re-resolve it.
@@ -367,10 +396,9 @@ Parser notes:
   anything else (`src/query/ast/src/parser/expr.rs:2359`), so the new rules must
   be ordered before it, exactly like `ty_timestamp_tz` is today
   (`src/query/ast/src/parser/expr.rs:2408-2409`).
-- `TIMESTAMP(6)` and `DATETIME(6)` keep parsing; the precision argument is
-  ignored, as today. `TIMESTAMP_NTZ(p)` is rejected for the same reason it is
-  meaningless — the type has no precision parameter. If Snowflake compatibility
-  later requires accepting it, it can be accepted and ignored like `TIMESTAMP`.
+- The precision argument `p` is accepted and ignored for all four type names
+  when `p <= 6`, and rejected when `p` is 7..=9 (see "Deliberate divergences").
+  All timestamp types are stored as microseconds regardless.
 
 ### Resolving a settings-dependent type name
 
@@ -484,7 +512,8 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
 3. The full conversion matrix: all six directed pairs, each with the session
    timezone varied, asserting the numeric-effect table, plus the three implicit
    mixes (comparison, `UNION`, join key) resolving to the documented target
-   type.
+   type. Includes the `TZ` → `NTZ` property: an offset-bearing value casts to
+   `NTZ` keeping its own wall clock under every session timezone.
 4. `timestamp_type_mapping` tests: bare `TIMESTAMP` and `DATETIME` under all
    three values, `SHOW CREATE TABLE` printing concrete types, and a prepared
    statement not re-resolving after the setting changes.
@@ -500,21 +529,15 @@ Snowflake-compatible, and it is the clearest example of I1's boundary.
 
 ## Open questions
 
-1. **`TIMESTAMP_TZ` → `TIMESTAMP_NTZ`.** Session timezone (proposed) or the
-   value's own stored offset? Needs a compatibility test against a real
-   Snowflake account before P2 merges.
-2. **Coercion precedence.** `TZ > LTZ > NTZ` is proposed. Every pair should be
+1. **Coercion precedence.** `TZ > LTZ > NTZ` is proposed. Every pair should be
    spot-checked against Snowflake, since the precedence chooses the target type
    for joins and set operations.
-3. **Nanosecond precision.** Out of scope here, but it is the one Snowflake
-   difference that cannot be papered over by aliases. If a migration ever needs
-   `TIMESTAMP(9)`, that is a separate proposal with its own storage change.
-4. **LTZ on-disk encoding.** Should `TIMESTAMP` be written as
+2. **LTZ on-disk encoding.** Should `TIMESTAMP` be written as
    `Timestamp(us, Some("UTC"))` so that it is honest on disk and naturally
    distinct from `TIMESTAMP_NTZ`? It is the cleaner long-term encoding but it
    changes the logical annotation of new files written for existing tables, and
    it changes what external engines see. Suggested as a separate proposal.
-5. **Cost expectation.** Adding `TimestampTz` touched 84 files and about 2.2k
+3. **Cost expectation.** Adding `TimestampTz` touched 84 files and about 2.2k
    lines and kept producing boundary fixes for months afterwards. `TimestampNtz`
    should be cheaper per site because the physical type is reused and there is
    no offset field, but P0 is what makes that estimate hold. Implicit
