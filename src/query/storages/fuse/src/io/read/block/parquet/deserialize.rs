@@ -39,7 +39,7 @@ use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 
 /// The sorted Parquet leaves read from a block, and the positions of the dictionary hints
-/// dropped for its column chunks without a dictionary page.
+/// dropped for its column chunks that are not dictionary encoded throughout.
 type FieldLevelsKey = (Vec<usize>, Vec<usize>);
 
 const MAX_CACHED_FIELD_LEVEL_LAYOUTS: usize = 16;
@@ -256,7 +256,8 @@ pub(super) fn column_chunks_record_reader(
     }
     projection_mask.sort_unstable();
 
-    // Positions of the dictionary hints to drop for this block.
+    // Drop the hint if the writer disabled dictionaries or fell back to plain pages after
+    // a dictionary page. Otherwise Arrow would rebuild a dictionary of plain values row by row.
     let mut plain_hints = Vec::new();
     if let Some(hint_fields) = &read_schema.hint_fields {
         for (index, field) in hint_fields.iter().enumerate() {
@@ -265,12 +266,7 @@ pub(super) fn column_chunks_record_reader(
                 && read_schema
                     .column_id_to_dfs_id
                     .get(&column_id)
-                    // Whether a column chunk is dictionary encoded was decided when writing it,
-                    // from its distinct values (dictionary disabled for high NDV, or the
-                    // arrow-rs writer falling back to plain once the dictionary page is too
-                    // large), and shows as a leading dictionary page. Its header tells whether
-                    // reading as a dictionary pays.
-                    .is_some_and(|dfs_id| !builder.starts_with_dictionary_page(*dfs_id))
+                    .is_some_and(|dfs_id| !builder.all_pages_dictionary_encoded(*dfs_id))
             {
                 plain_hints.push(index);
             }
@@ -397,35 +393,46 @@ mod tests {
         Ok(())
     }
 
-    /// A dictionary hint keeps the dictionary of a dictionary encoded column chunk, and reads a
-    /// column chunk without a dictionary page as its regular type, also when one
-    /// [`FieldLevelsCache`] serves chunks of both kinds one after the other.
+    /// A dictionary hint applies only to chunks encoded as dictionaries throughout, even when
+    /// one [`FieldLevelsCache`] serves dictionary, plain, and fallback chunks in succession.
     #[test]
     fn test_dictionary_hint_follows_column_chunk() -> databend_common_exception::Result<()> {
         let num_rows = 1000;
         let schema = TableSchema::new(vec![TableField::new("s", TableDataType::String)]);
         let arrow_schema = Arc::new(Schema::from(&schema));
-        let values = (0..num_rows)
-            .map(|i| format!("v{}", i % 3))
-            .collect::<Vec<_>>();
-        let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(
-            arrow_array::StringViewArray::from(values.clone()),
-        )])?;
         let column_id = schema.field(0).column_id();
         let hint = dictionary_hint_fields(&schema, [column_id]).unwrap();
         let read_schema = Arc::new(ParquetReadSchema::try_new(&schema, Some(hint))?);
         let mut field_levels = FieldLevelsCache::new(read_schema.clone());
 
-        for dictionary_enabled in [true, false, true] {
-            let properties = WriterProperties::builder()
+        for (dictionary_enabled, falls_back) in
+            [(true, false), (true, true), (false, false), (true, false)]
+        {
+            let distinct = if falls_back { 500 } else { 3 };
+            let values = (0..num_rows)
+                .map(|i| format!("value-{}", i % distinct))
+                .collect::<Vec<_>>();
+            let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(
+                arrow_array::StringViewArray::from(values.clone()),
+            )])?;
+            let mut properties = WriterProperties::builder()
                 .set_dictionary_enabled(dictionary_enabled)
-                .build();
+                .set_data_page_row_count_limit(100)
+                .set_write_batch_size(100);
+            if falls_back {
+                properties = properties.set_dictionary_page_size_limit(64);
+            }
             let mut bytes = Vec::new();
             let mut writer =
-                ArrowWriter::try_new(&mut bytes, arrow_schema.clone(), Some(properties))?;
+                ArrowWriter::try_new(&mut bytes, arrow_schema.clone(), Some(properties.build()))?;
             writer.write(&batch)?;
             let metadata = writer.close()?;
-            let (offset, length) = metadata.row_group(0).column(0).byte_range();
+            let column = metadata.row_group(0).column(0);
+            assert_eq!(
+                column.dictionary_page_offset().is_some(),
+                dictionary_enabled
+            );
+            let (offset, length) = column.byte_range();
             let bytes = Bytes::from(bytes);
             let column_chunks = HashMap::from([(
                 column_id,
@@ -447,8 +454,8 @@ mod tests {
             let column = record.column(0);
             assert_eq!(
                 matches!(column.data_type(), ArrowDataType::Dictionary(..)),
-                dictionary_enabled,
-                "dictionary_enabled: {dictionary_enabled}"
+                dictionary_enabled && !falls_back,
+                "dictionary_enabled: {dictionary_enabled}, falls_back: {falls_back}"
             );
             let decoded = databend_common_expression::Column::from_arrow_rs(
                 column.clone(),

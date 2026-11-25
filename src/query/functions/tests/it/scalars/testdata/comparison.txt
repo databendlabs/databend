@@ -2948,3 +2948,271 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------+
 
 
+ast            : a = ''
+raw expr       : eq(a::String, '')
+checked expr   : eq<String, String>(a, "")
+evaluation:
++--------+------------------------------------+---------------+
+|        | a                                  | Output        |
++--------+------------------------------------+---------------+
+| Type   | String                             | Boolean       |
+| Domain | {""..="x"}                         | {FALSE, TRUE} |
+| Row 0  | ''                                 | true          |
+| Row 1  | 'x'                                | false         |
+| Row 2  | 'a value longer than twelve bytes' | false         |
+| Row 3  | ' '                                | false         |
+| Row 4  | ''                                 | true          |
++--------+------------------------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___10001])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : a <> ''
+raw expr       : noteq(a::String, '')
+checked expr   : noteq<String, String>(a, "")
+evaluation:
++--------+------------------------------------+---------------+
+|        | a                                  | Output        |
++--------+------------------------------------+---------------+
+| Type   | String                             | Boolean       |
+| Domain | {""..="x"}                         | {FALSE, TRUE} |
+| Row 0  | ''                                 | false         |
+| Row 1  | 'x'                                | true          |
+| Row 2  | 'a value longer than twelve bytes' | true          |
+| Row 3  | ' '                                | true          |
+| Row 4  | ''                                 | false         |
++--------+------------------------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___01110])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : a > ''
+raw expr       : gt(a::String, '')
+checked expr   : gt<String, String>(a, "")
+evaluation:
++--------+------------------------------------+---------------+
+|        | a                                  | Output        |
++--------+------------------------------------+---------------+
+| Type   | String                             | Boolean       |
+| Domain | {""..="x"}                         | {FALSE, TRUE} |
+| Row 0  | ''                                 | false         |
+| Row 1  | 'x'                                | true          |
+| Row 2  | 'a value longer than twelve bytes' | true          |
+| Row 3  | ' '                                | true          |
+| Row 4  | ''                                 | false         |
++--------+------------------------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___01110])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : a >= ''
+raw expr       : gte(a::String, '')
+checked expr   : gte<String, String>(a, "")
+optimized expr : true
+evaluation:
++--------+------------------------------------+---------+
+|        | a                                  | Output  |
++--------+------------------------------------+---------+
+| Type   | String                             | Boolean |
+| Domain | {""..="x"}                         | {TRUE}  |
+| Row 0  | ''                                 | true    |
+| Row 1  | 'x'                                | true    |
+| Row 2  | 'a value longer than twelve bytes' | true    |
+| Row 3  | ' '                                | true    |
+| Row 4  | ''                                 | true    |
++--------+------------------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___11111])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : a < ''
+raw expr       : lt(a::String, '')
+checked expr   : lt<String, String>(a, "")
+optimized expr : false
+evaluation:
++--------+------------------------------------+---------+
+|        | a                                  | Output  |
++--------+------------------------------------+---------+
+| Type   | String                             | Boolean |
+| Domain | {""..="x"}                         | {FALSE} |
+| Row 0  | ''                                 | false   |
+| Row 1  | 'x'                                | false   |
+| Row 2  | 'a value longer than twelve bytes' | false   |
+| Row 3  | ' '                                | false   |
+| Row 4  | ''                                 | false   |
++--------+------------------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___00000])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : a <= ''
+raw expr       : lte(a::String, '')
+checked expr   : lte<String, String>(a, "")
+evaluation:
++--------+------------------------------------+---------------+
+|        | a                                  | Output        |
++--------+------------------------------------+---------------+
+| Type   | String                             | Boolean       |
+| Domain | {""..="x"}                         | {FALSE, TRUE} |
+| Row 0  | ''                                 | true          |
+| Row 1  | 'x'                                | false         |
+| Row 2  | 'a value longer than twelve bytes' | false         |
+| Row 3  | ' '                                | false         |
+| Row 4  | ''                                 | true          |
++--------+------------------------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___10001])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : '' = a
+raw expr       : eq('', a::String)
+checked expr   : eq<String, String>("", a)
+evaluation:
++--------+------------------------------------+---------------+
+|        | a                                  | Output        |
++--------+------------------------------------+---------------+
+| Type   | String                             | Boolean       |
+| Domain | {""..="x"}                         | {FALSE, TRUE} |
+| Row 0  | ''                                 | true          |
+| Row 1  | 'x'                                | false         |
+| Row 2  | 'a value longer than twelve bytes' | false         |
+| Row 3  | ' '                                | false         |
+| Row 4  | ''                                 | true          |
++--------+------------------------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___10001])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : '' < a
+raw expr       : lt('', a::String)
+checked expr   : lt<String, String>("", a)
+evaluation:
++--------+------------------------------------+---------------+
+|        | a                                  | Output        |
++--------+------------------------------------+---------------+
+| Type   | String                             | Boolean       |
+| Domain | {""..="x"}                         | {FALSE, TRUE} |
+| Row 0  | ''                                 | false         |
+| Row 1  | 'x'                                | true          |
+| Row 2  | 'a value longer than twelve bytes' | true          |
+| Row 3  | ' '                                | true          |
+| Row 4  | ''                                 | false         |
++--------+------------------------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___01110])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : '' >= a
+raw expr       : gte('', a::String)
+checked expr   : gte<String, String>("", a)
+evaluation:
++--------+------------------------------------+---------------+
+|        | a                                  | Output        |
++--------+------------------------------------+---------------+
+| Type   | String                             | Boolean       |
+| Domain | {""..="x"}                         | {FALSE, TRUE} |
+| Row 0  | ''                                 | true          |
+| Row 1  | 'x'                                | false         |
+| Row 2  | 'a value longer than twelve bytes' | false         |
+| Row 3  | ' '                                | false         |
+| Row 4  | ''                                 | true          |
++--------+------------------------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | Column(StringColumn[, x, a value longer than twelve bytes,  , ]) |
+| Output | Boolean([0b___10001])                                            |
++--------+------------------------------------------------------------------+
+
+
+ast            : b = ''
+raw expr       : eq(b::String NULL, '')
+checked expr   : eq<String NULL, String NULL>(b, CAST<String>("" AS String NULL))
+optimized expr : eq<String NULL, String NULL>(b, "")
+evaluation:
++--------+---------------------+------------------------+
+|        | b                   | Output                 |
++--------+---------------------+------------------------+
+| Type   | String NULL         | Boolean NULL           |
+| Domain | {""..="z"} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
+| Row 0  | ''                  | true                   |
+| Row 1  | NULL                | NULL                   |
+| Row 2  | 'y'                 | false                  |
+| Row 3  | 'z'                 | false                  |
+| Row 4  | NULL                | NULL                   |
++--------+---------------------+------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| b      | Column(NullableColumn { column: StringColumn[, , y, z, ], validity: [0b___01101] }) |
+| Output | NullableColumn { column: Boolean([0b___10011]), validity: [0b___01101] }            |
++--------+-------------------------------------------------------------------------------------+
+
+
+ast            : b <> ''
+raw expr       : noteq(b::String NULL, '')
+checked expr   : noteq<String NULL, String NULL>(b, CAST<String>("" AS String NULL))
+optimized expr : noteq<String NULL, String NULL>(b, "")
+evaluation:
++--------+---------------------+------------------------+
+|        | b                   | Output                 |
++--------+---------------------+------------------------+
+| Type   | String NULL         | Boolean NULL           |
+| Domain | {""..="z"} ∪ {NULL} | {FALSE, TRUE} ∪ {NULL} |
+| Row 0  | ''                  | false                  |
+| Row 1  | NULL                | NULL                   |
+| Row 2  | 'y'                 | true                   |
+| Row 3  | 'z'                 | true                   |
+| Row 4  | NULL                | NULL                   |
++--------+---------------------+------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| b      | Column(NullableColumn { column: StringColumn[, , y, z, ], validity: [0b___01101] }) |
+| Output | NullableColumn { column: Boolean([0b___01100]), validity: [0b___01101] }            |
++--------+-------------------------------------------------------------------------------------+
+
+

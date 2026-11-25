@@ -110,6 +110,14 @@ impl<'a> EvaluateOptions<'a> {
     }
 }
 
+/// `bitmap` with the rows that `validity` marks as NULL unset.
+fn and_validity(bitmap: Bitmap, validity: Option<&Bitmap>) -> Bitmap {
+    match validity {
+        Some(validity) => &bitmap & validity,
+        None => bitmap,
+    }
+}
+
 /// Merge a source error set into a target error set, keeping the union of
 /// error rows and the first error message. Error sets travel upward through
 /// nested calls while suppression is active, so both sibling arguments and
@@ -389,33 +397,94 @@ impl<'a> Evaluator<'a> {
     }
 
     /// `<column> <op> <constant>` over an encoded column, or `<column> <op> <column>` over two
-    /// frame of reference encoded columns, evaluated without decoding (on the deltas / once per
-    /// dictionary value). `None` if the arguments do not have this form.
+    /// frame of reference encoded columns or two string columns of which at least one is
+    /// dictionary encoded, evaluated without decoding (on the deltas / once per dictionary
+    /// value / by the dictionary value of each row). `None` if the arguments do not have this
+    /// form or a column is nullable.
     pub fn try_compare_encoded(&self, op: &SelectOp, args: &[Expr]) -> Option<Bitmap> {
-        let encoded = |id: usize| match self.data_block.get_by_offset(id) {
-            BlockEntry::Column(Column::Encoded(encoded)) => Some(encoded),
+        self.compare_encoded(op, args, None, false)
+    }
+
+    /// [`Self::try_compare_encoded`] for a filter, which also takes nullable columns: their
+    /// validity applies after the comparison and NULL selects as false. With `rows`, the result
+    /// is only correct at `rows`, see [`DictColumn::compare_scalar`].
+    pub fn try_select_compare_encoded(
+        &self,
+        op: &SelectOp,
+        args: &[Expr],
+        rows: Option<&[u32]>,
+    ) -> Option<Bitmap> {
+        self.compare_encoded(op, args, rows, true)
+    }
+
+    fn compare_encoded(
+        &self,
+        op: &SelectOp,
+        args: &[Expr],
+        rows: Option<&[u32]>,
+        nullable: bool,
+    ) -> Option<Bitmap> {
+        // The column of `id` and, if it is nullable, its validity.
+        let column = |id: usize| match self.data_block.get_by_offset(id) {
+            BlockEntry::Column(Column::Nullable(column)) if nullable => {
+                Some((column.column(), Some(column.validity())))
+            }
+            BlockEntry::Column(Column::Nullable(_)) => None,
+            BlockEntry::Column(column) => Some((column, None)),
+            BlockEntry::Const(..) => None,
+        };
+        // A column, or for a filter also a column cast to the nullable of its type, which only
+        // wraps it.
+        let column_id = |expr: &Expr| match expr {
+            Expr::ColumnRef(ColumnRef { id, .. }) => Some(*id),
+            Expr::Cast(Cast {
+                is_try: false,
+                expr,
+                dest_type,
+                ..
+            }) if nullable => match expr.as_ref() {
+                Expr::ColumnRef(ColumnRef { id, data_type, .. })
+                    if dest_type.is_nullable() && dest_type.remove_nullable() == *data_type =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            },
             _ => None,
         };
-        let (id, scalar, op) = match args {
-            [
-                Expr::ColumnRef(ColumnRef { id, .. }),
-                Expr::Constant(Constant { scalar, .. }),
-            ] => (*id, scalar, op.clone()),
-            [
-                Expr::Constant(Constant { scalar, .. }),
-                Expr::ColumnRef(ColumnRef { id, .. }),
-            ] => (*id, scalar, op.reverse()),
-            // `<column> <op> <column>`, both frame of reference encoded.
-            [
-                Expr::ColumnRef(ColumnRef { id: lhs, .. }),
-                Expr::ColumnRef(ColumnRef { id: rhs, .. }),
-            ] => {
-                let rhs = encoded(*rhs)?.as_for()?;
-                return encoded(*lhs)?.as_for()?.compare_for(op, rhs);
+        let [lhs, rhs] = args else {
+            return None;
+        };
+        let (id, scalar, op) = match (column_id(lhs), column_id(rhs), lhs, rhs) {
+            (Some(lhs), Some(rhs), _, _) => {
+                let (lhs, lhs_validity) = column(lhs)?;
+                let (rhs, rhs_validity) = column(rhs)?;
+                let bitmap = match (lhs, rhs) {
+                    (Column::Encoded(lhs), Column::Encoded(rhs))
+                        if lhs.as_for().is_some() && rhs.as_for().is_some() =>
+                    {
+                        lhs.as_for()?.compare_for(op, rhs.as_for()?)?
+                    }
+                    (lhs, rhs) => DictColumn::compare_string_columns(op, lhs, rhs, rows)?,
+                };
+                return Some(and_validity(
+                    and_validity(bitmap, lhs_validity),
+                    rhs_validity,
+                ));
+            }
+            (Some(id), None, _, Expr::Constant(Constant { scalar, .. })) => {
+                (id, scalar, op.clone())
+            }
+            (None, Some(id), Expr::Constant(Constant { scalar, .. }), _) => {
+                (id, scalar, op.reverse())
             }
             _ => return None,
         };
-        encoded(id)?.compare_scalar(&op, scalar)
+        let (Column::Encoded(encoded), validity) = column(id)? else {
+            return None;
+        };
+        let bitmap = encoded.compare_scalar(&op, scalar, rows)?;
+        Some(and_validity(bitmap, validity))
     }
 
     /// Evaluates a filter's LIKE over a dictionary encoded string column without decoding.

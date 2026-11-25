@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Add;
@@ -43,6 +44,8 @@ pub struct View {
 
 impl View {
     pub const MAX_INLINE_SIZE: u32 = 12;
+    /// The number of value bytes kept in `prefix`.
+    pub const PREFIX_LEN: usize = 4;
 
     #[inline(always)]
     pub fn as_u128(self) -> u128 {
@@ -145,6 +148,125 @@ impl View {
                 data.get_unchecked(offset..offset + self.length as usize)
             }
         }
+    }
+
+    #[inline(always)]
+    pub fn is_inline(&self) -> bool {
+        self.length <= Self::MAX_INLINE_SIZE
+    }
+
+    /// The first 8 bytes of the view: the length and the prefix.
+    #[inline(always)]
+    fn length_and_prefix(&self) -> u64 {
+        self.length as u64 | ((self.prefix as u64) << 32)
+    }
+
+    /// The last 8 bytes of the view: the inlined bytes after the prefix for a short string, the
+    /// buffer index and offset for a long one.
+    #[inline(always)]
+    fn suffix(&self) -> u64 {
+        self.buffer_idx as u64 | ((self.offset as u64) << 32)
+    }
+
+    /// The prefix as a big-endian integer, so that integer order is the byte order of the prefix.
+    #[inline(always)]
+    fn prefix_order_key(&self) -> u32 {
+        u32::from_be_bytes(self.prefix.to_le_bytes())
+    }
+
+    /// The inlined bytes after the prefix as a big-endian integer, so that integer order is their
+    /// byte order. Only meaningful for an inlined view.
+    #[inline(always)]
+    fn inline_suffix_order_key(&self) -> u64 {
+        let [b0, b1, b2, b3] = self.buffer_idx.to_le_bytes();
+        let [b4, b5, b6, b7] = self.offset.to_le_bytes();
+        u64::from_be_bytes([b0, b1, b2, b3, b4, b5, b6, b7])
+    }
+}
+
+/// Whether the values of two views are equal.
+///
+/// The length and prefix are compared as one `u64`, then the inlined bytes as another, so the
+/// data buffers are only read for long values that share both length and prefix. This relies on
+/// the zero padding of inlined views that the Arrow format requires.
+#[inline(always)]
+pub(crate) fn views_eq<'a, 'b>(
+    lhs: &View,
+    rhs: &View,
+    lhs_bytes: impl FnOnce() -> &'a [u8],
+    rhs_bytes: impl FnOnce() -> &'b [u8],
+) -> bool {
+    if lhs.length_and_prefix() != rhs.length_and_prefix() {
+        return false;
+    }
+    if lhs.is_inline() {
+        // Same length, so both are inlined.
+        return lhs.suffix() == rhs.suffix();
+    }
+    // Long values of the same length: the first 4 bytes are the equal prefixes.
+    lhs_bytes()[View::PREFIX_LEN..] == rhs_bytes()[View::PREFIX_LEN..]
+}
+
+/// Compares the values of two views, deciding from the prefixes alone when they differ.
+#[inline(always)]
+pub(crate) fn views_cmp<'a, 'b>(
+    lhs: &View,
+    rhs: &View,
+    lhs_bytes: impl FnOnce() -> &'a [u8],
+    rhs_bytes: impl FnOnce() -> &'b [u8],
+) -> Ordering {
+    // Prefixes are zero padded, so a prefix that differs differs at a byte both values have, or
+    // at a non-zero byte past the end of the shorter one: either way the prefix order is the order
+    // of the values.
+    if lhs.prefix != rhs.prefix {
+        return lhs.prefix_order_key().cmp(&rhs.prefix_order_key());
+    }
+    // `rhs` first: for a constant probe it is the same on every row, so the branch is
+    // predictable.
+    if rhs.is_inline() && lhs.is_inline() {
+        // The same holds for the zero padded bytes after the prefix. Values that are still equal
+        // differ at most by trailing zero bytes, so the shorter one is less.
+        return lhs
+            .inline_suffix_order_key()
+            .cmp(&rhs.inline_suffix_order_key())
+            .then(lhs.length.cmp(&rhs.length));
+    }
+    lhs_bytes().cmp(rhs_bytes())
+}
+
+/// A value prepared once for comparison with many rows of a view column, such as the constant of
+/// `col = 'abc'`.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewProbe<'a> {
+    view: View,
+    bytes: &'a [u8],
+}
+
+impl<'a> ViewProbe<'a> {
+    pub fn new(bytes: &'a [u8]) -> Self {
+        let view = if bytes.len() <= View::MAX_INLINE_SIZE as usize {
+            // SAFETY: the length is checked above.
+            unsafe { View::new_inline_unchecked(bytes) }
+        } else {
+            // A column value is at most `u32::MAX` bytes. A longer probe gets that length, which
+            // only matches long column values, and their byte comparison sees the real lengths.
+            View {
+                length: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
+                prefix: u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
+                ..Default::default()
+            }
+        };
+        Self { view, bytes }
+    }
+
+    #[inline(always)]
+    pub(crate) fn view(&self) -> &View {
+        &self.view
+    }
+
+    #[inline(always)]
+    pub(crate) fn bytes(&self) -> &'a [u8] {
+        self.bytes
     }
 }
 

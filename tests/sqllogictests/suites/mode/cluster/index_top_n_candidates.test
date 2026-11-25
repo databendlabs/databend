@@ -1,0 +1,58 @@
+statement ok
+create or replace database index_top_n_candidates;
+
+statement ok
+use index_top_n_candidates;
+
+statement ok
+create table hits (id int not null, body string not null, v vector(4),
+                   inverted index ft(body), vector index vi(v) distance='l2');
+
+# Five segments: more than the CI cluster's node count. Each block has
+# one match, equally many tokens, and a different frequency of 'red'.
+statement ok
+insert into hits values (9, 'red red red red red', [9,0,0,0]), (10, 'blue', NULL);
+
+statement ok
+insert into hits values (1, 'red blue blue blue blue', [1,0,0,0]), (2, 'blue', NULL);
+
+statement ok
+insert into hits values (5, 'red red red blue blue', [5,0,0,0]), (6, 'blue', NULL);
+
+statement ok
+insert into hits values (3, 'red red blue blue blue', [3,0,0,0]), (4, 'blue', NULL);
+
+statement ok
+insert into hits values (7, 'red red red red blue', [7,0,0,0]), (8, 'blue', NULL);
+
+# No TopN in the oracle: compare exact scores and fetched rows across the exchange.
+statement ok
+create table reference as select id, score() as s from hits where match(body, 'red');
+
+query I
+with actual as (select id, score() as s from hits where match(body,'red') order by s desc limit 2 offset 1),
+     expected as (select id, s from reference order by s desc limit 2 offset 1)
+select count(*) from actual a full join expected e on a.id = e.id and a.s = e.s
+where a.id is null or e.id is null;
+----
+0
+
+query I
+select id from hits order by l2_distance(v, [0,0,0,0]::vector(4)) limit 2 offset 1;
+----
+3
+5
+
+# K is larger than the number of scored rows: blocks must not drop their NULL rows.
+query I
+select id from (select id from hits order by l2_distance(v, [0,0,0,0]::vector(4)) limit 20) t
+where id % 2 = 0 order by id;
+----
+2
+4
+6
+8
+10
+
+statement ok
+drop database index_top_n_candidates;

@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use arrow_array::Array;
 use arrow_array::ArrayRef;
@@ -34,9 +36,12 @@ use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::BlockDataFile;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 mod adapter;
 mod deserialize;
+mod dict_chunk;
 mod encode;
+mod page_header;
 mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
@@ -45,7 +50,10 @@ pub use deserialize::ParquetReadSchema;
 pub use deserialize::column_chunks_to_record_batch;
 pub use deserialize::column_chunks_to_record_batch_with_codecs;
 pub use deserialize::dictionary_hint_fields;
+use dict_chunk::read_string_dictionary_chunk;
 pub use encode::ColumnEncoding;
+use page_header::dictionary_len;
+use parquet::basic::Compression as ParquetCompression;
 pub use row_selection::RowSelection;
 
 use self::deserialize::column_chunks_record_reader;
@@ -59,6 +67,35 @@ impl BlockReader {
     /// by a caller that reads many blocks.
     pub fn field_levels_cache(&self) -> FieldLevelsCache {
         FieldLevelsCache::new(self.parquet_read_schema.clone())
+    }
+
+    /// The projected non-nullable string columns kept as dictionaries whose chunk is
+    /// dictionary encoded throughout, with a dictionary within the NDV ratio (as in
+    /// [`ColumnEncoding::encode`]).
+    fn dictionary_chunks(
+        &self,
+        num_rows: usize,
+        column_chunks: &HashMap<ColumnId, DataItem>,
+    ) -> HashSet<ColumnId> {
+        self.projected_schema
+            .fields
+            .iter()
+            .filter(|field| {
+                *field.data_type() == TableDataType::String
+                    && self.column_encodings.get(&field.column_id)
+                        == Some(&ColumnEncoding::Dictionary)
+                    && matches!(
+                        column_chunks.get(&field.column_id),
+                        Some(DataItem::RawData(chunk))
+                            if dictionary_len(chunk).is_some_and(|len| {
+                                len > 0
+                                    && len as u64 * 100
+                                        <= num_rows as u64 * self.dictionary_ndv_ratio
+                            })
+                    )
+            })
+            .map(|field| field.column_id)
+            .collect()
     }
 
     pub fn deserialize_part(
@@ -116,12 +153,26 @@ impl BlockReader {
             return Ok(DataBlock::empty_with_schema(&self.data_schema()));
         }
 
+        // Dictionary encoded chunks of the string columns kept as dictionaries are read
+        // without the arrow reader, see `dict_chunk`.
+        let dictionary_chunks = self.dictionary_chunks(num_rows, &column_chunks);
+        let arrow_chunks;
+        let arrow_chunks = if dictionary_chunks.is_empty() {
+            &column_chunks
+        } else {
+            arrow_chunks = column_chunks
+                .iter()
+                .filter(|(column_id, _)| !dictionary_chunks.contains(column_id))
+                .map(|(column_id, item)| (*column_id, item.clone()))
+                .collect::<HashMap<_, _>>();
+            &arrow_chunks
+        };
         let record_batch = column_chunks_to_record_batch_with_codecs(
             &self.original_schema,
             &self.parquet_read_schema,
             field_levels,
             num_rows,
-            &column_chunks,
+            arrow_chunks,
             files.default_compression(),
             |column_id| files.compression_of(column_id),
             selection.map(|s| s.selection.clone()),
@@ -131,69 +182,94 @@ impl BlockReader {
             result_rows,
             &files,
             &column_chunks,
+            &dictionary_chunks,
+            num_rows,
             selection,
-            &self.parquet_name_paths,
+            true,
         )
     }
 
-    /// Cache entries and encodings describe the whole block, not a batch.
-    pub(crate) fn parquet_filter_batches<'a>(
-        &'a self,
-        part: &'a FuseBlockPartInfo,
-        column_chunks: &'a HashMap<ColumnId, DataItem<'a>>,
-        batch_rows: usize,
-        field_levels: Option<&mut FieldLevelsCache>,
-    ) -> databend_common_exception::Result<
-        Option<impl Iterator<Item = databend_common_exception::Result<DataBlock>> + 'a>,
-    > {
-        if (self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
-            || !self.column_encodings.is_empty()
-            || column_chunks.is_empty()
-            || column_chunks
+    /// Whether [`Self::parquet_batches`] can decode `column_chunks` in batches rather than
+    /// whole: cache entries and encodings describe the whole block, not a batch.
+    ///
+    /// Callers check it once per block, as the column array cache may be enabled by another
+    /// session at any time.
+    pub(crate) fn can_parquet_batches(&self, column_chunks: &HashMap<ColumnId, DataItem>) -> bool {
+        !(self.policy.memory.writes() && FuseCaches::instance().column_arrays.is_enabled())
+            && self.column_encodings.is_empty()
+            && !column_chunks.is_empty()
+            && !column_chunks
                 .values()
                 .any(|item| matches!(item, DataItem::ColumnArray(_)))
-        {
-            return Ok(None);
-        }
+    }
+
+    /// Decodes the column chunks of a block in batches of at most `batch_rows` rows.
+    ///
+    /// The returned decoder owns the column chunks, so batches can be pulled after the read
+    /// result is gone: each pull decompresses only the pages of that batch. The batches
+    /// never fill the column array cache, whose entries hold whole columns.
+    ///
+    /// The caller must have checked [`Self::can_parquet_batches`] on `column_chunks`.
+    pub(crate) fn parquet_batches(
+        self: &Arc<Self>,
+        part: &FuseBlockPartInfo,
+        column_chunks: &HashMap<ColumnId, DataItem>,
+        selection: Option<&RowSelection>,
+        batch_rows: usize,
+        field_levels: &mut FieldLevelsCache,
+    ) -> databend_common_exception::Result<ParquetBatches> {
+        debug_assert!(self.column_encodings.is_empty());
         let data_files = part.data_files();
         let files = DataFileLookup::new(&data_files);
+        // Cap the reader batch size by the selected/total row count so sparse pushdowns
+        // do not over-allocate output column buffers retained downstream.
+        let reader_batch_rows = selection
+            .map_or(part.nums_rows, |s| s.selected_rows)
+            .min(batch_rows);
         let reader = column_chunks_record_reader(
             &self.original_schema,
             &self.parquet_read_schema,
-            field_levels,
+            Some(field_levels),
             part.nums_rows,
             column_chunks,
             files.default_compression(),
             |column_id| files.compression_of(column_id),
-            None,
-            batch_rows,
+            selection.map(|s| s.selection.clone()),
+            reader_batch_rows,
         )?;
-        Ok(Some(reader.map(move |batch| {
-            let batch = batch?;
-            self.record_batch_to_block(
-                &batch,
-                batch.num_rows(),
-                &DataFileLookup::new(&data_files),
-                column_chunks,
-                None,
-                &self.parquet_name_paths,
-            )
-        })))
+        let column_chunks = column_chunks
+            .iter()
+            .map(|(column_id, item)| match item {
+                DataItem::RawData(buffer) => (*column_id, DataItem::RawData(buffer.clone())),
+                DataItem::ColumnArray(_) => unreachable!("checked by can_parquet_batches"),
+            })
+            .collect();
+        Ok(ParquetBatches {
+            block_reader: self.clone(),
+            column_chunks,
+            reader,
+        })
     }
 
+    /// `dictionary_chunks` are decoded from `column_chunks` instead of `record_batch`; they hold
+    /// `num_rows` rows before `selection`.
+    #[allow(clippy::too_many_arguments)]
     fn record_batch_to_block(
         &self,
         record_batch: &RecordBatch,
         result_rows: usize,
         files: &DataFileLookup,
         column_chunks: &HashMap<ColumnId, DataItem>,
+        dictionary_chunks: &HashSet<ColumnId>,
+        num_rows: usize,
         selection: Option<&RowSelection>,
-        name_paths: &[Vec<String>],
+        whole_block: bool,
     ) -> databend_common_exception::Result<DataBlock> {
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let caches = FuseCaches::instance();
+        // Only the columns of a whole block, all rows, are cached.
         let array_cache = Some(&caches.column_arrays).filter(|cache| {
-            self.policy.memory.writes() && selection.is_none() && cache.is_enabled()
+            whole_block && self.policy.memory.writes() && selection.is_none() && cache.is_enabled()
         });
 
         for ((i, field), column_node) in self
@@ -221,9 +297,40 @@ impl BlockReader {
             //  Yes, it is too obscure, we need to polish it later.
 
             let value = match column_chunks.get(&field.column_id) {
+                Some(DataItem::RawData(chunk)) if dictionary_chunks.contains(&field.column_id) => {
+                    let compression =
+                        ParquetCompression::from(files.compression_of(field.column_id));
+                    let column =
+                        read_string_dictionary_chunk(chunk.clone(), compression, num_rows)?;
+                    if let Some(cache) = array_cache {
+                        let file = files.file_of(field.column_id).unwrap();
+                        let meta = file.col_metas.get(&field.column_id).unwrap();
+                        let (offset, len) = meta.offset_length();
+                        let cache_key = TableDataCacheKey::new(
+                            file.location,
+                            field.column_id,
+                            offset,
+                            len,
+                            &ColumnEncoding::cache_type_key(encoding, &data_type),
+                        );
+                        let memory_size = column.memory_size(false);
+                        cache.fill(
+                            cache_key.as_ref(),
+                            (CachedColumnArray::Column(column.clone()), memory_size),
+                        );
+                    }
+                    // The whole chunk is decoded: filter it as the arrow reader would.
+                    let mut value = Value::Column(column);
+                    if let Some(selection) = selection {
+                        let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
+                        filter_visitor.visit_value(value)?;
+                        value = filter_visitor.take_result().unwrap();
+                    }
+                    value
+                }
                 Some(DataItem::RawData(_)) => {
                     // get the deserialized arrow array, which may be a nested array
-                    let arrow_array = column_by_name(record_batch, &name_paths[i]);
+                    let arrow_array = column_by_name(record_batch, &self.parquet_name_paths[i]);
                     // Nested columns are neither cached nor encoded.
                     let cache = array_cache.filter(|_| !column_node.is_nested);
                     let cache_key = || {
@@ -244,6 +351,7 @@ impl BlockReader {
                                 arrow_array,
                                 &data_type,
                                 self.dictionary_ndv_ratio,
+                                self.build_encodings,
                             )?;
                             if let Some(cache) = cache {
                                 let memory_size = column.memory_size(false);
@@ -291,6 +399,39 @@ impl BlockReader {
             entries.push(BlockEntry::new(value, || (data_type, result_rows)));
         }
         Ok(DataBlock::new(entries, result_rows))
+    }
+}
+
+/// Batch decoder of one block from [`BlockReader::parquet_batches`].
+pub(crate) struct ParquetBatches {
+    block_reader: Arc<BlockReader>,
+    /// The chunks the reader decodes: they tell present columns from defaulted ones.
+    column_chunks: HashMap<ColumnId, DataItem<'static>>,
+    reader: ParquetRecordBatchReader,
+}
+
+impl ParquetBatches {
+    /// Decodes the next batch of the block `part`, the block the decoder was built for.
+    pub(crate) fn next_block(
+        &mut self,
+        part: &FuseBlockPartInfo,
+    ) -> Option<databend_common_exception::Result<DataBlock>> {
+        let batch = match self.reader.next()? {
+            Ok(batch) => batch,
+            Err(err) => return Some(Err(err.into())),
+        };
+        let data_files = part.data_files();
+        Some(self.block_reader.record_batch_to_block(
+            &batch,
+            batch.num_rows(),
+            &DataFileLookup::new(&data_files),
+            &self.column_chunks,
+            // Without encodings no chunk is read as a dictionary chunk.
+            &HashSet::new(),
+            batch.num_rows(),
+            None,
+            false,
+        ))
     }
 }
 

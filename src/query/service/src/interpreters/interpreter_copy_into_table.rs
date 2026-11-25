@@ -68,7 +68,6 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::common::build_update_stream_reqs;
-use crate::interpreters::common::check_deduplicate_label;
 use crate::physical_plans::CopyIntoTable;
 use crate::physical_plans::CopyIntoTableSource;
 use crate::physical_plans::Exchange;
@@ -830,7 +829,6 @@ impl CopyIntoTableInterpreter {
         files_to_copy: Vec<StageFileInfo>,
         duplicated_files_detected: Vec<String>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
-        deduplicated_label: Option<String>,
         path_prefix: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
         new_schema: Option<TableSchemaRef>,
@@ -881,7 +879,6 @@ impl CopyIntoTableInterpreter {
                 update_stream_meta,
                 plan.write_mode.is_overwrite(),
                 prev_snapshot_id,
-                deduplicated_label,
                 table_meta_timestamps,
             )?;
         }
@@ -964,11 +961,6 @@ impl Interpreter for CopyIntoTableInterpreter {
         Box::pin(async move {
             debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
-            if check_deduplicate_label(self.ctx.clone()).await? {
-                self.ctx.attach_query_lineage(None);
-                return Ok(PipelineBuildResult::create());
-            }
-
             let plan = &self.plan;
             let to_table = self
                 .ctx
@@ -1030,7 +1022,6 @@ impl Interpreter for CopyIntoTableInterpreter {
                     files_to_copy,
                     duplicated_files_detected,
                     update_stream_meta,
-                    unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                     self.plan.path_prefix.clone(),
                     table_meta_timestamps,
                     new_schema,

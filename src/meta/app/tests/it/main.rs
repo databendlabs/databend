@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 mod file_format;
-mod table_deduplication_label_ident;
 mod user_grant;
 mod user_info;
 mod user_privilege;

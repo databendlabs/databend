@@ -1,7 +1,9 @@
 // Run with: node --test .github/scripts/test_pr_ci_lifecycle.js
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { canRetryWorkflowRun, cancelClosedPRRuns, maxAutoRetries } = require('./pr_ci_lifecycle');
+const {
+    applyDefaultPRCIHold, canRetryWorkflowRun, cancelClosedPRRuns, getPRCIHoldReason, maxAutoRetries
+} = require('./pr_ci_lifecycle');
 
 const core = { info() {}, warning() {} };
 const repo = { owner: 'databendlabs', repo: 'databend' };
@@ -12,6 +14,8 @@ function pr(overrides = {}) {
         state: 'open',
         created_at: '2026-11-05T12:00:00Z',
         closed_at: null,
+        labels: [],
+        user: { login: 'contributor' },
         head: { ref: 'feature', sha: 'head', repo: { id: 2 } },
         ...overrides
     };
@@ -33,23 +37,74 @@ function run(overrides = {}) {
     };
 }
 
-// Mocked GitHub client: `prs` back pulls.get / pulls.list, `runs` back the runs listing.
-function mockGitHub({ prs = [pr()], runs = [] } = {}) {
+function mockGitHub({ prs = [pr()], runs = [], issueEvents = [] } = {}) {
     const cancelled = [];
+    const addedLabels = [];
     const rest = {
         pulls: {
             get: async ({ pull_number }) => ({ data: prs.find(p => p.number === pull_number) }),
             list() {}
+        },
+        issues: {
+            listEvents() {},
+            addLabels: async args => addedLabels.push(args)
         },
         actions: {
             listWorkflowRunsForRepo() {},
             cancelWorkflowRun: async ({ run_id }) => cancelled.push(run_id)
         }
     };
-    const paginate = async (method, args) =>
-        method === rest.pulls.list ? prs : runs.filter(r => r.event === args.event);
-    return { rest, paginate, cancelled };
+    const paginate = async (method, args) => {
+        if (method === rest.pulls.list) return prs;
+        if (method === rest.issues.listEvents) return issueEvents;
+        return runs.filter(r => r.event === args.event);
+    };
+    return { rest, paginate, cancelled, addedLabels };
 }
+
+const prContext = { repo, issue: { number: 7 } };
+const dependabotPR = (overrides = {}) => pr({ user: { login: 'dependabot[bot]' }, ...overrides });
+const holdLabel = { name: 'hold-ci' };
+
+test('holds Dependabot CI even when Dev reaches the gate before PR Assistant labels the PR', async () => {
+    const github = mockGitHub({
+        prs: [dependabotPR()],
+        issueEvents: [{ event: 'unlabeled', label: { name: 'dependencies' } }]
+    });
+    assert.equal(await getPRCIHoldReason(github, prContext), 'dependabot');
+    await applyDefaultPRCIHold(github, prContext);
+    assert.deepEqual(github.addedLabels, [{ ...repo, issue_number: 7, labels: ['hold-ci'] }]);
+});
+
+test('releases Dependabot CI after hold-ci is removed without reapplying it', async () => {
+    const github = mockGitHub({
+        prs: [dependabotPR()],
+        issueEvents: [{ event: 'unlabeled', label: holdLabel }]
+    });
+    assert.equal(await getPRCIHoldReason(github, prContext), null);
+    await applyDefaultPRCIHold(github, prContext);
+    assert.deepEqual(github.addedLabels, []);
+});
+
+test('honors a live hold-ci label even if it was removed previously', async () => {
+    const github = mockGitHub({
+        prs: [dependabotPR({ labels: [holdLabel] })],
+        issueEvents: [{ event: 'unlabeled', label: holdLabel }]
+    });
+    assert.equal(await getPRCIHoldReason(github, prContext), 'label');
+    await applyDefaultPRCIHold(github, prContext);
+    assert.deepEqual(github.addedLabels, []);
+});
+
+test('ordinary PRs are held only when they have the hold-ci label', async () => {
+    const pull = pr();
+    const github = mockGitHub({ prs: [pull] });
+    assert.equal(await getPRCIHoldReason(github, prContext), null);
+    await applyDefaultPRCIHold(github, prContext);
+    assert.deepEqual(github.addedLabels, []);
+    pull.labels.push(holdLabel);
+    assert.equal(await getPRCIHoldReason(github, prContext), 'label');
+});
 
 const closeContext = {
     repo,

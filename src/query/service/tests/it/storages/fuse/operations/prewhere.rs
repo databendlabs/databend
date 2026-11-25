@@ -188,13 +188,20 @@ async fn run_prewhere_test_with_threshold(
         block_reader.clone(),
     )?;
     assert_eq!(read_state.use_single_prewhere_reader, expect_single_reader);
+    if !expect_single_reader {
+        // x, y and z are decoded once in early, despite being output and y also being
+        // probed by a Bloom filter. Only the second Bloom filter needs a newly decoded column.
+        let late_fields = read_state.pre_reader.data_fields();
+        assert_eq!(late_fields.len(), 1);
+        assert_eq!(late_fields[0].name(), "d");
+    }
 
     // Use the new unified API that handles all states internally
     let ReadStateOutput {
         block: data_block,
         bitmap_selection,
         scan_stats,
-    } = read_state.deserialize_and_filter(column_chunks.clone(), &part, false)?;
+    } = read_state.deserialize_and_filter(column_chunks.clone(), &part, false, None, false)?;
 
     // Scan statistics describe the whole block that was read and decoded,
     // not the single row left after prewhere and runtime filters. All five

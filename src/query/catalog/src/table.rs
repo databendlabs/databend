@@ -290,7 +290,6 @@ pub trait Table: Sync + Send {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
-        _deduplicated_label: Option<String>,
         _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _, _, _, _) = (

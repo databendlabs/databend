@@ -30,6 +30,7 @@ pub use low_level_block_reader::FuseLowLevelColumnReader;
 pub use low_level_block_reader::FuseLowLevelDataReader;
 pub use low_level_block_reader::FuseLowLevelFullRowReader;
 pub use parquet::FieldLevelsCache;
+pub(crate) use parquet::ParquetBatches;
 pub use parquet::RowSelection;
 pub use parquet::column_chunks_to_record_batch;
 mod low_level_block_reader;

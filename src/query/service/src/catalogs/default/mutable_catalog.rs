@@ -820,11 +820,10 @@ impl Catalog for MutableCatalog {
             .collect();
 
         info!(
-            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], copied_files_len={}, deduplicated_labels_len={}, update_temp_tables_len={}",
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], copied_files_len={}, update_temp_tables_len={}",
             table_updates.join("; "),
             stream_updates.join("; "),
             req.copied_files.len(),
-            req.deduplicated_labels.len(),
             req.update_temp_tables.len()
         );
         let begin = Instant::now();

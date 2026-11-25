@@ -147,7 +147,6 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
                 merge_meta,
             },
             update_stream_meta: vec![],
-            deduplicated_label: None,
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
             expected_ttl: None,

@@ -303,7 +303,20 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
-        if let Some(bitmap) = self.evaluator.try_compare_encoded(select_op, exprs) {
+        // Only the bits of the rows to select are read.
+        let rows = match select_strategy {
+            SelectStrategy::True => {
+                Some(&true_selection[*mutable_true_idx..*mutable_true_idx + count])
+            }
+            SelectStrategy::False => {
+                Some(&false_selection.0[*mutable_false_idx..*mutable_false_idx + count])
+            }
+            SelectStrategy::All => None,
+        };
+        if let Some(bitmap) = self
+            .evaluator
+            .try_select_compare_encoded(select_op, exprs, rows)
+        {
             let buffers = SelectionBuffers {
                 true_selection,
                 false_selection: false_selection.0,

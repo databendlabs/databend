@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::SpillProgress;
+use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -119,6 +120,138 @@ async fn test_top_n_matches_sort_limit_for_multikey_nulls_and_offset() -> Result
         settings.set_setting("enable_top_n".into(), "1".into())?;
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_covering_index_top_n() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let table = format!("{}.hits", fixture.default_db_name());
+    fixture.execute_command(&format!("CREATE TABLE {table} (id INT, body STRING, v VECTOR(4), INVERTED INDEX ft(body), VECTOR INDEX vi(v) distance='l2')")).await?;
+    for (a, b) in [(1, 3), (2, 4)] {
+        fixture.execute_command(&format!("INSERT INTO {table} VALUES ({a},'red',[{a},0,0,0]), ({b},'red red green',[{b},0,0,0])")).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let settings = ctx.get_settings();
+    settings.set_max_threads(4)?;
+    // Two segments on one node must still be pruned lazily by default.
+    assert!(settings.get_enable_distributed_pruning()?);
+    settings.set_setting("enable_prune_cache".into(), "0".into())?;
+    let segments = format!(
+        "SELECT count() FROM fuse_segment('{}', 'hits')",
+        fixture.default_db_name()
+    );
+    assert_eq!(execute_rows(ctx.clone(), &segments).await?, vec![vec![
+        Scalar::Number(NumberScalar::UInt64(2))
+    ]]);
+    let nearest = "l2_distance(v,[0,0,0,0]::VECTOR(4))";
+    // Compare lazy execution to the existing one-block source (when eligible)
+    // and to Sort + Limit. Only the eager path may replace both TopN stages.
+    // (sql, eager IndexTopNSource, lazy scan narrowed to the blocks, rows returned)
+    for (sql, covered, narrow, rows) in [
+        (
+            format!(
+                "SELECT score() FROM {table} WHERE match(body,'red') ORDER BY score() DESC LIMIT 2"
+            ),
+            true,
+            true,
+            2,
+        ),
+        (
+            format!("SELECT id, {nearest} AS d FROM {table} ORDER BY d LIMIT 2 OFFSET 1"),
+            true,
+            true,
+            2,
+        ),
+        // An OFFSET past the 4 matches: the source emits no block, and RowFetch gets none.
+        (
+            format!(
+                "SELECT id FROM {table} WHERE match(body,'red') ORDER BY score() DESC LIMIT 3 OFFSET 30"
+            ),
+            true,
+            true,
+            0,
+        ),
+        // Ascending scores: each block returns every match, so the eager source
+        // covers it; the lazy scan is not an index Top-K and keeps its width.
+        (
+            format!(
+                "SELECT score() FROM {table} WHERE match(body,'red') ORDER BY score() ASC LIMIT 2"
+            ),
+            true,
+            false,
+            2,
+        ),
+        (
+            format!("SELECT id FROM {table} ORDER BY {nearest} LIMIT 20"),
+            false,
+            true,
+            4,
+        ), // unscored rows are not excluded
+        (
+            format!(
+                "SELECT id FROM {table} WHERE match(body,'red') AND id>1 ORDER BY score() DESC,id LIMIT 2"
+            ),
+            false,
+            false,
+            2,
+        ),
+    ] {
+        settings.set_setting("enable_top_n".into(), "1".into())?;
+        settings.set_setting("enable_distributed_pruning".into(), "1".into())?;
+        let pipeline = explain_text(ctx.clone(), &format!("PIPELINE {sql}")).await?;
+        assert!(!pipeline.contains("IndexTopNSource"), "{sql}\n{pipeline}");
+        assert!(
+            pipeline.contains("LazySegmentReceiverSource"),
+            "{sql}\n{pipeline}"
+        );
+        if narrow {
+            // Two blocks need only two readers, even before pruning produces
+            // the partitions and with a larger configured I/O concurrency.
+            assert_eq!(
+                pipeline.matches("AsyncReadDataTransform").count(),
+                2,
+                "{sql}\n{pipeline}"
+            );
+            assert!(
+                pipeline.contains("TransformPartialTopN"),
+                "{sql}\n{pipeline}"
+            );
+        }
+        let actual = execute_rows(ctx.clone(), &sql).await?;
+        assert_eq!(actual.len(), rows, "{sql}");
+        settings.set_setting("enable_distributed_pruning".into(), "0".into())?;
+        let eager = explain_text(ctx.clone(), &format!("PIPELINE {sql}")).await?;
+        assert_eq!(eager.contains("IndexTopNSource"), covered, "{sql}\n{eager}");
+        assert_eq!(actual, execute_rows(ctx.clone(), &sql).await?, "{sql}");
+        settings.set_setting("enable_top_n".into(), "0".into())?;
+        assert_eq!(actual, execute_rows(ctx.clone(), &sql).await?, "{sql}");
+    }
+    // Score-only queries need no RowFetch. A zero-column Parquet scan would
+    // charge every row of each surviving block, not just its indexed winner.
+    for sql in [
+        format!(
+            "SELECT score() FROM {table} WHERE match(body,'red') ORDER BY score() DESC LIMIT 1"
+        ),
+        format!("SELECT {nearest} AS d FROM {table} ORDER BY d LIMIT 1"),
+    ] {
+        let scanned = async || -> Result<_> {
+            let before = ctx.get_scan_progress_value().rows;
+            let rows = execute_rows(ctx.clone(), &sql).await?;
+            Ok((rows, ctx.get_scan_progress_value().rows - before))
+        };
+        settings.set_setting("enable_distributed_pruning".into(), "1".into())?;
+        settings.set_setting("enable_top_n".into(), "1".into())?;
+        let (rows, indexed) = scanned().await?;
+        settings.set_setting("enable_top_n".into(), "0".into())?;
+        let (reference, ordinary) = scanned().await?;
+        assert_eq!(rows, reference, "{sql}");
+        assert!(
+            indexed > 0 && indexed < ordinary,
+            "{sql}: {indexed} vs {ordinary}"
+        );
+    }
     Ok(())
 }
 

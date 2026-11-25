@@ -965,14 +965,13 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
         )]),
         (
             "mixed_large",
-            vec![Some(0), None, Some(1), Some(1)],
+            vec![Some(0), None, Some(0), None, Some(1), Some(1)],
             1000,
             100,
-            4,
+            2,
             vec![
-                (ReclusterTaskKind::MergeBlocks, 2),
-                (ReclusterTaskKind::SortBlocks, 1),
-                (ReclusterTaskKind::SortBlocks, 1),
+                (ReclusterTaskKind::SortBlocks, 2),
+                (ReclusterTaskKind::SortBlocks, 2),
             ],
         ),
         (
@@ -981,7 +980,15 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
             1000,
             100,
             1,
-            vec![(ReclusterTaskKind::SortBlocks, 1)],
+            vec![(ReclusterTaskKind::SortBlocks, 3)],
+        ),
+        (
+            "task_byte_budget",
+            vec![Some(0), None, Some(0)],
+            1000,
+            400,
+            1,
+            vec![(ReclusterTaskKind::SortBlocks, 2)],
         ),
         ("over_memory", vec![Some(0)], 1000, 1001, 4, vec![]),
     ] {
@@ -1033,6 +1040,7 @@ async fn test_recluster_task_kinds() -> anyhow::Result<()> {
             );
             let mut source_locations = HashSet::new();
             for task in &parts.tasks {
+                assert!(task.total_bytes <= 1000, "{case}");
                 let decoded: ReclusterTask = serde_json::from_slice(&serde_json::to_vec(task)?)?;
                 assert_eq!(decoded.kind, task.kind);
                 assert_eq!(decoded.parts, task.parts);
@@ -1094,50 +1102,59 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
         fixture.default_table_name()
     );
     fixture
-        .execute_command(&format!(
-            "create table {name}(id int not null) row_per_block=3 block_per_segment=2"
-        ))
-        .await?;
-    // Two full blocks: the combined row count exceeds the small-group limit.
+        .default_session()
+        .get_settings()
+        .set_setting("enable_compact_after_write".to_string(), "0".to_string())?;
     fixture
         .execute_command(&format!(
-            "insert into {name} values (6),(1),(5),(3),(2),(4)"
+            "create table {name}(id int not null) row_per_block=5 block_per_segment=2"
         ))
         .await?;
+    // Two full blocks and a tail exceed the small-group limit.
+    for values in ["(6),(1),(5),(3)", "(2),(4),(9),(7)", "(8)"] {
+        fixture
+            .execute_command(&format!("insert into {name} values {values}"))
+            .await?;
+    }
     fixture
         .execute_command(&format!("alter table {name} cluster by(id)"))
         .await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let before = fuse.read_table_snapshot().await?.unwrap();
+    assert_eq!(before.summary.block_count, 3);
+
     let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings().set_max_threads(1)?;
+    ctx.get_settings().set_max_threads(2)?;
     execute_command(ctx, &format!("alter table {name} recluster")).await?;
 
     let table = fixture.latest_default_table().await?;
     let fuse = FuseTable::try_from_table(table.as_ref())?;
     let snapshot = fuse.read_table_snapshot().await?.unwrap();
+    assert_eq!(
+        snapshot.prev_snapshot_id.map(|(id, _)| id),
+        Some(before.snapshot_id),
+        "ordinary RECLUSTER must commit exactly one snapshot"
+    );
+    assert_eq!(snapshot.summary.row_count, before.summary.row_count);
     let key_id = fuse.cluster_key_id().unwrap();
-    let mut ordered = 0;
-    let mut unordered = 0;
+    let mut block_rows = Vec::new();
     for location in &snapshot.segments {
         let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
             .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
             .await?;
-        for block in segment.block_metas()?.iter() {
-            if block
-                .cluster_stats
-                .as_ref()
-                .is_some_and(|stats| stats.cluster_key_id == key_id)
-            {
-                ordered += 1;
-            } else {
-                unordered += 1;
-            }
+        for block in segment.block_metas()? {
+            assert!(
+                block
+                    .cluster_stats
+                    .as_ref()
+                    .is_some_and(|stats| stats.cluster_key_id == key_id)
+            );
+            block_rows.push(block.row_count);
         }
     }
-    assert_eq!(
-        (ordered, unordered),
-        (1, 1),
-        "ordinary RECLUSTER must execute only one task round"
-    );
+    block_rows.sort_unstable();
+    assert_eq!(block_rows, [4, 5]);
 
     fixture
         .execute_command(&format!("alter table {name} recluster final"))
@@ -1145,7 +1162,7 @@ async fn test_sort_blocks_single_round_and_final() -> anyhow::Result<()> {
     let table = fixture.latest_default_table().await?;
     let fuse = FuseTable::try_from_table(table.as_ref())?;
     let snapshot = fuse.read_table_snapshot().await?.unwrap();
-    assert_eq!(snapshot.summary.row_count, 6);
+    assert_eq!(snapshot.summary.row_count, 9);
     for location in &snapshot.segments {
         let segment = SegmentInfoReader::new(fuse.get_operator(), fuse.schema())
             .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)

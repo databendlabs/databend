@@ -48,6 +48,7 @@ pub use read::FuseLowLevelFullRowReader;
 pub use read::IndexMetaKey;
 pub use read::IndexMetaReader;
 pub use read::InvertedIndexReader;
+pub(crate) use read::ParquetBatches;
 pub use read::RowSelection;
 pub use read::SegmentInfoReader;
 pub use read::SegmentStatsReader;
