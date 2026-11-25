@@ -40,10 +40,10 @@ Published results on Databend Cloud with default settings. Each page includes th
 
 | Benchmark | Result |
 | :--- | :--- |
-| [TPC-H SF100 vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch) | 1.25× faster, ~60% lower cost |
+| [TPC-H SF100 vs. Snowflake](https://docs.databend.com/guides/benchmark/tpch) | 3.97× faster, ~87% lower cost |
 | [Data ingestion vs. Snowflake](https://docs.databend.com/guides/benchmark/data-ingest) | 5.15× faster, 91% lower cost |
 | [Vector & full-text search](https://docs.databend.com/guides/benchmark/search-vector) | 10M docs: vector p50 41 ms, full-text p50 35 ms |
-| [TPC-H SF1000 (1 TB) scaling](https://docs.databend.com/guides/benchmark/tpch-sf1000) | 4.1× faster on Large vs. Small warehouse |
+| [TPC-H SF1000 (1 TB) scaling](https://docs.databend.com/guides/benchmark/tpch-sf1000) | 3.34× faster on Large vs. Small warehouse |
 
 See all [benchmarks](https://docs.databend.com/guides/benchmark).
 
