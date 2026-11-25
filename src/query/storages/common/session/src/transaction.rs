@@ -101,8 +101,6 @@ pub struct TxnBuffer {
     lvt_check: HashMap<u64, TableLvtCheck>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
-    local_deduplication_labels: HashSet<String>,
-    persistent_deduplication_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
     // These must be discarded with the buffer on rollback or failure as well.
@@ -162,14 +160,6 @@ impl TxnBuffer {
         mut req: UpdateMultiTableMetaReq,
     ) -> Result<()> {
         self.bind_tenant(tenant)?;
-
-        // Classify labels before merging this statement with unrelated durable updates.
-        let labels = if req.has_persistent_updates() {
-            &mut self.persistent_deduplication_labels
-        } else {
-            &mut self.local_deduplication_labels
-        };
-        labels.extend(req.deduplicated_labels);
 
         for (req, table_info) in req.update_table_metas {
             let table_id = req.table_id;
@@ -520,12 +510,6 @@ impl TxnManager {
                 .values()
                 .cloned()
                 .collect(),
-            deduplicated_labels: self
-                .txn_buffer
-                .persistent_deduplication_labels
-                .iter()
-                .cloned()
-                .collect(),
             update_temp_tables: self
                 .txn_buffer
                 .mutated_temp_tables
@@ -538,14 +522,6 @@ impl TxnManager {
                 })
                 .collect(),
         }
-    }
-
-    pub fn contains_deduplicated_label(&self, label: &str) -> bool {
-        self.txn_buffer.local_deduplication_labels.contains(label)
-            || self
-                .txn_buffer
-                .persistent_deduplication_labels
-                .contains(label)
     }
 
     pub fn get_table_copied_file_info(
@@ -665,13 +641,11 @@ mod tests {
     use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
     use databend_common_meta_app::schema::UpdateStreamMetaReq;
     use databend_common_meta_app::schema::UpdateTableMetaReq;
-    use databend_common_meta_app::schema::UpdateTempTableReq;
     use databend_common_meta_app::tenant::Tenant;
     use databend_meta_client::types::MatchSeq;
     use databend_storages_common_table_meta::meta::BlockHLL;
     use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
     use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
-    use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
 
     use super::TxnBuffer;
     use super::TxnManager;
@@ -681,47 +655,6 @@ mod tests {
         let (db, table) = TxnBuffer::parse_db_tbl_name("'db'.'tbl'");
         assert_eq!(db, "db");
         assert_eq!(table, "tbl");
-    }
-
-    #[test]
-    fn test_transaction_keeps_temporary_write_labels_local() {
-        let tenant = Tenant::new_literal("tenant");
-        let txn_mgr = TxnManager::init();
-        let mut txn = txn_mgr.lock();
-        txn.begin();
-        txn.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
-            update_temp_tables: vec![UpdateTempTableReq {
-                table_id: TEMP_TBL_ID_BEGIN,
-                desc: "'db'.'temp'".to_string(),
-                new_table_meta: Default::default(),
-                copied_files: Default::default(),
-            }],
-            deduplicated_labels: vec!["local".to_string()],
-            ..Default::default()
-        })
-        .unwrap();
-        assert!(txn.contains_deduplicated_label("local"));
-        let req = txn.req();
-        assert_eq!(req.update_temp_tables.len(), 1);
-        assert!(req.deduplicated_labels.is_empty());
-
-        txn.update_multi_table_meta(&tenant, UpdateMultiTableMetaReq {
-            update_stream_metas: vec![UpdateStreamMetaReq {
-                stream_id: 7,
-                seq: MatchSeq::Exact(1),
-                options: Default::default(),
-            }],
-            deduplicated_labels: vec!["stream".to_string()],
-            ..Default::default()
-        })
-        .unwrap();
-        assert!(txn.contains_deduplicated_label("local"));
-        assert!(txn.contains_deduplicated_label("stream"));
-        assert_eq!(txn.req().deduplicated_labels, ["stream"]);
-
-        txn.clear();
-        assert!(!txn.contains_deduplicated_label("local"));
-        assert!(!txn.contains_deduplicated_label("stream"));
     }
 
     #[test]
