@@ -3,37 +3,6 @@ description: The upper ON equality simplifies the inner LEFT JOIN through a proj
 sql: SELECT a.k, q.w FROM t a JOIN
     (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-    │   └── Join(Left)
-    │       ├── build keys: [k (#6)]
-    │       ├── probe keys: [t.k (#2)]
-    │       ├── other filters: []
-    │       ├── EvalScalar
-    │       │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │       │   └── Scan
-    │       │       ├── table: default.t (#2)
-    │       │       ├── filters: []
-    │       │       ├── order by: []
-    │       │       └── limit: NONE
-    │       └── Scan
-    │           ├── table: default.t (#1)
-    │           ├── filters: []
-    │           ├── order by: []
-    │           └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), k (#7) AS (#8), k (#6) AS (#9)]
@@ -69,37 +38,6 @@ EvalScalar
         ├── limit: NONE
         └── runtime filters: [#0: t.k (#0), #1: t.k (#0)]
 
-optimized_without_early_pass:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), k (#6) AS (#7)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── runtime filters: [#0: k (#6) -> t.k (#0)]
-    ├── Join(Left)
-    │   ├── build keys: [k (#6)]
-    │   ├── probe keys: [t.k (#2)]
-    │   ├── other filters: []
-    │   ├── EvalScalar
-    │   │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │   │   └── Scan
-    │   │       ├── table: default.t (#2)
-    │   │       ├── filters: []
-    │   │       ├── order by: []
-    │   │       └── limit: NONE
-    │   └── Scan
-    │       ├── table: default.t (#1)
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        ├── limit: NONE
-        └── runtime filters: [#0: t.k (#0)]
-
 
 === conversion_exposes_next_inner_on ===
 description: After simplifying the middle LEFT JOIN, its ON also constrains its formerly preserved input.
@@ -108,50 +46,6 @@ sql: SELECT a.k, q.w FROM t a JOIN
         (SELECT x.v AS w, y.k AS match_key FROM t x LEFT JOIN t y ON x.k = y.k) b
         LEFT JOIN t c ON b.match_key = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3)]
-└── Join(Inner)
-    ├── build keys: [k (#9)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [t.v (#3) AS (#3), k (#9) AS (#9)]
-    │   └── Join(Left)
-    │       ├── build keys: [k (#9)]
-    │       ├── probe keys: [k (#6)]
-    │       ├── other filters: []
-    │       ├── EvalScalar
-    │       │   ├── scalars: [CAST(t.k (#7) AS Int32 NULL) AS (#9)]
-    │       │   └── Scan
-    │       │       ├── table: default.t (#3)
-    │       │       ├── filters: []
-    │       │       ├── order by: []
-    │       │       └── limit: NONE
-    │       └── EvalScalar
-    │           ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-    │           └── Join(Left)
-    │               ├── build keys: [k (#6)]
-    │               ├── probe keys: [t.k (#2)]
-    │               ├── other filters: []
-    │               ├── EvalScalar
-    │               │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │               │   └── Scan
-    │               │       ├── table: default.t (#2)
-    │               │       ├── filters: []
-    │               │       ├── order by: []
-    │               │       └── limit: NONE
-    │               └── Scan
-    │                   ├── table: default.t (#1)
-    │                   ├── filters: []
-    │                   ├── order by: []
-    │                   └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), k (#11) AS (#13), k (#12) AS (#14), k (#9) AS (#15)]
@@ -208,39 +102,6 @@ description: A WHERE equality provides the same necessary non-NULL condition as 
 sql: SELECT a.k, q.w FROM t a CROSS JOIN
     (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
     WHERE a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3)]
-└── Filter
-    ├── filters: [eq(t.k (#0), k (#6))]
-    └── Join(Cross)
-        ├── build keys: []
-        ├── probe keys: []
-        ├── other filters: []
-        ├── EvalScalar
-        │   ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-        │   └── Join(Left)
-        │       ├── build keys: [k (#6)]
-        │       ├── probe keys: [t.k (#2)]
-        │       ├── other filters: []
-        │       ├── EvalScalar
-        │       │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-        │       │   └── Scan
-        │       │       ├── table: default.t (#2)
-        │       │       ├── filters: []
-        │       │       ├── order by: []
-        │       │       └── limit: NONE
-        │       └── Scan
-        │           ├── table: default.t (#1)
-        │           ├── filters: []
-        │           ├── order by: []
-        │           └── limit: NONE
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), k (#7) AS (#8), k (#6) AS (#9)]
@@ -276,30 +137,38 @@ EvalScalar
         ├── limit: NONE
         └── runtime filters: [#0: t.k (#0), #1: t.k (#0)]
 
-optimized_without_early_pass:
+
+=== full_reduces_to_left_by_on ===
+description: An upper ON on the left key of FULL JOIN removes only right-unmatched rows.
+sql: SELECT a.k, q.rk FROM t a JOIN
+    (SELECT b.k AS lk, c.k AS rk FROM t b FULL JOIN t c ON b.k = c.k) q
+    ON a.k = q.lk
+optimized_plan:
 EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), k (#6) AS (#7)]
+├── scalars: [t.k (#0) AS (#0), k (#7) AS (#7), k (#6) AS (#8)]
 └── Join(Inner)
     ├── build keys: [k (#6)]
     ├── probe keys: [t.k (#0)]
     ├── other filters: []
     ├── runtime filters: [#0: k (#6) -> t.k (#0)]
     ├── Join(Left)
-    │   ├── build keys: [k (#6)]
-    │   ├── probe keys: [t.k (#2)]
+    │   ├── build keys: [k (#7)]
+    │   ├── probe keys: [k (#6)]
     │   ├── other filters: []
     │   ├── EvalScalar
-    │   │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
+    │   │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#7)]
     │   │   └── Scan
     │   │       ├── table: default.t (#2)
     │   │       ├── filters: []
     │   │       ├── order by: []
     │   │       └── limit: NONE
-    │   └── Scan
-    │       ├── table: default.t (#1)
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
+    │   └── EvalScalar
+    │       ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#6)]
+    │       └── Scan
+    │           ├── table: default.t (#1)
+    │           ├── filters: []
+    │           ├── order by: []
+    │           └── limit: NONE
     └── Scan
         ├── table: default.t (#0)
         ├── filters: []
@@ -308,56 +177,168 @@ EvalScalar
         └── runtime filters: [#0: t.k (#0)]
 
 
-=== full_reduces_to_left_from_filter ===
-description: Requiring the left key of FULL JOIN removes only right-unmatched rows.
-sql: SELECT q.lk, q.rk FROM
+=== full_reduces_to_inner_by_on ===
+description: An upper ON on both keys of FULL JOIN removes all unmatched rows.
+sql: SELECT a.k FROM t a JOIN
     (SELECT b.k AS lk, c.k AS rk FROM t b FULL JOIN t c ON b.k = c.k) q
-    WHERE q.lk IS NOT NULL
-raw_plan:
+    ON a.k = q.lk AND a.v = q.rk
+optimized_plan:
 EvalScalar
-├── scalars: [k (#4) AS (#4), k (#5) AS (#5)]
-└── Filter
-    ├── filters: [is_not_null(k (#4))]
+├── scalars: [t.k (#0) AS (#0), k (#6) AS (#8), k (#7) AS (#9), t.v (#1) AS (#10)]
+└── Join(Inner)
+    ├── build keys: [k (#6), k (#6)]
+    ├── probe keys: [t.k (#0), t.v (#1)]
+    ├── other filters: []
+    ├── runtime filters: [#0: k (#6) -> t.k (#0), #1: k (#6) -> t.v (#1)]
+    ├── Join(Inner)
+    │   ├── build keys: [k (#7)]
+    │   ├── probe keys: [k (#6)]
+    │   ├── other filters: []
+    │   ├── runtime filters: [#2: k (#7) -> k (#6)]
+    │   ├── EvalScalar
+    │   │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#7)]
+    │   │   └── Scan
+    │   │       ├── table: default.t (#2)
+    │   │       ├── filters: []
+    │   │       ├── order by: []
+    │   │       └── limit: NONE
+    │   └── EvalScalar
+    │       ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#6)]
+    │       └── Scan
+    │           ├── table: default.t (#1)
+    │           ├── filters: []
+    │           ├── order by: []
+    │           ├── limit: NONE
+    │           └── runtime filters: [#2: CAST(t.k (#2) AS Int32 NULL)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [eq(t.k (#0), t.v (#1))]
+        ├── order by: []
+        ├── limit: NONE
+        └── runtime filters: [#0: t.k (#0), #1: t.v (#1)]
+
+
+=== right_join_null_supplying_left ===
+description: Requiring a key from the left input of RIGHT JOIN removes its NULL-extended rows.
+sql: SELECT a.k, q.w FROM t a JOIN
+    (SELECT b.k AS match_key, c.v AS w FROM t b RIGHT JOIN t c ON b.k = c.k) q
+    ON a.k = q.match_key
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#5) AS (#5), k (#6) AS (#8), k (#7) AS (#9)]
+└── Join(Inner)
+    ├── build keys: [k (#6), k (#7)]
+    ├── probe keys: [t.k (#0), t.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: k (#6) -> t.k (#0), #1: k (#7) -> t.k (#0)]
+    ├── EvalScalar
+    │   ├── scalars: [t.v (#5) AS (#5), k (#6) AS (#6), t.k (#4) AS (#7)]
+    │   └── Join(Inner)
+    │       ├── build keys: [t.k (#4)]
+    │       ├── probe keys: [k (#6)]
+    │       ├── other filters: []
+    │       ├── runtime filters: [#2: t.k (#4) -> k (#6)]
+    │       ├── Scan
+    │       │   ├── table: default.t (#2)
+    │       │   ├── filters: []
+    │       │   ├── order by: []
+    │       │   └── limit: NONE
+    │       └── EvalScalar
+    │           ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#6)]
+    │           └── Scan
+    │               ├── table: default.t (#1)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               ├── limit: NONE
+    │               └── runtime filters: [#2: CAST(t.k (#2) AS Int32 NULL)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        └── runtime filters: [#0: t.k (#0), #1: t.k (#0)]
+
+
+=== exists_semi_join_requires_key ===
+description: EXISTS decorrelates to a semi join, whose equality needs a non-NULL key on both inputs.
+sql: SELECT q.w FROM
+    (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
+    WHERE EXISTS (SELECT 1 FROM t a WHERE a.k = q.match_key)
+optimized_plan:
+EvalScalar
+├── scalars: [t.v (#1) AS (#1), k (#8) AS (#9), k (#4) AS (#10)]
+└── Join(LeftSemi)
+    ├── build keys: [t.k (#5), t.k (#5)]
+    ├── probe keys: [k (#4), k (#8)]
+    ├── other filters: []
+    ├── runtime filters: [#0: t.k (#5) -> k (#4), #1: t.k (#5) -> k (#8)]
+    ├── EvalScalar
+    │   ├── scalars: [1 AS (#7)]
+    │   └── Scan
+    │       ├── table: default.t (#2)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
     └── EvalScalar
-        ├── scalars: [k (#4) AS (#4), k (#5) AS (#5)]
-        └── Join(Full)
-            ├── build keys: [k (#5)]
-            ├── probe keys: [k (#4)]
+        ├── scalars: [t.v (#1) AS (#1), k (#4) AS (#4), t.k (#0) AS (#8)]
+        └── Join(Inner)
+            ├── build keys: [k (#4)]
+            ├── probe keys: [t.k (#0)]
             ├── other filters: []
+            ├── runtime filters: [#2: k (#4) -> t.k (#0)]
             ├── EvalScalar
-            │   ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#5)]
+            │   ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#4)]
             │   └── Scan
             │       ├── table: default.t (#1)
             │       ├── filters: []
             │       ├── order by: []
-            │       └── limit: NONE
-            └── EvalScalar
-                ├── scalars: [CAST(t.k (#0) AS Int32 NULL) AS (#4)]
-                └── Scan
-                    ├── table: default.t (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
+            │       ├── limit: NONE
+            │       └── runtime filters: [#1: CAST(t.k (#2) AS Int32 NULL), #0: CAST(t.k (#2) AS Int32 NULL)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                ├── limit: NONE
+                └── runtime filters: [#1: t.k (#0), #0: t.k (#0), #2: t.k (#0)]
 
+
+=== right_semi_join_requires_key ===
+description: RIGHT SEMI JOIN returns only matched rows, so its ON also constrains the left input.
+sql: SELECT a.k FROM
+    (SELECT c.k AS match_key FROM t b LEFT JOIN t c ON b.k = c.k) q
+    RIGHT SEMI JOIN t a ON q.match_key = a.k
 optimized_plan:
-Join(Left)
-├── build keys: [k (#5)]
-├── probe keys: [k (#4)]
+Join(LeftSemi)
+├── build keys: [k (#4)]
+├── probe keys: [t.k (#5)]
 ├── other filters: []
+├── runtime filters: [#0: k (#4) -> t.k (#5)]
 ├── EvalScalar
-│   ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#5)]
-│   └── Scan
-│       ├── table: default.t (#1)
-│       ├── filters: [is_not_null(CAST(t.k (#2) AS Int32 NULL))]
-│       ├── order by: []
-│       └── limit: NONE
-└── EvalScalar
-    ├── scalars: [CAST(t.k (#0) AS Int32 NULL) AS (#4)]
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: [is_not_null(CAST(t.k (#0) AS Int32 NULL))]
-        ├── order by: []
-        └── limit: NONE
+│   ├── scalars: [k (#4) AS (#4), t.k (#0) AS (#7)]
+│   └── Join(Inner)
+│       ├── build keys: [k (#4)]
+│       ├── probe keys: [t.k (#0)]
+│       ├── other filters: []
+│       ├── runtime filters: [#1: k (#4) -> t.k (#0)]
+│       ├── EvalScalar
+│       │   ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#4)]
+│       │   └── Scan
+│       │       ├── table: default.t (#1)
+│       │       ├── filters: []
+│       │       ├── order by: []
+│       │       └── limit: NONE
+│       └── Scan
+│           ├── table: default.t (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           ├── limit: NONE
+│           └── runtime filters: [#1: t.k (#0)]
+└── Scan
+    ├── table: default.t (#2)
+    ├── filters: []
+    ├── order by: []
+    ├── limit: NONE
+    └── runtime filters: [#0: t.k (#5)]
 
 
 === union_maps_each_branch ===
@@ -367,61 +348,6 @@ sql: SELECT a.k, q.w FROM t a JOIN
      UNION ALL
      SELECT e.k AS match_key, d.v AS w FROM t d LEFT JOIN t e ON d.k = e.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), w (#13) AS (#13)]
-└── Join(Inner)
-    ├── build keys: [match_key (#12)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── UnionAll
-    │   ├── output: [match_key (#12), w (#13)]
-    │   ├── left: [k (#6), t.v (#3)]
-    │   ├── right: [k (#11), t.v (#8)]
-    │   ├── cte_scan_names: []
-    │   ├── logical_recursive_cte_id: None
-    │   ├── EvalScalar
-    │   │   ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-    │   │   └── Join(Left)
-    │   │       ├── build keys: [k (#6)]
-    │   │       ├── probe keys: [t.k (#2)]
-    │   │       ├── other filters: []
-    │   │       ├── EvalScalar
-    │   │       │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │   │       │   └── Scan
-    │   │       │       ├── table: default.t (#2)
-    │   │       │       ├── filters: []
-    │   │       │       ├── order by: []
-    │   │       │       └── limit: NONE
-    │   │       └── Scan
-    │   │           ├── table: default.t (#1)
-    │   │           ├── filters: []
-    │   │           ├── order by: []
-    │   │           └── limit: NONE
-    │   └── EvalScalar
-    │       ├── scalars: [t.v (#8) AS (#8), k (#11) AS (#11)]
-    │       └── Join(Left)
-    │           ├── build keys: [k (#11)]
-    │           ├── probe keys: [t.k (#7)]
-    │           ├── other filters: []
-    │           ├── EvalScalar
-    │           │   ├── scalars: [CAST(t.k (#9) AS Int32 NULL) AS (#11)]
-    │           │   └── Scan
-    │           │       ├── table: default.t (#4)
-    │           │       ├── filters: []
-    │           │       ├── order by: []
-    │           │       └── limit: NONE
-    │           └── Scan
-    │               ├── table: default.t (#3)
-    │               ├── filters: []
-    │               ├── order by: []
-    │               └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), w (#13) AS (#13), match_key (#12) AS (#16)]
@@ -489,39 +415,6 @@ description: An upper LEFT JOIN ON condition cannot reject NULL keys on its pres
 sql: SELECT a.k, q.w FROM
     (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
     LEFT JOIN t a ON q.match_key = a.k
-raw_plan:
-EvalScalar
-├── scalars: [t.v (#1) AS (#1), k (#7) AS (#7)]
-└── Join(Left)
-    ├── build keys: [k (#7)]
-    ├── probe keys: [k (#4)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [CAST(t.k (#5) AS Int32 NULL) AS (#7)]
-    │   └── Scan
-    │       ├── table: default.t (#2)
-    │       ├── filters: []
-    │       ├── order by: []
-    │       └── limit: NONE
-    └── EvalScalar
-        ├── scalars: [t.v (#1) AS (#1), k (#4) AS (#4)]
-        └── Join(Left)
-            ├── build keys: [k (#4)]
-            ├── probe keys: [t.k (#0)]
-            ├── other filters: []
-            ├── EvalScalar
-            │   ├── scalars: [CAST(t.k (#2) AS Int32 NULL) AS (#4)]
-            │   └── Scan
-            │       ├── table: default.t (#1)
-            │       ├── filters: []
-            │       ├── order by: []
-            │       └── limit: NONE
-            └── Scan
-                ├── table: default.t (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
-
 optimized_plan:
 Join(Left)
 ├── build keys: [k (#7)]
@@ -557,37 +450,6 @@ description: The upper NULL-safe equality can still match a NULL-extended row.
 sql: SELECT a.v, q.w FROM t a JOIN
     (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.v IS NOT DISTINCT FROM q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.v (#1) AS (#1), t.v (#3) AS (#3)]
-└── Join(Inner)
-    ├── build keys: []
-    ├── probe keys: []
-    ├── other filters: [assume_not_null(if(and(not(is_not_null(t.v (#1))), not(is_not_null(k (#6)))), true, or(not(is_not_null(t.v (#1))), not(is_not_null(k (#6)))), false, eq(t.v (#1), k (#6))))]
-    ├── EvalScalar
-    │   ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-    │   └── Join(Left)
-    │       ├── build keys: [k (#6)]
-    │       ├── probe keys: [t.k (#2)]
-    │       ├── other filters: []
-    │       ├── EvalScalar
-    │       │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │       │   └── Scan
-    │       │       ├── table: default.t (#2)
-    │       │       ├── filters: []
-    │       │       ├── order by: []
-    │       │       └── limit: NONE
-    │       └── Scan
-    │           ├── table: default.t (#1)
-    │           ├── filters: []
-    │           ├── order by: []
-    │           └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.v (#1) AS (#1), t.v (#3) AS (#3), k (#6) AS (#7)]
@@ -620,49 +482,49 @@ EvalScalar
             └── limit: NONE
 
 
+=== unproven_conjunct_is_a_barrier ===
+description: Moving the row removal across q.w + 1 > 0 could skip its evaluation, so the filter does not simplify the lower join although a.k = q.match_key alone would.
+sql: SELECT a.k, q.w FROM t a CROSS JOIN
+    (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
+    WHERE a.k = q.match_key AND q.w + 1 > 0
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), k (#6) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [k (#6)]
+    ├── probe keys: [t.k (#0)]
+    ├── other filters: []
+    ├── runtime filters: [#0: k (#6) -> t.k (#0)]
+    ├── Join(Left)
+    │   ├── build keys: [k (#6)]
+    │   ├── probe keys: [t.k (#2)]
+    │   ├── other filters: []
+    │   ├── EvalScalar
+    │   │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
+    │   │   └── Scan
+    │   │       ├── table: default.t (#2)
+    │   │       ├── filters: []
+    │   │       ├── order by: []
+    │   │       └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.t (#1)
+    │       ├── filters: [gt(plus(t.v (#3), 1), 0)]
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        ├── limit: NONE
+        └── runtime filters: [#0: t.k (#0)]
+
+
 === top_n_is_a_barrier ===
 description: Rejecting NULL after TopN must not remove rows before TopN chooses its candidates.
 sql: SELECT a.k, q.w FROM t a JOIN
     (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k
      ORDER BY b.v LIMIT 2) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── Limit
-    │   ├── limit: [2]
-    │   ├── offset: [0]
-    │   └── Sort
-    │       ├── sort keys: [t.v (#3) ASC NULLS LAST]
-    │       ├── limit: [NONE]
-    │       └── EvalScalar
-    │           ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-    │           └── Join(Left)
-    │               ├── build keys: [k (#6)]
-    │               ├── probe keys: [t.k (#2)]
-    │               ├── other filters: []
-    │               ├── EvalScalar
-    │               │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │               │   └── Scan
-    │               │       ├── table: default.t (#2)
-    │               │       ├── filters: []
-    │               │       ├── order by: []
-    │               │       └── limit: NONE
-    │               └── Scan
-    │                   ├── table: default.t (#1)
-    │                   ├── filters: []
-    │                   ├── order by: []
-    │                   └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), k (#6) AS (#7)]
@@ -704,37 +566,6 @@ description: A nullable input is not required when the projected join key replac
 sql: SELECT a.k, q.w FROM t a JOIN
     (SELECT coalesce(c.k, 0) AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3)]
-└── Join(Inner)
-    ├── build keys: [match_key (#7)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [t.v (#3) AS (#3), CAST(if(is_not_null(k (#6)), assume_not_null(k (#6)), 0) AS Int32 NULL) AS (#7)]
-    │   └── Join(Left)
-    │       ├── build keys: [k (#6)]
-    │       ├── probe keys: [t.k (#2)]
-    │       ├── other filters: []
-    │       ├── EvalScalar
-    │       │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │       │   └── Scan
-    │       │       ├── table: default.t (#2)
-    │       │       ├── filters: []
-    │       │       ├── order by: []
-    │       │       └── limit: NONE
-    │       └── Scan
-    │           ├── table: default.t (#1)
-    │           ├── filters: []
-    │           ├── order by: []
-    │           └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#3) AS (#3), match_key (#7) AS (#8)]
@@ -774,37 +605,6 @@ description: Even when the join key is a direct alias, removing rows before anot
 sql: SELECT a.k, q.d FROM t a JOIN
     (SELECT c.k AS match_key, running_difference(b.v) AS d FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), d (#7) AS (#7)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [k (#6) AS (#6), running_difference(t.v (#3)) AS (#7)]
-    │   └── Join(Left)
-    │       ├── build keys: [k (#6)]
-    │       ├── probe keys: [t.k (#2)]
-    │       ├── other filters: []
-    │       ├── EvalScalar
-    │       │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │       │   └── Scan
-    │       │       ├── table: default.t (#2)
-    │       │       ├── filters: []
-    │       │       ├── order by: []
-    │       │       └── limit: NONE
-    │       └── Scan
-    │           ├── table: default.t (#1)
-    │           ├── filters: []
-    │           ├── order by: []
-    │           └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), d (#7) AS (#7), k (#6) AS (#8)]
@@ -845,49 +645,6 @@ sql: SELECT q.match_key, q.rn FROM t a JOIN
     (SELECT c.k AS match_key, row_number() OVER (PARTITION BY c.k ORDER BY b.v) AS rn
      FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7)]
-    │   └── Window
-    │       ├── aggregate function: row_number
-    │       ├── partition items: [k (#6) AS (#6)]
-    │       ├── order by items: [t.v (#3) AS (#3)]
-    │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │       └── Sort
-    │           ├── sort keys: [k (#6) ASC NULLS LAST, t.v (#3) ASC NULLS LAST]
-    │           ├── limit: [NONE]
-    │           ├── window top: NONE
-    │           ├── window function: RowNumber
-    │           └── EvalScalar
-    │               ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-    │               └── Join(Left)
-    │                   ├── build keys: [k (#6)]
-    │                   ├── probe keys: [t.k (#2)]
-    │                   ├── other filters: []
-    │                   ├── EvalScalar
-    │                   │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │                   │   └── Scan
-    │                   │       ├── table: default.t (#2)
-    │                   │       ├── filters: []
-    │                   │       ├── order by: []
-    │                   │       └── limit: NONE
-    │                   └── Scan
-    │                       ├── table: default.t (#1)
-    │                       ├── filters: []
-    │                       ├── order by: []
-    │                       └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), t.k (#0) AS (#9)]
@@ -933,47 +690,6 @@ EvalScalar
         ├── limit: NONE
         └── runtime filters: [#0: t.k (#0)]
 
-optimized_without_early_pass:
-EvalScalar
-├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), t.k (#0) AS (#8)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── runtime filters: [#0: k (#6) -> t.k (#0)]
-    ├── Window
-    │   ├── aggregate function: row_number
-    │   ├── partition items: [k (#6) AS (#6)]
-    │   ├── order by items: [t.v (#3) AS (#3)]
-    │   ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │   └── Sort
-    │       ├── sort keys: [k (#6) ASC NULLS LAST, t.v (#3) ASC NULLS LAST]
-    │       ├── limit: [NONE]
-    │       ├── window top: NONE
-    │       ├── window function: RowNumber
-    │       └── Join(Left)
-    │           ├── build keys: [k (#6)]
-    │           ├── probe keys: [t.k (#2)]
-    │           ├── other filters: []
-    │           ├── EvalScalar
-    │           │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │           │   └── Scan
-    │           │       ├── table: default.t (#2)
-    │           │       ├── filters: []
-    │           │       ├── order by: []
-    │           │       └── limit: NONE
-    │           └── Scan
-    │               ├── table: default.t (#1)
-    │               ├── filters: []
-    │               ├── order by: []
-    │               └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        ├── limit: NONE
-        └── runtime filters: [#0: t.k (#0)]
-
 
 === window_group_common_partition_key ===
 description: All windows in the group partition on the required key.
@@ -982,48 +698,6 @@ sql: SELECT q.match_key, q.rn, q.rk FROM t a JOIN
             rank() OVER (PARTITION BY c.k ORDER BY b.k) AS rk
      FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), rank() OVER (PARTITION BY c.k ORDER BY b.k) (#8) AS (#8)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), rank() OVER (PARTITION BY c.k ORDER BY b.k) (#8) AS (#8)]
-    │   └── WindowGroup
-    │       ├── Window
-    │       │   ├── aggregate function: row_number
-    │       │   ├── partition items: [k (#6) AS (#6)]
-    │       │   ├── order by items: [t.v (#3) AS (#3)]
-    │       │   └── frame: [Range: Preceding(None) ~ CurrentRow]
-    │       ├── Window
-    │       │   ├── aggregate function: rank
-    │       │   ├── partition items: [k (#6) AS (#6)]
-    │       │   ├── order by items: [t.k (#2) AS (#2)]
-    │       │   └── frame: [Range: Preceding(None) ~ CurrentRow]
-    │       └── Join(Left)
-    │           ├── build keys: [k (#6)]
-    │           ├── probe keys: [t.k (#2)]
-    │           ├── other filters: []
-    │           ├── EvalScalar
-    │           │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │           │   └── Scan
-    │           │       ├── table: default.t (#2)
-    │           │       ├── filters: []
-    │           │       ├── order by: []
-    │           │       └── limit: NONE
-    │           └── Scan
-    │               ├── table: default.t (#1)
-    │               ├── filters: []
-    │               ├── order by: []
-    │               └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), rank() OVER (PARTITION BY c.k ORDER BY b.k) (#8) AS (#8), t.k (#0) AS (#9)]
@@ -1068,48 +742,6 @@ EvalScalar
         ├── limit: NONE
         └── runtime filters: [#0: t.k (#0)]
 
-optimized_without_early_pass:
-EvalScalar
-├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), rank() OVER (PARTITION BY c.k ORDER BY b.k) (#8) AS (#8), t.k (#0) AS (#9)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── runtime filters: [#0: k (#6) -> t.k (#0)]
-    ├── WindowGroup
-    │   ├── Window
-    │   │   ├── aggregate function: row_number
-    │   │   ├── partition items: [k (#6) AS (#6)]
-    │   │   ├── order by items: [t.v (#3) AS (#3)]
-    │   │   └── frame: [Range: Preceding(None) ~ CurrentRow]
-    │   ├── Window
-    │   │   ├── aggregate function: rank
-    │   │   ├── partition items: [k (#6) AS (#6)]
-    │   │   ├── order by items: [t.k (#2) AS (#2)]
-    │   │   └── frame: [Range: Preceding(None) ~ CurrentRow]
-    │   └── Join(Left)
-    │       ├── build keys: [k (#6)]
-    │       ├── probe keys: [t.k (#2)]
-    │       ├── other filters: []
-    │       ├── EvalScalar
-    │       │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │       │   └── Scan
-    │       │       ├── table: default.t (#2)
-    │       │       ├── filters: []
-    │       │       ├── order by: []
-    │       │       └── limit: NONE
-    │       └── Scan
-    │           ├── table: default.t (#1)
-    │           ├── filters: []
-    │           ├── order by: []
-    │           └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        ├── limit: NONE
-        └── runtime filters: [#0: t.k (#0)]
-
 
 === computed_window_partition_is_not_a_direct_key ===
 description: A dependency of the partition key is not itself a partition key. COALESCE puts unmatched rows in a partition with matching rows.
@@ -1117,49 +749,6 @@ sql: SELECT q.match_key, q.rn FROM t a JOIN
     (SELECT c.k AS match_key, row_number() OVER (PARTITION BY coalesce(c.k, 0) ORDER BY b.v) AS rn
      FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY coalesce(c.k, 0) ORDER BY b.v) (#8) AS (#8)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY coalesce(c.k, 0) ORDER BY b.v) (#8) AS (#8)]
-    │   └── Window
-    │       ├── aggregate function: row_number
-    │       ├── partition items: [CAST(if(is_not_null(k (#6)), assume_not_null(k (#6)), 0) AS Int32 NULL) AS (#7)]
-    │       ├── order by items: [t.v (#3) AS (#3)]
-    │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │       └── Sort
-    │           ├── sort keys: [row_number_part_0 (#7) ASC NULLS LAST, t.v (#3) ASC NULLS LAST]
-    │           ├── limit: [NONE]
-    │           ├── window top: NONE
-    │           ├── window function: RowNumber
-    │           └── EvalScalar
-    │               ├── scalars: [t.v (#3) AS (#3), CAST(if(is_not_null(k (#6)), assume_not_null(k (#6)), 0) AS Int32 NULL) AS (#7)]
-    │               └── Join(Left)
-    │                   ├── build keys: [k (#6)]
-    │                   ├── probe keys: [t.k (#2)]
-    │                   ├── other filters: []
-    │                   ├── EvalScalar
-    │                   │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │                   │   └── Scan
-    │                   │       ├── table: default.t (#2)
-    │                   │       ├── filters: []
-    │                   │       ├── order by: []
-    │                   │       └── limit: NONE
-    │                   └── Scan
-    │                       ├── table: default.t (#1)
-    │                       ├── filters: []
-    │                       ├── order by: []
-    │                       └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY coalesce(c.k, 0) ORDER BY b.v) (#8) AS (#8), t.k (#0) AS (#9)]
@@ -1211,47 +800,6 @@ sql: SELECT q.match_key, q.rn, q.grn FROM t a JOIN
             row_number() OVER (ORDER BY b.k) AS grn
      FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), row_number() OVER (ORDER BY b.k) (#8) AS (#8)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), row_number() OVER (ORDER BY b.k) (#8) AS (#8)]
-    │   └── Window
-    │       ├── aggregate function: row_number
-    │       ├── partition items: []
-    │       ├── order by items: [t.k (#2) AS (#2)]
-    │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │       └── Window
-    │           ├── aggregate function: row_number
-    │           ├── partition items: [k (#6) AS (#6)]
-    │           ├── order by items: [t.v (#3) AS (#3)]
-    │           ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │           └── Join(Left)
-    │               ├── build keys: [k (#6)]
-    │               ├── probe keys: [t.k (#2)]
-    │               ├── other filters: []
-    │               ├── EvalScalar
-    │               │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │               │   └── Scan
-    │               │       ├── table: default.t (#2)
-    │               │       ├── filters: []
-    │               │       ├── order by: []
-    │               │       └── limit: NONE
-    │               └── Scan
-    │                   ├── table: default.t (#1)
-    │                   ├── filters: []
-    │                   ├── order by: []
-    │                   └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [k (#6) AS (#6), row_number() OVER (PARTITION BY c.k ORDER BY b.v) (#7) AS (#7), row_number() OVER (ORDER BY b.k) (#8) AS (#8), t.k (#0) AS (#9)]
@@ -1299,42 +847,6 @@ description: A requirement on the ordinary group key removes an entire group wit
 sql: SELECT q.match_key, q.n FROM t a JOIN
     (SELECT c.k AS match_key, count(*) AS n FROM t b LEFT JOIN t c ON b.k = c.k GROUP BY c.k) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [k (#6) AS (#6), COUNT(*) (#7) AS (#7)]
-└── Join(Inner)
-    ├── build keys: [k (#6)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [k (#6) AS (#6), COUNT(*) (#7) AS (#7)]
-    │   └── Aggregate(Initial)
-    │       ├── group items: [k (#6) AS (#6)]
-    │       ├── aggregate functions: [count() AS (#7)]
-    │       └── EvalScalar
-    │           ├── scalars: [k (#6) AS (#6)]
-    │           └── Join(Left)
-    │               ├── build keys: [k (#6)]
-    │               ├── probe keys: [t.k (#2)]
-    │               ├── other filters: []
-    │               ├── EvalScalar
-    │               │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │               │   └── Scan
-    │               │       ├── table: default.t (#2)
-    │               │       ├── filters: []
-    │               │       ├── order by: []
-    │               │       └── limit: NONE
-    │               └── Scan
-    │                   ├── table: default.t (#1)
-    │                   ├── filters: []
-    │                   ├── order by: []
-    │                   └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [k (#6) AS (#6), COUNT(*) (#7) AS (#7), t.k (#0) AS (#9)]
@@ -1376,43 +888,6 @@ EvalScalar
                         ├── limit: NONE
                         └── runtime filters: [#0: t.k (#2), #1: t.k (#2)]
 
-optimized_without_early_pass:
-EvalScalar
-├── scalars: [k (#6) AS (#6), COUNT(*) (#7) AS (#7), t.k (#0) AS (#8)]
-└── Join(Inner)
-    ├── build keys: [t.k (#0)]
-    ├── probe keys: [k (#6)]
-    ├── other filters: []
-    ├── runtime filters: [#0: t.k (#0) -> k (#6)]
-    ├── Scan
-    │   ├── table: default.t (#0)
-    │   ├── filters: []
-    │   ├── order by: []
-    │   └── limit: NONE
-    └── Aggregate(Final)
-        ├── group items: [k (#6) AS (#6)]
-        ├── aggregate functions: [count() AS (#7)]
-        └── Aggregate(Partial)
-            ├── group items: [k (#6) AS (#6)]
-            ├── aggregate functions: [count() AS (#7)]
-            └── Join(Left)
-                ├── build keys: [k (#6)]
-                ├── probe keys: [t.k (#2)]
-                ├── other filters: []
-                ├── EvalScalar
-                │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-                │   └── Scan
-                │       ├── table: default.t (#2)
-                │       ├── filters: []
-                │       ├── order by: []
-                │       ├── limit: NONE
-                │       └── runtime filters: [#0: CAST(t.k (#4) AS Int32 NULL)]
-                └── Scan
-                    ├── table: default.t (#1)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
-
 
 === aggregate_result_is_not_an_input_requirement ===
 description: Rejecting NULL MAX does not let us remove individual inputs that contribute to COUNT(*).
@@ -1420,42 +895,6 @@ sql: SELECT q.g, q.n FROM t a JOIN
     (SELECT b.v AS g, max(c.k) AS match_key, count(*) AS n
      FROM t b LEFT JOIN t c ON b.k = c.k GROUP BY b.v) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [t.v (#3) AS (#3), COUNT(*) (#8) AS (#8)]
-└── Join(Inner)
-    ├── build keys: [max(c.k) (#7)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [t.v (#3) AS (#3), max(c.k) (#7) AS (#7), COUNT(*) (#8) AS (#8)]
-    │   └── Aggregate(Initial)
-    │       ├── group items: [t.v (#3) AS (#3)]
-    │       ├── aggregate functions: [max(k (#6)) AS (#7), count() AS (#8)]
-    │       └── EvalScalar
-    │           ├── scalars: [t.v (#3) AS (#3), k (#6) AS (#6)]
-    │           └── Join(Left)
-    │               ├── build keys: [k (#6)]
-    │               ├── probe keys: [t.k (#2)]
-    │               ├── other filters: []
-    │               ├── EvalScalar
-    │               │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │               │   └── Scan
-    │               │       ├── table: default.t (#2)
-    │               │       ├── filters: []
-    │               │       ├── order by: []
-    │               │       └── limit: NONE
-    │               └── Scan
-    │                   ├── table: default.t (#1)
-    │                   ├── filters: []
-    │                   ├── order by: []
-    │                   └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [t.v (#3) AS (#3), COUNT(*) (#8) AS (#8), t.k (#0) AS (#9), max(c.k) (#7) AS (#10)]
@@ -1499,42 +938,6 @@ sql: SELECT q.match_key, q.n FROM t a JOIN
     (SELECT c.k AS match_key, count(*) AS n FROM t b LEFT JOIN t c ON b.k = c.k
      GROUP BY GROUPING SETS ((c.k), ())) q
     ON a.k = q.match_key
-raw_plan:
-EvalScalar
-├── scalars: [k (#7) AS (#7), COUNT(*) (#9) AS (#9)]
-└── Join(Inner)
-    ├── build keys: [k (#7)]
-    ├── probe keys: [t.k (#0)]
-    ├── other filters: []
-    ├── EvalScalar
-    │   ├── scalars: [k (#7) AS (#7), COUNT(*) (#9) AS (#9)]
-    │   └── Aggregate(Initial)
-    │       ├── group items: [k (#7) AS (#7), _grouping_id (#8) AS (#8)]
-    │       ├── aggregate functions: [count() AS (#9)]
-    │       └── EvalScalar
-    │           ├── scalars: [k (#6) AS (#7)]
-    │           └── Join(Left)
-    │               ├── build keys: [k (#6)]
-    │               ├── probe keys: [t.k (#2)]
-    │               ├── other filters: []
-    │               ├── EvalScalar
-    │               │   ├── scalars: [CAST(t.k (#4) AS Int32 NULL) AS (#6)]
-    │               │   └── Scan
-    │               │       ├── table: default.t (#2)
-    │               │       ├── filters: []
-    │               │       ├── order by: []
-    │               │       └── limit: NONE
-    │               └── Scan
-    │                   ├── table: default.t (#1)
-    │                   ├── filters: []
-    │                   ├── order by: []
-    │                   └── limit: NONE
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
-
 optimized_plan:
 EvalScalar
 ├── scalars: [k (#7) AS (#7), COUNT(*) (#9) AS (#9), t.k (#0) AS (#10)]

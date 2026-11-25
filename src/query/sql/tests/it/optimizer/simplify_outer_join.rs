@@ -14,7 +14,6 @@
 
 use std::io::Write;
 
-use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 
 use crate::framework::golden::SqlTestCase;
@@ -55,12 +54,44 @@ async fn test_simplify_outer_join() -> Result<()> {
     WHERE a.k = q.match_key",
         },
         SqlTestCase {
-            name: "full_reduces_to_left_from_filter",
-            description: "Requiring the left key of FULL JOIN removes only right-unmatched rows.",
+            name: "full_reduces_to_left_by_on",
+            description: "An upper ON on the left key of FULL JOIN removes only right-unmatched rows.",
             setup_sqls: &[TABLE],
-            sql: "SELECT q.lk, q.rk FROM
+            sql: "SELECT a.k, q.rk FROM t a JOIN
     (SELECT b.k AS lk, c.k AS rk FROM t b FULL JOIN t c ON b.k = c.k) q
-    WHERE q.lk IS NOT NULL",
+    ON a.k = q.lk",
+        },
+        SqlTestCase {
+            name: "full_reduces_to_inner_by_on",
+            description: "An upper ON on both keys of FULL JOIN removes all unmatched rows.",
+            setup_sqls: &[TABLE],
+            sql: "SELECT a.k FROM t a JOIN
+    (SELECT b.k AS lk, c.k AS rk FROM t b FULL JOIN t c ON b.k = c.k) q
+    ON a.k = q.lk AND a.v = q.rk",
+        },
+        SqlTestCase {
+            name: "right_join_null_supplying_left",
+            description: "Requiring a key from the left input of RIGHT JOIN removes its NULL-extended rows.",
+            setup_sqls: &[TABLE],
+            sql: "SELECT a.k, q.w FROM t a JOIN
+    (SELECT b.k AS match_key, c.v AS w FROM t b RIGHT JOIN t c ON b.k = c.k) q
+    ON a.k = q.match_key",
+        },
+        SqlTestCase {
+            name: "exists_semi_join_requires_key",
+            description: "EXISTS decorrelates to a semi join, whose equality needs a non-NULL key on both inputs.",
+            setup_sqls: &[TABLE],
+            sql: "SELECT q.w FROM
+    (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
+    WHERE EXISTS (SELECT 1 FROM t a WHERE a.k = q.match_key)",
+        },
+        SqlTestCase {
+            name: "right_semi_join_requires_key",
+            description: "RIGHT SEMI JOIN returns only matched rows, so its ON also constrains the left input.",
+            setup_sqls: &[TABLE],
+            sql: "SELECT a.k FROM
+    (SELECT c.k AS match_key FROM t b LEFT JOIN t c ON b.k = c.k) q
+    RIGHT SEMI JOIN t a ON q.match_key = a.k",
         },
         SqlTestCase {
             name: "union_maps_each_branch",
@@ -87,6 +118,14 @@ async fn test_simplify_outer_join() -> Result<()> {
             sql: "SELECT a.v, q.w FROM t a JOIN
     (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
     ON a.v IS NOT DISTINCT FROM q.match_key",
+        },
+        SqlTestCase {
+            name: "unproven_conjunct_is_a_barrier",
+            description: "Moving the row removal across q.w + 1 > 0 could skip its evaluation, so the filter does not simplify the lower join although a.k = q.match_key alone would.",
+            setup_sqls: &[TABLE],
+            sql: "SELECT a.k, q.w FROM t a CROSS JOIN
+    (SELECT c.k AS match_key, b.v AS w FROM t b LEFT JOIN t c ON b.k = c.k) q
+    WHERE a.k = q.match_key AND q.w + 1 > 0",
         },
         SqlTestCase {
             name: "top_n_is_a_barrier",
@@ -181,39 +220,14 @@ async fn test_simplify_outer_join() -> Result<()> {
 
     for case in &cases {
         let ctx = setup_context(case).await?;
-        let raw = ctx.bind_sql(case.sql).await?;
+        let optimized = ctx.optimize_plan(ctx.bind_sql(case.sql).await?).await?;
         write_case_header(&mut file, case)?;
-        writeln!(file, "raw_plan:")?;
-        writeln!(
-            file,
-            "{}",
-            raw.format_indent(Default::default(), &ctx.stat_context()?)?
-        )?;
-        let optimized = ctx.optimize_plan(raw).await?;
         writeln!(file, "optimized_plan:")?;
         writeln!(
             file,
             "{}",
             optimized.format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
-        if matches!(
-            case.name,
-            "inner_on_through_alias"
-                | "where_equality_exposes_inner_before_inference"
-                | "window_partition_key"
-                | "window_group_common_partition_key"
-                | "aggregate_group_key"
-        ) {
-            ctx.get_settings()
-                .set_optimizer_skip_list("SimplifyOuterJoinOptimizer".to_string())?;
-            let control = ctx.optimize_plan(ctx.bind_sql(case.sql).await?).await?;
-            writeln!(file, "optimized_without_early_pass:")?;
-            writeln!(
-                file,
-                "{}",
-                control.format_indent(Default::default(), &ctx.stat_context()?)?
-            )?;
-        }
         writeln!(file)?;
     }
     Ok(())
