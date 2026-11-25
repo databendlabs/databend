@@ -24,10 +24,12 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::FunctionKind;
 use crate::Symbol;
 use crate::function::Function;
 use crate::function::FunctionID;
 use crate::function::FunctionRegistry;
+use crate::type_check::resolve_cast_function;
 use crate::types::DataType;
 use crate::values::Scalar;
 
@@ -1008,6 +1010,49 @@ impl<Index: ColumnIndex> Expr<Index> {
                 lambda_display: lambda_display.clone(),
                 return_type: return_type.clone(),
             },
+        }
+    }
+
+    /// Whether this expression can be compared across function contexts.
+    /// Unknown dispatch (such as composite casts) is conservatively not trusted.
+    #[recursive::recursive]
+    pub fn is_context_independent(&self, registry: &FunctionRegistry) -> bool {
+        match self {
+            Expr::ColumnRef(_) | Expr::Constant(_) => true,
+            Expr::Cast(cast) => {
+                // A cast to a nullable type, such as an argument passed to the nullable
+                // overload of a function, casts the values with the non-nullable function.
+                let source = cast.expr.data_type().remove_nullable();
+                let dest = cast.dest_type.remove_nullable();
+                let function_dest = if cast.is_try {
+                    dest.wrap_nullable()
+                } else {
+                    dest.clone()
+                };
+                (source == dest
+                    || resolve_cast_function(
+                        cast.span,
+                        cast.is_try,
+                        &source,
+                        &function_dest,
+                        registry,
+                    )
+                    .is_some_and(|call| !registry.is_context_dependent(&call.id)))
+                    && cast.expr.is_context_independent(registry)
+            }
+            Expr::FunctionCall(call) => {
+                registry
+                    .get_property(&call.function.signature.name)
+                    .is_some_and(|property| {
+                        property.kind == FunctionKind::Scalar && !property.non_deterministic
+                    })
+                    && !registry.is_context_dependent(&call.id)
+                    && call
+                        .args
+                        .iter()
+                        .all(|arg| arg.is_context_independent(registry))
+            }
+            Expr::LambdaFunctionCall(_) => false,
         }
     }
 

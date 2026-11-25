@@ -1203,7 +1203,7 @@ impl Binder {
             && let Some(partition_exprs) = partition_by
         {
             let keys = self
-                .analyze_table_keys(partition_exprs, schema.clone(), None, "PARTITION BY", false)
+                .analyze_partition_keys(partition_exprs, schema.clone())
                 .await?;
             options.insert(
                 OPT_KEY_PARTITION_BY.to_owned(),
@@ -1727,12 +1727,13 @@ impl Binder {
                         Some(&tbl.get_table_info().meta.indexes),
                         "CLUSTER BY with PARTITION BY",
                         false,
+                        false,
                     )
                     .await?;
                 }
 
                 let partition_keys = self
-                    .analyze_table_keys(partition_by, tbl.schema(), None, "PARTITION BY", false)
+                    .analyze_partition_keys(partition_by, tbl.schema())
                     .await?;
 
                 Ok(Plan::AlterTablePartitionBy(Box::new(
@@ -2851,8 +2852,20 @@ impl Binder {
                 "CLUSTER BY with PARTITION BY"
             },
             allow_vector,
+            false,
         )
         .await
+    }
+
+    /// Partition values are compared across sessions, so a key must not depend on the
+    /// session, for example on its time zone.
+    async fn analyze_partition_keys(
+        &mut self,
+        key_exprs: &[AstExpr],
+        schema: TableSchemaRef,
+    ) -> Result<Vec<String>> {
+        self.analyze_table_keys(key_exprs, schema, None, "PARTITION BY", false, true)
+            .await
     }
 
     async fn analyze_table_keys(
@@ -2862,6 +2875,7 @@ impl Binder {
         table_indexes: Option<&BTreeMap<String, TableIndex>>,
         key_name: &str,
         allow_vector: bool,
+        require_context_independent: bool,
     ) -> Result<Vec<String>> {
         let expr_len = key_exprs.len();
 
@@ -2894,6 +2908,18 @@ impl Binder {
             }
 
             let (table_key, _) = scalar_binder.bind(key_expr)?;
+            if require_context_independent {
+                // Bind again with the check, which runs before constant folding.
+                scalar_binder.set_require_context_independent(true);
+                let checked = scalar_binder.bind(key_expr);
+                scalar_binder.set_require_context_independent(false);
+                if checked.is_err() {
+                    return Err(ErrorCode::InvalidClusterKeys(format!(
+                        "{key_name} expression `{key_expr:#}` depends on session settings such as the time zone. \
+                         Pass the time zone explicitly, for example `to_yyyymmdd(ts, 'UTC')`"
+                    )));
+                }
+            }
             if table_key.used_columns().len() != 1 || !table_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "{key_name} expression `{key_expr:#}` is invalid"

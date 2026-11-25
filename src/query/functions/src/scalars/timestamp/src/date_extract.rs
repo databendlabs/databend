@@ -45,6 +45,7 @@ use databend_common_timezone::wall_clock_is_monotonic;
 
 use crate::fixed_offset::FixedOffset;
 use crate::fixed_offset::local_dates;
+use crate::timezone_arg::register_timestamp_with_timezone;
 
 /// Projection of a timestamp onto a calendar number, such as `to_year`.
 pub(super) trait ToNumber {
@@ -90,12 +91,19 @@ fn timestamp_to_u32_domain<T: ToNumber<Output = u32>>(
     ctx: &FunctionContext,
     domain: &SimpleDomain<i64>,
 ) -> FunctionDomain<UInt32Type> {
-    if !tz_wall_clock_single_segment(&ctx.tz, domain.min, domain.max) {
+    timestamp_to_u32_domain_in::<T>(&ctx.tz, domain)
+}
+
+fn timestamp_to_u32_domain_in<T: ToNumber<Output = u32>>(
+    tz: &Tz,
+    domain: &SimpleDomain<i64>,
+) -> FunctionDomain<UInt32Type> {
+    if !tz_wall_clock_single_segment(tz, domain.min, domain.max) {
         return FunctionDomain::Full;
     }
     FunctionDomain::Domain(SimpleDomain {
-        min: ToNumberImpl::eval_timestamp::<T>(domain.min, &ctx.tz),
-        max: ToNumberImpl::eval_timestamp::<T>(domain.max, &ctx.tz),
+        min: ToNumberImpl::eval_timestamp::<T>(domain.min, tz),
+        max: ToNumberImpl::eval_timestamp::<T>(domain.max, tz),
     })
 }
 
@@ -413,7 +421,7 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         );
     }
 
-    // date
+    // date: calendar fields of a DATE do not depend on the session.
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _>(
         "to_yyyymm",
         date_to_u32_domain::<ToYYYYMM>,
@@ -493,7 +501,14 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
             ToNumberImpl::eval_date::<ToWeekOfYear>(val)
         }),
     );
-    // timestamp
+    // timestamp: calendar fields are read in the session time zone.
+    registry.register_context_dependent(register_timestamp);
+
+    // timestamp with an explicit time zone
+    register_with_timezone(registry);
+}
+
+fn register_timestamp(registry: &mut FunctionRegistry) {
     registry.register_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymm",
         timestamp_to_u32_domain::<ToYYYYMM>,
@@ -614,6 +629,71 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |val, ctx| eval_clock_field(val, ctx, MICROS_PER_SEC, 60, |c| c.second),
     );
+}
+
+/// to_*(timestamp, time_zone) -> number
+fn register_with_timezone(registry: &mut FunctionRegistry) {
+    register_timestamp_with_timezone::<UInt32Type, _, _>(
+        registry,
+        "to_yyyymm",
+        timestamp_to_u32_domain_in::<ToYYYYMM>,
+        eval_number::<ToYYYYMM>,
+    );
+    register_timestamp_with_timezone::<UInt32Type, _, _>(
+        registry,
+        "to_yyyymmdd",
+        timestamp_to_u32_domain_in::<ToYYYYMMDD>,
+        eval_number::<ToYYYYMMDD>,
+    );
+
+    macro_rules! register_full_domain {
+        ($($name:literal => $output:ty, $field:ty;)*) => {
+            $(register_timestamp_with_timezone::<$output, _, _>(
+                registry,
+                $name,
+                |_, _| FunctionDomain::Full,
+                eval_number::<$field>,
+            );)*
+        };
+    }
+    register_full_domain! {
+        "to_yyyymmddhh" => UInt64Type, ToYYYYMMDDHH;
+        "to_yyyymmddhhmmss" => UInt64Type, ToYYYYMMDDHHMMSS;
+        "to_year" => UInt16Type, ToYear;
+        "to_iso_year" => UInt16Type, ToISOYear;
+        "to_quarter" => UInt8Type, ToQuarter;
+        "to_month" => UInt8Type, ToMonth;
+        "to_day_of_year" => UInt16Type, ToDayOfYear;
+        "to_day_of_month" => UInt8Type, ToDayOfMonth;
+        "to_day_of_week" => UInt8Type, ToDayOfWeek;
+        "dayofweek" => UInt8Type, DayOfWeek;
+        "yearweek" => UInt32Type, ToYYYYWW;
+        "millennium" => UInt16Type, ToMillennium;
+        "to_week_of_year" => UInt32Type, ToWeekOfYear;
+    }
+
+    register_timestamp_with_timezone::<UInt8Type, _, _>(
+        registry,
+        "to_hour",
+        |_, _| FunctionDomain::Full,
+        |ts, tz| Ok(components_from_timestamp(ts, tz).hour),
+    );
+    register_timestamp_with_timezone::<UInt8Type, _, _>(
+        registry,
+        "to_minute",
+        |_, _| FunctionDomain::Full,
+        |ts, tz| Ok(components_from_timestamp(ts, tz).minute),
+    );
+    register_timestamp_with_timezone::<UInt8Type, _, _>(
+        registry,
+        "to_second",
+        |_, _| FunctionDomain::Full,
+        |ts, tz| Ok(components_from_timestamp(ts, tz).second),
+    );
+}
+
+fn eval_number<T: ToNumber>(ts: i64, tz: &Tz) -> Result<T::Output, String> {
+    Ok(ToNumberImpl::eval_timestamp::<T>(ts, tz))
 }
 
 /// The hour, minute or second of the local time of each timestamp, `ts / unit % modulo` of

@@ -1315,3 +1315,31 @@ settings (timezone='Europe/Paris') select to_int64(ts), to_int64(to_start_of_hou
 
 statement ok
 drop table after_dst_t;
+
+## An explicit time zone argument takes the place of the session time zone.
+statement ok
+create or replace table explicit_tz_t (ts timestamp null, tz string null);
+
+statement ok
+settings (timezone='UTC') insert into explicit_tz_t values ('2024-01-31 20:00:00', 'Asia/Shanghai'), ('2024-01-31 20:00:00', 'UTC'), (NULL, NULL);
+
+query IITIIT
+settings (timezone='America/New_York') select to_yyyymmdd(ts, 'Asia/Shanghai'), to_yyyymm(ts, 'Asia/Shanghai'), to_date(ts, 'Asia/Shanghai'), to_hour(ts, 'Asia/Shanghai'), to_int64(to_start_of_day(ts, 'Asia/Shanghai')), to_start_of_month(ts, 'Asia/Shanghai') from explicit_tz_t order by tz nulls last;
+----
+20240201 202402 2024-02-01 4 1706716800000000 2024-02-01
+20240201 202402 2024-02-01 4 1706716800000000 2024-02-01
+NULL NULL NULL NULL NULL NULL
+
+## A time zone column is read row by row.
+query IT
+settings (timezone='America/New_York') select to_yyyymmdd(ts, tz), to_date(ts, tz) from explicit_tz_t order by tz nulls last;
+----
+20240201 2024-02-01
+20240131 2024-01-31
+NULL NULL
+
+statement error cannot parse time zone
+select to_yyyymmdd(ts, 'Mars/Base') from explicit_tz_t where ts is not null;
+
+statement ok
+drop table explicit_tz_t;

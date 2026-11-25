@@ -49,6 +49,7 @@ pub struct ScalarBinder<'a, A = FullTypeCheckAdapter> {
     forbid_virtual_computed_column: bool,
     apply_masking_policy: bool,
     masking_where_aliases: Option<MaskingWhereAliases<'a>>,
+    require_context_independent: bool,
 }
 
 impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
@@ -68,6 +69,7 @@ impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
             forbid_virtual_computed_column: false,
             apply_masking_policy: true,
             masking_where_aliases: None,
+            require_context_independent: false,
         }
     }
 
@@ -96,6 +98,7 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             forbid_virtual_computed_column: false,
             apply_masking_policy: true,
             masking_where_aliases: None,
+            require_context_independent: false,
         }
     }
 
@@ -106,6 +109,11 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
     /// Table maintenance predicates evaluate stored values, not user-visible masked values.
     pub fn without_masking_policy(&mut self) {
         self.apply_masking_policy = false;
+    }
+
+    /// Reject expressions whose value may depend on the session, such as its time zone.
+    pub fn set_require_context_independent(&mut self, require: bool) {
+        self.require_context_independent = require;
     }
 
     /// Let WHERE aliases stand for the expressions at their nodes in `arena`,
@@ -153,6 +161,7 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             type_checker.set_masking_where_aliases(arena, aliases);
         }
         type_checker.set_forbid_virtual_computed_column(self.forbid_virtual_computed_column);
+        type_checker.set_require_context_independent(self.require_context_independent);
         if let Some(items) = select_items {
             type_checker.set_select_items(items);
         }

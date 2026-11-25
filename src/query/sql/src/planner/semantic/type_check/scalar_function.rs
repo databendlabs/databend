@@ -317,6 +317,7 @@ where A: TypeCheckAdapter
             dest_type: DataType::from(&resolve_type_name(target_type, true)?),
         };
         let checked_expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        self.check_context_independent(&checked_expr)?;
         let data_type = &child.data_type;
 
         // cast variant to other type should nest wrap nullable,
@@ -600,6 +601,7 @@ where A: TypeCheckAdapter
             args: placeholders,
         };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+        self.check_context_independent(&expr)?;
         if let Some(identity) = identity
             && expr == identity
         {
@@ -632,6 +634,16 @@ where A: TypeCheckAdapter
                 Ok(self.bind_derived(scalar, return_type))
             }
         }
+    }
+
+    /// Check before constant folding, including implicit casts of arguments.
+    fn check_context_independent(&self, expr: &EExpr) -> Result<()> {
+        if self.require_context_independent && !expr.is_context_independent(&BUILTIN_FUNCTIONS) {
+            return Err(ErrorCode::SemanticError(
+                "The expression may depend on the session context",
+            ));
+        }
+        Ok(())
     }
 }
 

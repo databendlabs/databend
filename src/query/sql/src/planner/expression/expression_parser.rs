@@ -508,6 +508,31 @@ pub fn bind_normalized_key_exprs(
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
 ) -> Result<Vec<Expr<usize>>> {
+    bind_key_exprs(ctx, table_meta, &ast_exprs, false, |key| key)
+}
+
+/// Session-dependent keys, only found in tables defined before PARTITION BY
+/// rejected them, are `None`.
+pub fn bind_partition_keys_for_pruning(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    ast_exprs: Vec<AExpr>,
+) -> Result<Vec<Option<Expr<usize>>>> {
+    bind_key_exprs(ctx, table_meta, &ast_exprs, true, |key| {
+        Ok(key
+            .ok()
+            .filter(|key| key.is_context_independent(&BUILTIN_FUNCTIONS)))
+    })
+}
+
+/// `on_key` decides what a key, or the error binding it, becomes in the result.
+fn bind_key_exprs<T>(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    ast_exprs: &[AExpr],
+    require_context_independent: bool,
+    on_key: impl Fn(Result<Expr<usize>>) -> Result<T>,
+) -> Result<Vec<T>> {
     let schema = table_meta.schema();
     let names = NameResolutionContext::preserve_identifier_case();
     // Runtime rebinding of already persisted keys: keep permissive so tables
@@ -523,16 +548,15 @@ pub fn bind_normalized_key_exprs(
     // Physical keys are evaluated on stored values, independently of roles and
     // SELECT WHERE authorization. Keep the permissive runtime adapter for old keys.
     checker.set_apply_masking_policy(false);
-    ast_exprs
-        .iter()
-        .map(|ast| {
-            let (scalar, _) = *checker.resolve(ast)?;
-            scalar
-                .as_expr()?
-                .project_column_ref(|col| schema.index_of(&col.column_name))
-                .and_then(normalize_key_expr)
-        })
-        .collect()
+    checker.set_require_context_independent(require_context_independent);
+    let mut bind = |ast: &AExpr| -> Result<Expr<usize>> {
+        let (scalar, _) = *checker.resolve(ast)?;
+        scalar
+            .as_expr()?
+            .project_column_ref(|col| schema.index_of(&col.column_name))
+            .and_then(normalize_key_expr)
+    };
+    ast_exprs.iter().map(|ast| on_key(bind(ast))).collect()
 }
 
 /// Bind and normalize cluster-key SQL using the caller-provided name rules.

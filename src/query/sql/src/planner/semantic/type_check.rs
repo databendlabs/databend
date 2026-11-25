@@ -107,6 +107,8 @@ type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
 pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
+    /// Whether lowering read the session, such as `week_start` for `date_trunc(week, ...)`.
+    reads_session_context: bool,
     pub(super) aggregate_function_registry: &'static AggregateRegistry,
     /// How identifiers are normalized, for the parameters of lambdas.
     name_resolution_ctx: NameResolutionContext,
@@ -561,6 +563,7 @@ pub struct TypeChecker<'a, A> {
     // The parameters of the lambdas whose bodies are being bound, the
     // innermost last, see `lambda.rs`.
     lambda_params: Vec<Vec<ColumnBinding>>,
+    require_context_independent: bool,
 }
 
 #[cfg(test)]
