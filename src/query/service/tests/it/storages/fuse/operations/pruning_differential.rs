@@ -26,9 +26,8 @@
 //! infinities, long strings with truncated statistics, the extremes of the types, columns
 //! added after the block was written, empty arrays and maps.
 //!
-//! The filters are generated from a fixed seed. Those of a kind that is known to prune wrongly
-//! are kept apart in ignored tests, see [`Known`]: fixing a kind is checked by running its
-//! test, which is then enabled.
+//! The filters are generated from a fixed seed. Those of the kinds that pruned wrongly have
+//! their own tests, see [`Known`], which always check the smallest filters that did.
 //!
 //! The test checks a sample of the filters. To check more of them, or others:
 //!
@@ -47,25 +46,25 @@ use databend_query::test_kits::*;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-/// The kinds of filters that prune wrongly today: #21216, and #21166 for
-/// [`Known::EmptyCollection`].
+/// The kinds of filters that pruned wrongly (#21216, and #21166 for
+/// [`Known::EmptyCollection`]): each has a test of its own.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Known {
-    /// `CAST(column AS type) = constant` is folded as `column = constant'`, with the constant
-    /// converted to the type of the column, also when the conversion changes it.
+    /// `CAST(column AS type) = constant` was folded as `column = constant'`, with the constant
+    /// converted to the type of the column, also when the conversion changed it.
     CastComparison,
-    /// The domains of `-x`, `x + y`, `x - y` and `x * y` leave out the NaN that NaN and
+    /// The domains of `-x`, `x + y`, `x - y` and `x * y` left out the NaN that NaN and
     /// infinite floats produce.
     FloatArithmetic,
-    /// The statistics of a block where every array or map is empty read as elements that are
-    /// all null.
+    /// The statistics of a block where every array or map is empty were read as arrays and
+    /// maps that are all null.
     EmptyCollection,
-    /// Comparisons of variants: `IS DISTINCT FROM` assumes that the comparison of two values
-    /// is not null, and a variant compares with a number by a `TRY_CAST`.
+    /// Comparisons of variants: `IS DISTINCT FROM` assumed that the comparison of two values
+    /// is not null, while a variant compares with a number by a `TRY_CAST`.
     VariantComparison,
 }
 
-/// A filter, and the kind it is of if that kind prunes wrongly.
+/// A filter, and the kind it is of if it is of a known one.
 #[derive(Clone)]
 struct Case {
     filter: String,
@@ -137,7 +136,7 @@ enum Res {
     To(Kind),
     /// A cast of the column: its equality with a constant is a [`Known::CastComparison`].
     Cast(Kind),
-    /// The kind of the column, by arithmetic whose domain is wrong for floats.
+    /// The kind of the column, by arithmetic that makes NaN of infinite floats.
     Arith,
 }
 
@@ -370,7 +369,7 @@ fn compare_atoms(
         } else {
             None
         };
-        // Equality of a cast, or with a constant that is converted, is known to prune wrongly.
+        // Equality of a cast, or with a constant that is converted, is a kind of its own.
         let equality = |constants: &[&Const]| {
             let exact = !cast && constants.iter().all(|c| exact_comparison(kind, c.1));
             known.or((!exact).then_some(Known::CastComparison))
@@ -561,8 +560,8 @@ fn nested_atoms() -> Vec<Case> {
     out
 }
 
-/// The smallest filters of each known kind that prune wrongly: the samples of the atoms always
-/// have them, so that the test of a kind fails until the kind is fixed.
+/// The smallest filters of each known kind that pruned wrongly: the samples of the atoms always
+/// have them.
 fn pinned_atoms() -> Vec<Case> {
     let cast = [
         "i32::string = '02'",
@@ -713,7 +712,7 @@ impl Tables {
             format!("select count_if({filter}), sum(if({filter}, id, null)) from {db}.{table}");
         let expected = match self.first_row(&every_row).await {
             Ok(expected) => expected,
-            // The filters are meant not to panic: a query that panics may not return.
+            // The filters are meant not to panic.
             Err(err) if err.code() == ErrorCode::UNWIND_ERROR => {
                 return Outcome::Differs(format!("{filter}\n    panics: {}", err.message()));
             }
@@ -1125,25 +1124,21 @@ async fn test_pruned_scans_select_the_rows_where_the_filter_is_true() -> Result<
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "prunes wrongly: #21216, see `Known::CastComparison`"]
 async fn test_pruned_scans_of_cast_comparisons() -> Result<()> {
     check_kind(Some(Known::CastComparison)).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "prunes wrongly: #21216, see `Known::FloatArithmetic`"]
 async fn test_pruned_scans_of_float_arithmetic() -> Result<()> {
     check_kind(Some(Known::FloatArithmetic)).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "prunes wrongly: #21166, see `Known::EmptyCollection`"]
 async fn test_pruned_scans_of_empty_collections() -> Result<()> {
     check_kind(Some(Known::EmptyCollection)).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "prunes wrongly: #21216, see `Known::VariantComparison`"]
 async fn test_pruned_scans_of_variant_comparisons() -> Result<()> {
     check_kind(Some(Known::VariantComparison)).await
 }
