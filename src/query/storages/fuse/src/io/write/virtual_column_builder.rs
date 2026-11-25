@@ -93,6 +93,7 @@ use crate::index::encode_compact_virtual_column_string_table;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::write::WriteSettings;
+use crate::io::write::virtual_column_extractor::VirtualColumnExtractor;
 use crate::statistics::gen_columns_statistics;
 
 const DEFAULT_VIRTUAL_COLUMN_NUMBER: usize = 32;
@@ -236,6 +237,112 @@ impl VirtualColumnBuilder {
         self.total_rows += num_rows;
 
         Ok(())
+    }
+
+    /// Adds the columns `VirtualColumnExtractor` produced from the source
+    /// columns of `num_rows` rows, in the block's current row order. The result
+    /// matches `add_block` on the source columns of those rows.
+    pub(crate) fn add_extracted_columns(
+        &mut self,
+        extractor: &VirtualColumnExtractor,
+        entries: &[BlockEntry],
+        num_rows: usize,
+    ) -> Result<()> {
+        if extractor.sources().len() != self.variant_fields.len()
+            || entries.len() != extractor.num_columns()
+        {
+            return Err(ErrorCode::Internal(format!(
+                "extracted virtual columns do not match the writer schema: sources={}, variant_fields={}, columns={}, expected={}",
+                extractor.sources().len(),
+                self.variant_fields.len(),
+                entries.len(),
+                extractor.num_columns()
+            )));
+        }
+        for (field_index, source) in extractor.sources().iter().enumerate() {
+            debug_assert_eq!(source.column_offset, self.variant_offsets[field_index]);
+            for (position, key_paths) in source.direct_paths.iter().enumerate() {
+                let column = entries[source.first_column + position].to_column();
+                let Column::Nullable(nullable) = &column else {
+                    return Err(extracted_column_type_error(&column));
+                };
+                let Column::Variant(values) = nullable.column() else {
+                    return Err(extracted_column_type_error(&column));
+                };
+                if nullable.validity().null_count() == num_rows {
+                    continue;
+                }
+                let index = self.path_index(field_index, key_paths);
+                for (row, valid) in nullable.validity().iter().enumerate() {
+                    if valid {
+                        let scalar = Self::variant_bytes_to_scalar(values.value(row))?;
+                        self.virtual_values[index].push(JsonbScalarValue {
+                            row: self.total_rows + row,
+                            scalar,
+                        });
+                    }
+                }
+            }
+
+            let column = entries[source.remaining_column()].to_column();
+            let Column::Map(map) = &column else {
+                return Err(extracted_column_type_error(&column));
+            };
+            let Column::Tuple(fields) = map.values() else {
+                return Err(extracted_column_type_error(&column));
+            };
+            let [Column::String(keys), Column::Variant(values)] = fields.as_slice() else {
+                return Err(extracted_column_type_error(&column));
+            };
+            let offsets = map.offsets();
+            let mut name_to_index: HashMap<&str, usize> = HashMap::new();
+            for row in 0..num_rows {
+                for entry in offsets[row] as usize..offsets[row + 1] as usize {
+                    let name = keys.value(entry);
+                    let index = match name_to_index.get(name) {
+                        Some(index) => *index,
+                        None => {
+                            let key_paths =
+                                OwnedKeyPaths::from_canonical_path(name).map_err(|_| {
+                                    ErrorCode::Internal(format!(
+                                        "invalid extracted virtual column path {name:?}"
+                                    ))
+                                })?;
+                            let index = self.path_index(field_index, &key_paths);
+                            name_to_index.insert(name, index);
+                            index
+                        }
+                    };
+                    let scalar = Self::variant_bytes_to_scalar(values.value(entry))?;
+                    self.virtual_values[index].push(JsonbScalarValue {
+                        row: self.total_rows + row,
+                        scalar,
+                    });
+                }
+            }
+        }
+        self.total_rows += num_rows;
+        Ok(())
+    }
+
+    fn path_index(&mut self, field_index: usize, key_paths: &OwnedKeyPaths) -> usize {
+        let paths = &mut self.virtual_paths[field_index];
+        if let Some(index) = paths.get(key_paths) {
+            return *index;
+        }
+        let index = self.virtual_values.len();
+        self.virtual_values.push(Vec::new());
+        paths.insert(key_paths.clone(), index);
+        index
+    }
+
+    /// Inverse of the extractor encoding: the same `Scalar` that
+    /// `jsonb_value_to_scalar` produced from the visited value.
+    fn variant_bytes_to_scalar(bytes: &[u8]) -> Result<Scalar> {
+        let value = RawJsonb::new(bytes).to_value().map_err(|error| {
+            ErrorCode::Internal(format!("invalid extracted virtual column value: {error}"))
+        })?;
+        Ok(Self::jsonb_value_to_scalar(value))
     }
 
     fn extract_virtual_values(
@@ -1166,6 +1273,13 @@ impl VirtualColumnBuilder {
         }
         Ok(draft_virtual_column_metas)
     }
+}
+
+fn extracted_column_type_error(column: &Column) -> ErrorCode {
+    ErrorCode::Internal(format!(
+        "unexpected extracted virtual column type {}",
+        column.data_type()
+    ))
 }
 
 fn data_type_to_physical_type(data_type: &DataType) -> Option<VirtualColumnPhysicalType> {

@@ -83,6 +83,7 @@ pub use write::VectorIndexBuilder;
 pub use write::VectorIndexSearchOptions;
 pub use write::VirtualColumnBuildMode;
 pub use write::VirtualColumnBuilder;
+pub use write::VirtualColumnExtractor;
 pub use write::VirtualColumnLayoutPlanner;
 pub use write::VirtualColumnLayoutPolicy;
 pub use write::WriteSettings;

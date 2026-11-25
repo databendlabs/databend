@@ -48,6 +48,7 @@ use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::VirtualColumnBuilder;
+use crate::io::VirtualColumnExtractor;
 use crate::io::block_index::create_block_index_specs;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -254,6 +255,7 @@ impl TransformSerializeBlock {
             top_n,
             block_index_specs,
             virtual_column_builder,
+            virtual_column_extractor: None,
             json_path_statistics_builder,
             table_meta_timestamps,
             serialize_hll,
@@ -273,6 +275,26 @@ impl TransformSerializeBlock {
             pending_merge_hll: false,
             pending_logical_change: (0, 0),
         })
+    }
+
+    /// Input blocks carry the columns of `extractor` between the source and
+    /// the temporary key columns.
+    pub fn with_virtual_column_extractor(
+        mut self,
+        extractor: Arc<VirtualColumnExtractor>,
+    ) -> Result<Self> {
+        let num_source_columns = self.block_builder.source_schema.num_fields();
+        if self.block_builder.virtual_column_builder.is_none()
+            || num_source_columns != extractor.num_source_columns()
+        {
+            return Err(ErrorCode::Internal(format!(
+                "extracted virtual columns expect {} source columns and a virtual column builder, writer has {} columns",
+                extractor.num_source_columns(),
+                num_source_columns
+            )));
+        }
+        self.block_builder.virtual_column_extractor = Some(extractor);
+        Ok(self)
     }
 
     pub fn into_processor(self) -> Result<ProcessorPtr> {

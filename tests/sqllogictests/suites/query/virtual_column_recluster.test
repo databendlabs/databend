@@ -1,0 +1,190 @@
+statement ok
+DROP DATABASE IF EXISTS test_virtual_column_recluster
+
+statement ok
+CREATE DATABASE test_virtual_column_recluster
+
+statement ok
+USE test_virtual_column_recluster
+
+# `t_before_sort` extracts virtual columns before the sort, `t_writer` in the block
+# writer. The evaluated key `id % 5` places temporary key columns after the
+# extracted virtual columns.
+statement ok
+CREATE TABLE t_before_sort(id INT, v VARIANT, w VARIANT NULL) CLUSTER BY(id % 5, id) row_per_block = 4 storage_format = 'parquet' enable_virtual_column = true
+
+statement ok
+CREATE TABLE t_writer(id INT, v VARIANT, w VARIANT NULL) CLUSTER BY(id % 5, id) row_per_block = 4 storage_format = 'parquet' enable_virtual_column = true
+
+statement ok
+CREATE TABLE t_hilbert(b INT, c INT, v VARIANT) CLUSTER BY HILBERT(b, c) row_per_block = 2 block_per_segment = 2 recluster_depth = 8 storage_format = 'parquet' enable_virtual_column = true
+
+statement ok
+CREATE TABLE src(id INT, v VARIANT, w VARIANT NULL)
+
+statement ok
+INSERT INTO src VALUES
+  (1, '{"a":1,"b":{"c":"s1"},"n":null}', '{"x":1}'),
+  (2, '{"a":2,"b":{"c":"s2"},"n":null,"e":true}', '{"x":"t2"}'),
+  (3, '{"a":3,"b":{"c":"s0"},"n":null}', '{"x":null}'),
+  (4, '{"a":4,"b":{"c":"s1"},"n":null,"e":true}', NULL),
+  (5, '{"a":5,"b":{"c":"s2"},"n":null}', '{"x":5}'),
+  (6, '{"a":6,"b":{"c":"s0"},"n":null,"e":true}', '{"x":"t6"}'),
+  (7, '{"a":7,"b":{"c":"s1"},"n":null}', '{"x":null}'),
+  (8, '{"a":8,"b":{"c":"s2"},"n":null,"e":true}', NULL),
+  (9, '{"a":9,"b":{"c":"s0"},"n":null}', '{"x":9}'),
+  (10, '{"a":10,"b":{"c":"s1"},"n":null,"e":true}', '{"x":"t10"}'),
+  (11, '{"a":11,"b":{"c":"s2"},"n":null}', '{"x":null}'),
+  (12, '{"a":12,"b":{"c":"s0"},"n":null,"e":true}', NULL)
+
+statement ok
+INSERT INTO t_before_sort SELECT * FROM src WHERE id % 3 = 1
+
+statement ok
+INSERT INTO t_before_sort SELECT * FROM src WHERE id % 3 = 2
+
+statement ok
+INSERT INTO t_before_sort SELECT * FROM src WHERE id % 3 = 0
+
+statement ok
+INSERT INTO t_writer SELECT * FROM src WHERE id % 3 = 1
+
+statement ok
+INSERT INTO t_writer SELECT * FROM src WHERE id % 3 = 2
+
+statement ok
+INSERT INTO t_writer SELECT * FROM src WHERE id % 3 = 0
+
+statement ok
+INSERT INTO t_hilbert VALUES (0, 0, '{"a":0,"s":"x0"}'), (100, 100, '{"a":100,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (10, 90, '{"a":10,"s":"x10"}'), (90, 10, '{"a":90,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (20, 80, '{"a":20,"s":"x20"}'), (80, 20, '{"a":80,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (30, 70, '{"a":30,"s":"x30"}'), (70, 30, '{"a":70,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (40, 60, '{"a":40,"s":"x40"}'), (60, 40, '{"a":60,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (45, 55, '{"a":45,"s":"x45"}'), (55, 45, '{"a":55,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (5, 95, '{"a":5,"s":"x5"}'), (95, 5, '{"a":95,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (15, 85, '{"a":15,"s":"x15"}'), (85, 15, '{"a":85,"n":null}')
+
+statement ok
+INSERT INTO t_hilbert VALUES (25, 75, '{"a":25,"s":"x25"}'), (75, 25, '{"a":75,"n":null}')
+
+# Overlapping blocks guarantee that recluster has Hilbert tasks to run.
+query B
+SELECT info:max_depth::int > 8 FROM clustering_information('test_virtual_column_recluster', 't_hilbert')
+----
+1
+
+# With several threads, which reader takes which input block is a race, so the
+# output block boundaries differ between runs. The block meta comparison below
+# needs both tables split identically.
+statement ok
+SET max_threads = 1
+
+statement ok
+SET enable_recluster_early_virtual_column = 1
+
+statement ok
+ALTER TABLE t_before_sort RECLUSTER FINAL
+
+statement ok
+ALTER TABLE t_hilbert RECLUSTER FINAL
+
+statement ok
+SET enable_recluster_early_virtual_column = 0
+
+statement ok
+ALTER TABLE t_writer RECLUSTER FINAL
+
+statement ok
+UNSET enable_recluster_early_virtual_column
+
+statement ok
+UNSET max_threads
+
+query ITTTTT
+SELECT id, v['a'], v['b']['c'], v['n'], v['e'], w['x'] FROM t_before_sort ORDER BY id
+----
+1 1 "s1" null NULL 1
+2 2 "s2" null true "t2"
+3 3 "s0" null NULL null
+4 4 "s1" null true NULL
+5 5 "s2" null NULL 5
+6 6 "s0" null true "t6"
+7 7 "s1" null NULL null
+8 8 "s2" null true NULL
+9 9 "s0" null NULL 9
+10 10 "s1" null true "t10"
+11 11 "s2" null NULL null
+12 12 "s0" null true NULL
+
+query IITTT
+SELECT b, c, v['a'], v['s'], v['n'] FROM t_hilbert ORDER BY b
+----
+0 0 0 "x0" NULL
+5 95 5 "x5" NULL
+10 90 10 "x10" NULL
+15 85 15 "x15" NULL
+20 80 20 "x20" NULL
+25 75 25 "x25" NULL
+30 70 30 "x30" NULL
+40 60 40 "x40" NULL
+45 55 45 "x45" NULL
+55 45 55 NULL null
+60 40 60 NULL null
+70 30 70 NULL null
+75 25 75 NULL null
+80 20 80 NULL null
+85 15 85 NULL null
+90 10 90 NULL null
+95 5 95 NULL null
+100 100 100 NULL null
+
+query B
+SELECT count(*) > 0 FROM fuse_virtual_column_block_meta('test_virtual_column_recluster', 't_hilbert') WHERE virtual_column_metas IS NOT NULL
+----
+1
+
+query B
+SELECT count(*) > 0 FROM fuse_virtual_column_block_meta('test_virtual_column_recluster', 't_before_sort') WHERE virtual_column_metas IS NOT NULL
+----
+1
+
+# Both extraction paths write the same sidecars for the same output blocks.
+query I
+SELECT count(*) FROM (
+  SELECT row_count, virtual_column_size, virtual_columns_complete, virtual_column_metas::STRING, virtual_path_statistics::STRING
+  FROM fuse_virtual_column_block_meta('test_virtual_column_recluster', 't_before_sort')
+  EXCEPT
+  SELECT row_count, virtual_column_size, virtual_columns_complete, virtual_column_metas::STRING, virtual_path_statistics::STRING
+  FROM fuse_virtual_column_block_meta('test_virtual_column_recluster', 't_writer')
+)
+----
+0
+
+query I
+SELECT count(*) FROM (
+  SELECT row_count, virtual_column_size, virtual_columns_complete, virtual_column_metas::STRING, virtual_path_statistics::STRING
+  FROM fuse_virtual_column_block_meta('test_virtual_column_recluster', 't_writer')
+  EXCEPT
+  SELECT row_count, virtual_column_size, virtual_columns_complete, virtual_column_metas::STRING, virtual_path_statistics::STRING
+  FROM fuse_virtual_column_block_meta('test_virtual_column_recluster', 't_before_sort')
+)
+----
+0
+
+statement ok
+DROP DATABASE test_virtual_column_recluster
