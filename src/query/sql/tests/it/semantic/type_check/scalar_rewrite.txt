@@ -9,14 +9,14 @@ type: Boolean NULL
 description: IS DISTINCT FROM appears in join tests and should lower through the null-aware comparison rewrite.
 sql: number IS DISTINCT FROM delta
 status: ok
-scalar: assume_not_null(if(and(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), false, or(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), true, noteq(number (#0), delta (#3))))
+scalar: assume_not_null(if(and(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), false, not(is_true(eq(number (#0), delta (#3))))))
 type: Boolean
 
 === is_not_distinct_from_rewrites_null_safe_comparison ===
 description: IS NOT DISTINCT FROM should share the same null-aware comparison path with the inverted result.
 sql: number IS NOT DISTINCT FROM delta
 status: ok
-scalar: assume_not_null(if(and(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), true, or(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), false, eq(number (#0), delta (#3))))
+scalar: assume_not_null(if(and(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))), true, is_true(eq(number (#0), delta (#3)))))
 type: Boolean
 
 === searched_case_from_sqllogictest_binds ===

@@ -756,7 +756,7 @@ EvalScalar
 └── Join(Inner)
     ├── build keys: []
     ├── probe keys: []
-    ├── other filters: [assume_not_null(eq(rf_fact.k (#0), rf_dim.k (#3)))]
+    ├── other filters: [assume_not_null(is_true(eq(rf_fact.k (#0), rf_dim.k (#3))))]
     ├── Scan
     │   ├── table: default.rf_dim (#1)
     │   ├── filters: []
@@ -772,7 +772,7 @@ optimized_plan:
 EvalScalar
 ├── scalars: [rf_fact.v (#1) AS (#1), rf_fact.k (#0) AS (#5), rf_dim.k (#3) AS (#6)]
 └── Filter
-    ├── filters: [assume_not_null(eq(rf_fact.k (#0), rf_dim.k (#3)))]
+    ├── filters: [assume_not_null(is_true(eq(rf_fact.k (#0), rf_dim.k (#3))))]
     └── Join(Cross)
         ├── build keys: []
         ├── probe keys: []

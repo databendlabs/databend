@@ -478,7 +478,7 @@ EvalScalar
     └── Join(Left)
         ├── build keys: []
         ├── probe keys: []
-        ├── other filters: [assume_not_null(if(and(not(is_not_null(outer_to_anti_left.k (#0))), not(is_not_null(outer_to_anti_right.k (#3)))), true, or(not(is_not_null(outer_to_anti_left.k (#0))), not(is_not_null(outer_to_anti_right.k (#3)))), false, eq(outer_to_anti_left.k (#0), outer_to_anti_right.k (#3))))]
+        ├── other filters: [assume_not_null(if(and(not(is_not_null(outer_to_anti_left.k (#0))), not(is_not_null(outer_to_anti_right.k (#3)))), true, is_true(eq(outer_to_anti_left.k (#0), outer_to_anti_right.k (#3)))))]
         ├── Scan
         │   ├── table: default.outer_to_anti_right (#1)
         │   ├── filters: []
@@ -496,7 +496,7 @@ Filter
 └── Join(Left)
     ├── build keys: []
     ├── probe keys: []
-    ├── other filters: [assume_not_null(if(and(not(is_not_null(outer_to_anti_left.k (#0))), not(is_not_null(outer_to_anti_right.k (#3)))), true, or(not(is_not_null(outer_to_anti_left.k (#0))), not(is_not_null(outer_to_anti_right.k (#3)))), false, eq(outer_to_anti_left.k (#0), outer_to_anti_right.k (#3))))]
+    ├── other filters: [assume_not_null(if(and(not(is_not_null(outer_to_anti_left.k (#0))), not(is_not_null(outer_to_anti_right.k (#3)))), true, is_true(eq(outer_to_anti_left.k (#0), outer_to_anti_right.k (#3)))))]
     ├── Scan
     │   ├── table: default.outer_to_anti_right (#1)
     │   ├── filters: []
