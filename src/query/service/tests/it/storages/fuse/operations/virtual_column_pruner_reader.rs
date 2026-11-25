@@ -425,7 +425,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         query_column_id,
         parse_key_paths(b"{s}")?.to_owned(),
     );
-    field.data_type = Box::new(TableDataType::String.wrap_nullable());
+    *field.data_type = TableDataType::String.wrap_nullable();
     let push_down = PushDownInfo {
         virtual_column: Some(VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
