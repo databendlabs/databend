@@ -128,7 +128,7 @@ TableScan
 ├── scan id: 0
 ├── output columns: [store_id (#0), category (#1), store_name (#2)]
 ├── read rows: 14
-├── read size: 1.35 KiB
+├── read size: 1.31 KiB
 ├── partitions total: 7
 ├── partitions scanned: 7
 ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 7 to 7 cost: <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>, spatial pruning: 7 to 7 cost: <slt:ignore>>]

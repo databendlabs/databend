@@ -61,7 +61,7 @@ HashJoin
 │       ├── scan id: 1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 1000
-│       ├── read size: 1.06 KiB
+│       ├── read size: 3.94 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
@@ -80,7 +80,7 @@ HashJoin
     ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 100000
-    ├── read size: 180.86 KiB
+    ├── read size: 432.12 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
@@ -129,7 +129,7 @@ HashJoin
 │       ├── scan id: 1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 1000
-│       ├── read size: 1.06 KiB
+│       ├── read size: 3.94 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
@@ -149,7 +149,7 @@ HashJoin
     ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 100000
-    ├── read size: 180.86 KiB
+    ├── read size: 432.12 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
@@ -272,7 +272,7 @@ HashJoin
 │       ├── scan id: 1
 │       ├── output columns: [s (#1)]
 │       ├── read rows: 1000
-│       ├── read size: < 1 KiB
+│       ├── read size: 3.98 KiB
 │       ├── partitions total: 10
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>>]
@@ -283,7 +283,7 @@ HashJoin
     ├── scan id: 0
     ├── output columns: [s (#0)]
     ├── read rows: 100000
-    ├── read size: 98.68 KiB
+    ├── read size: 386.28 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
@@ -405,7 +405,7 @@ HashJoin
     ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 100000
-    ├── read size: 180.86 KiB
+    ├── read size: 432.12 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
@@ -463,7 +463,7 @@ HashJoin
     ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 100000
-    ├── read size: 180.86 KiB
+    ├── read size: 432.12 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
