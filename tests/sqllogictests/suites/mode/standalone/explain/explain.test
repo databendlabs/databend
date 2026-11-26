@@ -1770,7 +1770,7 @@ EvalScalar
     │                       ├── output columns: [0 (#74), x (#79), v (#80), x (#81), y (#82), sx (#84), sy (#85)]
     │                       ├── join type: INNER
     │                       ├── build keys: [CAST(p.v (#83) - 1 AS Int64 NULL)]
-    │                       ├── probe keys: [CAST(f.v (#80) AS Int64 NULL)]
+    │                       ├── probe keys: [TRY_CAST(f.v (#80) AS Int64 NULL)]
     │                       ├── keys is null equal: [false]
     │                       ├── filters: []
     │                       ├── estimated rows: 0.00
@@ -1894,7 +1894,7 @@ EvalScalar
         │                               ├── output columns: [0 (#28), x (#33), v (#34), x (#35), y (#36), sx (#38), sy (#39)]
         │                               ├── join type: INNER
         │                               ├── build keys: [CAST(p.v (#37) - 1 AS Int64 NULL)]
-        │                               ├── probe keys: [CAST(f.v (#34) AS Int64 NULL)]
+        │                               ├── probe keys: [TRY_CAST(f.v (#34) AS Int64 NULL)]
         │                               ├── keys is null equal: [false]
         │                               ├── filters: []
         │                               ├── estimated rows: 0.00

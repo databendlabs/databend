@@ -82,6 +82,8 @@ fn cross_join(probe: DataBlock, build: DataBlock, predicate: Option<Expr>) -> Ha
         build,
         build_keys: vec![],
         probe_keys: vec![],
+        narrowed_build_keys: vec![],
+        narrowed_probe_keys: vec![],
         is_null_equal: vec![],
         non_equi_conditions: predicate.into_iter().map(|p| p.as_remote_expr()).collect(),
         join_type: JoinType::Cross,

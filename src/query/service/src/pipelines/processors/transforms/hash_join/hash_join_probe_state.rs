@@ -47,6 +47,7 @@ use super::PendingProbe;
 use super::ProbeState;
 use super::ProcessState;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
@@ -223,12 +224,19 @@ impl HashJoinProbeState {
                     .into())
             })
             .collect::<Result<_>>()?;
+        let in_range = HashJoinDesc::in_range_rows(
+            &evaluator,
+            &keys_entries,
+            &self.hash_join_state.hash_join_desc.probe_key_inputs,
+            input_num_rows,
+        )?;
 
         let desc = &self.hash_join_state.hash_join_desc;
         if desc.join_type == JoinType::RightMark && desc.mark_nulls_from_key {
             self.hash_join_state.init_markers(
                 (&keys_entries).into(),
                 input_num_rows,
+                in_range.as_ref(),
                 probe_state.markers.as_mut().unwrap(),
             );
         }
@@ -256,6 +264,7 @@ impl HashJoinProbeState {
         } else {
             None
         };
+        let valids = and_validities(valids, in_range);
 
         keys_entries
             .iter_mut()
@@ -735,6 +744,11 @@ impl HashJoinProbeState {
         if desc.join_type != JoinType::LeftMark {
             return Ok(());
         }
-        desc.record_mark_nulls(data_block, &desc.probe_keys, &self.func_ctx)
+        desc.record_mark_nulls(
+            data_block,
+            &desc.probe_keys,
+            &desc.probe_key_inputs,
+            &self.func_ctx,
+        )
     }
 }

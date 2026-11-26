@@ -1,0 +1,380 @@
+# run-with-settings: enable_experimental_new_join=0
+
+# Equi joins of UInt64 and Int64 keys compare them as Int64, with the UInt64 key
+# in TRY_CAST. A UInt64 value above i64::MAX equals no Int64 value: it matches
+# nothing instead of failing the query with an overflow. NULLs keep their meaning,
+# also for the NULL equal keys of mark joins, INTERSECT and EXCEPT.
+
+statement ok
+create or replace database mixed_sign_join_keys
+
+statement ok
+use mixed_sign_join_keys
+
+statement ok
+create or replace table u(id bigint unsigned null)
+
+statement ok
+insert into u values (1), (2), (9223372036854775807), (9223372036854775808), (18446744073709551615), (null)
+
+statement ok
+create or replace table s(id bigint null)
+
+statement ok
+insert into s values (-1), (1), (3), (9223372036854775807), (null)
+
+statement ok
+create or replace table u_not_null(id bigint unsigned not null)
+
+statement ok
+insert into u_not_null values (1), (9223372036854775808), (18446744073709551615)
+
+statement ok
+create or replace table s_not_null(id bigint not null)
+
+statement ok
+insert into s_not_null values (-1), (1)
+
+statement ok
+create or replace table s_large as select number::bigint as id from numbers(1000)
+
+statement ok
+create or replace table u_large as select (number + 9223372036854775800)::bigint unsigned as id from numbers(1000)
+
+# inner
+query II
+select u.id, s.id from u join s on u.id = s.id order by u.id
+----
+1 1
+9223372036854775807 9223372036854775807
+
+# inner, keys not null
+query II
+select u_not_null.id, s_not_null.id from u_not_null join s_not_null on u_not_null.id = s_not_null.id
+----
+1 1
+
+# left outer
+query II
+select u.id, s.id from u left join s on u.id = s.id order by u.id nulls first
+----
+NULL NULL
+1 1
+2 NULL
+9223372036854775807 9223372036854775807
+9223372036854775808 NULL
+18446744073709551615 NULL
+
+# left outer, keys not null
+query II
+select u_not_null.id, s_not_null.id from u_not_null left join s_not_null on u_not_null.id = s_not_null.id order by u_not_null.id
+----
+1 1
+9223372036854775808 NULL
+18446744073709551615 NULL
+
+# right outer
+query II
+select u.id, s.id from u right join s on u.id = s.id order by s.id nulls first
+----
+NULL NULL
+NULL -1
+1 1
+NULL 3
+9223372036854775807 9223372036854775807
+
+# full outer
+query III
+select count(*), count(u.id), count(s.id) from u full join s on u.id = s.id
+----
+9 5 4
+
+# semi
+query I
+select id from u where id in (select id from s) order by id
+----
+1
+9223372036854775807
+
+# anti
+query I
+select id from u where not exists (select 1 from s where s.id = u.id) order by id nulls first
+----
+NULL
+2
+9223372036854775808
+18446744073709551615
+
+# runtime filter built from the UInt64 side
+query I
+select count(*) from s_large join u on s_large.id = u.id
+----
+2
+
+# mark, UInt64 outer
+query IB
+select id, id in (select id from s) from u order by id nulls first
+----
+NULL 1
+1 1
+2 NULL
+9223372036854775807 1
+9223372036854775808 NULL
+18446744073709551615 NULL
+
+# mark, UInt64 outer, no NULL in the subquery
+query IB
+select id, id in (select id from s where id is not null) from u order by id nulls first
+----
+NULL NULL
+1 1
+2 0
+9223372036854775807 1
+9223372036854775808 0
+18446744073709551615 0
+
+# mark, UInt64 subquery
+query IB
+select id, id in (select id from u) from s order by id nulls first
+----
+NULL 1
+-1 NULL
+1 1
+3 NULL
+9223372036854775807 1
+
+# mark, UInt64 subquery without NULL
+query IB
+select id, id in (select id from u where id is not null) from s order by id nulls first
+----
+NULL NULL
+-1 0
+1 1
+3 0
+9223372036854775807 1
+
+# left mark, UInt64 outer
+query IB
+select id, id in (select id from s_large) from u order by id nulls first
+----
+NULL NULL
+1 1
+2 1
+9223372036854775807 0
+9223372036854775808 0
+18446744073709551615 0
+
+# left mark, UInt64 subquery
+query IB
+select id, id in (select id from u_large) from s order by id nulls first
+----
+NULL NULL
+-1 0
+1 0
+3 0
+9223372036854775807 1
+
+# mark, keys not null, UInt64 outer
+query IB
+select id, id in (select id from s_not_null) from u_not_null order by id
+----
+1 1
+9223372036854775808 0
+18446744073709551615 0
+
+# mark, keys not null, UInt64 subquery
+query IB
+select id, id in (select id from u_not_null) from s_not_null order by id
+----
+-1 0
+1 1
+
+# NOT IN, UInt64 subquery without NULL
+query I
+select id from s where id not in (select id from u where id is not null) order by id
+----
+-1
+3
+
+# NOT IN, UInt64 outer
+query I
+select id from u where id not in (select id from s where id is not null) order by id
+----
+2
+9223372036854775808
+18446744073709551615
+
+# INTERSECT
+query I
+select id from u intersect select id from s order by id nulls first
+----
+NULL
+1
+9223372036854775807
+
+# EXCEPT, UInt64 left
+query I
+select id from u except select id from s order by id
+----
+2
+9223372036854775808
+18446744073709551615
+
+# EXCEPT, Int64 left
+query I
+select id from s except select id from u order by id
+----
+-1
+3
+
+# INTERSECT, keys not null
+query I
+select id from u_not_null intersect select id from s_not_null order by id
+----
+1
+
+# EXCEPT, keys not null, UInt64 left
+query I
+select id from u_not_null except select id from s_not_null order by id
+----
+9223372036854775808
+18446744073709551615
+
+# EXCEPT, keys not null, Int64 left
+query I
+select id from s_not_null except select id from u_not_null order by id
+----
+-1
+
+# The same keys when the join spills.
+statement ok
+set force_join_data_spill = 1
+
+# inner
+query II
+select u.id, s.id from u join s on u.id = s.id order by u.id
+----
+1 1
+9223372036854775807 9223372036854775807
+
+# left outer
+query II
+select u.id, s.id from u left join s on u.id = s.id order by u.id nulls first
+----
+NULL NULL
+1 1
+2 NULL
+9223372036854775807 9223372036854775807
+9223372036854775808 NULL
+18446744073709551615 NULL
+
+# right outer
+query II
+select u.id, s.id from u right join s on u.id = s.id order by s.id nulls first
+----
+NULL NULL
+NULL -1
+1 1
+NULL 3
+9223372036854775807 9223372036854775807
+
+# anti
+query I
+select id from u where not exists (select 1 from s where s.id = u.id) order by id nulls first
+----
+NULL
+2
+9223372036854775808
+18446744073709551615
+
+# mark, UInt64 outer
+query IB
+select id, id in (select id from s) from u order by id nulls first
+----
+NULL 1
+1 1
+2 NULL
+9223372036854775807 1
+9223372036854775808 NULL
+18446744073709551615 NULL
+
+# mark, UInt64 subquery
+query IB
+select id, id in (select id from u) from s order by id nulls first
+----
+NULL 1
+-1 NULL
+1 1
+3 NULL
+9223372036854775807 1
+
+# left mark, UInt64 outer
+query IB
+select id, id in (select id from s_large) from u order by id nulls first
+----
+NULL NULL
+1 1
+2 1
+9223372036854775807 0
+9223372036854775808 0
+18446744073709551615 0
+
+# left mark, UInt64 subquery
+query IB
+select id, id in (select id from u_large) from s order by id nulls first
+----
+NULL NULL
+-1 0
+1 0
+3 0
+9223372036854775807 1
+
+# mark, keys not null, UInt64 outer
+query IB
+select id, id in (select id from s_not_null) from u_not_null order by id
+----
+1 1
+9223372036854775808 0
+18446744073709551615 0
+
+# mark, keys not null, UInt64 subquery
+query IB
+select id, id in (select id from u_not_null) from s_not_null order by id
+----
+-1 0
+1 1
+
+# INTERSECT
+query I
+select id from u intersect select id from s order by id nulls first
+----
+NULL
+1
+9223372036854775807
+
+# EXCEPT, UInt64 left
+query I
+select id from u except select id from s order by id
+----
+2
+9223372036854775808
+18446744073709551615
+
+# INTERSECT, keys not null
+query I
+select id from u_not_null intersect select id from s_not_null order by id
+----
+1
+
+# EXCEPT, keys not null, UInt64 left
+query I
+select id from u_not_null except select id from s_not_null order by id
+----
+9223372036854775808
+18446744073709551615
+
+statement ok
+unset force_join_data_spill
+
+statement ok
+drop database mixed_sign_join_keys

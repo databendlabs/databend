@@ -102,11 +102,11 @@ impl BasicHashJoin {
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
-        let keys_entries = self.desc.build_key(&chunk_block, &self.function_ctx)?;
+        let (keys_entries, valids) = self.desc.build_key(&chunk_block, &self.function_ctx)?;
         let mut keys_block = DataBlock::new(keys_entries, chunk_block.num_rows());
 
         chunk_block = chunk_block.project(&self.desc.build_projection);
-        if let Some(bitmap) = self.desc.build_valids_by_keys(&keys_block)? {
+        if let Some(bitmap) = valids {
             if bitmap.true_count() != bitmap.len() {
                 keys_block = keys_block.filter_with_bitmap(&bitmap)?;
 

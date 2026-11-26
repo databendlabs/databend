@@ -53,6 +53,7 @@ use parking_lot::RwLock;
 use tokio::sync::Barrier;
 
 use super::concat_buffer::ConcatBuffer;
+use super::desc::HashJoinDesc;
 use super::desc::RuntimeFilterDesc;
 use super::runtime_filter::JoinRuntimeFilterPacket;
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -185,7 +186,12 @@ impl HashJoinBuildState {
             return Ok(());
         }
         for data_block in data_blocks {
-            desc.record_mark_nulls(data_block, &desc.build_keys, &self.func_ctx)?;
+            desc.record_mark_nulls(
+                data_block,
+                &desc.build_keys,
+                &desc.build_key_inputs,
+                &self.func_ctx,
+            )?;
         }
         Ok(())
     }
@@ -672,6 +678,12 @@ impl HashJoinBuildState {
                     .into())
             })
             .collect::<Result<_>>()?;
+        let in_range = HashJoinDesc::in_range_rows(
+            &evaluator,
+            &keys_entries,
+            &self.hash_join_state.hash_join_desc.build_key_inputs,
+            chunk.num_rows(),
+        )?;
 
         let column_nums = chunk.num_columns();
         let mut block_entries = Vec::with_capacity(self.build_projections.len());
@@ -707,18 +719,13 @@ impl HashJoinBuildState {
                     }
                 });
             match valids {
-                ControlFlow::Continue(Some(valids)) | ControlFlow::Break(Some(valids)) => {
-                    if valids.null_count() == valids.len() {
-                        return Ok(());
-                    }
-                    if valids.null_count() != 0 {
-                        Some(valids)
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
+                ControlFlow::Continue(valids) | ControlFlow::Break(valids) => valids,
             }
+        };
+        let valids = match and_validities(valids, in_range.clone()) {
+            Some(valids) if valids.null_count() == valids.len() => return Ok(()),
+            Some(valids) if valids.null_count() != 0 => Some(valids),
+            _ => None,
         };
 
         // The NULLs of a right mark join's build keys are recorded as its blocks are collected,
@@ -726,8 +733,12 @@ impl HashJoinBuildState {
         let desc = &self.hash_join_state.hash_join_desc;
         if desc.join_type == JoinType::LeftMark && desc.mark_nulls_from_key {
             let markers = &mut build_state.mark_scan_map[chunk_index];
-            self.hash_join_state
-                .init_markers((&keys_entries).into(), chunk.num_rows(), markers);
+            self.hash_join_state.init_markers(
+                (&keys_entries).into(),
+                chunk.num_rows(),
+                in_range.as_ref(),
+                markers,
+            );
         }
 
         keys_entries

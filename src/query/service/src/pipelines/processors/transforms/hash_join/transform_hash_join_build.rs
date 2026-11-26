@@ -521,6 +521,8 @@ mod tests {
         let desc = HashJoinDesc {
             build_keys: vec![],
             probe_keys: vec![],
+            build_key_inputs: vec![],
+            probe_key_inputs: vec![],
             is_null_equal: vec![],
             join_type: JoinType::Cross,
             single_to_inner: None,

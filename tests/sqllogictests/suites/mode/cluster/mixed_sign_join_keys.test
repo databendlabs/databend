@@ -1,0 +1,72 @@
+# A shuffle join of UInt64 and Int64 keys hashes the UInt64 side by its TRY_CAST
+# to Int64. A UInt64 value above i64::MAX matches nothing: it must be shuffled
+# instead of failing the query with an overflow.
+
+statement ok
+create or replace database mixed_sign_shuffle_keys
+
+statement ok
+use mixed_sign_shuffle_keys
+
+statement ok
+set enforce_shuffle_join = 1
+
+statement ok
+create or replace table u(id bigint unsigned null)
+
+statement ok
+insert into u values (1), (2), (9223372036854775807), (9223372036854775808), (18446744073709551615), (null)
+
+statement ok
+create or replace table s(id bigint null)
+
+statement ok
+insert into s values (-1), (1), (3), (9223372036854775807), (null)
+
+query II
+select u.id, s.id from u join s on u.id = s.id order by u.id
+----
+1 1
+9223372036854775807 9223372036854775807
+
+query II
+select u.id, s.id from u left join s on u.id = s.id order by u.id nulls first
+----
+NULL NULL
+1 1
+2 NULL
+9223372036854775807 9223372036854775807
+9223372036854775808 NULL
+18446744073709551615 NULL
+
+query II
+select u.id, s.id from u right join s on u.id = s.id order by s.id nulls first
+----
+NULL NULL
+NULL -1
+1 1
+NULL 3
+9223372036854775807 9223372036854775807
+
+query IB
+select id, id in (select id from s where id is not null) from u order by id nulls first
+----
+NULL NULL
+1 1
+2 0
+9223372036854775807 1
+9223372036854775808 0
+18446744073709551615 0
+
+query I
+select id from u except select id from s order by id
+----
+2
+9223372036854775808
+18446744073709551615
+
+statement ok
+unset enforce_shuffle_join
+
+statement ok
+drop database mixed_sign_shuffle_keys

@@ -274,6 +274,33 @@ impl JoinEquiCondition {
     }
 }
 
+/// The common type of two keys of a join equality, and whether each key narrows to it.
+///
+/// Keys of different types are compared on their common type, which can be narrower than one of
+/// them: a UInt64 key and an Int64 key are compared as Int64. A value out of the range of the
+/// common type equals no value of the other key, so a key that narrows is cast with TRY_CAST: the
+/// value becomes NULL and matches nothing, instead of failing the query. The common type is then
+/// nullable, so that both keys have the same type.
+pub fn join_keys_common_type(left: &DataType, right: &DataType) -> Option<(DataType, bool, bool)> {
+    let common_type = common_super_type(
+        left.clone(),
+        right.clone(),
+        BUILTIN_FUNCTIONS.comparison_cast_rules(),
+    )?;
+    let narrows = |src: &DataType| match (src.remove_nullable(), common_type.remove_nullable()) {
+        (DataType::Number(src), DataType::Number(dest)) => {
+            src.is_integer() && dest.is_integer() && !src.can_lossless_cast_to(dest)
+        }
+        _ => false,
+    };
+    let (left_narrows, right_narrows) = (narrows(left), narrows(right));
+    let common_type = match left_narrows || right_narrows {
+        true => common_type.wrap_nullable(),
+        false => common_type,
+    };
+    Some((common_type, left_narrows, right_narrows))
+}
+
 /// Remove an integer-to-string round trip when the other equality key is an integer.
 ///
 /// Mixed string/integer equality normally uses `Decimal(38, 5)` as the hash key. That coercion is
@@ -1164,5 +1191,56 @@ mod tests {
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
         Ok(())
+    }
+
+    #[test]
+    fn test_join_keys_common_type_narrows_overflowing_integer_keys() {
+        use NumberDataType::*;
+        let number = DataType::Number;
+        let int64 = number(Int64);
+        let int64_null = int64.wrap_nullable();
+        let cases = [
+            // UInt64 is compared as Int64: it narrows, and both keys become nullable.
+            (
+                number(UInt64),
+                int64.clone(),
+                int64_null.clone(),
+                true,
+                false,
+            ),
+            (
+                int64.clone(),
+                number(UInt64),
+                int64_null.clone(),
+                false,
+                true,
+            ),
+            (
+                number(UInt64).wrap_nullable(),
+                number(Int32),
+                int64_null.clone(),
+                true,
+                false,
+            ),
+            // Lossless widening.
+            (number(UInt32), int64.clone(), int64.clone(), false, false),
+            (number(Int8), number(UInt8), number(Int16), false, false),
+            (int64_null.clone(), int64.clone(), int64_null, false, false),
+            // Not an integer to integer cast: it rounds rather than throws.
+            (
+                number(UInt64),
+                number(Float64),
+                number(Float64),
+                false,
+                false,
+            ),
+        ];
+        for (left, right, common_type, left_narrows, right_narrows) in cases {
+            assert_eq!(
+                join_keys_common_type(&left, &right),
+                Some((common_type, left_narrows, right_narrows)),
+                "{left} and {right}"
+            );
+        }
     }
 }

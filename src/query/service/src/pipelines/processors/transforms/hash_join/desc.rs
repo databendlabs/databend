@@ -52,6 +52,10 @@ pub struct MarkJoinDesc {
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
+    /// By key, the input of a key that narrows, see `HashJoin::narrowed_build_keys`. An out of
+    /// range value is not NULL, see `in_range_rows`.
+    pub(crate) build_key_inputs: Vec<Option<Expr>>,
+    pub(crate) probe_key_inputs: Vec<Option<Expr>>,
     pub(crate) is_null_equal: Vec<bool>,
     pub(crate) join_type: JoinType,
     pub(crate) single_to_inner: Option<JoinType>,
@@ -131,6 +135,22 @@ pub(crate) fn probes_all_pairs(
     }
 }
 
+/// The keys of one side of a join, and by key the input of a key that narrows.
+fn join_keys(keys: &[RemoteExpr], narrowed: &[bool]) -> (Vec<Expr>, Vec<Option<Expr>>) {
+    debug_assert_eq!(keys.len(), narrowed.len());
+    keys.iter()
+        .zip(narrowed)
+        .map(|(key, narrowed)| {
+            let key = key.as_expr(&BUILTIN_FUNCTIONS);
+            let input = match (&key, narrowed) {
+                (Expr::Cast(cast), true) => Some(cast.expr.as_ref().clone()),
+                _ => None,
+            };
+            (key, input)
+        })
+        .unzip()
+}
+
 impl HashJoinDesc {
     pub(crate) fn probes_all_pairs(&self) -> bool {
         probes_all_pairs(
@@ -143,21 +163,15 @@ impl HashJoinDesc {
     pub fn create(join: &HashJoin) -> Result<HashJoinDesc> {
         let other_predicate = Self::join_predicate(&join.join_type, &join.non_equi_conditions)?;
 
-        let build_keys: Vec<Expr> = join
-            .build_keys
-            .iter()
-            .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
-            .collect();
-        let probe_keys: Vec<Expr> = join
-            .probe_keys
-            .iter()
-            .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
-            .collect();
+        let (build_keys, build_key_inputs) = join_keys(&join.build_keys, &join.narrowed_build_keys);
+        let (probe_keys, probe_key_inputs) = join_keys(&join.probe_keys, &join.narrowed_probe_keys);
 
         Ok(HashJoinDesc {
             join_type: join.join_type,
             build_keys,
             probe_keys,
+            build_key_inputs,
+            probe_key_inputs,
             is_null_equal: join.is_null_equal.clone(),
             other_predicate,
             marker_join_desc: MarkJoinDesc {
@@ -212,7 +226,12 @@ impl HashJoinDesc {
         }
     }
 
-    pub fn build_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
+    /// The build keys of a block, and the rows to insert by them, see `valids_by_keys`.
+    pub fn build_key(
+        &self,
+        block: &DataBlock,
+        ctx: &FunctionContext,
+    ) -> Result<(Vec<BlockEntry>, Option<Bitmap>)> {
         let build_keys = &self.build_keys;
         let mut _nullable_chunk = None;
         let evaluator = match self.join_type {
@@ -228,7 +247,7 @@ impl HashJoinDesc {
             }
             _ => Evaluator::new(block, ctx, &BUILTIN_FUNCTIONS),
         };
-        build_keys
+        let keys = build_keys
             .iter()
             .map(|expr| {
                 Ok(evaluator
@@ -236,16 +255,25 @@ impl HashJoinDesc {
                     .convert_to_full_column(expr.data_type(), block.num_rows())
                     .into())
             })
-            .collect::<Result<_>>()
+            .collect::<Result<Vec<_>>>()?;
+        let in_range =
+            Self::in_range_rows(&evaluator, &keys, &self.build_key_inputs, block.num_rows())?;
+        let valids = self.valids_by_keys(&keys, block.num_rows(), in_range);
+        Ok((keys, valids))
     }
 
-    pub fn probe_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
+    /// The probe keys of a block, and the rows to look up by them, see `valids_by_keys`.
+    pub fn probe_key(
+        &self,
+        block: &DataBlock,
+        ctx: &FunctionContext,
+    ) -> Result<(Vec<BlockEntry>, Option<Bitmap>)> {
         let build_keys = &self.probe_keys;
         let evaluator = Evaluator::new(block, ctx, &BUILTIN_FUNCTIONS);
         // A single string key is serialized by `HashMethodSerializer`, which probes a dictionary
         // encoded key once per dictionary value (see `SerializerHashJoinHashTable::probe`).
         let keep_encoded = matches!(build_keys.as_slice(), [expr] if expr.data_type().remove_nullable().is_string());
-        build_keys
+        let keys = build_keys
             .iter()
             .map(|expr| {
                 Ok(evaluator
@@ -254,16 +282,25 @@ impl HashJoinDesc {
                     .convert_to_full_column(expr.data_type(), block.num_rows())
                     .into())
             })
-            .collect::<Result<_>>()
+            .collect::<Result<Vec<_>>>()?;
+        let in_range =
+            Self::in_range_rows(&evaluator, &keys, &self.probe_key_inputs, block.num_rows())?;
+        let valids = self.valids_by_keys(&keys, block.num_rows(), in_range);
+        Ok((keys, valids))
     }
 
-    pub fn build_valids_by_keys(&self, keys: &DataBlock) -> Result<Option<Bitmap>> {
+    /// The rows to look up or insert by `keys`, `None` if all are: a row is left out if a key that
+    /// is not NULL equal is NULL, or if it is not `in_range`.
+    fn valids_by_keys(
+        &self,
+        keys: &[BlockEntry],
+        num_rows: usize,
+        in_range: Option<Bitmap>,
+    ) -> Option<Bitmap> {
         let is_null_equal = &self.is_null_equal;
         let mut valids = None;
 
-        let num_rows = keys.num_rows();
-
-        for (entry, null_equals) in keys.columns().iter().zip(is_null_equal.iter()) {
+        for (entry, null_equals) in keys.iter().zip(is_null_equal.iter()) {
             if !null_equals {
                 let (is_all_null, column_valids) = entry.as_column().unwrap().validity();
 
@@ -286,7 +323,10 @@ impl HashJoinDesc {
             }
         }
 
-        Ok(valids)
+        match and_validities(valids, in_range) {
+            Some(valids) if valids.null_count() == 0 => None,
+            valids => valids,
+        }
     }
 
     pub fn remove_keys_nullable(&self, keys: &mut DataBlock) {
@@ -299,16 +339,50 @@ impl HashJoinDesc {
         }
     }
 
+    /// For the keys evaluated as TRY_CAST, the rows whose values are in range, `None` if all are.
+    /// TRY_CAST makes an out of range value NULL, which must equal nothing, so these rows are left
+    /// out of the join also where NULL is equal. The NULL keys of the rows in range are NULL as
+    /// written, which the markers of a mark join read.
+    pub(crate) fn in_range_rows(
+        evaluator: &Evaluator,
+        keys: &[BlockEntry],
+        inputs: &[Option<Expr>],
+        num_rows: usize,
+    ) -> Result<Option<Bitmap>> {
+        let mut in_range = None;
+        for (key, input) in keys.iter().zip(inputs) {
+            let Some(input) = input else {
+                continue;
+            };
+            let key = key.to_column();
+            let Some(key_valids) = key.validity().1.filter(|valids| valids.null_count() > 0) else {
+                continue;
+            };
+            let input = evaluator
+                .run(input)?
+                .convert_to_full_column(input.data_type(), num_rows);
+            let rows = match input.validity().1 {
+                Some(input_valids) => key_valids | &!input_valids,
+                None => key_valids.clone(),
+            };
+            in_range = and_validities(in_range, Some(rows));
+        }
+        Ok(in_range)
+    }
+
     /// Records a NULL in the first key of the subquery side of a mark join, see
-    /// `HashJoin::mark_nulls_from_key`.
+    /// `HashJoin::mark_nulls_from_key`. An out of range value of a key that narrows is not NULL.
     pub(crate) fn record_mark_nulls(
         &self,
         data_block: &DataBlock,
         keys: &[Expr],
+        key_inputs: &[Option<Expr>],
         func_ctx: &FunctionContext,
     ) -> Result<()> {
-        let Some(key) = keys.first() else {
-            return Ok(());
+        let key = match (key_inputs.first(), keys.first()) {
+            (Some(Some(input)), _) => input,
+            (_, Some(key)) => key,
+            _ => return Ok(()),
         };
         if !self.mark_nulls_from_key
             || !key.data_type().is_nullable_or_null()

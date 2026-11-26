@@ -149,8 +149,14 @@ impl HashJoinState {
     /// Marks NULL a row whose keys are all NULL. It is for the outer keys of a mark join that
     /// marks NULLs from its key, see `HashJoin::mark_nulls_from_key`: `NULL IN (subquery)` is
     /// NULL. The keys of other mark joins are correlations, and a NULL correlation equals no
-    /// subquery row.
-    pub(crate) fn init_markers(&self, cols: ProjectedBlock, num_rows: usize, markers: &mut [u8]) {
+    /// subquery row. A row out of `in_range`, see `HashJoinDesc::in_range_rows`, is not NULL.
+    pub(crate) fn init_markers(
+        &self,
+        cols: ProjectedBlock,
+        num_rows: usize,
+        in_range: Option<&Bitmap>,
+        markers: &mut [u8],
+    ) {
         if cols
             .iter()
             .any(|entry| entry.data_type().is_nullable_or_null())
@@ -177,7 +183,7 @@ impl HashJoinState {
             if let Some(v) = valids {
                 let mut idx = 0;
                 while idx < num_rows {
-                    if !v.get_bit(idx) {
+                    if !v.get_bit(idx) && in_range.is_none_or(|in_range| in_range.get_bit(idx)) {
                         markers[idx] = MARKER_KIND_NULL;
                     }
                     idx += 1;
