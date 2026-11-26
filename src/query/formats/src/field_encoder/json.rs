@@ -29,7 +29,6 @@ use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_io::prelude::OutputFormatSettings;
 use geozero::ToJson;
 use geozero::wkb::Ewkb;
-use jsonb::RawJsonb;
 
 use crate::OutputCommonSettings;
 use crate::field_encoder::FieldEncoderBytes;
@@ -91,16 +90,13 @@ impl FieldEncoderJSON {
             | Column::TimestampNtz(..)
             | Column::Bitmap(..)
             | Column::Interval(..) => {
-                let mut buf = Vec::new();
-                self.simple
-                    .write_field(column, row_index, &mut buf, false)?;
-                self.write_string(&buf, out_buf);
+                // These fixed renderings contain no JSON escape characters.
+                out_buf.push(b'"');
+                self.simple.write_field(column, row_index, out_buf, false)?;
+                out_buf.push(b'"');
             }
 
-            Column::Variant(c) => {
-                let v = unsafe { c.index_unchecked(row_index) };
-                out_buf.extend_from_slice(RawJsonb::new(v).to_string().as_bytes());
-            }
+            Column::Variant(c) => self.simple.write_variant(c, row_index, out_buf),
             Column::Geometry(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
                 out_buf.extend_from_slice(Ewkb(v).to_json().unwrap().as_bytes())

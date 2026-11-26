@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write as _;
+
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::AnyType;
@@ -254,19 +256,26 @@ impl FieldEncoderCSV {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
-        let scalar = column.index(row_index).unwrap();
-        let data = match scalar {
+        match column.index(row_index).unwrap() {
             DecimalScalar::Decimal64(v, size) => {
-                display_decimal_128_trimmed(v as i128, size.scale()).to_string()
+                write!(
+                    out_buf,
+                    "{}",
+                    display_decimal_128_trimmed(v as i128, size.scale())
+                )
             }
             DecimalScalar::Decimal128(v, size) => {
-                display_decimal_128_trimmed(v, size.scale()).to_string()
+                write!(out_buf, "{}", display_decimal_128_trimmed(v, size.scale()))
             }
             DecimalScalar::Decimal256(v, size) => {
-                display_decimal_256_trimmed(v.0, size.scale()).to_string()
+                write!(
+                    out_buf,
+                    "{}",
+                    display_decimal_256_trimmed(v.0, size.scale())
+                )
             }
-        };
-        out_buf.extend_from_slice(data.as_bytes());
+        }
+        .unwrap();
     }
 
     fn write_nullable(

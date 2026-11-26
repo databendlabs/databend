@@ -15,8 +15,12 @@
 mod escape;
 mod json;
 mod number_helpers;
+mod text;
 
 pub use escape::write_quoted_string;
 pub use escape::write_tsv_escaped_string;
 pub use json::write_json_string;
 pub use number_helpers::PrimitiveWithFormat;
+pub(super) use text::TextWriter;
+pub(super) use text::format_date;
+pub(super) use text::format_timestamp;

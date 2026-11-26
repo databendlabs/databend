@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Write as _;
+
 use base64::Engine as _;
 use base64::engine::general_purpose;
 use databend_common_base::base::OrderedFloat;
@@ -28,15 +31,13 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::VectorColumn;
 use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::array::ArrayColumn;
-use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::geography::GeographyColumn;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::string::StringColumn;
-use databend_common_expression::types::timestamp::timestamp_to_string;
-use databend_common_expression::types::timestamp_ntz::timestamp_ntz_to_string;
+use databend_common_expression::types::timestamp_ntz::CIVIL_TZ;
 use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
 use databend_common_io::UNKNOWN_SRID;
@@ -66,6 +67,9 @@ use micromarshal::Unmarshal;
 
 use crate::OutputCommonSettings;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
+use crate::field_encoder::helpers::TextWriter;
+use crate::field_encoder::helpers::format_date;
+use crate::field_encoder::helpers::format_timestamp;
 use crate::field_encoder::helpers::write_quoted_string;
 
 pub struct FieldEncoderBytes {
@@ -197,6 +201,23 @@ impl FieldEncoderBytes {
         }
     }
 
+    fn write_text(&self, value: impl Display, out_buf: &mut Vec<u8>, in_nested: bool) {
+        if in_nested {
+            out_buf.push(self.quote_char);
+        }
+        let mut writer = TextWriter(|text: &str| {
+            if in_nested {
+                write_quoted_string(text.as_bytes(), out_buf, self.escape_char, self.quote_char);
+            } else {
+                out_buf.extend_from_slice(text.as_bytes());
+            }
+        });
+        write!(writer, "{value}").unwrap();
+        if in_nested {
+            out_buf.push(self.quote_char);
+        }
+    }
+
     fn write_bool(&self, column: &Bitmap, row_index: usize, out_buf: &mut Vec<u8>) {
         let v = if column.get_bit(row_index) {
             &self.common_settings.true_bytes
@@ -253,8 +274,7 @@ impl FieldEncoderBytes {
     }
 
     fn write_decimal(&self, column: &DecimalColumn, row_index: usize, out_buf: &mut Vec<u8>) {
-        let data = column.index(row_index).unwrap().to_string();
-        out_buf.extend_from_slice(data.as_bytes());
+        self.write_text(column.index(row_index).unwrap(), out_buf, false);
     }
 
     fn write_binary(
@@ -313,8 +333,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(*v as i64);
-        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+        self.write_text(format_date(*v), out_buf, in_nested);
     }
 
     fn write_interval(
@@ -325,8 +344,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = interval_to_string(v).to_string();
-        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+        self.write_text(interval_to_string(v), out_buf, in_nested);
     }
 
     fn write_timestamp(
@@ -337,8 +355,11 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string(*v, &self.common_settings.settings.timezone).to_string();
-        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+        self.write_text(
+            format_timestamp(*v, &self.common_settings.settings.timezone),
+            out_buf,
+            in_nested,
+        );
     }
 
     fn write_timestamp_ntz(
@@ -349,8 +370,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_ntz_to_string(*v).to_string();
-        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+        self.write_text(format_timestamp(*v, &CIVIL_TZ), out_buf, in_nested);
     }
 
     fn write_timestamp_tz(
@@ -361,7 +381,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        self.write_string_inner(v.to_string().as_bytes(), out_buf, in_nested);
+        self.write_text(v, out_buf, in_nested);
     }
 
     fn write_bitmap(
@@ -375,10 +395,23 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         self.write_string_inner(bitmap_result, out_buf, in_nested);
     }
 
-    fn write_variant(&self, column: &BinaryColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+    pub(super) fn write_variant(
+        &self,
+        column: &BinaryColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+    ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = RawJsonb::new(v).to_string();
-        out_buf.extend_from_slice(s.as_bytes());
+        let start = out_buf.len();
+        if serde_json::to_writer(&mut *out_buf, &RawJsonb::new(v)).is_err() {
+            // Match RawJsonb::to_string's fallback, discarding any partial output.
+            out_buf.truncate(start);
+            if v.is_empty() {
+                out_buf.extend_from_slice(b"null");
+            } else {
+                out_buf.extend_from_slice(String::from_utf8_lossy(v).as_bytes());
+            }
+        }
     }
 
     fn write_geometry(

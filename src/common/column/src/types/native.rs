@@ -536,11 +536,9 @@ impl Display for timestamp_tz {
             return Err(std::fmt::Error);
         };
 
-        write!(
-            f,
-            "{}",
-            utc.with_timezone(&offset).format(TIMESTAMP_TIMEZONE_FORMAT)
-        )
+        utc.with_timezone(&offset)
+            .format(TIMESTAMP_TIMEZONE_FORMAT)
+            .write_to(f)
     }
 }
 

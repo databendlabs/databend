@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::fmt;
+use std::fmt::Display;
 use std::fmt::Write as _;
 
 use base64::Engine as _;
@@ -27,11 +29,9 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::VectorColumn;
 use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::array::ArrayColumn;
-use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::opaque::OpaqueColumn;
-use databend_common_expression::types::timestamp::timestamp_to_string;
-use databend_common_expression::types::timestamp_ntz::timestamp_ntz_to_string;
+use databend_common_expression::types::timestamp_ntz::CIVIL_TZ;
 use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
 use databend_common_io::UNKNOWN_SRID;
@@ -53,6 +53,10 @@ use databend_common_io::prelude::OutputFormatSettings;
 use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
+
+use crate::field_encoder::helpers::TextWriter;
+use crate::field_encoder::helpers::format_date;
+use crate::field_encoder::helpers::format_timestamp;
 
 const BITMAP_BINARY: &str = "<bitmap binary>";
 
@@ -87,19 +91,22 @@ impl FieldEncoderToString {
             Column::Binary(c) => Ok(self.encode_binary(c, row_index)?),
             Column::String(c) => Ok(Cow::Borrowed(unsafe { c.index_unchecked(row_index) })),
             Column::Timestamp(c) => Ok(Cow::Owned(
-                self.timestamp_text(unsafe { *c.get_unchecked(row_index) }),
+                self.timestamp_text(unsafe { *c.get_unchecked(row_index) })
+                    .to_string(),
             )),
             Column::TimestampTz(c) => Ok(Cow::Owned(
-                self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) }),
+                self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) })
+                    .to_string(),
             )),
             Column::TimestampNtz(c) => Ok(Cow::Owned(
-                timestamp_ntz_to_string(unsafe { *c.get_unchecked(row_index) }).to_string(),
+                format_timestamp(unsafe { *c.get_unchecked(row_index) }, &CIVIL_TZ).to_string(),
             )),
             Column::Date(c) => Ok(Cow::Owned(
-                self.date_text(unsafe { *c.get_unchecked(row_index) }),
+                self.date_text(unsafe { *c.get_unchecked(row_index) })
+                    .to_string(),
             )),
             Column::Interval(c) => Ok(Cow::Owned(
-                self.interval_text(unsafe { c.get_unchecked(row_index) }),
+                interval_to_string(unsafe { c.get_unchecked(row_index) }).to_string(),
             )),
             Column::Bitmap(_) => Ok(Cow::Borrowed(self.bitmap_text())),
             Column::Nullable(c) => {
@@ -165,30 +172,23 @@ impl FieldEncoderToString {
             Column::String(c) => {
                 self.write_quoted_string(unsafe { c.index_unchecked(row_index) }, out)
             }
-            Column::Timestamp(c) => self.write_quoted_string(
-                self.timestamp_text(unsafe { *c.get_unchecked(row_index) })
-                    .as_str(),
+            Column::Timestamp(c) => self.write_quoted_text(
+                self.timestamp_text(unsafe { *c.get_unchecked(row_index) }),
                 out,
             ),
-            Column::TimestampTz(c) => self.write_quoted_string(
-                self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) })
-                    .as_str(),
+            Column::TimestampTz(c) => self.write_quoted_text(
+                self.timestamp_tz_text(unsafe { *c.get_unchecked(row_index) }),
                 out,
             ),
-            Column::TimestampNtz(c) => self.write_quoted_string(
-                timestamp_ntz_to_string(unsafe { *c.get_unchecked(row_index) })
-                    .to_string()
-                    .as_str(),
+            Column::TimestampNtz(c) => self.write_quoted_text(
+                format_timestamp(unsafe { *c.get_unchecked(row_index) }, &CIVIL_TZ),
                 out,
             ),
-            Column::Date(c) => self.write_quoted_string(
-                self.date_text(unsafe { *c.get_unchecked(row_index) })
-                    .as_str(),
-                out,
-            ),
-            Column::Interval(c) => self.write_quoted_string(
-                self.interval_text(unsafe { c.get_unchecked(row_index) })
-                    .as_str(),
+            Column::Date(c) => {
+                self.write_quoted_text(self.date_text(unsafe { *c.get_unchecked(row_index) }), out)
+            }
+            Column::Interval(c) => self.write_quoted_text(
+                interval_to_string(unsafe { c.get_unchecked(row_index) }),
                 out,
             ),
             Column::Bitmap(_) => self.write_quoted_string(self.bitmap_text(), out),
@@ -231,36 +231,31 @@ impl FieldEncoderToString {
     }
 
     #[inline]
-    fn timestamp_text(&self, value: i64) -> String {
-        match self.settings.http_json_result_mode {
+    fn timestamp_text(&self, value: i64) -> impl Display + '_ {
+        fmt::from_fn(move |out| match self.settings.http_json_result_mode {
             HttpHandlerDataFormat::Display => {
-                timestamp_to_string(value, &self.settings.timezone).to_string()
+                Display::fmt(&format_timestamp(value, &self.settings.timezone), out)
             }
-            HttpHandlerDataFormat::Driver => value.to_string(),
-        }
+            HttpHandlerDataFormat::Driver => Display::fmt(&value, out),
+        })
     }
 
     #[inline]
-    fn date_text(&self, value: i32) -> String {
-        match self.settings.http_json_result_mode {
-            HttpHandlerDataFormat::Display => date_to_string(value as i64),
-            HttpHandlerDataFormat::Driver => value.to_string(),
-        }
+    fn date_text(&self, value: i32) -> impl Display + '_ {
+        fmt::from_fn(move |out| match self.settings.http_json_result_mode {
+            HttpHandlerDataFormat::Display => Display::fmt(&format_date(value), out),
+            HttpHandlerDataFormat::Driver => Display::fmt(&value, out),
+        })
     }
 
     #[inline]
-    fn interval_text(&self, value: &databend_common_column::types::months_days_micros) -> String {
-        interval_to_string(value).to_string()
-    }
-
-    #[inline]
-    fn timestamp_tz_text(&self, value: timestamp_tz) -> String {
-        match self.settings.http_json_result_mode {
-            HttpHandlerDataFormat::Display => value.to_string(),
+    fn timestamp_tz_text(&self, value: timestamp_tz) -> impl Display + '_ {
+        fmt::from_fn(move |out| match self.settings.http_json_result_mode {
+            HttpHandlerDataFormat::Display => Display::fmt(&value, out),
             HttpHandlerDataFormat::Driver => {
-                format!("{} {}", value.timestamp(), value.seconds_offset())
+                write!(out, "{} {}", value.timestamp(), value.seconds_offset())
             }
-        }
+        })
     }
 
     #[inline]
@@ -552,16 +547,25 @@ setting binary_output_format to 'UTF-8-LOSSY'."
     }
 
     fn write_quoted_string(&self, value: &str, out: &mut String) {
-        let quote = self.quote_char as char;
-        let escape = self.escape_char as char;
-        out.push(quote);
+        out.push(self.quote_char as char);
+        self.write_quoted_content(value, out);
+        out.push(self.quote_char as char);
+    }
+
+    fn write_quoted_text(&self, value: impl Display, out: &mut String) {
+        out.push(self.quote_char as char);
+        let mut writer = TextWriter(|text: &str| self.write_quoted_content(text, out));
+        write!(writer, "{value}").unwrap();
+        out.push(self.quote_char as char);
+    }
+
+    fn write_quoted_content(&self, value: &str, out: &mut String) {
         for ch in value.chars() {
-            if ch == quote {
-                out.push(escape);
+            if ch == self.quote_char as char {
+                out.push(self.escape_char as char);
             }
             out.push(ch);
         }
-        out.push(quote);
     }
 }
 
