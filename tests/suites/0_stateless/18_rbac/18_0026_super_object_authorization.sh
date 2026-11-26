@@ -185,6 +185,13 @@ request super_public_creator "$procedure_body_sql" | jq -e '
 ' >/dev/null
 echo 'procedure row hidden when RBAC is enabled'
 
+bendsql_connect_root_null --query='GRANT ACCESS PROCEDURE ON PROCEDURE super_private_proc() TO ROLE super_creator_role;'
+request super_public_creator "$procedure_body_sql" '{"role":"super_creator_role"}' | jq -e '
+	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
+' >/dev/null
+echo 'procedure body visible with ACCESS PROCEDURE when RBAC is enabled'
+bendsql_connect_root_null --query='REVOKE ACCESS PROCEDURE ON PROCEDURE super_private_proc() FROM ROLE super_creator_role;'
+
 echo '=== Stage and UDF checks are on by default; SUPER can restore legacy behavior ==='
 expect_denied super_public_creator 'SELECT super_private_udf(1)' Usage
 expect_denied super_public_creator 'LIST @super_private_stage' Read

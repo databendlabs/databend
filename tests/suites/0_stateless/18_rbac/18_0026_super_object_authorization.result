@@ -49,6 +49,7 @@ denied
 visible=1
 === Procedure rows and bodies follow the RBAC switch ===
 procedure row hidden when RBAC is enabled
+procedure body visible with ACCESS PROCEDURE when RBAC is enabled
 === Stage and UDF checks are on by default; SUPER can restore legacy behavior ===
 denied
 denied
