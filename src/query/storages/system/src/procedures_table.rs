@@ -30,10 +30,8 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_meta_app::principal::GetProcedureReq;
-use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::ListProcedureReq;
 use databend_common_meta_app::principal::ProcedureIdentity;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -97,8 +95,8 @@ impl AsyncSystemTable for ProceduresTable {
 
         let enable_experimental_rbac_check =
             ctx.get_settings().get_enable_experimental_rbac_check()?;
-        let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
         let procedures = if enable_experimental_rbac_check {
+            let visibility_checker = ctx.get_visibility_checker(false, Object::Procedure).await?;
             all_procedures
                 .into_iter()
                 .filter(|p| visibility_checker.check_procedure_visibility(&p.ident.procedure_id()))
@@ -106,14 +104,6 @@ impl AsyncSystemTable for ProceduresTable {
         } else {
             all_procedures
         };
-
-        // Legacy listings expose metadata for all procedures, but definitions still
-        // require the same access as DESC PROCEDURE, including its SUPER bypass.
-        let can_read_all_listed_bodies = enable_experimental_rbac_check
-            || ctx
-                .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
-                .await
-                .is_ok();
 
         let mut names = Vec::with_capacity(procedures.len());
         let mut procedure_ids = Vec::with_capacity(procedures.len());
@@ -131,9 +121,8 @@ impl AsyncSystemTable for ProceduresTable {
         let mut bodies = Vec::with_capacity(procedures.len());
 
         for procedure in &procedures {
-            let procedure_id = *procedure.ident.procedure_id();
             names.push(procedure.name_ident.procedure_name().name.to_string());
-            procedure_ids.push(procedure_id);
+            procedure_ids.push(*procedure.ident.procedure_id());
             arguments.push(format!(
                 "{} RETURN ({})",
                 procedure.name_ident.procedure_name(),
@@ -144,9 +133,7 @@ impl AsyncSystemTable for ProceduresTable {
             comments.push(procedure.meta.comment.as_str());
 
             created_on_s.push(procedure.meta.created_on.timestamp_micros());
-            let can_read_body = can_read_all_listed_bodies
-                || visibility_checker.check_procedure_visibility(&procedure_id);
-            bodies.push(can_read_body.then_some(procedure.meta.script.as_str()));
+            bodies.push(procedure.meta.script.as_str());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -156,7 +143,7 @@ impl AsyncSystemTable for ProceduresTable {
             StringType::from_data(comments),
             StringType::from_data(descriptions),
             TimestampType::from_data(created_on_s),
-            StringType::from_opt_data(bodies),
+            StringType::from_data(bodies),
         ]))
     }
 }
@@ -173,10 +160,7 @@ impl ProceduresTable {
             TableField::new("comment", TableDataType::String),
             TableField::new("description", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new(
-                "body",
-                TableDataType::Nullable(Box::new(TableDataType::String)),
-            ),
+            TableField::new("body", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

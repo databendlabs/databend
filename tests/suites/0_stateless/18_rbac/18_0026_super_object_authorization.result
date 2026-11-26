@@ -47,6 +47,8 @@ allowed
 allowed
 denied
 visible=1
+=== Procedure rows and bodies follow the RBAC switch ===
+procedure row hidden when RBAC is enabled
 === Stage and UDF checks are on by default; SUPER can restore legacy behavior ===
 denied
 denied
@@ -54,10 +56,7 @@ denied
 allowed
 allowed
 allowed
-=== Legacy procedure listings expose metadata but not unauthorized bodies ===
-visible=1
-denied
-procedure body hidden without access, visible to SUPER
+procedure body visible when RBAC is disabled
 SHOW PROCEDURES omits the body column
 === Only direct SUPER or SUPER on the current role can change the global switches ===
 allowed

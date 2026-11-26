@@ -178,6 +178,13 @@ expect_allowed super_public_creator 'SELECT nextval(super_private_seq) FROM numb
 expect_denied super_public_creator 'DESC SEQUENCE super_private_seq' Super
 expect_visible super_public_creator 'SHOW SEQUENCES' super_private_seq 1
 
+echo '=== Procedure rows and bodies follow the RBAC switch ==='
+procedure_body_sql="SELECT body FROM system.procedures WHERE name = 'super_private_proc'"
+request super_public_creator "$procedure_body_sql" | jq -e '
+	.state == "Succeeded" and .error == null and .data == []
+' >/dev/null
+echo 'procedure row hidden when RBAC is enabled'
+
 echo '=== Stage and UDF checks are on by default; SUPER can restore legacy behavior ==='
 expect_denied super_public_creator 'SELECT super_private_udf(1)' Usage
 expect_denied super_public_creator 'LIST @super_private_stage' Read
@@ -186,18 +193,11 @@ expect_allowed super_direct_user "SET GLOBAL $rbac_check = 0"
 expect_allowed super_public_creator 'SELECT super_private_udf(1)'
 expect_allowed super_public_creator 'LIST @super_private_stage'
 
-echo '=== Legacy procedure listings expose metadata but not unauthorized bodies ==='
-procedure_body_sql="SELECT body FROM system.procedures WHERE name = 'super_private_proc'"
-expect_visible super_public_creator 'SELECT name FROM system.procedures' super_private_proc 1
-expect_denied super_public_creator 'DESC PROCEDURE super_private_proc()' AccessProcedure
 request super_public_creator "$procedure_body_sql" | jq -e '
-	.state == "Succeeded" and .error == null and .data == [[null]]
-' >/dev/null
-request super_direct_user "$procedure_body_sql" | jq -e '
 	.state == "Succeeded" and .error == null and .data == [["BEGIN RETURN 42; END;"]]
 ' >/dev/null
-echo 'procedure body hidden without access, visible to SUPER'
-request super_direct_user "SHOW PROCEDURES WHERE name = 'super_private_proc'" | jq -e '
+echo 'procedure body visible when RBAC is disabled'
+request super_public_creator "SHOW PROCEDURES WHERE name = 'super_private_proc'" | jq -e '
 	.state == "Succeeded" and .error == null and
 	(.schema | map(.name)) == ["name", "procedure_id", "arguments", "comment", "description", "created_on"] and
 	.data[0][0] == "super_private_proc"
