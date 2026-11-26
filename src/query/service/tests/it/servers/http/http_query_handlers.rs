@@ -2117,6 +2117,90 @@ async fn test_session_secondary_role_revoked_and_granted_again() -> anyhow::Resu
     Ok(())
 }
 
+/// A session token outlives the login it came from: once the user is disabled, neither the
+/// session token nor the refresh token may be used, and both work again once it is enabled.
+#[tokio::test(flavor = "current_thread")]
+async fn test_session_tokens_of_disabled_user_are_rejected() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE USER disabled_token_user IDENTIFIED BY 'test-password'")
+        .await?;
+
+    let mut caps = HeaderMap::new();
+    caps.insert(
+        HEADER_CLIENT_CAPABILITIES,
+        HeaderValue::from_static("session_header"),
+    );
+    let login = TestHttpQueryRequest::new(serde_json::json!({}))
+        .with_basic_auth("disabled_token_user", "test-password")
+        .with_headers(caps.clone())
+        .do_request_raw(Method::POST, "/v1/session/login")
+        .await?;
+    assert_eq!(login.status(), StatusCode::OK);
+    // Requests with the tokens carry the client session headers of the login, as clients do.
+    let mut headers = caps;
+    for (name, value) in login.headers() {
+        if name.as_str().starts_with("x-databend-session") {
+            headers.insert(name.clone(), value.clone());
+        }
+    }
+    let login: serde_json::Value = login.into_body().into_json().await?;
+    let session_token = login["tokens"]["session_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let refresh_token = login["tokens"]["refresh_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let with_token = |token: &str, json: serde_json::Value| -> anyhow::Result<_> {
+        let mut request = TestHttpQueryRequest::new(json).with_headers(headers.clone());
+        request.auth_header = format!("Bearer {token}").parse()?;
+        Ok(request)
+    };
+    let query = || with_token(&session_token, serde_json::json!({"sql": "SELECT 1"}));
+    let refresh = || {
+        with_token(
+            &refresh_token,
+            serde_json::json!({"session_token": session_token}),
+        )
+    };
+    let assert_disabled = |response: Response| async move {
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body = response.into_body().into_string().await?;
+        assert!(body.contains("is disabled"), "{body}");
+        anyhow::Ok(())
+    };
+
+    let (status, result, _) = query()?.fetch_begin().await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_none(), "{:?}", result.error);
+
+    fixture
+        .execute_command("ALTER USER disabled_token_user WITH DISABLED = TRUE")
+        .await?;
+    assert_disabled(query()?.do_request_raw(Method::POST, "/v1/query").await?).await?;
+    assert_disabled(
+        refresh()?
+            .do_request_raw(Method::POST, "/v1/session/refresh")
+            .await?,
+    )
+    .await?;
+
+    fixture
+        .execute_command("ALTER USER disabled_token_user WITH DISABLED = FALSE")
+        .await?;
+    let (status, result, _) = query()?.fetch_begin().await?;
+    assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_none(), "{:?}", result.error);
+    let response = refresh()?
+        .do_request_raw(Method::POST, "/v1/session/refresh")
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    Ok(())
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn test_auth_configured_user() -> anyhow::Result<()> {
     let user_name = "conf_user";

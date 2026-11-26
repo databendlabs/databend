@@ -145,6 +145,9 @@ impl AuthMgr {
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
                     let user_info = user_api.get_auth_user(&tenant, identity.clone()).await?;
+                    // A token outlives its login: a user disabled since then must not keep
+                    // querying, nor refresh the token.
+                    UserApiProvider::check_user_enabled(&user_info)?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
                 Ok((claim.user, Some(claim.session_id)))
