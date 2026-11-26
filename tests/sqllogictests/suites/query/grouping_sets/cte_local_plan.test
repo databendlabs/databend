@@ -93,11 +93,11 @@ query II
 SELECT count(*), sum(n)
 FROM (
     SELECT p,
-        (SELECT count(*) FROM (SELECT a, sum(v) AS s FROM t u WHERE u.p > t.p GROUP BY ROLLUP(a)) z) AS n
+        (SELECT count(*) FROM (SELECT a, sum(v) AS s FROM t u WHERE u.p >= t.p GROUP BY ROLLUP(a)) z) AS n
     FROM t GROUP BY p
 ) w
 ----
-40 156
+40 160
 
 # MERGE reads its source through a join with the target.
 statement ok

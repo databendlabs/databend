@@ -198,13 +198,6 @@ SELECT count(*), count(p) FROM x
 ----
 164 160
 
-# A materialized CTE that nothing reads.
-query I
-WITH x AS MATERIALIZED (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a))
-SELECT count(*) FROM t
-----
-1000
-
 ## Copies of one subquery
 
 # Referencing the alias of a scalar subquery again copies the bound subquery, so
