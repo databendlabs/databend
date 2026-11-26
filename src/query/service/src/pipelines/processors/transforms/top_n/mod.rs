@@ -15,7 +15,6 @@
 mod transform_final_top_n;
 mod transform_partial_top_n;
 
-use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::ChunkIndex;
 use databend_common_expression::DataBlock;
@@ -100,12 +99,7 @@ impl<R: Rows> TopNCandidates<R> {
 
         let (block, rows) = match &self.boundary {
             Some(bound) => {
-                let bound_item = R::scalar_as_item(bound);
-                let mut bitmap = MutableBitmap::with_capacity(rows.len());
-                for i in 0..rows.len() {
-                    bitmap.push(rows.row(i) <= bound_item);
-                }
-                let bitmap = bitmap.into();
+                let bitmap = rows.rows_le_bound(bound);
                 let block = block.filter_with_bitmap(&bitmap)?;
                 if block.is_empty() {
                     return Ok(());

@@ -19,12 +19,14 @@
 use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
@@ -37,11 +39,13 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_number_type;
 use databend_common_functions::scalars::dt_func::date_arithmetic::EvalMonthsImpl;
 use databend_common_functions::scalars::dt_func::date_conversion::calc_date_to_timestamp;
 use databend_common_pipeline::core::Event;
@@ -233,8 +237,7 @@ impl TransformWindow {
 
         debug_assert!(end.block == self.partition_end.block + 1);
 
-        let partition_by_columns = self.partition_indices.len();
-        if partition_by_columns == 0 {
+        if self.partition_indices.is_empty() {
             self.partition_size += self.block_rows(&self.partition_end);
             self.partition_end = end;
             return;
@@ -244,36 +247,36 @@ impl TransformWindow {
 
         let block_rows = self.block_rows(&self.partition_end);
 
-        // STEP 1: Increment `self.partition_end` until it reaches the end of the partition or the end of the block.
-        while self.partition_end.row < block_rows {
-            // STEP 2: Check each partition column to see if it has changed.
-            let mut i = 0;
-            while i < partition_by_columns {
-                // Should use `prev_frame_start` or `peer_group_start` because the block at `partition_start` may already be popped out of the buffer queue.
-                let index = if self.is_ranking {
-                    &self.peer_group_start
-                } else {
-                    &self.prev_frame_start
-                };
-                let start_column = self.entry_at(index, self.partition_indices[i]);
-                let compare_column = self.entry_at(&self.partition_end, self.partition_indices[i]);
+        // Should use `prev_frame_start` or `peer_group_start` because the block at `partition_start` may already be popped out of the buffer queue.
+        let index = if self.is_ranking {
+            self.peer_group_start
+        } else {
+            self.prev_frame_start
+        };
 
-                if unsafe {
-                    start_column.index_unchecked(index.row)
-                        != compare_column.index_unchecked(self.partition_end.row)
-                } {
-                    break;
-                }
-                i += 1;
+        // STEP 1: The partition goes on while every partition column equals its value at `index`,
+        // so it ends at the first row where any column changes.
+        let start = self.partition_end.row;
+        let mut len = block_rows - start;
+        for &offset in &self.partition_indices {
+            if len == 0 {
+                break;
             }
+            len = leading_entries_eq(
+                self.entry_at(&index, offset),
+                index.row,
+                self.entry_at(&self.partition_end, offset),
+                start..start + len,
+            );
+        }
+        self.partition_end.row += len;
+        self.partition_size += len;
 
-            // STEP 3: If any partition column has changed, we have reached the end of the partition.
-            if i < partition_by_columns {
-                self.partition_ended = true;
-                return;
-            }
-            self.partition_end.row += 1;
-            self.partition_size += 1;
+        // STEP 2: If a partition column has changed in this block, we have reached the end of
+        // the partition.
+        if self.partition_end.row < block_rows {
+            self.partition_ended = true;
+            return;
         }
 
         assert_eq!(self.partition_end.row, block_rows);
@@ -1623,6 +1626,89 @@ impl Processor for TransformWindow {
     }
 }
 
+/// The number of rows at the start of `rows` of `entry` that equal row `start_row` of `start`, as
+/// `ScalarRef` equality decides.
+fn leading_entries_eq(
+    start: &BlockEntry,
+    start_row: usize,
+    entry: &BlockEntry,
+    rows: Range<usize>,
+) -> usize {
+    match (start, entry) {
+        (BlockEntry::Column(start), BlockEntry::Column(column)) => {
+            leading_rows_eq(start, start_row, column, rows)
+        }
+        _ => {
+            let value = unsafe { start.index_unchecked(start_row) };
+            rows.take_while(|&i| value == unsafe { entry.index_unchecked(i) })
+                .count()
+        }
+    }
+}
+
+/// The number of rows at the start of `rows` of `column` that equal row `start_row` of `start`,
+/// as `ScalarRef` equality decides: nulls equal each other, and so do NaNs.
+///
+/// Strings compare by view against a probe of the start value, and numbers, dates and
+/// timestamps compare their native values, so no row builds a `ScalarRef`.
+fn leading_rows_eq(start: &Column, start_row: usize, column: &Column, rows: Range<usize>) -> usize {
+    fn leading_values_eq<T: PartialEq>(start: &[T], start_row: usize, values: &[T]) -> usize {
+        let value = &start[start_row];
+        values.iter().take_while(|v| *v == value).count()
+    }
+
+    match (start, column) {
+        (Column::String(start), Column::String(column)) => {
+            let probe = start.probe(start_row);
+            rows.take_while(|&i| column.equal_probe(i, &probe)).count()
+        }
+        (Column::Number(start), Column::Number(column)) => {
+            with_number_type!(|NUM_TYPE| match (start, column) {
+                (NumberColumn::NUM_TYPE(start), NumberColumn::NUM_TYPE(column)) => {
+                    leading_values_eq(start.as_slice(), start_row, &column.as_slice()[rows])
+                }
+                _ => leading_scalars_eq(
+                    &Column::Number(start.clone()),
+                    start_row,
+                    &Column::Number(column.clone()),
+                    rows
+                ),
+            })
+        }
+        (Column::Date(start), Column::Date(column)) => {
+            leading_values_eq(start.as_slice(), start_row, &column.as_slice()[rows])
+        }
+        (Column::Timestamp(start), Column::Timestamp(column)) => {
+            leading_values_eq(start.as_slice(), start_row, &column.as_slice()[rows])
+        }
+        (Column::Nullable(start), Column::Nullable(column)) => {
+            let validity = column.validity();
+            if !start.validity().get_bit(start_row) {
+                return rows.take_while(|&i| !validity.get_bit(i)).count();
+            }
+            let valid = rows.clone().take_while(|&i| validity.get_bit(i)).count();
+            leading_rows_eq(
+                start.column(),
+                start_row,
+                column.column(),
+                rows.start..rows.start + valid,
+            )
+        }
+        (start, column) => leading_scalars_eq(start, start_row, column, rows),
+    }
+}
+
+fn leading_scalars_eq(
+    start: &Column,
+    start_row: usize,
+    column: &Column,
+    rows: Range<usize>,
+) -> usize {
+    let value = unsafe { start.index_unchecked(start_row) };
+    rows.take_while(|&i| value == unsafe { column.index_unchecked(i) })
+        .count()
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -2851,5 +2937,84 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    /// Checks `leading_entries_eq` against comparing `ScalarRef`s, from every start row over
+    /// every range, with the start row in a column of its own.
+    fn assert_leading_eq_matches_scalars(column: &Column) {
+        let other = column.clone();
+        let entries = [
+            BlockEntry::Column(column.clone()),
+            BlockEntry::Const(
+                unsafe { column.index_unchecked(0) }.to_owned(),
+                column.data_type(),
+                column.len(),
+            ),
+        ];
+        for start_row in 0..column.len() {
+            let value = unsafe { other.index_unchecked(start_row) };
+            for begin in 0..=column.len() {
+                for entry in &entries {
+                    let expected = (begin..column.len())
+                        .take_while(|&i| value == unsafe { entry.index_unchecked(i) })
+                        .count();
+                    let actual = leading_entries_eq(
+                        &BlockEntry::Column(other.clone()),
+                        start_row,
+                        entry,
+                        begin..column.len(),
+                    );
+                    assert_eq!(
+                        actual, expected,
+                        "start {start_row}, rows {begin}.., {entry:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_leading_rows_eq_matches_scalars() {
+        use databend_common_column::bitmap::Bitmap;
+        use databend_common_expression::types::DateType;
+        use databend_common_expression::types::Float64Type;
+        use databend_common_expression::types::StringType;
+
+        let strings = StringType::from_data(vec![
+            "",
+            "",
+            "\0",
+            "abcd",
+            "abcd",
+            "abcd\0",
+            "abcdefghijkl",
+            "abcdefghijkl",
+            "abcdefghijklm",
+            "https://www.example.com/a",
+            "https://www.example.com/a",
+            "https://www.example.com/b",
+        ]);
+        assert_leading_eq_matches_scalars(&strings);
+        assert_leading_eq_matches_scalars(&Int32Type::from_data(vec![1, 1, 2, 2, 2, 3, 1]));
+        // NaNs equal each other, and -0.0 equals 0.0.
+        assert_leading_eq_matches_scalars(&Float64Type::from_data(vec![
+            f64::NAN,
+            f64::NAN,
+            0.0,
+            -0.0,
+            1.0,
+        ]));
+        assert_leading_eq_matches_scalars(&DateType::from_data(vec![7, 7, 8]));
+        // Nulls equal each other, whatever value sits under them.
+        let validity: Bitmap = [true, true, false, false, true, false, true]
+            .into_iter()
+            .collect();
+        assert_leading_eq_matches_scalars(
+            &StringType::from_data(vec!["a", "a", "a", "b", "b", "b", "b"])
+                .wrap_nullable(Some(validity.clone())),
+        );
+        assert_leading_eq_matches_scalars(
+            &Int32Type::from_data(vec![1, 1, 1, 2, 2, 2, 2]).wrap_nullable(Some(validity)),
+        );
     }
 }

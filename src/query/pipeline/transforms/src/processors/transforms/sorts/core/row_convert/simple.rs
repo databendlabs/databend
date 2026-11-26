@@ -17,12 +17,15 @@ use std::cmp::Reverse;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use databend_common_column::binview::ViewProbe;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -77,6 +80,18 @@ where for<'a> Self::ScalarRef<'a>: Ord + Send
         rows.take_while(|&i| unsafe { Self::index_column_unchecked(a, i) } == value)
             .count()
     }
+
+    /// Which rows of `column` have an order against `bound` that satisfies `keep`.
+    fn rows_by_bound(
+        column: &Self::Column,
+        bound: &Scalar,
+        keep: impl Fn(Ordering) -> bool,
+    ) -> Bitmap {
+        let bound = Self::try_downcast_scalar(&bound.as_ref()).unwrap();
+        Bitmap::collect_bool(Self::column_len(column), |i| {
+            keep(unsafe { Self::index_column_unchecked(column, i) }.cmp(&bound))
+        })
+    }
 }
 
 impl<N: Number> SimpleRowsType for NumberType<N> {}
@@ -116,6 +131,17 @@ impl SimpleRowsType for StringType {
     fn leading_rows_eq(a: &Self::Column, rows: Range<usize>, b: &Self::Column, j: usize) -> usize {
         let probe = b.probe(j);
         rows.take_while(|&i| a.equal_probe(i, &probe)).count()
+    }
+
+    /// Prepares `bound` once, so each row is compared with it by view.
+    fn rows_by_bound(
+        column: &Self::Column,
+        bound: &Scalar,
+        keep: impl Fn(Ordering) -> bool,
+    ) -> Bitmap {
+        let bound = Self::try_downcast_scalar(&bound.as_ref()).unwrap();
+        let probe = ViewProbe::new(bound.as_bytes());
+        Bitmap::collect_bool(column.len(), |i| keep(column.compare_probe(i, &probe)))
     }
 }
 
@@ -164,6 +190,10 @@ where
     #[inline]
     fn leading_rows_eq(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
         T::leading_rows_eq(&self.inner, rows, &other.inner, j)
+    }
+
+    fn rows_le_bound(&self, bound: &Scalar) -> Bitmap {
+        T::rows_by_bound(&self.inner, bound, Ordering::is_le)
     }
 
     fn to_column(&self) -> Column {
@@ -239,6 +269,11 @@ where
     #[inline]
     fn leading_rows_eq(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
         T::leading_rows_eq(&self.inner, rows, &other.inner, j)
+    }
+
+    /// Rows sorted descending are within the bound when they are not less than it.
+    fn rows_le_bound(&self, bound: &Scalar) -> Bitmap {
+        T::rows_by_bound(&self.inner, bound, Ordering::is_ge)
     }
 
     fn to_column(&self) -> Column {

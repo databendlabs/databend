@@ -36,6 +36,13 @@ fn assert_row_comparisons_match_items<R: Rows>(lhs: &Column, rhs: &Column) {
             assert_eq!(lhs.eq_rows(i, &rhs, j), a == b, "eq_rows({a:?}, {b:?})");
         }
     }
+    for j in 0..rhs.len() {
+        let bound = R::owned_item(rhs.row(j));
+        let b = rhs.row(j);
+        let expected = (0..lhs.len()).map(|i| lhs.row(i) <= b).collect::<Vec<_>>();
+        let actual = lhs.rows_le_bound(&bound).iter().collect::<Vec<_>>();
+        assert_eq!(actual, expected, "rows_le_bound({b:?})");
+    }
     for start in 0..=lhs.len() {
         for j in 0..rhs.len() {
             let b = rhs.row(j);

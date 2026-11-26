@@ -16,6 +16,8 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::ops::Range;
 
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
@@ -65,6 +67,16 @@ where Self: Sized + Clone + Debug + Send
     fn leading_rows_eq(&self, rows: Range<usize>, other: &Self, j: usize) -> usize {
         let item = other.row(j);
         rows.take_while(|&i| self.row(i) == item).count()
+    }
+
+    /// Which rows are less than or equal to `bound`, the boundary of a TopN.
+    fn rows_le_bound(&self, bound: &Scalar) -> Bitmap {
+        let bound = Self::scalar_as_item(bound);
+        let mut bitmap = MutableBitmap::with_capacity(self.len());
+        for i in 0..self.len() {
+            bitmap.push(self.row(i) <= bound);
+        }
+        bitmap.into()
     }
 
     fn to_column(&self) -> Column;
