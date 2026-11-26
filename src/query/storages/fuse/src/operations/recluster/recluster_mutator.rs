@@ -36,6 +36,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MAX_SEGMENT_LOCATIONS_PER_CLAIM;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_storage::ColumnNodes;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -61,6 +62,7 @@ use crate::io::FuseCaches;
 use crate::io::SegmentStatsReader;
 use crate::io::VirtualColumnLayoutPlanner;
 use crate::io::VirtualColumnLayoutPolicy;
+use crate::operations::TtlDrop;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterBlock;
@@ -321,6 +323,8 @@ pub struct ReclusterMutator {
     pub(crate) properties: ReclusterProperties,
     strategy: Arc<dyn ReclusterStrategy>,
     virtual_column_layout_policy: VirtualColumnLayoutPolicy,
+    /// Drop the blocks of the scanned segments that expired by the table TTL.
+    pub(crate) ttl: Option<Arc<TtlDrop>>,
 }
 
 /// Caps the selected block bytes of one recluster task.
@@ -444,6 +448,7 @@ impl ReclusterMutator {
             properties,
             strategy,
             virtual_column_layout_policy: table.virtual_column_layout_policy(),
+            ttl: None,
         })
     }
 
@@ -452,6 +457,19 @@ impl ReclusterMutator {
     pub fn with_vector_full_pass(mut self, blocks: Option<Arc<HashSet<String>>>) -> Self {
         self.properties.vector_full_pass = blocks;
         self
+    }
+
+    /// Build tasks only on the blocks that did not expire by the TTL, and drop
+    /// the expired ones of the segments the round replaces.
+    pub fn with_ttl(mut self, ttl: Option<Arc<TtlDrop>>) -> Self {
+        self.ttl = ttl;
+        self
+    }
+
+    fn block_expired(&self, block: &BlockMeta) -> bool {
+        self.ttl
+            .as_ref()
+            .is_some_and(|ttl| ttl.block_expired(block))
     }
 
     /// Build a recluster mutator directly for tests.
@@ -494,6 +512,7 @@ impl ReclusterMutator {
             properties,
             strategy,
             virtual_column_layout_policy: Default::default(),
+            ttl: None,
         }
     }
 
@@ -528,8 +547,15 @@ impl ReclusterMutator {
             .await?;
         let mut blocks = Vec::with_capacity(total_block_count);
         for segment_blocks in &blocks_by_segment {
-            blocks.extend(segment_blocks.iter());
+            // Candidates are built only on the blocks that did not expire. The
+            // expired ones are dropped once their segment is replaced.
+            blocks.extend(
+                segment_blocks
+                    .iter()
+                    .filter(|block| !self.block_expired(&block.meta)),
+            );
         }
+        let live_block_count = blocks.len();
 
         let mut candidate_window = ReclusterCandidateWindow {
             segments: window_segments,
@@ -580,8 +606,8 @@ impl ReclusterMutator {
             };
             let selected_segment_count = window_segment_infos.len();
             let target_segment_count =
-                total_block_count.div_ceil(self.properties.block_thresholds.block_per_segment);
-            let compactable_repack = total_block_count > 0
+                live_block_count.div_ceil(self.properties.block_thresholds.block_per_segment);
+            let compactable_repack = live_block_count > 0
                 && selected_segment_count > 1
                 && target_segment_count < selected_segment_count;
             let unordered_repack = self.properties.mode == ReclusterMode::Conservative
@@ -1258,10 +1284,20 @@ impl ReclusterMutator {
 
         let mut virtual_schemas = Vec::new();
         let mut retained = Vec::new();
+        let mut ttl_deleted_rows = 0;
         for (segment_idx, segment) in removed_segment_infos {
-            let indices = (0..segment.blocks.len())
-                .filter(|block_idx| !selected_block_keys.contains(&(segment_idx, *block_idx)))
-                .collect::<Vec<_>>();
+            let mut indices = Vec::with_capacity(segment.blocks.len());
+            for (block_idx, block) in segment.blocks.iter().enumerate() {
+                if selected_block_keys.contains(&(segment_idx, block_idx)) {
+                    continue;
+                }
+                // The segment is replaced: its expired blocks go away with it.
+                if self.block_expired(block) {
+                    ttl_deleted_rows += block.row_count;
+                } else {
+                    indices.push(block_idx);
+                }
+            }
             if indices.is_empty() {
                 continue;
             }
@@ -1293,7 +1329,104 @@ impl ReclusterMutator {
             virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
+            ttl_deleted_rows,
         }))
+    }
+
+    /// Spend the claim capacity the selected tasks leave on the other scanned
+    /// segments with expired blocks, like ClickHouse TTLDrop merges: segments
+    /// that expired as a whole first, then those with the most expired rows.
+    /// Their surviving blocks are carried into the new segments unchanged.
+    #[async_backtrace::framed]
+    pub async fn fill_ttl_drops(
+        &self,
+        parts: &mut ReclusterParts,
+        scanned: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+    ) -> Result<()> {
+        let Some(ttl) = &self.ttl else {
+            return Ok(());
+        };
+        let capacity =
+            MAX_SEGMENT_LOCATIONS_PER_CLAIM.saturating_sub(parts.removed_segment_indexes.len());
+        if capacity == 0 || scanned.is_empty() {
+            return Ok(());
+        }
+
+        let removed = parts
+            .removed_segment_indexes
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        let segment_cache = FuseCaches::instance()
+            .segments
+            .with_policy(self.ctx.cache_policy());
+        let mut candidates = Vec::new();
+        for (location, info) in scanned {
+            if removed.contains(&location.segment_idx) {
+                continue;
+            }
+            if ttl.segment_expired(&info.summary) {
+                let rows = info.summary.row_count;
+                candidates.push((true, rows, location, info, None));
+                continue;
+            }
+            if !ttl.segment_may_expire(&info.summary) {
+                continue;
+            }
+            let blocks = segment_cache.block_metas(&location.location.0, || info.block_metas())?;
+            let rows = blocks
+                .iter()
+                .filter(|block| ttl.block_expired(block))
+                .map(|block| block.row_count)
+                .sum::<u64>();
+            if rows > 0 {
+                candidates.push((false, rows, location, info, Some(blocks)));
+            }
+        }
+        candidates.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+        candidates.truncate(capacity);
+
+        let cluster_key_info = Some(&self.properties.cluster_key_info);
+        let mut retained = Vec::new();
+        for (_, rows, location, info, blocks) in candidates {
+            parts.removed_segment_indexes.push(location.segment_idx);
+            merge_statistics_mut(
+                &mut parts.removed_segment_summary,
+                &info.summary,
+                cluster_key_info,
+            );
+            parts.ttl_deleted_rows += rows;
+            // A segment that expired as a whole leaves nothing to carry.
+            let Some(blocks) = blocks else {
+                continue;
+            };
+            let indices = blocks
+                .iter()
+                .enumerate()
+                .filter(|(_, block)| !ttl.block_expired(block))
+                .map(|(idx, _)| idx)
+                .collect::<Vec<_>>();
+            if indices.is_empty() {
+                continue;
+            }
+            let virtual_schema_index = parts.virtual_schemas.len();
+            parts
+                .virtual_schemas
+                .push(info.summary.virtual_segment_schema.clone().map(Arc::new));
+            let segment = Arc::new(SegmentInfo {
+                format_version: info.format_version,
+                blocks: blocks.to_vec(),
+                summary: info.summary.clone(),
+            });
+            retained.push((virtual_schema_index, segment, indices));
+        }
+        parts
+            .remained_blocks
+            .extend(self.gather_retained_blocks(retained).await?);
+        parts
+            .removed_segment_indexes
+            .sort_unstable_by(|a, b| b.cmp(a));
+        Ok(())
     }
 
     // Capture group selection time in tracing without duplicating strategy summaries.

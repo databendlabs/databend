@@ -191,6 +191,7 @@ impl IPhysicalPlan for CommitSink {
                                 recluster_info.merged_blocks,
                                 recluster_info.virtual_schemas,
                             )
+                            .with_ttl_deleted_rows(recluster_info.ttl_deleted_rows)
                         });
                 }
 

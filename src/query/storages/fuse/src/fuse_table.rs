@@ -1655,7 +1655,6 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
-        self.check_format_supported()?;
         self.do_compact_blocks(ctx, limits).await
     }
 

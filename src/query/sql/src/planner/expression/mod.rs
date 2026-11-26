@@ -18,6 +18,6 @@ mod udf_validator;
 
 pub use expression_parser::*;
 pub(crate) use ttl::bind_ttl_definition;
-pub(crate) use ttl::materialize_ttl_predicate;
+pub use ttl::materialize_ttl_predicate;
 pub use udf_validator::UDFValidator;
 pub use udf_validator::UdfValidationConfig;

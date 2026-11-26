@@ -32,6 +32,7 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
+use crate::operations::TtlDrop;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
@@ -150,8 +151,28 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.compact_blocks_with_ttl(ctx, limits, None).await
+    }
+
+    /// Compact blocks; with `ttl`, also drop the blocks of the scanned segments
+    /// whose statistics prove every row expired.
+    #[async_backtrace::framed]
+    pub async fn compact_blocks_with_ttl(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        limits: CompactionLimits,
+        ttl: Option<Arc<TtlDrop>>,
+    ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.check_format_supported()?;
+        // A single block needs no compaction, but may still have expired.
+        let min_blocks = if ttl.is_some() { 1 } else { 2 };
         let compact_options = if let Some(v) = self
-            .compact_options(limits.segment_limit, limits.block_limit, ctx.cache_policy())
+            .compact_options(
+                limits.segment_limit,
+                limits.block_limit,
+                ctx.cache_policy(),
+                min_blocks,
+            )
             .await?
         {
             v
@@ -170,6 +191,7 @@ impl FuseTable {
         mutator.partition_key_count = self.partition_key_count();
         mutator.partition_key_id = self.partition_key_id();
         mutator.virtual_column_layout_policy = self.virtual_column_layout_policy();
+        mutator.ttl = ttl;
 
         let partitions = mutator.target_select().await?;
         if partitions.is_empty() {
@@ -187,7 +209,8 @@ impl FuseTable {
         num_segment_limit: Option<usize>,
         policy: CachePolicy,
     ) -> Result<Option<CompactOptions>> {
-        self.compact_options(num_segment_limit, None, policy).await
+        self.compact_options(num_segment_limit, None, policy, 2)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -196,6 +219,7 @@ impl FuseTable {
         num_segment_limit: Option<usize>,
         num_block_limit: Option<usize>,
         policy: CachePolicy,
+        min_blocks: u64,
     ) -> Result<Option<CompactOptions>> {
         let snapshot_opt = self.read_table_snapshot_with_policy(policy).await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
@@ -205,7 +229,7 @@ impl FuseTable {
             return Ok(None);
         };
 
-        if base_snapshot.summary.block_count <= 1 {
+        if base_snapshot.summary.block_count < min_blocks {
             return Ok(None);
         }
 

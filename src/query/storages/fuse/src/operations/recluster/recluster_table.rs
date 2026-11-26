@@ -45,6 +45,7 @@ use tokio::sync::Semaphore;
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::io::SegmentsIO;
+use crate::operations::TtlDrop;
 use crate::operations::recluster::CandidateScore;
 use crate::operations::recluster::ReclusterCandidateWindow;
 use crate::operations::recluster::ReclusterFinalCarry;
@@ -305,6 +306,7 @@ impl FuseTable {
         mode: ReclusterMode,
         carry: &mut ReclusterFinalCarry,
         claimed_segments: &HashSet<String>,
+        ttl: Option<Arc<TtlDrop>>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
 
@@ -329,7 +331,8 @@ impl FuseTable {
 
         let mutator = Arc::new(
             ReclusterMutator::try_create(self, ctx.clone(), snapshot.as_ref(), mode)?
-                .with_vector_full_pass(carry.vector_full_pass.clone()),
+                .with_vector_full_pass(carry.vector_full_pass.clone())
+                .with_ttl(ttl),
         );
 
         // Carry is tied to the current cluster key because cached block metas
@@ -459,6 +462,9 @@ impl FuseTable {
             let mut pending_windows = valid_carry;
             // Tracks whether LIMIT has consumed a non-pruned scan range.
             let mut scan_had_compact_segments = false;
+            // Scanned segments whose expired blocks the claim capacity left by the
+            // selected tasks may drop.
+            let mut ttl_scanned = Vec::new();
 
             if !scan_locations.is_empty() {
                 let scan_segments = scan_locations.len();
@@ -479,13 +485,18 @@ impl FuseTable {
                         *max_concurrency,
                     )
                 };
-                let probe_segments = Self::segment_pruning(
+                let mut probe_segments = Self::segment_pruning(
                     pruning_ctx,
                     segment_pruner,
                     max_concurrency,
                     scan_locations,
                 )
                 .await?;
+                if let Some(ttl) = &mutator.ttl {
+                    // A segment that expired as a whole forms no task.
+                    ttl_scanned = probe_segments.clone();
+                    probe_segments.retain(|(_, info)| !ttl.segment_expired(&info.summary));
+                }
 
                 let status = format!(
                     "[FUSE-RECLUSTER] Scanned segment range: scan_start={} scan_end={} scanned_segments={} probe_segments={} segment_progress={}/{} elapsed={:?}",
@@ -591,7 +602,7 @@ impl FuseTable {
                 }
             }
 
-            let (_, parts) = if pending_windows.is_empty() {
+            let (_, mut parts) = if pending_windows.is_empty() {
                 (0, ReclusterParts::default())
             } else {
                 // Step 3: choose task candidates. Reaching the early-accept
@@ -656,6 +667,9 @@ impl FuseTable {
                     .materialize_task_candidates(&live_segments, selected)
                     .await?
             };
+
+            // Tasks first; TTL drops take the claim capacity they leave.
+            mutator.fill_ttl_drops(&mut parts, ttl_scanned).await?;
 
             if parts.removed_segment_indexes.len() > MAX_SEGMENT_LOCATIONS_PER_CLAIM {
                 return Err(ErrorCode::Internal(format!(

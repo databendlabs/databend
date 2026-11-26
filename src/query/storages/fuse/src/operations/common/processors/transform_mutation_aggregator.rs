@@ -308,6 +308,13 @@ impl TableMutationAggregator {
         self
     }
 
+    /// Rows of the blocks the planner dropped because they expired by the TTL.
+    /// They never reach the mutation logs, so the commit learns them here.
+    pub fn with_ttl_deleted_rows(mut self, rows: u64) -> Self {
+        self.logical_deleted_rows += rows;
+        self
+    }
+
     fn accumulate_top_n(&mut self, top_n: Option<BlockTopN>) -> Result<()> {
         if let Some(top_n) = top_n
             && !top_n.is_empty()
@@ -734,6 +741,15 @@ impl TableMutationAggregator {
                         )));
                     }
                     assert!(segment_mutation.deleted_blocks.is_empty());
+                    // TTL dropped every block of the compact group: nothing replaces
+                    // it. Its source segments are removed with their statistics.
+                    if segment_mutation.replaced_blocks.is_empty() {
+                        return Ok(SegmentLite {
+                            index,
+                            new_segment_info: None,
+                            origin_summary: None,
+                        });
+                    }
                     // There are more than 1 blocks, means that the blocks can no longer be compacted.
                     // They can be marked as perfect blocks.
                     force_all_blocks_perfect = segment_mutation.replaced_blocks.len() > 1;

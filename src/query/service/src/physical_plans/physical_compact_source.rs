@@ -14,9 +14,11 @@
 
 use std::any::Any;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::cache_policy::CachePolicy;
+use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -40,9 +42,11 @@ use databend_common_storages_fuse::operations::CompactSource as FuseCompactSourc
 use databend_common_storages_fuse::operations::CompactTransform;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::TtlDrop;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::interpreters::common::MaintenanceTtl;
 use crate::interpreters::common::check_expected_table_id;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
@@ -63,6 +67,9 @@ pub struct CompactSource {
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
     pub table_meta_timestamps: TableMetaTimestamps,
+    /// The TTL predicate lazy parts drop expired blocks by on every node.
+    #[serde(default)]
+    pub ttl: Option<Filters>,
 }
 
 #[typetag::serde]
@@ -86,6 +93,7 @@ impl IPhysicalPlan for CompactSource {
             table_info: self.table_info.clone(),
             column_ids: self.column_ids.clone(),
             table_meta_timestamps: self.table_meta_timestamps,
+            ttl: self.ttl.clone(),
         })
     }
 
@@ -110,6 +118,18 @@ impl IPhysicalPlan for CompactSource {
         if is_lazy {
             let query_ctx = builder.ctx.clone();
             let dal = table.get_operator();
+            let ttl = self
+                .ttl
+                .as_ref()
+                .map(|filters| {
+                    TtlDrop::try_create(
+                        builder.ctx.get_function_context()?,
+                        filters,
+                        table.schema(),
+                    )
+                    .map(Arc::new)
+                })
+                .transpose()?;
 
             let lazy_parts = self
                 .parts
@@ -137,6 +157,7 @@ impl IPhysicalPlan for CompactSource {
                                 thresholds,
                                 virtual_column_layout_policy,
                                 lazy_parts,
+                                ttl,
                             )
                             .await?;
 
@@ -254,8 +275,20 @@ impl PhysicalPlanBuilder {
 
         let table_info = tbl.get_table_info().clone();
 
-        let Some((parts, snapshot)) = tbl.compact_blocks(self.ctx.clone(), limit.clone()).await?
-        else {
+        let ttl = MaintenanceTtl::bind(&self.ctx, &tbl);
+        let selected = match &ttl {
+            Some(ttl) => {
+                FuseTable::try_from_table(tbl.as_ref())?
+                    .compact_blocks_with_ttl(
+                        self.ctx.clone(),
+                        limit.clone(),
+                        Some(ttl.build(&self.ctx, tbl.as_ref())?),
+                    )
+                    .await?
+            }
+            None => tbl.compact_blocks(self.ctx.clone(), limit.clone()).await?,
+        };
+        let Some((parts, snapshot)) = selected else {
             return Err(ErrorCode::NoNeedToCompact(format!(
                 "No need to do compact for '{database}'.'{table}'"
             )));
@@ -271,6 +304,7 @@ impl PhysicalPlanBuilder {
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             table_meta_timestamps,
+            ttl: ttl.as_ref().map(|ttl| ttl.filters.clone()),
             meta: PhysicalPlanMeta::new("ConstantTableScan"),
         });
 
@@ -298,7 +332,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             table_meta_timestamps,
             meta: PhysicalPlanMeta::new("CommitSink"),
-            expected_ttl: None,
+            expected_ttl: ttl.map(|ttl| ttl.definition),
         });
 
         root.adjust_plan_id(&mut 0);

@@ -141,7 +141,7 @@ fn timestamp_literal(micros: i64) -> Result<AstExpr> {
 /// Build a column-to-constant DELETE predicate, preserving ordinary SQL time-zone
 /// arithmetic. Retention TTL uses column < cutoff - interval, not column +
 /// interval <= cutoff: these are deliberately different at calendar boundaries.
-pub(crate) fn materialize_ttl_predicate(
+pub fn materialize_ttl_predicate(
     ctx: Arc<dyn TableContext>,
     schema: &TableSchemaRef,
     sql: &str,

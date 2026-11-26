@@ -135,6 +135,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             meta: PhysicalPlanMeta::new("CompactSource"),
             table_meta_timestamps,
+            ttl: None,
         });
 
         let physical_plan: PhysicalPlan = PhysicalPlan::new(CommitSink {

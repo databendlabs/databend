@@ -39,11 +39,13 @@ use databend_common_sql::bind_table;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReclusterFinalCarry;
 use databend_common_storages_fuse::operations::ReclusterMode;
+use databend_common_storages_fuse::operations::TtlDrop;
 use databend_common_storages_fuse::operations::VectorFinalPlan;
 use databend_common_storages_fuse::operations::VectorReclusterBlock;
 use databend_common_storages_fuse::operations::is_auto_vacuum_enabled;
@@ -58,6 +60,7 @@ use rand::Rng;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::interpreters::common::MaintenanceTtl;
 use crate::interpreters::common::check_expected_table_id;
 use crate::interpreters::common::check_maintenance_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
@@ -75,6 +78,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextQueryState;
@@ -153,6 +157,10 @@ impl Interpreter for ReclusterTableInterpreter {
             let start = SystemTime::now();
             let timeout = Duration::from_secs(recluster_timeout_secs);
             let is_final = self.plan.is_final;
+            // Like ClickHouse TTLDrop, the rounds drop the blocks of the scanned
+            // segments that expired by the TTL. `RECLUSTER WHERE` rewrites only the
+            // selected rows and does not apply TTL.
+            let ttl = self.maintenance_ttl().await;
             // Vector FINAL: what it does is decided from the blocks when it starts (see
             // `vector_final_plan`); the full pass starts at once. This scans every block
             // meta, so it is skipped when FINAL rewrites part of the table at most:
@@ -201,7 +209,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
                 rounds += 1;
                 let res = self
-                    .execute_recluster(&mut push_downs, &mut linear_final_carry)
+                    .execute_recluster(&mut push_downs, &mut linear_final_carry, ttl.as_ref())
                     .await;
 
                 match res {
@@ -399,10 +407,39 @@ impl ReclusterTableInterpreter {
         }
     }
 
+    async fn maintenance_ttl(&self) -> Option<MaintenanceTtl> {
+        if self.plan.selection.is_some() || !matches!(self.plan.target, MaintenanceTarget::Table) {
+            return None;
+        }
+        let ReclusterPlan {
+            catalog,
+            database,
+            table,
+            ..
+        } = &self.plan;
+        let tbl = self.ctx.get_table(catalog, database, table).await.ok()?;
+        let ctx: Arc<dyn TableContext> = self.ctx.clone();
+        MaintenanceTtl::bind(&ctx, &tbl)
+    }
+
+    /// The TTL a round on `tbl` drops expired blocks by: not once the TTL changed.
+    fn ttl_drop(&self, ttl: Option<&MaintenanceTtl>, tbl: &dyn Table) -> Option<Arc<TtlDrop>> {
+        let ttl = ttl.filter(|ttl| ttl.applies_to(tbl))?;
+        let ctx: Arc<dyn TableContext> = self.ctx.clone();
+        match ttl.build(&ctx, tbl) {
+            Ok(ttl) => Some(ttl),
+            Err(e) => {
+                warn!("recluster: skip TTL: {e}");
+                None
+            }
+        }
+    }
+
     async fn execute_recluster(
         &self,
         push_downs: &mut Option<PushDownInfo>,
         linear_final_carry: &mut ReclusterFinalCarry,
+        ttl: Option<&MaintenanceTtl>,
     ) -> Result<ReclusterRoundOutcome> {
         self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
@@ -455,6 +492,7 @@ impl ReclusterTableInterpreter {
                     *limit,
                     linear_final_carry,
                     &claimed_segments,
+                    self.ttl_drop(ttl, tbl.as_ref()),
                 )
                 .await?;
             let Some((parts, snapshot, segments)) = candidate else {
@@ -493,7 +531,7 @@ impl ReclusterTableInterpreter {
             check_expected_table_id(tbl.get_id(), self.plan.expected_table_id)?;
         };
         let mut physical_plan =
-            self.build_linear_plan(tbl.as_ref(), parts, snapshot, claim_manager.is_some())?;
+            self.build_linear_plan(tbl.as_ref(), parts, snapshot, claim_manager.is_some(), ttl)?;
         physical_plan.adjust_plan_id(&mut 0);
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
@@ -565,6 +603,7 @@ impl ReclusterTableInterpreter {
         limit: Option<usize>,
         linear_final_carry: &mut ReclusterFinalCarry,
         claimed_segments: &HashSet<String>,
+        ttl: Option<Arc<TtlDrop>>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>, Vec<String>)>> {
         let fuse_table = FuseTable::try_from_table(tbl)?;
         // Missing `aggressive_recluster` marks a pre-option clustered table. Keep
@@ -585,6 +624,7 @@ impl ReclusterTableInterpreter {
                 mode,
                 linear_final_carry,
                 claimed_segments,
+                ttl,
             )
             .await?
         else {
@@ -618,6 +658,7 @@ impl ReclusterTableInterpreter {
         parts: ReclusterParts,
         snapshot: Arc<TableSnapshot>,
         acquire_commit_lock: bool,
+        ttl: Option<&MaintenanceTtl>,
     ) -> Result<PhysicalPlan> {
         let table_meta_timestamps = self
             .ctx
@@ -630,7 +671,12 @@ impl ReclusterTableInterpreter {
             virtual_schemas,
             removed_segment_indexes,
             removed_segment_summary,
+            ttl_deleted_rows,
         } = parts;
+        // A round that drops expired blocks must not commit over a changed TTL.
+        let expected_ttl = ttl
+            .filter(|_| ttl_deleted_rows > 0)
+            .map(|ttl| ttl.definition.clone());
         // Keep a single batch local, even if it contains multiple tasks.
         // Distributed placement preserves whole batches; unbatched strategies
         // route one task per node.
@@ -670,9 +716,10 @@ impl ReclusterTableInterpreter {
                 removed_segment_indexes,
                 removed_statistics: removed_segment_summary,
                 acquire_commit_lock,
+                ttl_deleted_rows,
             }),
             meta: PhysicalPlanMeta::new("CommitSink"),
-            expected_ttl: None,
+            expected_ttl,
         }))
     }
 
