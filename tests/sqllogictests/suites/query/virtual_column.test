@@ -156,7 +156,7 @@ select virtual_column_size, virtual_column_count, virtual_schema from fuse_virtu
 query IIBT
 select virtual_column_size, row_count, virtual_columns_complete, virtual_column_metas from fuse_virtual_column_block_meta('test_virtual_column', 't2')
 ----
-819 3 1 [{"column_id":0,"column_stat":{"in_memory_size":25,"max":22,"min":11,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":4,"path":"val.a"},{"column_id":1,"column_stat":{"in_memory_size":25,"max":2,"min":1,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":44,"path":"val.b"},{"column_id":2,"column_stat":{"in_memory_size":49,"max":"test","min":"data","null_count":1},"data_type":"String","len":40,"num_values":3,"offset":84,"path":"val.c"}]
+819 3 1 [{"column_id":0,"column_stat":{"in_memory_size":25,"max":22,"min":11,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":4,"path":"val.a"},{"column_id":1,"column_stat":{"in_memory_size":25,"max":2,"min":1,"null_count":1},"data_type":"UInt64","len":40,"num_values":3,"offset":44,"path":"val.b"},{"column_id":2,"column_stat":{"in_memory_size":49,"max":"test","min":"data","null_count":1},"data_type":"String","len":42,"num_values":3,"offset":84,"path":"val.c"}]
 
 query IIIIII
 select block_count, row_count, bytes_uncompressed, bytes_compressed, index_size, virtual_block_count from fuse_segment('test_virtual_column', 't2')
