@@ -114,12 +114,22 @@ impl SnapshotGenerator for MutationGenerator {
                         replaced,
                         removed,
                     );
+                    let previous_summary = previous.summary();
+                    let replaces_all_rows =
+                        previous_summary.row_count == ctx.removed_statistics.row_count;
                     let mut new_summary = merge_statistics(
-                        previous.summary(),
+                        previous_summary,
                         &ctx.merged_statistics,
                         cluster_key_info.as_ref(),
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
+                    if replaces_all_rows {
+                        // The rows the mutation puts in place are all there is, so
+                        // their column statistics are the table's. A column that was
+                        // unknown over the previous rows, such as one added after they
+                        // were written, is known again once all of them are rewritten.
+                        new_summary.col_stats = ctx.merged_statistics.col_stats.clone();
+                    }
 
                     let table_statistics_location = table_stats_gen.table_statistics_location();
                     for (id, ndv) in table_stats_gen.column_distinct_values() {

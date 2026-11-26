@@ -36,6 +36,7 @@ use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::statistics::default_columns_statistics;
 use databend_common_storages_iceberg::table::ICEBERG_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_meta_client::types::MatchSeq;
@@ -198,6 +199,21 @@ impl Interpreter for AddTableColumnInterpreter {
                 )));
             }
 
+            // The rows written so far do not store the new column and all read as its
+            // default. This is the one moment that is known for certain, so it is when
+            // the table summary learns the column. A column refreshed by the update
+            // below, or computed from other columns, has no such default.
+            let has_default_rows =
+                num_rows > 0 && self.plan.is_deterministic && field.computed_expr().is_none();
+            let default_of_existing_rows = if has_default_rows {
+                let added_field = table_info.meta.schema.field_with_name(field.name())?;
+                let default =
+                    DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(added_field)?;
+                Some((added_field.clone(), default))
+            } else {
+                None
+            };
+
             commit_table_meta(
                 &self.ctx,
                 tbl.as_ref(),
@@ -206,6 +222,11 @@ impl Interpreter for AddTableColumnInterpreter {
                 |snapshot_opt, _| {
                     if let Some(snapshot) = snapshot_opt {
                         snapshot.schema = table_info.meta.schema.as_ref().clone();
+                        if let Some((field, default)) = &default_of_existing_rows {
+                            let row_count = snapshot.summary.row_count;
+                            let stats = default_columns_statistics(field, default, row_count);
+                            snapshot.summary.col_stats.extend(stats);
+                        }
                     }
                 },
             )

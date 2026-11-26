@@ -46,6 +46,7 @@ pub use column_statistic::END_OF_UNICODE_RANGE;
 pub use column_statistic::STATS_STRING_PREFIX_LEN;
 pub use column_statistic::Trim;
 pub use column_statistic::calc_column_distinct_of_values;
+pub use column_statistic::default_columns_statistics;
 pub use column_statistic::gen_columns_statistics;
 pub use column_statistic::scalar_min_max;
 pub(crate) use column_statistic::trim_column_min_max;

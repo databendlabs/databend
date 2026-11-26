@@ -35,33 +35,34 @@ use databend_storages_common_table_meta::meta::validate_segment_partition_statis
 
 const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
 
+/// Reduce the column statistics of several sets of rows, each given with its
+/// row count, into the statistics of all of them.
+///
+/// A column is left out of the result when an input that has rows lacks it:
+/// a missing entry means the column is unknown over those rows, not that the
+/// rows have no values. Inputs without rows are ignored.
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
-    stats_of_columns: &[T],
+    stats_of_columns: &[(u64, T)],
 ) -> StatisticsOfColumns {
-    // Combine statistics of a column into `Vec`, that is:
-    // from : `&[HashMap<ColumnId, ColumnStatistics>]`
-    // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>
-    let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
-        item.borrow().iter().fold(
-            acc,
-            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
-                acc.entry(*col_id).or_default().push(col_stats);
-                acc
-            },
-        )
-    });
-
-    // Reduce the `Vec<&ColumnStatistics>` into ColumnStatistics`, i.e.:
-    // from : `HashMap<ColumnId, Vec<&ColumnStatistics>>`
-    // to   : `type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>`
-    let len = col_to_stats_lit.len();
-    col_to_stats_lit
+    let inputs = stats_of_columns
         .iter()
-        .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
-            let col_stats = reduce_column_statistics(stats);
-            acc.insert(*id, col_stats);
-            acc
+        .filter(|(row_count, _)| *row_count > 0)
+        .map(|(_, stats)| stats.borrow())
+        .collect::<Vec<_>>();
+    // A column known over all inputs is in particular known over the first.
+    let Some(first) = inputs.first() else {
+        return HashMap::new();
+    };
+    first
+        .keys()
+        .filter_map(|id| {
+            let column = inputs
+                .iter()
+                .map(|stats| stats.get(id))
+                .collect::<Option<Vec<_>>>()?;
+            Some((*id, reduce_column_statistics(&column)))
         })
+        .collect()
 }
 
 pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
@@ -309,7 +310,8 @@ pub fn merge_statistics_mut(
         l.cluster_stats = r.cluster_stats.clone();
         l.partition_stats = r.partition_stats.clone();
     } else {
-        l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        l.col_stats =
+            reduce_block_statistics(&[(l.row_count, &l.col_stats), (r.row_count, &r.col_stats)]);
         l.spatial_stats = reduce_spatial_statistics(&[&l.spatial_stats, &r.spatial_stats]);
         l.cluster_stats =
             reduce_cluster_statistics(&[&l.cluster_stats, &r.cluster_stats], cluster_key_info);
@@ -367,6 +369,11 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.uncompressed_byte_size -= r.uncompressed_byte_size;
     l.compressed_byte_size -= r.compressed_byte_size;
     l.index_size -= r.index_size;
+    // The entry of a column covers every row of `l`. Without the entry of the
+    // rows taken away, what remains of it is unknown.
+    if r.row_count > 0 {
+        l.col_stats.retain(|id, _| r.col_stats.contains_key(id));
+    }
     for (id, col_stats) in &mut l.col_stats {
         if let Some(r_col_stats) = r.col_stats.get(id) {
             // The MinMax of a column cannot be recalculated by the right statistics,
@@ -472,7 +479,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         {
             perfect_block_count += 1;
         }
-        col_stats.push(&b.col_stats);
+        col_stats.push((b.row_count, &b.col_stats));
         cluster_stats.push(&b.cluster_stats);
         partition_stats.push(&b.partition_stats);
         spatial_col_stats.push(&b.spatial_stats);

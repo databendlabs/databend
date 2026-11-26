@@ -183,6 +183,7 @@ fn test_ft_stats_col_stats_reduce() -> anyhow::Result<()> {
                 HashMap::new(),
             )
         })
+        .map(|stats| Ok((rows_per_block as u64, stats?)))
         .collect::<databend_common_exception::Result<Vec<_>>>()?;
     let r = reducers::reduce_block_statistics(&col_stats);
     assert_eq!(3, r.len());
@@ -234,7 +235,7 @@ fn test_reduce_block_statistics_in_memory_size() -> anyhow::Result<()> {
     // combine two statistics
     let col_stats_left = HashMap::from_iter(iter(0).take(num_of_cols));
     let col_stats_right = HashMap::from_iter(iter(0).take(num_of_cols));
-    let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right]);
+    let r = reducers::reduce_block_statistics(&[(1, col_stats_left), (1, col_stats_right)]);
     assert_eq!(num_of_cols, r.len());
     // there should be 100 columns in the result
     for idx in 1..=num_of_cols as u32 {

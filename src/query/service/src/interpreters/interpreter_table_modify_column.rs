@@ -480,19 +480,17 @@ impl ModifyTableColumnInterpreter {
                     let statistics_provider = fuse_table
                         .column_statistics_provider(self.ctx.clone())
                         .await?;
-                    let column_stat = statistics_provider
-                        .column_statistics(old_field.column_id)
-                        .ok_or_else(|| {
-                            ErrorCode::UnknownColumn(format!(
-                                "Cannot find statistics for column '{}' (id: {})",
-                                field.name, old_field.column_id
-                            ))
-                        })?;
-                    if column_stat.null_count() > 0 {
+                    let null_count =
+                        match statistics_provider.column_statistics(old_field.column_id) {
+                            Some(column_stat) => column_stat.null_count(),
+                            // The table has the statistics of a column only when
+                            // they cover every row; the blocks still have theirs.
+                            None => self.null_count_of_blocks(fuse_table, old_field).await?,
+                        };
+                    if null_count > 0 {
                         return Err(ErrorCode::BadArguments(format!(
                             "Cannot change column '{}' to NOT NULL: contains {} NULL values",
-                            field.name,
-                            column_stat.null_count()
+                            field.name, null_count
                         )));
                     }
                 }
@@ -779,6 +777,39 @@ impl ModifyTableColumnInterpreter {
             table_meta_timestamps,
         )
         .await
+    }
+
+    /// Count the NULL values of a column from the metadata of the blocks, for a
+    /// column the table has no statistics for.
+    async fn null_count_of_blocks(&self, table: &FuseTable, field: &TableField) -> Result<u64> {
+        let unknown = || {
+            ErrorCode::UnknownColumn(format!(
+                "Cannot find statistics for column '{}' (id: {})",
+                field.name, field.column_id
+            ))
+        };
+        // Nested columns keep statistics per leaf, and those below an Array or
+        // a Map count elements, not rows. A computed column has no default.
+        let is_nested = matches!(
+            field.data_type.remove_nullable(),
+            TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_)
+        );
+        if is_nested || field.computed_expr().is_some() {
+            return Err(unknown());
+        }
+
+        let (null_count, rows_without_column) = table
+            .column_null_count_of_blocks(self.ctx.clone(), field.column_id)
+            .await?
+            .ok_or_else(unknown)?;
+        // Rows of blocks written before the column was added read as its default.
+        if rows_without_column > 0 {
+            let default = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(field)?;
+            if default.is_null() {
+                return Ok(null_count + rows_without_column);
+            }
+        }
+        Ok(null_count)
     }
 
     // Set column comment.

@@ -20,6 +20,8 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_expression::types::AccessType;
@@ -158,6 +160,74 @@ pub fn gen_columns_statistics(
         }
     }
     Ok(statistics)
+}
+
+/// The statistics of the leaf columns of `field` over `row_count` rows that all
+/// read as `default`.
+///
+/// These are the rows of a table at the moment the column is added to it:
+/// their blocks do not store the column. Leaves below an Array, a Map or a
+/// Vector, those of a tuple that defaults to NULL, and a string default
+/// without a short upper bound are left out, i.e. unknown.
+pub fn default_columns_statistics(
+    field: &TableField,
+    default: &Scalar,
+    row_count: u64,
+) -> StatisticsOfColumns {
+    fn collect(
+        default: &Scalar,
+        data_type: &TableDataType,
+        column_ids: &mut impl Iterator<Item = ColumnId>,
+        row_count: u64,
+        statistics: &mut StatisticsOfColumns,
+    ) {
+        match (data_type.remove_nullable(), default) {
+            (TableDataType::Tuple { fields_type, .. }, Scalar::Tuple(values))
+                if fields_type.len() == values.len() =>
+            {
+                for (data_type, default) in fields_type.iter().zip(values) {
+                    collect(default, data_type, column_ids, row_count, statistics);
+                }
+            }
+            _ => {
+                // A nested column takes all of its leaves along.
+                let leaves = data_type.num_leaf_columns();
+                let leaf_ids = column_ids.by_ref().take(leaves).collect::<Vec<_>>();
+                let [column_id] = leaf_ids[..] else {
+                    return;
+                };
+                let data_type = DataType::from(data_type);
+                if !default.as_ref().is_value_of_type(&data_type) {
+                    return;
+                }
+                let Some((min, max)) = scalar_min_max(&data_type, default.clone()) else {
+                    return;
+                };
+                let (null_count, distinct_of_values) = if default.is_null() {
+                    (row_count, 0)
+                } else {
+                    (0, 1)
+                };
+                let stats =
+                    ColumnStatistics::new(min, max, null_count, 0, Some(distinct_of_values));
+                statistics.insert(column_id, stats);
+            }
+        }
+    }
+
+    let mut statistics = StatisticsOfColumns::new();
+    if row_count > 0 {
+        let mut column_ids = field.leaf_column_ids().into_iter();
+        let data_type = field.data_type();
+        collect(
+            default,
+            data_type,
+            &mut column_ids,
+            row_count,
+            &mut statistics,
+        );
+    }
+    statistics
 }
 
 pub fn scalar_min_max(data_type: &DataType, scalar: Scalar) -> Option<(Scalar, Scalar)> {
@@ -322,13 +392,17 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::type_check::check_function;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
     use databend_common_functions::BUILTIN_FUNCTIONS;
     use databend_storages_common_index::RangeIndex;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
 
     use super::MAX_AUTO_STATS_STRING_COMMON_PREFIX_LEN;
     use super::MAX_AUTO_STATS_STRING_PREFIX_LEN;
     use super::auto_stats_string_prefix_len;
+    use super::default_columns_statistics;
     use super::gen_columns_statistics;
     use super::scalar_min_max;
     use super::trim_string_max_with_len;
@@ -567,5 +641,62 @@ mod tests {
 
             assert_eq!(res, Some(Scalar::String(exp)));
         }
+    }
+
+    #[test]
+    fn test_default_columns_statistics() {
+        let int = TableDataType::Number(NumberDataType::Int32);
+        let n = |n: i32| Scalar::Number(n.into());
+        let string = |s: &str| Scalar::String(s.to_string());
+        let schema = TableSchema::new(vec![
+            TableField::new("a", int.clone()),
+            TableField::new("b", TableDataType::String.wrap_nullable()),
+            TableField::new("t", TableDataType::Tuple {
+                fields_name: vec!["x".to_string(), "y".to_string()],
+                fields_type: vec![int.clone(), TableDataType::String.wrap_nullable()],
+            }),
+            TableField::new("arr", TableDataType::Array(Box::new(int.clone()))),
+            TableField::new("c", int.wrap_nullable()),
+        ]);
+        let stats = |name: &str, default: Scalar, rows: u64| {
+            default_columns_statistics(schema.field_with_name(name).unwrap(), &default, rows)
+        };
+        let bounds = |stats: &ColumnStatistics| (stats.min().clone(), stats.max().clone());
+
+        // Every row holds the default.
+        let a = stats("a", n(7), 3);
+        assert_eq!(a.len(), 1);
+        assert_eq!(bounds(&a[&0]), (n(7), n(7)));
+        assert_eq!((a[&0].null_count, a[&0].distinct_of_values), (0, Some(1)));
+
+        // A NULL default makes every row null.
+        let b = stats("b", Scalar::Null, 3);
+        assert_eq!(b.len(), 1);
+        assert_eq!(bounds(&b[&1]), (Scalar::Null, Scalar::Null));
+        assert_eq!(b[&1].null_count, 3);
+        assert_eq!(b[&1].distinct_of_values, Some(0));
+
+        // The fields of a tuple are its leaves.
+        let t = stats("t", Scalar::Tuple(vec![n(1), string("x")]), 3);
+        assert_eq!(t.len(), 2);
+        assert_eq!(bounds(&t[&2]), (n(1), n(1)));
+        assert_eq!(bounds(&t[&3]), (string("x"), string("x")));
+
+        // The leaf of an array describes elements, not rows: unknown.
+        let elements = Scalar::Array(Int32Type::from_data(vec![1, 2]));
+        assert!(stats("arr", elements, 3).is_empty());
+
+        // The column after the nested ones still gets its own leaf id.
+        let c = stats("c", n(5), 3);
+        assert_eq!(c.keys().copied().collect::<Vec<_>>(), vec![5]);
+
+        // A string default without an upper bound of the stored length.
+        let unbounded = END_OF_UNICODE_RANGE
+            .to_string()
+            .repeat(STATS_STRING_PREFIX_LEN + 1);
+        assert!(stats("b", string(&unbounded), 3).is_empty());
+
+        // A table without rows has nothing to describe.
+        assert!(stats("a", n(7), 0).is_empty());
     }
 }

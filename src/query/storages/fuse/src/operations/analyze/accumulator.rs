@@ -45,6 +45,8 @@ use crate::statistics::reduce_cluster_statistics;
 pub struct ReducedSegmentStats {
     pub col_stats: StatisticsOfColumns,
     pub cluster_stats: Option<ClusterStatistics>,
+    /// Rows covered by `col_stats`.
+    row_count: u64,
     /// Number of segments folded in. An empty accumulator must be replaced rather than
     /// reduced, because reducing `None` cluster statistics with anything yields `None`.
     segment_count: usize,
@@ -55,6 +57,7 @@ impl ReducedSegmentStats {
         let next = Self {
             col_stats: summary.col_stats.clone(),
             cluster_stats: summary.cluster_stats.clone(),
+            row_count: summary.row_count,
             segment_count: 1,
         };
         self.merge(next, cluster_key_info);
@@ -69,7 +72,11 @@ impl ReducedSegmentStats {
             return;
         }
 
-        self.col_stats = reduce_block_statistics(&[&self.col_stats, &other.col_stats]);
+        self.col_stats = reduce_block_statistics(&[
+            (self.row_count, &self.col_stats),
+            (other.row_count, &other.col_stats),
+        ]);
+        self.row_count += other.row_count;
         self.cluster_stats = reduce_cluster_statistics(
             &[&self.cluster_stats, &other.cluster_stats],
             cluster_key_info,

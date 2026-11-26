@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -44,14 +43,6 @@ pub trait SnapshotGenerator {
 
     fn skip_auto_vacuum(&self) -> bool {
         false
-    }
-
-    async fn fill_default_values(
-        &mut self,
-        _schema: &TableSchema,
-        _snapshot: &Option<Arc<TableSnapshot>>,
-    ) -> Result<()> {
-        Ok(())
     }
 
     fn generate_new_snapshot(

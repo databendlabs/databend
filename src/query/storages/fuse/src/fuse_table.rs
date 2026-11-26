@@ -169,6 +169,7 @@ use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
 use crate::pruning::PartitionPruningInfo;
+use crate::segment_format_from_location;
 use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
@@ -1158,6 +1159,59 @@ impl FuseTable {
         new_table.table_info.meta.schema = schema;
         Arc::new(new_table)
     }
+
+    /// Count the NULL values of a leaf column from the metadata of every block
+    /// of the current snapshot.
+    ///
+    /// The table summary has the statistics of a column only when they cover
+    /// every row, whereas each block has those of the columns it stores. A
+    /// block that does not store the column was written before the column was
+    /// added, and its rows read as the column's default.
+    ///
+    /// Returns the NULL count of the blocks that store the column and the row
+    /// count of those that do not. Returns `None` when the count is not known:
+    /// a block stores the column without statistics, or a segment is
+    /// column-oriented.
+    #[async_backtrace::framed]
+    pub async fn column_null_count_of_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        column_id: ColumnId,
+    ) -> Result<Option<(u64, u64)>> {
+        let Some(snapshot) = self.read_table_snapshot().await? else {
+            return Ok(Some((0, 0)));
+        };
+        if snapshot.segments.iter().any(|(location, _)| {
+            segment_format_from_location(location) == FuseSegmentFormat::Column
+        }) {
+            return Ok(None);
+        }
+
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
+        let chunk_size = (ctx.get_settings().get_max_threads()? as usize * 4).max(1);
+        let mut null_count = 0;
+        let mut rows_without_column = 0;
+        for chunk in snapshot.segments.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
+                .await?;
+            for segment in segments {
+                for block in segment?.block_metas()? {
+                    if block.row_count == 0 {
+                        continue;
+                    }
+                    match block.col_stats.get(&column_id) {
+                        Some(stats) => null_count += stats.null_count,
+                        None if block.column_meta(&column_id).is_none() => {
+                            rows_without_column += block.row_count;
+                        }
+                        None => return Ok(None),
+                    }
+                }
+            }
+        }
+        Ok(Some((null_count, rows_without_column)))
+    }
 }
 
 #[async_trait::async_trait]
@@ -1484,6 +1538,7 @@ impl Table for FuseTable {
 
         // Fold column ranges of segments chunk by chunk
         let mut reduced = HashMap::with_capacity(num_fields);
+        let mut reduced_rows = 0;
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
             let segments = segments_io
@@ -1491,16 +1546,18 @@ impl Table for FuseTable {
                 .await?;
             let mut partial_col_stats = Vec::with_capacity(chunk_size);
             // 1. Carry the previously reduced ranges
-            partial_col_stats.push(reduced);
+            partial_col_stats.push((reduced_rows, reduced));
             // 2. Append ranges of this chunk
             for compacted_seg in segments.into_iter() {
                 let segment = compacted_seg?;
                 let mut cols_stats = segment.summary.col_stats.clone();
                 cols_stats.retain(|k, _| column_ids.contains(k));
-                partial_col_stats.push(cols_stats);
+                partial_col_stats.push((segment.summary.row_count, cols_stats));
             }
-            // 3. Reduces them
+            // 3. Reduces them. A column that a segment has no statistics for
+            // drops out here and stays out.
             reduced = reduce_block_statistics(&partial_col_stats);
+            reduced_rows = partial_col_stats.iter().map(|(rows, _)| rows).sum();
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }
 

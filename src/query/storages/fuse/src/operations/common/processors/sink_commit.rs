@@ -596,8 +596,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::FillDefault => {
-                let schema = self.table.schema();
-
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table
                     .read_table_snapshot_with_policy(self.ctx.cache_policy())
@@ -657,9 +655,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         "commit failed because the snapshot had changed during the commit process",
                     ));
                 } else {
-                    self.snapshot_gen
-                        .fill_default_values(&schema, &previous)
-                        .await?;
                     let table_stats_gen = fuse_table
                         .generate_table_stats(
                             &previous,

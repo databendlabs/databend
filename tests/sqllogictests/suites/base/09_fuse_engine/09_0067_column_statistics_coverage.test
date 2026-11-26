@@ -1,0 +1,269 @@
+# run-with-settings: enable_block_stream_write=1
+# run-with-settings: enable_block_stream_write=0
+
+# Column statistics describe the rows they cover: a block or segment without
+# statistics for a column is unknown, it is not a block or segment without
+# values. Both write paths are exercised in addition to the default pass.
+
+statement ok
+create or replace database db_column_statistics_coverage;
+
+statement ok
+use db_column_statistics_coverage;
+
+# Inserts stay as written: each one is a block in a segment of its own, until
+# a statement below merges the segments.
+statement ok
+set enable_compact_after_write = 0;
+
+# A block written before ADD COLUMN stores no statistics for the new column.
+# Its rows read as the default, which the range of later blocks does not cover.
+statement ok
+create or replace table t_default(id int not null);
+
+statement ok
+insert into t_default values (1);
+
+statement ok
+alter table t_default add column k int not null default 0;
+
+statement ok
+insert into t_default values (2, 42);
+
+query II
+select min(k), max(k) from t_default;
+----
+0 42
+
+statement ok
+optimize table t_default compact segment;
+
+query I
+select id from t_default where k = 0;
+----
+1
+
+query I
+select id from t_default where k < 42;
+----
+1
+
+query II
+select min(k), max(k) from t_default;
+----
+0 42
+
+statement ok
+replace into t_default on (k) values (9, 0);
+
+query II
+select id, k from t_default order by id;
+----
+2 42
+9 0
+
+# The row that defaults to 0 is not part of a segment "full of 42".
+statement ok
+delete from t_default where k = 42;
+
+query II
+select id, k from t_default order by id;
+----
+9 0
+
+# The same with a nullable column: the old rows are not NULL, they are 7.
+statement ok
+create or replace table t_nullable_default(id int not null);
+
+statement ok
+insert into t_nullable_default values (1);
+
+statement ok
+alter table t_nullable_default add column k int null default 7;
+
+statement ok
+insert into t_nullable_default values (2, null);
+
+statement ok
+optimize table t_nullable_default compact segment;
+
+query I
+select id from t_nullable_default where k = 7;
+----
+1
+
+query I
+select id from t_nullable_default where k is not null;
+----
+1
+
+query II
+select max(k), count(k) from t_nullable_default;
+----
+7 1
+
+statement ok
+delete from t_nullable_default where k is null;
+
+query II
+select id, k from t_nullable_default order by id;
+----
+1 7
+
+# Without a default the old rows are NULL, and only they are.
+statement ok
+create or replace table t_null_default(id int not null);
+
+statement ok
+insert into t_null_default values (1);
+
+statement ok
+alter table t_null_default add column k int null;
+
+statement ok
+insert into t_null_default values (2, 5);
+
+statement ok
+optimize table t_null_default compact segment;
+
+query I
+select id from t_null_default where k is null;
+----
+1
+
+query I
+select id from t_null_default where k is not null;
+----
+2
+
+statement ok
+delete from t_null_default where k = 5;
+
+query II
+select id, k from t_null_default order by id;
+----
+1 NULL
+
+# The table summary learns the default of the old rows when the column is
+# added. It forgets the column when a segment that does not know it is merged,
+# and knows it again once every old block is rewritten.
+statement ok
+create or replace table t_rewritten(id int not null);
+
+statement ok
+insert into t_rewritten values (1), (2);
+
+statement ok
+alter table t_rewritten add column k int not null default 0;
+
+statement ok
+insert into t_rewritten values (3, 5);
+
+query T
+select column_name from fuse_statistic('db_column_statistics_coverage', 't_rewritten') order by column_name;
+----
+id
+k
+
+statement ok
+optimize table t_rewritten compact segment;
+
+query T
+select column_name from fuse_statistic('db_column_statistics_coverage', 't_rewritten') order by column_name;
+----
+id
+
+query I
+select id from t_rewritten where k = 0 order by id;
+----
+1
+2
+
+statement ok
+optimize table t_rewritten compact;
+
+query T
+select column_name from fuse_statistic('db_column_statistics_coverage', 't_rewritten') order by column_name;
+----
+id
+k
+
+query I
+select id from t_rewritten where k = 0 order by id;
+----
+1
+2
+
+# MODIFY COLUMN ... NOT NULL counts the NULL values of the column. Where the
+# table summary has forgotten the column, the blocks still tell: one written
+# before the column was added reads as the default.
+statement ok
+create or replace table t_not_null(id int not null);
+
+statement ok
+insert into t_not_null values (1);
+
+statement ok
+alter table t_not_null add column k int null default 7;
+
+statement ok
+insert into t_not_null values (2, 8);
+
+statement ok
+optimize table t_not_null compact segment;
+
+query T
+select column_name from fuse_statistic('db_column_statistics_coverage', 't_not_null') order by column_name;
+----
+id
+
+statement ok
+alter table t_not_null modify column k int not null;
+
+query II
+select id, k from t_not_null order by id;
+----
+1 7
+2 8
+
+# Without a default the old rows are NULL. Deleting one of them leaves the
+# summary without the column, and the other one still in the way.
+statement ok
+create or replace table t_not_null_rejected(id int not null);
+
+statement ok
+insert into t_not_null_rejected values (1);
+
+statement ok
+insert into t_not_null_rejected values (3);
+
+statement ok
+alter table t_not_null_rejected add column k int null;
+
+statement ok
+insert into t_not_null_rejected values (2, 8);
+
+statement ok
+delete from t_not_null_rejected where id = 1;
+
+query T
+select column_name from fuse_statistic('db_column_statistics_coverage', 't_not_null_rejected') order by column_name;
+----
+id
+
+statement error 1006.*contains 1 NULL values
+alter table t_not_null_rejected modify column k int not null;
+
+statement ok
+delete from t_not_null_rejected where id = 3;
+
+statement ok
+alter table t_not_null_rejected modify column k int not null;
+
+query II
+select id, k from t_not_null_rejected order by id;
+----
+2 8
+
+statement ok
+drop database db_column_statistics_coverage;
