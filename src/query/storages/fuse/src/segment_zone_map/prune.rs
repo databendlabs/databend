@@ -69,7 +69,7 @@ pub async fn prune_segments_by_zone_map(
     for (group, stats) in group_stats.into_iter().enumerate() {
         // A group whose bounds already fail the filter has every row dropped
         // without reading its statistics.
-        let whole = !range_pruner.should_keep(&RangeIndexInput::from_columns(&stats), None);
+        let whole = !range_pruner.should_keep(&range_input(&stats), None);
         let (file, column_ids) = (file.clone(), column_ids.clone());
         let (range_pruner, semaphore) = (range_pruner.clone(), semaphore.clone());
         tasks.push(spawn(async move {
@@ -109,13 +109,28 @@ async fn dropped_paths(
     for row in 0..data.num_rows() {
         if !whole {
             data.fill_stats(row, &mut stats);
-            if range_pruner.should_keep(&RangeIndexInput::from_columns(&stats), None) {
+            if range_pruner.should_keep(&range_input(&stats), None) {
                 continue;
             }
         }
         dropped.push(data.path(row).to_string());
     }
     Ok(dropped)
+}
+
+/// The range pruning input for statistics read from a zone map, be it a row or
+/// the bounds of a row group.
+///
+/// The file does not record row counts. It stores null bounds only for a column
+/// that is entirely NULL, though, and the null count of such a column is the
+/// row count of its segment; over a row group it is the greatest one, which
+/// every entirely NULL column of the group shares.
+fn range_input(stats: &StatisticsOfColumns) -> RangeIndexInput<'_> {
+    let row_count = stats
+        .values()
+        .find(|stats| stats.min.is_null() && stats.max.is_null())
+        .map(|stats| stats.null_count);
+    RangeIndexInput::from_columns(stats).with_row_count(row_count)
 }
 
 /// Covered columns that `filter` references and whose stored type is still the
@@ -192,6 +207,9 @@ mod tests {
         Scalar::String(v.to_string())
     }
 
+    /// Rows of every random segment.
+    const ROWS: u64 = 10;
+
     /// Statistics of one column: absent, all NULL, or a random range with a
     /// random null count.
     fn random_stats(
@@ -203,7 +221,7 @@ mod tests {
             2 => Some(ColumnStatistics::new(
                 Scalar::Null,
                 Scalar::Null,
-                10,
+                ROWS,
                 0,
                 None,
             )),
@@ -232,6 +250,7 @@ mod tests {
             col_stats.insert(1, stats);
         }
         Statistics {
+            row_count: ROWS,
             block_count: 1,
             col_stats,
             ..Default::default()
@@ -340,8 +359,8 @@ mod tests {
             let kept: HashSet<usize> = kept.await?.into_iter().map(|(idx, _)| idx).collect();
             let pruner = RangePrunerCreator::try_create(func_ctx.clone(), &schema, Some(&filter))?;
             for (i, summary) in summaries.iter().enumerate() {
-                let direct =
-                    pruner.should_keep(&RangeIndexInput::from_columns(&summary.col_stats), None);
+                let input = RangeIndexInput::new(&summary.col_stats, summary.row_count, None);
+                let direct = pruner.should_keep(&input, None);
                 let expected = direct || i >= covered;
                 assert_eq!(
                     kept.contains(&i),

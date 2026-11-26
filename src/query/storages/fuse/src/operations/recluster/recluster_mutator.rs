@@ -1559,6 +1559,7 @@ impl ReclusterMutator {
                         &self.properties,
                         block_meta.cluster_stats.as_ref(),
                         &block_meta.col_stats,
+                        block_meta.row_count,
                     ))
                 };
                 segment_blocks.push(ReclusterBlock {

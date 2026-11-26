@@ -297,7 +297,8 @@ impl RuntimeTopNBoundary {
     ///
     /// `min`/`max` describe the non-null values of the block and `null_count`
     /// its null rows; boundaries are never null, so null rows rank by
-    /// `nulls_first` alone.
+    /// `nulls_first` alone. A bound may be null on its own when it is unknown,
+    /// as the upper bound of a string column can be.
     pub fn boundary_excludes(&self, min: &Scalar, max: &Scalar, null_count: u64) -> bool {
         let boundary = self.boundary.read();
         let Some(boundary) = boundary.as_ref() else {
@@ -310,12 +311,14 @@ impl RuntimeTopNBoundary {
             return false;
         }
 
-        // Blocks without non-null values have null min/max statistics. Under
+        // Statistics without non-null values have both bounds null. Under
         // NULLS LAST every such row sorts after the non-null boundary.
-        if matches!(min, Scalar::Null) || matches!(max, Scalar::Null) {
+        if matches!(min, Scalar::Null) && matches!(max, Scalar::Null) {
             return !self.nulls_first && null_count > 0;
         }
 
+        // A single null bound is an unknown bound, which excludes nothing:
+        // `partial_cmp` does not order it against the boundary.
         if self.asc {
             min.partial_cmp(boundary) == Some(CmpOrdering::Greater)
         } else {
@@ -675,6 +678,23 @@ mod tests {
         assert!(!nulls_first.boundary_excludes(&int64(11), &int64(20), 1));
         assert!(nulls_first.boundary_excludes(&int64(11), &int64(20), 0));
         assert!(!nulls_first.boundary_excludes(&Scalar::Null, &Scalar::Null, 7));
+    }
+
+    #[test]
+    fn runtime_top_n_boundary_keeps_blocks_with_an_unknown_bound() {
+        // A bound that is null on its own is unknown, not the mark of a block
+        // without values.
+        let asc = RuntimeTopNBoundary::new(true, false);
+        asc.update(&int64(10));
+        assert!(asc.boundary_excludes(&int64(11), &Scalar::Null, 5));
+        assert!(!asc.boundary_excludes(&int64(9), &Scalar::Null, 5));
+        assert!(!asc.boundary_excludes(&Scalar::Null, &int64(20), 5));
+
+        let desc = RuntimeTopNBoundary::new(false, false);
+        desc.update(&int64(10));
+        assert!(!desc.boundary_excludes(&int64(1), &Scalar::Null, 5));
+        assert!(desc.boundary_excludes(&Scalar::Null, &int64(9), 5));
+        assert!(!desc.boundary_excludes(&Scalar::Null, &int64(10), 5));
     }
 
     #[test]

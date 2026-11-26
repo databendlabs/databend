@@ -238,6 +238,7 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         properties: &ReclusterProperties,
         cluster_stats: Option<&ClusterStatistics>,
         col_stats: &StatisticsOfColumns,
+        row_count: u64,
     ) -> ClusterStatistics {
         if let Some(stats) = cluster_stats {
             if self.can_reuse_cluster_stats(properties, stats) {
@@ -248,6 +249,7 @@ pub(crate) trait ReclusterStrategy: Send + Sync {
         cluster_stats_from_col_stats(
             &properties.prepared_cluster_key_exprs,
             col_stats,
+            row_count,
             properties.cluster_key_info.cluster_key_id(),
             0,
         )

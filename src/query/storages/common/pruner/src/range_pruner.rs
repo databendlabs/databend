@@ -35,6 +35,9 @@ use crate::ProjectedVirtualSegmentSchema;
 
 pub struct RangeIndexInput<'a> {
     pub col_stats: &'a StatisticsOfColumns,
+    /// Number of rows `col_stats` covers, when the source knows it. A column
+    /// is known to hold no values only when its null count equals it.
+    pub row_count: Option<u64>,
     pub spatial_stats: Option<&'a StatisticsOfSpatialColumns>,
     /// Range statistics of direct virtual columns referenced by filters or TopN.
     pub virtual_col_stats: Option<VirtualColumnStatsOfNames>,
@@ -43,21 +46,30 @@ pub struct RangeIndexInput<'a> {
 impl<'a> RangeIndexInput<'a> {
     pub fn new(
         col_stats: &'a StatisticsOfColumns,
+        row_count: u64,
         spatial_stats: Option<&'a StatisticsOfSpatialColumns>,
     ) -> Self {
         Self {
             col_stats,
+            row_count: Some(row_count),
             spatial_stats,
             virtual_col_stats: None,
         }
     }
 
+    /// Statistics whose row count is unknown.
     pub fn from_columns(col_stats: &'a StatisticsOfColumns) -> Self {
         Self {
             col_stats,
+            row_count: None,
             spatial_stats: None,
             virtual_col_stats: None,
         }
+    }
+
+    pub fn with_row_count(mut self, row_count: Option<u64>) -> Self {
+        self.row_count = row_count;
+        self
     }
 
     pub fn from_block_meta(
@@ -67,6 +79,7 @@ impl<'a> RangeIndexInput<'a> {
     ) -> Self {
         Self {
             col_stats: &block_meta.col_stats,
+            row_count: Some(block_meta.row_count),
             spatial_stats: block_meta.spatial_stats.as_ref(),
             virtual_col_stats: build_virtual_col_stats(
                 block_meta,
@@ -184,6 +197,7 @@ impl RangePruner for RangeIndex {
     ) -> bool {
         let apply = self.apply(
             input.col_stats,
+            input.row_count,
             input.spatial_stats,
             input.virtual_col_stats.as_ref(),
             |k| {

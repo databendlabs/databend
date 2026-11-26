@@ -578,6 +578,7 @@ impl FusePruner {
                             if let Some(range_index) = &inverse_range_index {
                                 let range_input = RangeIndexInput::new(
                                     &compact_segment_info.summary.col_stats,
+                                    compact_segment_info.summary.row_count,
                                     compact_segment_info.summary.spatial_stats.as_ref(),
                                 );
                                 if !range_index.should_keep(&range_input, None) {

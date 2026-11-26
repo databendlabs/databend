@@ -19,7 +19,6 @@ use std::collections::HashSet;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
-use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -30,6 +29,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::merge_column_statistics;
 pub use databend_storages_common_table_meta::meta::reduce_cluster_statistics;
 use databend_storages_common_table_meta::meta::validate_segment_partition_statistics;
 
@@ -64,37 +64,10 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
         })
 }
 
+/// Reduce the statistics of one column over several sets of rows, see
+/// [`merge_column_statistics`].
 pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
-    let mut min_stats = Vec::with_capacity(stats.len());
-    let mut max_stats = Vec::with_capacity(stats.len());
-    let mut ndvs = Vec::with_capacity(stats.len());
-    let mut null_count = 0;
-    let mut in_memory_size = 0;
-
-    for col_stats in stats.iter() {
-        let col_stats = col_stats.borrow();
-        min_stats.push(col_stats.min().clone());
-        max_stats.push(col_stats.max().clone());
-        ndvs.push(col_stats.distinct_of_values);
-        null_count += col_stats.null_count;
-        in_memory_size += col_stats.in_memory_size;
-    }
-
-    let min = min_stats
-        .into_iter()
-        .filter(|s| !s.is_null())
-        .min_by(|x, y| x.cmp(y))
-        .unwrap_or(Scalar::Null);
-
-    let max = max_stats
-        .into_iter()
-        .filter(|s| !s.is_null())
-        .max_by(|x, y| x.cmp(y))
-        .unwrap_or(Scalar::Null);
-    let distinct_of_values = ndvs
-        .into_iter()
-        .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
-    ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values)
+    merge_column_statistics(stats.iter().map(|stats| stats.borrow()))
 }
 
 // Generate virtual column statistics from virtual column meta.

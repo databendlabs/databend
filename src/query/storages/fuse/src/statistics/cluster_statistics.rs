@@ -711,10 +711,12 @@ pub(crate) fn prepare_cluster_key_exprs(
         .collect()
 }
 
-/// Reconstruct cluster min/max stats from column stats and prepared key domains.
+/// Reconstruct cluster min/max stats from the column stats of `row_count`
+/// rows and prepared key domains.
 pub(crate) fn get_min_max_stats(
     prepared_exprs: &[PreparedClusterKeyExpr],
     col_stats: &StatisticsOfColumns,
+    row_count: u64,
     cluster_stats: Option<&ClusterStatistics>,
     default_key_id: Option<u32>,
 ) -> (Vec<Scalar>, Vec<Scalar>) {
@@ -735,7 +737,7 @@ pub(crate) fn get_min_max_stats(
                     .iter()
                     .filter_map(|column_id| col_stats.get(column_id))
                     .collect();
-                let domain = statistics_to_domain(stats, ty);
+                let domain = statistics_to_domain(stats, ty, Some(row_count));
                 (*index, domain)
             })
             .collect();
@@ -763,10 +765,11 @@ pub(crate) fn get_min_max_stats(
 pub(crate) fn cluster_stats_from_col_stats(
     prepared_exprs: &[PreparedClusterKeyExpr],
     col_stats: &StatisticsOfColumns,
+    row_count: u64,
     cluster_key_id: u32,
     level: i32,
 ) -> ClusterStatistics {
-    let (min, max) = get_min_max_stats(prepared_exprs, col_stats, None, None);
+    let (min, max) = get_min_max_stats(prepared_exprs, col_stats, row_count, None, None);
     ClusterStatistics::new(cluster_key_id, min, max, level)
 }
 
@@ -774,6 +777,7 @@ pub(crate) fn cluster_stats_from_col_stats(
 pub(crate) fn hilbert_bounds_for_diagnostics(
     prepared_exprs: &[PreparedClusterKeyExpr],
     col_stats: &StatisticsOfColumns,
+    row_count: u64,
     cluster_stats: Option<&ClusterStatistics>,
     cluster_key_id: u32,
 ) -> [Scalar; HILBERT_CLUSTER_DIMENSIONS * 2] {
@@ -794,7 +798,7 @@ pub(crate) fn hilbert_bounds_for_diagnostics(
         ];
     }
 
-    let (min, max) = get_min_max_stats(prepared_exprs, col_stats, None, None);
+    let (min, max) = get_min_max_stats(prepared_exprs, col_stats, row_count, None, None);
     debug_assert_eq!(min.len(), HILBERT_CLUSTER_DIMENSIONS);
     debug_assert_eq!(max.len(), HILBERT_CLUSTER_DIMENSIONS);
     [
@@ -1006,7 +1010,7 @@ mod tests {
         let prepared_exprs = prepare_cluster_key_exprs(&exprs, &schema);
         let col_stats = int32_col_stats(&[(0, 1, 3), (1, 2, 5)]);
 
-        let (min, max) = get_min_max_stats(&prepared_exprs, &col_stats, None, Some(0));
+        let (min, max) = get_min_max_stats(&prepared_exprs, &col_stats, 1, None, Some(0));
 
         assert_eq!(min, vec![int32_scalar(1), int32_scalar(2)]);
         assert_eq!(max, vec![int32_scalar(3), int32_scalar(5)]);
@@ -1019,7 +1023,7 @@ mod tests {
         let prepared_exprs = prepare_cluster_key_exprs(&exprs, &schema);
         let col_stats = int32_col_stats(&[(0, 10, 1)]);
 
-        let (min, max) = get_min_max_stats(&prepared_exprs, &col_stats, None, Some(0));
+        let (min, max) = get_min_max_stats(&prepared_exprs, &col_stats, 1, None, Some(0));
 
         assert_eq!(min, vec![int32_scalar(i32::MIN)]);
         assert_eq!(max, vec![int32_scalar(i32::MAX)]);

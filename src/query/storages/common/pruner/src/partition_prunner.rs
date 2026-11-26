@@ -86,6 +86,8 @@ impl PartitionPruner {
                 stats.insert(f.column_id(), column_stats);
             }
         }
-        self.range_filter.apply(&stats, None, None, |_| false)
+        // The statistics describe the partition value: one value, null or not.
+        self.range_filter
+            .apply(&stats, Some(1), None, None, |_| false)
     }
 }

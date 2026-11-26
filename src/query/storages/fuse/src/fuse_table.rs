@@ -1527,12 +1527,17 @@ impl Table for FuseTable {
                     Scalar::String(s) => {
                         unknown_string_truncation || s.chars().count() >= truncate_len
                     }
+                    // A null bound is the exact answer for a column without
+                    // values, whose other bound is null as well. Next to a
+                    // known bound it is an unknown bound.
+                    Scalar::Null => !v.max.is_null(),
                     _ => false,
                 };
                 let max_may_be_truncated = match &v.max {
                     Scalar::String(s) => {
                         unknown_string_truncation || s.chars().count() >= truncate_len
                     }
+                    Scalar::Null => !v.min.is_null(),
                     _ => false,
                 };
                 (k, ColumnRange {

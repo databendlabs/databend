@@ -593,6 +593,7 @@ fn collect_segment_endpoints(
                 let bounds = hilbert_bounds_for_diagnostics(
                     prepared_exprs,
                     &block.col_stats,
+                    block.row_count,
                     block.cluster_stats.as_ref(),
                     id,
                 );
@@ -605,6 +606,7 @@ fn collect_segment_endpoints(
                 let (min, max) = get_min_max_stats(
                     prepared_exprs,
                     &block.col_stats,
+                    block.row_count,
                     block.cluster_stats.as_ref(),
                     cluster_key_id,
                 );

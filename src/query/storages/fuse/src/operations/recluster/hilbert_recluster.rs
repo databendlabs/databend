@@ -60,6 +60,7 @@ impl ReclusterStrategy for HilbertReclusterStrategy {
                 properties,
                 info.summary.cluster_stats.as_ref(),
                 &info.summary.col_stats,
+                info.summary.row_count,
             );
             let block_count = info.summary.block_count as usize;
             if stats.level < 0 && block_count >= block_per_segment {

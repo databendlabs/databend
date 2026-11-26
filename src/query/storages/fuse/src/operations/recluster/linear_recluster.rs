@@ -523,6 +523,7 @@ pub(crate) fn select_scalar_segments(
             properties,
             compact_segment.summary.cluster_stats.as_ref(),
             &compact_segment.summary.col_stats,
+            compact_segment.summary.row_count,
         );
         let level = stats.level;
 

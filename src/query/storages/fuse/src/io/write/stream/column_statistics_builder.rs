@@ -15,7 +15,6 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
@@ -360,13 +359,7 @@ where
         } else {
             Scalar::Null
         };
-        let (min, max) =
-            trim_column_min_max(raw_min, raw_max, self.string_col_len).ok_or_else(|| {
-                ErrorCode::Internal(
-                    "Unable to trim string: retained prefix is at the end of the Unicode range"
-                        .to_string(),
-                )
-            })?;
+        let (min, max) = trim_column_min_max(raw_min, raw_max, self.string_col_len);
 
         Ok(ColumnStatistics::new(
             min,

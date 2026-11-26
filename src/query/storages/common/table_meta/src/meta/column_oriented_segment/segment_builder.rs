@@ -34,7 +34,6 @@ use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
-use databend_common_functions::aggregates::eval_aggr;
 
 use super::AbstractSegment;
 use super::schema::segment_schema;
@@ -52,6 +51,7 @@ use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
 use crate::meta::VirtualSegmentSchema;
 use crate::meta::format::encode;
+use crate::meta::merge_column_statistics;
 use crate::meta::reduce_cluster_statistics;
 use crate::meta::supported_stat_type;
 use crate::meta::validate_segment_partition_statistics;
@@ -121,20 +121,36 @@ struct ColStatBuilder {
     null_count: Vec<u64>,
     in_memory_size: Vec<u64>,
     distinct_of_values: Vec<Option<u64>>,
+    /// Statistics of the column over the blocks added so far.
+    summary: ColumnStatistics,
 }
 
 impl ColStatBuilder {
     fn new(data_type: &TableDataType, block_per_segment: usize) -> Self {
-        let data_type: DataType = data_type.into();
+        // A bound is null when the block has no value of the column or the
+        // bound is unknown, whatever the type of the column.
+        let data_type = DataType::from(data_type).wrap_nullable();
         Self {
             min: ColumnBuilder::with_capacity(&data_type, block_per_segment),
             max: ColumnBuilder::with_capacity(&data_type, block_per_segment),
             null_count: Vec::with_capacity(block_per_segment),
             in_memory_size: Vec::with_capacity(block_per_segment),
             distinct_of_values: Vec::with_capacity(block_per_segment),
+            summary: ColumnStatistics::new(Scalar::Null, Scalar::Null, 0, 0, Some(0)),
         }
     }
+
+    /// Add the statistics of the column over a block.
+    fn push(&mut self, stat: &ColumnStatistics) {
+        self.min.push(stat.min.as_ref());
+        self.max.push(stat.max.as_ref());
+        self.null_count.push(stat.null_count);
+        self.in_memory_size.push(stat.in_memory_size);
+        self.distinct_of_values.push(stat.distinct_of_values);
+        self.summary = merge_column_statistics([&self.summary, stat]);
+    }
 }
+
 #[derive(Default)]
 struct ColMetaBuilder {
     offset: Vec<u64>,
@@ -185,12 +201,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         self.create_on
             .push(block_meta.create_on.map(|t| t.timestamp()));
         for (col_id, col_stat) in self.column_stats.iter_mut() {
-            let stat = &block_meta.col_stats[col_id];
-            col_stat.min.push(stat.min.as_ref());
-            col_stat.max.push(stat.max.as_ref());
-            col_stat.null_count.push(stat.null_count);
-            col_stat.in_memory_size.push(stat.in_memory_size);
-            col_stat.distinct_of_values.push(stat.distinct_of_values);
+            col_stat.push(&block_meta.col_stats[col_id]);
         }
         for (col_id, col_meta) in self.column_meta.iter_mut() {
             let meta = &block_meta.col_metas[col_id].as_parquet().unwrap();
@@ -350,49 +361,11 @@ impl ColumnOrientedSegmentBuilder {
             index_size += virtual_block_meta.virtual_column_size;
         }
 
-        let mut col_stats = HashMap::new();
-        let mut self_column_stats = HashMap::new();
-
-        for (col_id, mut col_stat) in std::mem::take(&mut self.column_stats).into_iter() {
-            let mins = col_stat.min.build();
-            let maxs = col_stat.max.build();
-            let (mins_of_mins, _) = eval_aggr(
-                "min",
-                vec![],
-                &[mins.clone().into()],
-                block_count as usize,
-                vec![],
-            )?;
-            let min = mins_of_mins
-                .index(0)
-                .map(|x| x.to_owned())
-                .unwrap_or(Scalar::Null);
-            let (maxs_of_maxs, _) = eval_aggr(
-                "max",
-                vec![],
-                &[maxs.clone().into()],
-                block_count as usize,
-                vec![],
-            )?;
-            let max = maxs_of_maxs
-                .index(0)
-                .map(|x| x.to_owned())
-                .unwrap_or(Scalar::Null);
-            let null_count = col_stat.null_count.iter().sum();
-            let in_memory_size = col_stat.in_memory_size.iter().sum();
-            let distinct_of_values = col_stat
-                .distinct_of_values
-                .iter()
-                .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
-            col_stats.insert(
-                col_id,
-                ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values),
-            );
-            col_stat.min = ColumnBuilder::from_column(mins);
-            col_stat.max = ColumnBuilder::from_column(maxs);
-            self_column_stats.insert(col_id, col_stat);
-        }
-        self.column_stats = self_column_stats;
+        let col_stats = self
+            .column_stats
+            .iter()
+            .map(|(col_id, col_stat)| (*col_id, col_stat.summary.clone()))
+            .collect();
 
         let cluster_stats = reduce_cluster_statistics(&self.cluster_stats, cluster_key_info);
         let partition_stats =

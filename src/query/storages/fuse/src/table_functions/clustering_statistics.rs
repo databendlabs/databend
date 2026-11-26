@@ -159,6 +159,7 @@ impl TableMetaFunc for ClusteringStatistics {
                     ranges.push(get_min_max_stats(
                         &prepared_cluster_key_exprs,
                         &block.col_stats,
+                        block.row_count,
                         current_cluster_stats,
                         Some(cluster_key_id),
                     ));

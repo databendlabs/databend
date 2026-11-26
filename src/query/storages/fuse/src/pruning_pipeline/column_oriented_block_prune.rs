@@ -202,7 +202,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                     }
 
                     let row_count = row_count_col[block_idx];
-                    let range_input = RangeIndexInput::from_columns(&columns_stat);
+                    let range_input = RangeIndexInput::from_columns(&columns_stat)
+                        .with_row_count(Some(row_count));
                     if !range_pruner.should_keep(&range_input, None)
                         || runtime_scan_filters
                             .should_prune(RuntimeScanStatistics::from_columns(Some(&columns_stat)))

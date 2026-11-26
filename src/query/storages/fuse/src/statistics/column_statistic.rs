@@ -69,13 +69,11 @@ pub fn gen_columns_statistics(
                 let (distinct_of_values, unset_bits) =
                     if s == Scalar::Null { (0, rows) } else { (1, 0) };
 
-                let Some((min, max)) = trim_column_min_max(
+                let (min, max) = trim_column_min_max(
                     s.clone(),
                     s.clone(),
                     col_stats_truncate_lens.get(&column_id).copied(),
-                ) else {
-                    continue;
-                };
+                );
 
                 // when we read it back from parquet, it is a Column instead of Scalar
                 let in_memory_size = s.as_ref().estimated_scalar_repeat_size(rows, &data_type);
@@ -116,15 +114,11 @@ pub fn gen_columns_statistics(
                         }
                     }
 
-                    let Some((trimmed_min, trimmed_max)) = trim_column_min_max(
+                    (min, max) = trim_column_min_max(
                         min,
                         max,
                         col_stats_truncate_lens.get(&column_id).copied(),
-                    ) else {
-                        continue;
-                    };
-                    min = trimmed_min;
-                    max = trimmed_max;
+                    );
                 }
 
                 let (is_all_null, bitmap) = col.validity();
@@ -204,21 +198,30 @@ fn auto_stats_string_prefix_len(min: &str, max: &str) -> usize {
     }
 }
 
+/// Trim the bounds of a column to what its statistics store.
+///
+/// String bounds are cut to a prefix. A prefix is a lower bound as it is, so
+/// a column with values always keeps its lower bound. As an upper bound the
+/// prefix has to be incremented, which a prefix of U+10FFFF only does not
+/// allow: no string of that length bounds the value from above. The upper
+/// bound is then null, i.e. unknown, and the rest of the statistics stay.
 pub(crate) fn trim_column_min_max(
     min: Scalar,
     max: Scalar,
     string_truncate_len: Option<usize>,
-) -> Option<(Scalar, Scalar)> {
+) -> (Scalar, Scalar) {
     match (min, max) {
         (Scalar::String(min), Scalar::String(max)) => {
             let truncate_len =
                 string_truncate_len.unwrap_or_else(|| auto_stats_string_prefix_len(&min, &max));
-            Some((
-                Scalar::String(trim_string_min_with_len(min, truncate_len)?),
-                Scalar::String(trim_string_max_with_len(max, truncate_len)?),
-            ))
+            let min = trim_string_min_with_len(min, truncate_len);
+            let max = trim_string_max_with_len(max, truncate_len);
+            (
+                min.map_or(Scalar::Null, Scalar::String),
+                max.map_or(Scalar::Null, Scalar::String),
+            )
         }
-        (min, max) => Some((min.trim_min()?, max.trim_max()?)),
+        bounds => bounds,
     }
 }
 
@@ -310,6 +313,7 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
     use databend_common_expression::DataBlock;
@@ -322,6 +326,8 @@ mod tests {
     use databend_common_expression::TableSchema;
     use databend_common_expression::type_check::check_function;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
     use databend_common_functions::BUILTIN_FUNCTIONS;
     use databend_storages_common_index::RangeIndex;
@@ -331,6 +337,7 @@ mod tests {
     use super::auto_stats_string_prefix_len;
     use super::gen_columns_statistics;
     use super::scalar_min_max;
+    use super::trim_column_min_max;
     use super::trim_string_max_with_len;
     use super::trim_string_min_with_len;
     use crate::statistics::END_OF_UNICODE_RANGE;
@@ -504,10 +511,53 @@ mod tests {
             )
             .unwrap();
 
-            assert!(!index.apply(&stats, None, None, |_| false).unwrap());
+            assert!(!index.apply(&stats, Some(1), None, None, |_| false).unwrap());
             stats.get_mut(&0).unwrap().max = Scalar::String(old_bound.to_string());
-            assert!(index.apply(&stats, None, None, |_| false).unwrap());
+            assert!(index.apply(&stats, Some(1), None, None, |_| false).unwrap());
         }
+    }
+
+    #[test]
+    fn test_trim_column_min_max() {
+        let max_chars = |n| END_OF_UNICODE_RANGE.to_string().repeat(n);
+
+        // The upper bound carries past trailing U+10FFFF.
+        let prefix = format!("a{}", max_chars(STATS_STRING_PREFIX_LEN - 1));
+        let value = Scalar::String(format!("{prefix}-suffix"));
+        let len = Some(STATS_STRING_PREFIX_LEN);
+        let (min, max) = trim_column_min_max(value.clone(), value, len);
+        assert_eq!(min, Scalar::String(prefix));
+        assert_eq!(
+            max,
+            Scalar::String(format!("b{}", "\0".repeat(STATS_STRING_PREFIX_LEN - 1)))
+        );
+        assert!(max.as_string().unwrap().len() >= STATS_STRING_PREFIX_LEN);
+
+        // A prefix of U+10FFFF only cannot carry: the lower bound stays and
+        // the upper bound is unknown.
+        for kept in [1, 4, STATS_STRING_PREFIX_LEN] {
+            let value = Scalar::String(format!("{}z", max_chars(kept)));
+            let (min, max) =
+                trim_column_min_max(Scalar::String("a".to_string()), value.clone(), Some(kept));
+            assert_eq!(min, Scalar::String("a".to_string()));
+            assert_eq!(max, Scalar::Null);
+
+            let (min, max) = trim_column_min_max(value.clone(), value, Some(kept));
+            assert_eq!(min, Scalar::String(max_chars(kept)));
+            assert_eq!(max, Scalar::Null);
+        }
+        // Without an explicit length, the bounds of a column are cut where
+        // they differ, 16 characters in at the earliest.
+        let value = Scalar::String(format!("{}z", max_chars(STATS_STRING_PREFIX_LEN)));
+        let (min, max) = trim_column_min_max(Scalar::String("a".to_string()), value, None);
+        assert_eq!(min, Scalar::String("a".to_string()));
+        assert_eq!(max, Scalar::Null);
+
+        // Other bounds are stored as they are.
+        let (min, max) = trim_column_min_max(Scalar::from(1_i32), Scalar::from(2_i32), Some(4));
+        assert_eq!((min, max), (Scalar::from(1_i32), Scalar::from(2_i32)));
+        let (min, max) = trim_column_min_max(Scalar::Null, Scalar::Null, Some(4));
+        assert_eq!((min, max), (Scalar::Null, Scalar::Null));
     }
 
     #[test]
@@ -527,6 +577,36 @@ mod tests {
             Scalar::String(format!("b{}", "\0".repeat(STATS_STRING_PREFIX_LEN - 1)))
         );
         assert!(max.as_string().unwrap().len() >= STATS_STRING_PREFIX_LEN);
+    }
+
+    #[test]
+    fn test_unknown_string_max_keeps_the_rest_of_the_statistics() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::String.wrap_nullable(),
+        )]));
+        let unbounded = format!("{}z", END_OF_UNICODE_RANGE.to_string().repeat(4));
+        let block = DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![
+            Some("a"),
+            None,
+            Some(unbounded.as_str()),
+        ])]);
+
+        let stats = gen_columns_statistics(
+            &block,
+            None,
+            &schema,
+            &BTreeMap::from([(0, 4)]),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        let stats = &stats[&0];
+        assert_eq!(stats.min(), &Scalar::String("a".to_string()));
+        assert_eq!(stats.max(), &Scalar::Null);
+        assert_eq!(stats.null_count, 1);
+        assert_eq!(stats.distinct_of_values, Some(2));
+        assert!(!stats.is_all_null(3));
     }
 
     #[test]
@@ -567,5 +647,40 @@ mod tests {
 
             assert_eq!(res, Some(Scalar::String(exp)));
         }
+    }
+
+    /// Reducing statistics takes null bounds for "no value", so the elements
+    /// of an array must get a lower bound as soon as one of them has a value.
+    #[test]
+    fn test_array_elements_with_a_value_have_a_lower_bound() {
+        let element = TableDataType::Number(NumberDataType::Int32).wrap_nullable();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Array(Box::new(element)),
+        )]));
+        let data_type = DataType::from(schema.field(0).data_type());
+        let stats_of = |elements: Vec<Option<i32>>| {
+            let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
+            builder.push(Scalar::Array(Int32Type::from_opt_data(elements)).as_ref());
+            let block = DataBlock::new_from_columns(vec![builder.build()]);
+            let stats =
+                gen_columns_statistics(&block, None, &schema, &BTreeMap::new(), HashMap::new())
+                    .unwrap();
+            stats[&0].clone()
+        };
+        let five = Scalar::Number(5_i32.into());
+
+        let empty = stats_of(vec![]);
+        assert_eq!((empty.min(), empty.max()), (&Scalar::Null, &Scalar::Null));
+        assert_eq!(empty.null_count, 0);
+
+        let nulls = stats_of(vec![None, None]);
+        assert_eq!((nulls.min(), nulls.max()), (&Scalar::Null, &Scalar::Null));
+        assert_eq!(nulls.null_count, 2);
+
+        // The null count is of elements: two in a block of one row.
+        let with_value = stats_of(vec![None, None, Some(5)]);
+        assert_eq!((with_value.min(), with_value.max()), (&five, &five));
+        assert_eq!(with_value.null_count, 2);
     }
 }
