@@ -121,7 +121,12 @@ pub async fn generate_segments_v2(
             TestFixture::default_table_meta_timestamps(),
         )
         .await?;
-        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None)?;
+        let mut summary = reduce_block_metas(
+            &block_metas,
+            BlockThresholds::default(),
+            None,
+            &fuse_table.schema(),
+        )?;
         let uuid = Uuid::new_v4();
         let location = format!(
             "{}/{}/{}_v{}.json",
@@ -164,7 +169,12 @@ pub async fn generate_segments(
             table_meta_timestamps,
         )
         .await?;
-        let mut summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None)?;
+        let mut summary = reduce_block_metas(
+            &block_metas,
+            BlockThresholds::default(),
+            None,
+            &fuse_table.schema(),
+        )?;
         let location = if is_greater_than_v5 {
             location_generator.gen_segment_info_location(table_meta_timestamps, false)
         } else {
@@ -284,8 +294,12 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
-    snapshot_1.summary =
-        merge_statistics(snapshot_0.summary.clone(), &segments_v3[0].1.summary, None);
+    snapshot_1.summary = merge_statistics(
+        snapshot_0.summary.clone(),
+        &segments_v3[0].1.summary,
+        None,
+        &schema,
+    );
     let new_snapshot_location =
         location_gen.gen_snapshot_location(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_1
@@ -310,8 +324,12 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     )?;
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
-    snapshot_2.summary =
-        merge_statistics(snapshot_1.summary.clone(), &segments_v3[1].1.summary, None);
+    snapshot_2.summary = merge_statistics(
+        snapshot_1.summary.clone(),
+        &segments_v3[1].1.summary,
+        None,
+        &schema,
+    );
     let new_snapshot_location =
         location_gen.gen_snapshot_location(&snapshot_2.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_2

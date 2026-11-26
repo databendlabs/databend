@@ -1122,7 +1122,7 @@ impl CompactSegmentTestFixture {
             cluster_key_info.clone(),
             max_threads,
             max_io_requests,
-            schema,
+            schema.clone(),
             data_accessor,
             location_gen,
             TestFixture::default_table_meta_timestamps(),
@@ -1141,7 +1141,12 @@ impl CompactSegmentTestFixture {
         .await?;
         let mut summary = Statistics::default();
         for segment in segments {
-            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_info.as_ref());
+            merge_statistics_mut(
+                &mut summary,
+                &segment.summary,
+                cluster_key_info.as_ref(),
+                &schema,
+            );
         }
         self.input_blocks = blocks;
         // The input is in snapshot order (newest first); gen_segments writes
@@ -1176,7 +1181,8 @@ impl CompactSegmentTestFixture {
             tasks.push(async move {
                 let (schema, blocks) =
                     TestFixture::gen_sample_blocks_ex(num_blocks, rows_per_block, 1);
-                let mut stats_acc = RowOrientedSegmentBuilder::default();
+                let mut stats_acc =
+                    RowOrientedSegmentBuilder::new(schema.clone(), thresholds.block_per_segment);
 
                 let mut collected_blocks = vec![];
                 for block in blocks {
@@ -1374,7 +1380,12 @@ impl CompactCase {
                 .read(&(location.0.clone(), location.1), &CachePolicy::BYPASS)
                 .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
-            merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary, None);
+            merge_statistics_mut(
+                &mut statistics_of_input_segments,
+                &segment.summary,
+                None,
+                &TestFixture::default_table_schema(),
+            );
             block_num_of_output_segments.push(segment.blocks.len());
 
             for x in &segment.blocks {
@@ -1484,7 +1495,12 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         ));
         let mut summary = Statistics::default();
         for segment in &segments {
-            merge_statistics_mut(&mut summary, &segment.summary, cluster_key_info.as_ref());
+            merge_statistics_mut(
+                &mut summary,
+                &segment.summary,
+                cluster_key_info.as_ref(),
+                &schema,
+            );
         }
 
         eprintln!("running compact, limit {}", limit);
@@ -1525,6 +1541,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
                 &mut statistics_of_segments,
                 &segment.summary,
                 cluster_key_info.as_ref(),
+                &schema,
             );
 
             output_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));

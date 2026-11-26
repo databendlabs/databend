@@ -1469,8 +1469,7 @@ impl Table for FuseTable {
         let column_ids: HashSet<&ColumnId, RandomState> = HashSet::from_iter(column_ids);
 
         let schema = self.schema();
-        let num_fields = schema.fields.len();
-        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema);
+        let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), schema.clone());
         let chunk_size = std::cmp::min(
             ctx.get_settings().get_max_threads()? as usize * 4,
             num_segments,
@@ -1483,24 +1482,34 @@ impl Table for FuseTable {
         ));
 
         // Fold column ranges of segments chunk by chunk
-        let mut reduced = HashMap::with_capacity(num_fields);
+        let mut reduced = None;
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
             let segments = segments_io
                 .read_segments::<Arc<CompactSegmentInfo>>(chunk, CachePolicy::READ_ONLY)
                 .await?;
-            let mut partial_col_stats = Vec::with_capacity(chunk_size);
-            // 1. Carry the previously reduced ranges
-            partial_col_stats.push(reduced);
-            // 2. Append ranges of this chunk
-            for compacted_seg in segments.into_iter() {
-                let segment = compacted_seg?;
-                let mut cols_stats = segment.summary.col_stats.clone();
-                cols_stats.retain(|k, _| column_ids.contains(k));
-                partial_col_stats.push(cols_stats);
+            let mut partial_col_stats = Vec::with_capacity(chunk.len() + 1);
+            // None means no non-empty segments yet; an empty map means the
+            // previous segments have no usable ranges and must not be skipped.
+            partial_col_stats.extend(reduced.take());
+            for segment in segments {
+                let segment = segment?;
+                if segment.summary.row_count == 0 {
+                    continue;
+                }
+                partial_col_stats.push(
+                    segment
+                        .summary
+                        .col_stats
+                        .iter()
+                        .filter(|(id, _)| column_ids.contains(id))
+                        .map(|(&id, stat)| (id, stat.clone()))
+                        .collect(),
+                );
             }
-            // 3. Reduces them
-            reduced = reduce_block_statistics(&partial_col_stats);
+            if !partial_col_stats.is_empty() {
+                reduced = Some(reduce_block_statistics(&partial_col_stats, &schema));
+            }
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }
 
@@ -1509,6 +1518,7 @@ impl Table for FuseTable {
         // Its string bounds may have been truncated at any number of characters.
         let unknown_string_truncation = self.table_type == FuseTableType::Attached;
         let r = reduced
+            .unwrap_or_default()
             .into_iter()
             .map(|(k, v)| {
                 let truncate_len = col_stats_truncate_lens

@@ -369,11 +369,8 @@ impl TableMutationAggregator {
             }
             MutationLogEntry::DeletedSegment { deleted_segment } => {
                 self.removed_segment_indexes.push(deleted_segment.index);
-                merge_statistics_mut(
-                    &mut self.removed_statistics,
-                    &deleted_segment.summary,
-                    self.write_segment_ctx.cluster_key_info.as_ref(),
-                );
+                self.write_segment_ctx
+                    .merge_statistics(&mut self.removed_statistics, &deleted_segment.summary);
             }
             MutationLogEntry::AppendSegment {
                 segment_location,
@@ -393,11 +390,8 @@ impl TableMutationAggregator {
                         total.file_size += stats.file_size;
                     }
                 }
-                merge_statistics_mut(
-                    &mut self.appended_statistics,
-                    &summary,
-                    self.write_segment_ctx.cluster_key_info.as_ref(),
-                );
+                self.write_segment_ctx
+                    .merge_statistics(&mut self.appended_statistics, &summary);
                 if matches!(self.write_segment_ctx.kind, MutationKind::Insert) && !hll.is_empty() {
                     merge_column_hll_mut(&mut self.hll, &hll);
                 }
@@ -423,10 +417,9 @@ impl TableMutationAggregator {
 
                 self.removed_segment_indexes
                     .extend(extras.removed_segment_indexes);
-                merge_statistics_mut(
+                self.write_segment_ctx.merge_statistics(
                     &mut self.removed_statistics,
                     &extras.removed_segment_summary,
-                    self.write_segment_ctx.cluster_key_info.as_ref(),
                 );
             }
             MutationLogEntry::DoNothing => (),
@@ -521,11 +514,8 @@ impl TableMutationAggregator {
         .collect::<Result<Vec<_>>>()?;
 
         for (location, stats) in new_segments {
-            merge_statistics_mut(
-                &mut self.appended_statistics,
-                &stats,
-                self.write_segment_ctx.cluster_key_info.as_ref(),
-            );
+            self.write_segment_ctx
+                .merge_statistics(&mut self.appended_statistics, &stats);
             self.appended_segments
                 .push((location, SegmentInfo::VERSION));
         }
@@ -556,22 +546,16 @@ impl TableMutationAggregator {
                     // replace the old segment location with the new one.
                     let new_segment_loc = (location, SegmentInfo::VERSION);
                     new_segment_locs.push(new_segment_loc.clone());
-                    merge_statistics_mut(
-                        &mut merged_statistics,
-                        &summary,
-                        self.write_segment_ctx.cluster_key_info.as_ref(),
-                    );
+                    self.write_segment_ctx
+                        .merge_statistics(&mut merged_statistics, &summary);
                     replaced_segments.insert(result.index, new_segment_loc);
                 } else {
                     self.removed_segment_indexes.push(result.index);
                 }
 
                 if let Some(origin_summary) = result.origin_summary {
-                    merge_statistics_mut(
-                        &mut self.removed_statistics,
-                        &origin_summary,
-                        self.write_segment_ctx.cluster_key_info.as_ref(),
-                    );
+                    self.write_segment_ctx
+                        .merge_statistics(&mut self.removed_statistics, &origin_summary);
                 }
             }
 
@@ -595,11 +579,8 @@ impl TableMutationAggregator {
             "Mutation segment removals collected"
         );
 
-        merge_statistics_mut(
-            &mut merged_statistics,
-            &appended_statistics,
-            self.write_segment_ctx.cluster_key_info.as_ref(),
-        );
+        self.write_segment_ctx
+            .merge_statistics(&mut merged_statistics, &appended_statistics);
 
         Ok(ConflictResolveContext::ModifiedSegmentExistsInLatest(
             SnapshotChanges {
@@ -933,6 +914,15 @@ struct WriteSegmentCtx {
 }
 
 impl WriteSegmentCtx {
+    fn merge_statistics(&self, summary: &mut Statistics, additional: &Statistics) {
+        merge_statistics_mut(
+            summary,
+            additional,
+            self.cluster_key_info.as_ref(),
+            &self.schema,
+        );
+    }
+
     async fn write_segment(
         &self,
         mut blocks: Vec<Arc<BlockMeta>>,
@@ -944,8 +934,12 @@ impl WriteSegmentCtx {
             .location_gen
             .gen_segment_info_location(self.table_meta_timestamps, false);
         let virtual_schema = build_virtual_segment_schema(&mut blocks, &mut virtual_inputs)?;
-        let mut new_summary =
-            reduce_block_metas(&blocks, self.thresholds, self.cluster_key_info.as_ref())?;
+        let mut new_summary = reduce_block_metas(
+            &blocks,
+            self.thresholds,
+            self.cluster_key_info.as_ref(),
+            &self.schema,
+        )?;
         new_summary.virtual_segment_schema = virtual_schema;
         if force_all_blocks_perfect {
             // To fix issue #13217.

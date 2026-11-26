@@ -322,6 +322,7 @@ impl AsyncSink for CommitMultiTableInsert {
                     m.clone(),
                     meta,
                     cluster_key_info.as_ref(),
+                    &table.schema(),
                 )?;
             }
             None => {

@@ -25,7 +25,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
@@ -104,7 +103,6 @@ pub struct ColumnOrientedSegmentBuilder {
     column_stats: HashMap<ColumnId, ColStatBuilder>,
     column_meta: HashMap<ColumnId, ColMetaBuilder>,
 
-    segment_schema: TableSchema,
     table_schema: TableSchemaRef,
     block_per_segment: usize,
 }
@@ -184,14 +182,19 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         self.compression.push(block_meta.compression.to_u8());
         self.create_on
             .push(block_meta.create_on.map(|t| t.timestamp()));
-        for (col_id, col_stat) in self.column_stats.iter_mut() {
-            let stat = &block_meta.col_stats[col_id];
+        // Each stored statistics column has one tuple per block. If we can't
+        // represent every block's range, omit the statistics column entirely.
+        self.column_stats.retain(|col_id, col_stat| {
+            let Some(stat) = block_meta.col_stats.get(col_id) else {
+                return false;
+            };
             col_stat.min.push(stat.min.as_ref());
             col_stat.max.push(stat.max.as_ref());
             col_stat.null_count.push(stat.null_count);
             col_stat.in_memory_size.push(stat.in_memory_size);
             col_stat.distinct_of_values.push(stat.distinct_of_values);
-        }
+            true
+        });
         for (col_id, col_meta) in self.column_meta.iter_mut() {
             let meta = &block_meta.col_metas[col_id].as_parquet().unwrap();
             col_meta.offset.push(meta.offset);
@@ -241,12 +244,13 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             UInt8Type::from_data(this.compression),
             Int64Type::from_opt_data(this.create_on),
         ];
+        let segment_schema =
+            segment_schema(&this.table_schema, |id| this.column_stats.contains_key(&id));
         let mut column_stats = this.column_stats;
         let mut column_meta = this.column_meta;
         for field in this.table_schema.leaf_fields() {
             let col_id = field.column_id();
-            if supported_stat_type(&field.data_type().into()) {
-                let col_stat = column_stats.remove(&col_id).unwrap();
+            if let Some(col_stat) = column_stats.remove(&col_id) {
                 columns.push(Column::Tuple(vec![
                     col_stat.min.build(),
                     col_stat.max.build(),
@@ -266,14 +270,12 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         let segment = ColumnOrientedSegment {
             block_metas: DataBlock::new_from_columns(columns),
             summary,
-            segment_schema: this.segment_schema.clone(),
+            segment_schema,
         };
         Ok(segment)
     }
 
     fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self {
-        let segment_schema = segment_schema(&table_schema);
-
         let mut column_stats = HashMap::new();
         let mut column_meta = HashMap::new();
 
@@ -306,7 +308,6 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             create_on: Vec::with_capacity(block_per_segment),
             column_stats,
             column_meta,
-            segment_schema,
             table_schema,
             block_per_segment,
         }

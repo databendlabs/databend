@@ -15,6 +15,8 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::merge_column_hll;
@@ -29,13 +31,15 @@ use crate::statistics::merge_statistics;
 pub struct TransformMergeCommitMeta {
     to_merged: Vec<CommitMeta>,
     cluster_key_info: Option<ClusterKeyInfo>,
+    schema: TableSchemaRef,
 }
 
 impl TransformMergeCommitMeta {
-    pub fn create(cluster_key_info: Option<ClusterKeyInfo>) -> Self {
+    pub fn create(cluster_key_info: Option<ClusterKeyInfo>, schema: TableSchemaRef) -> Self {
         TransformMergeCommitMeta {
             to_merged: vec![],
             cluster_key_info,
+            schema,
         }
     }
 
@@ -43,6 +47,7 @@ impl TransformMergeCommitMeta {
         l: ConflictResolveContext,
         r: ConflictResolveContext,
         cluster_key_info: Option<&ClusterKeyInfo>,
+        schema: &TableSchema,
     ) -> Result<ConflictResolveContext> {
         match (l, r) {
             (
@@ -62,6 +67,7 @@ impl TransformMergeCommitMeta {
                             l.removed_statistics.clone(),
                             &r.removed_statistics,
                             cluster_key_info,
+                            schema,
                         ),
                         appended_segments: l
                             .appended_segments
@@ -77,6 +83,7 @@ impl TransformMergeCommitMeta {
                             l.merged_statistics.clone(),
                             &r.merged_statistics,
                             cluster_key_info,
+                            schema,
                         ),
                     },
                 ))
@@ -101,6 +108,7 @@ impl TransformMergeCommitMeta {
                             l.merged_statistics.clone(),
                             &r.merged_statistics,
                             cluster_key_info,
+                            &l_schema,
                         ),
                     },
                     l_schema,
@@ -117,6 +125,7 @@ impl TransformMergeCommitMeta {
         l: CommitMeta,
         r: CommitMeta,
         cluster_key_info: Option<&ClusterKeyInfo>,
+        schema: &TableSchema,
     ) -> Result<CommitMeta> {
         assert_eq!(l.table_id, r.table_id, "table id mismatch");
 
@@ -128,6 +137,7 @@ impl TransformMergeCommitMeta {
                 l.conflict_resolve_context,
                 r.conflict_resolve_context,
                 cluster_key_info,
+                schema,
             )?,
             new_segment_locs: l
                 .new_segment_locs
@@ -160,7 +170,7 @@ impl AccumulatingTransform for TransformMergeCommitMeta {
         let mut to_merged = to_merged.into_iter();
         let first = to_merged.next().unwrap();
         let merged = to_merged.try_fold(first, |acc, x| {
-            Self::merge_commit_meta(acc, x, self.cluster_key_info.as_ref())
+            Self::merge_commit_meta(acc, x, self.cluster_key_info.as_ref(), &self.schema)
         })?;
         Ok(vec![merged.into()])
     }
@@ -195,7 +205,13 @@ mod tests {
         let deleted = commit_meta_with_rows(90, 100, 10);
         let inserted = commit_meta_with_rows(105, 100, 0);
 
-        let merged = TransformMergeCommitMeta::merge_commit_meta(deleted, inserted, None).unwrap();
+        let merged = TransformMergeCommitMeta::merge_commit_meta(
+            deleted,
+            inserted,
+            None,
+            &TableSchema::empty(),
+        )
+        .unwrap();
         assert_eq!(merged.logical_deleted_rows, 10);
         assert_eq!(
             merged

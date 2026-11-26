@@ -28,6 +28,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::CachePolicy;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -233,6 +234,7 @@ impl BlockCompactMutator {
                     BlockCompactMutator::build_compact_tasks(
                         self.ctx.clone(),
                         self.operator.clone(),
+                        Arc::new(snapshot.schema.clone()),
                         self.cluster_key_info.clone(),
                         self.partition_key_count,
                         self.partition_key_id,
@@ -261,6 +263,7 @@ impl BlockCompactMutator {
     pub async fn build_compact_tasks(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
+        schema: TableSchemaRef,
         cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
         partition_key_id: Option<u32>,
@@ -291,6 +294,7 @@ impl BlockCompactMutator {
             let dal = dal.clone();
 
             let cluster_key_info = cluster_key_info.clone();
+            let schema = schema.clone();
             let batch = lazy_parts
                 .by_ref()
                 .take(current_batch_size)
@@ -301,6 +305,7 @@ impl BlockCompactMutator {
                     let mut builder = CompactTaskBuilder::new(
                         dal.clone(),
                         cache_policy,
+                        schema.clone(),
                         cluster_key_info.clone(),
                         partition_key_count,
                         partition_key_id,
@@ -507,6 +512,7 @@ struct CompactTaskBuilder {
     dal: Operator,
     // How the segment statistics are read: the policy of the compaction.
     cache_policy: CachePolicy,
+    schema: TableSchemaRef,
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
     partition_key_id: Option<u32>,
@@ -527,9 +533,11 @@ enum TailMergeSource {
 }
 
 impl CompactTaskBuilder {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         dal: Operator,
         cache_policy: CachePolicy,
+        schema: TableSchemaRef,
         cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
         partition_key_id: Option<u32>,
@@ -539,6 +547,7 @@ impl CompactTaskBuilder {
         Self {
             dal,
             cache_policy,
+            schema,
             cluster_key_info,
             partition_key_count,
             partition_key_id,
@@ -723,6 +732,7 @@ impl CompactTaskBuilder {
                     &mut removed_segment_summary,
                     &summary,
                     self.cluster_key_info.as_ref(),
+                    &self.schema,
                 );
 
                 let virtual_schema_index = self.virtual_schemas.len();

@@ -658,7 +658,8 @@ impl Processor for SinkAnalyzeState {
                 .take_meta()
                 .and_then(AnalyzeAccumulator::downcast_from)
             {
-                self.acc.merge(acc, self.analyzer.cluster_key_info())?;
+                self.acc
+                    .merge(acc, self.analyzer.cluster_key_info(), &self.table.schema())?;
             }
         }
         Ok(())
