@@ -537,5 +537,10 @@ async fn test_check_materialized_cte_receivers_taken() -> anyhow::Result<()> {
 
     let _second = ctx.get_materialized_cte_receiver("cte");
     ctx.check_materialized_cte_receivers_taken()?;
+
+    // A consumer built later, by a recursive CTE step, has not taken its channel yet.
+    let _senders = ctx.get_materialized_cte_senders("deferred", 1, Some(2));
+    ctx.defer_materialized_cte_consumers(["deferred".to_string()]);
+    ctx.check_materialized_cte_receivers_taken()?;
     Ok(())
 }

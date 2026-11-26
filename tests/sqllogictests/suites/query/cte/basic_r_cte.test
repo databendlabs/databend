@@ -656,3 +656,15 @@ SELECT s, ind FROM x ORDER BY s, ind;
 3. 2
 32 0
 33 0
+
+# A materialized CTE read by the outer query and by the seed of a recursive CTE. The
+# seed builds its pipeline only when the recursive CTE runs, after the query pipeline.
+query III
+WITH m AS MATERIALIZED (SELECT number AS n FROM numbers(5))
+SELECT count(*), sum(x), (SELECT count(*) FROM m)
+FROM (
+    WITH RECURSIVE r AS (SELECT max(n) AS x FROM m UNION ALL SELECT x - 1 FROM r WHERE x > 0)
+    SELECT x FROM r
+) t
+----
+5 10 5

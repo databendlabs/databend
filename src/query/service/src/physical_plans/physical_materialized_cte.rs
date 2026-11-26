@@ -268,7 +268,7 @@ pub fn recount_materialized_cte_refs(plan: &mut PhysicalPlan) {
 }
 
 #[recursive::recursive]
-fn count_cte_consumers(plan: &PhysicalPlan, ref_counts: &mut HashMap<String, usize>) {
+pub(crate) fn count_cte_consumers(plan: &PhysicalPlan, ref_counts: &mut HashMap<String, usize>) {
     if let Some(consumer) = MaterializeCTERef::from_physical_plan(plan) {
         *ref_counts.entry(consumer.cte_name.clone()).or_default() += 1;
     }

@@ -216,6 +216,9 @@ pub struct QueryContextShared {
 
     pub(super) materialized_cte_receivers:
         Arc<Mutex<HashMap<String, Vec<Receiver<MaterializedCtePayload>>>>>,
+    /// Materialized CTEs read inside a recursive CTE, whose consumers are built only when
+    /// the recursive steps run.
+    pub(super) deferred_materialized_cte_consumers: Arc<Mutex<HashSet<String>>>,
     // Temp tables created for recursive CTE cleanup.
     // This must be shared across QueryContext instances created from the same query,
     // otherwise cleanup hooks running on the parent context cannot see registrations
@@ -326,6 +329,7 @@ impl QueryContextShared {
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
+            deferred_materialized_cte_consumers: Arc::new(Mutex::new(HashSet::new())),
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
             visibility_checker_cache: Default::default(),
