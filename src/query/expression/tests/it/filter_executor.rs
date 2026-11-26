@@ -586,3 +586,134 @@ fn test_select_string_comparisons() {
         );
     }
 }
+
+/// The selector and the evaluator, chosen by `enable_selector_executor`, select the same rows
+/// through every entry point. After `filter`, `true_selection` holds the selected rows with
+/// either strategy: the hash join reads it to update its row states.
+#[test]
+fn test_filter_executor_strategies() {
+    let num_rows = 100;
+    let columns = [
+        ("k", DataType::Number(NumberDataType::Int32)),
+        (
+            "n",
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+        ),
+    ];
+    let block = DataBlock::new_from_columns(vec![
+        Int32Type::from_data((0..num_rows as i32).collect()),
+        Int32Type::from_data_with_validity(
+            (0..num_rows as i32).collect(),
+            (0..num_rows).map(|row| row % 7 != 0).collect(),
+        ),
+    ]);
+    // An expression and whether it keeps a row.
+    type Case = (&'static str, fn(usize) -> bool);
+    let cases: [Case; 8] = [
+        ("k % 3 = 0", |row| row % 3 == 0),
+        ("k % 3 = 0 AND k > 10", |row| row % 3 == 0 && row > 10),
+        // OR selects the rows of the second child after those of the first.
+        ("k % 3 = 0 OR k % 5 = 0", |row| row % 3 == 0 || row % 5 == 0),
+        // A NULL predicate drops the row.
+        ("n > 50", |row| row % 7 != 0 && row > 50),
+        ("n > 50 OR k < 5", |row| {
+            (row % 7 != 0 && row > 50) || row < 5
+        }),
+        ("NOT (n > 50)", |row| row % 7 != 0 && row <= 50),
+        ("k >= 0", |_| true),
+        ("k < 0", |_| false),
+    ];
+    let func_ctx = FunctionContext::default();
+    let ids = |block: &DataBlock| {
+        let mut ids = block
+            .get_by_offset(0)
+            .downcast::<Int32Type>()
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>();
+        ids.sort();
+        ids
+    };
+    for (text, keep) in cases {
+        let expr = type_check::check(
+            &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let expected = (0..num_rows)
+            .filter(|row| keep(*row))
+            .map(|row| row as u32)
+            .collect::<Vec<_>>();
+        let expected_ids = expected.iter().map(|row| *row as i32).collect::<Vec<_>>();
+        // A `max_block_size` below the block size grows the executor, and slices the block in
+        // `select_to_bitmap`.
+        for (enable_selector, single_comparison, max_block_size, keep_order) in [
+            (true, false, num_rows, true),
+            (true, false, 16, false),
+            (true, true, 16, true),
+            (false, false, num_rows, true),
+            (false, false, 16, false),
+        ] {
+            let context = format!(
+                "{text}, selector: {enable_selector}, single comparison: {single_comparison}, \
+                 max_block_size: {max_block_size}, keep_order: {keep_order}"
+            );
+            let new_executor = || {
+                let executor = FilterExecutor::new(
+                    expr.clone(),
+                    FunctionContext {
+                        enable_selector_executor: enable_selector,
+                        ..func_ctx.clone()
+                    },
+                    max_block_size,
+                    None,
+                    &BUILTIN_FUNCTIONS,
+                    keep_order,
+                );
+                if single_comparison {
+                    executor.evaluate_single_comparison()
+                } else {
+                    executor
+                }
+            };
+
+            let mut executor = new_executor();
+            let count = executor.select(&block).unwrap();
+            let mut selection = executor.true_selection()[..count].to_vec();
+            selection.sort();
+            assert_eq!(selection, expected, "select: {context}");
+
+            let mut executor = new_executor();
+            let filtered = executor.filter(block.clone()).unwrap();
+            assert_eq!(ids(&filtered), expected_ids, "filter: {context}");
+            if keep_order {
+                assert!(
+                    filtered
+                        .get_by_offset(0)
+                        .downcast::<Int32Type>()
+                        .unwrap()
+                        .iter()
+                        .is_sorted(),
+                    "filter: {context}"
+                );
+            }
+            let mut selection = executor.true_selection()[..filtered.num_rows()].to_vec();
+            selection.sort();
+            assert_eq!(
+                selection, expected,
+                "true_selection after filter: {context}"
+            );
+
+            let mut executor = new_executor();
+            let bitmap = executor.select_to_bitmap(&block).unwrap();
+            assert_eq!(bitmap.len(), num_rows, "select_to_bitmap: {context}");
+            assert_eq!(
+                (0..num_rows as u32)
+                    .filter(|row| bitmap.get(*row as usize))
+                    .collect::<Vec<_>>(),
+                expected,
+                "select_to_bitmap: {context}"
+            );
+        }
+    }
+}

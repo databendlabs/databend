@@ -1,0 +1,146 @@
+# Filters, join conditions and DML predicates go through `FilterExecutor`, which uses the
+# selector or the evaluator by `enable_selector_executor`. Both must give the same rows, also
+# in the old hash join, which reads the selected rows to update its outer join row states.
+# run-with-settings: enable_selector_executor=0
+# run-with-settings: enable_experimental_new_join=0
+# run-with-settings: enable_selector_executor=0, enable_experimental_new_join=0
+
+statement ok
+CREATE OR REPLACE TABLE fes_t1(a INT, b INT)
+
+statement ok
+INSERT INTO fes_t1 VALUES (1, 10), (2, 20), (3, 30), (4, NULL)
+
+statement ok
+CREATE OR REPLACE TABLE fes_t2(a INT, c INT)
+
+statement ok
+INSERT INTO fes_t2 VALUES (1, 5), (1, 15), (2, 25), (3, 1), (5, 100)
+
+query III
+SELECT fes_t1.a, fes_t1.b, fes_t2.c FROM fes_t1 LEFT JOIN fes_t2
+    ON fes_t1.a = fes_t2.a AND fes_t1.b > fes_t2.c
+ORDER BY fes_t1.a, fes_t2.c
+----
+1 10 5
+2 20 NULL
+3 30 1
+4 NULL NULL
+
+query III
+SELECT fes_t1.a, fes_t1.b, fes_t2.c FROM fes_t1 LEFT JOIN fes_t2
+    ON fes_t1.a = fes_t2.a AND (fes_t2.c < 3 OR fes_t1.b < fes_t2.c)
+ORDER BY fes_t1.a, fes_t2.c
+----
+1 10 15
+2 20 25
+3 30 1
+4 NULL NULL
+
+query III
+SELECT fes_t1.a, fes_t2.a, fes_t2.c FROM fes_t1 RIGHT JOIN fes_t2
+    ON fes_t1.a = fes_t2.a AND fes_t1.b > fes_t2.c
+ORDER BY fes_t2.a, fes_t2.c
+----
+1 1 5
+NULL 1 15
+NULL 2 25
+3 3 1
+NULL 5 100
+
+query III
+SELECT fes_t1.a, fes_t2.a, fes_t2.c FROM fes_t1 FULL JOIN fes_t2
+    ON fes_t1.a = fes_t2.a AND fes_t1.b > fes_t2.c
+ORDER BY fes_t1.a NULLS LAST, fes_t2.a NULLS LAST, fes_t2.c NULLS LAST
+----
+1 1 5
+2 NULL NULL
+3 3 1
+4 NULL NULL
+NULL 1 15
+NULL 2 25
+NULL 5 100
+
+query I
+SELECT a FROM fes_t1
+WHERE EXISTS (SELECT 1 FROM fes_t2 WHERE fes_t2.a = fes_t1.a AND fes_t2.c > fes_t1.b)
+ORDER BY a
+----
+1
+2
+
+query I
+SELECT a FROM fes_t1
+WHERE NOT EXISTS (SELECT 1 FROM fes_t2 WHERE fes_t2.a = fes_t1.a AND fes_t2.c > fes_t1.b)
+ORDER BY a
+----
+3
+4
+
+query II
+SELECT a, b FROM fes_t1 WHERE a = 1 OR b > 25 ORDER BY a
+----
+1 10
+3 30
+
+statement ok
+CREATE OR REPLACE TABLE fes_t3(a INT, c INT)
+
+statement ok
+INSERT INTO fes_t3 VALUES (1, 0), (2, 0), (3, 0), (4, 0)
+
+statement ok
+CREATE OR REPLACE TABLE fes_t4(a INT, c INT)
+
+statement ok
+INSERT INTO fes_t4 VALUES (1, 5), (2, 25), (3, 1), (5, 100), (6, 10)
+
+query III
+MERGE INTO fes_t3 USING fes_t4 ON fes_t3.a = fes_t4.a
+    WHEN MATCHED AND (fes_t4.c < 3 OR fes_t4.c > 20) THEN UPDATE SET fes_t3.c = fes_t4.c
+    WHEN MATCHED AND fes_t4.c = 5 THEN DELETE
+    WHEN NOT MATCHED AND (fes_t4.c > 50 OR fes_t4.a < 0) THEN INSERT (a, c) VALUES (fes_t4.a, fes_t4.c)
+----
+1 2 1
+
+query II
+SELECT a, c FROM fes_t3 ORDER BY a
+----
+2 25
+3 1
+4 0
+5 100
+
+statement ok
+DELETE FROM fes_t3 WHERE a = 2 OR c = 1
+
+statement ok
+UPDATE fes_t3 SET c = c + 1 WHERE a = 4 OR c > 50
+
+query II
+SELECT a, c FROM fes_t3 ORDER BY a
+----
+4 1
+5 101
+
+statement ok
+REPLACE INTO fes_t3 ON(a) DELETE WHEN d = 0 OR d > 8
+    SELECT * FROM (VALUES (4, 1, 0), (5, 2, 9), (6, 1, 1), (7, 2, 2)) AS v(a, c, d)
+
+query II
+SELECT a, c FROM fes_t3 ORDER BY a
+----
+6 1
+7 2
+
+statement ok
+DROP TABLE fes_t1
+
+statement ok
+DROP TABLE fes_t2
+
+statement ok
+DROP TABLE fes_t3
+
+statement ok
+DROP TABLE fes_t4

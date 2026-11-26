@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::Evaluator;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
 use databend_common_expression::eval_function;
@@ -76,10 +77,21 @@ pub(crate) fn get_or(
     )
 }
 
-pub(crate) fn expr2prdicate(evaluator: &Evaluator, filter: &Expr) -> Result<Value<BooleanType>> {
-    Ok(evaluator
-        .run(filter)
-        .map_err(|e| e.add_message("eval filter failed:"))?
-        .try_downcast::<BooleanType>()
-        .unwrap())
+/// The rows of `data_block` that `filter` selects, with NULL as false.
+pub(crate) fn eval_predicate(
+    data_block: &DataBlock,
+    filter: &Expr,
+    func_ctx: &FunctionContext,
+) -> Result<Value<BooleanType>> {
+    let bitmap = FilterExecutor::new(
+        filter.clone(),
+        func_ctx.clone(),
+        data_block.num_rows(),
+        None,
+        &BUILTIN_FUNCTIONS,
+        false,
+    )
+    .select_to_bitmap(data_block)
+    .map_err(|e| e.add_message("eval filter failed:"))?;
+    Ok(Value::Column(bitmap.into()))
 }

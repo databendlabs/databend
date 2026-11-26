@@ -13,20 +13,17 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
 use super::utils::get_not;
-use crate::operations::merge_into::mutator::utils::expr2prdicate;
+use crate::operations::merge_into::mutator::utils::eval_predicate;
 use crate::operations::merge_into::mutator::utils::get_and;
 pub struct DeleteByExprMutator {
     expr: Option<Expr>,
@@ -116,9 +113,7 @@ impl DeleteByExprMutator {
             let filter: Expr = cast_expr_to_non_null_boolean(self.expr.as_ref().unwrap().clone())?;
             assert_eq!(filter.data_type(), &DataType::Boolean);
 
-            let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-            let predicates = expr2prdicate(&evaluator, &filter)?;
+            let predicates = eval_predicate(&data_block, &filter, &self.func_ctx)?;
 
             // for delete, we don't need to add new filter to the result block,
             // just filter it.
@@ -145,14 +140,7 @@ impl DeleteByExprMutator {
                     .clone()
                     .filter_boolean_value(&predicates_not.try_downcast().unwrap())?;
 
-                let const_expr = Expr::Constant(Constant {
-                    span: None,
-                    scalar: Scalar::Boolean(false),
-                    data_type: DataType::Boolean,
-                });
-
-                let const_predicates = expr2prdicate(&evaluator, &const_expr)?;
-                res_block.add_value(const_predicates.upcast(), DataType::Boolean);
+                res_block.add_value(Value::Scalar(Scalar::Boolean(false)), DataType::Boolean);
 
                 Ok((res_block, self.get_row_id_block(filtered_block)))
             }

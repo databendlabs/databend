@@ -28,10 +28,9 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FromData;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableDataType;
@@ -40,7 +39,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::expr::*;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
@@ -252,17 +250,17 @@ impl<'a> FuseEncodingImpl<'a> {
 
         let data_block = self.to_block(&rows).await?;
         let result = if let Some(filter) = self.filters.as_ref().map(|f| &f.filter) {
-            let func_ctx = FunctionContext::default();
-            let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
-            let filter = evaluator
-                .run(&as_expr(
-                    filter,
-                    &BUILTIN_FUNCTIONS,
-                    &FuseEncodingImpl::schema(),
-                ))?
-                .try_downcast::<BooleanType>()
-                .unwrap();
-            data_block.filter_boolean_value(&filter)?
+            let filter = as_expr(filter, &BUILTIN_FUNCTIONS, &FuseEncodingImpl::schema());
+            let num_rows = data_block.num_rows();
+            FilterExecutor::new(
+                filter,
+                self.ctx.get_function_context()?,
+                num_rows,
+                None,
+                &BUILTIN_FUNCTIONS,
+                true,
+            )
+            .filter(data_block)?
         } else {
             data_block
         };

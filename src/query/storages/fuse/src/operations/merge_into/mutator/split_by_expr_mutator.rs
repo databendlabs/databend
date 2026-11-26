@@ -14,14 +14,14 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::eval_function;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+
+use super::utils::eval_predicate;
 
 pub struct SplitByExprMutator {
     expr: Option<Expr>,
@@ -42,13 +42,7 @@ impl SplitByExprMutator {
             let filter: Expr = cast_expr_to_non_null_boolean(self.expr.as_ref().unwrap().clone())?;
             assert_eq!(filter.data_type(), &DataType::Boolean);
 
-            let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-            let predicates = evaluator
-                .run(&filter)
-                .map_err(|e| e.add_message("eval filter failed:"))?
-                .try_downcast::<BooleanType>()
-                .unwrap();
+            let predicates = eval_predicate(&data_block, &filter, &self.func_ctx)?;
             let (predicates_not, _) = eval_function(
                 None,
                 "not",
