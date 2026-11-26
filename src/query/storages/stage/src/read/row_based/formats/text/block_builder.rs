@@ -85,6 +85,7 @@ impl TextDecoder {
         builder: &mut ColumnBuilder,
         col_data: &[u8],
         column_index: usize,
+        scratch: &mut Vec<u8>,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
             return self.read_empty_column(builder, column_index);
@@ -112,7 +113,10 @@ impl TextDecoder {
             return self.read_empty_column(builder, column_index);
         }
 
-        if let Err(e) = self.field_decoder.read_field(builder, decoded, true) {
+        if let Err(e) = self
+            .field_decoder
+            .read_field(builder, decoded, true, scratch)
+        {
             return Err(get_decode_error_by_pos(
                 column_index,
                 &self.load_context.schema,
@@ -183,10 +187,11 @@ impl TextDecoder {
         &self,
         buf: &[u8],
         columns: &mut [ColumnBuilder],
+        scratch: &mut Vec<u8>,
     ) -> std::result::Result<(), FileParseError> {
         if self.field_delimiter.is_none() {
             if columns.len() == 1 {
-                return self.read_column(&mut columns[0], buf, 0);
+                return self.read_column(&mut columns[0], buf, 0, scratch);
             }
             if self.error_on_column_count_mismatch {
                 return Err(FileParseError::NumberOfColumnsMismatch {
@@ -194,9 +199,9 @@ impl TextDecoder {
                     file: 1,
                 });
             }
-            self.read_column(&mut columns[0], buf, 0)?;
+            self.read_column(&mut columns[0], buf, 0, scratch)?;
             for (column_index, column) in columns.iter_mut().enumerate().skip(1) {
-                self.read_column(column, &[], column_index)?;
+                self.read_empty_column(column, column_index)?;
             }
             return Ok(());
         }
@@ -217,6 +222,7 @@ impl TextDecoder {
                             &mut columns[column_index],
                             &buf[field_start..field_end],
                             column_index,
+                            scratch,
                         ) {
                             error = Some(e);
                             break;
@@ -244,6 +250,7 @@ impl TextDecoder {
                         &mut columns[column_index],
                         &buf[field_start..field_end],
                         column_index,
+                        scratch,
                     ) {
                         error = Some(err);
                         break;
@@ -259,7 +266,7 @@ impl TextDecoder {
             if error.is_none() {
                 if !self.error_on_column_count_mismatch {
                     while column_index < num_columns {
-                        self.read_column(&mut columns[column_index], &[], column_index)?;
+                        self.read_empty_column(&mut columns[column_index], column_index)?;
                         column_index += 1;
                     }
                 } else if column_index < num_columns {
@@ -289,7 +296,7 @@ impl RowDecoder for TextDecoder {
             row = self.trim_record_delimiter(row);
             let row_id = batch.start_pos.rows + row_id;
             if !row.is_empty() {
-                if let Err(e) = self.read_row(row, columns) {
+                if let Err(e) = self.read_row(row, columns, &mut state.nested_field_scratch) {
                     self.load_context.error_handler.on_error(
                         e.with_row(row_id),
                         Some((columns, state.num_rows)),

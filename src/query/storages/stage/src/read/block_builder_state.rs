@@ -35,6 +35,7 @@ use crate::read::load_context::LoadContext;
 #[derive(Default)]
 pub struct BlockBuilderState {
     pub column_builders: Vec<ColumnBuilder>,
+    pub(crate) nested_field_scratch: Vec<u8>,
     pub internal_column_builders: Vec<ColumnBuilder>,
     pub internal_columns: Vec<InternalColumn>,
     pub row_id_column_pos: Option<usize>,
@@ -73,6 +74,7 @@ impl BlockBuilderState {
 
         BlockBuilderState {
             column_builders,
+            nested_field_scratch: Vec::new(),
             internal_column_builders,
             internal_columns: ctx.internal_columns.clone(),
             row_id_column_pos,

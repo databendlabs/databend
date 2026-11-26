@@ -72,6 +72,7 @@ use crate::field_decoder::common::read_timestamp_tz;
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
     common_settings: InputCommonSettings,
+    scratch: Vec<u8>,
 }
 
 impl FieldDecoder for FastFieldDecoderValues {
@@ -91,6 +92,7 @@ impl FastFieldDecoderValues {
                 settings,
                 binary_format: Default::default(),
             },
+            scratch: Vec::new(),
         }
     }
 
@@ -116,7 +118,7 @@ impl FastFieldDecoderValues {
     }
 
     pub fn read_field<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut ColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
@@ -185,7 +187,7 @@ impl FastFieldDecoderValues {
     }
 
     fn read_nullable<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut NullableColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
@@ -258,13 +260,13 @@ impl FastFieldDecoderValues {
         Ok(())
     }
 
-    fn read_string_inner<R: AsRef<[u8]>>(
-        &self,
+    fn read_quoted_text_into_scratch<R: AsRef<[u8]>>(
+        &mut self,
         reader: &mut Cursor<R>,
-        out_buf: &mut Vec<u8>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        reader.fast_read_quoted_text(out_buf, positions)?;
+        self.scratch.clear();
+        reader.fast_read_quoted_text(&mut self.scratch, positions)?;
         Ok(())
     }
 
@@ -274,77 +276,69 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        self.read_string_inner(reader, &mut column.row_buffer, positions)?;
+        reader.fast_read_quoted_text(&mut column.row_buffer, positions)?;
         column.commit_row();
         Ok(())
     }
 
     fn read_interval<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut Vec<months_days_micros>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        let res =
-            std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
-                format!(
-                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
-                    buf
-                )
-            })?;
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        let buf = &self.scratch;
+        let res = std::str::from_utf8(buf).map_err_to_code(ErrorCode::BadBytes, || {
+            format!("UTF-8 Conversion Failed: Unable to convert value {buf:?} to UTF-8")
+        })?;
         let i = Interval::from_string(res)?;
         column.push(months_days_micros::new(i.months, i.days, i.micros));
         Ok(())
     }
 
     fn read_date<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut Vec<i32>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        super::common::read_date(column, &buf, &self.common_settings)
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        super::common::read_date(column, &self.scratch, &self.common_settings)
     }
 
     fn read_timestamp<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut Vec<i64>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        read_timestamp(column, &buf, &self.common_settings)
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        read_timestamp(column, &self.scratch, &self.common_settings)
     }
 
     fn read_timestamp_tz<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut Vec<timestamp_tz>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        read_timestamp_tz(column, &buf, &self.common_settings)
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        read_timestamp_tz(column, &self.scratch, &self.common_settings)
     }
 
     fn read_timestamp_ntz<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut Vec<i64>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        read_timestamp_ntz(column, &buf)
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        read_timestamp_ntz(column, &self.scratch)
     }
 
     fn read_array<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
@@ -372,7 +366,7 @@ impl FastFieldDecoderValues {
     }
 
     fn read_map<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
@@ -429,7 +423,7 @@ impl FastFieldDecoderValues {
     }
 
     fn read_tuple<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         fields: &mut [ColumnBuilder],
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
@@ -463,28 +457,26 @@ impl FastFieldDecoderValues {
     }
 
     fn read_bitmap<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        let rb = parse_bitmap(&buf)?;
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        let rb = parse_bitmap(&self.scratch)?;
         rb.serialize_into(&mut column.data).unwrap();
         column.commit_row();
         Ok(())
     }
 
     fn read_variant<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        match parse_owned_jsonb_with_buf(&buf, &mut column.data) {
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        match parse_owned_jsonb_with_buf(&self.scratch, &mut column.data) {
             Ok(_) => {
                 column.commit_row();
             }
@@ -496,7 +488,7 @@ impl FastFieldDecoderValues {
                 } else {
                     return Err(ErrorCode::BadBytes(format!(
                         "Invalid JSON value: {:?}",
-                        String::from_utf8_lossy(&buf)
+                        String::from_utf8_lossy(&self.scratch)
                     )));
                 }
             }
@@ -505,28 +497,26 @@ impl FastFieldDecoderValues {
     }
 
     fn read_geometry<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        let geom = parse_bytes_to_ewkb(&buf, None)?;
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        let geom = parse_bytes_to_ewkb(&self.scratch, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
         Ok(())
     }
 
     fn read_geography<R: AsRef<[u8]>>(
-        &self,
+        &mut self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
         positions: &mut VecDeque<usize>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, positions)?;
-        let geog = geography_from_ewkt_bytes(&buf)?;
+        self.read_quoted_text_into_scratch(reader, positions)?;
+        let geog = geography_from_ewkt_bytes(&self.scratch)?;
         column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
@@ -565,7 +555,7 @@ impl FastFieldDecoderValues {
 }
 
 pub struct FastValuesDecoder<'a> {
-    field_decoder: &'a FastFieldDecoderValues,
+    field_decoder: &'a mut FastFieldDecoderValues,
     reader: Cursor<&'a [u8]>,
     estimated_rows: usize,
     positions: VecDeque<usize>,
@@ -583,7 +573,7 @@ static INSERT_TOKEN_FINDER: LazyLock<AhoCorasick> =
     LazyLock::new(|| AhoCorasick::new(PATTERNS).unwrap());
 
 impl<'a> FastValuesDecoder<'a> {
-    pub fn new(data: &'a str, field_decoder: &'a FastFieldDecoderValues) -> Self {
+    pub fn new(data: &'a str, field_decoder: &'a mut FastFieldDecoderValues) -> Self {
         let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
         for mat in INSERT_TOKEN_FINDER.find_iter(data) {
@@ -881,9 +871,9 @@ mod test {
             writeln!(file, "---------- Input Column Types ----------")?;
             writeln!(file, "{:?}", case.column_types)?;
 
-            let field_decoder =
+            let mut field_decoder =
                 FastFieldDecoderValues::create_for_insert(InputFormatSettings::default());
-            let mut values_decoder = FastValuesDecoder::new(case.data, &field_decoder);
+            let mut values_decoder = FastValuesDecoder::new(case.data, &mut field_decoder);
             let fallback = DummyFastValuesDecodeFallback {};
             let mut columns = case
                 .column_types

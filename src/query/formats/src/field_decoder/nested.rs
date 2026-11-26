@@ -113,13 +113,14 @@ impl NestedValues {
         &self,
         column: &mut ColumnBuilder,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
         match column {
             ColumnBuilder::Null { len } => {
                 *len += 1;
                 Ok(())
             }
-            ColumnBuilder::Nullable(c) => self.read_nullable(c, reader),
+            ColumnBuilder::Nullable(c) => self.read_nullable(c, reader, scratch),
             ColumnBuilder::Boolean(c) => self.read_bool(c, reader),
             ColumnBuilder::Number(c) => with_number_mapped_type!(|NUM_TYPE| match c {
                 NumberColumnBuilder::NUM_TYPE(c) => {
@@ -133,20 +134,20 @@ impl NestedValues {
             ColumnBuilder::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
                 DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, reader),
             }),
-            ColumnBuilder::Date(c) => self.read_date(c, reader),
-            ColumnBuilder::Interval(c) => self.read_interval(c, reader),
-            ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
-            ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, reader),
-            ColumnBuilder::TimestampNtz(c) => self.read_timestamp_ntz(c, reader),
-            ColumnBuilder::Binary(c) => self.read_binary(c, reader),
+            ColumnBuilder::Date(c) => self.read_date(c, reader, scratch),
+            ColumnBuilder::Interval(c) => self.read_interval(c, reader, scratch),
+            ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, scratch),
+            ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, reader, scratch),
+            ColumnBuilder::TimestampNtz(c) => self.read_timestamp_ntz(c, reader, scratch),
+            ColumnBuilder::Binary(c) => self.read_binary(c, reader, scratch),
             ColumnBuilder::String(c) => self.read_string(c, reader),
-            ColumnBuilder::Array(c) => self.read_array(c, reader),
-            ColumnBuilder::Map(c) => self.read_map(c, reader),
-            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader),
-            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader),
-            ColumnBuilder::Variant(c) => self.read_variant(c, reader),
-            ColumnBuilder::Geometry(c) => self.read_geometry(c, reader),
-            ColumnBuilder::Geography(c) => self.read_geography(c, reader),
+            ColumnBuilder::Array(c) => self.read_array(c, reader, scratch),
+            ColumnBuilder::Map(c) => self.read_map(c, reader, scratch),
+            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, scratch),
+            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, scratch),
+            ColumnBuilder::Variant(c) => self.read_variant(c, reader, scratch),
+            ColumnBuilder::Geometry(c) => self.read_geometry(c, reader, scratch),
+            ColumnBuilder::Geography(c) => self.read_geography(c, reader, scratch),
             ColumnBuilder::Vector(c) => self.read_vector(c, reader),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
@@ -219,10 +220,10 @@ impl NestedValues {
         &self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
-        let decoded = decode_binary(&buf, self.common_settings.binary_format)?;
+        self.read_quoted_text_into_scratch(reader, scratch)?;
+        let decoded = decode_binary(scratch, self.common_settings.binary_format)?;
         column.put_slice(&decoded);
         column.commit_row();
         Ok(())
@@ -238,6 +239,15 @@ impl NestedValues {
             reader.read_quoted_text(out_buf, b'\'')?;
         }
         Ok(())
+    }
+
+    fn read_quoted_text_into_scratch<R: AsRef<[u8]>>(
+        &self,
+        reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
+    ) -> Result<()> {
+        scratch.clear();
+        self.read_string_inner(reader, scratch)
     }
 
     fn read_decimal<R: AsRef<[u8]>, D: Decimal>(
@@ -262,26 +272,22 @@ impl NestedValues {
         &self,
         column: &mut Vec<i32>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
-        super::common::read_date(column, &buf, &self.common_settings)
+        self.read_quoted_text_into_scratch(reader, scratch)?;
+        super::common::read_date(column, scratch, &self.common_settings)
     }
 
     fn read_interval<R: AsRef<[u8]>>(
         &self,
         column: &mut Vec<months_days_micros>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
-        let res =
-            std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
-                format!(
-                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
-                    buf
-                )
-            })?;
+        self.read_quoted_text_into_scratch(reader, scratch)?;
+        let res = std::str::from_utf8(scratch).map_err_to_code(ErrorCode::BadBytes, || {
+            format!("UTF-8 Conversion Failed: Unable to convert value {scratch:?} to UTF-8")
+        })?;
         let i = Interval::from_string(res)?;
         column.push(months_days_micros::new(i.months, i.days, i.micros));
         Ok(())
@@ -291,40 +297,40 @@ impl NestedValues {
         &self,
         column: &mut Vec<i64>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
-        read_timestamp(column, &buf, &self.common_settings)
+        self.read_quoted_text_into_scratch(reader, scratch)?;
+        read_timestamp(column, scratch, &self.common_settings)
     }
 
     fn read_timestamp_tz<R: AsRef<[u8]>>(
         &self,
         column: &mut Vec<timestamp_tz>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
-        read_timestamp_tz(column, &buf, &self.common_settings)
+        self.read_quoted_text_into_scratch(reader, scratch)?;
+        read_timestamp_tz(column, scratch, &self.common_settings)
     }
 
     fn read_timestamp_ntz<R: AsRef<[u8]>>(
         &self,
         column: &mut Vec<i64>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
-        read_timestamp_ntz(column, &buf)
+        self.read_quoted_text_into_scratch(reader, scratch)?;
+        read_timestamp_ntz(column, scratch)
     }
 
     fn read_bitmap<R: AsRef<[u8]>>(
         &self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf)?;
-        let rb = parse_bitmap(&buf)?;
+        self.read_quoted_text_into_scratch(reader, scratch)?;
+        let rb = parse_bitmap(scratch)?;
         rb.serialize_into(&mut column.data).unwrap();
         column.commit_row();
         Ok(())
@@ -334,15 +340,13 @@ impl NestedValues {
         &self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let buf = if let Ok(val) = self.read_json(reader) {
-            val.as_bytes().to_vec()
-        } else {
-            let mut buf = Vec::new();
-            reader.read_quoted_text(&mut buf, b'\'')?;
-            buf
-        };
-        match parse_owned_jsonb_with_buf(&buf, &mut column.data) {
+        if self.read_json_into_scratch(reader, scratch).is_err() {
+            scratch.clear();
+            reader.read_quoted_text(scratch, b'\'')?;
+        }
+        match parse_owned_jsonb_with_buf(scratch, &mut column.data) {
             Ok(_) => {
                 column.commit_row();
             }
@@ -363,15 +367,12 @@ impl NestedValues {
         &self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        if reader.read_quoted_text(&mut buf, b'"').is_err()
-            && reader.read_quoted_text(&mut buf, b'\'').is_err()
-        {
-            let val = self.read_json(reader)?;
-            buf = val.as_bytes().to_vec();
+        if self.read_quoted_text_into_scratch(reader, scratch).is_err() {
+            self.read_json_into_scratch(reader, scratch)?;
         }
-        let geom = parse_bytes_to_ewkb(&buf, None)?;
+        let geom = parse_bytes_to_ewkb(scratch, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
         Ok(())
@@ -381,33 +382,39 @@ impl NestedValues {
         &self,
         column: &mut BinaryColumnBuilder,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
-        let mut buf = Vec::new();
-        if reader.read_quoted_text(&mut buf, b'"').is_err()
-            && reader.read_quoted_text(&mut buf, b'\'').is_err()
-        {
-            let val = self.read_json(reader)?;
-            buf = val.as_bytes().to_vec();
+        if self.read_quoted_text_into_scratch(reader, scratch).is_err() {
+            self.read_json_into_scratch(reader, scratch)?;
         }
-        let geog = geography_from_ewkt_bytes(&buf)?;
+        let geog = geography_from_ewkt_bytes(scratch)?;
         column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
     }
 
-    fn read_json<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> Result<String> {
+    fn read_json_into_scratch<R: AsRef<[u8]>>(
+        &self,
+        reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
+    ) -> Result<()> {
         let start = reader.position() as usize;
         let data = reader.get_ref().as_ref();
         let mut deserializer = Deserializer::from_slice(&data[start..]);
-        let raw: Box<RawValue> = Box::<RawValue>::deserialize(&mut deserializer)?;
-        reader.set_position((start + raw.get().len()) as u64);
-        Ok(raw.to_string())
+        let raw = <&RawValue>::deserialize(&mut deserializer)?
+            .get()
+            .as_bytes();
+        scratch.clear();
+        scratch.extend_from_slice(raw);
+        reader.set_position((start + raw.len()) as u64);
+        Ok(())
     }
 
     fn read_nullable<R: AsRef<[u8]>>(
         &self,
         column: &mut NullableColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
         for null in &self.common_settings.null_if {
             if self.match_bytes(reader, null) {
@@ -415,7 +422,7 @@ impl NestedValues {
                 return Ok(());
             }
         }
-        self.read_field(&mut column.builder, reader)?;
+        self.read_field(&mut column.builder, reader, scratch)?;
         column.validity.push(true);
         Ok(())
     }
@@ -424,6 +431,7 @@ impl NestedValues {
         &self,
         column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
         for idx in 0.. {
@@ -435,7 +443,7 @@ impl NestedValues {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces_or_comments();
-            self.read_field(&mut column.builder, reader)?;
+            self.read_field(&mut column.builder, reader, scratch)?;
         }
         column.commit_row();
         Ok(())
@@ -445,6 +453,7 @@ impl NestedValues {
         &self,
         column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
         const KEY: usize = 0;
         const VALUE: usize = 1;
@@ -460,7 +469,7 @@ impl NestedValues {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces_or_comments();
-            self.read_field(&mut map_builder[KEY], reader)?;
+            self.read_field(&mut map_builder[KEY], reader, scratch)?;
             // check duplicate map keys
             let key = map_builder[KEY].pop().unwrap();
             if set.contains(&key) {
@@ -473,7 +482,7 @@ impl NestedValues {
             let _ = reader.ignore_white_spaces_or_comments();
             reader.must_ignore_byte(b':')?;
             let _ = reader.ignore_white_spaces_or_comments();
-            self.read_field(&mut map_builder[VALUE], reader)?;
+            self.read_field(&mut map_builder[VALUE], reader, scratch)?;
         }
         column.commit_row();
         Ok(())
@@ -483,6 +492,7 @@ impl NestedValues {
         &self,
         fields: &mut [ColumnBuilder],
         reader: &mut Cursor<R>,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
         let closing = if reader.ignore_byte(b'(') {
             b')'
@@ -496,7 +506,7 @@ impl NestedValues {
                 reader.must_ignore_byte(b',')?;
             }
             let _ = reader.ignore_white_spaces_or_comments();
-            self.read_field(field, reader)?;
+            self.read_field(field, reader, scratch)?;
         }
         reader.must_ignore_byte(closing)?;
         Ok(())

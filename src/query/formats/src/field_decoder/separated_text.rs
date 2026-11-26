@@ -27,7 +27,6 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
-use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -100,6 +99,7 @@ impl SeparatedTextDecoder {
         column: &mut ColumnBuilder,
         data: &[u8],
         allow_null: bool,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
         match column {
             ColumnBuilder::Null { len } => {
@@ -117,7 +117,7 @@ impl SeparatedTextDecoder {
                 Ok(())
             }
             ColumnBuilder::Boolean(c) => self.read_bool(c, data),
-            ColumnBuilder::Nullable(c) => self.read_nullable(c, data, allow_null),
+            ColumnBuilder::Nullable(c) => self.read_nullable(c, data, allow_null, scratch),
             ColumnBuilder::Number(c) => with_number_mapped_type!(|NUM_TYPE| match c {
                 NumberColumnBuilder::NUM_TYPE(c) => {
                     if NUM_TYPE::FLOATING {
@@ -135,10 +135,19 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, data),
             ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, data),
             ColumnBuilder::TimestampNtz(c) => read_timestamp_ntz(c, data),
-            ColumnBuilder::Array(c) => self.read_array(c, data),
-            ColumnBuilder::Map(c) => self.read_map(c, data),
+            ColumnBuilder::Array(c) => {
+                self.nested_decoder
+                    .read_array(c, &mut Cursor::new(data), scratch)
+            }
+            ColumnBuilder::Map(c) => {
+                self.nested_decoder
+                    .read_map(c, &mut Cursor::new(data), scratch)
+            }
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
-            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
+            ColumnBuilder::Tuple(fields) => {
+                self.nested_decoder
+                    .read_tuple(fields, &mut Cursor::new(data), scratch)
+            }
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, data),
             ColumnBuilder::Geography(c) => self.read_geography(c, data),
@@ -175,6 +184,7 @@ impl SeparatedTextDecoder {
         column: &mut NullableColumnBuilder<AnyType>,
         data: &[u8],
         allow_null: bool,
+        scratch: &mut Vec<u8>,
     ) -> Result<()> {
         if allow_null {
             for null in &self.common_settings.null_if {
@@ -184,7 +194,7 @@ impl SeparatedTextDecoder {
                 }
             }
         }
-        self.read_field(&mut column.builder, data, false)?;
+        self.read_field(&mut column.builder, data, false, scratch)?;
         column.validity.push(true);
         Ok(())
     }
@@ -305,21 +315,6 @@ impl SeparatedTextDecoder {
         column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
-    }
-
-    fn read_array(&self, column: &mut ArrayColumnBuilder<AnyType>, data: &[u8]) -> Result<()> {
-        let mut cursor = Cursor::new(data);
-        self.nested_decoder.read_array(column, &mut cursor)
-    }
-
-    fn read_map(&self, column: &mut ArrayColumnBuilder<AnyType>, data: &[u8]) -> Result<()> {
-        let mut cursor = Cursor::new(data);
-        self.nested_decoder.read_map(column, &mut cursor)
-    }
-
-    fn read_tuple(&self, column: &mut [ColumnBuilder], data: &[u8]) -> Result<()> {
-        let mut cursor = Cursor::new(data);
-        self.nested_decoder.read_tuple(column, &mut cursor)
     }
 
     fn read_vector(&self, column: &mut VectorColumnBuilder, data: &[u8]) -> Result<()> {

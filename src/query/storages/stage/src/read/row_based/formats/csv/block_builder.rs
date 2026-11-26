@@ -56,6 +56,7 @@ impl CsvDecoder {
         mut col_data: &[u8],
         column_index: usize,
         is_quoted: bool,
+        scratch: &mut Vec<u8>,
     ) -> std::result::Result<(), FileParseError> {
         if self.fmt.params.trim_space {
             col_data = trim_ascii_space(col_data);
@@ -136,6 +137,7 @@ impl CsvDecoder {
                 builder,
                 col_data,
                 !is_quoted || self.fmt.params.allow_quoted_nulls,
+                scratch,
             )
             .map_err(|e| {
                 get_decode_error_by_pos(
@@ -152,6 +154,7 @@ impl CsvDecoder {
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         field_ends: &[usize],
+        scratch: &mut Vec<u8>,
     ) -> std::result::Result<(), FileParseError> {
         if let Some(columns_to_read) = &self.load_context.pos_projection {
             for c in columns_to_read {
@@ -170,7 +173,7 @@ impl CsvDecoder {
                         is_quoted = true;
                     }
                     let col_data = &buf[field_start..field_end];
-                    self.read_column(&mut columns[*c], col_data, *c, is_quoted)?;
+                    self.read_column(&mut columns[*c], col_data, *c, is_quoted, scratch)?;
                 }
             }
         } else {
@@ -183,7 +186,7 @@ impl CsvDecoder {
                     is_quoted = true;
                 }
                 let col_data = &buf[field_start..field_end];
-                self.read_column(column, col_data, c, is_quoted)?;
+                self.read_column(column, col_data, c, is_quoted, scratch)?;
                 field_start = field_end;
             }
         }
@@ -205,6 +208,7 @@ impl RowDecoder for CsvDecoder {
                 buf,
                 columns,
                 &data.field_ends[field_end_idx..field_end_idx + num_fields],
+                &mut state.nested_field_scratch,
             ) {
                 self.load_context.error_handler.on_error(
                     e.with_row(row_id),

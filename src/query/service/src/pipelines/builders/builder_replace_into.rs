@@ -145,9 +145,9 @@ impl AsyncSource for RawValueSource {
         }
 
         let format = self.ctx.get_input_format_settings()?;
-        let field_decoder = FastFieldDecoderValues::create_for_insert(format);
+        let mut field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
-        let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
+        let mut values_decoder = FastValuesDecoder::new(&self.data, &mut field_decoder);
         let estimated_rows = values_decoder.estimated_rows();
 
         let mut columns = self
