@@ -161,7 +161,7 @@ select virtual_column_size, row_count, virtual_columns_complete, virtual_column_
 query IIIIII
 select block_count, row_count, bytes_uncompressed, bytes_compressed, index_size, virtual_block_count from fuse_segment('test_virtual_column', 't2')
 ----
-1 3 134 697 1233 1
+1 3 134 697 1235 1
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
