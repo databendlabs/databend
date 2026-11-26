@@ -67,6 +67,10 @@ Separate hot-only probe: best of four runs after one warm-up. Of 17 cases, 11 ar
 
 Raw probe and scan plans: [format.json](format.json).
 
+## Encoded columns only
+
+A separate [same-snapshot comparison](encoded-columns/README.md) changes only `enable_encoded_columns` on `main`. With all other settings unchanged, cold and hot totals fall by 13.1% and 15.8%, respectively. That comparison has its own default arm; do not pool its timings with the version comparison above.
+
 ## Charts
 
 ![main vs v0.9.53](charts/speedup-vs-v0.9.53.svg)

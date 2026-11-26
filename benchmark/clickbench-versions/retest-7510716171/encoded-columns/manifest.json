@@ -1,0 +1,57 @@
+{
+ "git_sha": "7510716171d90a81ea3df8806ac4cc291a1473e5",
+ "version": "Databend Query v1.2.969-7510716171(rust-1.101.0-nightly-2026-11-26T08:42:50.878887741Z)",
+ "cpu_pinning": "0-15",
+ "source_sha256": "a390f6cb782f6aaef278c72fc1dd86c4f30bc843ebab3c159e9bd4d45ddb079f",
+ "query_sql_sha256": "98d4c0025e44b03cf76df2d7da904c7af7f40916a12803b585c25fa912d56ef5",
+ "query_binary_sha256": "d41782796fc3f6c52c1ac10dbfd853614c467b3253edc6ffc2e9c14c3afac404",
+ "meta_binary_sha256": "0230a84f77e8ddf618542185564c6499c68060d75e147572b83350578929d60b",
+ "snapshot": {
+  "location": "1/10/_ss/h01a21714cebc7a2c9e56eef20ea6916a_v4.mpk",
+  "blocks": 784,
+  "rows": 99997497,
+  "table_data_bytes": 13696144769
+ },
+ "arms": {
+  "default": {
+   "effective_settings": {
+    "enable_condition_cache": "0",
+    "enable_encoded_columns": "0",
+    "enable_query_result_cache": "0",
+    "max_block_size": "65536",
+    "max_threads": "16"
+   },
+   "caches_at_start": {
+    "memory_cache_condition": {
+     "items": 0,
+     "bytes": 0,
+     "capacity": 18446744073709551615,
+     "access": 0,
+     "hit": 0,
+     "miss": 0
+    }
+   },
+   "smoke_cache_hits": {}
+  },
+  "encoded": {
+   "effective_settings": {
+    "enable_condition_cache": "0",
+    "enable_encoded_columns": "1",
+    "enable_query_result_cache": "0",
+    "max_block_size": "65536",
+    "max_threads": "16"
+   },
+   "caches_at_start": {
+    "memory_cache_condition": {
+     "items": 0,
+     "bytes": 0,
+     "capacity": 18446744073709551615,
+     "access": 0,
+     "hit": 0,
+     "miss": 0
+    }
+   },
+   "smoke_cache_hits": {}
+  }
+ }
+}

@@ -52,10 +52,10 @@ class Svg:
             self.rect(x, y + i * 18 - 10, 12, 12, color)
             self.text(x + 18, y + i * 18, label, 12)
 
-    def save(self, name):
-        OUT.mkdir(exist_ok=True)
+    def save(self, name, *, out=OUT):
+        out.mkdir(exist_ok=True)
         body = '\n'.join(self.items)
-        (OUT / name).write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.w}" height="{self.h}" '
+        (out / name).write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.w}" height="{self.h}" '
                                 f'viewBox="0 0 {self.w} {self.h}">\n<rect width="100%" height="100%" fill="white"/>\n{body}\n</svg>\n')
 
 def grouped_bars(svg, left, top, width, height, series, ys, ylog, ylabel, xlabels, baseline=None):
@@ -89,12 +89,13 @@ def grouped_bars(svg, left, top, width, height, series, ys, ylog, ylabel, xlabel
     svg.line(left, top + height, left + width, top + height, '#999')
 
 
-def speedup_chart(fname, title, subtitle, rows, note):
+def speedup_chart(fname, title, subtitle, rows, note, *, out=OUT, neutral_label='within noise'):
     """One horizontal bar per query, sorted from biggest speedup to biggest slowdown.
 
     rows: [(label, baseline_s, new_s, significant)]. A bar goes left (green) when the new
     build is faster and right (red) when it is slower; its length is log2 of the speedup, and
-    its label says "N× faster" / "N× slower" with both times. Grey bars are within noise."""
+    its label says "N× faster" / "N× slower" with both times. Grey bars do not meet the
+    caller's significance threshold."""
     rows = sorted(rows, key=lambda r: r[2] / r[1])
     span = max(abs(math.log2(r[2] / r[1])) for r in rows)
     span = max(1.0, math.ceil(span))
@@ -107,7 +108,7 @@ def speedup_chart(fname, title, subtitle, rows, note):
     svg.text(16, 46, subtitle, 12, fill='#444')
     svg.rect(16, 58, 12, 12, '#59a14f'); svg.text(34, 68, 'faster', 12)
     svg.rect(90, 58, 12, 12, '#e15759'); svg.text(108, 68, 'slower', 12)
-    svg.rect(166, 58, 12, 12, '#bbbbbb'); svg.text(184, 68, 'within noise', 12)
+    svg.rect(166, 58, 12, 12, '#bbbbbb'); svg.text(184, 68, neutral_label, 12)
     for k in range(1, int(span) + 1):
         for sign, word in ((-1, 'faster'), (1, 'slower')):
             x = mid + sign * k * unit
@@ -127,7 +128,7 @@ def speedup_chart(fname, title, subtitle, rows, note):
                  fill='#222' if significant else '#888')
     svg.line(mid, top - 4, mid, top + row_h * len(rows), '#333', 1.2)
     svg.text(16, height - 14, note, 11, fill='#555')
-    svg.save(fname)
+    svg.save(fname, out=out)
 
 
 def query_label(q, n=52):

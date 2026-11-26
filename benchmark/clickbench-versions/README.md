@@ -15,6 +15,7 @@ This directory was copied from the working directory of the run, `/home/kould/tm
 |---|---|
 | [PR-21163-ORIGINAL-SUMMARY.md](PR-21163-ORIGINAL-SUMMARY.md) | original PR Summary, preserved before the retest on main |
 | [retest-7510716171/README.md](retest-7510716171/README.md) | main retest: paired timings, Parquet probes and PR trace |
+| [retest-7510716171/encoded-columns/README.md](retest-7510716171/encoded-columns/README.md) | same-snapshot comparison with only encoded columns enabled |
 | `releases.json` | the 5 releases, their sources and order |
 | `build-official.sh` | builds databend-query in a clean worktree with the parameters of the x86_64 nightly release CI |
 | `bin/NAME/build-info.json` | per local build: commit, git log, rustc, cargo command, environment variables, profile, start and end time, sha256 |

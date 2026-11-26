@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="440" viewBox="0 0 1500 440">
+<rect width="100%" height="100%" fill="white"/>
+<text x="750.0" y="26.0" font-size="15" text-anchor="middle" font-weight="bold" fill="#222" font-family="Helvetica, Arial, sans-serif">Peak RSS per query (GiB, max over all runs): encoded columns only vs default</text>
+<line x1="70.0" y1="375.0" x2="1470.0" y2="375.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="379.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">0</text>
+<line x1="70.0" y1="332.9" x2="1470.0" y2="332.9" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="336.9" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">2</text>
+<line x1="70.0" y1="290.7" x2="1470.0" y2="290.7" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="294.7" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">4</text>
+<line x1="70.0" y1="248.6" x2="1470.0" y2="248.6" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="252.6" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">6</text>
+<line x1="70.0" y1="206.4" x2="1470.0" y2="206.4" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="210.4" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">8</text>
+<line x1="70.0" y1="164.3" x2="1470.0" y2="164.3" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="168.3" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">10</text>
+<line x1="70.0" y1="122.1" x2="1470.0" y2="122.1" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="126.1" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">12</text>
+<line x1="70.0" y1="80.0" x2="1470.0" y2="80.0" stroke="#e5e5e5" stroke-width="1"/>
+<text x="64.0" y="84.0" font-size="11" text-anchor="end" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">14</text>
+<text x="24.0" y="227.5" font-size="12" text-anchor="middle" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif" transform="rotate(-90 24.0 227.5)">GiB</text>
+<rect x="73.3" y="367.2" width="12.5" height="7.8" fill="#f28e2b"><title>Q00 Default: 0.371</title></rect>
+<rect x="86.3" y="367.2" width="12.5" height="7.8" fill="#4e79a7"><title>Q00 Encoded columns only: 0.372</title></rect>
+<text x="86.3" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q00</text>
+<rect x="105.8" y="358.5" width="12.5" height="16.5" fill="#f28e2b"><title>Q01 Default: 0.781</title></rect>
+<rect x="118.8" y="357.8" width="12.5" height="17.2" fill="#4e79a7"><title>Q01 Encoded columns only: 0.816</title></rect>
+<text x="118.8" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q01</text>
+<rect x="138.4" y="352.1" width="12.5" height="22.9" fill="#f28e2b"><title>Q02 Default: 1.09</title></rect>
+<rect x="151.4" y="353.9" width="12.5" height="21.1" fill="#4e79a7"><title>Q02 Encoded columns only: 1</title></rect>
+<text x="151.4" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q02</text>
+<rect x="170.9" y="358.2" width="12.5" height="16.8" fill="#f28e2b"><title>Q03 Default: 0.796</title></rect>
+<rect x="184.0" y="357.7" width="12.5" height="17.3" fill="#4e79a7"><title>Q03 Encoded columns only: 0.819</title></rect>
+<text x="184.0" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q03</text>
+<rect x="203.5" y="323.6" width="12.5" height="51.4" fill="#f28e2b"><title>Q04 Default: 2.44</title></rect>
+<rect x="216.5" y="319.8" width="12.5" height="55.2" fill="#4e79a7"><title>Q04 Encoded columns only: 2.62</title></rect>
+<text x="216.5" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q04</text>
+<rect x="236.0" y="319.9" width="12.5" height="55.1" fill="#f28e2b"><title>Q05 Default: 2.62</title></rect>
+<rect x="249.1" y="319.4" width="12.5" height="55.6" fill="#4e79a7"><title>Q05 Encoded columns only: 2.64</title></rect>
+<text x="249.1" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q05</text>
+<rect x="268.6" y="367.1" width="12.5" height="7.9" fill="#f28e2b"><title>Q06 Default: 0.376</title></rect>
+<rect x="281.6" y="367.0" width="12.5" height="8.0" fill="#4e79a7"><title>Q06 Encoded columns only: 0.379</title></rect>
+<text x="281.6" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q06</text>
+<rect x="301.2" y="356.9" width="12.5" height="18.1" fill="#f28e2b"><title>Q07 Default: 0.859</title></rect>
+<rect x="314.2" y="357.9" width="12.5" height="17.1" fill="#4e79a7"><title>Q07 Encoded columns only: 0.811</title></rect>
+<text x="314.2" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q07</text>
+<rect x="333.7" y="313.1" width="12.5" height="61.9" fill="#f28e2b"><title>Q08 Default: 2.94</title></rect>
+<rect x="346.7" y="318.1" width="12.5" height="56.9" fill="#4e79a7"><title>Q08 Encoded columns only: 2.7</title></rect>
+<text x="346.7" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q08</text>
+<rect x="366.3" y="310.4" width="12.5" height="64.6" fill="#f28e2b"><title>Q09 Default: 3.07</title></rect>
+<rect x="379.3" y="309.4" width="12.5" height="65.6" fill="#4e79a7"><title>Q09 Encoded columns only: 3.12</title></rect>
+<text x="379.3" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q09</text>
+<rect x="398.8" y="346.5" width="12.5" height="28.5" fill="#f28e2b"><title>Q10 Default: 1.35</title></rect>
+<rect x="411.9" y="345.9" width="12.5" height="29.1" fill="#4e79a7"><title>Q10 Encoded columns only: 1.38</title></rect>
+<text x="411.9" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q10</text>
+<rect x="431.4" y="345.8" width="12.5" height="29.2" fill="#f28e2b"><title>Q11 Default: 1.38</title></rect>
+<rect x="444.4" y="346.3" width="12.5" height="28.7" fill="#4e79a7"><title>Q11 Encoded columns only: 1.36</title></rect>
+<text x="444.4" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q11</text>
+<rect x="464.0" y="317.7" width="12.5" height="57.3" fill="#f28e2b"><title>Q12 Default: 2.72</title></rect>
+<rect x="477.0" y="318.0" width="12.5" height="57.0" fill="#4e79a7"><title>Q12 Encoded columns only: 2.71</title></rect>
+<text x="477.0" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q12</text>
+<rect x="496.5" y="285.4" width="12.5" height="89.6" fill="#f28e2b"><title>Q13 Default: 4.25</title></rect>
+<rect x="509.5" y="291.6" width="12.5" height="83.4" fill="#4e79a7"><title>Q13 Encoded columns only: 3.96</title></rect>
+<text x="509.5" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q13</text>
+<rect x="529.1" y="315.6" width="12.5" height="59.4" fill="#f28e2b"><title>Q14 Default: 2.82</title></rect>
+<rect x="542.1" y="315.2" width="12.5" height="59.8" fill="#4e79a7"><title>Q14 Encoded columns only: 2.84</title></rect>
+<text x="542.1" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q14</text>
+<rect x="561.6" y="309.7" width="12.5" height="65.3" fill="#f28e2b"><title>Q15 Default: 3.1</title></rect>
+<rect x="574.7" y="310.1" width="12.5" height="64.9" fill="#4e79a7"><title>Q15 Encoded columns only: 3.08</title></rect>
+<text x="574.7" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q15</text>
+<rect x="594.2" y="253.4" width="12.5" height="121.6" fill="#f28e2b"><title>Q16 Default: 5.77</title></rect>
+<rect x="607.2" y="246.8" width="12.5" height="128.2" fill="#4e79a7"><title>Q16 Encoded columns only: 6.09</title></rect>
+<text x="607.2" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q16</text>
+<rect x="626.7" y="353.9" width="12.5" height="21.1" fill="#f28e2b"><title>Q17 Default: 1</title></rect>
+<rect x="639.8" y="354.3" width="12.5" height="20.7" fill="#4e79a7"><title>Q17 Encoded columns only: 0.984</title></rect>
+<text x="639.8" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q17</text>
+<rect x="659.3" y="179.9" width="12.5" height="195.1" fill="#f28e2b"><title>Q18 Default: 9.26</title></rect>
+<rect x="672.3" y="177.0" width="12.5" height="198.0" fill="#4e79a7"><title>Q18 Encoded columns only: 9.4</title></rect>
+<text x="672.3" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q18</text>
+<rect x="691.9" y="356.3" width="12.5" height="18.7" fill="#f28e2b"><title>Q19 Default: 0.888</title></rect>
+<rect x="704.9" y="356.6" width="12.5" height="18.4" fill="#4e79a7"><title>Q19 Encoded columns only: 0.872</title></rect>
+<text x="704.9" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q19</text>
+<rect x="724.4" y="335.6" width="12.5" height="39.4" fill="#f28e2b"><title>Q20 Default: 1.87</title></rect>
+<rect x="737.4" y="330.8" width="12.5" height="44.2" fill="#4e79a7"><title>Q20 Encoded columns only: 2.1</title></rect>
+<text x="737.4" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q20</text>
+<rect x="757.0" y="327.7" width="12.5" height="47.3" fill="#f28e2b"><title>Q21 Default: 2.25</title></rect>
+<rect x="770.0" y="325.7" width="12.5" height="49.3" fill="#4e79a7"><title>Q21 Encoded columns only: 2.34</title></rect>
+<text x="770.0" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q21</text>
+<rect x="789.5" y="315.8" width="12.5" height="59.2" fill="#f28e2b"><title>Q22 Default: 2.81</title></rect>
+<rect x="802.6" y="314.7" width="12.5" height="60.3" fill="#4e79a7"><title>Q22 Encoded columns only: 2.86</title></rect>
+<text x="802.6" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q22</text>
+<rect x="822.1" y="305.0" width="12.5" height="70.0" fill="#f28e2b"><title>Q23 Default: 3.32</title></rect>
+<rect x="835.1" y="326.0" width="12.5" height="49.0" fill="#4e79a7"><title>Q23 Encoded columns only: 2.32</title></rect>
+<text x="835.1" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q23</text>
+<rect x="854.7" y="353.2" width="12.5" height="21.8" fill="#f28e2b"><title>Q24 Default: 1.04</title></rect>
+<rect x="867.7" y="354.7" width="12.5" height="20.3" fill="#4e79a7"><title>Q24 Encoded columns only: 0.962</title></rect>
+<text x="867.7" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q24</text>
+<rect x="887.2" y="350.0" width="12.5" height="25.0" fill="#f28e2b"><title>Q25 Default: 1.19</title></rect>
+<rect x="900.2" y="352.9" width="12.5" height="22.1" fill="#4e79a7"><title>Q25 Encoded columns only: 1.05</title></rect>
+<text x="900.2" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q25</text>
+<rect x="919.8" y="352.5" width="12.5" height="22.5" fill="#f28e2b"><title>Q26 Default: 1.07</title></rect>
+<rect x="932.8" y="354.1" width="12.5" height="20.9" fill="#4e79a7"><title>Q26 Encoded columns only: 0.993</title></rect>
+<text x="932.8" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q26</text>
+<rect x="952.3" y="327.5" width="12.5" height="47.5" fill="#f28e2b"><title>Q27 Default: 2.25</title></rect>
+<rect x="965.3" y="327.3" width="12.5" height="47.7" fill="#4e79a7"><title>Q27 Encoded columns only: 2.26</title></rect>
+<text x="965.3" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q27</text>
+<rect x="984.9" y="301.1" width="12.5" height="73.9" fill="#f28e2b"><title>Q28 Default: 3.5</title></rect>
+<rect x="997.9" y="299.1" width="12.5" height="75.9" fill="#4e79a7"><title>Q28 Encoded columns only: 3.6</title></rect>
+<text x="997.9" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q28</text>
+<rect x="1017.4" y="358.0" width="12.5" height="17.0" fill="#f28e2b"><title>Q29 Default: 0.806</title></rect>
+<rect x="1030.5" y="358.0" width="12.5" height="17.0" fill="#4e79a7"><title>Q29 Encoded columns only: 0.809</title></rect>
+<text x="1030.5" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q29</text>
+<rect x="1050.0" y="314.6" width="12.5" height="60.4" fill="#f28e2b"><title>Q30 Default: 2.87</title></rect>
+<rect x="1063.0" y="313.0" width="12.5" height="62.0" fill="#4e79a7"><title>Q30 Encoded columns only: 2.94</title></rect>
+<text x="1063.0" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q30</text>
+<rect x="1082.6" y="292.7" width="12.5" height="82.3" fill="#f28e2b"><title>Q31 Default: 3.91</title></rect>
+<rect x="1095.6" y="293.3" width="12.5" height="81.7" fill="#4e79a7"><title>Q31 Encoded columns only: 3.88</title></rect>
+<text x="1095.6" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q31</text>
+<rect x="1115.1" y="84.4" width="12.5" height="290.6" fill="#f28e2b"><title>Q32 Default: 13.8</title></rect>
+<rect x="1128.1" y="89.7" width="12.5" height="285.3" fill="#4e79a7"><title>Q32 Encoded columns only: 13.5</title></rect>
+<text x="1128.1" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q32</text>
+<rect x="1147.7" y="176.2" width="12.5" height="198.8" fill="#f28e2b"><title>Q33 Default: 9.44</title></rect>
+<rect x="1160.7" y="183.4" width="12.5" height="191.6" fill="#4e79a7"><title>Q33 Encoded columns only: 9.09</title></rect>
+<text x="1160.7" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q33</text>
+<rect x="1180.2" y="179.7" width="12.5" height="195.3" fill="#f28e2b"><title>Q34 Default: 9.27</title></rect>
+<rect x="1193.3" y="178.5" width="12.5" height="196.5" fill="#4e79a7"><title>Q34 Encoded columns only: 9.32</title></rect>
+<text x="1193.3" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q34</text>
+<rect x="1212.8" y="312.5" width="12.5" height="62.5" fill="#f28e2b"><title>Q35 Default: 2.96</title></rect>
+<rect x="1225.8" y="322.6" width="12.5" height="52.4" fill="#4e79a7"><title>Q35 Encoded columns only: 2.49</title></rect>
+<text x="1225.8" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q35</text>
+<rect x="1245.3" y="352.8" width="12.5" height="22.2" fill="#f28e2b"><title>Q36 Default: 1.06</title></rect>
+<rect x="1258.4" y="352.0" width="12.5" height="23.0" fill="#4e79a7"><title>Q36 Encoded columns only: 1.09</title></rect>
+<text x="1258.4" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q36</text>
+<rect x="1277.9" y="357.6" width="12.5" height="17.4" fill="#f28e2b"><title>Q37 Default: 0.825</title></rect>
+<rect x="1290.9" y="356.4" width="12.5" height="18.6" fill="#4e79a7"><title>Q37 Encoded columns only: 0.884</title></rect>
+<text x="1290.9" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q37</text>
+<rect x="1310.5" y="354.1" width="12.5" height="20.9" fill="#f28e2b"><title>Q38 Default: 0.99</title></rect>
+<rect x="1323.5" y="353.0" width="12.5" height="22.0" fill="#4e79a7"><title>Q38 Encoded columns only: 1.05</title></rect>
+<text x="1323.5" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q38</text>
+<rect x="1343.0" y="340.5" width="12.5" height="34.5" fill="#f28e2b"><title>Q39 Default: 1.64</title></rect>
+<rect x="1356.0" y="342.6" width="12.5" height="32.4" fill="#4e79a7"><title>Q39 Encoded columns only: 1.54</title></rect>
+<text x="1356.0" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q39</text>
+<rect x="1375.6" y="358.1" width="12.5" height="16.9" fill="#f28e2b"><title>Q40 Default: 0.804</title></rect>
+<rect x="1388.6" y="358.3" width="12.5" height="16.7" fill="#4e79a7"><title>Q40 Encoded columns only: 0.791</title></rect>
+<text x="1388.6" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q40</text>
+<rect x="1408.1" y="359.6" width="12.5" height="15.4" fill="#f28e2b"><title>Q41 Default: 0.729</title></rect>
+<rect x="1421.2" y="358.4" width="12.5" height="16.6" fill="#4e79a7"><title>Q41 Encoded columns only: 0.788</title></rect>
+<text x="1421.2" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q41</text>
+<rect x="1440.7" y="360.1" width="12.5" height="14.9" fill="#f28e2b"><title>Q42 Default: 0.705</title></rect>
+<rect x="1453.7" y="360.7" width="12.5" height="14.3" fill="#4e79a7"><title>Q42 Encoded columns only: 0.677</title></rect>
+<text x="1453.7" y="389.0" font-size="10" text-anchor="middle" font-weight="normal" fill="#333" font-family="Helvetica, Arial, sans-serif">Q42</text>
+<line x1="70.0" y1="80.0" x2="70.0" y2="375.0" stroke="#999" stroke-width="1"/>
+<line x1="70.0" y1="375.0" x2="1470.0" y2="375.0" stroke="#999" stroke-width="1"/>
+<rect x="1190.0" y="45.0" width="12.0" height="12.0" fill="#f28e2b"></rect>
+<text x="1208.0" y="55.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Default</text>
+<rect x="1280.0" y="45.0" width="12.0" height="12.0" fill="#4e79a7"></rect>
+<text x="1298.0" y="55.0" font-size="12" text-anchor="start" font-weight="normal" fill="#222" font-family="Helvetica, Arial, sans-serif">Encoded columns only</text>
+<text x="70.0" y="420.0" font-size="11" text-anchor="start" font-weight="normal" fill="#555" font-family="Helvetica, Arial, sans-serif">Source: results/round*.json; RSS sampled every 5 ms from /proc/PID/statm.</text>
+</svg>
