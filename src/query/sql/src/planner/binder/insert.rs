@@ -46,8 +46,10 @@ use crate::plans::InsertValue;
 use crate::plans::Plan;
 use crate::plans::StreamingLoadPlan;
 
+pub(super) const LEGACY_STREAMING_LOAD_PLACEHOLDER: &str = "_databend_load";
+
 pub(super) fn is_streaming_load_placeholder(name: &str) -> bool {
-    matches!(name, "_streaming_load" | "_databend_load")
+    matches!(name, "_streaming_load" | LEGACY_STREAMING_LOAD_PLACEHOLDER)
 }
 
 pub(super) fn streaming_load_placeholder_error(name: &str) -> ErrorCode {
@@ -199,10 +201,9 @@ impl Binder {
                 let file_format_params =
                     parse_file_format(FileFormatOptionsReader::from_ast(&format_options))?;
                 match location.as_str() {
-                    name if is_streaming_load_placeholder(name) => {
-                        if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
-                            return Err(streaming_load_placeholder_error(name));
-                        }
+                    name if is_streaming_load_placeholder(name)
+                        && self.ctx.get_session_type() == SessionType::HTTPStreamingLoad =>
+                    {
                         let (required_source_schema, values_consts) = if let Some(value) = value {
                             self.prepared_values(value, &required_values_schema, settings)
                                 .await?
@@ -233,6 +234,10 @@ impl Binder {
                             required_source_schema,
                         }))
                     }
+                    LEGACY_STREAMING_LOAD_PLACEHOLDER => {
+                        Err(streaming_load_placeholder_error(&location))
+                    }
+                    // A stage named _streaming_load may already exist from before it was reserved.
                     loc => {
                         let (stage_info, path) = StageResolver::from_table_context(
                             self.ctx.clone(),

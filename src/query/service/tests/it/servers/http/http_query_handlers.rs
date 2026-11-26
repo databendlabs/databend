@@ -32,10 +32,12 @@ use databend_common_config::UserConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
+use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_SEMVER;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
@@ -1386,6 +1388,72 @@ async fn post_json_to_endpoint(
     let uri = "/v1/query";
     let response = post_uri(ep, uri, json, headers).await?;
     check_response(response).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_upload_to_existing_streaming_load_stage() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    // Seed metadata directly to simulate a stage created before the name was reserved.
+    UserApiProvider::instance()
+        .add_stage(
+            &fixture.default_tenant(),
+            StageInfo::new_internal_stage("_streaming_load"),
+            false,
+            Some(BUILTIN_ROLE_ACCOUNT_ADMIN),
+        )
+        .await?;
+
+    let db = fixture.default_db_name();
+    let table = format!("{db}.uploaded_data");
+    fixture
+        .execute_command(&format!("create database {db}"))
+        .await?;
+    fixture
+        .execute_command(&format!("create table {table}(id int)"))
+        .await?;
+
+    let ep = create_endpoint()?;
+    let response = ep
+        .call(
+            Request::builder()
+                .uri("/v1/upload_to_stage".parse()?)
+                .method(Method::PUT)
+                .typed_header(headers::Authorization::basic("root", ""))
+                .header("x-databend-stage-name", "_streaming_load")
+                .header(header::CONTENT_TYPE, "multipart/form-data; boundary=test")
+                .body(concat!(
+                    "--test\r\n",
+                    "Content-Disposition: form-data; name=\"upload\"; filename=\"data.csv\"\r\n\r\n",
+                    "42\n",
+                    "\r\n--test--\r\n"
+                )),
+        )
+        .await?;
+    let status = response.status();
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "{}",
+        response.into_body().into_string().await?
+    );
+
+    fixture.execute_command("list @_streaming_load").await?;
+    fixture
+        .execute_command(&format!(
+            "copy into {table} from @_streaming_load FILE_FORMAT = (TYPE = CSV) PURGE = FALSE"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {table} from @_streaming_load FILE_FORMAT = (TYPE = CSV)"
+        ))
+        .await?;
+
+    let sql = format!("select id, count(*) from {table} group by id");
+    let (_, result) = post_sql_to_endpoint(&ep, &sql, 10).await?;
+    assert!(result.error.is_none(), "{result:?}");
+    assert_eq!(unwrap_data(&result.data, "NULL"), vec![vec!["42", "2"]]);
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
