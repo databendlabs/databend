@@ -1,0 +1,418 @@
+# Grouping sets whose outer query reads only some of their columns. The UNION
+# rewrites feed each grouping level from a CTE that sends every block to each of
+# its readers through a small bounded channel. Physical planning can drop a
+# reader: a level with no keys and no used aggregate becomes a constant scan and
+# no longer reads the level it was derived from. A channel left for a dropped
+# reader fills up and the query hangs, so the queries here make the producing
+# level send more blocks than the channel holds: keys have up to 40 values and
+# blocks hold 4 rows. A few cases keep every reader and guard the results.
+# Readers are also lost when two copies of one subquery share CTE names. Run
+# with the default cascading UNION rewrite, the plain UNION rewrite, the
+# cascading rewrite without the hierarchical rule, and native expansion, which
+# gives the expected results.
+# run-with-settings: enable_cascading_grouping_sets=0
+# run-with-settings: optimizer_skip_list=HierarchicalGroupingSetsToUnion
+# run-with-settings: grouping_sets_to_union=0
+
+statement ok
+CREATE OR REPLACE DATABASE grouping_sets_cte_consumers
+
+statement ok
+USE grouping_sets_cte_consumers
+
+# Three inserts give a cluster several blocks to distribute.
+statement ok
+CREATE TABLE t(p INT NOT NULL, a INT NOT NULL, b INT NULL, v INT NOT NULL)
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(400)
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(700) WHERE number >= 400
+
+statement ok
+INSERT INTO t SELECT number % 40, number % 3, if(number % 7 = 0, NULL, number % 5), number
+FROM numbers(1000) WHERE number >= 700
+
+statement ok
+SET max_block_size = 4
+
+## Reading only the keys
+
+# The grand total of each form becomes a constant scan.
+query IIIII
+SELECT count(*), count(p), count(a), sum(p), sum(a)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+----
+164 160 123 3120 123
+
+query IIII
+SELECT count(*), count(p), count(a), count(b)
+FROM (SELECT p, a, b, sum(v) AS s FROM t GROUP BY ROLLUP(p, a, b)) x
+----
+401 400 360 120
+
+query IIII
+SELECT count(*), count(p), count(a), count(b)
+FROM (SELECT p, a, b, max(v) AS m FROM t GROUP BY CUBE(p, a, b)) x
+----
+508 480 381 180
+
+# AVG makes the UNION rewrite fall back from the hierarchical form, so every
+# set reads the same input CTE.
+query III
+SELECT count(*), count(p), count(a)
+FROM (SELECT p, a, avg(v) AS m FROM t GROUP BY GROUPING SETS ((p), (a), ())) x
+----
+44 40 3
+
+# Repeated sets.
+query III
+SELECT count(*), count(p), count(a)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY GROUPING SETS ((p, a), (p), (p), (), ())) x
+----
+161 160 120
+
+# A plain key next to a CUBE leaves no empty set, so no level becomes a constant
+# scan and every reader is kept.
+query III
+SELECT count(*), count(p), count(a)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY p, CUBE(a)) x
+----
+160 160 120
+
+# grouping() is computed per set, not read from the input.
+query II rowsort
+SELECT g, count(*)
+FROM (SELECT p, grouping(p, a) AS g, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+GROUP BY g
+----
+0 120
+1 40
+2 3
+3 1
+
+# Counting the output rows reads no column at all.
+query I
+SELECT count(*) FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+----
+164
+
+## Reading some of the aggregates
+
+# The grand total keeps the used aggregate and still reads its input.
+query IIII
+SELECT count(*), count(p), sum(s1), sum(c)
+FROM (SELECT p, a, sum(v) AS s1, count(*) AS c, max(v) AS m FROM t GROUP BY CUBE(p, a)) x
+----
+164 160 1998000 4000
+
+## Consumers that stop early or sit under other operators
+
+# LIMIT stops the outer query before every level is read.
+query I
+SELECT count(*) FROM (
+    SELECT p FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x LIMIT 5
+) y
+----
+5
+
+query II
+SELECT p, a FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+ORDER BY p NULLS FIRST, a NULLS FIRST LIMIT 3
+----
+NULL NULL
+NULL 0
+NULL 1
+
+query III
+SELECT count(*), max(rn), count(p)
+FROM (
+    SELECT p, row_number() OVER (PARTITION BY a ORDER BY p) AS rn
+    FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+) y
+----
+164 41 160
+
+query II
+SELECT count(*), count(p)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+WHERE a IS NULL
+----
+41 40
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT p FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x)
+----
+41
+
+## Grouping sets in subqueries and set operations
+
+query I
+SELECT count(*) FROM t
+WHERE p IN (SELECT p FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x WHERE a IS NULL)
+----
+1000
+
+query I
+SELECT count(*) FROM t
+WHERE EXISTS (SELECT 1 FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x WHERE x.p = t.p)
+----
+1000
+
+query I
+SELECT (SELECT count(*) FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x)
+----
+164
+
+# Two independent chains under one UNION ALL.
+query III
+SELECT count(*), count(p), count(a) FROM (
+    SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)
+    UNION ALL
+    SELECT p, a, sum(v) AS s FROM t GROUP BY ROLLUP(p, a)
+) x
+----
+325 320 243
+
+## CTEs over grouping sets
+
+# A CTE inlined at both references, each reading only its keys.
+statement ok
+SET enable_auto_materialize_cte = 0
+
+query II
+WITH x AS (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a))
+SELECT count(*), count(x1.p) FROM x x1 JOIN x x2 ON x1.p = x2.p AND x1.a = x2.a
+----
+120 120
+
+statement ok
+UNSET enable_auto_materialize_cte
+
+query II
+WITH x AS MATERIALIZED (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a))
+SELECT count(*), count(p) FROM x
+----
+164 160
+
+# A materialized CTE that nothing reads.
+query I
+WITH x AS MATERIALIZED (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a))
+SELECT count(*) FROM t
+----
+1000
+
+## Copies of one subquery
+
+# Referencing the alias of a scalar subquery again copies the bound subquery, so
+# both copies rewrite to CTEs derived from the same expression. Each copy needs
+# CTE names of its own.
+query II
+SELECT (SELECT sum(s) FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x) AS c1, c1 + 1
+----
+1998000 1998001
+
+query II
+SELECT count(*), sum(c)
+FROM (
+    SELECT p, (SELECT count(*) FROM (SELECT p, sum(v) AS s FROM t GROUP BY ROLLUP(p)) x) AS c
+    FROM t WHERE c + p > 0
+) w
+----
+1000 41000
+
+## Writing the keys
+
+# INSERT and CREATE TABLE AS plan their SELECT the same way.
+statement ok
+CREATE TABLE keys(p INT NULL, a INT NULL)
+
+statement ok
+INSERT INTO keys SELECT p, a FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+
+statement ok
+CREATE TABLE keys_ctas AS SELECT p, a FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY ROLLUP(p, a)) x
+
+query IIII
+SELECT count(*), count(p), count(a), (SELECT count(*) FROM keys_ctas) FROM keys
+----
+164 160 123 161
+
+## Grouping sets over inputs that run on one node
+
+statement ok
+CREATE TABLE d(p INT NOT NULL, name STRING NOT NULL)
+
+statement ok
+INSERT INTO d SELECT number, concat('n', number::STRING) FROM numbers(20)
+
+statement ok
+INSERT INTO d SELECT number, concat('n', number::STRING) FROM numbers(40) WHERE number >= 20
+
+# A sorted LIMIT runs on one node. On a cluster, the CTE over its rows is
+# redistributed by a constant key: all rows reach one executor, while every
+# executor runs readers.
+query IIII
+SELECT count(*), count(p), count(a), sum(s)
+FROM (SELECT p, a, sum(v) AS s FROM (SELECT * FROM t ORDER BY v LIMIT 900) z GROUP BY CUBE(p, a)) x
+----
+164 160 123 1618200
+
+query II
+SELECT count(*), sum(s) FROM (
+    (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a) ORDER BY s LIMIT 30)
+    UNION ALL
+    (SELECT p, b, sum(v) AS s FROM t GROUP BY ROLLUP(p, b) ORDER BY s DESC LIMIT 30)
+) x
+----
+60 979505
+
+query IIII
+SELECT count(*), count(p), count(a), sum(m)
+FROM (
+    SELECT p, a, max(rn) AS m
+    FROM (SELECT p, a, v, row_number() OVER (PARTITION BY p ORDER BY v) AS rn FROM t) z
+    GROUP BY ROLLUP(p, a)
+) x
+----
+161 160 120 3905
+
+## Readers under joins, windows and correlated subqueries
+
+# A window without PARTITION BY reads every level on one node.
+query III
+SELECT count(*), sum(s), sum(rn)
+FROM (
+    SELECT p, a, s, row_number() OVER (ORDER BY s, p, a) AS rn
+    FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+) y
+----
+164 1998000 13530
+
+# So does a full join on a non-equal condition.
+query II
+SELECT count(*), sum(s) FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x FULL JOIN d ON x.p > d.p
+----
+3129 20770000
+
+query III
+SELECT count(*), sum(x.s), count(t.p)
+FROM t JOIN (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x ON t.p = x.p AND t.a = x.a
+----
+1000 4175820 1000
+
+statement ok
+SET enforce_broadcast_join = 1
+
+query III
+SELECT count(*), sum(x.s), count(t.p)
+FROM t JOIN (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x ON t.p = x.p AND t.a = x.a
+----
+1000 4175820 1000
+
+statement ok
+UNSET enforce_broadcast_join
+
+# Both sides of the join read grouping sets, from two chains.
+query III
+SELECT count(*), sum(x.s), sum(y.s)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+JOIN (SELECT p, b, sum(v) AS s FROM t GROUP BY ROLLUP(p, b)) y ON x.p = y.p
+----
+480 2997000 3996000
+
+query III
+SELECT count(*), sum(x.s), sum(y.s)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+JOIN (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) y ON x.p = y.p AND x.a = y.a
+----
+120 499500 499500
+
+# Without cost-based optimization, the heuristic planner places the exchanges.
+statement ok
+SET enable_cbo = 0
+
+query III
+SELECT count(*), sum(x.s), sum(y.s)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+JOIN (SELECT p, b, sum(v) AS s FROM t GROUP BY ROLLUP(p, b)) y ON x.p = y.p
+----
+480 2997000 3996000
+
+statement ok
+UNSET enable_cbo
+
+# The other side of the join is empty.
+query II
+SELECT count(*), sum(x.s)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x JOIN (SELECT * FROM d WHERE p < 0) e ON x.p = e.p
+----
+0 NULL
+
+query II
+SELECT count(*), sum(c)
+FROM (
+    SELECT x.p, x.a, (SELECT count(*) FROM d WHERE d.p < x.p) AS c
+    FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+) y
+----
+164 3120
+
+query II
+SELECT count(*), sum(s)
+FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x
+WHERE s > (SELECT max(s) / 10 FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) y WHERE y.p = x.p)
+----
+160 999000
+
+## More copies of one subquery
+
+# Aliases of scalar subqueries referenced again in GROUP BY, HAVING, ORDER BY
+# and other aliases.
+query II
+SELECT count(*), sum(k)
+FROM (
+    SELECT (SELECT count(*) FROM (SELECT p, sum(v) AS s FROM t GROUP BY ROLLUP(p)) x) + d.p AS k
+    FROM d GROUP BY k HAVING k > 0 ORDER BY k
+) y
+----
+40 2420
+
+query II
+SELECT p, (SELECT sum(s) FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x) AS c1
+FROM d ORDER BY c1 + p, p LIMIT 2
+----
+0 1998000
+1 1998000
+
+query IIIII
+SELECT (SELECT sum(s) FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x) AS c1,
+    c1 + 1 AS c2, c2 + c1,
+    (SELECT count(*) FROM (SELECT a, sum(v) AS s FROM t GROUP BY ROLLUP(a)) y) AS c3, c3 * 2
+----
+1998000 1998001 3996001 4 8
+
+# A SQL function that uses its argument twice copies the subquery passed to it.
+statement ok
+CREATE OR REPLACE FUNCTION grouping_sets_cte_consumers_twice AS (x) -> x * 10 + x
+
+query II
+SELECT grouping_sets_cte_consumers_twice((SELECT count(*) FROM (SELECT p, a, sum(v) AS s FROM t GROUP BY CUBE(p, a)) x)) AS k,
+    grouping_sets_cte_consumers_twice(k)
+----
+1804 19844
+
+statement ok
+DROP FUNCTION grouping_sets_cte_consumers_twice
+
+statement ok
+UNSET max_block_size
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE grouping_sets_cte_consumers
