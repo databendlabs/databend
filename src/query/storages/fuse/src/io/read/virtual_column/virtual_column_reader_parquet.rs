@@ -234,7 +234,10 @@ impl VirtualColumnReader {
                 // Slot IDs (not query column IDs) identify physical sidecar fields.
                 // Only request codes for strings projected directly as strings.
                 let hint = self.dictionary_ndv_ratio.and_then(|_| {
-                    let slots = self.virtual_column_info.virtual_column_fields.iter()
+                    let slots = self
+                        .virtual_column_info
+                        .virtual_column_fields
+                        .iter()
                         .filter(|field| field.data_type.remove_nullable() == TableDataType::String)
                         .filter_map(|field| match virtual_fields.get(&field.query_column_id)? {
                             VirtualFieldReadPlan::Direct { slot } => Some(slot.0),

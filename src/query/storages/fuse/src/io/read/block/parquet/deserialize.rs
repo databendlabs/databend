@@ -135,7 +135,8 @@ pub fn dictionary_hint_fields(
     for column_id in dictionary_columns {
         // The type check guards against a nested field sharing the column id of its leaf.
         let Some(index) = original_schema.fields().iter().position(|field| {
-            field.column_id() == column_id && field.data_type().remove_nullable() == TableDataType::String
+            field.column_id() == column_id
+                && field.data_type().remove_nullable() == TableDataType::String
         }) else {
             continue;
         };

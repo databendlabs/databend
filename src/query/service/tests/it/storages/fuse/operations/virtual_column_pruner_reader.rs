@@ -496,8 +496,13 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let Column::Nullable(nullable) = &kind else {
         panic!("expected nullable kind column");
     };
-    assert!(nullable.column().is_dict_encoded(), "expected dictionary codes for kind");
-    assert_eq!(nullable.validity().iter().collect::<Vec<_>>(), [true, true, true, false]);
+    assert!(
+        nullable.column().is_dict_encoded(),
+        "expected dictionary codes for kind"
+    );
+    assert_eq!(nullable.validity().iter().collect::<Vec<_>>(), [
+        true, true, true, false
+    ]);
     assert_eq!(kind.iter().collect::<Vec<_>>(), [
         ScalarRef::String("a"),
         ScalarRef::String(""),
