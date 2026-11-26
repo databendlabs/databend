@@ -184,14 +184,15 @@ impl HashJoinDesc {
             .try_reduce(|lhs, rhs| {
                 check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
             });
-        // For RIGHT MARK join, we can't use is_true to cast filter into non_null boolean
+        // A mark join is NULL where its predicate is NULL, so it reads the predicate as nullable:
+        // `is_true` would turn NULL into false.
         match expr {
             Ok(Some(expr)) => match expr {
                 Expr::Constant(Constant { ref scalar, .. }) if !scalar.is_null() => {
                     Ok(Some(cast_expr_to_non_null_boolean(expr)?))
                 }
                 _ => {
-                    if matches!(join_type, JoinType::RightMark)
+                    if matches!(join_type, JoinType::LeftMark | JoinType::RightMark)
                         || !expr.data_type().is_nullable_or_null()
                     {
                         Ok(Some(expr))

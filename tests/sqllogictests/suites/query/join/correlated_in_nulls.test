@@ -1,0 +1,93 @@
+# A correlated IN subquery is NULL, rather than false, for a row without a match
+# when the matching subquery rows have a NULL, or when the value is NULL and the
+# matching subquery rows are not empty. The subquery's correlation is the join
+# key of a mark join, and its IN comparison the join's other condition, which
+# must keep its NULLs whichever side the subquery is built on.
+
+statement ok
+create or replace database correlated_in_nulls
+
+statement ok
+use correlated_in_nulls
+
+statement ok
+create or replace table o(k int, x int null)
+
+statement ok
+insert into o values (1, 1), (1, 2), (2, 3), (2, null), (3, 5), (4, 7), (6, null)
+
+statement ok
+create or replace table i(k int, y int null)
+
+statement ok
+insert into i values (1, 1), (1, null), (2, 3), (3, 4), (3, null)
+
+# The subquery is small, so it is the build side of a right mark join.
+query IIB
+select k, x, x in (select y from i where i.k = o.k) from o order by k, x nulls first
+----
+1 1 1
+1 2 NULL
+2 NULL NULL
+2 3 1
+3 5 NULL
+4 7 0
+6 NULL 0
+
+query IIB
+select k, x, x not in (select y from i where i.k = o.k) from o order by k, x nulls first
+----
+1 1 0
+1 2 NULL
+2 NULL NULL
+2 3 0
+3 5 NULL
+4 7 1
+6 NULL 1
+
+# Rows that match no outer row make the subquery the probe side of a left mark
+# join.
+statement ok
+insert into i select number % 5, number + 100 from numbers(2000)
+
+query IIB
+select k, x, x in (select y from i where i.k = o.k) from o order by k, x nulls first
+----
+1 1 1
+1 2 NULL
+2 NULL NULL
+2 3 1
+3 5 NULL
+4 7 0
+6 NULL 0
+
+query IIB
+select k, x, x not in (select y from i where i.k = o.k) from o order by k, x nulls first
+----
+1 1 0
+1 2 NULL
+2 NULL NULL
+2 3 0
+3 5 NULL
+4 7 1
+6 NULL 1
+
+statement ok
+set force_join_data_spill = 1
+
+query IIB
+select k, x, x in (select y from i where i.k = o.k) from o order by k, x nulls first
+----
+1 1 1
+1 2 NULL
+2 NULL NULL
+2 3 1
+3 5 NULL
+4 7 0
+6 NULL 0
+
+statement ok
+unset force_join_data_spill
+
+statement ok
+drop database correlated_in_nulls
